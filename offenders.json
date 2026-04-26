@@ -1,0 +1,141 @@
+[
+  {
+    "vendor": "Google Nest / Nest Wifi / Google Wifi Router",
+    "ouis": [
+      "34:5f:45", "64:16:66", "d8:eb:97", "3c:5a:b4",
+      "b0:87:c1", "f4:f5:d8", "54:f5:55", "e8:aa:7a", "18:b4:30",
+      "3c:22:fb", "6c:ad:f8", "70:5a:0f", "58:ef:68",
+      "94:eb:2c", "48:d6:d5", "f0:ef:86", "4c:bc:a5", "a4:c0:e1",
+      "30:fd:38", "00:1a:11", "9c:28:b4", "f0:72:ea",
+      "1c:f2:9a", "20:df:b9", "28:3b:82", "70:3a:51",
+      "b4:f1:da", "d4:f5:47", "08:9e:08", "e4:f0:42",
+      "7c:2e:bd", "f8:8f:ca", "cc:fa:00", "9c:5c:f9", "b8:9a:2a"
+    ],
+    "known_issues": [
+      "STP BPDU injection — claims Root Bridge when connected via Ethernet",
+      "Rogue DHCP server activation — conflicts with primary router DHCP",
+      "Hidden setup SSID broadcast ('GoogleSetup-xxxx', '_goog-hmac')",
+      "Advertises itself as IPv6 router, injecting a second routing domain on your LAN",
+      "STP hello time 2s causes 15-45s reconvergence outage cycles"
+    ],
+    "risk_level": "HIGH",
+    "description": "Google Nest Wifi and Google Wifi router/point devices inject 802.1D STP BPDUs when connected via Ethernet, potentially winning the Root Bridge election and forcing your primary router to block its uplink port. They also advertise as an IPv6 router and may activate a DHCP server, creating two conflicting gateways on your LAN. This causes periodic 15-45 second internet outages.",
+    "forum_reference": "https://community.google.com/s/topic/0D53000005FJVNmCAP",
+    "remediation": "Disconnect Ethernet cable from the Nest/Google Wifi device. Use Wi-Fi backhaul only, or enable RSTP on a managed switch and set bridge priority lower on your main router."
+  },
+  {
+    "vendor": "Google Chromecast / Google Home / Cast Audio",
+    "ouis": [
+      "54:60:09", "a4:77:33"
+    ],
+    "known_issues": [
+      "mDNS/Bonjour broadcast flooding on large networks",
+      "Periodic multicast bursts from Google Cast discovery protocol"
+    ],
+    "risk_level": "LOW",
+    "description": "Google Chromecast and Google Home/Nest Audio devices are WiFi-only passive receivers. They do NOT inject STP BPDUs or act as routers. They generate mDNS multicast traffic for Cast discovery but are generally harmless on home networks. Confirm via TCP connections — Cast uses port 8009.",
+    "forum_reference": "https://support.google.com/chromecast/",
+    "remediation": "No action usually needed. If mDNS flooding is excessive, enable mDNS isolation on your router or place devices on a separate VLAN."
+  },
+  {
+    "vendor": "Amazon / Echo / Ring / Eero",
+    "ouis": [
+      "00:fc:8b", "34:d2:70", "4c:ef:c0", "68:37:e9", "a4:08:f5",
+      "b4:7c:9c", "a0:3d:6f", "28:ee:52", "f0:27:2d", "74:c2:46",
+      "44:65:0d", "f0:81:73", "fc:65:de", "50:eb:71", "3c:84:6a"
+    ],
+    "known_issues": [
+      "mDNS broadcast flooding (Bonjour proxy)",
+      "Eero mesh: DHCP server activation conflict in bridge mode",
+      "Ring devices: aggressive ARP broadcast on network changes",
+      "Eero: STP participation on Ethernet backhaul"
+    ],
+    "risk_level": "MEDIUM",
+    "description": "Amazon Echo and Eero mesh devices generate significant multicast traffic. Eero satellites may activate DHCP server in bridge mode and participate in STP on wired connections.",
+    "forum_reference": "https://community.eero.com/",
+    "remediation": "Ensure Eero is in bridge mode and DHCP is disabled on satellites. Use Wi-Fi backhaul where possible."
+  },
+  {
+    "vendor": "Apple Inc. (HomePod / AirPort / AirPort Extreme)",
+    "ouis": [
+      "00:17:f2", "00:1f:f3", "68:9c:70", "2c:f0:a2", "ac:3c:0b",
+      "f0:d1:a9", "28:6a:b8", "04:f7:e4", "7c:6d:62", "00:25:bc",
+      "00:26:08", "00:23:12", "a8:66:7f"
+    ],
+    "known_issues": [
+      "STP BPDU participation via Ethernet",
+      "Bonjour/mDNS heavy broadcast flooding",
+      "AirPort Express: secondary DHCP server conflict",
+      "AirPort Extreme: bridge mode STP root election"
+    ],
+    "risk_level": "MEDIUM",
+    "description": "Apple AirPort and HomePod devices connected via Ethernet participate in STP and generate heavy Bonjour/mDNS multicast traffic. AirPort in bridge mode may compete for Root Bridge.",
+    "forum_reference": "https://discussions.apple.com/",
+    "remediation": "Disable STP on AirPort via AirPort Utility. Ensure only one DHCP server exists on the network."
+  },
+  {
+    "vendor": "TP-Link (Deco mesh / RE series extenders)",
+    "ouis": [
+      "50:c7:bf", "60:32:b1", "8c:8d:28", "c0:4a:00", "ec:08:6b",
+      "10:27:f5", "b0:be:76", "90:f6:52", "80:8f:1d", "00:27:19",
+      "14:cc:20", "b0:4e:26", "d8:0d:17", "54:af:97",
+      "3c:64:cf", "60:83:e7"
+    ],
+    "known_issues": [
+      "STP conflicts in mixed mesh environments",
+      "DHCP server activation in AP/mesh satellite mode",
+      "RE extenders in wired mode: STP BPDU generation"
+    ],
+    "risk_level": "LOW",
+    "description": "TP-Link Deco and RE-series satellite nodes may enable DHCP server in AP mode and generate STP BPDUs on wired connections.",
+    "forum_reference": "https://community.tp-link.com/",
+    "remediation": "Set Deco satellites to Access Point mode and disable DHCP on all but the primary unit."
+  },
+  {
+    "vendor": "Netgear (Orbi / Nighthawk mesh)",
+    "ouis": [
+      "00:1e:2a", "28:c6:8e", "84:1b:5e", "a0:04:60", "20:0c:c8",
+      "4c:60:de", "9c:3d:cf", "c3:0e:c4", "5c:a8:6a", "00:14:6c",
+      "00:26:f2", "44:94:fc", "d8:97:ba"
+    ],
+    "known_issues": [
+      "STP BPDU generation on Ethernet backhaul",
+      "Orbi satellite: dual DHCP server conflict"
+    ],
+    "risk_level": "LOW",
+    "description": "Netgear Orbi satellites generate STP BPDUs on wired Ethernet backhaul connections.",
+    "forum_reference": "https://community.netgear.com/",
+    "remediation": "Ensure backhaul is Wi-Fi not Ethernet where possible, or configure STP properly on managed switches."
+  },
+  {
+    "vendor": "Linksys (Velop / Atlas mesh)",
+    "ouis": [
+      "c4:41:1e", "00:07:0e", "48:f8:b3", "98:01:a7", "c8:d3:a3",
+      "00:18:39", "00:14:bf", "20:aa:4b", "08:86:3b"
+    ],
+    "known_issues": [
+      "STP participation on Ethernet backhaul",
+      "Velop: simultaneous router mode conflict"
+    ],
+    "risk_level": "LOW",
+    "description": "Linksys Velop and Atlas mesh nodes participate in STP on wired connections and may create routing loops.",
+    "forum_reference": "https://community.linksys.com/",
+    "remediation": "Use bridge/access-point mode on satellite nodes and verify DHCP is disabled on satellites."
+  },
+  {
+    "vendor": "Ubiquiti (UniFi AP / AmpliFi)",
+    "ouis": [
+      "00:27:22", "04:18:d6", "24:a4:3c", "44:d9:e7", "68:72:51",
+      "78:8a:20", "80:2a:a8", "b4:fb:e4", "dc:9f:db", "e0:63:da",
+      "f0:9f:c2", "fc:ec:da"
+    ],
+    "known_issues": [
+      "UniFi switches: aggressive RSTP BPDU generation",
+      "AmpliFi: DHCP conflict in router-behind-router mode"
+    ],
+    "risk_level": "LOW",
+    "description": "Ubiquiti UniFi devices participate heavily in STP/RSTP. When misconfigured, can claim Root Bridge or cause topology changes.",
+    "forum_reference": "https://community.ui.com/",
+    "remediation": "Configure STP bridge priority explicitly in UniFi controller. Ensure only one Root Bridge."
+  }
+]

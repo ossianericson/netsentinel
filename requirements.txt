@@ -1,0 +1,14 @@
+# ~= pins to the same major.minor, allowing only patch updates.
+# This prevents silent breaking changes from upstream releases while
+# still receiving bug fixes. Update these intentionally, not accidentally.
+PyQt6~=6.11
+scapy~=2.7
+matplotlib~=3.10
+pyinstaller~=6.20
+pytest~=8.0
+
+# Optional — Windows service only (svc.py).
+# Not needed for the GUI or CLI. Install separately as Administrator:
+#   pip install pywin32
+#   python -m pywin32_postinstall -install
+# pywin32~=308

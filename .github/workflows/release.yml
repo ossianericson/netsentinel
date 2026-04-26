@@ -1,0 +1,232 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Windows ────────────────────────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pywin32
+
+      - name: Pre-build smoke test
+        run: python app.py --smoke
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Build Windows executable
+        run: |
+          pyinstaller NetSentinel.spec
+          pyinstaller NetSentinelCLI.spec
+          pyinstaller NetSentinelSvc.spec
+
+      - name: Post-build smoke test
+        run: dist\NetSentinel.exe --smoke
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/NetSentinel.exe
+          overwrite: true
+
+      - name: Upload Windows CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cli
+          path: dist/NetSentinel-cli.exe
+          overwrite: true
+
+      - name: Upload Windows service artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-svc
+          path: dist/NetSentinel-svc.exe
+          overwrite: true
+
+  # ── macOS ──────────────────────────────────────────────────────────────────
+  build-macos:
+    runs-on: macos-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pre-build smoke test
+        run: python app.py --smoke
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Build macOS app
+        run: |
+          pyinstaller NetSentinel.spec
+          pyinstaller NetSentinelCLI.spec
+          mv dist/NetSentinel-cli dist/NetSentinel-cli-macOS
+
+      - name: Post-build smoke test
+        run: |
+          BINARY="dist/NetSentinel.app/Contents/MacOS/NetSentinel"
+          [ -f "$BINARY" ] || BINARY="dist/NetSentinel"
+          "$BINARY" --smoke
+
+      - name: Zip macOS app
+        run: |
+          cd dist
+          zip -r NetSentinel-macOS.zip NetSentinel.app || \
+            zip NetSentinel-macOS.zip NetSentinel
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/NetSentinel-macOS.zip
+          overwrite: true
+
+      - name: Upload macOS CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-cli
+          path: dist/NetSentinel-cli-macOS
+          overwrite: true
+
+  # ── Linux ──────────────────────────────────────────────────────────────────
+  build-linux:
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libxcb-cursor0 libxcb1 libx11-6 \
+            libgl1-mesa-glx libglib2.0-0 libdbus-1-3 \
+            libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xinerama0 libegl1 libegl-mesa0
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pre-build smoke test
+        run: python app.py --smoke
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Build Linux binary
+        run: |
+          pyinstaller NetSentinel.spec
+          pyinstaller NetSentinelCLI.spec
+          mv dist/NetSentinel-cli dist/NetSentinel-cli-linux
+
+      - name: Make executable
+        run: |
+          chmod +x dist/NetSentinel
+          chmod +x dist/NetSentinel-cli-linux
+
+      - name: Post-build smoke test
+        run: dist/NetSentinel --smoke
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-binary
+          path: dist/NetSentinel
+          overwrite: true
+
+      - name: Upload Linux CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-cli
+          path: dist/NetSentinel-cli-linux
+          overwrite: true
+
+  # ── GitHub Release ─────────────────────────────────────────────────────────
+  release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "NetSentinel ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          body: |
+            ## NetSentinel ${{ github.ref_name }}
+
+            ### Download the right file for your OS:
+
+            | Platform | File | Notes |
+            |---|---|---|
+            | **Windows** | `NetSentinel.exe` | GUI — right-click → Run as Administrator. May need [Npcap](https://npcap.com) for STP/Storm. |
+            | **Windows** | `NetSentinel-cli.exe` | Headless CLI — no GUI, no display required. |
+            | **Windows** | `NetSentinel-svc.exe` | Background Windows service installer. |
+            | **macOS** | `NetSentinel-macOS.zip` | GUI — unzip, right-click → Open (bypasses Gatekeeper). |
+            | **macOS** | `NetSentinel-cli-macOS` | Headless CLI. |
+            | **Linux** | `NetSentinel` | GUI — `chmod +x NetSentinel && sudo ./NetSentinel` |
+            | **Linux** | `NetSentinel-cli-linux` | Headless CLI — `chmod +x NetSentinel-cli-linux` |
+
+            ### What it does
+            One tool that replaces a drawer full of network utilities:
+            - Rogue device fingerprinting with OUI database (115+ OUI prefixes)
+            - STP/BPDU rogue Root Bridge detection
+            - Broadcast & multicast storm analysis
+            - Hidden SSID and co-channel WiFi interference detection
+            - Live ping + DNS latency correlation
+            - On-demand diagnostics: speed test, DNS leak, traceroute, public IP
+            - Long-term background connectivity logger with automated plain-English analysis
+            - TCP port scanner (26 ports, banner grab, HIGH-risk flags)
+            - MTR continuous hop-by-hop traceroute
+            - Wake-on-LAN magic packet sender
+            - HTML report export
+          files: |
+            artifacts/windows-exe/NetSentinel.exe
+            artifacts/windows-cli/NetSentinel-cli.exe
+            artifacts/windows-svc/NetSentinel-svc.exe
+            artifacts/macos-app/NetSentinel-macOS.zip
+            artifacts/macos-cli/NetSentinel-cli-macOS
+            artifacts/linux-binary/NetSentinel
+            artifacts/linux-cli/NetSentinel-cli-linux
