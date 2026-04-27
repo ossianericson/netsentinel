@@ -75,6 +75,14 @@ class MatrixRainWidget(QWidget):
     """
     Full-overlay matrix rain.  Parent it to the main window and call show().
     It resizes itself to match the parent whenever the parent resizes.
+
+    Stability score integration
+    ───────────────────────────
+    Call set_stability_score(pct) with the network uptime percentage (0–100).
+    The rain colour shifts:
+      95–100 %  → classic green   (network healthy)
+      70–94  %  → amber / orange  (degraded)
+      0–69   %  → red             (critical / unstable)
     """
 
     CHAR_W = 14
@@ -89,12 +97,33 @@ class MatrixRainWidget(QWidget):
 
         self._font = QFont("Courier New", 11, QFont.Weight.Bold)
         self._columns: List[_Column] = []
+        self._stability: float = 100.0   # 0–100; controls rain colour
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
 
         self._resize_to_parent()
         self.hide()  # stay hidden until explicitly started via toggle() / Ctrl+Shift+M
+
+    # ── Stability API ─────────────────────────────────────────────────────────
+
+    def set_stability_score(self, uptime_pct: float) -> None:
+        """Set the stability score (0–100 %).  Updates rain colour immediately."""
+        self._stability = max(0.0, min(100.0, uptime_pct))
+
+    def _trail_color(self, alpha: float) -> QColor:
+        """Return the trail colour based on current stability score."""
+        s = self._stability
+        if s >= 95:                           # healthy — classic green
+            g = int(80 + 175 * alpha)
+            return QColor(0, g, int(40 * alpha), int(220 * alpha))
+        elif s >= 70:                         # degraded — amber / orange
+            r = int(200 * alpha)
+            g = int(120 * alpha)
+            return QColor(r, g, 0, int(220 * alpha))
+        else:                                  # critical — red
+            r = int(80 + 175 * alpha)
+            return QColor(r, int(20 * alpha), int(20 * alpha), int(220 * alpha))
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -164,12 +193,16 @@ class MatrixRainWidget(QWidget):
                 ch = col.chars[row % len(col.chars)]
 
                 if is_head:
-                    # Bright white/cyan head character
-                    color = QColor(200, 255, 220, 255)
+                    # Bright head character — white when healthy, warm-white when degraded, pink when critical
+                    s = self._stability
+                    if s >= 95:
+                        color = QColor(200, 255, 220, 255)
+                    elif s >= 70:
+                        color = QColor(255, 220, 100, 255)
+                    else:
+                        color = QColor(255, 160, 160, 255)
                 else:
-                    # Green trail — brighter = closer to head
-                    green = int(80 + 175 * alpha)
-                    color = QColor(0, green, int(40 * alpha), int(220 * alpha))
+                    color = self._trail_color(alpha)
 
                 painter.setPen(QPen(color))
                 painter.drawText(

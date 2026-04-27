@@ -217,12 +217,36 @@ QSpinBox, QComboBox {{
     background: {BG_CARD};
     border: 1px solid #2a2a4a;
     border-radius: 5px;
-    padding: 4px 8px;
+    padding: 4px 26px 4px 8px;
     color: {TEXT_PRIMARY};
+    min-width: 52px;
 }}
 
 QSpinBox:focus, QComboBox:focus {{
     border-color: {ACCENT};
+}}
+
+QSpinBox::up-button, QSpinBox::down-button {{
+    width: 18px;
+    background: #1a1a35;
+    border-left: 1px solid #2a2a4a;
+}}
+
+QSpinBox::up-button {{
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    border-top-right-radius: 5px;
+    border-bottom: 1px solid #2a2a4a;
+}}
+
+QSpinBox::down-button {{
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    border-bottom-right-radius: 5px;
+}}
+
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+    background: {ACCENT};
 }}
 
 QTextEdit {{

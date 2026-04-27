@@ -16,6 +16,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
+try:
+    from modules.mac_registry import lookup as _mac_registry_lookup
+except Exception:
+    _mac_registry_lookup = None  # type: ignore
+
+try:
+    from modules.name_resolver import resolve as _resolve_name
+except Exception:
+    _resolve_name = None  # type: ignore
+
 
 @dataclass
 class DeviceInfo:
@@ -175,14 +185,28 @@ def scan(offenders_path: Path) -> dict:
     results: List[DeviceInfo] = []
     high_risk: List[DeviceInfo] = []
 
-    # Resolve hostnames in parallel (1 s timeout each)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-        hostname_futures = {ip: ex.submit(_resolve_hostname, ip) for ip, _ in arp_entries}
-    resolved_hostnames = {ip: fut.result() for ip, fut in hostname_futures.items()}
+    # Resolve names via multi-method resolver (falls back to rDNS only if unavailable)
+    if _resolve_name is not None:
+        from modules.name_resolver import resolve_batch
+        resolved = resolve_batch(
+            [{"ip": ip, "mac": mac} for ip, mac in arp_entries],
+            use_netbios=True, use_mdns=True, use_snmp=False, use_dhcp=True,
+        )
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+            hostname_futures = {ip: ex.submit(_resolve_hostname, ip) for ip, _ in arp_entries}
+        resolved = {ip: type("_N", (), {"hostname": fut.result(), "vendor": "", "model": "", "device_type": ""})()
+                    for ip, fut in hostname_futures.items()}
 
     for ip, mac in arp_entries:
         info = DeviceInfo(ip=ip, mac=mac)
-        info.hostname = resolved_hostnames.get(ip, "")
+        name_info = resolved.get(ip)
+        info.hostname = getattr(name_info, "hostname", "") if name_info else ""
+        # Enrich vendor/model from registry if offenders.json won't override
+        if name_info and getattr(name_info, "model", ""):
+            info.vendor = getattr(name_info, "vendor", info.vendor) or info.vendor
+            if not info.device_type:
+                info.device_type = getattr(name_info, "device_type", "") or ""
 
         # --- Link-local detection (rogue DHCP indicator) ---
         if ip.startswith("169.254."):

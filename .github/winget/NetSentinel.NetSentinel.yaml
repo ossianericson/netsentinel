@@ -1,0 +1,15 @@
+# NetSentinel winget manifest — version file
+# Path in winget-pkgs repo:
+#   manifests/n/NetSentinel/NetSentinel/{VERSION}/NetSentinel.NetSentinel.yaml
+#
+# DO NOT edit PackageVersion manually.
+# The release CI (winget-submit.yml) fills this in automatically using wingetcreate.
+# For the very first submission, run:
+#   winget install Microsoft.Wingetcreate
+#   wingetcreate new https://github.com/ossianericson/netsentinel/releases/download/v1.0.4/NetSentinel-Setup-1.0.4.exe
+
+PackageIdentifier: NetSentinel.NetSentinel
+PackageVersion: 1.0.4
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

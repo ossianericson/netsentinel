@@ -351,25 +351,40 @@ def discover(
                 if progress_cb:
                     progress_cb(f"{name}: skipped ({exc})")
 
-    # ── Stage 3: Hostname resolution (parallel) ───────────────────────────────
+    # ── Stage 3: Multi-method name resolution ─────────────────────────────────
     if resolve_hostnames and not stop.is_set():
         if progress_cb:
-            progress_cb(f"Resolving hostnames for {len(devices)} device(s)…")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as pool:
-            resolve_futures = {
-                pool.submit(_resolve_hostname, ip, 0.5): ip
-                for ip, dev in devices.items() if not dev.hostname
-            }
-            for fut in concurrent.futures.as_completed(resolve_futures):
-                ip = resolve_futures[fut]
-                if stop.is_set():
-                    break
-                try:
-                    name = fut.result()
-                    if name and ip in devices:
-                        devices[ip].hostname = name
-                except Exception:
-                    pass
+            progress_cb(f"Resolving names for {len(devices)} device(s)…")
+        try:
+            from modules.name_resolver import resolve_batch
+            name_results = resolve_batch(
+                list(devices.values()),
+                use_netbios=True, use_mdns=True, use_snmp=False, use_dhcp=True,
+            )
+            for ip, nr in name_results.items():
+                if ip in devices:
+                    if nr.hostname and not devices[ip].hostname:
+                        devices[ip].hostname = nr.hostname
+                    # Attach registry model as display hint via mdns_services list
+                    if nr.model:
+                        hint = f"model:{nr.model}"
+                        if hint not in devices[ip].mdns_services:
+                            devices[ip].mdns_services.insert(0, hint)
+        except Exception:
+            # Fallback to basic rDNS
+            with concurrent.futures.ThreadPoolExecutor(max_workers=32) as pool:
+                rf = {pool.submit(_resolve_hostname, ip, 0.5): ip
+                      for ip, dev in devices.items() if not dev.hostname}
+                for fut in concurrent.futures.as_completed(rf):
+                    ip = rf[fut]
+                    if stop.is_set():
+                        break
+                    try:
+                        name = fut.result()
+                        if name and ip in devices:
+                            devices[ip].hostname = name
+                    except Exception:
+                        pass
 
     duration = time.monotonic() - t0
     sorted_devs = sorted(devices.values(), key=lambda d: ipaddress.ip_address(d.ip))

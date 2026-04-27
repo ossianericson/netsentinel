@@ -3,6 +3,7 @@ Main Dashboard — NetSentinel network security scanner and monitor.
 """
 
 import datetime
+import html
 import webbrowser
 from pathlib import Path
 from typing import Optional
@@ -261,7 +262,7 @@ class Dashboard(QMainWindow):
         self._stp_duration = QSpinBox()
         self._stp_duration.setRange(10, 120)
         self._stp_duration.setValue(30)
-        self._stp_duration.setFixedWidth(60)
+        self._stp_duration.setFixedWidth(72)
         self._stp_duration.setToolTip("How long to listen for STP/BPDU frames")
 
         # Storm duration
@@ -270,7 +271,7 @@ class Dashboard(QMainWindow):
         self._storm_duration = QSpinBox()
         self._storm_duration.setRange(5, 60)
         self._storm_duration.setValue(10)
-        self._storm_duration.setFixedWidth(60)
+        self._storm_duration.setFixedWidth(72)
 
         # Module toggles
         self._chk_stp   = QCheckBox("STP")
@@ -456,6 +457,9 @@ class Dashboard(QMainWindow):
         self._recon_pe_tab_widget        = self._build_recon_pe_tab()
         self._recon_cloud_tab_widget     = self._build_recon_cloud_metadata_tab()
         self._ipv6_tab_widget            = self._build_ipv6_tab()
+        self._correlator_tab_widget      = self._build_correlator_tab()
+        self._iot_baseline_tab_widget    = self._build_iot_baseline_tab()
+        self._benchmark_tab_widget       = self._build_benchmark_tab()
 
         # ── Worker refs ───────────────────────────────────────────────────────
         self._arp_worker:        Optional[object] = None
@@ -475,6 +479,7 @@ class Dashboard(QMainWindow):
         self._ipv6_worker:       Optional[object] = None
         self._cloud_worker:      Optional[object] = None
         self._log_chart_summary: Optional[object] = None   # last loaded LogSummary
+        self._last_benchmark_result: Optional[object] = None  # last BenchmarkResult
 
         # ── Sidebar list + stacked content ────────────────────────────────────
         self._nav = QListWidget()
@@ -508,28 +513,31 @@ class Dashboard(QMainWindow):
 
         # ── Standard pages ────────────────────────────────────────────────────
         self._nav_add_section("Standard")
-        self._nav_add_page("🔍  Device Fingerprinter", m1)
-        self._nav_add_page("🌉  STP / BPDU Detector",  m2)
-        self._nav_add_page("🌊  Storm Analyser",        m3)
-        self._nav_add_page("📶  WiFi Scanner",           m4)
-        self._nav_add_page("📡  DNS Correlator",         m5)
-        self._nav_add_page("🌐  Network Info",           net)
-        self._nav_add_page("⚡  Diagnostics",            dia)
-        self._nav_add_page("📋  Network Logger",         log)
+        self._nav_add_page("🔍  Devices on Network",    m1)
+        self._nav_add_page("🌉  Rogue Bridge (STP)",    m2)
+        self._nav_add_page("🌊  Broadcast Storm",        m3)
+        self._nav_add_page("📶  WiFi Networks",          m4)
+        self._nav_add_page("📡  DNS & Outages",          m5)
+        self._nav_add_page("🌐  My Network Info",        net)
+        self._nav_add_page("⚡  Health Check",           dia)
+        self._nav_add_page("📋  Stability Log",          log)
         self._nav_add_page("🔷  IPv6 Devices",           self._ipv6_tab_widget)
+        self._nav_add_page("🧩  Root Cause Analysis",    self._correlator_tab_widget)
+        self._nav_add_page("🤖  IoT Behaviour",          self._iot_baseline_tab_widget)
+        self._nav_add_page("📊  Network Grade",           self._benchmark_tab_widget)
 
         # ── Advanced pages (hidden until Advanced Mode) ───────────────────────
         self._nav_adv_sep = self._nav.count()
         self._nav_add_section("Advanced")
         self._nav_adv_rows = [
-            self._nav_add_page("🔁  MTR",              self._mtr_tab_widget,      hidden=True),
-            self._nav_add_page("🔧  Advanced Tools",   self._adv_tab_widget,      hidden=True),
-            self._nav_add_page("🗺  Topology",          self._topology_tab_widget, hidden=True),
-            self._nav_add_page("🛡  ARP Monitor",       self._arp_tab_widget,      hidden=True),
-            self._nav_add_page("📦  DHCP Monitor",      self._dhcp_tab_widget,     hidden=True),
-            self._nav_add_page("📊  Bandwidth",         self._bw_tab_widget,       hidden=True),
-            self._nav_add_page("🕐  Scheduler",         self._sched_tab_widget,    hidden=True),
-            self._nav_add_page("📡  SNMP",              self._snmp_tab_widget,     hidden=True),
+            self._nav_add_page("🔁  Hop-by-Hop Trace",  self._mtr_tab_widget,      hidden=True),
+            self._nav_add_page("🔧  Tools & Wake-on-LAN",self._adv_tab_widget,     hidden=True),
+            self._nav_add_page("🗺  Network Map",        self._topology_tab_widget, hidden=True),
+            self._nav_add_page("🛡  ARP Spoof Watch",    self._arp_tab_widget,      hidden=True),
+            self._nav_add_page("📦  DHCP Leases",        self._dhcp_tab_widget,     hidden=True),
+            self._nav_add_page("📊  Bandwidth Usage",    self._bw_tab_widget,       hidden=True),
+            self._nav_add_page("🕐  Scheduled Scans",    self._sched_tab_widget,    hidden=True),
+            self._nav_add_page("📡  SNMP Device Info",   self._snmp_tab_widget,     hidden=True),
         ]
         # Hide the Advanced section separator too
         adv_sep_item = self._nav.item(self._nav_adv_sep)
@@ -545,18 +553,18 @@ class Dashboard(QMainWindow):
         self._nav_recon_sep = self._nav.count()
         self._nav_add_section("Security Audit")
         self._nav_recon_rows = [
-            self._nav_add_page("⚡  SYN Scan",           self._recon_syn_tab_widget,       hidden=True),
-            self._nav_add_page("📻  UDP Scan",            self._recon_udp_tab_widget,       hidden=True),
-            self._nav_add_page("🖥  OS Fingerprint",      self._recon_os_tab_widget,        hidden=True),
-            self._nav_add_page("🎯  Risk Scorer",         self._recon_risk_tab_widget,      hidden=True),
-            self._nav_add_page("🛡  CVE Lookup",          self._recon_cve_tab_widget,       hidden=True),
-            self._nav_add_page("🌐  Internet Exposure",   self._recon_exposure_tab_widget,  hidden=True),
-            self._nav_add_page("🔑  Credentialed Scan",   self._recon_cred_tab_widget,      hidden=True),
-            self._nav_add_page("🚀  Fast Discovery",      self._recon_discovery_tab_widget, hidden=True),
-            self._nav_add_page("🗂  SMB / NetBIOS",       self._recon_smb_tab_widget,       hidden=True),
-            self._nav_add_page("🔌  Plugins",             self._recon_plugin_tab_widget,    hidden=True),
-            self._nav_add_page("🔒  Private Endpoints",   self._recon_pe_tab_widget,        hidden=True),
-            self._nav_add_page("☁  Cloud Metadata",      self._recon_cloud_tab_widget,     hidden=True),
+            self._nav_add_page("⚡  Port Scan (SYN)",        self._recon_syn_tab_widget,       hidden=True),
+            self._nav_add_page("📻  Port Scan (UDP)",         self._recon_udp_tab_widget,       hidden=True),
+            self._nav_add_page("🖥  OS Detection",            self._recon_os_tab_widget,        hidden=True),
+            self._nav_add_page("🎯  Device Risk Score",       self._recon_risk_tab_widget,      hidden=True),
+            self._nav_add_page("🛡  Known CVEs",              self._recon_cve_tab_widget,       hidden=True),
+            self._nav_add_page("🌐  Exposed to Internet",     self._recon_exposure_tab_widget,  hidden=True),
+            self._nav_add_page("🔑  Login Test (SSH/SMB)",    self._recon_cred_tab_widget,      hidden=True),
+            self._nav_add_page("🚀  Full Device Discovery",   self._recon_discovery_tab_widget, hidden=True),
+            self._nav_add_page("🗂  Windows Shares (SMB)",    self._recon_smb_tab_widget,       hidden=True),
+            self._nav_add_page("🔌  Plugin Modules",          self._recon_plugin_tab_widget,    hidden=True),
+            self._nav_add_page("🔒  Private Endpoint Check",  self._recon_pe_tab_widget,        hidden=True),
+            self._nav_add_page("☁  Cloud Metadata Probe",    self._recon_cloud_tab_widget,     hidden=True),
         ]
         recon_sep_item = self._nav.item(self._nav_recon_sep)
         if recon_sep_item:
@@ -713,6 +721,8 @@ class Dashboard(QMainWindow):
         act_scan = menu.addAction(f"🔍  Port scan  {ip}")
         act_wol  = menu.addAction(f"⚡  Wake-on-LAN  →  {mac}")
         menu.addSeparator()
+        act_fix  = menu.addAction("🔧  How to Fix")
+        menu.addSeparator()
         act_copy_ip  = menu.addAction("📋  Copy IP")
         act_copy_mac = menu.addAction("📋  Copy MAC")
         act_copy_row = menu.addAction("📋  Copy full row")
@@ -721,6 +731,16 @@ class Dashboard(QMainWindow):
             self._run_port_scan(ip)
         elif chosen == act_wol:
             self._send_wol(mac)
+        elif chosen == act_fix:
+            # find remediation from stored result
+            rem = ""
+            if self._m1_result:
+                for d in self._m1_result.get("devices", []):
+                    d_ip = getattr(d, "ip", d.get("ip","")) if not isinstance(d, dict) else d.get("ip","")
+                    if d_ip == ip:
+                        rem = getattr(d, "remediation", d.get("remediation","")) if not isinstance(d, dict) else d.get("remediation","")
+                        break
+            self._show_how_to_fix(ip, rem or "No specific remediation available for this device.")
         elif chosen == act_copy_ip:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(ip)
@@ -752,10 +772,46 @@ class Dashboard(QMainWindow):
         self._m2_table.setColumnWidth(0, 150)
         self._m2_table.setColumnWidth(1, 80)
         self._m2_table.setColumnWidth(2, 150)
+        self._m2_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._m2_table.customContextMenuRequested.connect(self._m2_context_menu)
 
         lay.addWidget(self._m2_status)
         lay.addWidget(self._m2_table)
         return w
+
+    def _m2_context_menu(self, pos):
+        from PyQt6.QtWidgets import QMenu
+        row = self._m2_table.rowAt(pos.y())
+        if row < 0:
+            return
+        src_mac = (self._m2_table.item(row, 0) or QTableWidgetItem()).text()
+        is_rogue = (self._m2_table.item(row, 7) or QTableWidgetItem()).text().strip().upper() in ("YES", "TRUE", "ROGUE")
+        menu = QMenu(self)
+        menu.setStyleSheet(f"background:#1e1e3a; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a;")
+        act_fix  = menu.addAction("🔧  How to Fix")
+        menu.addSeparator()
+        act_copy = menu.addAction("📋  Copy MAC")
+        chosen = menu.exec(self._m2_table.viewport().mapToGlobal(pos))
+        if chosen == act_fix:
+            if is_rogue:
+                rem = (
+                    f"A rogue STP Root Bridge was detected from {src_mac}. "
+                    "Disconnect the Ethernet cable from this device immediately. "
+                    "If it is a mesh satellite (e.g. Google Nest, TP-Link Deco), it must use "
+                    "Wi-Fi backhaul only — do not connect it via Ethernet. "
+                    "After disconnecting, wait 60 seconds for the real router to reclaim the Root Bridge role, "
+                    "then re-run this scan to confirm the network is stable."
+                )
+            else:
+                rem = (
+                    f"Device {src_mac} is sending STP BPDUs but is not currently rated as rogue. "
+                    "This is expected for your main router or managed switch. "
+                    "If you see repeated outages, verify this MAC belongs to your router."
+                )
+            self._show_how_to_fix(src_mac, rem)
+        elif chosen == act_copy:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(src_mac)
 
     # ── Module 3 ──────────────────────────────────────────────────────────────
 
@@ -781,11 +837,43 @@ class Dashboard(QMainWindow):
         self._m3_table = _table(["Source MAC", "Broadcast Packets", "Rogue Match?"])
         self._m3_table.setColumnWidth(0, 160)
         self._m3_table.setColumnWidth(1, 160)
+        self._m3_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._m3_table.customContextMenuRequested.connect(self._m3_context_menu)
 
         lay.addWidget(self._m3_status)
         lay.addLayout(stats)
         lay.addWidget(self._m3_table)
         return w
+
+    def _m3_context_menu(self, pos):
+        from PyQt6.QtWidgets import QMenu
+        row = self._m3_table.rowAt(pos.y())
+        if row < 0:
+            return
+        src_mac = (self._m3_table.item(row, 0) or QTableWidgetItem()).text()
+        bcast   = (self._m3_table.item(row, 1) or QTableWidgetItem()).text()
+        menu = QMenu(self)
+        menu.setStyleSheet(f"background:#1e1e3a; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a;")
+        act_fix  = menu.addAction("🔧  How to Fix")
+        act_copy = menu.addAction("📋  Copy MAC")
+        chosen = menu.exec(self._m3_table.viewport().mapToGlobal(pos))
+        if chosen == act_fix:
+            rem = (
+                f"Device {src_mac} sent {bcast} broadcast packets. "
+                "To resolve a broadcast storm: "
+                "1. Identify the physical device using the MAC address "
+                "(check your router's DHCP table). "
+                "2. Restart or reboot that device. "
+                "3. Check for firmware updates — faulty firmware is a common cause. "
+                "4. If the storm continues, disconnect the device from the network "
+                "and move it to a separate VLAN or guest network. "
+                "5. High broadcast rates from IoT devices (cameras, smart plugs) often indicate "
+                "a failing device that needs replacement."
+            )
+            self._show_how_to_fix(src_mac, rem)
+        elif chosen == act_copy:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(src_mac)
 
     # ── Module 4 ──────────────────────────────────────────────────────────────
 
@@ -1673,6 +1761,9 @@ class Dashboard(QMainWindow):
                 self._update_stat(self._log_stat_outages,
                                   str(len(summary.outages)),
                                   RED if summary.outages else GREEN)
+                # Update MatrixRain colour from live stability score
+                if self._matrix_rain:
+                    self._matrix_rain.set_stability_score(summary.uptime_pct)
                 # Rebuild outage table
                 self._log_outage_table.setRowCount(0)
                 for o in summary.outages:
@@ -2008,6 +2099,571 @@ class Dashboard(QMainWindow):
             self._log_status_lbl.setText(f"Chart error: {exc}")
         finally:
             self._btn_log_chart.setEnabled(True)
+
+    # ── Root Cause Analysis (Correlator) tab ─────────────────────────────────
+
+    def _build_correlator_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(8, 8, 8, 8)
+
+        info = QLabel(
+            "Automatically links findings from all scans — STP, Storm, Diagnostics, and the "
+            "Stability Log — to identify the single root cause of your network problems. "
+            "Distinguishes between a fault in your home network versus a problem at your ISP. "
+            "Run at least one scan first, then click Analyse."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+
+        self._corr_status = QLabel("No analysis yet — run scans first, then click Analyse.")
+        self._corr_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        self._corr_status.setWordWrap(True)
+
+        # Verdict banner
+        self._corr_verdict = QLabel("Run a scan to see the root cause summary.")
+        self._corr_verdict.setWordWrap(True)
+        self._corr_verdict.setStyleSheet(
+            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:2px solid #2a2a4a; "
+            "border-radius:10px; padding:10px 14px; font-size:13px; font-weight:bold;"
+        )
+
+        ctrl = QHBoxLayout()
+        btn_analyse = QPushButton("🧩  Analyse Root Cause Now")
+        btn_analyse.setObjectName("btnScan")
+        btn_analyse.setToolTip("Correlate all scan results and produce a prioritised root-cause list.")
+        btn_analyse.clicked.connect(self._run_correlator)
+        ctrl.addWidget(btn_analyse)
+        ctrl.addStretch()
+
+        # Findings table
+        self._corr_table = _table([
+            "Severity", "Category", "Source", "What's Wrong", "How to Fix It"
+        ])
+        self._corr_table.setColumnWidth(0, 80)
+        self._corr_table.setColumnWidth(1, 200)
+        self._corr_table.setColumnWidth(2, 160)
+        self._corr_table.setColumnWidth(3, 300)
+
+        lay.addWidget(info)
+        lay.addWidget(self._corr_verdict)
+        lay.addWidget(self._corr_status)
+        lay.addLayout(ctrl)
+        lay.addWidget(self._corr_table, 1)
+        return w
+
+    @pyqtSlot()
+    def _run_correlator(self):
+        from PyQt6.QtGui import QColor
+        try:
+            from modules.root_cause_correlator import correlate
+
+            # Gather available results — everything is optional
+            diag   = self._diag_result
+            m3_res = self._m3_result   # StormResult
+            m1_dev = self._m1_result.get("devices", []) if self._m1_result else []
+            gw_mac = self._net_info.get("gateway_mac", None) if self._net_info else None
+
+            # Collect BPDU list from m2 result if present
+            bpdus = []
+            if self._m2_result and "bpdus" in self._m2_result:
+                bpdus = self._m2_result["bpdus"]
+
+            # Log summary from logger worker
+            log_summary = None
+            if self._logger_worker:
+                try:
+                    log_summary = self._logger_worker.get_summary()
+                except Exception:
+                    pass
+
+            result = correlate(
+                diag_result=diag,
+                storm_result=m3_res,
+                stp_bpdus=bpdus,
+                fingerprint_devices=m1_dev,
+                log_summary=log_summary,
+                gateway_mac=gw_mac,
+            )
+
+            # Update verdict banner colour
+            sev_colors = {
+                "CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER,
+                "LOW": GREEN, "INFO": TEXT_SECONDARY,
+            }
+            banner_color = sev_colors.get(result.global_severity, TEXT_SECONDARY)
+            self._corr_verdict.setStyleSheet(
+                f"background:{BG_CARD}; color:{banner_color}; "
+                f"border:2px solid {banner_color}; border-radius:10px; "
+                "padding:10px 14px; font-size:13px; font-weight:bold;"
+            )
+            self._corr_verdict.setText(result.plain_summary)
+
+            # Populate findings table
+            self._corr_table.setRowCount(0)
+            for f in result.findings:
+                row = self._corr_table.rowCount()
+                self._corr_table.insertRow(row)
+                color = sev_colors.get(f.severity, TEXT_SECONDARY)
+                for col, val in enumerate([
+                    f.severity, f.category, f.source, f.headline, f.remediation
+                ]):
+                    item = QTableWidgetItem(str(val))
+                    if col in (0, 1):
+                        item.setForeground(QColor(color))
+                    self._corr_table.setItem(row, col, item)
+
+            isp_tag = " [ISP issue — local alerts suppressed]" if result.suppress_local_alerts else ""
+            self._corr_status.setText(
+                f"Analysis complete — {result.finding_count} finding(s), "
+                f"global severity: {result.global_severity}{isp_tag}"
+            )
+
+        except Exception as exc:
+            self._corr_status.setText(f"⚠ Correlation failed: {exc}")
+
+    # ── IoT Behavioural Baseline tab ─────────────────────────────────────────
+
+    def _build_iot_baseline_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(8, 8, 8, 8)
+
+        info = QLabel(
+            "NetSentinel learns what traffic is normal for each IoT device on your network "
+            "(smart speakers, cameras, TVs, etc.) and alerts you if one behaves differently — "
+            "e.g. suddenly port-scanning, contacting an unusual server, or flooding traffic. "
+            "Run a Devices scan first, then click Learn to capture a baseline."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+
+        self._iot_status = QLabel("No baseline loaded. Run 'Devices on Network' scan first.")
+        self._iot_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        self._iot_status.setWordWrap(True)
+
+        ctrl = QHBoxLayout()
+        btn_learn = QPushButton("📖  Learn Normal Behaviour (60 s)")
+        btn_learn.setObjectName("btnNetRefresh")
+        btn_learn.setToolTip(
+            "Sniffs traffic for 60 seconds to record which servers and ports each IoT device normally uses."
+        )
+        btn_learn.clicked.connect(self._run_iot_learn)
+
+        btn_monitor = QPushButton("👁  Start Anomaly Monitor")
+        btn_monitor.setObjectName("btnScan")
+        btn_monitor.setToolTip("Continuously watches IoT device traffic and alerts on deviations from the baseline.")
+        btn_monitor.clicked.connect(self._run_iot_monitor)
+
+        btn_stop = QPushButton("⏹  Stop Monitor")
+        btn_stop.setObjectName("btnNetRefresh")
+        btn_stop.clicked.connect(self._stop_iot_monitor)
+
+        self._iot_learn_duration = QSpinBox()
+        self._iot_learn_duration.setRange(30, 600)
+        self._iot_learn_duration.setValue(60)
+        self._iot_learn_duration.setSuffix(" s")
+        self._iot_learn_duration.setToolTip("How many seconds to observe traffic during the learning phase")
+        self._iot_learn_duration.setFixedWidth(80)
+
+        ctrl.addWidget(btn_learn)
+        ctrl.addWidget(self._iot_learn_duration)
+        ctrl.addSpacing(12)
+        ctrl.addWidget(btn_monitor)
+        ctrl.addWidget(btn_stop)
+        ctrl.addStretch()
+
+        # Baseline summary table
+        self._iot_baseline_table = _table([
+            "Device", "IP", "MAC", "Type", "Known IPs", "Known Ports", "Avg pps", "Learned"
+        ])
+        self._iot_baseline_table.setColumnWidth(0, 200)
+        self._iot_baseline_table.setColumnWidth(1, 110)
+        self._iot_baseline_table.setColumnWidth(2, 145)
+        self._iot_baseline_table.setColumnWidth(3, 150)
+        self._iot_baseline_table.setColumnWidth(4, 60)
+        self._iot_baseline_table.setColumnWidth(5, 70)
+        self._iot_baseline_table.setColumnWidth(6, 65)
+
+        # Live alert table
+        alerts_lbl = QLabel("Live Anomaly Alerts")
+        alerts_lbl.setStyleSheet(f"color:{ACCENT_LITE};font-size:12px;font-weight:bold;padding:6px 0 2px 0;")
+        self._iot_alert_table = _table([
+            "Time", "Device", "Alert Type", "Severity", "Detail", "Remediation"
+        ])
+        self._iot_alert_table.setColumnWidth(0, 75)
+        self._iot_alert_table.setColumnWidth(1, 170)
+        self._iot_alert_table.setColumnWidth(2, 130)
+        self._iot_alert_table.setColumnWidth(3, 75)
+        self._iot_alert_table.setColumnWidth(4, 350)
+
+        lay.addWidget(info)
+        lay.addWidget(self._iot_status)
+        lay.addLayout(ctrl)
+        lay.addWidget(self._iot_baseline_table)
+        lay.addWidget(alerts_lbl)
+        lay.addWidget(self._iot_alert_table, 1)
+
+        self._iot_monitor_obj = None
+        return w
+
+    def _populate_iot_baseline_table(self, baselines: dict) -> None:
+        from PyQt6.QtGui import QColor
+        self._iot_baseline_table.setRowCount(0)
+        for mac, b in baselines.items():
+            row = self._iot_baseline_table.rowCount()
+            self._iot_baseline_table.insertRow(row)
+            label = b.model or b.vendor or mac
+            for col, val in enumerate([
+                label, b.ip, mac, b.device_type,
+                str(len(b.known_ips)), str(len(b.known_ports)),
+                f"{b.avg_pps:.1f}", b.learned_at[:10] if b.learned_at else "—",
+            ]):
+                self._iot_baseline_table.setItem(row, col, QTableWidgetItem(str(val)))
+
+    @pyqtSlot()
+    def _run_iot_learn(self):
+        if not self._m1_result:
+            self._iot_status.setText("⚠ Run 'Devices on Network' scan first.")
+            return
+        devices = self._m1_result.get("devices", [])
+        duration = self._iot_learn_duration.value()
+        self._iot_status.setText(f"Learning for {duration} s — keep devices active…")
+        try:
+            from modules.iot_baseline import learn
+            from pathlib import Path
+            def _do_learn():
+                baselines = learn(
+                    devices=devices, duration_s=duration,
+                    progress_cb=lambda m: self._iot_status.setText(m),
+                )
+                self._populate_iot_baseline_table(baselines)
+                self._iot_status.setText(
+                    f"Baseline learned for {len(baselines)} IoT device(s). "
+                    "Click 'Start Anomaly Monitor' to watch for deviations."
+                )
+            import threading
+            threading.Thread(target=_do_learn, daemon=True).start()
+        except Exception as exc:
+            self._iot_status.setText(f"⚠ Learn failed: {exc}")
+
+    @pyqtSlot()
+    def _run_iot_monitor(self):
+        try:
+            from modules.iot_baseline import load_or_create, IoTMonitor
+            from PyQt6.QtGui import QColor
+            import time
+
+            if not self._m1_result:
+                self._iot_status.setText("⚠ Run 'Devices on Network' scan first.")
+                return
+
+            devices = self._m1_result.get("devices", [])
+
+            def _start():
+                baselines = load_or_create(
+                    devices=devices,
+                    progress_cb=lambda m: self._iot_status.setText(m),
+                )
+                if not baselines:
+                    self._iot_status.setText("⚠ No IoT baselines — run Learn first.")
+                    return
+                self._populate_iot_baseline_table(baselines)
+
+                def _on_alert(alert):
+                    row = self._iot_alert_table.rowCount()
+                    self._iot_alert_table.insertRow(row)
+                    sev_color = RED if alert.severity == "CRITICAL" else (AMBER if alert.severity == "HIGH" else BLUE)
+                    for col, val in enumerate([
+                        alert.timestamp[11:19], alert.device_label,
+                        alert.alert_type.replace("_", " ").title(),
+                        alert.severity, alert.detail, alert.remediation,
+                    ]):
+                        item = QTableWidgetItem(str(val))
+                        if col in (2, 3):
+                            item.setForeground(QColor(sev_color))
+                        self._iot_alert_table.setItem(row, col, item)
+                    self._iot_alert_table.scrollToBottom()
+                    self._iot_status.setText(
+                        f"⚠ Alert: {alert.alert_type} on {alert.device_label}"
+                    )
+
+                self._iot_monitor_obj = IoTMonitor(
+                    baselines=baselines,
+                    on_alert=_on_alert,
+                    on_error=lambda m: self._iot_status.setText(f"⚠ {m}"),
+                )
+                self._iot_monitor_obj.start()
+                self._iot_status.setText(
+                    f"Monitoring {len(baselines)} IoT device(s) — watching for anomalies…"
+                )
+
+            import threading
+            threading.Thread(target=_start, daemon=True).start()
+
+        except Exception as exc:
+            self._iot_status.setText(f"⚠ Monitor failed: {exc}")
+
+    @pyqtSlot()
+    def _stop_iot_monitor(self):
+        if self._iot_monitor_obj:
+            self._iot_monitor_obj.stop()
+            self._iot_monitor_obj = None
+            self._iot_status.setText("Anomaly monitor stopped.")
+
+    # ── Network Grade (Benchmark) tab ─────────────────────────────────────────
+
+    def _build_benchmark_tab(self) -> QWidget:
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(8, 8, 8, 8)
+
+        info = QLabel(
+            "Compares your network against a 'Perfect Home Network' baseline and gives "
+            "an A–F letter grade across Uptime, Latency, Jitter, DNS Speed, Download Speed, "
+            "Device Safety, STP Health, and Broadcast Storm Level. "
+            "Run scans and/or the Stability Logger first, then click Grade My Network."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+
+        # Grade display
+        grade_row = QHBoxLayout()
+        self._bm_grade_label = QLabel("—")
+        self._bm_grade_label.setFixedSize(90, 90)
+        self._bm_grade_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._bm_grade_label.setStyleSheet(
+            "font-size:40px; font-weight:bold; border-radius:45px; "
+            f"background:{BG_CARD}; border:3px solid #2a2a4a; color:{TEXT_PRIMARY};"
+        )
+        self._bm_score_label = QLabel("Score: —")
+        self._bm_score_label.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:16px; font-weight:bold;"
+        )
+        self._bm_verdict_label = QLabel("Run scans first, then click Grade My Network.")
+        self._bm_verdict_label.setWordWrap(True)
+        self._bm_verdict_label.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; max-width:500px;"
+        )
+        grade_text = QVBoxLayout()
+        grade_text.addWidget(self._bm_score_label)
+        grade_text.addWidget(self._bm_verdict_label)
+        grade_row.addWidget(self._bm_grade_label)
+        grade_row.addSpacing(16)
+        grade_row.addLayout(grade_text)
+        grade_row.addStretch()
+
+        ctrl = QHBoxLayout()
+        btn_grade = QPushButton("📊  Grade My Network")
+        btn_grade.setObjectName("btnScan")
+        btn_grade.setToolTip("Score your network health across all available dimensions.")
+        btn_grade.clicked.connect(self._run_benchmark)
+        btn_isp = QPushButton("📤  Generate ISP Report")
+        btn_isp.setObjectName("btnNetRefresh")
+        btn_isp.setToolTip(
+            "Export an ISP Accountability Report — hop table, outages, grade — "
+            "as HTML you can print to PDF and attach to a support ticket."
+        )
+        btn_isp.clicked.connect(self._export_isp_report)
+        ctrl.addWidget(btn_grade)
+        ctrl.addWidget(btn_isp)
+        ctrl.addStretch()
+
+        # Dimension breakdown table
+        self._bm_table = _table(["Dimension", "Grade", "Your Value", "Ideal", "Verdict", "Fix Tip"])
+        self._bm_table.setColumnWidth(0, 190)
+        self._bm_table.setColumnWidth(1, 50)
+        self._bm_table.setColumnWidth(2, 100)
+        self._bm_table.setColumnWidth(3, 90)
+        self._bm_table.setColumnWidth(4, 280)
+
+        lay.addWidget(info)
+        lay.addLayout(grade_row)
+        lay.addSpacing(6)
+        lay.addLayout(ctrl)
+        lay.addWidget(self._bm_table, 1)
+        return w
+
+    @pyqtSlot()
+    def _run_benchmark(self):
+        from PyQt6.QtGui import QColor
+        try:
+            from modules.network_benchmark import grade as bm_grade
+
+            log_summary = None
+            if self._logger_worker:
+                try:
+                    log_summary = self._logger_worker.get_summary()
+                except Exception:
+                    pass
+
+            result = bm_grade(
+                log_summary=log_summary,
+                diag_result=self._diag_result,
+                m1_result=self._m1_result,
+                m2_result=self._m2_result,
+                m3_result=self._m3_result,
+            )
+            self._last_benchmark_result = result
+
+            # Update grade circle
+            grade_styles = {
+                "A": (GREEN, "#14532d"),
+                "B": ("#4ade80", "#1a3a1a"),
+                "C": (AMBER, "#451a03"),
+                "D": (RED, "#7f1d1d"),
+                "F": ("#ff4444", "#3b0000"),
+                "N/A": (TEXT_SECONDARY, BG_CARD),
+            }
+            fg, bg = grade_styles.get(result.overall_grade, (TEXT_SECONDARY, BG_CARD))
+            self._bm_grade_label.setText(result.overall_grade)
+            self._bm_grade_label.setStyleSheet(
+                f"font-size:40px; font-weight:bold; border-radius:45px; "
+                f"background:{bg}; border:3px solid {fg}; color:{fg};"
+            )
+            self._bm_score_label.setText(f"Score: {result.overall_score:.0f}/100")
+            self._bm_score_label.setStyleSheet(f"color:{fg}; font-size:16px; font-weight:bold;")
+            self._bm_verdict_label.setText(result.overall_verdict)
+
+            # Populate dimension table
+            self._bm_table.setRowCount(0)
+            for d in result.dimensions:
+                row = self._bm_table.rowCount()
+                self._bm_table.insertRow(row)
+                grade_color = {
+                    "A": GREEN, "B": "#4ade80", "C": AMBER, "D": RED, "F": "#ff4444"
+                }.get(d.grade, TEXT_SECONDARY)
+                for col, val in enumerate([
+                    d.name, d.grade, d.value_label, d.ideal_label, d.verdict, d.tip
+                ]):
+                    item = QTableWidgetItem(str(val))
+                    if col == 1:
+                        item.setForeground(QColor(grade_color))
+                    self._bm_table.setItem(row, col, item)
+
+        except Exception as exc:
+            self._bm_verdict_label.setText(f"⚠ Grading failed: {exc}")
+
+    @pyqtSlot()
+    def _export_isp_report(self):
+        try:
+            from modules.report_exporter import save_isp_report
+            from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit as _QLE
+
+            # Collect optional ISP name & account ref from user
+            dlg = QDialog(self)
+            dlg.setWindowTitle("ISP Report — Optional Details")
+            dlg.setMinimumWidth(380)
+            dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+            form = QFormLayout(dlg)
+            isp_edit = _QLE()
+            isp_edit.setPlaceholderText("e.g. BT, Virgin Media, Comcast…")
+            isp_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a; border-radius:4px; padding:4px;")
+            ref_edit = _QLE()
+            ref_edit.setPlaceholderText("e.g. REF-123456 (optional)")
+            ref_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a; border-radius:4px; padding:4px;")
+            form.addRow("ISP Name:", isp_edit)
+            form.addRow("Account / Ticket Ref:", ref_edit)
+            btns = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            )
+            btns.accepted.connect(dlg.accept)
+            btns.rejected.connect(dlg.reject)
+            form.addRow(btns)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
+
+            isp_name   = isp_edit.text().strip()
+            account_ref = ref_edit.text().strip()
+
+            # Gather data
+            log_summary = None
+            if self._logger_worker:
+                try:
+                    log_summary = self._logger_worker.get_summary()
+                except Exception:
+                    pass
+            bm_result = getattr(self, "_last_benchmark_result", None)
+
+            # Pick save path
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_name = f"ISP_Report_{ts}.html"
+            docs_dir = Path.home() / "Documents" / "NetSentinel" / "reports"
+            docs_dir.mkdir(parents=True, exist_ok=True)
+            path_str, _ = QFileDialog.getSaveFileName(
+                self, "Save ISP Report", str(docs_dir / default_name),
+                "HTML Report (*.html);;All Files (*)"
+            )
+            if not path_str:
+                return
+
+            out = save_isp_report(
+                output_path=Path(path_str),
+                log_summary=log_summary,
+                diag_result=self._diag_result,
+                benchmark_result=bm_result,
+                m1_result=self._m1_result,
+                isp_name=isp_name,
+                account_ref=account_ref,
+            )
+            webbrowser.open(out.as_uri())
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "ISP Report Error", str(exc))
+
+    # ── How to Fix dialog (shared by M1 / M2 / M3 context menus) ─────────────
+
+    def _show_how_to_fix(self, title: str, remediation: str):
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QScrollArea as _SA
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"How to Fix — {title}")
+        dlg.setMinimumWidth(500)
+        dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+        lay = QVBoxLayout(dlg)
+
+        heading = QLabel(f"<b>Remediation steps for: {title}</b>")
+        heading.setStyleSheet(f"color:{ACCENT_LITE}; font-size:13px; padding-bottom:4px;")
+        heading.setWordWrap(True)
+        lay.addWidget(heading)
+
+        # Split on ". " or "\\n" for numbered steps
+        import re
+        raw = remediation.strip() if remediation else "No specific fix information available."
+        parts = [p.strip() for p in re.split(r'\. (?=[A-Z0-9])', raw) if p.strip()]
+        if len(parts) <= 1 and "\n" in raw:
+            parts = [p.strip() for p in raw.split("\n") if p.strip()]
+
+        steps_html = ""
+        for i, step in enumerate(parts, 1):
+            s = html.escape(step)
+            if not s.endswith("."):
+                s += "."
+            steps_html += f"<li style='margin-bottom:8px'><b>Step {i}:</b> {s}</li>"
+        if not steps_html:
+            steps_html = f"<li>{html.escape(raw)}</li>"
+
+        txt = QLabel(f"<ol style='padding-left:18px;line-height:1.8'>{steps_html}</ol>")
+        txt.setWordWrap(True)
+        txt.setTextFormat(Qt.TextFormat.RichText)
+        txt.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px; padding:4px;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        inner = QWidget()
+        inner_lay = QVBoxLayout(inner)
+        inner_lay.addWidget(txt)
+        inner_lay.addStretch()
+        scroll.setWidget(inner)
+        scroll.setStyleSheet(f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:6px;")
+        scroll.setMinimumHeight(160)
+
+        lay.addWidget(scroll, 1)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        btns.accepted.connect(dlg.accept)
+        lay.addWidget(btns)
+        dlg.exec()
 
     # ── Window lifecycle ──────────────────────────────────────────────────────
 

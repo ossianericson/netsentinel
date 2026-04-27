@@ -66,6 +66,11 @@ hiddenimports: list = [
     "modules.nl_query",
     "modules.plugin_system",
     "modules.private_endpoint_checker",
+    "modules.mac_registry",
+    "modules.name_resolver",
+    "modules.network_benchmark",
+    "modules.iot_baseline",
+    "modules.root_cause_correlator",
     "ui.topology_widget",
     "ui.matrix_rain",
 ]

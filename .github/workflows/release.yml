@@ -41,6 +41,43 @@ jobs:
       - name: Post-build smoke test
         run: dist\NetSentinel.exe --smoke
 
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+
+      - name: Get version from tag
+        id: tag_version
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Patch installer.iss version
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.tag_version.outputs.VERSION }}"
+          (Get-Content installer.iss) -replace '#define MyAppVersion\s+"[^"]+"', "#define MyAppVersion `"$ver`"" |
+            Set-Content installer.iss
+
+      - name: Build Inno Setup installer
+        run: iscc installer.iss
+
+      - name: Compute installer SHA256
+        id: sha256
+        shell: pwsh
+        run: |
+          $ver  = "${{ steps.tag_version.outputs.VERSION }}"
+          $file = "dist\NetSentinel-Setup-${ver}.exe"
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          echo "SHA256=$hash" >> $env:GITHUB_OUTPUT
+          echo "Installer SHA256: $hash"
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/NetSentinel-Setup-*.exe
+          overwrite: true
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
@@ -197,32 +234,43 @@ jobs:
           body: |
             ## NetSentinel ${{ github.ref_name }}
 
-            ### Download the right file for your OS:
+            ### Recommended install
+
+            ```powershell
+            winget install NetSentinel.NetSentinel
+            ```
+
+            Or download manually:
 
             | Platform | File | Notes |
             |---|---|---|
-            | **Windows** | `NetSentinel.exe` | GUI — right-click → Run as Administrator. May need [Npcap](https://npcap.com) for STP/Storm. |
-            | **Windows** | `NetSentinel-cli.exe` | Headless CLI — no GUI, no display required. |
-            | **Windows** | `NetSentinel-svc.exe` | Background Windows service installer. |
-            | **macOS** | `NetSentinel-macOS.zip` | GUI — unzip, right-click → Open (bypasses Gatekeeper). |
+            | **Windows** | `NetSentinel-Setup-*.exe` | **Recommended** — full installer, adds to Start Menu + PATH. Registers with winget. |
+            | **Windows** | `NetSentinel.exe` | Portable GUI — right-click → Run as Administrator. |
+            | **Windows** | `NetSentinel-cli.exe` | Headless CLI — no GUI required. |
+            | **Windows** | `NetSentinel-svc.exe` | Background Windows service. |
+            | **macOS** | `NetSentinel-macOS.zip` | GUI — unzip, right-click → Open. |
             | **macOS** | `NetSentinel-cli-macOS` | Headless CLI. |
             | **Linux** | `NetSentinel` | GUI — `chmod +x NetSentinel && sudo ./NetSentinel` |
-            | **Linux** | `NetSentinel-cli-linux` | Headless CLI — `chmod +x NetSentinel-cli-linux` |
+            | **Linux** | `NetSentinel-cli-linux` | Headless CLI. |
 
             ### What it does
             One tool that replaces a drawer full of network utilities:
-            - Rogue device fingerprinting with OUI database (115+ OUI prefixes)
+            - Rogue device fingerprinting with curated OUI registry (Google, TP-Link, Apple, Amazon, Samsung, LG, PlayStation, Nintendo, Xbox, Roku, Netgear, Asus)
             - STP/BPDU rogue Root Bridge detection
             - Broadcast & multicast storm analysis
+            - IoT Behavioral Baseline — learns normal device traffic, alerts on deviations
+            - Root Cause Correlator — distinguishes ISP fault from local network fault
+            - Network Grade (A–F) across 8 dimensions — uptime, latency, jitter, DNS, speed, safety, STP, storm
+            - ISP Accountability Report — HTML export with MTR hop table and outage log for support tickets
+            - How-to-Fix context menus on every scan result
             - Hidden SSID and co-channel WiFi interference detection
             - Live ping + DNS latency correlation
             - On-demand diagnostics: speed test, DNS leak, traceroute, public IP
-            - Long-term background connectivity logger with automated plain-English analysis
-            - TCP port scanner (26 ports, banner grab, HIGH-risk flags)
-            - MTR continuous hop-by-hop traceroute
-            - Wake-on-LAN magic packet sender
-            - HTML report export
+            - Long-term background connectivity logger with stability scoring
+            - TCP port scanner, OS fingerprinter, CVE lookup, MTR, and more
+            - HTML, JSON, CSV, Nmap XML report export
           files: |
+            artifacts/windows-installer/NetSentinel-Setup-*.exe
             artifacts/windows-exe/NetSentinel.exe
             artifacts/windows-cli/NetSentinel-cli.exe
             artifacts/windows-svc/NetSentinel-svc.exe

@@ -62,6 +62,11 @@ def _smoke_test() -> None:
         "modules.cloud_metadata",
         "modules.log_chart",
         "ui.matrix_rain",
+        "modules.mac_registry",
+        "modules.name_resolver",
+        "modules.network_benchmark",
+        "modules.iot_baseline",
+        "modules.root_cause_correlator",
     ]
     for _mod in _checks:
         try:
@@ -219,7 +224,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.0.3")
+    app.setApplicationVersion("1.0.4")
     app.setOrganizationName("netsentinel")
 
     # App icon (bundled as icon.ico / icon.png if present)

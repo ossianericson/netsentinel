@@ -690,3 +690,258 @@ def save_nmap_xml_report(
     return output_path
 
 
+# ── ISP Accountability Report ─────────────────────────────────────────────────
+
+_ISP_CSS = _CSS + """
+.isp-header { background: #0a0a1a; border-bottom: 3px solid #7c3aed; padding: 24px 32px 16px; }
+.isp-header h1 { color: #e0e0f0; font-size: 1.6rem; }
+.isp-header .sub { color: #888; font-size: 0.85rem; margin-top: 4px; }
+.grade-box { display:inline-block; width:90px; height:90px; border-radius:50%;
+  line-height:90px; text-align:center; font-size:3rem; font-weight:bold; margin-right:24px;
+  vertical-align:middle; }
+.grade-A { background:#14532d; color:#4ade80; border:3px solid #22c55e; }
+.grade-B { background:#1a3a1a; color:#86efac; border:3px solid #4ade80; }
+.grade-C { background:#451a03; color:#fcd34d; border:3px solid #f59e0b; }
+.grade-D { background:#7f1d1d; color:#fca5a5; border:3px solid #ef4444; }
+.grade-F { background:#3b0000; color:#ff4444; border:3px solid #dc2626; }
+.dim-row { display:flex; align-items:center; padding:10px 0; border-bottom:1px solid #1e1e3a; }
+.dim-name { flex:0 0 200px; color:#a78bfa; font-size:0.9rem; }
+.dim-bar-wrap { flex:1; background:#1e1e3a; border-radius:6px; height:12px; margin:0 16px; }
+.dim-bar { height:12px; border-radius:6px; }
+.dim-grade { flex:0 0 30px; font-weight:bold; font-size:1.1rem; text-align:center; }
+.dim-val { flex:0 0 100px; color:#888; font-size:0.8rem; text-align:right; }
+.hop-table { font-size:0.82rem; }
+.hop-table .loss-high { color:#ef4444; font-weight:bold; }
+.section-title { color:#7c3aed; font-size:1rem; font-weight:bold;
+  margin:20px 0 8px; padding-bottom:4px; border-bottom:1px solid #2a2a4a; }
+.evidence-note { background:#0d0d1e; border-left:3px solid #7c3aed;
+  padding:10px 14px; font-size:0.85rem; color:#aaa; margin:12px 0; border-radius:0 8px 8px 0; }
+"""
+
+
+def generate_isp_report(
+    log_summary=None,
+    diag_result=None,
+    mtr_result=None,
+    benchmark_result=None,
+    m1_result=None,
+    public_ip: str = "",
+    isp_name: str = "",
+    account_ref: str = "",
+) -> str:
+    """
+    Generate a self-contained HTML ISP Accountability Report designed to be
+    attached to a support ticket or printed and handed to a technician.
+
+    Bundles: network grade, traceroute hop table with loss %, ping stats,
+    DNS latency, outage log, and a plain-English summary paragraph.
+
+    Parameters
+    ----------
+    log_summary      : LogSummary (uptime, jitter, outages)
+    diag_result      : DiagnosticsResult (ping, DNS, download, trace hops)
+    mtr_result       : List[dict] with keys hop/ip/loss_pct/avg_rtt
+    benchmark_result : BenchmarkResult from network_benchmark.grade()
+    m1_result        : rogue_device scan dict
+    public_ip        : Detected public IP (shown for ISP reference)
+    isp_name         : Optional ISP name to include in report header
+    account_ref      : Optional account/reference number
+    """
+    ts  = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.datetime.now().strftime("%A %d %B %Y, %H:%M")
+
+    # ── Overall grade section ─────────────────────────────────────────────────
+    if benchmark_result:
+        grade_letter = benchmark_result.overall_grade
+        grade_color  = benchmark_result.overall_color
+        overall_txt  = html.escape(benchmark_result.overall_verdict)
+        grade_css    = f"grade-{grade_letter}"
+        score        = f"{benchmark_result.overall_score:.0f}/100"
+    else:
+        grade_letter = "N/A"
+        grade_css    = "grade-F"
+        grade_color  = "#888"
+        overall_txt  = "No benchmark data available."
+        score        = "—"
+
+    # ── Dimension bars ────────────────────────────────────────────────────────
+    dim_html = ""
+    if benchmark_result and benchmark_result.dimensions:
+        for d in benchmark_result.dimensions:
+            bar_color = d.color
+            dim_html += (
+                f'<div class="dim-row">'
+                f'<div class="dim-name">{html.escape(d.name)}</div>'
+                f'<div class="dim-bar-wrap">'
+                f'<div class="dim-bar" style="width:{d.score:.0f}%;background:{bar_color}"></div>'
+                f'</div>'
+                f'<div class="dim-grade" style="color:{bar_color}">{d.grade}</div>'
+                f'<div class="dim-val">{html.escape(d.value_label)}</div>'
+                f'</div>'
+            )
+
+    # ── Traceroute / MTR hop table ────────────────────────────────────────────
+    trace_hops = getattr(diag_result, "trace_hops", []) if diag_result else []
+    mtr_rows_html = ""
+    if mtr_result:
+        for hop in mtr_result:
+            loss = hop.get("loss_pct", 0.0)
+            cls  = 'loss-high' if loss > 10 else ''
+            mtr_rows_html += (
+                f"<tr><td>{hop.get('hop','?')}</td>"
+                f"<td>{html.escape(hop.get('ip','*'))}</td>"
+                f"<td class='{cls}'>{loss:.1f}%</td>"
+                f"<td>{hop.get('avg_rtt',-1):.1f} ms</td>"
+                f"<td>{hop.get('last_rtt',-1):.1f} ms</td></tr>"
+            )
+    elif trace_hops:
+        for h in trace_hops:
+            rtt  = getattr(h, "rtt_ms", -1)
+            mtr_rows_html += (
+                f"<tr><td>{getattr(h,'hop','?')}</td>"
+                f"<td>{html.escape(getattr(h,'ip','*'))}</td>"
+                f"<td>—</td>"
+                f"<td>{'—' if rtt < 0 else f'{rtt:.1f} ms'}</td>"
+                f"<td>—</td></tr>"
+            )
+    hop_section = ""
+    if mtr_rows_html:
+        hop_section = f"""
+<div class="section-title">Network Path (Traceroute / MTR)</div>
+<table class="hop-table">
+<thead><tr><th>Hop</th><th>IP Address</th><th>Packet Loss</th>
+<th>Avg RTT</th><th>Last RTT</th></tr></thead>
+<tbody>{mtr_rows_html}</tbody>
+</table>
+<div class="evidence-note">
+Packet loss at hop 1 (your router) = local fault.<br>
+Packet loss first appearing at hop 2+ = ISP infrastructure issue.
+</div>"""
+
+    # ── Outage log ────────────────────────────────────────────────────────────
+    outages = getattr(log_summary, "outages", []) if log_summary else []
+    outage_rows = ""
+    for o in outages:
+        outage_rows += (
+            f"<tr><td>{html.escape(o.host)}</td>"
+            f"<td>{html.escape(o.start)}</td>"
+            f"<td>{html.escape(o.end)}</td>"
+            f"<td>{o.duration_s:.0f} s</td>"
+            f"<td>{o.consecutive_fails}</td></tr>"
+        )
+    outage_section = ""
+    if outage_rows:
+        outage_section = f"""
+<div class="section-title">Recorded Outages</div>
+<table>
+<thead><tr><th>Target</th><th>Start</th><th>End</th>
+<th>Duration</th><th>Consecutive Fails</th></tr></thead>
+<tbody>{outage_rows}</tbody>
+</table>"""
+    elif log_summary:
+        outage_section = (
+            '<div class="section-title">Recorded Outages</div>'
+            '<p style="color:#22c55e">No outages recorded during the monitoring period.</p>'
+        )
+
+    # ── Key metrics summary ───────────────────────────────────────────────────
+    uptime  = getattr(log_summary, "uptime_pct",   100.0) if log_summary else None
+    avg_rtt = getattr(log_summary, "avg_rtt_ms",   -1.0)  if log_summary else -1.0
+    jitter  = getattr(log_summary, "avg_jitter_ms",-1.0)  if log_summary else -1.0
+    dl_mbps = getattr(diag_result, "download_mbps",-1.0)  if diag_result else -1.0
+
+    def _fmt(val, suffix, default="Not measured"):
+        return f"{val:.1f}{suffix}" if val and val > 0 else default
+
+    metrics_rows = f"""
+<tr><td>Uptime</td><td>{_fmt(uptime,'%') if uptime is not None else 'Not measured'}</td></tr>
+<tr><td>Average Latency</td><td>{_fmt(avg_rtt,' ms')}</td></tr>
+<tr><td>Average Jitter</td><td>{_fmt(jitter,' ms')}</td></tr>
+<tr><td>Download Speed</td><td>{_fmt(dl_mbps,' Mbps')}</td></tr>
+<tr><td>Public IP</td><td>{html.escape(public_ip or 'Not detected')}</td></tr>
+<tr><td>ISP</td><td>{html.escape(isp_name or 'Not specified')}</td></tr>
+<tr><td>Account Reference</td><td>{html.escape(account_ref or '—')}</td></tr>
+"""
+
+    # ── Assemble ──────────────────────────────────────────────────────────────
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NetSentinel — ISP Report {ts}</title>
+<style>{_ISP_CSS}</style>
+</head>
+<body>
+<div class="isp-header">
+  <h1>NetSentinel — ISP Accountability Report</h1>
+  <div class="sub">Generated: {now} &nbsp;|&nbsp; This report was produced entirely offline. No data was sent to any server.</div>
+</div>
+
+<div class="module" style="margin-top:20px;display:flex;align-items:center">
+  <div class="grade-box {grade_css}">{grade_letter}</div>
+  <div>
+    <div style="font-size:1.1rem;font-weight:bold;color:{grade_color}">
+      Network Health Score: {score}
+    </div>
+    <div style="color:#ccc;margin-top:6px;max-width:600px">{overall_txt}</div>
+  </div>
+</div>
+
+<div class="module">
+  <div class="section-title">Performance Breakdown</div>
+  {dim_html or '<p>No benchmark data — run scans first.</p>'}
+</div>
+
+<div class="module">
+  <div class="section-title">Key Metrics Summary</div>
+  <table><tbody>{metrics_rows}</tbody></table>
+</div>
+
+{f'<div class="module">{hop_section}</div>' if hop_section else ''}
+{f'<div class="module">{outage_section}</div>' if outage_section else ''}
+
+<div class="module">
+  <div class="section-title">How to Use This Report</div>
+  <ul style="padding-left:18px;line-height:1.9;color:#ccc;font-size:0.9rem">
+    <li>Share this HTML file or print it to PDF (Ctrl+P → Save as PDF) and attach to your ISP support ticket.</li>
+    <li>Point the technician to the <strong>Network Path</strong> table — packet loss first appearing at hop 2 or later is in the ISP's network.</li>
+    <li>The <strong>Recorded Outages</strong> section provides timestamped evidence of every disconnection.</li>
+    <li>The <strong>Network Health Score</strong> gives an at-a-glance summary of your connection quality.</li>
+  </ul>
+</div>
+
+<p class="meta">
+  NetSentinel &bull; Privacy-First Network Diagnostics &bull;
+  All measurements taken locally &bull; {ts}
+</p>
+</body>
+</html>"""
+
+
+def save_isp_report(
+    output_path: Path,
+    log_summary=None,
+    diag_result=None,
+    mtr_result=None,
+    benchmark_result=None,
+    m1_result=None,
+    public_ip: str = "",
+    isp_name: str = "",
+    account_ref: str = "",
+) -> Path:
+    """Save an ISP Accountability Report as HTML. Returns the output path."""
+    content = generate_isp_report(
+        log_summary=log_summary,
+        diag_result=diag_result,
+        mtr_result=mtr_result,
+        benchmark_result=benchmark_result,
+        m1_result=m1_result,
+        public_ip=public_ip,
+        isp_name=isp_name,
+        account_ref=account_ref,
+    )
+    output_path.write_text(content, encoding="utf-8")
+    return output_path
+
+
+
