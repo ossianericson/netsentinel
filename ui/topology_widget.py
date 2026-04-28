@@ -21,8 +21,8 @@ from matplotlib.patches import FancyBboxPatch
 from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
-    BG_DARK, BG_CARD, TEXT_PRIMARY, TEXT_SECONDARY,
-    ACCENT_LITE, RED, AMBER, GREEN, BLUE,
+    BG_CARD, BG_DARK, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+    ACCENT, RED, AMBER, GREEN, BLUE, BORDER, CHART_BG, CHART_PLOT_BG,
 )
 
 RISK_NODE_COLOR = {
@@ -30,11 +30,11 @@ RISK_NODE_COLOR = {
     "MEDIUM":  AMBER,
     "LOW":     BLUE,
     "CLEAN":   GREEN,
-    "UNKNOWN": "#555570",
+    "UNKNOWN": TEXT_MUTED,
 }
 
-GATEWAY_COLOR  = ACCENT_LITE
-INTERNET_COLOR = "#3b82f6"
+GATEWAY_COLOR  = ACCENT
+INTERNET_COLOR = ACCENT
 
 
 class TopologyWidget(QWidget):
@@ -53,7 +53,7 @@ class TopologyWidget(QWidget):
 
     def _style_axes(self):
         ax = self._ax
-        ax.set_facecolor(BG_DARK)
+        ax.set_facecolor(BG_CARD)
         ax.axis("off")
         self._fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
@@ -73,7 +73,7 @@ class TopologyWidget(QWidget):
 
         if not devices:
             ax.text(0.5, 0.5, "No devices to display.\nRun a scan first.",
-                    ha="center", va="center", color=TEXT_SECONDARY,
+                    ha="center", va="center", color=TEXT_MUTED,
                     fontsize=13, transform=ax.transAxes)
             self._canvas.draw()
             return
@@ -121,20 +121,20 @@ class TopologyWidget(QWidget):
         # Draw edges
         gx, gy = positions["gateway"]
         ix, iy = positions["internet"]
-        ax.plot([ix, gx], [iy, gy], color="#333355", linewidth=1.5, zorder=1)
+        ax.plot([ix, gx], [iy, gy], color=BORDER, linewidth=1.5, zorder=1)
         for node in nodes[2:]:
             nx, ny = positions[node["id"]]
-            ax.plot([gx, nx], [gy, ny], color="#2a2a4a", linewidth=1.0, zorder=1)
+            ax.plot([gx, nx], [gy, ny], color=BORDER, linewidth=1.0, zorder=1)
 
         # Draw nodes
         for node in nodes:
             x, y = positions[node["id"]]
             ax.scatter(x, y, s=node["size"], c=node["color"],
-                       zorder=3, alpha=0.9, edgecolors="#1a1a35", linewidths=1.5)
+                       zorder=3, alpha=0.9, edgecolors=BG_CARD, linewidths=1.5)
             ax.text(x, y - 0.07, node["label"],
                     ha="center", va="top", fontsize=7,
                     color=TEXT_PRIMARY, zorder=4,
-                    bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec="none", alpha=0.7))
+                    bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.9))
 
         # Legend
         legend_items = [
@@ -150,9 +150,9 @@ class TopologyWidget(QWidget):
         ]
         ax.legend(handles=handles, loc="lower right",
                   fontsize=8, labelcolor=TEXT_SECONDARY,
-                  facecolor=BG_CARD, edgecolor="#2a2a4a", framealpha=0.8)
+                  facecolor=BG_CARD, edgecolor=BORDER, framealpha=0.9)
 
-        ax.set_title("Network Topology", color=ACCENT_LITE, fontsize=11, pad=6)
+        ax.set_title("Network Topology", color=CHART_TITLE, fontsize=11, fontweight="bold", pad=6)
         self._fig.tight_layout(pad=0.5)
         self._canvas.draw()
 

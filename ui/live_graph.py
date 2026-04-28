@@ -13,13 +13,16 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
 
-from ui.styles import BG_DARK, BG_CARD, TEXT_PRIMARY, TEXT_SECONDARY, ACCENT_LITE, RED, GREEN
+from ui.styles import (
+    BG_CARD, ACCENT, ACCENT_LITE, BORDER, RED, GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
+    CHART_BG, CHART_PLOT_BG, CHART_GRID, CHART_TITLE,
+)
 
 TARGET_COLORS = {
-    "1.1.1.1":  "#a78bfa",
-    "8.8.8.8":  "#38bdf8",
-    "gateway":  "#4ade80",
-    "default":  "#94a3b8",
+    "1.1.1.1":  "#0078D4",
+    "8.8.8.8":  "#2E7D32",
+    "gateway":  "#F59E0B",
+    "default":  "#5A6A7A",
 }
 
 
@@ -31,7 +34,7 @@ class LiveGraphWidget(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._series: Dict[str, List] = {}   # target -> list of (t, rtt_ms or None)
-        self._fig = Figure(figsize=(8, 3), dpi=96, facecolor=BG_DARK)
+        self._fig = Figure(figsize=(8, 3), dpi=96, facecolor=CHART_BG)
         self._ax = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -45,16 +48,16 @@ class LiveGraphWidget(QWidget):
 
     def _style_axes(self):
         ax = self._ax
-        ax.set_facecolor(BG_CARD)
+        ax.set_facecolor(CHART_PLOT_BG)
         ax.tick_params(colors=TEXT_SECONDARY, labelsize=9)
-        ax.spines["bottom"].set_color("#2a2a4a")
-        ax.spines["left"].set_color("#2a2a4a")
+        ax.spines["bottom"].set_color(BORDER)
+        ax.spines["left"].set_color(BORDER)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.set_xlabel("Elapsed (s)", color=TEXT_SECONDARY, fontsize=9)
         ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
-        ax.set_title("Ping & DNS Latency — Live", color=ACCENT_LITE, fontsize=10)
-        ax.grid(True, color="#1e1e3a", linewidth=0.6, linestyle="--")
+        ax.set_title("Ping & DNS Latency — Live", color=CHART_TITLE, fontsize=10, fontweight="bold")
+        ax.grid(True, color=CHART_GRID, linewidth=0.8, linestyle="-")
 
     def add_ping_point(self, timestamp: float, target: str, rtt_ms):
         """rtt_ms is None for timeouts."""
@@ -97,7 +100,7 @@ class LiveGraphWidget(QWidget):
             loc="upper right",
             fontsize=8,
             facecolor=BG_CARD,
-            edgecolor="#2a2a4a",
+            edgecolor=BORDER,
             labelcolor=TEXT_PRIMARY,
         )
         self._fig.tight_layout(pad=1.0)

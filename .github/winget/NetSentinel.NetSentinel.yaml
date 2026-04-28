@@ -6,10 +6,10 @@
 # The release CI (winget-submit.yml) fills this in automatically using wingetcreate.
 # For the very first submission, run:
 #   winget install Microsoft.Wingetcreate
-#   wingetcreate new https://github.com/ossianericson/netsentinel/releases/download/v1.0.4/NetSentinel-Setup-1.0.4.exe
+#   wingetcreate new https://github.com/ossianericson/netsentinel/releases/download/v1.1.2/NetSentinel-Setup-1.1.2.exe
 
 PackageIdentifier: NetSentinel.NetSentinel
-PackageVersion: 1.0.4
+PackageVersion: 1.1.2
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.6.0

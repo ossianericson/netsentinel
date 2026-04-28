@@ -224,7 +224,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.0.4")
+    app.setApplicationVersion("1.3.1")
     app.setOrganizationName("netsentinel")
 
     # App icon (bundled as icon.ico / icon.png if present)
@@ -235,17 +235,139 @@ def main():
     else:
         base = Path(__file__).parent
 
-    for ico in ("icon.ico", "icon.png"):
+    for ico in (
+        "NetSentinel.ico",
+        "assets/icons/NetSentinel.ico",
+        "icon.ico",
+        "icon.png",
+    ):
         ico_path = base / ico
         if ico_path.exists():
             app.setWindowIcon(QIcon(str(ico_path)))
             break
 
+    from modules.metric_store import MetricStore
+    from modules.alert_engine import AlertEngine
+    from workers.availability_worker import AvailabilityWorker
+    from workers.cert_worker import CertWorker
+    from workers.service_worker import ServiceWorker as SvcWorker
+    from workers.report_scheduler_worker import ReportSchedulerWorker
+    from workers.snmp_trap_worker import SnmpTrapWorker
+    from workers.syslog_worker import SyslogWorker
+
+    store  = MetricStore()           # uses default portable path
+    alerts = AlertEngine(store=store)
+
+    from modules.notification_router import NotificationRouter
+    notif_router = NotificationRouter()
+    alerts.set_on_alert(notif_router.dispatch)
+
+    from modules.maintenance_window import MaintenanceWindowManager
+    maint_manager = MaintenanceWindowManager()
+    alerts.set_maintenance_checker(maint_manager.is_suppressed)
+
+    avail_worker = AvailabilityWorker(store=store, interval_s=60)
+    avail_worker.start()
+
+    cert_worker = CertWorker(store=store, interval_s=3600)
+    cert_worker.start()
+
+    svc_worker = SvcWorker(store=store, interval_s=60)
+    svc_worker.start()
+
+    report_worker = ReportSchedulerWorker(store=store)
+    report_worker.start()
+
+    snmp_trap_worker = SnmpTrapWorker()
+    snmp_trap_worker.start()
+
+    syslog_worker = SyslogWorker()
+    syslog_worker.start()
+
     from ui.dashboard import Dashboard
-    window = Dashboard()
+    window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
+                       maint_manager=maint_manager)
     window.show()
 
-    sys.exit(app.exec())
+    # First-run onboarding dialog (shown once per install)
+    from ui.first_run_dialog import FirstRunDialog, should_show_first_run
+    if should_show_first_run():
+        dlg = FirstRunDialog(parent=window)
+        dlg.exec()
+
+    # Wire notification router → toast callback + notifications page
+    notif_router.set_toast_callback(window._show_alert_toast)
+    window._notifications_page.set_router(notif_router)
+    window._maintenance_page.set_manager(maint_manager)
+
+    # Wire report worker → reports page
+    report_worker.report_saved.connect(window._reports_page.on_report_saved)
+    report_worker.error.connect(window._reports_page.on_worker_error)
+    window._reports_page.set_worker(report_worker)
+
+    # Wire SNMP trap worker → trap page
+    snmp_trap_worker.trap_received.connect(window._snmp_trap_page.on_trap_received)
+    snmp_trap_worker.status.connect(window._snmp_trap_page.on_status)
+    snmp_trap_worker.error.connect(window._snmp_trap_page.on_error)
+
+    # Wire syslog worker → syslog page
+    syslog_worker.message_received.connect(window._syslog_page.on_message_received)
+    syslog_worker.status.connect(window._syslog_page.on_status)
+    syslog_worker.error.connect(window._syslog_page.on_error)
+
+    # Wire worker signal → history + inventory + uptime pages
+    avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
+    avail_worker.cycle_done.connect(window._inventory_page.on_cycle_done)
+    avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
+
+    # Wire cert worker → cert page
+    cert_worker.check_done.connect(window._cert_page.on_check_done)
+
+    # Wire service worker → service page + alert engine
+    svc_worker.check_done.connect(window._service_page.on_check_done)
+
+    def _on_svc_check(results: list) -> None:
+        fired = alerts.evaluate_service_checks(results)
+        for a in fired:
+            window._show_alert_toast(a)
+        window._overview_page.on_svc_done(results)
+
+    svc_worker.check_done.connect(_on_svc_check)
+
+    # Wire cert alerts
+    def _on_cert_check(results: list) -> None:
+        fired = alerts.evaluate_cert_checks(results)
+        for a in fired:
+            window._show_alert_toast(a)
+        window._overview_page.on_cert_done(results)
+
+    cert_worker.check_done.connect(_on_cert_check)
+
+    # Wire availability cycle → alert engine + overview page
+    def _on_cycle(result_dict: dict) -> None:
+        fired = alerts.evaluate_cycle(result_dict)
+        for a in fired:
+            window._show_alert_toast(a)
+            window._overview_page.on_alert(a)
+        window._overview_page.on_cycle_done(result_dict)
+
+    avail_worker.cycle_done.connect(_on_cycle)
+
+    ret = app.exec()
+    avail_worker.stop()
+    avail_worker.wait(5000)
+    cert_worker.stop()
+    cert_worker.wait(5000)
+    svc_worker.stop()
+    svc_worker.wait(5000)
+    report_worker.stop()
+    report_worker.wait(5000)
+    snmp_trap_worker.stop()
+    snmp_trap_worker.wait(5000)
+    syslog_worker.stop()
+    syslog_worker.wait(5000)
+    store.close()
+    sys.exit(ret)
 
 
 if __name__ == "__main__":

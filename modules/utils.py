@@ -27,6 +27,60 @@ def is_admin() -> bool:
         return False
 
 
+# ── Npcap / libpcap detection ─────────────────────────────────────────────────
+
+def is_npcap_available() -> bool:
+    """
+    Return True if the packet-capture driver needed by Scapy is installed.
+
+    Windows  — checks the Npcap registry installation key (instantaneous).
+    macOS    — checks for libpcap shared library in standard locations.
+    Linux    — checks for libpcap shared library in standard locations.
+
+    Cached after first call so repeated page-builds are free.
+    """
+    return _npcap_available()
+
+
+def _npcap_available(_cache: list = []) -> bool:   # noqa: B006
+    if _cache:
+        return _cache[0]
+
+    system = platform.system()
+    try:
+        if system == "Windows":
+            import winreg
+            # Npcap installer writes to HKLM\SOFTWARE\Npcap
+            winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Npcap",
+                access=winreg.KEY_READ | winreg.KEY_WOW64_32KEY,
+            ).Close()
+            result = True
+        elif system == "Darwin":
+            result = any(
+                Path(p).exists() for p in [
+                    "/usr/lib/libpcap.dylib",
+                    "/usr/local/lib/libpcap.dylib",
+                    "/opt/homebrew/lib/libpcap.dylib",
+                ]
+            )
+        else:   # Linux / other POSIX
+            result = any(
+                Path(p).exists() for p in [
+                    "/usr/lib/libpcap.so.0",
+                    "/usr/lib/libpcap.so",
+                    "/usr/lib/x86_64-linux-gnu/libpcap.so.0.8",
+                    "/usr/lib/x86_64-linux-gnu/libpcap.so.1",
+                ]
+            )
+    except Exception:
+        result = False
+
+    _cache.append(result)
+    return result
+
+
 def get_offenders_path() -> Path:
     """Locate offenders.json whether running from source or as a PyInstaller bundle."""
     if getattr(sys, "frozen", False):

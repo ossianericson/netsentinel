@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NetSentinel
+GenericName=Network Security Scanner
+Comment=Detect rogue devices, monitor connectivity, and audit your network
+Exec=/opt/netsentinel/NetSentinel
+Icon=netsentinel
+Terminal=false
+Categories=Network;Security;System;
+Keywords=network;security;scanner;monitor;rogue;arp;stp;dns;
+StartupNotify=true
+StartupWMClass=NetSentinel

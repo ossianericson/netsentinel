@@ -22,7 +22,7 @@
 ; ============================================================================
 
 #define MyAppName        "NetSentinel"
-#define MyAppVersion     "1.0.4"
+#define MyAppVersion     "1.3.1"
 #define MyAppPublisher   "NetSentinel Project"
 #define MyAppURL         "https://github.com/ossianericson/netsentinel"
 #define MyAppExeName     "NetSentinel.exe"
@@ -106,7 +106,7 @@ Name: "{group}\{#MyAppName} CLI";                 Filename: "{app}\{#MyAppCliNam
 Name: "{group}\Uninstall {#MyAppName}";           Filename: "{uninstallexe}"
 
 ; Desktop (optional)
-Name: "{autodesktop}\{#MyAppName}";               Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}";               Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\NetSentinel.ico"
 
 [Registry]
 ; Add install dir to system PATH

@@ -24,7 +24,10 @@ from PyInstaller.utils.hooks import collect_all
 _debug_build = os.environ.get("NETSENTINEL_DEBUG", "0") == "1"
 
 # ── Data files ────────────────────────────────────────────────────────────────
-datas = [("offenders.json", ".")]
+datas = [
+    ("offenders.json", "."),
+    ("assets/icons", "assets/icons"),
+]
 
 # ── Collect whole packages (data + binaries + submodule tree) ─────────────────
 # PyInstaller cannot auto-discover dynamically-loaded backends and lazy-loaded
@@ -116,7 +119,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon="assets/icons/NetSentinel.ico" if sys.platform == "win32" else None,
 )
 
 # macOS: wrap the binary in a .app bundle (only relevant on macOS)
@@ -124,7 +127,7 @@ if sys.platform == "darwin":
     app = BUNDLE(  # noqa: F821 — PyInstaller injects this name at build time
         exe,
         name="NetSentinel.app",
-        icon=None,
+        icon="assets/icons/NetSentinel.ico",
         bundle_identifier="com.netsentinel.app",
         info_plist={
             "NSHighResolutionCapable": True,

@@ -14,6 +14,7 @@ Build:
 """
 
 import os
+import sys
 
 # ── Data files ────────────────────────────────────────────────────────────────
 datas = [("offenders.json", ".")]
@@ -77,5 +78,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon="assets/icons/NetSentinel.ico" if sys.platform == "win32" else None,
 )

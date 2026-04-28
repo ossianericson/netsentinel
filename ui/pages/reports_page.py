@@ -1,0 +1,304 @@
+"""
+ReportsPage — UI for scheduled auto-report generation (T2#9).
+
+Shows:
+  • Schedule configuration (interval, output directory, enable/disable)
+  • "Generate Now" button
+  • Recent reports list (last N)
+
+Conforms to the NetSentinel enterprise UI design system:
+  • Light content area (#F4F4F4)
+  • Cards with #FFFFFF background, 1px #D4D4D4 border, 0px radius
+  • Table header #1A3A5C / white, 11px rows, zebra striping
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from PyQt6.QtCore    import Qt, QTimer, pyqtSlot
+from PyQt6.QtWidgets import (
+    QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QListWidgetItem, QPushButton, QSizePolicy, QSpinBox,
+    QVBoxLayout, QWidget, QCheckBox, QGroupBox, QFrame,
+)
+
+from modules.metric_store      import MetricStore
+from modules.report_scheduler  import ReportConfig, ReportScheduler
+from ui.styles                 import (
+    ACCENT, BG_CARD, BG_DARK, BORDER, GREEN, RED, TEXT_PRIMARY,
+    TEXT_SECONDARY, TH_BG, TH_TEXT,
+)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
+    """Return a card container + its body layout."""
+    outer = QWidget()
+    outer.setStyleSheet(
+        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; }}"
+    )
+    outer_lay = QVBoxLayout(outer)
+    outer_lay.setContentsMargins(0, 0, 0, 0)
+    outer_lay.setSpacing(0)
+
+    # Title bar
+    title_bar = QLabel(title)
+    title_bar.setStyleSheet(
+        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid #ECECEC;"
+        f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}"
+    )
+    outer_lay.addWidget(title_bar)
+
+    body = QWidget()
+    body.setStyleSheet(f"background:{BG_CARD}; border:none;")
+    body_lay = QVBoxLayout(body)
+    body_lay.setContentsMargins(12, 10, 12, 10)
+    body_lay.setSpacing(8)
+    outer_lay.addWidget(body)
+
+    return outer, body_lay
+
+
+def _kpi_tile(label: str, value: str = "—") -> tuple[QWidget, QLabel]:
+    tile = QWidget()
+    tile.setStyleSheet(
+        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        f" border-left:3px solid {ACCENT}; padding:4px 8px; }}"
+    )
+    tile.setMinimumWidth(120)
+    tile.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+    lay = QVBoxLayout(tile)
+    lay.setContentsMargins(6, 4, 6, 4)
+    lay.setSpacing(2)
+    lbl = QLabel(label.upper())
+    lbl.setStyleSheet(f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
+    val = QLabel(value)
+    val.setStyleSheet(f"font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
+    lay.addWidget(lbl)
+    lay.addWidget(val)
+    return tile, val
+
+
+# ── Page ──────────────────────────────────────────────────────────────────────
+
+class ReportsPage(QWidget):
+    """
+    Auto-report schedule configuration and history viewer.
+    Receives the ReportSchedulerWorker reference from app.py after the
+    page is registered in the dashboard.
+    """
+
+    def __init__(self, store: MetricStore, report_worker=None, parent=None):
+        super().__init__(parent)
+        self._store  = store
+        self._worker = report_worker   # may be set later via set_worker()
+        self._error_count = 0
+        self._setup_ui()
+
+    def set_worker(self, worker) -> None:
+        """Inject the worker after construction (called from app.py)."""
+        self._worker = worker
+
+    # ── UI ────────────────────────────────────────────────────────────────────
+
+    def _setup_ui(self) -> None:
+        self.setStyleSheet(f"QWidget#ReportsPage {{ background:{BG_DARK}; }}")
+        self.setObjectName("ReportsPage")
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(10)
+
+        # Page title
+        title = QLabel("Auto-Report Generation")
+        title.setStyleSheet(f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};")
+        sub = QLabel("Generate status reports on a schedule and save them to disk.")
+        sub.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        root.addWidget(title)
+        root.addWidget(sub)
+
+        # KPI row
+        kpi_row = QHBoxLayout()
+        kpi_row.setSpacing(10)
+        tile_total,  self._kpi_total   = _kpi_tile("Reports Generated", "0")
+        tile_errors, self._kpi_errors  = _kpi_tile("Errors", "0")
+        tile_last,   self._kpi_last    = _kpi_tile("Last Report", "—")
+        kpi_row.addWidget(tile_total)
+        kpi_row.addWidget(tile_errors)
+        kpi_row.addWidget(tile_last)
+        kpi_row.addStretch()
+        root.addLayout(kpi_row)
+
+        # Schedule config card
+        cfg_card, cfg_lay = _card("Schedule Configuration")
+
+        # Enable checkbox
+        self._chk_enabled = QCheckBox("Enable automatic report generation")
+        self._chk_enabled.setChecked(True)
+        self._chk_enabled.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        cfg_lay.addWidget(self._chk_enabled)
+
+        # Interval row
+        int_row = QHBoxLayout()
+        int_row.setSpacing(8)
+        int_lbl = QLabel("Generate every")
+        int_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        self._spin_hours = QSpinBox()
+        self._spin_hours.setRange(1, 8760)
+        self._spin_hours.setValue(24)
+        self._spin_hours.setFixedWidth(70)
+        self._spin_hours.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        int_row.addWidget(int_lbl)
+        int_row.addWidget(self._spin_hours)
+        int_row.addWidget(QLabel("hours"))
+        int_row.addStretch()
+        cfg_lay.addLayout(int_row)
+
+        # Output dir row
+        dir_row = QHBoxLayout()
+        dir_row.setSpacing(8)
+        dir_lbl = QLabel("Output directory")
+        dir_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        self._txt_dir = QLineEdit(str(Path.home() / "NetSentinel-Reports"))
+        self._txt_dir.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;"
+        )
+        self._btn_browse = QPushButton("Browse…")
+        self._btn_browse.setFixedHeight(26)
+        self._btn_browse.setStyleSheet(
+            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            f" background:white; padding:0 10px;"
+        )
+        self._btn_browse.clicked.connect(self._browse_dir)
+        dir_row.addWidget(dir_lbl)
+        dir_row.addWidget(self._txt_dir, 1)
+        dir_row.addWidget(self._btn_browse)
+        cfg_lay.addLayout(dir_row)
+
+        # Apply + Generate Now
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        self._btn_apply = QPushButton("Apply Settings")
+        self._btn_apply.setFixedHeight(34)
+        self._btn_apply.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:white; background:{ACCENT};"
+            f" border:none; padding:0 18px; border-radius:4px;"
+        )
+        self._btn_apply.clicked.connect(self._apply_settings)
+        self._btn_now = QPushButton("Generate Now")
+        self._btn_now.setFixedHeight(34)
+        self._btn_now.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{ACCENT}; background:white;"
+            f" border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;"
+        )
+        self._btn_now.clicked.connect(self._generate_now)
+        btn_row.addWidget(self._btn_apply)
+        btn_row.addWidget(self._btn_now)
+        btn_row.addStretch()
+        cfg_lay.addLayout(btn_row)
+
+        root.addWidget(cfg_card)
+
+        # Recent reports card
+        hist_card, hist_lay = _card("Recent Reports")
+        self._report_list = QListWidget()
+        self._report_list.setStyleSheet(
+            f"QListWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
+            f" background:{BG_CARD}; }}"
+            f"QListWidget::item {{ padding:4px 8px; border-bottom:1px solid #EAEAEA; }}"
+            f"QListWidget::item:hover {{ background:#EEF4FF; }}"
+            f"QListWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+        )
+        self._report_list.setFixedHeight(220)
+        self._report_list.itemDoubleClicked.connect(self._open_report)
+        hist_lay.addWidget(self._report_list)
+        self._lbl_empty = QLabel("No reports generated yet. Click \"Generate Now\" to create one.")
+        self._lbl_empty.setStyleSheet(f"font-size:11px; color:#9BA8B4; padding:8px;")
+        self._lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hist_lay.addWidget(self._lbl_empty)
+        root.addWidget(hist_card)
+
+        root.addStretch()
+        self._sync_list_visibility()
+
+    # ── Slots ─────────────────────────────────────────────────────────────────
+
+    @pyqtSlot(str)
+    def on_report_saved(self, path: str) -> None:
+        """Called when the worker emits report_saved(path)."""
+        item = QListWidgetItem(path)
+        item.setData(Qt.ItemDataRole.UserRole, path)
+        item.setForeground(Qt.GlobalColor.darkGreen if Path(path).exists() else Qt.GlobalColor.gray)
+        self._report_list.insertItem(0, item)
+        # Update KPI
+        count = int(self._kpi_total.text()) + 1 if self._kpi_total.text().isdigit() else 1
+        self._kpi_total.setText(str(count))
+        ts = Path(path).stem.replace("netsentinel-report-", "")
+        self._kpi_last.setText(ts.replace("_", " ") if ts else "now")
+        self._sync_list_visibility()
+
+    @pyqtSlot(str)
+    def on_worker_error(self, msg: str) -> None:
+        self._error_count += 1
+        self._kpi_errors.setText(str(self._error_count))
+
+    # ── Actions ───────────────────────────────────────────────────────────────
+
+    def _browse_dir(self) -> None:
+        d = QFileDialog.getExistingDirectory(
+            self, "Select output directory", self._txt_dir.text()
+        )
+        if d:
+            self._txt_dir.setText(d)
+
+    def _apply_settings(self) -> None:
+        if not self._worker:
+            return
+        from modules.report_scheduler import ReportConfig
+        config = ReportConfig(
+            output_dir     = Path(self._txt_dir.text()),
+            interval_hours = float(self._spin_hours.value()),
+            enabled        = self._chk_enabled.isChecked(),
+        )
+        self._worker.set_config(config)
+
+    def _generate_now(self) -> None:
+        if not self._worker:
+            # No worker yet — generate inline (e.g., during smoke test)
+            try:
+                from modules.report_scheduler import ReportConfig, ReportScheduler
+                config = ReportConfig(
+                    output_dir     = Path(self._txt_dir.text()),
+                    interval_hours = float(self._spin_hours.value()),
+                    enabled        = True,
+                )
+                sched = ReportScheduler(store=self._store, config=config,
+                                        on_saved=lambda p: self.on_report_saved(str(p)))
+                sched.generate_now()
+            except Exception:
+                pass
+            return
+        self._worker.trigger_now()
+
+    def _open_report(self, item: QListWidgetItem) -> None:
+        import subprocess, sys
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if path and Path(path).exists():
+            if sys.platform == "win32":
+                import os
+                os.startfile(path)  # noqa: S606
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _sync_list_visibility(self) -> None:
+        has_items = self._report_list.count() > 0
+        self._report_list.setVisible(has_items)
+        self._lbl_empty.setVisible(not has_items)

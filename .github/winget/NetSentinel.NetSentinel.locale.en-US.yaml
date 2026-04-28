@@ -1,7 +1,7 @@
 # NetSentinel winget manifest — default locale (en-US)
 
 PackageIdentifier: NetSentinel.NetSentinel
-PackageVersion: 1.0.4
+PackageVersion: 1.1.2
 PackageLocale: en-US
 Publisher: NetSentinel Project
 PublisherUrl: https://github.com/ossianericson/netsentinel
@@ -43,6 +43,17 @@ Tags:
   - diagnostics
   - iot
   - monitoring
+  - arp
+  - broadcast-storm
+  - wifi
+  - dns
+  - port-scanner
+  - cve
+  - isp
+  - packet-capture
+  - network-health
+  - admin-tool
+  - npcap
 ReleaseNotesUrl: https://github.com/ossianericson/netsentinel/releases
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

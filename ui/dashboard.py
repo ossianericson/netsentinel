@@ -8,13 +8,12 @@ import webbrowser
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QFont, QIcon
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -24,12 +23,10 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QSpinBox,
     QSplitter,
     QStackedWidget,
     QStatusBar,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -38,10 +35,16 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.live_graph import LiveGraphWidget
+from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
-    ACCENT, ACCENT_LITE, AMBER, AMBER_BG, BG_CARD, BG_DARK,
-    BLUE, GREEN, GREEN_BG, MAIN_STYLE, RED, RED_BG, RISK_BG, RISK_COLORS,
-    TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, ACCENT_LITE, ACCENT_DARK, ADMIN_WARN_FG, ADMIN_WARN_HOVER,
+    AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER, BLUE, BORDER, BORDER_MED,
+    BTN_HOVER_BG, CARD_HDR_BORDER, GRADE_A_BG, GRADE_B_FG, GRADE_B_BG, GRADE_C_BG,
+    GRADE_D_BG, GRADE_F_FG, GRADE_F_BG, GREEN, GREEN_BG,
+    MAIN_STYLE, NAV_BAR, NAV_DIVIDER, RED, RED_BG, RISK_BG, RISK_COLORS,
+    SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_SECTION_BG, SIDEBAR_SECTION_FG,
+    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+    UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
 )
 from modules.utils import get_offenders_path, is_admin
 
@@ -61,7 +64,7 @@ class RiskBadge(QLabel):
         bg    = _bg_for_level(level)
         self.setStyleSheet(
             f"color:{color}; background:{bg}; border:1px solid {color};"
-            "border-radius:10px; padding:2px 10px; font-weight:bold; font-size:11px;"
+            "border-radius:3px; padding:1px 8px; font-weight:bold; font-size:10px;"
         )
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -92,11 +95,12 @@ class VerdictPanel(QFrame):
         color = _color_for_level(level)
         bg    = _bg_for_level(level)
         self.setStyleSheet(
-            f"QFrame#verdictFrame {{ background:{bg}; border:2px solid {color};"
-            "border-radius:12px; padding:4px; }}"
+            f"QFrame#verdictFrame {{ background:{bg}; border-left:4px solid {color};"
+            f"border-radius:0px; border-top:1px solid {BORDER};"
+            f"border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
         )
-        self._title.setStyleSheet(f"color:{color}; padding:8px 12px 2px 12px;")
-        self._text.setStyleSheet(f"color:{TEXT_PRIMARY}; padding:2px 12px 12px 12px;")
+        self._title.setStyleSheet(f"color:{color}; font-weight:bold; padding:6px 12px 2px 12px;")
+        self._text.setStyleSheet(f"color:{TEXT_PRIMARY}; padding:2px 12px 8px 12px; font-size:11px;")
 
     def update(self, text: str, level: str = "UNKNOWN"):
         self._set_level(level)
@@ -121,31 +125,104 @@ def _table(headers: list) -> QTableWidget:
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     t.verticalHeader().setVisible(False)
+    t.horizontalHeader().setDefaultSectionSize(120)
+    t.setShowGrid(True)
+    t.verticalHeader().setDefaultSectionSize(24)  # compact row height
     return t
 
 
 def _add_row(table: QTableWidget, values: list, level: str = "CLEAN"):
+    from PyQt6.QtGui import QColor
     row = table.rowCount()
     table.insertRow(row)
     color = _color_for_level(level)
     for col, val in enumerate(values):
         item = QTableWidgetItem(str(val))
-        item.setForeground(
-            __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(color)
-            if level in ("HIGH", "STORM") else
-            __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(TEXT_PRIMARY)
-        )
+        # Only colorise the text for high-risk rows; normal rows use default dark text
+        if level in ("HIGH", "STORM", "MEDIUM", "WARNING"):
+            item.setForeground(QColor(color))
         table.setItem(row, col, item)
+
+
+def _make_card(title: str) -> tuple:
+    """
+    Build a standard enterprise card frame.
+    Returns (card_QFrame, body_QVBoxLayout) — add content widgets to body_layout.
+    Card: white BG, 0px border-radius, navy header bar (32px) with uppercase title.
+    """
+    from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QLabel
+    card = QFrame()
+    card.setObjectName("card")
+    card_lay = QVBoxLayout(card)
+    card_lay.setContentsMargins(0, 0, 0, 0)
+    card_lay.setSpacing(0)
+
+    hdr = QFrame()
+    hdr.setObjectName("cardHeader")
+    hdr_lay = QHBoxLayout(hdr)
+    hdr_lay.setContentsMargins(12, 0, 10, 0)
+    hdr_lay.setSpacing(0)
+    t = QLabel(title.upper())
+    t.setStyleSheet(
+        f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+        "letter-spacing:0.5px; background:transparent; border:none;"
+    )
+    hdr_lay.addWidget(t)
+    hdr_lay.addStretch()
+    card_lay.addWidget(hdr)
+
+    body_lay = QVBoxLayout()
+    body_lay.setContentsMargins(0, 0, 0, 0)
+    body_lay.setSpacing(0)
+    card_lay.addLayout(body_lay, 1)
+
+    return card, body_lay
+
+
+def _page_header(title: str, subtitle: str = "") -> tuple:
+    """
+    Returns (title_QLabel, subtitle_QLabel) styled per design system:
+    title 18px bold TEXT_PRIMARY, subtitle 11px TEXT_SECONDARY.
+    """
+    from PyQt6.QtWidgets import QLabel
+    t = QLabel(title)
+    t.setStyleSheet(
+        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;"
+    )
+    s = QLabel(subtitle)
+    s.setStyleSheet(
+        f"color:{TEXT_SECONDARY}; font-size:11px;"
+        "padding:0 0 8px 0; background:transparent; border:none;"
+    )
+    return t, s
 
 
 # ─── Main Window ─────────────────────────────────────────────────────────────
 
 class Dashboard(QMainWindow):
-    def __init__(self):
+    _update_available = pyqtSignal(str)
+
+    def __init__(self, store=None, alert_engine=None, notif_router=None, maint_manager=None):
         super().__init__()
+        self._store        = store          # MetricStore | None
+        self._alert_engine = alert_engine   # AlertEngine | None
+        self._notif_router = notif_router   # NotificationRouter | None
+        self._maint_manager = maint_manager # MaintenanceWindowManager | None
         self.setWindowTitle("NetSentinel  —  Network Security Scanner & Monitor")
         self.setMinimumSize(1100, 720)
         self.setStyleSheet(MAIN_STYLE)
+
+        # Window icon
+        from pathlib import Path as _Path
+        from PyQt6.QtGui import QIcon as _QIcon
+        import sys as _sys
+        _base = _Path(_sys._MEIPASS) if getattr(_sys, "frozen", False) else _Path(__file__).parent.parent
+        for _ico in ("assets/icons/NetSentinel.ico", "NetSentinel.ico", "icon.ico"):
+            _p = _base / _ico
+            if _p.exists():
+                self.setWindowIcon(_QIcon(str(_p)))
+                break
 
         self._offenders_path = get_offenders_path()
         self._admin = is_admin()
@@ -184,38 +261,39 @@ class Dashboard(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(16, 12, 16, 12)
-        root.setSpacing(10)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        # Header
+        # Top application bar (dark navy)
         root.addWidget(self._build_header())
 
-        # Admin warning
-        if not self._admin:
-            root.addWidget(self._build_admin_warning())
+        # Update notification bar — hidden until background check finds a newer release
+        self._update_bar = self._build_update_bar()
+        self._update_bar.setVisible(False)
+        self._update_available.connect(self._on_update_available)
+        root.addWidget(self._update_bar)
 
-        # Main splitter: tabs (top) + verdict (bottom)
+        # Main splitter: sidebar+content (top) + verdict strip (bottom)
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(self._build_tabs())
         splitter.addWidget(self._build_verdict_area())
-        splitter.setSizes([520, 140])
-        splitter.setStyleSheet("QSplitter::handle { background: #2a2a4a; height: 2px; }")
+        splitter.setSizes([560, 100])
+        splitter.setStyleSheet(f"QSplitter::handle {{ background: {BORDER}; height: 1px; }}")
         root.addWidget(splitter, 1)
 
         # Status bar
         self._status_bar = QStatusBar()
-        self._status_bar.setStyleSheet(
-            f"QStatusBar {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; font-size:11px; }}"
-        )
         self._progress = QProgressBar()
         self._progress.setRange(0, 0)  # indeterminate
-        self._progress.setFixedHeight(6)
+        self._progress.setFixedHeight(4)
         self._progress.setVisible(False)
         self._status_bar.addPermanentWidget(self._progress)
         self.setStatusBar(self._status_bar)
         self._set_status("Ready. Click RUN FULL SCAN to begin.")
         # Load network info in background on startup
         self._refresh_network_info()
+        # Silent background update check
+        self._start_update_check()
         # Matrix rain overlay (created after window is built)
         from ui.matrix_rain import MatrixRainWidget
         self._matrix_rain = MatrixRainWidget(self.centralWidget())
@@ -232,197 +310,413 @@ class Dashboard(QMainWindow):
             self._matrix_rain.toggle()
 
     def _build_header(self) -> QWidget:
+        """Slim top bar: brand | stretch | verdict | actions."""
+        from PyQt6.QtWidgets import QMenu, QWidgetAction, QToolButton
+
         w = QWidget()
-        w.setStyleSheet(f"background:{BG_CARD}; border-radius:10px;")
+        w.setObjectName("appBar")
+        w.setFixedHeight(42)
         lay = QHBoxLayout(w)
-        lay.setContentsMargins(20, 14, 20, 14)
+        lay.setContentsMargins(14, 0, 10, 0)
+        lay.setSpacing(6)
 
-        left = QVBoxLayout()
-        title = QLabel("NetSentinel")
-        title.setObjectName("lblTitle")
-        subtitle = QLabel("Network Security Scanner  •  Rogue Device Detector  •  Connectivity Monitor")
-        subtitle.setObjectName("lblSubtitle")
-        left.addWidget(title)
-        left.addWidget(subtitle)
+        # ── Brand (left, fixed) ───────────────────────────────────────────────
+        brand_lbl = QLabel("NetSentinel")
+        brand_lbl.setObjectName("lblTitle")
+        brand_lbl.setStyleSheet("background:transparent;")
+        lay.addWidget(brand_lbl)
 
-        lay.addLayout(left, 1)
-        lay.addStretch()
+        # ── Stretch — pushes everything else to the right ─────────────────────
+        lay.addStretch(1)
 
-        # Settings
-        settings_box = QGroupBox("Scan Settings")
-        settings_box.setStyleSheet(
-            f"QGroupBox {{ color:{ACCENT_LITE}; font-size:11px; }}"
+        # ── Admin warning icon (only when not admin) ──────────────────────────
+        if not self._admin:
+            _btn_admin = QPushButton("⚠")
+            _btn_admin.setFixedSize(28, 26)
+            _btn_admin.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{ADMIN_WARN_FG};"
+                f" border:none; font-size:13px; padding:0; }}"
+                f"QPushButton:hover {{ color:{ADMIN_WARN_HOVER}; }}"
+            )
+            _btn_admin.setToolTip(
+                "Not running as Administrator — STP and Storm modules will be skipped.\n"
+                "Re-launch as Admin for full diagnostics."
+            )
+            lay.addWidget(_btn_admin)
+
+        # Shared flat button style for all header buttons except primary
+        _flat_qss = (
+            f"QPushButton {{ background:{SIDEBAR_HOVER}; color:{TEXT_MUTED};"
+            f" border:1px solid {SIDEBAR_SECTION_BG}; border-radius:2px;"
+            f" padding:0 12px; font-size:11px; min-height:24px; max-height:24px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
         )
-        slayout = QHBoxLayout(settings_box)
-        slayout.setSpacing(14)
 
-        # STP duration
-        lbl_stp = QLabel("STP scan (s):")
-        lbl_stp.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
-        self._stp_duration = QSpinBox()
-        self._stp_duration.setRange(10, 120)
-        self._stp_duration.setValue(30)
-        self._stp_duration.setFixedWidth(72)
-        self._stp_duration.setToolTip("How long to listen for STP/BPDU frames")
-
-        # Storm duration
-        lbl_storm = QLabel("Storm (s):")
-        lbl_storm.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
-        self._storm_duration = QSpinBox()
-        self._storm_duration.setRange(5, 60)
-        self._storm_duration.setValue(10)
-        self._storm_duration.setFixedWidth(72)
-
-        # Module toggles
-        self._chk_stp   = QCheckBox("STP")
-        self._chk_storm = QCheckBox("Storm")
-        self._chk_wifi  = QCheckBox("WiFi")
-        self._chk_dns   = QCheckBox("DNS")
-        for chk in (self._chk_stp, self._chk_storm, self._chk_wifi, self._chk_dns):
-            chk.setChecked(True)
-            chk.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
-
-        slayout.addWidget(lbl_stp)
-        slayout.addWidget(self._stp_duration)
-        slayout.addWidget(lbl_storm)
-        slayout.addWidget(self._storm_duration)
-        slayout.addWidget(self._chk_stp)
-        slayout.addWidget(self._chk_storm)
-        slayout.addWidget(self._chk_wifi)
-        slayout.addWidget(self._chk_dns)
-
-        lay.addWidget(settings_box)
-        lay.addSpacing(20)
-
-        # Scan button
-        self._btn_scan = QPushButton("⚡  RUN FULL SCAN")
+        # ── Run Scan (primary, always highlighted) ────────────────────────────
+        self._btn_scan = QPushButton("Run Scan")
         self._btn_scan.setObjectName("btnScan")
-        self._btn_scan.setFixedHeight(54)
-        self._btn_scan.setMinimumWidth(200)
+        self._btn_scan.setMinimumWidth(80)
         self._btn_scan.clicked.connect(self._start_full_scan)
         lay.addWidget(self._btn_scan)
 
-        # Export button
-        self._btn_export = QPushButton("📄  Export Report")
+        # ── Export ────────────────────────────────────────────────────────────
+        self._btn_export = QPushButton("Export")
         self._btn_export.setObjectName("btnExport")
-        self._btn_export.setFixedHeight(54)
-        self._btn_export.setMinimumWidth(150)
+        self._btn_export.setFixedHeight(24)
+        self._btn_export.setMinimumWidth(60)
         self._btn_export.setEnabled(False)
+        self._btn_export.setStyleSheet(_flat_qss)
         self._btn_export.clicked.connect(self._export_report)
         lay.addWidget(self._btn_export)
 
-        # Standard / Advanced mode toggle
-        self._btn_mode = QPushButton("⚙  Advanced Mode")
-        self._btn_mode.setObjectName("btnNetRefresh")
-        self._btn_mode.setFixedHeight(54)
-        self._btn_mode.setCheckable(True)
-        self._btn_mode.setToolTip(
-            "Advanced Mode shows MTR, Port Scanner, DNS Leak, and device baseline diff tabs"
+        # ── Verdict badge (inline text, no background) ────────────────────────
+        self._verdict_badge = QLabel("● –")
+        self._verdict_badge.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; font-weight:bold;"
+            f" background:transparent; border:none; padding:0 4px;"
         )
-        self._btn_mode.toggled.connect(self._on_mode_toggle)
-        lay.addWidget(self._btn_mode)
+        self._verdict_badge.setToolTip("Overall scan verdict")
+        lay.addWidget(self._verdict_badge)
 
-        # Recon mode toggle
-        self._btn_recon = QPushButton("🔎  Security Audit Mode")
-        self._btn_recon.setObjectName("btnNetRefresh")
-        self._btn_recon.setFixedHeight(54)
-        self._btn_recon.setCheckable(True)
-        self._btn_recon.setToolTip(
-            "Security Audit Mode adds SYN stealth scan, UDP scan, full 1000-port range, "
-            "deep OS fingerprinting, and per-device risk scoring.\n"
-            "Requires administrator privileges and Npcap (Windows)."
+        # ── Settings dropdown (⚙) ─────────────────────────────────────────────
+        _spin_qss = (
+            f"QSpinBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:2px; font-size:11px; padding:0 2px; }}"
+            f"QSpinBox::up-button, QSpinBox::down-button {{ width:14px; }}"
         )
-        self._btn_recon.toggled.connect(self._on_recon_toggle)
-        lay.addWidget(self._btn_recon)
+        self._stp_duration = QSpinBox()
+        self._stp_duration.setRange(10, 120); self._stp_duration.setValue(30)
+        self._stp_duration.setFixedWidth(64); self._stp_duration.setStyleSheet(_spin_qss)
+        self._stp_duration.setToolTip("STP/BPDU listen duration (seconds)")
 
-        # OUI database reload
-        btn_reload_oui = QPushButton("↺  Reload OUI DB")
-        btn_reload_oui.setObjectName("btnNetRefresh")
-        btn_reload_oui.setFixedHeight(54)
-        btn_reload_oui.setToolTip("Re-read offenders.json without restarting the app")
-        btn_reload_oui.clicked.connect(self._reload_oui_db)
-        lay.addWidget(btn_reload_oui)
+        self._storm_duration = QSpinBox()
+        self._storm_duration.setRange(5, 60); self._storm_duration.setValue(10)
+        self._storm_duration.setFixedWidth(64); self._storm_duration.setStyleSheet(_spin_qss)
 
-        # About
-        btn_about = QPushButton("ℹ  About")
-        btn_about.setObjectName("btnNetRefresh")
-        btn_about.setFixedHeight(54)
-        btn_about.setToolTip("About NetSentinel")
-        btn_about.clicked.connect(self._show_about)
-        lay.addWidget(btn_about)
+        _chk_qss = (
+            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; padding:3px 8px; }}"
+            f"QCheckBox::indicator {{ width:12px; height:12px; border:1px solid {BORDER_MED};"
+            f" border-radius:2px; background:{BG_CARD}; }}"
+            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
+        )
+        self._chk_stp   = QCheckBox("STP detection")
+        self._chk_storm = QCheckBox("Storm analysis")
+        self._chk_wifi  = QCheckBox("WiFi scan")
+        self._chk_dns   = QCheckBox("DNS check")
+        for _c in (self._chk_stp, self._chk_storm, self._chk_wifi, self._chk_dns):
+            _c.setChecked(True); _c.setStyleSheet(_chk_qss)
+
+        _menu_s = QMenu()
+        _menu_s.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; padding:4px; font-size:11px; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
+        )
+
+        def _spin_row(label: str, spin: QSpinBox) -> QWidgetAction:
+            _w = QWidget(); _l = QHBoxLayout(_w)
+            _l.setContentsMargins(8, 3, 8, 3); _l.setSpacing(8)
+            _lbl = QLabel(label)
+            _lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; min-width:120px;")
+            _l.addWidget(_lbl); _l.addWidget(spin)
+            _wa = QWidgetAction(_menu_s); _wa.setDefaultWidget(_w)
+            return _wa
+
+        _menu_s.addAction(_spin_row("STP listen (s):", self._stp_duration))
+        _menu_s.addAction(_spin_row("Storm listen (s):", self._storm_duration))
+        _menu_s.addSeparator()
+        for _c in (self._chk_stp, self._chk_storm, self._chk_wifi, self._chk_dns):
+            _cwa = QWidgetAction(_menu_s); _cwa.setDefaultWidget(_c)
+            _menu_s.addAction(_cwa)
+        _menu_s.addSeparator()
+        _act_oui = _menu_s.addAction("Reload OUI database")
+        _act_oui.triggered.connect(self._reload_oui_db)
+        _act_about = _menu_s.addAction("About NetSentinel")
+        _act_about.triggered.connect(self._show_about)
+        _menu_s.addSeparator()
+        _act_app_settings = _menu_s.addAction("⚙  App Settings (Theme & Display)…")
+        _act_app_settings.triggered.connect(self._open_settings_dialog)
+
+        _btn_settings = QToolButton()
+        _btn_settings.setText("⚙")
+        _btn_settings.setFixedSize(26, 24)
+        _btn_settings.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        _btn_settings.setMenu(_menu_s)
+        _btn_settings.setToolTip("Scan Settings — module toggles, durations, and app preferences")
+        _btn_settings.setStyleSheet(
+            f"QToolButton {{ background:{SIDEBAR_HOVER}; color:{TEXT_MUTED};"
+            f" border:1px solid {SIDEBAR_SECTION_BG}; border-radius:2px;"
+            f" font-size:13px; min-height:24px; max-height:24px; }}"
+            f"QToolButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
+            "QToolButton::menu-indicator { image: none; }"
+        )
+        lay.addWidget(_btn_settings)
+
+        # ── Help button (❓) ──────────────────────────────────────────────────
+        _btn_help = QPushButton("❓")
+        _btn_help.setFixedSize(26, 24)
+        _btn_help.setToolTip("Help & Reference")
+        _btn_help.setStyleSheet(
+            f"QPushButton {{ background:{SIDEBAR_HOVER}; color:{TEXT_MUTED};"
+            f" border:1px solid {SIDEBAR_SECTION_BG}; border-radius:2px;"
+            f" font-size:13px; min-height:24px; max-height:24px; padding:0; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
+        )
+        _btn_help.clicked.connect(self._open_help_dialog)
+        lay.addWidget(_btn_help)
 
         return w
 
-    def _build_admin_warning(self) -> QWidget:
+    def _build_update_bar(self) -> QWidget:
+        """Thin update-available bar — hidden until a newer release is detected."""
         container = QWidget()
-        container.setObjectName("adminWarningBar")
-        container.setStyleSheet(
-            f"QWidget#adminWarningBar {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:8px; }}"
-        )
+        container.setObjectName("updateNotifBar")
+        container.setFixedHeight(28)
         row = QHBoxLayout(container)
-        row.setContentsMargins(14, 8, 10, 8)
-        row.setSpacing(8)
-
-        lbl = QLabel(
-            "⚠  Not running as Administrator / root. "
-            "Modules 2 (STP) and 3 (Storm) require elevated privileges — they will be skipped. "
-            "Re-launch as Admin for full diagnostics."
+        row.setContentsMargins(12, 0, 8, 0)
+        row.setSpacing(6)
+        container.setStyleSheet(
+            f"QWidget#updateNotifBar {{ background:{UPDATE_BAR_BG}; "
+            f"border-bottom: 1px solid {UPDATE_BAR_BORDER}; }}"
         )
-        lbl.setWordWrap(True)
-        lbl.setStyleSheet(f"color:{AMBER}; font-size:12px; background:transparent; border:none;")
-        row.addWidget(lbl, 1)
-
+        icon = QLabel("↑")
+        icon.setStyleSheet(f"color:{ACCENT}; font-size:12px; background:transparent; border:none;")
+        row.addWidget(icon)
+        self._update_bar_lbl = QLabel("A new version is available.")
+        self._update_bar_lbl.setStyleSheet(
+            f"color:{UPDATE_BAR_FG}; font-size:11px; background:transparent; border:none;"
+        )
+        self._update_bar_lbl.setOpenExternalLinks(True)
+        self._update_bar_lbl.setTextFormat(Qt.TextFormat.RichText)
+        row.addWidget(self._update_bar_lbl, 1)
         btn_dismiss = QPushButton("✕")
-        btn_dismiss.setFixedSize(22, 22)
-        btn_dismiss.setToolTip("Dismiss")
+        btn_dismiss.setFixedSize(20, 20)
         btn_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{AMBER}; border:none; font-size:14px; }}"
-            f"QPushButton:hover {{ color:#ffffff; }}"
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:none; font-size:12px; }}"
+            f"QPushButton:hover {{ color:{UPDATE_BAR_FG}; }}"
         )
         btn_dismiss.clicked.connect(container.hide)
         row.addWidget(btn_dismiss)
-
         return container
 
-    # ── Sidebar navigation helpers ───────────────────────────────────────────
+    def _start_update_check(self):
+        """Kick off a background thread to check the GitHub releases API."""
+        import threading
+        def _check():
+            try:
+                import urllib.request, json as _json
+                from PyQt6.QtWidgets import QApplication
+                current = QApplication.applicationVersion()
+                url = "https://api.github.com/repos/ossianericson/netsentinel/releases/latest"
+                req = urllib.request.Request(url, headers={"User-Agent": "NetSentinel"})
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    data = _json.loads(resp.read())
+                latest = data.get("tag_name", "").lstrip("v")
+                def _ver(s):
+                    try:
+                        return tuple(int(x) for x in s.split("."))
+                    except ValueError:
+                        return (0,)
+                if latest and _ver(latest) > _ver(current):
+                    self._show_update_bar(latest)
+            except Exception:
+                pass  # silent — no network or rate-limited; user can check manually
+        threading.Thread(target=_check, daemon=True).start()
 
-    def _nav_add_section(self, label: str):
-        """Add a non-selectable section separator to the nav list."""
-        item = QListWidgetItem(f"  {label.upper()}")
-        item.setFlags(Qt.ItemFlag.NoItemFlags)  # not selectable
-        item.setForeground(
-            __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor("#555570")
+    def _show_update_bar(self, latest: str):
+        """Called from the background thread — must dispatch to the UI thread."""
+        self._update_available.emit(latest)
+
+    @pyqtSlot(str)
+    def _on_update_available(self, latest: str):
+        """Runs on the UI thread — safe to touch widgets."""
+        from PyQt6.QtWidgets import QApplication
+        current = QApplication.applicationVersion()
+        msg = (
+            f"NetSentinel v{latest} is available (you have v{current}) — "
+            f'<a href="https://github.com/ossianericson/netsentinel/releases/latest" '
+            f'style="color:{ACCENT};">Download</a>'
+            f' &nbsp;·&nbsp; or run: <code>winget upgrade NetSentinel.NetSentinel</code>'
         )
-        f = item.font()
-        f.setPointSize(9)
+        self._update_bar_lbl.setText(msg)
+        self._update_bar.setVisible(True)
+
+    # ── Sidebar navigation helpers ───────────────────────────────────────────
+    # Data model (initialised in _build_tabs):
+    #   _nav_item_icons[row]    str  — emoji shown in icon-only mode
+    #   _nav_item_labels[row]   str  — full label text
+    #   _nav_header_rows        set  — rows that are section or sub-group headers
+    #   _nav_section_groups[r]  dict — {children:[rows], collapsed:bool, level:0|1}
+    #   _nav_current_section    int  — row of last section header added
+    #   _nav_current_subgroup   int  — row of last sub-group header (-1 = none)
+    #   _nav_collapsed          bool — sidebar in icon-only (narrow) mode
+
+    def _nav_add_section(self, label: str, icon: str = "■",
+                         collapsed_by_default: bool = False) -> int:
+        """Add a collapsible section header row."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QFont as _QFont, QBrush
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)   # clickable but not selectable
+        item.setSizeHint(QSize(0, 28))
+        item.setBackground(QBrush(QColor(SIDEBAR_SECTION_BG)))
+        f = _QFont("Segoe UI", 9)
         f.setBold(True)
         item.setFont(f)
-        item.setSizeHint(__import__("PyQt6.QtCore", fromlist=["QSize"]).QSize(0, 26))
         self._nav.addItem(item)
-        # Store as separator so we never map it to a page
-        self._nav_separators.add(self._nav.count() - 1)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]    = icon
+        self._nav_item_labels[row]   = label
+        self._nav_header_rows.add(row)
+        self._nav_section_groups[row] = {
+            "children": [], "collapsed": collapsed_by_default, "level": 0
+        }
+        self._nav_current_section  = row
+        self._nav_current_subgroup = -1
+        self._nav_separators.add(row)          # legacy compat
+        self._nav_refresh_item_text(row)
+        return row
 
-    def _nav_add_page(self, icon_label: str, widget: QWidget, hidden: bool = False) -> int:
-        """Add a page to both the nav list and the stacked widget. Returns nav row index."""
-        item = QListWidgetItem(f"  {icon_label}")
-        item.setSizeHint(__import__("PyQt6.QtCore", fromlist=["QSize"]).QSize(0, 34))
+    def _nav_add_subgroup(self, label: str, icon: str = "▸") -> int:
+        """Add an indented collapsible sub-group header under the current section."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QBrush
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        item.setSizeHint(QSize(0, 26))
+        item.setBackground(QBrush(QColor(SIDEBAR_SECTION_BG)))
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]    = icon
+        self._nav_item_labels[row]   = label
+        self._nav_header_rows.add(row)
+        self._nav_section_groups[row] = {
+            "children": [], "collapsed": False, "level": 1
+        }
+        self._nav_section_groups[self._nav_current_section]["children"].append(row)
+        self._nav_separators.add(row)          # legacy compat
+        self._nav_current_subgroup = row
+        self._nav_refresh_item_text(row)
+        return row
+
+    def _nav_add_page(self, icon: str, label: str, widget: QWidget) -> int:
+        """Add a page entry to the sidebar and the stacked widget. Returns nav row index."""
+        from PyQt6.QtCore import QSize
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        item.setSizeHint(QSize(0, 30))
         self._nav.addItem(item)
         page_idx = self._stack.addWidget(widget)
-        nav_row  = self._nav.count() - 1
-        self._nav_row_to_page[nav_row] = page_idx
-        if hidden:
-            item.setHidden(True)
-        return nav_row
+        row = self._nav.count() - 1
+        self._nav_row_to_page[row] = page_idx
+        self._nav_item_icons[row]  = icon
+        self._nav_item_labels[row] = label
+        parent = (self._nav_current_subgroup if self._nav_current_subgroup >= 0
+                  else self._nav_current_section)
+        if parent >= 0:
+            self._nav_section_groups[parent]["children"].append(row)
+        self._nav_refresh_item_text(row)
+        return row
 
     def _nav_set_page(self, nav_row: int):
         if nav_row in self._nav_row_to_page:
             self._stack.setCurrentIndex(self._nav_row_to_page[nav_row])
 
-    def _nav_show_group(self, nav_rows, visible: bool):
-        for row in nav_rows:
-            item = self._nav.item(row)
+    def _nav_refresh_item_text(self, row: int):
+        """Rewrite displayed text for a nav row based on collapsed/expanded mode."""
+        item = self._nav.item(row)
+        if item is None:
+            return
+        icon  = self._nav_item_icons.get(row, "")
+        label = self._nav_item_labels.get(row, "")
+        if self._nav_collapsed:
+            item.setText(icon)
+            if row not in self._nav_header_rows:
+                item.setToolTip(label)
+        elif row in self._nav_section_groups:
+            grp   = self._nav_section_groups[row]
+            arrow = "▶" if grp["collapsed"] else "▼"
+            from PyQt6.QtGui import QColor
+            if grp["level"] == 0:
+                item.setText(f" {arrow}  {label.upper()}")
+            else:
+                item.setText(f"     {arrow}  {label}")
+            item.setForeground(QColor(SIDEBAR_SECTION_FG))
+            item.setToolTip("")
+        else:
+            item.setText(f"  {icon}  {label}")
+            item.setToolTip("")
+
+    def _nav_toggle_section(self, header_row: int):
+        """Collapse or expand a section / sub-group header."""
+        if header_row not in self._nav_section_groups:
+            return
+        grp = self._nav_section_groups[header_row]
+        grp["collapsed"] = not grp["collapsed"]
+        self._nav_refresh_item_text(header_row)
+        self._nav_apply_section_visibility(header_row, grp["collapsed"])
+
+    def _nav_apply_section_visibility(self, header_row: int, hide: bool):
+        """Show/hide direct children; recurse into sub-group children."""
+        for child_row in self._nav_section_groups[header_row]["children"]:
+            child_item = self._nav.item(child_row)
+            if child_item:
+                child_item.setHidden(hide)
+            if child_row in self._nav_section_groups:
+                child_grp    = self._nav_section_groups[child_row]
+                effective_hide = hide or child_grp["collapsed"]
+                for sub_row in child_grp["children"]:
+                    sub_item = self._nav.item(sub_row)
+                    if sub_item:
+                        sub_item.setHidden(effective_hide)
+
+    def _nav_goto_label(self, label: str):
+        """Navigate to the sidebar page whose label matches exactly."""
+        for row, lbl in self._nav_item_labels.items():
+            if lbl == label and row not in self._nav_header_rows:
+                self._nav.setCurrentRow(row)
+                self._nav_set_page(row)
+                return
+
+    @pyqtSlot()
+    def _toggle_sidebar(self):
+        """Toggle between full-width sidebar and icon-only narrow mode."""
+        self._nav_collapsed = not self._nav_collapsed
+        new_width = 48 if self._nav_collapsed else 220
+        self._nav_sidebar_container.setFixedWidth(new_width)
+        self._nav_search.setVisible(not self._nav_collapsed)
+        self._sidebar_toggle_btn.setText("▶" if self._nav_collapsed else "◀")
+        for row in range(self._nav.count()):
+            self._nav_refresh_item_text(row)
+
+    @pyqtSlot(str)
+    def _on_nav_search_changed(self, text: str):
+        """Filter sidebar items to those whose label contains text."""
+        text = text.strip().lower()
+        if not text:
+            # Restore visibility: show all then re-hide collapsed sections
+            for row in range(self._nav.count()):
+                item = self._nav.item(row)
+                if item:
+                    item.setHidden(False)
+            for hrow, grp in self._nav_section_groups.items():
+                if grp["collapsed"]:
+                    self._nav_apply_section_visibility(hrow, True)
+            return
+        for row in range(self._nav.count()):
+            if row in self._nav_header_rows:
+                continue
+            label = self._nav_item_labels.get(row, "").lower()
+            item  = self._nav.item(row)
             if item:
-                item.setHidden(not visible)
+                item.setHidden(text not in label)
+
+    def _on_nav_item_clicked(self, item):
+        """Toggle section/sub-group headers when clicked."""
+        row = self._nav.row(item)
+        if row in self._nav_section_groups:
+            self._nav_toggle_section(row)
 
     def _build_tabs(self) -> QWidget:
         # ── Build all page widgets ────────────────────────────────────────────
@@ -434,6 +728,48 @@ class Dashboard(QMainWindow):
         net = self._build_network_info_tab()
         dia = self._build_diagnostics_tab()
         log = self._build_logger_tab()
+
+        from ui.pages.history_page import HistoryPage
+        self._history_page = HistoryPage(store=self._store)
+
+        from ui.pages.inventory_page import InventoryPage
+        self._inventory_page = InventoryPage(store=self._store)
+
+        from ui.pages.cert_page import CertPage
+        self._cert_page = CertPage(store=self._store)
+
+        from ui.pages.uptime_page import UptimePage
+        self._uptime_page = UptimePage(store=self._store)
+
+        from ui.pages.service_page import ServicePage
+        self._service_page = ServicePage(store=self._store)
+
+        from ui.pages.reports_page import ReportsPage
+        self._reports_page = ReportsPage(store=self._store)
+
+        from ui.pages.notifications_page import NotificationsPage
+        self._notifications_page = NotificationsPage(router=None, parent=None)
+
+        from ui.pages.baseline_page import BaselinePage
+        self._baseline_page = BaselinePage(store=self._store, parent=None)
+
+        from ui.pages.trend_page import TrendPage
+        self._trend_page = TrendPage(store=self._store, parent=None)
+
+        from ui.pages.maintenance_page import MaintenancePage
+        self._maintenance_page = MaintenancePage(parent=None)
+
+        from ui.pages.snmp_trap_page import SnmpTrapPage
+        self._snmp_trap_page = SnmpTrapPage(store=self._store)
+
+        from ui.pages.syslog_page import SyslogPage
+        self._syslog_page = SyslogPage(parent=None)
+
+        from ui.pages.overview_page import OverviewPage
+        self._overview_page = OverviewPage(store=self._store, parent=None)
+
+        from ui.pages.settings_page import SettingsPage
+        self._settings_page = SettingsPage(parent=None)
 
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
@@ -460,6 +796,7 @@ class Dashboard(QMainWindow):
         self._correlator_tab_widget      = self._build_correlator_tab()
         self._iot_baseline_tab_widget    = self._build_iot_baseline_tab()
         self._benchmark_tab_widget       = self._build_benchmark_tab()
+        self._help_tab_widget            = self._build_help_tab()
 
         # ── Worker refs ───────────────────────────────────────────────────────
         self._arp_worker:        Optional[object] = None
@@ -483,112 +820,164 @@ class Dashboard(QMainWindow):
 
         # ── Sidebar list + stacked content ────────────────────────────────────
         self._nav = QListWidget()
-        self._nav.setFixedWidth(200)
-        self._nav.setStyleSheet(
-            f"QListWidget {{"
-            f"  background: #0f0f22;"
-            f"  border: none;"
-            f"  outline: none;"
-            f"}}"
-            f"QListWidget::item {{"
-            f"  color: #888899;"
-            f"  padding: 0px 8px;"
-            f"  border-radius: 6px;"
-            f"  margin: 1px 6px;"
-            f"  font-size: 12px;"
-            f"}}"
-            f"QListWidget::item:selected {{"
-            f"  background: #2a1a5a;"
-            f"  color: #a78bfa;"
-            f"  font-weight: bold;"
-            f"}}"
-            f"QListWidget::item:hover:!selected {{"
-            f"  background: #1a1a35;"
-            f"  color: #e0e0f0;"
-            f"}}"
-        )
+        self._nav.setObjectName("sideNav")
         self._stack = QStackedWidget()
-        self._nav_row_to_page: dict = {}   # nav list row -> stack page index
-        self._nav_separators:  set  = set()
+        self._nav_row_to_page:   dict = {}
+        self._nav_separators:    set  = set()
+        # Extended nav data model
+        self._nav_item_icons:    dict = {}
+        self._nav_item_labels:   dict = {}
+        self._nav_header_rows:   set  = set()
+        self._nav_section_groups: dict = {}
+        self._nav_current_section:  int  = -1
+        self._nav_current_subgroup: int  = -1
+        self._nav_collapsed:     bool = False
 
-        # ── Standard pages ────────────────────────────────────────────────────
-        self._nav_add_section("Standard")
-        self._nav_add_page("🔍  Devices on Network",    m1)
-        self._nav_add_page("🌉  Rogue Bridge (STP)",    m2)
-        self._nav_add_page("🌊  Broadcast Storm",        m3)
-        self._nav_add_page("📶  WiFi Networks",          m4)
-        self._nav_add_page("📡  DNS & Outages",          m5)
-        self._nav_add_page("🌐  My Network Info",        net)
-        self._nav_add_page("⚡  Health Check",           dia)
-        self._nav_add_page("📋  Stability Log",          log)
-        self._nav_add_page("🔷  IPv6 Devices",           self._ipv6_tab_widget)
-        self._nav_add_page("🧩  Root Cause Analysis",    self._correlator_tab_widget)
-        self._nav_add_page("🤖  IoT Behaviour",          self._iot_baseline_tab_widget)
-        self._nav_add_page("📊  Network Grade",           self._benchmark_tab_widget)
+        # ── STANDARD (expanded by default) ─────────────────────────────────────
+        self._nav_add_section("Standard", icon="◼")
+        self._nav_add_page("🏠", "Overview",             self._overview_page)
+        self._nav_add_page("🖥", "Devices on Network",   m1)
+        self._nav_add_page("🌐", "WiFi Networks",        m4)
+        self._nav_add_page("📡", "DNS & Outages",        m5)
+        self._nav_add_page("🗓", "Availability History", self._history_page)
+        self._nav_add_page("📜", "Inventory Changes",    self._inventory_page)
+        self._nav_add_page("", "Uptime & SLA",        self._uptime_page)
+        self._nav_add_page("🔌", "Service Heartbeat",   self._service_page)
+        self._nav_add_page("📄", "Auto Reports",         self._reports_page)
+        self._nav_add_page("🔔", "Notifications",        self._notifications_page)
+        self._nav_add_page("📸", "Config Snapshots",     self._baseline_page)
+        self._nav_add_page("📈", "Trend Forecasts",      self._trend_page)
+        self._nav_add_page("🔧", "Maintenance Windows",  self._maintenance_page)
+        self._nav_add_page("ℹ", "Network Info",          net)
+        self._nav_add_page("📊", "Network Grade",        self._benchmark_tab_widget)
 
-        # ── Advanced pages (hidden until Advanced Mode) ───────────────────────
+        self._nav_add_subgroup("Network Health", icon="💊")
+        self._nav_add_page("💊", "Health Check",         dia)
+        self._nav_add_page("📋", "Stability Log",        log)
+        self._nav_add_page("🔷", "IPv6 Devices",         self._ipv6_tab_widget)
+        self._nav_add_page("🔍", "Root Cause Analysis",  self._correlator_tab_widget)
+        self._nav_current_subgroup = -1
+
+        self._nav_add_subgroup("Traffic & Behaviour", icon="⚡")
+        self._nav_add_page("⚡", "Broadcast Storm",      m3)
+        self._nav_add_page("📡", "IoT Behaviour",        self._iot_baseline_tab_widget)
+        self._nav_add_page("🔀", "Rogue Bridge (STP)",   m2)
+        self._nav_current_subgroup = -1
+
+        # ── ADVANCED (collapsed by default) ────────────────────────────────────
         self._nav_adv_sep = self._nav.count()
-        self._nav_add_section("Advanced")
-        self._nav_adv_rows = [
-            self._nav_add_page("🔁  Hop-by-Hop Trace",  self._mtr_tab_widget,      hidden=True),
-            self._nav_add_page("🔧  Tools & Wake-on-LAN",self._adv_tab_widget,     hidden=True),
-            self._nav_add_page("🗺  Network Map",        self._topology_tab_widget, hidden=True),
-            self._nav_add_page("🛡  ARP Spoof Watch",    self._arp_tab_widget,      hidden=True),
-            self._nav_add_page("📦  DHCP Leases",        self._dhcp_tab_widget,     hidden=True),
-            self._nav_add_page("📊  Bandwidth Usage",    self._bw_tab_widget,       hidden=True),
-            self._nav_add_page("🕐  Scheduled Scans",    self._sched_tab_widget,    hidden=True),
-            self._nav_add_page("📡  SNMP Device Info",   self._snmp_tab_widget,     hidden=True),
-        ]
-        # Hide the Advanced section separator too
-        adv_sep_item = self._nav.item(self._nav_adv_sep)
-        if adv_sep_item:
-            adv_sep_item.setHidden(True)
+        self._nav_add_section("Advanced", icon="⚙", collapsed_by_default=True)
+
+        self._nav_add_subgroup("Deep Analysis", icon="🔬")
+        _mtr_row  = self._nav_add_page("🗺", "Hop-by-Hop Trace",  self._mtr_tab_widget)
+        _arp_row  = self._nav_add_page("👁", "ARP Spoof Watch",    self._arp_tab_widget)
+        _snmp_row = self._nav_add_page("📟", "SNMP Device Info",   self._snmp_tab_widget)
+        _snmp_trap_row = self._nav_add_page("📥", "SNMP Trap Receiver", self._snmp_trap_page)
+        _syslog_row    = self._nav_add_page("📜", "Syslog Viewer",       self._syslog_page)
+        self._nav_current_subgroup = -1
+
+        _adv_tools_row = self._nav_add_page("🔧", "Tools & Wake-on-LAN", self._adv_tab_widget)
+        _adv_map_row   = self._nav_add_page("🗺", "Network Map",          self._topology_tab_widget)
+        _adv_dhcp_row  = self._nav_add_page("📌", "DHCP Leases",          self._dhcp_tab_widget)
+        _adv_bw_row    = self._nav_add_page("📈", "Bandwidth Usage",       self._bw_tab_widget)
+        _adv_sched_row = self._nav_add_page("⏱", "Scheduled Scans",       self._sched_tab_widget)
+
+        # compat refs
+        self._nav_adv_rows      = [_mtr_row, _adv_tools_row, _adv_map_row,
+                                    _arp_row, _adv_dhcp_row, _adv_bw_row, _adv_sched_row, _snmp_row, _snmp_trap_row, _syslog_row]
+        self._adv_tab_index_adv = _adv_tools_row
+        self._adv_tab_index_mtr = _mtr_row
         self._nav_separators.add(self._nav_adv_sep)
 
-        # Track the nav row of Advanced Tools (for port-scan auto-navigate)
-        self._adv_tab_index_adv = self._nav_adv_rows[1]   # "🔧  Advanced Tools"
-        self._adv_tab_index_mtr = self._nav_adv_rows[0]   # kept for compat
-
-        # ── Recon pages (hidden until Recon Mode) ─────────────────────────────
+        # ── SECURITY AUDIT (collapsed by default) ──────────────────────────────
         self._nav_recon_sep = self._nav.count()
-        self._nav_add_section("Security Audit")
+        self._nav_add_section("Security Audit", icon="🔐", collapsed_by_default=True)
         self._nav_recon_rows = [
-            self._nav_add_page("⚡  Port Scan (SYN)",        self._recon_syn_tab_widget,       hidden=True),
-            self._nav_add_page("📻  Port Scan (UDP)",         self._recon_udp_tab_widget,       hidden=True),
-            self._nav_add_page("🖥  OS Detection",            self._recon_os_tab_widget,        hidden=True),
-            self._nav_add_page("🎯  Device Risk Score",       self._recon_risk_tab_widget,      hidden=True),
-            self._nav_add_page("🛡  Known CVEs",              self._recon_cve_tab_widget,       hidden=True),
-            self._nav_add_page("🌐  Exposed to Internet",     self._recon_exposure_tab_widget,  hidden=True),
-            self._nav_add_page("🔑  Login Test (SSH/SMB)",    self._recon_cred_tab_widget,      hidden=True),
-            self._nav_add_page("🚀  Full Device Discovery",   self._recon_discovery_tab_widget, hidden=True),
-            self._nav_add_page("🗂  Windows Shares (SMB)",    self._recon_smb_tab_widget,       hidden=True),
-            self._nav_add_page("🔌  Plugin Modules",          self._recon_plugin_tab_widget,    hidden=True),
-            self._nav_add_page("🔒  Private Endpoint Check",  self._recon_pe_tab_widget,        hidden=True),
-            self._nav_add_page("☁  Cloud Metadata Probe",    self._recon_cloud_tab_widget,     hidden=True),
+            self._nav_add_page("�", "TLS Certificates",      self._cert_page),
+            self._nav_add_page("�🔎", "Port Scan (SYN)",       self._recon_syn_tab_widget),
+            self._nav_add_page("🔎", "Port Scan (UDP)",        self._recon_udp_tab_widget),
+            self._nav_add_page("💻", "OS Detection",           self._recon_os_tab_widget),
+            self._nav_add_page("⚠",  "Device Risk Score",     self._recon_risk_tab_widget),
+            self._nav_add_page("🛡", "Known CVEs",             self._recon_cve_tab_widget),
+            self._nav_add_page("🌍", "Exposed to Internet",    self._recon_exposure_tab_widget),
+            self._nav_add_page("🔑", "Login Test (SSH/SMB)",   self._recon_cred_tab_widget),
+            self._nav_add_page("🔭", "Full Device Discovery",  self._recon_discovery_tab_widget),
+            self._nav_add_page("🗂", "Windows Shares (SMB)",   self._recon_smb_tab_widget),
+            self._nav_add_page("🔌", "Plugin Modules",         self._recon_plugin_tab_widget),
+            self._nav_add_page("🔒", "Private Endpoint Check", self._recon_pe_tab_widget),
+            self._nav_add_page("☁",  "Cloud Metadata Probe",  self._recon_cloud_tab_widget),
         ]
-        recon_sep_item = self._nav.item(self._nav_recon_sep)
-        if recon_sep_item:
-            recon_sep_item.setHidden(True)
         self._nav_separators.add(self._nav_recon_sep)
         self._recon_tab_start_index = -1  # kept for compat
 
-        # ── Wire selection signal ─────────────────────────────────────────────
+        # Apply initial collapse for sections starting collapsed
+        for _hrow, _grp in self._nav_section_groups.items():
+            if _grp["collapsed"] and _grp["level"] == 0:
+                self._nav_apply_section_visibility(_hrow, True)
+
+        # ── Wire signals ──────────────────────────────────────────────────────
         self._nav.currentRowChanged.connect(self._on_nav_row_changed)
-        # Select first real page
+        self._nav.itemClicked.connect(self._on_nav_item_clicked)
+        # Select first real page (row 1 = Devices on Network)
         self._nav.setCurrentRow(1)
 
-        # ── Assemble sidebar + content ────────────────────────────────────────
+        # ── Build sidebar container (search + nav list + collapse button) ──────
+        self._nav_sidebar_container = QWidget()
+        self._nav_sidebar_container.setFixedWidth(220)
+        self._nav_sidebar_container.setStyleSheet(
+            f"QWidget {{ background:{SIDEBAR_BG}; }}"
+        )
+        _sb_lay = QVBoxLayout(self._nav_sidebar_container)
+        _sb_lay.setContentsMargins(0, 0, 0, 0)
+        _sb_lay.setSpacing(0)
+
+        # Search / filter input
+        self._nav_search = QLineEdit()
+        self._nav_search.setObjectName("navSearch")
+        self._nav_search.setPlaceholderText("  Filter…")
+        self._nav_search.setFixedHeight(28)
+        self._nav_search.setStyleSheet(
+            f"QLineEdit#navSearch {{"
+            f" background:{SIDEBAR_HOVER}; color:#A8B8C8;"
+            f" border:none; border-bottom:1px solid #0A0E1A;"
+            f" padding:0 8px; font-size:11px; }}"
+            f"QLineEdit#navSearch:focus {{ color:{WHITE}; }}"
+        )
+        self._nav_search.textChanged.connect(self._on_nav_search_changed)
+        _sb_lay.addWidget(self._nav_search)
+        _sb_lay.addWidget(self._nav, 1)
+
+        # Collapse ◀ / ▶ toggle button
+        self._sidebar_toggle_btn = QPushButton("◀")
+        self._sidebar_toggle_btn.setFixedHeight(24)
+        self._sidebar_toggle_btn.setStyleSheet(
+            f"QPushButton {{ background:{SIDEBAR_SECTION_BG}; color:{SIDEBAR_SECTION_FG};"
+            f" border:none; border-top:1px solid #0A0E1A; font-size:11px; }}"
+            f"QPushButton:hover {{ color:{WHITE}; background:{SIDEBAR_HOVER}; }}"
+        )
+        self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
+        _sb_lay.addWidget(self._sidebar_toggle_btn)
+
+        # ── Assemble sidebar + content area ───────────────────────────────────
         container = QWidget()
+        container.setObjectName("contentArea")
         h = QHBoxLayout(container)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
-        h.addWidget(self._nav)
-        # thin divider line
+        h.addWidget(self._nav_sidebar_container)
+        # 1px divider
         div = QFrame()
         div.setFrameShape(QFrame.Shape.VLine)
-        div.setStyleSheet("background: #2a2a4a; max-width: 1px;")
+        div.setStyleSheet(f"background: {NAV_DIVIDER}; max-width: 1px;")
         h.addWidget(div)
-        h.addWidget(self._stack, 1)
+        # light content wrapper with padding
+        content_wrapper = QWidget()
+        content_wrapper.setObjectName("contentArea")
+        cw_lay = QVBoxLayout(content_wrapper)
+        cw_lay.setContentsMargins(12, 10, 12, 8)
+        cw_lay.setSpacing(0)
+        cw_lay.addWidget(self._stack)
+        h.addWidget(content_wrapper, 1)
 
         # Copy-to-clipboard right-click menus
         for tbl in (
@@ -614,81 +1003,141 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(int)
     def _on_nav_row_changed(self, row: int):
-        """Skip separator rows and switch the stacked page."""
-        if row in self._nav_separators or row < 0:
-            # Jump to the next real row below
-            for next_row in range(row + 1, self._nav.count()):
-                if next_row not in self._nav_separators:
-                    item = self._nav.item(next_row)
-                    if item and not item.isHidden():
-                        self._nav.setCurrentRow(next_row)
-                        return
+        """Navigate to the page for the selected nav row."""
+        if row < 0 or row in self._nav_header_rows:
             return
         self._nav_set_page(row)
 
-    @pyqtSlot(bool)
-    def _on_mode_toggle(self, advanced: bool):
-        if advanced:
-            self._btn_mode.setText("⚙  Standard Mode")
-            adv_sep = self._nav.item(self._nav_adv_sep)
-            if adv_sep:
-                adv_sep.setHidden(False)
-            self._nav_show_group(self._nav_adv_rows, True)
-        else:
-            self._btn_mode.setText("⚙  Advanced Mode")
-            adv_sep = self._nav.item(self._nav_adv_sep)
-            if adv_sep:
-                adv_sep.setHidden(True)
-            self._nav_show_group(self._nav_adv_rows, False)
-            # Also disable Recon if it was on
-            if self._btn_recon.isChecked():
-                self._btn_recon.setChecked(False)
-            # If current page is an advanced/recon one, jump back to page 1
-            cur = self._nav.currentRow()
-            if cur in self._nav_adv_rows or cur in self._nav_recon_rows:
-                self._nav.setCurrentRow(1)
-
-    @pyqtSlot(bool)
-    def _on_recon_toggle(self, recon: bool):
-        if recon:
-            if not self._btn_mode.isChecked():
-                self._btn_mode.setChecked(True)
-            self._btn_recon.setText("🔎  Security Audit Mode")
-            recon_sep = self._nav.item(self._nav_recon_sep)
-            if recon_sep:
-                recon_sep.setHidden(False)
-            self._nav_show_group(self._nav_recon_rows, True)
-        else:
-            self._btn_recon.setText("🔍  Security Audit Mode")
-            recon_sep = self._nav.item(self._nav_recon_sep)
-            if recon_sep:
-                recon_sep.setHidden(True)
-            self._nav_show_group(self._nav_recon_rows, False)
-            cur = self._nav.currentRow()
-            if cur in self._nav_recon_rows:
-                self._nav.setCurrentRow(1)
-
     # ── Module 1 ──────────────────────────────────────────────────────────────
+
+    def _build_kpi_bar(self) -> QWidget:
+        """
+        Four KPI tiles: Total Nodes | Critical Risks | Unauthorized | Scan Status.
+        Sits at the top of the Devices page. Values are updated by _update_kpi_tiles().
+        """
+        bar = QWidget()
+        bar.setFixedHeight(56)
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 0, 0, 6)
+        row.setSpacing(8)
+
+        def _tile(dot_color: str, label: str, start_val: str, start_color: str):
+            """Return (tile QFrame, dot QLabel, value QLabel)."""
+            tile = QFrame()
+            tile.setObjectName("card")
+            tile.setStyleSheet(
+                f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+                f"border-left:3px solid {dot_color};border-radius:0px;}}"
+            )
+            vl = QVBoxLayout(tile)
+            vl.setContentsMargins(8, 4, 8, 4)
+            vl.setSpacing(1)
+
+            hdr = QHBoxLayout()
+            hdr.setSpacing(4)
+            dot = QLabel("●")
+            dot.setStyleSheet(
+                f"color:{dot_color}; font-size:9px; background:transparent; border:none;"
+            )
+            lbl = QLabel(label.upper())
+            lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+                "letter-spacing:0.5px; background:transparent; border:none;"
+            )
+            hdr.addWidget(dot)
+            hdr.addWidget(lbl)
+            hdr.addStretch()
+            vl.addLayout(hdr)
+
+            val = QLabel(start_val)
+            val.setStyleSheet(
+                f"color:{start_color}; font-size:18px; font-weight:bold;"
+                "background:transparent; border:none;"
+            )
+            vl.addWidget(val)
+            return tile, dot, val
+
+        t1, self._kpi_nodes_dot,  self._kpi_nodes_val  = _tile(ACCENT,          "Total Nodes",    "—", TEXT_MUTED)
+        t2, self._kpi_risk_dot,   self._kpi_risk_val   = _tile(TEXT_MUTED,      "Critical Risks", "—", TEXT_MUTED)
+        t3, self._kpi_unauth_dot, self._kpi_unauth_val = _tile(TEXT_MUTED,      "Unauthorized",   "—", TEXT_MUTED)
+        t4, self._kpi_scan_dot,   self._kpi_scan_val   = _tile(TEXT_SECONDARY,  "Scan Status",    "Ready", TEXT_SECONDARY)
+
+        # Keep references to the tiles themselves so we can update border colours
+        self._kpi_risk_tile  = t2
+        self._kpi_unauth_tile = t3
+
+        for t in (t1, t2, t3, t4):
+            row.addWidget(t, 1)
+        return bar
+
+    def _update_kpi_tiles(self, data: dict) -> None:
+        """Refresh KPI tile values from a completed scan result dict."""
+        devices    = data.get("devices", [])
+        total      = len(devices)
+        high_risk  = sum(
+            1 for d in devices
+            if (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "")) in ("HIGH", "CRITICAL")
+        )
+        unauth     = data.get("high_risk_count", high_risk)
+
+        # Nodes tile — always blue
+        self._kpi_nodes_val.setText(str(total))
+        self._kpi_nodes_val.setStyleSheet(
+            f"color:{ACCENT}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;"
+        )
+
+        # Critical risks tile — green if 0, amber if 1-2, red if 3+
+        risk_color = GREEN if high_risk == 0 else (AMBER if high_risk <= 2 else RED)
+        self._kpi_risk_val.setText(str(high_risk))
+        self._kpi_risk_val.setStyleSheet(
+            f"color:{risk_color}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;"
+        )
+        self._kpi_risk_dot.setStyleSheet(
+            f"color:{risk_color}; font-size:9px; background:transparent; border:none;"
+        )
+        self._kpi_risk_tile.setStyleSheet(
+            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"border-left:3px solid {risk_color};border-radius:0px;}}"
+        )
+
+        # Unauthorized tile — green if 0, red if >0
+        unauth_color = GREEN if unauth == 0 else RED
+        self._kpi_unauth_val.setText(str(unauth))
+        self._kpi_unauth_val.setStyleSheet(
+            f"color:{unauth_color}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;"
+        )
+        self._kpi_unauth_dot.setStyleSheet(
+            f"color:{unauth_color}; font-size:9px; background:transparent; border:none;"
+        )
+        self._kpi_unauth_tile.setStyleSheet(
+            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"border-left:3px solid {unauth_color};border-radius:0px;}}"
+        )
+
+        # Scan status tile — green "Complete"
+        self._kpi_scan_val.setText("Complete")
+        self._kpi_scan_dot.setStyleSheet(
+            f"color:{GREEN}; font-size:9px; background:transparent; border:none;"
+        )
+        self._kpi_scan_val.setStyleSheet(
+            f"color:{GREEN}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;"
+        )
 
     def _build_m1_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(6)
+
+        # ── KPI summary tiles ─────────────────────────────────────────────────
+        lay.addWidget(self._build_kpi_bar())
 
         self._m1_status = QLabel("Not yet scanned.")
-        self._m1_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
-
-        # ── NL query search bar ───────────────────────────────────────────────
-        self._m1_search = QLineEdit()
-        self._m1_search.setPlaceholderText(
-            '🔍  Filter: "show risky devices"  ·  "find cameras"  ·  "list RDP"  ·  (clear to reset)'
-        )
-        self._m1_search.setStyleSheet(
-            f"background:#0d0d1e; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a;"
-            "border-radius:6px; padding:5px 8px; font-size:12px;"
-        )
-        self._m1_search.textChanged.connect(self._filter_m1_by_nl)
-        lay.addWidget(self._m1_search)
+        self._m1_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
 
         self._m1_table = _table([
             "IP Address", "Hostname", "MAC Address", "Vendor", "Risk", "Device Type", "Verdict"
@@ -704,8 +1153,26 @@ class Dashboard(QMainWindow):
         self._m1_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._m1_table.customContextMenuRequested.connect(self._m1_context_menu)
 
+        # Empty-state placeholder shown when table has no rows
+        self._m1_empty = QLabel("Run a scan to discover devices on this network.")
+        self._m1_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._m1_empty.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:13px; padding:40px;"
+            "background:transparent; border:none;"
+        )
+
+        # ── Card wrapping table + empty state ─────────────────────────────────
+        m1_card, m1_body = _make_card("Discovered Devices")
+        # Stack: table on top, empty label behind — we toggle visibility
+        from PyQt6.QtWidgets import QStackedWidget as _SW
+        self._m1_stack = _SW()
+        self._m1_stack.addWidget(self._m1_empty)   # index 0 — empty state
+        self._m1_stack.addWidget(self._m1_table)   # index 1 — live data
+        self._m1_stack.setCurrentIndex(0)
+        m1_body.addWidget(self._m1_stack)
+
         lay.addWidget(self._m1_status)
-        lay.addWidget(self._m1_table)
+        lay.addWidget(m1_card, 1)
         return w
 
     def _m1_context_menu(self, pos):
@@ -717,7 +1184,7 @@ class Dashboard(QMainWindow):
         ip  = (self._m1_table.item(row, 0) or QTableWidgetItem()).text()
         mac = (self._m1_table.item(row, 2) or QTableWidgetItem()).text()
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:#1e1e3a; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a;")
+        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_scan = menu.addAction(f"🔍  Port scan  {ip}")
         act_wol  = menu.addAction(f"⚡  Wake-on-LAN  →  {mac}")
         menu.addSeparator()
@@ -760,11 +1227,23 @@ class Dashboard(QMainWindow):
     def _build_m2_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        lay.addWidget(NpcapMissingBanner(parent=w))
+
+        pt, ps = _page_header(
+            "Rogue Bridge Detection",
+            "STP/BPDU frame capture — identifies unauthorised Spanning Tree root bridges"
+        )
+        lay.addWidget(pt)
+        lay.addWidget(ps)
 
         self._m2_status = QLabel("Not yet scanned.")
-        self._m2_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        self._m2_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        lay.addWidget(self._m2_status)
 
+        card, card_body = _make_card("STP Frames Detected")
         self._m2_table = _table([
             "Source MAC", "BPDU Type", "Root MAC", "Bridge Priority",
             "Hello (s)", "MaxAge (s)", "FwdDelay (s)", "Rogue?"
@@ -774,9 +1253,8 @@ class Dashboard(QMainWindow):
         self._m2_table.setColumnWidth(2, 150)
         self._m2_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._m2_table.customContextMenuRequested.connect(self._m2_context_menu)
-
-        lay.addWidget(self._m2_status)
-        lay.addWidget(self._m2_table)
+        card_body.addWidget(self._m2_table)
+        lay.addWidget(card, 1)
         return w
 
     def _m2_context_menu(self, pos):
@@ -787,7 +1265,7 @@ class Dashboard(QMainWindow):
         src_mac = (self._m2_table.item(row, 0) or QTableWidgetItem()).text()
         is_rogue = (self._m2_table.item(row, 7) or QTableWidgetItem()).text().strip().upper() in ("YES", "TRUE", "ROGUE")
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:#1e1e3a; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a;")
+        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_fix  = menu.addAction("🔧  How to Fix")
         menu.addSeparator()
         act_copy = menu.addAction("📋  Copy MAC")
@@ -818,12 +1296,23 @@ class Dashboard(QMainWindow):
     def _build_m3_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        lay.addWidget(NpcapMissingBanner(parent=w))
+
+        pt, ps = _page_header(
+            "Broadcast Storm Analysis",
+            "Live packet capture — measures broadcast/multicast rates and storm level"
+        )
+        lay.addWidget(pt)
+        lay.addWidget(ps)
 
         self._m3_status = QLabel("Not yet scanned.")
-        self._m3_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        self._m3_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        lay.addWidget(self._m3_status)
 
-        # Stats row
+        # KPI stats row
         stats = QHBoxLayout()
         self._m3_bcast_lbl  = self._stat_label("Broadcast/s", "—")
         self._m3_mcast_lbl  = self._stat_label("Multicast/s", "—")
@@ -833,16 +1322,16 @@ class Dashboard(QMainWindow):
                    self._m3_ratio_lbl, self._m3_level_lbl):
             stats.addWidget(w2)
         stats.addStretch()
+        lay.addLayout(stats)
 
+        card, card_body = _make_card("Broadcast Sources")
         self._m3_table = _table(["Source MAC", "Broadcast Packets", "Rogue Match?"])
         self._m3_table.setColumnWidth(0, 160)
         self._m3_table.setColumnWidth(1, 160)
         self._m3_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._m3_table.customContextMenuRequested.connect(self._m3_context_menu)
-
-        lay.addWidget(self._m3_status)
-        lay.addLayout(stats)
-        lay.addWidget(self._m3_table)
+        card_body.addWidget(self._m3_table)
+        lay.addWidget(card, 1)
         return w
 
     def _m3_context_menu(self, pos):
@@ -853,7 +1342,7 @@ class Dashboard(QMainWindow):
         src_mac = (self._m3_table.item(row, 0) or QTableWidgetItem()).text()
         bcast   = (self._m3_table.item(row, 1) or QTableWidgetItem()).text()
         menu = QMenu(self)
-        menu.setStyleSheet(f"background:#1e1e3a; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a;")
+        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_fix  = menu.addAction("🔧  How to Fix")
         act_copy = menu.addAction("📋  Copy MAC")
         chosen = menu.exec(self._m3_table.viewport().mapToGlobal(pos))
@@ -880,20 +1369,29 @@ class Dashboard(QMainWindow):
     def _build_m4_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        pt, ps = _page_header(
+            "WiFi Networks",
+            "Wireless scan — SSID enumeration, rogue AP detection, co-channel interference"
+        )
+        lay.addWidget(pt)
+        lay.addWidget(ps)
 
         self._m4_status = QLabel("Not yet scanned.")
-        self._m4_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        self._m4_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        lay.addWidget(self._m4_status)
 
+        card, card_body = _make_card("Detected Networks")
         self._m4_table = _table([
             "SSID", "BSSID", "Channel", "Band", "Signal (dBm)",
             "Hidden?", "Rogue SSID?", "Co-Channel?"
         ])
         self._m4_table.setColumnWidth(0, 180)
         self._m4_table.setColumnWidth(1, 150)
-
-        lay.addWidget(self._m4_status)
-        lay.addWidget(self._m4_table)
+        card_body.addWidget(self._m4_table)
+        lay.addWidget(card, 1)
         return w
 
     # ── Module 5 ──────────────────────────────────────────────────────────────
@@ -901,22 +1399,30 @@ class Dashboard(QMainWindow):
     def _build_m5_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
-        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        pt, ps = _page_header(
+            "DNS & Outage Monitor",
+            "Continuous RTT/DNS monitoring — latency graph, outage detection, STP correlation"
+        )
+        lay.addWidget(pt)
+        lay.addWidget(ps)
 
         self._m5_status = QLabel("Not yet scanned.")
-        self._m5_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
+        self._m5_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
+        lay.addWidget(self._m5_status)
 
         self._graph = LiveGraphWidget()
         self._graph.setMinimumHeight(220)
+        lay.addWidget(self._graph, 2)
 
+        card, card_body = _make_card("Detected Outages")
         self._m5_outage_table = _table([
             "Target", "Duration (s)", "Consecutive Drops", "STP Signature?", "Severity"
         ])
-
-        lay.addWidget(self._m5_status)
-        lay.addWidget(self._graph, 2)
-        lay.addWidget(QLabel("Detected Outages:"))
-        lay.addWidget(self._m5_outage_table, 1)
+        card_body.addWidget(self._m5_outage_table)
+        lay.addWidget(card, 1)
         return w
 
     # ── Network Info tab ──────────────────────────────────────────────────────
@@ -931,7 +1437,7 @@ class Dashboard(QMainWindow):
         hdr = QHBoxLayout()
         hdr_lbl = QLabel("🌐  Network Configuration")
         hdr_lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        hdr_lbl.setStyleSheet(f"color:{ACCENT_LITE};")
+        hdr_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         hdr.addWidget(hdr_lbl)
         hdr.addStretch()
         self._btn_net_refresh = QPushButton("↺  Refresh")
@@ -943,7 +1449,7 @@ class Dashboard(QMainWindow):
         # Info card
         self._net_info_card = QFrame()
         self._net_info_card.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         self._net_card_layout = QVBoxLayout(self._net_info_card)
         self._net_card_layout.setContentsMargins(18, 14, 18, 14)
@@ -959,14 +1465,14 @@ class Dashboard(QMainWindow):
         # Router links card
         router_frame = QFrame()
         router_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         rl = QVBoxLayout(router_frame)
         rl.setContentsMargins(18, 14, 18, 14)
         rl.setSpacing(6)
         rl_title = QLabel("🔗  Router / Modem Admin Panel")
         rl_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        rl_title.setStyleSheet(f"color:{ACCENT_LITE};")
+        rl_title.setStyleSheet(f"color:{TEXT_PRIMARY};")
         rl.addWidget(rl_title)
         rl_desc = QLabel(
             "Click a link below to open your router's admin page in a browser.\n"
@@ -985,14 +1491,14 @@ class Dashboard(QMainWindow):
         # ── OS network settings shortcuts ─────────────────────────────────────
         os_frame = QFrame()
         os_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         os_l = QVBoxLayout(os_frame)
         os_l.setContentsMargins(18, 12, 18, 12)
         os_l.setSpacing(6)
         os_title = QLabel("⚙️  Network Settings Shortcuts")
         os_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        os_title.setStyleSheet(f"color:{ACCENT_LITE};")
+        os_title.setStyleSheet(f"color:{TEXT_PRIMARY};")
         os_l.addWidget(os_title)
         os_btn_row = QHBoxLayout()
         os_btn_row.setSpacing(8)
@@ -1035,14 +1541,14 @@ class Dashboard(QMainWindow):
         # ── DHCP lease card ───────────────────────────────────────────────────
         dhcp_frame = QFrame()
         dhcp_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         dhcp_l = QVBoxLayout(dhcp_frame)
         dhcp_l.setContentsMargins(18, 12, 18, 12)
         dhcp_l.setSpacing(4)
         dhcp_title = QLabel("🕐  DHCP Lease  &  Adapter Details")
         dhcp_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        dhcp_title.setStyleSheet(f"color:{ACCENT_LITE};")
+        dhcp_title.setStyleSheet(f"color:{TEXT_PRIMARY};")
         dhcp_l.addWidget(dhcp_title)
         self._dhcp_label = QLabel("Loading…")
         self._dhcp_label.setWordWrap(True)
@@ -1190,12 +1696,12 @@ class Dashboard(QMainWindow):
         top = QHBoxLayout()
         title = QLabel("⚡  Network Health & Diagnostics")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{ACCENT_LITE};")
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         self._btn_diag = QPushButton("⚡  Run Diagnostics")
         self._btn_diag.setObjectName("btnDiag")
-        self._btn_diag.setFixedHeight(38)
+        self._btn_diag.setFixedHeight(34)
         self._btn_diag.clicked.connect(self._start_diagnostics)
         top.addWidget(self._btn_diag)
         lay.addLayout(top)
@@ -1292,7 +1798,7 @@ class Dashboard(QMainWindow):
         top = QHBoxLayout()
         title = QLabel("📋  Background Network Logger")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{ACCENT_LITE};")
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
 
@@ -1377,7 +1883,7 @@ class Dashboard(QMainWindow):
         self._log_analysis_box.setMaximumHeight(160)
         self._log_analysis_box.setStyleSheet(
             f"background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
-            "border:1px solid #2a2a4a; border-radius:6px; padding:6px;"
+            f"border:1px solid {BORDER}; border-radius:0px; padding:6px;"
         )
         self._log_analysis_box.setPlaceholderText(
             "Load a log file to see automatic diagnostic findings here."
@@ -1421,7 +1927,7 @@ class Dashboard(QMainWindow):
         top = QHBoxLayout()
         title = QLabel("🔁  Continuous Traceroute  (MTR)")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{ACCENT_LITE};")
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         tgt_lbl = QLabel("Target:")
@@ -1464,20 +1970,20 @@ class Dashboard(QMainWindow):
 
         title = QLabel("🔧  Advanced Tools")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{ACCENT_LITE};")
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         lay.addWidget(title)
 
         # Port Scanner card
         ps_frame = QFrame()
         ps_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         ps_l = QVBoxLayout(ps_frame)
         ps_l.setContentsMargins(16, 12, 16, 12)
         ps_l.setSpacing(6)
         ps_title = QLabel("🔍  Port Scanner")
         ps_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        ps_title.setStyleSheet(f"color:{ACCENT_LITE};")
+        ps_title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         ps_l.addWidget(ps_title)
         ps_desc = QLabel(
             "TCP connect-scan of common ports on any host.  "
@@ -1524,14 +2030,14 @@ class Dashboard(QMainWindow):
         # Wake-on-LAN card
         wol_frame = QFrame()
         wol_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         wol_l = QVBoxLayout(wol_frame)
         wol_l.setContentsMargins(16, 12, 16, 12)
         wol_l.setSpacing(6)
         wol_title = QLabel("⚡  Wake-on-LAN")
         wol_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        wol_title.setStyleSheet(f"color:{ACCENT_LITE};")
+        wol_title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         wol_l.addWidget(wol_title)
         wol_row = QHBoxLayout()
         self._wol_mac = QLineEdit()
@@ -1555,14 +2061,14 @@ class Dashboard(QMainWindow):
         # Device Baseline card
         bl_frame = QFrame()
         bl_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         bl_l = QVBoxLayout(bl_frame)
         bl_l.setContentsMargins(16, 12, 16, 12)
         bl_l.setSpacing(6)
         bl_title = QLabel("📋  New Device Alerts  (baseline diff)")
         bl_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        bl_title.setStyleSheet(f"color:{ACCENT_LITE};")
+        bl_title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         bl_l.addWidget(bl_title)
         bl_desc = QLabel(
             "After each scan, devices not seen before are highlighted here.  "
@@ -1882,7 +2388,7 @@ class Dashboard(QMainWindow):
         top = QHBoxLayout()
         title = QLabel("🔷  IPv6 Devices")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{ACCENT_LITE};")
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         self._btn_ipv6_scan = QPushButton("▶  Scan IPv6")
@@ -1962,7 +2468,7 @@ class Dashboard(QMainWindow):
         top = QHBoxLayout()
         title = QLabel("☁  Cloud Metadata Detection")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{ACCENT_LITE};")
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         top.addWidget(title)
         top.addStretch()
         self._btn_cloud_scan = QPushButton("▶  Run Check")
@@ -1986,7 +2492,7 @@ class Dashboard(QMainWindow):
         self._cloud_local_box.setMaximumHeight(180)
         self._cloud_local_box.setStyleSheet(
             f"background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
-            "border:1px solid #2a2a4a; border-radius:6px; padding:6px;"
+            f"border:1px solid {BORDER}; border-radius:0px; padding:6px;"
         )
         self._cloud_local_box.setPlaceholderText(
             "IMDS probe result will appear here — runs in < 1 second per provider."
@@ -2124,8 +2630,8 @@ class Dashboard(QMainWindow):
         self._corr_verdict = QLabel("Run a scan to see the root cause summary.")
         self._corr_verdict.setWordWrap(True)
         self._corr_verdict.setStyleSheet(
-            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:2px solid #2a2a4a; "
-            "border-radius:10px; padding:10px 14px; font-size:13px; font-weight:bold;"
+            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:2px solid {BORDER}; "
+            "border-radius:4px; padding:10px 14px; font-size:13px; font-weight:bold;"
         )
 
         ctrl = QHBoxLayout()
@@ -2194,7 +2700,7 @@ class Dashboard(QMainWindow):
             banner_color = sev_colors.get(result.global_severity, TEXT_SECONDARY)
             self._corr_verdict.setStyleSheet(
                 f"background:{BG_CARD}; color:{banner_color}; "
-                f"border:2px solid {banner_color}; border-radius:10px; "
+                f"border:2px solid {banner_color}; border-radius:4px; "
                 "padding:10px 14px; font-size:13px; font-weight:bold;"
             )
             self._corr_verdict.setText(result.plain_summary)
@@ -2435,7 +2941,7 @@ class Dashboard(QMainWindow):
         self._bm_grade_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._bm_grade_label.setStyleSheet(
             "font-size:40px; font-weight:bold; border-radius:45px; "
-            f"background:{BG_CARD}; border:3px solid #2a2a4a; color:{TEXT_PRIMARY};"
+            f"background:{BG_CARD}; border:3px solid {BORDER}; color:{TEXT_PRIMARY};"
         )
         self._bm_score_label = QLabel("Score: —")
         self._bm_score_label.setStyleSheet(
@@ -2509,11 +3015,11 @@ class Dashboard(QMainWindow):
 
             # Update grade circle
             grade_styles = {
-                "A": (GREEN, "#14532d"),
-                "B": ("#4ade80", "#1a3a1a"),
-                "C": (AMBER, "#451a03"),
-                "D": (RED, "#7f1d1d"),
-                "F": ("#ff4444", "#3b0000"),
+                "A": (GREEN,       GRADE_A_BG),
+                "B": (GRADE_B_FG,  GRADE_B_BG),
+                "C": (AMBER,       GRADE_C_BG),
+                "D": (RED,         GRADE_D_BG),
+                "F": (GRADE_F_FG,  GRADE_F_BG),
                 "N/A": (TEXT_SECONDARY, BG_CARD),
             }
             fg, bg = grade_styles.get(result.overall_grade, (TEXT_SECONDARY, BG_CARD))
@@ -2525,6 +3031,7 @@ class Dashboard(QMainWindow):
             self._bm_score_label.setText(f"Score: {result.overall_score:.0f}/100")
             self._bm_score_label.setStyleSheet(f"color:{fg}; font-size:16px; font-weight:bold;")
             self._bm_verdict_label.setText(result.overall_verdict)
+            self._overview_page.on_grade(result.overall_grade, result.overall_score)
 
             # Populate dimension table
             self._bm_table.setRowCount(0)
@@ -2532,7 +3039,7 @@ class Dashboard(QMainWindow):
                 row = self._bm_table.rowCount()
                 self._bm_table.insertRow(row)
                 grade_color = {
-                    "A": GREEN, "B": "#4ade80", "C": AMBER, "D": RED, "F": "#ff4444"
+                    "A": GREEN, "B": GRADE_B_FG, "C": AMBER, "D": RED, "F": GRADE_F_FG
                 }.get(d.grade, TEXT_SECONDARY)
                 for col, val in enumerate([
                     d.name, d.grade, d.value_label, d.ideal_label, d.verdict, d.tip
@@ -2559,10 +3066,10 @@ class Dashboard(QMainWindow):
             form = QFormLayout(dlg)
             isp_edit = _QLE()
             isp_edit.setPlaceholderText("e.g. BT, Virgin Media, Comcast…")
-            isp_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a; border-radius:4px; padding:4px;")
+            isp_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
             ref_edit = _QLE()
             ref_edit.setPlaceholderText("e.g. REF-123456 (optional)")
-            ref_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a; border-radius:4px; padding:4px;")
+            ref_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
             form.addRow("ISP Name:", isp_edit)
             form.addRow("Account / Ticket Ref:", ref_edit)
             btns = QDialogButtonBox(
@@ -2656,7 +3163,7 @@ class Dashboard(QMainWindow):
         inner_lay.addWidget(txt)
         inner_lay.addStretch()
         scroll.setWidget(inner)
-        scroll.setStyleSheet(f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:6px;")
+        scroll.setStyleSheet(f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;")
         scroll.setMinimumHeight(160)
 
         lay.addWidget(scroll, 1)
@@ -2699,29 +3206,37 @@ class Dashboard(QMainWindow):
     # ── Verdict area ─────────────────────────────────────────────────────────
 
     def _build_verdict_area(self) -> QWidget:
+        """Compact verdict strip at bottom — thin, doesn't waste screen space."""
         w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 4, 0, 0)
-        lay.setSpacing(4)
+        w.setStyleSheet(
+            f"background:{BG_CARD}; border-top:1px solid {BORDER};"
+        )
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(12, 4, 12, 4)
+        lay.setSpacing(0)
 
         self._verdict = VerdictPanel()
-        lay.addWidget(self._verdict)
+        lay.addWidget(self._verdict, 1)
         return w
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _stat_label(self, title: str, value: str) -> QFrame:
+        """KPI card: coloured left border, label above, large number below."""
         frame = QFrame()
         frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:8px; padding:4px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER};"
+            f"border-left:3px solid {ACCENT}; border-radius:3px;"
         )
         fl = QVBoxLayout(frame)
         fl.setContentsMargins(10, 6, 10, 6)
-        fl.setSpacing(2)
-        t = QLabel(title)
-        t.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        fl.setSpacing(1)
+        t = QLabel(title.upper())
+        t.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:9px; font-weight:bold; letter-spacing:0.5px;"
+        )
         v = QLabel(value)
-        v.setStyleSheet(f"color:{TEXT_PRIMARY};font-size:18px;font-weight:bold;")
+        v.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;")
         v.setObjectName(f"stat_{title.replace('/','_').replace(' ','_')}")
         fl.addWidget(t)
         fl.addWidget(v)
@@ -2742,9 +3257,45 @@ class Dashboard(QMainWindow):
     def _set_status(self, msg: str):
         self._status_bar.showMessage(f"  {msg}")
 
+    def _show_alert_toast(self, alert) -> None:
+        """Show a desktop notification for a fired alert.
+
+        Uses QSystemTrayIcon.showMessage() when a tray icon is available,
+        otherwise falls back to the status bar.
+        """
+        from ui.styles import RED, AMBER
+        severity = getattr(alert, "severity", "INFO")
+        message  = getattr(alert, "message",  str(alert))
+
+        # Update status bar regardless
+        prefix = "🔴" if severity == "CRITICAL" else "🟡"
+        self._set_status(f"{prefix} {message}")
+
+        # Desktop toast via tray icon (if one exists)
+        if hasattr(self, "_tray_icon") and self._tray_icon is not None:
+            from PyQt6.QtWidgets import QSystemTrayIcon
+            icon_type = (
+                QSystemTrayIcon.MessageIcon.Critical
+                if severity == "CRITICAL"
+                else QSystemTrayIcon.MessageIcon.Warning
+            )
+            self._tray_icon.showMessage("NetSentinel Alert", message, icon_type, 5000)
+
+
+
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
         self._progress.setVisible(scanning)
+        # Update KPI scan-status tile
+        if scanning:
+            self._kpi_scan_val.setText("Scanning…")
+            self._kpi_scan_dot.setStyleSheet(
+                f"color:{ACCENT}; font-size:9px; background:transparent; border:none;"
+            )
+            self._kpi_scan_val.setStyleSheet(
+                f"color:{ACCENT}; font-size:18px; font-weight:bold;"
+                "background:transparent; border:none;"
+            )
         if not scanning:
             self._btn_export.setEnabled(
                 any(x is not None for x in [
@@ -2819,10 +3370,11 @@ class Dashboard(QMainWindow):
         s = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
         # Window geometry
         s.setValue("window/geometry", self.saveGeometry().toBase64().data().decode())
-        # Mode state
-        s.setValue("ui/advanced_mode", self._btn_mode.isChecked())
-        s.setValue("ui/recon_mode",    self._btn_recon.isChecked())
-        # Last scan settings
+        # Sidebar nav state
+        s.setValue("nav/collapsed", str(self._nav_collapsed))
+        for _hrow, _grp in self._nav_section_groups.items():
+            if _grp["level"] == 0:
+                s.setValue(f"nav/section_{_hrow}_collapsed", str(_grp["collapsed"]))
         if hasattr(self, "_ps_host"):
             s.setValue("scan/last_port_scan_host", self._ps_host.text())
         if hasattr(self, "_ps_mode"):
@@ -2848,14 +3400,16 @@ class Dashboard(QMainWindow):
                 self.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
             except Exception:
                 pass
-        # Mode — restore Advanced first (Recon depends on it)
-        adv = s.value("ui/advanced_mode", False, type=bool)
-        rec = s.value("ui/recon_mode",    False, type=bool)
-        if adv or rec:
-            self._btn_mode.setChecked(True)
-        if rec:
-            self._btn_recon.setChecked(True)
-        # Last scan settings
+        # Sidebar nav state
+        if s.value("nav/collapsed", "False") == "True" and not self._nav_collapsed:
+            self._toggle_sidebar()
+        for _hrow in list(self._nav_section_groups.keys()):
+            _grp = self._nav_section_groups[_hrow]
+            if _grp["level"] != 0:
+                continue
+            _saved = s.value(f"nav/section_{_hrow}_collapsed", None)
+            if _saved is not None and (_saved == "True") != _grp["collapsed"]:
+                self._nav_toggle_section(_hrow)
         if hasattr(self, "_ps_host"):
             host = s.value("scan/last_port_scan_host", "")
             if host:
@@ -2918,6 +3472,7 @@ class Dashboard(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(NpcapMissingBanner(parent=w))
         self._arp_status = QLabel("ARP spoof monitor not running.")
         self._arp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         btn_row = QHBoxLayout()
@@ -2972,6 +3527,7 @@ class Dashboard(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(NpcapMissingBanner(parent=w))
         self._dhcp_status = QLabel("DHCP rogue server monitor not running.")
         self._dhcp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         btn_row = QHBoxLayout()
@@ -3024,6 +3580,7 @@ class Dashboard(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(NpcapMissingBanner(parent=w))
         self._bw_status = QLabel("Bandwidth monitor not running. Requires admin + Npcap.")
         self._bw_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         btn_row = QHBoxLayout()
@@ -3229,7 +3786,7 @@ class Dashboard(QMainWindow):
             "Use only on networks you own or have authorization to test."
         )
         warn.setWordWrap(True)
-        warn.setStyleSheet(f"color:{AMBER};font-size:11px;background:#1a1a00;padding:6px;border-radius:6px;")
+        warn.setStyleSheet(f"color:{AMBER};font-size:11px;background:{AMBER_BG};padding:6px;border-radius:4px;")
         self._syn_status = QLabel("SYN scanner idle.")
         self._syn_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl = QHBoxLayout()
@@ -3324,7 +3881,7 @@ class Dashboard(QMainWindow):
             "No response = open|filtered (firewall or open service — UDP is ambiguous)."
         )
         warn.setWordWrap(True)
-        warn.setStyleSheet(f"color:{AMBER};font-size:11px;background:#1a1a00;padding:6px;border-radius:6px;")
+        warn.setStyleSheet(f"color:{AMBER};font-size:11px;background:{AMBER_BG};padding:6px;border-radius:4px;")
         self._udp_status = QLabel("UDP scanner idle.")
         self._udp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl = QHBoxLayout()
@@ -3610,7 +4167,7 @@ class Dashboard(QMainWindow):
         self._exposure_verdict.setWordWrap(True)
         self._exposure_verdict.setStyleSheet(
             f"color:{AMBER};font-size:12px;font-weight:bold;padding:6px;"
-            f"background:#1a1000;border-radius:6px;"
+            f"background:{AMBER_BG};border-radius:4px;"
         )
         self._exposure_verdict.hide()
         ctrl = QHBoxLayout()
@@ -3654,9 +4211,9 @@ class Dashboard(QMainWindow):
         self._exposure_verdict.setText(result.plain_verdict)
         self._exposure_verdict.setStyleSheet(
             f"color:{risk_color};font-size:12px;font-weight:bold;padding:6px;"
-            f"background:#1a0000;border-radius:6px;" if result.risk == "HIGH" else
+            f"background:{RED_BG};border-radius:4px;" if result.risk == "HIGH" else
             f"color:{risk_color};font-size:12px;font-weight:bold;padding:6px;"
-            f"background:#1a1000;border-radius:6px;"
+            f"background:{AMBER_BG};border-radius:4px;"
         )
         self._exposure_verdict.show()
         self._recon_exposure_table.setRowCount(0)
@@ -3676,6 +4233,427 @@ class Dashboard(QMainWindow):
             f"CGNAT: {'Yes' if result.cgnat else 'No'} | "
             f"UPnP mappings: {len(result.upnp_mappings)}"
         )
+
+    # ── Help page ────────────────────────────────────────────────────────────
+
+    def _build_help_tab(self) -> QWidget:
+        """Static Help & Shortcuts reference page."""
+        page = QWidget()
+        page.setObjectName("contentArea")
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(10)
+
+        # Page header
+        pt, ps = _page_header(
+            "Help & Shortcuts",
+            "Quick-start guide, keyboard shortcuts, and feature reference",
+        )
+        outer.addWidget(pt)
+        outer.addWidget(ps)
+
+        # Scrollable body
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background: transparent;")
+
+        body = QWidget()
+        body.setObjectName("contentArea")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(0, 0, 12, 20)
+        bl.setSpacing(12)
+
+        def _section(title: str, rows: list[tuple[str, str]]) -> QFrame:
+            card = QFrame()
+            card.setObjectName("card")
+            card.setStyleSheet(
+                f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+                f"border-radius:0px;}}"
+            )
+            cl = QVBoxLayout(card)
+            cl.setContentsMargins(0, 0, 0, 0)
+            cl.setSpacing(0)
+
+            # title bar
+            tb = QFrame()
+            tb.setObjectName("cardHeader")
+            tb.setFixedHeight(32)
+            tb.setStyleSheet(
+                f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};"
+            )
+            tbl = QHBoxLayout(tb)
+            tbl.setContentsMargins(12, 0, 12, 0)
+            t = QLabel(title)
+            t.setStyleSheet(
+                f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;"
+            )
+            tbl.addWidget(t)
+            tbl.addStretch()
+            cl.addWidget(tb)
+
+            # rows
+            tbl_w = QTableWidget(len(rows), 2)
+            tbl_w.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            tbl_w.horizontalHeader().setVisible(False)
+            tbl_w.verticalHeader().setVisible(False)
+            tbl_w.setShowGrid(False)
+            tbl_w.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+            tbl_w.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            tbl_w.setStyleSheet(
+                f"QTableWidget{{background:{BG_CARD};border:none;font-size:11px;}}"
+                f"QTableWidget::item{{padding:4px 8px;color:{TEXT_PRIMARY};}}"
+            )
+            tbl_w.horizontalHeader().setStretchLastSection(True)
+            tbl_w.setColumnWidth(0, 220)
+            tbl_w.verticalHeader().setDefaultSectionSize(24)
+
+            for i, (key, desc) in enumerate(rows):
+                k = QTableWidgetItem(key)
+                k.setFont(QFont("Consolas", 10))
+                k.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(ACCENT_DARK))
+                k.setBackground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(BG_ALT_ROW if i % 2 else BG_CARD))
+                d = QTableWidgetItem(desc)
+                d.setBackground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(BG_ALT_ROW if i % 2 else BG_CARD))
+                tbl_w.setItem(i, 0, k)
+                tbl_w.setItem(i, 1, d)
+
+            tbl_w.setFixedHeight(len(rows) * 24 + 2)
+            cl.addWidget(tbl_w)
+            return card
+
+        # ── Getting started ──────────────────────────────────────────────────
+        intro_card = QFrame()
+        intro_card.setObjectName("card")
+        intro_card.setStyleSheet(
+            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"border-radius:0px;}}"
+        )
+        icl = QVBoxLayout(intro_card)
+        icl.setContentsMargins(0, 0, 0, 0)
+        icl.setSpacing(0)
+
+        itb = QFrame()
+        itb.setFixedHeight(32)
+        itb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+        itbl = QHBoxLayout(itb)
+        itbl.setContentsMargins(12, 0, 12, 0)
+        itl = QLabel("Getting Started")
+        itl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+        itbl.addWidget(itl)
+        itbl.addStretch()
+        icl.addWidget(itb)
+
+        intro_text = QLabel(
+            "<p style='margin:12px 16px 4px 16px; font-size:11px; "
+            f"color:{TEXT_PRIMARY}; line-height:1.6;'>"
+            "<b>1. Run as Administrator</b> — STP, Storm, ARP, and Bandwidth modules "
+            "require raw packet capture (Npcap on Windows). Right-click the shortcut "
+            "→ Run as Administrator, or the app will prompt you automatically.<br><br>"
+            "<b>2. Click Run Scan</b> — the main scan button sweeps your subnet, "
+            "flushes ARP/DNS caches, and populates all Standard tabs in parallel. "
+            "Most scans finish in 10–30 seconds depending on network size.<br><br>"
+            "<b>3. Enable Advanced Mode</b> — toggle in the top bar to reveal MTR, "
+            "Bandwidth, ARP Watch, DHCP, Network Map, Scheduled Scans, and SNMP tabs.<br><br>"
+            "<b>4. Enable Security Audit Mode</b> — reveals SYN/UDP port scanners, "
+            "OS detection, CVE lookup, credential testing, and cloud metadata probe. "
+            "Only use on networks you own or have explicit written authorisation to test.<br><br>"
+            "<b>5. Right-click anything</b> — every table row has a context menu "
+            "with Copy IP, Copy MAC, Port Scan, How to Fix, Wake-on-LAN, and more.<br><br>"
+            "<b>6. Generate an ISP Report</b> — run the Stability Logger for at least "
+            "30 minutes, then open Network Grade → Generate ISP Report. Exports a "
+            "standalone HTML file with evidence-grade data for ISP support tickets."
+            "</p>"
+        )
+        intro_text.setWordWrap(True)
+        intro_text.setTextFormat(Qt.TextFormat.RichText)
+        icl.addWidget(intro_text)
+        bl.addWidget(intro_card)
+
+        # ── Keyboard shortcuts ───────────────────────────────────────────────
+        bl.addWidget(_section("Keyboard Shortcuts", [
+            ("Ctrl + R",           "Run full scan"),
+            ("Ctrl + Shift + M",   "Visual Diagnostic Overlay (Matrix)"),
+            ("Ctrl + E",           "Export last scan results"),
+            ("Ctrl + Q",           "Quit application"),
+            ("F5",                 "Refresh current tab"),
+            ("Right-click",        "Context menu on any table row"),
+        ]))
+
+        # ── Feature reference ────────────────────────────────────────────────
+        bl.addWidget(_section("Standard Features (no admin required for most)", [
+            ("Devices on Network",   "ARP scan — every device with IP, MAC, vendor, model, type, risk"),
+            ("Rogue Bridge (STP)",   "Captures BPDUs and flags devices stealing the Root Bridge role"),
+            ("Broadcast Storm",      "Measures broadcast/multicast flood levels by source device"),
+            ("WiFi Networks",        "Hidden SSIDs, rogue APs, co-channel interference, WPS flags"),
+            ("DNS & Outages",        "Live ping + DNS latency graph with STP reconvergence detection"),
+            ("My Network Info",      "Local IPs, subnet, gateway, DNS servers, DHCP lease, adapter speeds"),
+            ("Health Check",         "On-demand ping, DNS speed test, traceroute, HTTP check, DNS leak test"),
+            ("Stability Log",        "Long-term logger — timestamped outage evidence for ISP disputes"),
+            ("Network Grade",        "A–F score across 8 dimensions with an exportable ISP Report"),
+            ("Root Cause Analysis",  "Correlates STP, Storm, DNS, and Logger data — ISP vs local verdict"),
+            ("IoT Behaviour",        "Baselines normal IoT traffic, alerts on port scanning or new servers"),
+            ("IPv6 Devices",         "Link-local segment sweep via OS neighbour cache and ping"),
+        ]))
+
+        bl.addWidget(_section("Advanced Features (toggle Advanced Mode)", [
+            ("Hop-by-Hop Trace",     "Continuous MTR — live per-hop loss % and RTT, updating every cycle"),
+            ("Tools & Wake-on-LAN",  "TCP port scanner (Fast / Normal / Low), service banners, WoL sender"),
+            ("Network Map",          "Visual topology diagram of devices and their relationships"),
+            ("ARP Spoof Watch",      "Detects ARP poisoning and MITM attacks in real time"),
+            ("DHCP Leases",          "Detects rogue DHCP servers handing out wrong gateways"),
+            ("Bandwidth Usage",      "Per-device rx/tx bps monitor via live packet capture"),
+            ("Scheduled Scans",      "Automated scans every N minutes with desktop notifications"),
+            ("SNMP Device Info",     "Polls SNMPv1/v2c OIDs — no extra dependencies required"),
+        ]))
+
+        bl.addWidget(_section("Security Audit Features (toggle Audit Mode — admin required)", [
+            ("Port Scan (SYN)",       "Raw SYN scanner — stealthy, fast, admin required"),
+            ("Port Scan (UDP)",       "UDP service discovery"),
+            ("OS Detection",          "OS fingerprinting via TTL + banner + SYN probe"),
+            ("Device Risk Score",     "Per-device numeric risk score with remediation guidance"),
+            ("Known CVEs",            "NVD API v2 CVE lookup for detected software/services"),
+            ("Exposed to Internet",   "WAN IP, CGNAT detection, UPnP port mapping enumeration"),
+            ("Login Test (SSH/SMB)",  "Credential testing against SSH and SMB services"),
+            ("Full Device Discovery", "Parallel ARP + ICMP + TCP SYN + mDNS discovery"),
+            ("Windows Shares (SMB)",  "NetBIOS + SMB share and user enumeration"),
+            ("Private Endpoint Check","DNS/TCP/TLS reachability checker for cloud private endpoints"),
+            ("Cloud Metadata Probe",  "Detects SSRF exposure via cloud VM metadata endpoint access"),
+        ]))
+
+        # ── What's New ───────────────────────────────────────────────────────
+        from PyQt6.QtWidgets import QApplication
+        app_ver = QApplication.applicationVersion()
+        bl.addWidget(_section(f"What's New in v{app_ver}", [
+            ("Overview Dashboard",       "Configurable live tile grid — drag to reorder in Edit Layout mode"),
+            ("Three colour themes",      "Arctic Clean / Midnight Pro / Obsidian Neon — ⚙ top bar → App Settings"),
+            ("App Settings dialog",      "Theme picker, compact rows, tooltips, shortcuts — always one click away"),
+            ("Help & Reference",         "❓ top bar — Risk Guide, Common Scenarios, 24-term Glossary"),
+            ("First-run onboarding",     "4-slide welcome dialog on first launch; 'Don't show again' persisted"),
+            ("Notification Routing",     "Toast / Webhook / Email channels — per-channel severity filter + rule allowlist"),
+            ("Config Snapshots",         "Point-in-time device fleet snapshots with structured diff (added/removed/changed)"),
+            ("Predictive Trend Alerts",  "OLS regression over RTT/loss/jitter — predicts ETA to breach threshold"),
+            ("Maintenance Windows",      "Suppress alerts for a host (or fleet) during a defined maintenance period"),
+            ("Version consistency test", "6 automated tests catch version drift across all files at CI time"),
+            ("winget CI gate",           "submit-winget is now a needs:[release] job — never triggers on a failed build"),
+        ]))
+
+        # ── Requirements ─────────────────────────────────────────────────────
+        bl.addWidget(_section("Requirements & Notes", [
+            ("Administrator rights",  "Required for STP, Storm, ARP Watch, Bandwidth, SYN scan"),
+            ("Npcap (Windows)",        "Required for raw packet capture — https://npcap.com (free)"),
+            ("Python 3.10+",           "If running from source: pip install -r requirements.txt"),
+            ("WINGET_PAT (CI only)",   "GitHub PAT with repo scope — needed only for automated winget submission in CI"),
+        ]))
+
+        # ── Risk Level Guide ──────────────────────────────────────────────────
+        risk_card = QFrame()
+        risk_card.setObjectName("card")
+        risk_card.setStyleSheet(
+            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"border-radius:0px;}}"
+        )
+        rcl = QVBoxLayout(risk_card)
+        rcl.setContentsMargins(0, 0, 0, 0)
+        rcl.setSpacing(0)
+        rtb = QFrame()
+        rtb.setFixedHeight(32)
+        rtb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+        rtbl = QHBoxLayout(rtb)
+        rtbl.setContentsMargins(12, 0, 12, 0)
+        rtl = QLabel("Risk Level Guide")
+        rtl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+        rtbl.addWidget(rtl)
+        rtbl.addStretch()
+        rcl.addWidget(rtb)
+
+        _risk_rows = [
+            ("CLEAN",   GREEN,    GREEN_BG,  "No threats or issues detected. All devices are expected."),
+            ("LOW",     ACCENT,   BG_CARD,   "Minor or informational — no immediate action required."),
+            ("MEDIUM",  AMBER,    AMBER_BG,  "Noteworthy — review soon. Examples: unknown device, degraded RTT."),
+            ("WARNING", AMBER,    AMBER_BG,  "Active issue that should be investigated promptly."),
+            ("HIGH",    RED,      RED_BG,    "Serious threat detected — ARP spoof, rogue bridge, rogue DHCP."),
+            ("STORM",   RED,      RED_BG,    "Broadcast storm in progress — network performance is impacted now."),
+            ("UNKNOWN", TEXT_MUTED, BG_CARD, "Device or result could not be classified. Check manually."),
+        ]
+        for lvl, fg, bg, meaning in _risk_rows:
+            rw = QWidget()
+            rw.setStyleSheet(f"background:{bg};")
+            rwl = QHBoxLayout(rw)
+            rwl.setContentsMargins(12, 4, 12, 4)
+            rwl.setSpacing(10)
+            badge = QLabel(lvl)
+            badge.setFixedWidth(72)
+            badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            badge.setStyleSheet(
+                f"color:{fg};font-size:10px;font-weight:bold;"
+                f"border:1px solid {fg};border-radius:3px;padding:1px 4px;"
+                f"background:transparent;"
+            )
+            ml = QLabel(meaning)
+            ml.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;")
+            rwl.addWidget(badge)
+            rwl.addWidget(ml, 1)
+            rcl.addWidget(rw)
+        bl.addWidget(risk_card)
+
+        # ── Common Scenarios ──────────────────────────────────────────────────
+        bl.addWidget(_section("I want to…  (Common Scenarios)", [
+            ("…see every device on my network",       "Devices on Network — run a scan"),
+            ("…find out why my internet is slow",     "Network Grade → run benchmark; Stability Log for long-term evidence"),
+            ("…detect if someone is on my WiFi",      "WiFi Networks + Devices on Network → look for unknown MACs"),
+            ("…prove to my ISP the problem is theirs","Stability Log for 30+ min → Network Grade → Generate ISP Report"),
+            ("…check if a device is hacked",          "Device Risk Score + Known CVEs (Security Audit section)"),
+            ("…monitor uptime of my servers",         "Service Heartbeat → add hosts + ports to watch"),
+            ("…see all open ports on a device",       "Tools & Wake-on-LAN → TCP Port Scan (Advanced section)"),
+            ("…detect ARP spoofing / MITM attack",    "ARP Spoof Watch (Advanced section)"),
+            ("…see who is using the most bandwidth",  "Bandwidth Usage (Advanced section)"),
+            ("…check TLS certificate expiry",         "TLS Certificates (Security Audit section)"),
+            ("…trace packet loss hop-by-hop",         "Hop-by-Hop Trace / MTR (Advanced section)"),
+            ("…change the colour theme",              "⚙ Settings → Appearance — Colour Theme"),
+        ]))
+
+        # ── Glossary ──────────────────────────────────────────────────────────
+        bl.addWidget(_section("Glossary — Key Terms", [
+            ("ARP",            "Address Resolution Protocol — maps IP addresses to MAC addresses on a LAN"),
+            ("ARP Spoofing",   "Attack where a device sends fake ARP replies to redirect traffic through it"),
+            ("BPDU",           "Bridge Protocol Data Unit — packets used by switches to elect the Root Bridge"),
+            ("CGNAT",          "Carrier-Grade NAT — ISP shares one public IP across many customers; you can't host servers"),
+            ("CVE",            "Common Vulnerabilities and Exposures — public database of known security flaws"),
+            ("DHCP",           "Dynamic Host Configuration Protocol — server that hands out IP addresses automatically"),
+            ("DNS",            "Domain Name System — translates names like google.com to IP addresses"),
+            ("DNS Leak",       "When your DNS queries go to your ISP's server instead of your chosen one (privacy risk)"),
+            ("Jitter",         "Variation in packet arrival time — high jitter causes choppy voice/video calls"),
+            ("MAC address",    "Hardware address burned into a network adapter — unique per device (first 3 bytes = vendor OUI)"),
+            ("mDNS",           "Multicast DNS — lets devices announce themselves on the LAN without a central server"),
+            ("MITM",           "Man-in-the-Middle — attacker intercepts traffic between two parties"),
+            ("MTR",            "My TraceRoute — combines ping and traceroute, showing loss % at each hop"),
+            ("Npcap",          "Windows packet capture driver required for raw network access (free, from npcap.com)"),
+            ("OUI",            "Organizationally Unique Identifier — the first 3 bytes of a MAC that identify the vendor"),
+            ("RTT",            "Round-Trip Time — how long a packet takes to travel to a host and back (in ms)"),
+            ("SNMP",           "Simple Network Management Protocol — queries routers/switches for status data"),
+            ("SSRF",           "Server-Side Request Forgery — server makes unintended requests; exploits cloud metadata APIs"),
+            ("STP",            "Spanning Tree Protocol — prevents loops in switched networks by electing a Root Bridge"),
+            ("Subnet",         "A range of IP addresses within a network, e.g. 192.168.1.0/24 = 256 addresses"),
+            ("SYN scan",       "Port scan technique using half-open TCP connections — stealthy, fast, needs admin rights"),
+            ("TLS",            "Transport Layer Security — encrypts connections (HTTPS, SMTPS, etc.); replaces SSL"),
+            ("UPnP",           "Universal Plug and Play — lets devices open ports on your router automatically (security risk)"),
+            ("WAN IP",         "Your external public IP address as seen by the internet"),
+        ]))
+
+        # ── Appearance / Theme → redirect to Settings ─────────────────────────
+        appear_callout = QFrame()
+        appear_callout.setObjectName("card")
+        appear_callout.setStyleSheet(
+            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"border-radius:0px;}}"
+        )
+        acl = QVBoxLayout(appear_callout)
+        acl.setContentsMargins(0, 0, 0, 0)
+        acl.setSpacing(0)
+        atb = QFrame()
+        atb.setFixedHeight(32)
+        atb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+        atbl = QHBoxLayout(atb)
+        atbl.setContentsMargins(12, 0, 12, 0)
+        atl = QLabel("Appearance & Customisation")
+        atl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+        atbl.addWidget(atl)
+        atbl.addStretch()
+        acl.addWidget(atb)
+        abody = QWidget()
+        abody.setStyleSheet(f"background:{BG_CARD};")
+        abl = QHBoxLayout(abody)
+        abl.setContentsMargins(16, 10, 16, 12)
+        abl.setSpacing(12)
+        ainfo = QLabel(
+            "Colour themes, display preferences, and shortcuts are managed in one place."
+        )
+        ainfo.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
+        abl.addWidget(ainfo, 1)
+        btn_go_settings = QPushButton("⚙  Open Settings")
+        btn_go_settings.setStyleSheet(
+            f"QPushButton{{background:{ACCENT};color:{NAV_BAR};"
+            f"border:1px solid {ACCENT};border-radius:4px;"
+            f"padding:5px 14px;font-size:11px;font-weight:bold;}}"
+        )
+        btn_go_settings.clicked.connect(
+            lambda: self._open_settings_dialog()
+        )
+        abl.addWidget(btn_go_settings)
+        acl.addWidget(abody)
+        bl.addWidget(appear_callout)
+
+        # ── Check for updates ─────────────────────────────────────────────────
+        update_card = QFrame()
+        update_card.setObjectName("card")
+        update_card.setStyleSheet(
+            f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+            f"border-radius:0px;}}"
+        )
+        ucl = QVBoxLayout(update_card)
+        ucl.setContentsMargins(0, 0, 0, 0)
+        ucl.setSpacing(0)
+        utb = QFrame()
+        utb.setFixedHeight(32)
+        utb.setStyleSheet(f"background:{BG_CARD};border-bottom:1px solid {CARD_HDR_BORDER};")
+        utbl = QHBoxLayout(utb)
+        utbl.setContentsMargins(12, 0, 12, 0)
+        utl = QLabel("Updates")
+        utl.setStyleSheet(f"color:{TEXT_PRIMARY};font-weight:bold;font-size:13px;")
+        utbl.addWidget(utl)
+        utbl.addStretch()
+        ucl.addWidget(utb)
+        ubody = QHBoxLayout()
+        ubody.setContentsMargins(12, 8, 12, 10)
+        self._update_lbl = QLabel(f"Current version: v{app_ver}")
+        self._update_lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};")
+        ubody.addWidget(self._update_lbl, 1)
+        btn_update = QPushButton("Check for Updates")
+        btn_update.setObjectName("btnNetRefresh")
+        btn_update.setFixedWidth(140)
+        btn_update.clicked.connect(self._check_for_updates)
+        ubody.addWidget(btn_update)
+        ucl.addLayout(ubody)
+        bl.addWidget(update_card)
+
+        bl.addStretch()
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
+        return page
+
+    def _check_for_updates(self):
+        """Manual update check from the Help tab button."""
+        import urllib.request, json as _json
+        from PyQt6.QtWidgets import QApplication
+        current = QApplication.applicationVersion()
+        self._update_lbl.setText("Checking…")
+        QApplication.processEvents()
+        try:
+            url = "https://api.github.com/repos/ossianericson/netsentinel/releases/latest"
+            req = urllib.request.Request(url, headers={"User-Agent": "NetSentinel"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = _json.loads(resp.read())
+            latest = data.get("tag_name", "").lstrip("v")
+            def _ver(s):
+                try:
+                    return tuple(int(x) for x in s.split("."))
+                except ValueError:
+                    return (0,)
+            if latest and _ver(latest) > _ver(current):
+                self._update_lbl.setText(
+                    f"Update available: v{latest} (you have v{current}) — "
+                    '<a href="https://github.com/ossianericson/netsentinel/releases/latest" '
+                    f'style="color:{ACCENT};">Download</a>'
+                    ' &nbsp;·&nbsp; or: <code>winget upgrade NetSentinel.NetSentinel</code>'
+                )
+                self._update_lbl.setOpenExternalLinks(True)
+                self._update_lbl.setTextFormat(Qt.TextFormat.RichText)
+                self._on_update_available(latest)  # also show the notification bar
+            else:
+                self._update_lbl.setText(f"You're up to date (v{current})")
+        except Exception as exc:
+            self._update_lbl.setText(f"Update check failed: {exc}")
 
     def _show_about(self):
         from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
@@ -3698,7 +4676,7 @@ class Dashboard(QMainWindow):
         version.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
         version.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        desc = QLabel("Designed for use on networks you own or are authorized to administer. Network Security Scanner & Connectivity Monitor")
+        desc = QLabel("Network Security Scanner & Connectivity Monitor")
         desc.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc.setWordWrap(True)
@@ -3707,13 +4685,13 @@ class Dashboard(QMainWindow):
         author.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
         author.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        linkedin = QLabel(
-            '<a href="https://www.linkedin.com/in/ossian-ericson/" '
-            f'style="color:{ACCENT};">linkedin.com/in/ossian-ericson</a>'
+        github = QLabel(
+            '<a href="https://github.com/ossianericson/netsentinel" '
+            f'style="color:{ACCENT};">github.com/ossianericson/netsentinel</a>'
         )
-        linkedin.setOpenExternalLinks(True)
-        linkedin.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        linkedin.setStyleSheet("font-size:12px;")
+        github.setOpenExternalLinks(True)
+        github.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        github.setStyleSheet("font-size:12px;")
 
         btn_close = QPushButton("Close")
         btn_close.setObjectName("btnNetRefresh")
@@ -3732,7 +4710,7 @@ class Dashboard(QMainWindow):
         disclaimer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         disclaimer.setWordWrap(True)
 
-        for w in (title, version, desc, author, linkedin):
+        for w in (title, version, desc, author, github):
             lay.addWidget(w)
         lay.addSpacing(8)
         lay.addWidget(disclaimer)
@@ -3740,6 +4718,38 @@ class Dashboard(QMainWindow):
         lay.addLayout(btn_row)
 
         dlg.exec()
+
+    def _open_settings_dialog(self):
+        """Open App Settings (theme, display preferences) as a persistent non-modal dialog."""
+        if not hasattr(self, "_settings_dlg") or self._settings_dlg is None:
+            from PyQt6.QtWidgets import QDialog, QVBoxLayout
+            dlg = QDialog(self)
+            dlg.setWindowTitle("App Settings")
+            dlg.resize(660, 540)
+            dlg.setStyleSheet(f"QDialog{{background:{BG_DARK};}}")
+            lay = QVBoxLayout(dlg)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.addWidget(self._settings_page)
+            self._settings_dlg = dlg
+        self._settings_dlg.show()
+        self._settings_dlg.raise_()
+        self._settings_dlg.activateWindow()
+
+    def _open_help_dialog(self):
+        """Open Help & Reference as a persistent non-modal dialog."""
+        if not hasattr(self, "_help_dlg") or self._help_dlg is None:
+            from PyQt6.QtWidgets import QDialog, QVBoxLayout
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Help & Reference")
+            dlg.resize(820, 660)
+            dlg.setStyleSheet(f"QDialog{{background:{BG_DARK};}}")
+            lay = QVBoxLayout(dlg)
+            lay.setContentsMargins(0, 0, 0, 0)
+            lay.addWidget(self._help_tab_widget)
+            self._help_dlg = dlg
+        self._help_dlg.show()
+        self._help_dlg.raise_()
+        self._help_dlg.activateWindow()
 
     # ── Scan orchestration ───────────────────────────────────────────────────
 
@@ -3930,7 +4940,36 @@ class Dashboard(QMainWindow):
         except Exception as _exc:
             self._bl_new_lbl.setText(f"Baseline check failed: {_exc}")
 
+        # ── Persistent device tracking (MetricStore) ──────────────────────────
+        if self._store is not None:
+            try:
+                from modules.device_tracker import DeviceTracker
+                if not hasattr(self, "_device_tracker"):
+                    self._device_tracker = DeviceTracker(self._store)
+                tr = self._device_tracker.process_scan(data.get("devices", []))
+                if tr.new_devices:
+                    msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})"
+                            for d in tr.new_devices[:3]]
+                    extra = f" +{len(tr.new_devices)-3} more" if len(tr.new_devices) > 3 else ""
+                    self._set_status(
+                        f"🆕 {len(tr.new_devices)} new device(s): {', '.join(msgs)}{extra}"
+                    )
+                if tr.gone_devices:
+                    gone_msgs = [f"{d.ip or d.mac}" for d in tr.gone_devices[:2]]
+                    self._set_status(
+                        f"⚠  {len(tr.gone_devices)} device(s) gone: {', '.join(gone_msgs)}"
+                    )
+                # Feed tracker result into alert engine
+                if self._alert_engine is not None:
+                    for a in self._alert_engine.evaluate_tracker_result(tr):
+                        self._show_alert_toast(a)
+            except Exception:
+                pass   # tracker errors must never break the scan result handler
+
         self._update_overall_verdict()
+        self._update_kpi_tiles(data)
+        # Show the table (hide the empty-state placeholder)
+        self._m1_stack.setCurrentIndex(1)
         # Refresh topology widget with new device list
         try:
             gw_ip  = self._net_info.get("gateway") if self._net_info else None
@@ -4206,6 +5245,12 @@ class Dashboard(QMainWindow):
 
         combined = "\n\n".join(verdicts) if verdicts else "Scan in progress..."
         self._verdict.update(combined, level)
+        # Update the compact badge in the top bar
+        self._verdict_badge.setText(f"\u25cf {level}")
+        self._verdict_badge.setStyleSheet(
+            f"color:{_color_for_level(level)}; font-size:11px; font-weight:bold; padding:0 8px;"
+            "background:transparent; border:none;"
+        )
 
     # ── Export ────────────────────────────────────────────────────────────────
 
@@ -4470,7 +5515,7 @@ class Dashboard(QMainWindow):
         self._cred_verdict.setWordWrap(True)
         self._cred_verdict.setStyleSheet(
             f"color:{GREEN};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:6px;"
+            f"background:{BG_CARD};border-radius:4px;"
         )
         self._cred_verdict.hide()
 
@@ -4526,7 +5571,7 @@ class Dashboard(QMainWindow):
         self._cred_verdict.setText(res.plain_verdict + (f"\n⚠ {' | '.join(flags)}" if flags else ""))
         self._cred_verdict.setStyleSheet(
             f"color:{color};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:6px;"
+            f"background:{BG_CARD};border-radius:4px;"
         )
         self._cred_verdict.show()
         self._cred_status.setText("Credentialed scan complete.")
@@ -4677,7 +5722,7 @@ class Dashboard(QMainWindow):
         self._smb_verdict.setWordWrap(True)
         self._smb_verdict.setStyleSheet(
             f"color:{AMBER};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:6px;"
+            f"background:{BG_CARD};border-radius:4px;"
         )
         self._smb_verdict.hide()
 
@@ -4727,7 +5772,7 @@ class Dashboard(QMainWindow):
         self._smb_verdict.setText(res.plain_verdict + (f"\n⚠ {' | '.join(flags)}" if flags else ""))
         self._smb_verdict.setStyleSheet(
             f"color:{color};font-size:11px;font-weight:bold;padding:4px;"
-            f"background:{BG_CARD};border-radius:6px;"
+            f"background:{BG_CARD};border-radius:4px;"
         )
         self._smb_verdict.show()
         self._smb_status.setText("SMB enumeration complete.")
@@ -4802,7 +5847,7 @@ class Dashboard(QMainWindow):
         self._plugin_result_text.setMaximumHeight(160)
         self._plugin_result_text.setStyleSheet(
             f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
-            "border:1px solid #2a2a4a;border-radius:6px;padding:6px;"
+            f"border:1px solid {BORDER};border-radius:0px;padding:6px;"
         )
         self._plugin_result_text.setPlaceholderText("Plugin output will appear here…")
 
@@ -4902,7 +5947,7 @@ class Dashboard(QMainWindow):
 
         title = QLabel("🔒  Private Endpoint Checker")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{ACCENT_LITE};")
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         lay.addWidget(title)
 
         desc = QLabel(
@@ -4917,7 +5962,7 @@ class Dashboard(QMainWindow):
         # ── Input area ────────────────────────────────────────────────────────
         input_frame = QFrame()
         input_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid #2a2a4a; border-radius:10px;"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         input_lay = QVBoxLayout(input_frame)
         input_lay.setContentsMargins(14, 10, 14, 10)
@@ -4935,8 +5980,8 @@ class Dashboard(QMainWindow):
         )
         self._pe_input.setFixedHeight(100)
         self._pe_input.setStyleSheet(
-            f"background:#0d0d1e; color:{TEXT_PRIMARY}; border:1px solid #2a2a4a;"
-            "border-radius:6px; padding:6px; font-size:12px; font-family:'Courier New';"
+            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            "border-radius:4px; padding:6px; font-size:12px; font-family:'Courier New';"
         )
         input_lay.addWidget(self._pe_input)
 
@@ -5057,3 +6102,10 @@ class Dashboard(QMainWindow):
             f"✓ Done — {total} endpoint(s), {fails} FAIL, {total - fails} OK."
         )
         self._btn_pe_run.setEnabled(True)
+
+
+
+
+
+
+

@@ -2,7 +2,7 @@
 set -e
 
 echo "================================================"
-echo " NetSentinel v1.0.0 — macOS / Linux Build"
+echo " NetSentinel v1.3.1 — macOS / Linux Build"
 echo "================================================"
 echo ""
 echo "Usage:"
@@ -79,6 +79,39 @@ if [ "$BUILD_GUI" = "1" ]; then
         echo "  GUI:  dist/NetSentinel.app"
     else
         echo "  GUI:  dist/NetSentinel"
+        # Generate Linux install helper script
+        if [ "$PLATFORM" = "Linux" ]; then
+            cat > dist/install-linux.sh << 'INSTALL'
+#!/usr/bin/env bash
+# NetSentinel — Linux desktop installer
+set -e
+INSTALL_DIR="/opt/netsentinel"
+ICON_SRC="$(dirname "$0")/../assets/icons/NetSentinel.ico"
+DESKTOP_SRC="$(dirname "$0")/../assets/netsentinel.desktop"
+
+echo "Installing NetSentinel to $INSTALL_DIR ..."
+sudo mkdir -p "$INSTALL_DIR"
+sudo cp "$(dirname "$0")/NetSentinel" "$INSTALL_DIR/NetSentinel"
+sudo chmod +x "$INSTALL_DIR/NetSentinel"
+
+# Desktop entry
+if [ -f "$DESKTOP_SRC" ]; then
+    sudo cp "$DESKTOP_SRC" /usr/share/applications/netsentinel.desktop
+    # Update Exec path
+    sudo sed -i "s|Exec=.*|Exec=$INSTALL_DIR/NetSentinel|" /usr/share/applications/netsentinel.desktop
+fi
+
+# CLI symlink
+if [ -f "$(dirname "$0")/NetSentinel-cli" ]; then
+    sudo cp "$(dirname "$0")/NetSentinel-cli" "$INSTALL_DIR/NetSentinel-cli"
+    sudo ln -sf "$INSTALL_DIR/NetSentinel-cli" /usr/local/bin/netsentinel
+fi
+
+echo "Done. Launch from your application menu or run: $INSTALL_DIR/NetSentinel"
+INSTALL
+            chmod +x dist/install-linux.sh
+            echo "  Install helper: dist/install-linux.sh (run as root to add desktop entry)"
+        fi
     fi
 fi
 if [ "$BUILD_CLI" = "1" ]; then
