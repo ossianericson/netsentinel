@@ -1,7 +1,52 @@
 name: netsentinel
-version: 1.3.1
+version: 1.4.0
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
+
+changelog:
+  - version: 1.4.0
+    date: 2026-04-29
+    summary: Speed Test, Home Automation Hub, Active Connections, Live Bandwidth, push notifications, threat intelligence, DHCP Lease Inventory, DNS Zone Mapping, security hardening
+    changes:
+      - Speed Test page (Ookla-compatible, server select, arc gauge, history in SQLite schema v5)
+      - Home Automation Hub page — OUI+port-based detection; HA devices tile on Overview
+      - ha_detected table + known_device extended (schema v6)
+      - System tray guardian: minimize-to-tray, badge counter, real-time toasts
+      - Run on startup toggle (Windows HKCU registry)
+      - Active Connections page: process-to-socket map (psutil), kill-connection firewall rule
+      - Live Bandwidth page: 60s rolling dual area chart per interface; LiveBandwidthTile
+      - Sidebar nav restructured into 7 subgroups (Discover / Live Monitor / Threat Detection /
+        Health & History / Diagnostics / Reports & Alerts / Tools)
+      - Push notifications: PushoverChannel, NtfyChannel, TelegramChannel added to
+        notification_router.py; 3 new channel cards in Notifications page; all tokens
+        stored in OS keychain (RULE 22-A)
+      - Threat Intelligence page: ThreatIntelDB (Feodo Tracker + Emerging Threats feeds),
+        AbuseIPDB v2 lookup (consent-gated, public IPs only, key in OS keychain)
+      - DHCP Lease Inventory page: dnsmasq/dhclient/nmcli/ARP+ipconfig; auto-refresh
+      - DNS Zone Mapping page: AXFR (raw TCP/53, full RR parser) + mDNS Bonjour/Avahi
+      - Security hardening: SMTP password + SNMP community moved to OS keychain (RULE 22-A)
+      - keyring~=25.0 added to requirements.txt
+      - psutil~=7.0 added to requirements.txt
+      - BACKLOG.md full rewrite: 30-item roadmap; items 1, 7, 9 (WoL), 17, 18, 20 (themes)
+        all confirmed built and moved to already-built table
+      - MAC clone / dual-claim detection: MAC_CLONE event in arp_monitor.py
+      - CVE lifecycle tracker: cve_page.py + metric_store schema v7 (cve_lifecycle + alert_fired tables)
+      - PDF report export: save_pdf_report() in report_exporter.py (weasyprint/headless browser chain)
+      - Alert escalation: EscalationPolicy dataclass + check_escalations() in alert_engine.py;
+        escalation config card in Notifications page; alert_fired table in MetricStore
+      - REST API (read-only, local): modules/rest_api.py (Flask, 127.0.0.1 default, OS-keychain
+        API key, 5 endpoints); workers/rest_api_worker.py (QThread); REST API card in Settings page;
+        disabled by default; flask~=3.0 added to requirements.txt
+      - Sidebar nav: Standard subgroups now collapsed by default (7+2=9 visible items on first
+        launch); collapse state persisted to QSettings per subgroup
+
+  - version: 1.3.1
+    date: 2026-04-28
+    summary: Maintenance and test hardening
+    changes:
+      - Schema v4 → Stable
+      - Test suite hardened to 988 passing
+
 dependencies:
   apm: []

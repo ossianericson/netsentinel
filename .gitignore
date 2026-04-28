@@ -11,8 +11,13 @@ build/
 
 # Virtual environments
 .venv/
+.venv*/
 venv/
 env/
+
+# Build debug logs
+build_debug.log
+build_*.log
 
 # PyInstaller — ignore auto-generated specs but track our hand-crafted one
 # *.spec  ← removed; NetSentinel.spec is the source-of-truth build config

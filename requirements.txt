@@ -6,6 +6,11 @@ scapy~=2.7
 matplotlib~=3.10
 pyinstaller~=6.20
 pytest~=8.0
+speedtest-cli~=2.1
+psutil~=7.0
+keyring~=25.0          # OS credential store (RULE 22-A); Windows Credential Manager / macOS Keychain / libsecret
+flask~=3.0             # Local REST API server (disabled by default, binds 127.0.0.1)
+cryptography~=44.0     # Required by scapy (krack module); without this scapy warns and some features are disabled
 
 # Optional — Windows service only (svc.py).
 # Not needed for the GUI or CLI. Install separately as Administrator:

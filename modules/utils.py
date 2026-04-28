@@ -102,7 +102,13 @@ def flush_network_caches() -> List[Tuple[str, bool]]:
     the ARP table reflects the current live state of the network.
     """
     system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+    if system == "Windows":
+        _si = subprocess.STARTUPINFO()
+        _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        _si.wShowWindow = 0  # SW_HIDE
+        extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": _si}
+    else:
+        extra = {}
     results: List[Tuple[str, bool]] = []
 
     if system == "Windows":
@@ -160,7 +166,13 @@ def ping_sweep_subnet(local_ip: str, progress_cb=None) -> List[str]:
         return []
     prefix = ".".join(parts[:3])
     hosts = [f"{prefix}.{i}" for i in range(1, 255)]
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+    if system == "Windows":
+        _si = subprocess.STARTUPINFO()
+        _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        _si.wShowWindow = 0
+        extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": _si}
+    else:
+        extra = {}
     responsive: List[str] = []
     _lock = threading.Lock()
     done_count = [0]
@@ -203,7 +215,13 @@ def get_network_info() -> dict:
     dns_servers (list of str), domain (str).
     """
     system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+    if system == "Windows":
+        _si = subprocess.STARTUPINFO()
+        _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        _si.wShowWindow = 0
+        extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": _si}
+    else:
+        extra = {}
     info: dict = {
         "local_ips":   [],   # [{"ip": ..., "mask": ..., "adapter": ...}]
         "gateway":     None,
@@ -352,7 +370,13 @@ def get_dhcp_info() -> dict:
     """
     import datetime
     system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+    if system == "Windows":
+        _si = subprocess.STARTUPINFO()
+        _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        _si.wShowWindow = 0
+        extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": _si}
+    else:
+        extra = {}
     result: dict = {
         "dhcp_enabled":    False,
         "dhcp_server":     "",

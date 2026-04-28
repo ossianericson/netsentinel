@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 4
+_SCHEMA_VERSION = 7
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -104,8 +104,27 @@ CREATE TABLE IF NOT EXISTS known_device (
     device_type  TEXT,
     first_seen   INTEGER NOT NULL,
     last_seen    INTEGER NOT NULL,
-    is_authorized INTEGER NOT NULL DEFAULT 1
+    is_authorized INTEGER NOT NULL DEFAULT 1,
+    -- Home Automation Hub fields (schema v6)
+    custom_name  TEXT,
+    room         TEXT,
+    category     TEXT    NOT NULL DEFAULT 'unknown',
+    notes        TEXT,
+    is_pinned    INTEGER NOT NULL DEFAULT 0
 );
+
+-- Home Automation detected protocol signatures (schema v6)
+CREATE TABLE IF NOT EXISTS ha_detected (
+    id           INTEGER PRIMARY KEY,
+    ts           INTEGER NOT NULL,
+    ip           TEXT    NOT NULL,
+    mac          TEXT,
+    ha_type      TEXT    NOT NULL,  -- home_assistant | hue_bridge | mqtt_broker | sonos | etc.
+    confidence   TEXT    NOT NULL DEFAULT 'medium',  -- high | medium | low
+    detail       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ha_ts  ON ha_detected(ts);
+CREATE INDEX IF NOT EXISTS idx_ha_ip  ON ha_detected(ip);
 
 -- TLS certificate check results
 CREATE TABLE IF NOT EXISTS cert_check (
@@ -146,10 +165,69 @@ CREATE TABLE IF NOT EXISTS config_snapshot (
     data_json  TEXT    NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_csnap_ts ON config_snapshot(ts);
+
+-- Internet speed test results
+CREATE TABLE IF NOT EXISTS speed_test (
+    id              INTEGER PRIMARY KEY,
+    ts              INTEGER NOT NULL,
+    download_mbps   REAL    NOT NULL,
+    upload_mbps     REAL    NOT NULL,
+    ping_ms         REAL    NOT NULL,
+    server_name     TEXT,
+    server_city     TEXT,
+    server_country  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_st_ts ON speed_test(ts);
+
+-- CVE lifecycle tracker (schema v7)
+-- Tracks the remediation state of discovered CVEs per host/service
+CREATE TABLE IF NOT EXISTS cve_lifecycle (
+    id          INTEGER PRIMARY KEY,
+    cve_id      TEXT    NOT NULL,
+    service     TEXT    NOT NULL DEFAULT '',
+    host        TEXT    NOT NULL DEFAULT '',
+    state       TEXT    NOT NULL DEFAULT 'Open',
+    owner       TEXT    NOT NULL DEFAULT '',
+    notes       TEXT    NOT NULL DEFAULT '',
+    cvss_score  REAL    NOT NULL DEFAULT 0.0,
+    severity    TEXT    NOT NULL DEFAULT '',
+    description TEXT    NOT NULL DEFAULT '',
+    opened_ts   INTEGER NOT NULL,
+    updated_ts  INTEGER NOT NULL,
+    UNIQUE(cve_id, host, service)
+);
+CREATE INDEX IF NOT EXISTS idx_cvl_state ON cve_lifecycle(state);
+CREATE INDEX IF NOT EXISTS idx_cvl_cve   ON cve_lifecycle(cve_id);
+
+-- Alert acknowledgement + escalation tracking (schema v7)
+CREATE TABLE IF NOT EXISTS alert_fired (
+    id          INTEGER PRIMARY KEY,
+    ts          INTEGER NOT NULL,
+    rule_name   TEXT    NOT NULL,
+    host        TEXT    NOT NULL DEFAULT '',
+    severity    TEXT    NOT NULL DEFAULT 'WARNING',
+    message     TEXT    NOT NULL DEFAULT '',
+    acked_ts    INTEGER,
+    acked_by    TEXT,
+    escalated   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_af_ts    ON alert_fired(ts);
+CREATE INDEX IF NOT EXISTS idx_af_acked ON alert_fired(acked_ts);
 """
 
 
 # ── Return types ─────────────────────────────────────────────────────────────
+
+@dataclass
+class SpeedTestPoint:
+    ts:             int
+    download_mbps:  float
+    upload_mbps:    float
+    ping_ms:        float
+    server_name:    Optional[str]
+    server_city:    Optional[str]
+    server_country: Optional[str]
+
 
 @dataclass
 class ServiceCheckPoint:
@@ -214,6 +292,23 @@ class KnownDevice:
     first_seen: int
     last_seen: int
     is_authorized: bool
+    # Home Automation Hub fields (schema v6)
+    custom_name: Optional[str] = None
+    room: Optional[str] = None
+    category: str = "unknown"
+    notes: Optional[str] = None
+    is_pinned: bool = False
+
+
+@dataclass
+class HaDetectedPoint:
+    id: int
+    ts: int
+    ip: str
+    mac: Optional[str]
+    ha_type: str       # home_assistant | hue_bridge | mqtt_broker | sonos …
+    confidence: str    # high | medium | low
+    detail: Optional[str]
 
 
 # ── MetricStore ───────────────────────────────────────────────────────────────
@@ -316,6 +411,18 @@ class MetricStore:
         with self._write_lock:
             conn = self._conn
             conn.executescript(_DDL)
+            # Schema v6 migration: add HA columns to existing known_device rows
+            for col_def in [
+                "ALTER TABLE known_device ADD COLUMN custom_name TEXT",
+                "ALTER TABLE known_device ADD COLUMN room TEXT",
+                "ALTER TABLE known_device ADD COLUMN category TEXT NOT NULL DEFAULT 'unknown'",
+                "ALTER TABLE known_device ADD COLUMN notes TEXT",
+                "ALTER TABLE known_device ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
+            ]:
+                try:
+                    conn.execute(col_def)
+                except sqlite3.OperationalError:
+                    pass  # column already exists
             conn.execute(
                 "INSERT INTO meta(key, value) VALUES(?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -767,7 +874,8 @@ class MetricStore:
         """Return all known devices keyed by MAC address."""
         rows = self._execute_read(
             "SELECT mac, ip, hostname, vendor, device_type, "
-            "first_seen, last_seen, is_authorized FROM known_device",
+            "first_seen, last_seen, is_authorized, "
+            "custom_name, room, category, notes, is_pinned FROM known_device",
             (),
         )
         return {
@@ -776,9 +884,317 @@ class MetricStore:
                 vendor=r["vendor"], device_type=r["device_type"],
                 first_seen=r["first_seen"], last_seen=r["last_seen"],
                 is_authorized=bool(r["is_authorized"]),
+                custom_name=r["custom_name"],
+                room=r["room"],
+                category=r["category"] or "unknown",
+                notes=r["notes"],
+                is_pinned=bool(r["is_pinned"]),
             )
             for r in rows
         }
+
+    # ── Write / Read: speed test results ──────────────────────────────────
+
+    def update_device_ha_info(
+        self,
+        mac: str,
+        custom_name: Optional[str] = None,
+        room: Optional[str] = None,
+        category: Optional[str] = None,
+        notes: Optional[str] = None,
+        is_pinned: Optional[bool] = None,
+    ) -> None:
+        """
+        Update the Home Automation Hub metadata for a known device.
+        Only non-None arguments are written; others are preserved.
+        """
+        sets, params = [], []
+        if custom_name is not None:
+            sets.append("custom_name = ?"); params.append(custom_name)
+        if room is not None:
+            sets.append("room = ?"); params.append(room)
+        if category is not None:
+            sets.append("category = ?"); params.append(category)
+        if notes is not None:
+            sets.append("notes = ?"); params.append(notes)
+        if is_pinned is not None:
+            sets.append("is_pinned = ?"); params.append(int(is_pinned))
+        if not sets:
+            return
+        params.append(mac)
+        self._execute_write(
+            f"UPDATE known_device SET {', '.join(sets)} WHERE mac = ?",
+            tuple(params),
+        )
+
+    def record_ha_detected(
+        self,
+        ip: str,
+        ha_type: str,
+        mac: Optional[str] = None,
+        confidence: str = "medium",
+        detail: Optional[str] = None,
+        ts: Optional[int] = None,
+    ) -> None:
+        """Record a detected Home Automation protocol/device signature."""
+        now = ts or int(time.time())
+        self._execute_write(
+            "INSERT INTO ha_detected(ts, ip, mac, ha_type, confidence, detail) "
+            "VALUES(?, ?, ?, ?, ?, ?)",
+            (now, ip, mac, ha_type, confidence, detail),
+        )
+
+    def query_ha_detected(
+        self, hours: float = 168.0
+    ) -> "List[HaDetectedPoint]":
+        """Return HA detection events within the last `hours`, newest first."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT id, ts, ip, mac, ha_type, confidence, detail "
+            "FROM ha_detected WHERE ts >= ? ORDER BY ts DESC",
+            (since,),
+        )
+        return [
+            HaDetectedPoint(
+                id=r["id"], ts=r["ts"], ip=r["ip"], mac=r["mac"],
+                ha_type=r["ha_type"], confidence=r["confidence"],
+                detail=r["detail"],
+            )
+            for r in rows
+        ]
+
+    def query_ha_devices(
+        self, category: Optional[str] = None
+    ) -> "List[KnownDevice]":
+        """
+        Return known devices tagged as home-automation categories.
+        If category is given, filter to that exact category.
+        If omitted, returns all devices except category='unknown'.
+        """
+        HA_CATEGORIES = {
+            "home_automation", "smart_speaker", "smart_tv",
+            "smart_hub", "camera", "thermostat", "lighting",
+            "smart_plug", "security", "media_player",
+        }
+        if category:
+            rows = self._execute_read(
+                "SELECT mac, ip, hostname, vendor, device_type, "
+                "first_seen, last_seen, is_authorized, "
+                "custom_name, room, category, notes, is_pinned "
+                "FROM known_device WHERE category = ?",
+                (category,),
+            )
+        else:
+            placeholders = ",".join("?" * len(HA_CATEGORIES))
+            rows = self._execute_read(
+                f"SELECT mac, ip, hostname, vendor, device_type, "
+                f"first_seen, last_seen, is_authorized, "
+                f"custom_name, room, category, notes, is_pinned "
+                f"FROM known_device WHERE category IN ({placeholders})",
+                tuple(HA_CATEGORIES),
+            )
+        return [
+            KnownDevice(
+                mac=r["mac"], ip=r["ip"], hostname=r["hostname"],
+                vendor=r["vendor"], device_type=r["device_type"],
+                first_seen=r["first_seen"], last_seen=r["last_seen"],
+                is_authorized=bool(r["is_authorized"]),
+                custom_name=r["custom_name"], room=r["room"],
+                category=r["category"] or "unknown",
+                notes=r["notes"], is_pinned=bool(r["is_pinned"]),
+            )
+            for r in rows
+        ]
+
+    # ── Write / Read: speed test results ─────────────────────────────────────
+
+    def record_speed_test(
+        self,
+        download_mbps: float,
+        upload_mbps: float,
+        ping_ms: float,
+        server_name: Optional[str] = None,
+        server_city: Optional[str] = None,
+        server_country: Optional[str] = None,
+        ts: Optional[int] = None,
+    ) -> None:
+        """Persist a completed speed test result to the database."""
+        now = ts or int(time.time())
+        self._execute_write(
+            "INSERT INTO speed_test "
+            "(ts, download_mbps, upload_mbps, ping_ms, server_name, server_city, server_country) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            (now, download_mbps, upload_mbps, ping_ms, server_name, server_city, server_country),
+        )
+
+    def query_speed_test_history(
+        self,
+        hours: float = 168.0,
+        limit: int = 200,
+    ) -> "List[SpeedTestPoint]":
+        """Return speed test results within the last `hours`, newest first."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT ts, download_mbps, upload_mbps, ping_ms, "
+            "server_name, server_city, server_country "
+            "FROM speed_test WHERE ts >= ? "
+            "ORDER BY ts DESC LIMIT ?",
+            (since, limit),
+        )
+        return [
+            SpeedTestPoint(
+                ts=r["ts"],
+                download_mbps=r["download_mbps"],
+                upload_mbps=r["upload_mbps"],
+                ping_ms=r["ping_ms"],
+                server_name=r["server_name"],
+                server_city=r["server_city"],
+                server_country=r["server_country"],
+            )
+            for r in rows
+        ]
+
+    # ── CVE lifecycle tracker (schema v7) ────────────────────────────────────
+
+    def upsert_cve_lifecycle(
+        self,
+        cve_id: str,
+        service: str,
+        host: str,
+        cvss_score: float,
+        severity: str,
+        description: str,
+        state: str = "Open",
+        owner: str = "",
+        notes: str = "",
+        ts: Optional[int] = None,
+    ) -> int:
+        """
+        Insert or update a CVE lifecycle record.
+        Returns the row id.
+        """
+        now = ts or int(time.time())
+        rows = self._execute_read(
+            "SELECT id FROM cve_lifecycle WHERE cve_id=? AND host=? AND service=?",
+            (cve_id, host, service),
+        )
+        if rows:
+            row_id = rows[0]["id"]
+            self._execute_write(
+                "UPDATE cve_lifecycle SET cvss_score=?, severity=?, description=?, "
+                "updated_ts=? WHERE id=?",
+                (cvss_score, severity, description, now, row_id),
+            )
+            return row_id
+        else:
+            self._execute_write(
+                "INSERT INTO cve_lifecycle "
+                "(cve_id, service, host, state, owner, notes, cvss_score, severity, "
+                "description, opened_ts, updated_ts) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (cve_id, service, host, state, owner, notes,
+                 cvss_score, severity, description, now, now),
+            )
+            rows2 = self._execute_read(
+                "SELECT id FROM cve_lifecycle WHERE cve_id=? AND host=? AND service=?",
+                (cve_id, host, service),
+            )
+            return rows2[0]["id"] if rows2 else -1
+
+    def update_cve_state(
+        self,
+        row_id: int,
+        state: str,
+        owner: str = "",
+        notes: str = "",
+        ts: Optional[int] = None,
+    ) -> None:
+        """Update the remediation state, owner, and notes of a CVE lifecycle record."""
+        now = ts or int(time.time())
+        self._execute_write(
+            "UPDATE cve_lifecycle SET state=?, owner=?, notes=?, updated_ts=? WHERE id=?",
+            (state, owner, notes, now, row_id),
+        )
+
+    def list_cve_lifecycles(
+        self, state_filter: Optional[str] = None
+    ) -> List[dict]:
+        """Return all CVE lifecycle rows, optionally filtered by state."""
+        if state_filter:
+            rows = self._execute_read(
+                "SELECT * FROM cve_lifecycle WHERE state=? ORDER BY cvss_score DESC, opened_ts ASC",
+                (state_filter,),
+            )
+        else:
+            rows = self._execute_read(
+                "SELECT * FROM cve_lifecycle ORDER BY cvss_score DESC, opened_ts ASC",
+                (),
+            )
+        return [dict(r) for r in rows]
+
+    def delete_cve_lifecycle(self, row_id: int) -> None:
+        """Remove a CVE lifecycle record."""
+        self._execute_write("DELETE FROM cve_lifecycle WHERE id=?", (row_id,))
+
+    # ── Alert fired / acknowledgement tracker (schema v7) ────────────────────
+
+    def record_alert_fired(
+        self,
+        rule_name: str,
+        host: str,
+        severity: str,
+        message: str,
+        ts: Optional[int] = None,
+    ) -> int:
+        """Persist a fired alert for acknowledgement + escalation tracking. Returns row id."""
+        now = ts or int(time.time())
+        self._execute_write(
+            "INSERT INTO alert_fired (ts, rule_name, host, severity, message) "
+            "VALUES(?,?,?,?,?)",
+            (now, rule_name, host, severity, message),
+        )
+        rows = self._execute_read(
+            "SELECT id FROM alert_fired WHERE ts=? AND rule_name=? AND host=? ORDER BY id DESC LIMIT 1",
+            (now, rule_name, host),
+        )
+        return rows[0]["id"] if rows else -1
+
+    def acknowledge_alert(self, alert_id: int, acked_by: str = "user", ts: Optional[int] = None) -> None:
+        """Mark an alert as acknowledged."""
+        now = ts or int(time.time())
+        self._execute_write(
+            "UPDATE alert_fired SET acked_ts=?, acked_by=? WHERE id=?",
+            (now, acked_by, alert_id),
+        )
+
+    def mark_alert_escalated(self, alert_id: int) -> None:
+        """Mark an alert as having been escalated."""
+        self._execute_write(
+            "UPDATE alert_fired SET escalated=1 WHERE id=?",
+            (alert_id,),
+        )
+
+    def get_unacked_alerts(self, older_than_s: int = 0) -> List[dict]:
+        """
+        Return alerts that have not been acknowledged.
+        older_than_s: only return alerts fired more than this many seconds ago (for escalation checks).
+        """
+        cutoff = int(time.time()) - older_than_s
+        rows = self._execute_read(
+            "SELECT * FROM alert_fired WHERE acked_ts IS NULL AND ts <= ? "
+            "ORDER BY ts ASC",
+            (cutoff,),
+        )
+        return [dict(r) for r in rows]
+
+    def get_recent_alerts(self, hours: float = 24.0, limit: int = 200) -> List[dict]:
+        """Return recent fired alerts, newest first."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT * FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+            (since, limit),
+        )
+        return [dict(r) for r in rows]
 
     # ── Maintenance ───────────────────────────────────────────────────────────
 
@@ -790,7 +1206,7 @@ class MetricStore:
         days   = retain_days if retain_days is not None else self._retain_days
         cutoff = int(time.time()) - days * 86400
         deleted = 0
-        for tbl in ("rtt_sample", "device_state", "device_event", "cert_check", "service_check"):
+        for tbl in ("rtt_sample", "device_state", "device_event", "cert_check", "service_check", "speed_test", "ha_detected"):
             self._execute_write(f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,))
             deleted += 1  # rowcount not tracked per-table in unified path
         return deleted
@@ -805,7 +1221,7 @@ class MetricStore:
     def get_row_counts(self) -> Dict[str, int]:
         """Return row counts for each data table."""
         result = {}
-        for tbl in ("rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check"):
+        for tbl in ("rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected"):
             rows = self._execute_read(f"SELECT COUNT(*) AS n FROM {tbl}", ())
             result[tbl] = rows[0]["n"] if rows else 0
         return result

@@ -531,7 +531,13 @@ class MTRWorker(QThread):
         import re
         import subprocess
         system = platform.system()
-        extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+        if system == "Windows":
+            _si = subprocess.STARTUPINFO()
+            _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            _si.wShowWindow = 0
+            extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": _si}
+        else:
+            extra = {}
         cycle = 0
         self.status.emit(f"MTR running to {self.target}…  (click Stop to end)")
         while not self._stop.is_set():

@@ -7,8 +7,8 @@ live ARP replies to detect:
   1. IP takeover  — a new MAC claims an IP that already has an owner
   2. Gateway MAC  — any device advertising the gateway IP with a different MAC
   3. Gratuitous ARP flood — a device repeatedly broadcasting its own MAC
-     (common stealth-MITM technique)
-
+     (common stealth-MITM technique)  4. MAC clone / dual-claim — the same MAC appears on two different IP
+     addresses simultaneously (possible MAC cloning or spoof)
 Requires Scapy + admin / root for raw packet capture.
 Gracefully degrades when Scapy is unavailable.
 """
@@ -89,7 +89,9 @@ class ARPSniffer:
         self.duration   = duration
         self.stop_event = stop_event or threading.Event()
         self._sniffer   = None
-        self._grat_count: Dict[str, int] = {}  # mac → gratuitous count
+        self._grat_count: Dict[str, int] = {}   # mac → gratuitous count
+        self._mac_to_ips: Dict[str, set]  = {}   # mac → set of seen IPs
+        self._mac_clone_alerted: set      = set() # macs already fired MAC_CLONE
         self.packet_count = 0
 
     def _handle(self, pkt):
@@ -159,6 +161,28 @@ class ARPSniffer:
 
             # Update working baseline with what we see
             self.baseline[src_ip] = src_mac
+
+            # ── MAC clone / dual-claim detection ─────────────────────────
+            if src_mac not in self._mac_to_ips:
+                self._mac_to_ips[src_mac] = set()
+            prev_ips = self._mac_to_ips[src_mac]
+            if prev_ips and src_ip not in prev_ips and src_mac not in self._mac_clone_alerted:
+                other_ip = next(iter(prev_ips))
+                evt = SpoofEvent(
+                    event_type="MAC_CLONE",
+                    attacker_mac=src_mac,
+                    attacker_ip=src_ip,
+                    victim_ip=other_ip,
+                    original_mac=src_mac,
+                    verdict=(
+                        f"MAC CLONE/DUAL-CLAIM: {src_mac} is seen on both {src_ip} and "
+                        f"{other_ip} simultaneously. Possible MAC cloning attack or "
+                        "misconfigured VM/container. Investigate both addresses."
+                    ),
+                )
+                self.on_event(evt)
+                self._mac_clone_alerted.add(src_mac)
+            self._mac_to_ips[src_mac].add(src_ip)
 
         except Exception:
             pass
@@ -254,27 +278,33 @@ def scan(
 
     sniffer.stop()
 
-    hijack  = [e for e in events if e.event_type == "GATEWAY_HIJACK"]
+    hijack   = [e for e in events if e.event_type == "GATEWAY_HIJACK"]
     takeover = [e for e in events if e.event_type == "IP_TAKEOVER"]
-    flood   = [e for e in events if e.event_type == "GRAT_FLOOD"]
+    flood    = [e for e in events if e.event_type == "GRAT_FLOOD"]
+    clone    = [e for e in events if e.event_type == "MAC_CLONE"]
 
     if hijack:
         plain = (
-            f"🔴 CRITICAL: Gateway MAC hijack detected! "
+            f"CRITICAL: Gateway MAC hijack detected! "
             + " | ".join(e.verdict for e in hijack[:2])
         )
     elif takeover:
         plain = (
-            f"🔴 {len(takeover)} ARP spoofing event(s) detected. "
+            f"{len(takeover)} ARP spoofing event(s) detected. "
             + " | ".join(e.verdict for e in takeover[:2])
+        )
+    elif clone:
+        plain = (
+            f"{len(clone)} MAC clone/dual-claim event(s) detected. "
+            + " | ".join(e.verdict for e in clone[:2])
         )
     elif flood:
         plain = (
-            f"🟡 {len(flood)} device(s) sending gratuitous ARP floods — investigate."
+            f"{len(flood)} device(s) sending gratuitous ARP floods — investigate."
         )
     else:
         plain = (
-            f"✅ No ARP spoofing detected. "
+            f"No ARP spoofing detected. "
             f"Monitored {sniffer.packet_count} ARP packet(s) over {duration}s."
         )
 

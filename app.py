@@ -12,6 +12,29 @@ Or double-click the compiled executable.
 import sys
 import os
 
+# ── Suppress CMD flashes in windowed exe ─────────────────────────────────────
+# On Windows, scapy calls subprocess.Popen (for `route print`, `arp -a`, etc.)
+# at import time WITHOUT CREATE_NO_WINDOW, causing brief CMD flashes.
+# Patch Popen before any network library loads so all child processes are
+# spawned hidden.  This only activates in a frozen (PyInstaller) windowed build
+# where there is no console to attach to anyway.
+if sys.platform == "win32" and getattr(sys, "frozen", False):
+    import subprocess as _subprocess
+    _OrigPopen = _subprocess.Popen
+    _CNW = _subprocess.CREATE_NO_WINDOW
+
+    class _SilentPopen(_OrigPopen):  # type: ignore[misc]
+        def __init__(self, *args, **kwargs):
+            kwargs.setdefault("creationflags", 0)
+            kwargs["creationflags"] |= _CNW
+            si = kwargs.get("startupinfo") or _subprocess.STARTUPINFO()
+            si.dwFlags |= _subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 0  # SW_HIDE
+            kwargs["startupinfo"] = si
+            super().__init__(*args, **kwargs)
+
+    _subprocess.Popen = _SilentPopen  # type: ignore[misc]
+
 
 def _smoke_test() -> None:
     """
@@ -61,7 +84,6 @@ def _smoke_test() -> None:
         "modules.private_endpoint_checker",
         "modules.cloud_metadata",
         "modules.log_chart",
-        "ui.matrix_rain",
         "modules.mac_registry",
         "modules.name_resolver",
         "modules.network_benchmark",
@@ -217,15 +239,52 @@ def main():
 
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtGui import QIcon
-    from PyQt6.QtCore import Qt
+    from PyQt6.QtCore import Qt, QSettings, qInstallMessageHandler
+
+    # Suppress noisy Qt warnings that come from matplotlib's QtAgg backend
+    # measuring fonts with pixel-size QFont objects (pointSize() returns -1).
+    def _qt_message_handler(msg_type, context, message):
+        if "Point size <= 0" in message:
+            return  # matplotlib font-metrics noise — safe to ignore
+        # In windowed/frozen builds sys.stderr is None — guard before writing
+        import sys as _sys
+        if _sys.stderr is not None:
+            _sys.stderr.write(message + "\n")
+    qInstallMessageHandler(_qt_message_handler)
 
     # Enable high-DPI
     os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.3.1")
+    app.setApplicationVersion("1.4.0")
     app.setOrganizationName("netsentinel")
+
+    # ── Single instance guard ─────────────────────────────────────────────────
+    # If another instance is running, signal it to restore its window and exit.
+    from PyQt6.QtNetwork import QLocalServer, QLocalSocket
+    _INSTANCE_KEY = "NetSentinel_SingleInstance_v1"
+    _probe = QLocalSocket()
+    _probe.connectToServer(_INSTANCE_KEY)
+    if _probe.waitForConnected(500):
+        # Another instance is alive — tell it to come to the front and exit.
+        _probe.write(b"SHOW")
+        _probe.flush()
+        _probe.waitForBytesWritten(500)
+        _probe.disconnectFromServer()
+        _probe = None
+        sys.exit(0)
+    # No running instance found; clean up the probe and take ownership of the key.
+    _probe.abort()
+    del _probe
+    _instance_server = QLocalServer()
+    # Remove any stale socket left by a prior crash (no-op on Windows).
+    # Only called after the probe confirmed no live server is behind the name.
+    QLocalServer.removeServer(_INSTANCE_KEY)
+    if not _instance_server.listen(_INSTANCE_KEY):
+        # Fallback: if listen fails, run without instance guard rather than crashing.
+        _instance_server = None
+    # ─────────────────────────────────────────────────────────────────────────
 
     # App icon (bundled as icon.ico / icon.png if present)
     from pathlib import Path
@@ -254,9 +313,11 @@ def main():
     from workers.report_scheduler_worker import ReportSchedulerWorker
     from workers.snmp_trap_worker import SnmpTrapWorker
     from workers.syslog_worker import SyslogWorker
+    from workers.rest_api_worker import RestApiWorker
 
     store  = MetricStore()           # uses default portable path
     alerts = AlertEngine(store=store)
+    alerts.set_warmup_period(10)     # suppress boot-time alert noise for 10 s
 
     from modules.notification_router import NotificationRouter
     notif_router = NotificationRouter()
@@ -284,16 +345,22 @@ def main():
     syslog_worker = SyslogWorker()
     syslog_worker.start()
 
+    # REST API worker — only starts when user has enabled it in Settings
+    _qs = QSettings("NetSentinel", "NetSentinel")
+    rest_api_worker: RestApiWorker | None = None
+    if _qs.value("rest_api/enabled", False, type=bool):
+        _port     = int(_qs.value("rest_api/port", 8765))
+        _external = _qs.value("rest_api/external", False, type=bool)
+        _host     = "0.0.0.0" if _external else "127.0.0.1"
+        rest_api_worker = RestApiWorker(store=store)
+        rest_api_worker.set_bind(_host, _port)
+        from modules.rest_api import get_or_create_api_key as _ensure_key
+        _ensure_key()  # generate and persist key on first enable
+        rest_api_worker.start()
+
     from ui.dashboard import Dashboard
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
                        maint_manager=maint_manager)
-    window.show()
-
-    # First-run onboarding dialog (shown once per install)
-    from ui.first_run_dialog import FirstRunDialog, should_show_first_run
-    if should_show_first_run():
-        dlg = FirstRunDialog(parent=window)
-        dlg.exec()
 
     # Wire notification router → toast callback + notifications page
     notif_router.set_toast_callback(window._show_alert_toast)
@@ -353,6 +420,31 @@ def main():
 
     avail_worker.cycle_done.connect(_on_cycle)
 
+    # ── Show window after all wiring is complete (prevents startup flash) ─────
+    window.show()
+
+    # Second-instance → raise this window to the front
+    def _on_second_instance() -> None:
+        conn = _instance_server.nextPendingConnection()
+        if conn:
+            conn.waitForReadyRead(200)
+        window.show()
+        window.setWindowState(
+            (window.windowState() & ~Qt.WindowState.WindowMinimized)
+            | Qt.WindowState.WindowActive
+        )
+        window.raise_()
+        window.activateWindow()
+
+    if _instance_server is not None:
+        _instance_server.newConnection.connect(_on_second_instance)
+
+    # First-run onboarding — deferred so the window is fully painted first
+    from ui.first_run_dialog import FirstRunDialog, should_show_first_run
+    if should_show_first_run():
+        from PyQt6.QtCore import QTimer as _QTimer
+        _QTimer.singleShot(250, lambda: FirstRunDialog(parent=window).exec())
+
     ret = app.exec()
     avail_worker.stop()
     avail_worker.wait(5000)
@@ -366,6 +458,11 @@ def main():
     snmp_trap_worker.wait(5000)
     syslog_worker.stop()
     syslog_worker.wait(5000)
+    if rest_api_worker is not None:
+        rest_api_worker.stop()
+        rest_api_worker.wait(3000)
+    if _instance_server is not None:
+        _instance_server.close()
     store.close()
     sys.exit(ret)
 

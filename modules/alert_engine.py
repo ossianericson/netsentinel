@@ -106,6 +106,22 @@ class AlertFired:
     value:       Optional[float] = None   # the triggering metric value
 
 
+@dataclass
+class EscalationPolicy:
+    """
+    Defines what happens when an alert is not acknowledged within wait_minutes.
+
+    When an alert matching rule_name fires and remains unacknowledged for
+    wait_minutes, the AlertEngine's check_escalations() will return it for
+    escalation.  The caller is responsible for re-delivering via the channels
+    listed in notify_channels (channel names as stored in notification_router).
+    """
+    rule_name:       str
+    wait_minutes:    int              = 15
+    notify_channels: List[str]        = field(default_factory=list)
+    enabled:         bool             = True
+
+
 # ── Engine ────────────────────────────────────────────────────────────────────
 
 class AlertEngine:
@@ -144,6 +160,10 @@ class AlertEngine:
         self._dependency_map: Dict[str, List[str]] = {}
         # optional callable(host) → window_label|None — for maintenance suppression
         self._maintenance_checker: Optional[Callable[[str], Optional[str]]] = None
+        # escalation policies
+        self._escalation_policies: List[EscalationPolicy] = []
+        # boot-time warmup — suppress all alerts until this timestamp
+        self._suppress_until: float = 0.0
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -186,6 +206,47 @@ class AlertEngine:
         Pass None to disable maintenance suppression.
         """
         self._maintenance_checker = checker
+
+    def set_warmup_period(self, seconds: float) -> None:
+        """Suppress all alert firings for *seconds* after this call.
+
+        Call once at startup to avoid spurious notifications fired before the
+        first real monitoring cycle completes.
+        """
+        self._suppress_until = time.time() + seconds
+
+    def set_escalation_policies(self, policies: List[EscalationPolicy]) -> None:
+        """Replace the current escalation policy list."""
+        self._escalation_policies = list(policies)
+
+    def get_escalation_policies(self) -> List[EscalationPolicy]:
+        """Return a copy of the current escalation policies."""
+        return list(getattr(self, "_escalation_policies", []))
+
+    def check_escalations(self, store) -> List[dict]:
+        """
+        Return fired alerts that are unacknowledged and past their escalation threshold.
+
+        store: MetricStore instance — used to query unacked alerts.
+
+        Returns a list of dicts with keys:
+          alert_row — the alert_fired row dict from MetricStore
+          policy    — the matching EscalationPolicy
+        """
+        policies = getattr(self, "_escalation_policies", [])
+        if not policies or store is None:
+            return []
+
+        due = []
+        for policy in policies:
+            if not policy.enabled:
+                continue
+            wait_s = policy.wait_minutes * 60
+            unacked = store.get_unacked_alerts(older_than_s=wait_s)
+            for row in unacked:
+                if row.get("rule_name") == policy.rule_name and not row.get("escalated"):
+                    due.append({"alert_row": row, "policy": policy})
+        return due
 
     def evaluate_cycle(self, cycle_result: dict) -> List[AlertFired]:
         """
@@ -442,6 +503,9 @@ class AlertEngine:
         value: Optional[float],
     ) -> Optional[AlertFired]:
         """Return an AlertFired only if cooldown has expired and host is not under maintenance."""
+        # Boot warmup — suppress all firings during the initial quiet period
+        if time.time() < self._suppress_until:
+            return None
         # Maintenance suppression — silently drop when the host is in a window
         if self._maintenance_checker is not None:
             window_label = self._maintenance_checker(host)

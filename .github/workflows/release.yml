@@ -341,15 +341,17 @@ jobs:
 
           # Version manifest
           @(
+            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json",
             "PackageIdentifier: NetSentinel.NetSentinel",
             "PackageVersion: $ver",
             "DefaultLocale: en-US",
             "ManifestType: version",
-            "ManifestVersion: 1.6.0"
+            "ManifestVersion: 1.12.0"
           ) | Set-Content "$dir\NetSentinel.NetSentinel.yaml" -Encoding UTF8
 
           # Installer manifest
           @(
+            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json",
             "PackageIdentifier: NetSentinel.NetSentinel",
             "PackageVersion: $ver",
             "InstallerLocale: en-US",
@@ -359,11 +361,12 @@ jobs:
             "  InstallerUrl: $url",
             "  InstallerSha256: $hash",
             "ManifestType: installer",
-            "ManifestVersion: 1.6.0"
+            "ManifestVersion: 1.12.0"
           ) | Set-Content "$dir\NetSentinel.NetSentinel.installer.yaml" -Encoding UTF8
 
           # Default locale manifest
           @(
+            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json",
             "PackageIdentifier: NetSentinel.NetSentinel",
             "PackageVersion: $ver",
             "PackageLocale: en-US",
@@ -372,7 +375,7 @@ jobs:
             "License: MIT",
             "ShortDescription: Network monitoring and security tool for Windows",
             "ManifestType: defaultLocale",
-            "ManifestVersion: 1.6.0"
+            "ManifestVersion: 1.12.0"
           ) | Set-Content "$dir\NetSentinel.NetSentinel.locale.en-US.yaml" -Encoding UTF8
 
           echo "Manifests written to $dir"

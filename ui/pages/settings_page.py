@@ -19,8 +19,10 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -116,6 +118,8 @@ class SettingsPage(QWidget):
 
         bl.addWidget(self._build_appearance_card())
         bl.addWidget(self._build_display_card())
+        bl.addWidget(self._build_tray_card())
+        bl.addWidget(self._build_rest_api_card())
         bl.addWidget(self._build_shortcuts_card())
         bl.addStretch()
 
@@ -227,6 +231,243 @@ class SettingsPage(QWidget):
     def _on_tooltip_toggled(self, checked: bool):
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("display/tooltips_enabled", checked)
+
+    # ── System Tray & Startup ─────────────────────────────────────────────────
+
+    def _build_tray_card(self) -> QFrame:
+        import sys
+        from ui.system_tray import get_run_on_startup, set_run_on_startup
+
+        card, bl = _card("System Tray & Startup")
+
+        qs = QSettings("NetSentinel", "NetSentinel")
+
+        # Minimize to tray
+        self._chk_tray = QCheckBox(
+            "Minimize to system tray on close  "
+            "(app keeps running in the background)"
+        )
+        self._chk_tray.setStyleSheet(
+            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+        )
+        self._chk_tray.setChecked(qs.value("tray/minimize_to_tray", True, type=bool))
+        self._chk_tray.toggled.connect(self._on_tray_toggled)
+        bl.addWidget(self._chk_tray)
+
+        # Run on startup (Windows only)
+        self._chk_startup = QCheckBox(
+            "Start NetSentinel automatically when Windows starts  "
+            "(launches minimised to tray)"
+        )
+        self._chk_startup.setStyleSheet(
+            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+        )
+        if sys.platform != "win32":
+            self._chk_startup.setEnabled(False)
+            self._chk_startup.setToolTip("Startup registration is only available on Windows")
+        else:
+            self._chk_startup.setChecked(get_run_on_startup())
+        self._chk_startup.toggled.connect(self._on_startup_toggled)
+        bl.addWidget(self._chk_startup)
+
+        note = QLabel(
+            "Tray notifications fire automatically when new devices join, "
+            "devices leave, ARP attacks are detected, or alerts fire."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(
+            f"font-size:10px;color:{TEXT_SECONDARY};background:transparent;"
+        )
+        bl.addWidget(note)
+        return card
+
+    def _on_tray_toggled(self, checked: bool) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("tray/minimize_to_tray", checked)
+        # Also update the live tray manager if reachable
+        try:
+            from PyQt6.QtWidgets import QApplication
+            win = QApplication.instance().activeWindow()
+            if win is None:
+                # Try main window via topLevelWidgets
+                for w in QApplication.instance().topLevelWidgets():
+                    if hasattr(w, "_tray_manager"):
+                        win = w
+                        break
+            if win and hasattr(win, "_tray_manager"):
+                win._tray_manager.set_minimize_to_tray(checked)
+        except Exception:
+            pass
+
+    def _on_startup_toggled(self, checked: bool) -> None:
+        from ui.system_tray import set_run_on_startup
+        set_run_on_startup(checked)
+
+    # ── REST API ──────────────────────────────────────────────────────────────
+
+    def _build_rest_api_card(self) -> QFrame:
+        from ui.styles import AMBER, RED
+        card, bl = _card("Local REST API")
+
+        desc = QLabel(
+            "Expose a read-only HTTP API on localhost so external tools "
+            "(Grafana, Home Assistant, scripts) can query NetSentinel data."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+        bl.addWidget(desc)
+
+        # Enable toggle
+        self._chk_api_enabled = QCheckBox("Enable REST API  (disabled by default)")
+        self._chk_api_enabled.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        qs = QSettings("NetSentinel", "NetSentinel")
+        self._chk_api_enabled.setChecked(qs.value("rest_api/enabled", False, type=bool))
+        self._chk_api_enabled.stateChanged.connect(self._on_api_toggle)
+        bl.addWidget(self._chk_api_enabled)
+
+        # Port row
+        port_row = QHBoxLayout()
+        port_row.setSpacing(8)
+        port_lbl = QLabel("Port:")
+        port_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        self._spin_api_port = QSpinBox()
+        self._spin_api_port.setRange(1024, 65535)
+        self._spin_api_port.setValue(int(qs.value("rest_api/port", 8765)))
+        self._spin_api_port.setFixedWidth(90)
+        self._spin_api_port.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        self._spin_api_port.valueChanged.connect(self._on_api_port_changed)
+        port_row.addWidget(port_lbl)
+        port_row.addWidget(self._spin_api_port)
+        port_row.addStretch()
+        bl.addLayout(port_row)
+
+        # External access toggle + warning
+        self._chk_api_external = QCheckBox("Allow external access (bind 0.0.0.0 — exposes API to your network)")
+        self._chk_api_external.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        self._chk_api_external.setChecked(qs.value("rest_api/external", False, type=bool))
+        self._chk_api_external.stateChanged.connect(self._on_api_external_changed)
+        bl.addWidget(self._chk_api_external)
+
+        self._lbl_api_warning = QLabel(
+            "WARNING: Enabling external access exposes the API to all devices on your network. "
+            "Ensure your API key is kept secret and your firewall is configured appropriately."
+        )
+        self._lbl_api_warning.setWordWrap(True)
+        self._lbl_api_warning.setStyleSheet(
+            f"font-size:11px; color:{AMBER}; background:#FFF8E7;"
+            f" border:1px solid {AMBER}; padding:6px 8px;"
+        )
+        self._lbl_api_warning.setVisible(self._chk_api_external.isChecked())
+        bl.addWidget(self._lbl_api_warning)
+
+        # API key row
+        key_row = QHBoxLayout()
+        key_row.setSpacing(8)
+        key_lbl = QLabel("API Key:")
+        key_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        self._txt_api_key = QLineEdit()
+        self._txt_api_key.setReadOnly(True)
+        self._txt_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._txt_api_key.setPlaceholderText("Click 'Show Key' to view or generate")
+        self._txt_api_key.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;"
+        )
+        self._btn_show_key = QPushButton("Show Key")
+        self._btn_show_key.setFixedHeight(26)
+        self._btn_show_key.setStyleSheet(
+            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            f" background:white; padding:0 10px;"
+        )
+        self._btn_show_key.clicked.connect(self._show_api_key)
+        self._btn_regen_key = QPushButton("Regenerate")
+        self._btn_regen_key.setFixedHeight(26)
+        self._btn_regen_key.setStyleSheet(
+            f"font-size:11px; color:{RED}; border:1px solid {RED};"
+            f" background:white; padding:0 10px;"
+        )
+        self._btn_regen_key.clicked.connect(self._regen_api_key)
+        key_row.addWidget(key_lbl)
+        key_row.addWidget(self._txt_api_key, 1)
+        key_row.addWidget(self._btn_show_key)
+        key_row.addWidget(self._btn_regen_key)
+        bl.addLayout(key_row)
+
+        # Status label
+        self._lbl_api_status = QLabel("")
+        self._lbl_api_status.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+        bl.addWidget(self._lbl_api_status)
+        self._update_api_status_label()
+
+        # Endpoint reference
+        ref_lbl = QLabel(
+            "Endpoints:  GET /health   /devices   /alerts   /uptime/<ip>   /speed-history\n"
+            "Auth header:  X-API-Key: <key>  or  ?api_key=<key>"
+        )
+        ref_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; font-family:Consolas; border:none;"
+        )
+        bl.addWidget(ref_lbl)
+
+        return card
+
+    def _on_api_toggle(self, state: int) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        enabled = bool(state)
+        qs.setValue("rest_api/enabled", enabled)
+        self._update_api_status_label()
+
+    def _on_api_port_changed(self, value: int) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("rest_api/port", value)
+
+    def _on_api_external_changed(self, state: int) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        enabled = bool(state)
+        qs.setValue("rest_api/external", enabled)
+        self._lbl_api_warning.setVisible(enabled)
+
+    def _show_api_key(self) -> None:
+        from modules.rest_api import get_or_create_api_key
+        key = get_or_create_api_key()
+        if self._txt_api_key.echoMode() == QLineEdit.EchoMode.Password:
+            self._txt_api_key.setText(key)
+            self._txt_api_key.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._btn_show_key.setText("Hide Key")
+        else:
+            self._txt_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+            self._btn_show_key.setText("Show Key")
+
+    def _regen_api_key(self) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self, "Regenerate API Key",
+            "This will invalidate the current key immediately.\n"
+            "Any external tools using the old key will stop working.\n\nProceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            from modules.rest_api import regenerate_api_key
+            key = regenerate_api_key()
+            self._txt_api_key.setText(key)
+            self._txt_api_key.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._btn_show_key.setText("Hide Key")
+            self._lbl_api_status.setText("New API key generated.")
+
+    def _update_api_status_label(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        enabled = qs.value("rest_api/enabled", False, type=bool)
+        port    = int(qs.value("rest_api/port", 8765))
+        external = qs.value("rest_api/external", False, type=bool)
+        if enabled:
+            host = "0.0.0.0" if external else "127.0.0.1"
+            self._lbl_api_status.setText(
+                f"API running on http://{host}:{port}/  — "
+                "changes take effect after restarting NetSentinel"
+            )
+        else:
+            self._lbl_api_status.setText("API disabled — enable above and restart to activate.")
 
     # ── Shortcuts reference ───────────────────────────────────────────────────
 

@@ -22,7 +22,7 @@ winget install NetSentinel.NetSentinel
 ```
 Or download the installer from the latest release:
 
-### 👉 [Latest Release](https://github.com/ossianericson/netsentinel/releases/latest) — v1.3.1
+### 👉 [Latest Release](https://github.com/ossianericson/netsentinel/releases/latest) — v1.4.0
 
 | OS | File | How to run |
 |---|---|---|
@@ -78,42 +78,13 @@ NetSentinel is the single tool that:
 - **Runs 100% locally** — no cloud account, no telemetry, no data sent anywhere
 
 ---
-## How it was built
-
-**Sunday, 26 April 2026. 12:30 PM. After lunch.**
-
-Not "prototyped". Not "scaffolded". Built — from a blank folder to a cross-platform, multi-mode network security tool with a full CI/CD pipeline, three executable targets, and automated GitHub Releases for Windows, macOS, and Linux.
-
-Here is the commit log. Every timestamp is real.
-
-| Time | What shipped |
-|---|---|
-| **12:58** | First commit — `Layer2 Ghost Hunter v1.0.0`. ARP scan, basic risk flagging. |
-| **13:08** | GitHub Actions release workflow. Tag → executable → release. Done before the first feature worked end-to-end. |
-| **14:15** | Hostname resolution, MAC OUI fingerprinting (200+ vendors), IPv6 rogue router detection, gateway exclusion. |
-| **16:02** | Full rebrand to NetSentinel. v2.0.0. Overhauled UI, new tabs. |
-| **17:18** | CVE lookup (NVD API v2), Nmap XML export, Internet Exposure scanner, persistent settings, Matrix rain Easter egg. |
-| **18:12** | Natural language query engine, scan politeness levels, WPS detection, plugin system, sidebar navigation. |
-| **19:49** | v1.0.0 tag. IPv6 full scan, cloud metadata detection (AWS/Azure/GCP), logger RTT chart renderer, CLI (`cli.py`), Windows service (`svc.py`). |
-| **20:35** | Bug fix: hard crash at ~240/254 hosts — race condition on ping-sweep counter + Windows handle exhaustion. Fixed with a threading lock and `max_workers=32`. |
-| **21:22** | Bug fix: missing `_on_bpdu_found` slot; harden storm fallback. |
-| **21:28–21:38** | CI fixes: artifact overwrite, CLI + service builds. |
-| **22:11** | Final runtime bugs: topology widget crash, bandwidth monitor crash, About dialog version. Shipped as v1.0.2. |
-| **22:50** | 88 behavioural pytest tests, CONTRIBUTING.md, credential docs. Shipped as v1.0.3. |
-
-**9 hours and 52 minutes. 21 commits. Three executable targets. Three operating systems. A full test suite.**
-
-The tool exists because a problem is real — consumer mesh nodes silently winning STP Root Bridge elections, causing the exact intermittent drops every ISP helpdesk blames on WiFi. No single existing tool exposed this to a non-expert. So one was built.
-
-The commit history is public. The timestamps don't lie.
-
----
 ## Key features
 
 ### Standard tabs (no admin required)
 
 | Tab | What it tells you |
 |---|---|
+| 📌 **Pinned (Quick Access)** | Top-level section always open on startup — Overview, DNS & Outages, Live Bandwidth, Speed Test, Devices on Network, Availability History, Active Connections. Instant one-click access without expanding any subgroup. |
 | 🏠 **Overview Dashboard** | Configurable live tile dashboard — Device Count, Fleet Uptime, Service Status, TLS Health, RTT Summary, Network Grade, Alert Feed, Device Events. Drag tiles to reorder in Edit Layout mode; layout persists across sessions. |
 | 🔍 **Devices on Network** | Every device on your subnet — IP, hostname, MAC, vendor, **device model** (e.g. "Google Nest Audio", "TP-Link Deco M5"), device type, and risk level. Right-click any device for a **🔧 How to Fix** guide. |
 | 📶 **WiFi Networks** | Hidden SSIDs, rogue access points, co-channel interference, WPS-enabled networks, connected client list. |
@@ -139,6 +110,10 @@ The commit history is public. The timestamps don't lie.
 
 | Feature | Details |
 |---|---|
+| 📌 **Pinned sidebar section** | Seven most-used pages pinned at the top of the sidebar — always visible, never collapsed. The full Standard section is collapsed by default and expands on demand. |
+| 🔒 **Single-instance guard** | Launching a second copy of NetSentinel restores and focuses the already-running window instead of opening a duplicate. Works across minimised and tray-hidden states. |
+| 🔕 **Boot alert warmup** | Network alerts are suppressed for the first 10 seconds after startup to prevent spurious notifications before the first monitoring cycle completes. |
+| 🔔 **Tray restore on any click** | Clicking the tray icon (single or double), or clicking a notification bubble, always restores and focuses the main window. |
 | 🎨 **Three Colour Themes** | Arctic Clean (professional light), Midnight Pro (deep charcoal + electric cyan), Obsidian Neon (true black + neon lime). Click **⚙** in the top bar → **App Settings (Theme & Display)…**; takes effect on next launch. |
 | ❓ **Help & Reference** | Click **❓** in the top bar to open Help from any page. Contains Risk Level Guide (CLEAN→STORM), Common Scenarios lookup table, and a 24-term networking glossary. |
 | 👋 **First-Run Onboarding** | 4-slide welcome dialog on first launch. Explains Standard / Advanced / Security Audit sections and directs new users to App Settings. “Don’t show again” persisted to QSettings. |
@@ -162,12 +137,14 @@ The commit history is public. The timestamps don't lie.
 
 | Tab | What it gives you |
 |---|---|
+| 🧠 **Threat Intelligence** | Feodo Tracker + Emerging Threats blocklist feeds. AbuseIPDB v2 manual lookup (consent-gated, OUI-only, key in OS keychain). KPI tiles: blocklist hits, high-confidence IPs, last update. |
 | 🔒 **TLS Certificates** | Per-host certificate expiry monitoring. Hourly checks. Badges: OK / EXPIRING (< 30 days) / EXPIRED / UNREACHABLE. Alerts fire automatically; results persisted to MetricStore. |
 | 🔎 **Port Scan (SYN)** | Raw SYN scanner via Scapy — stealth half-open scan, faster than TCP connect. Requires admin. |
 | 🔎 **Port Scan (UDP)** | UDP port scanner. Identifies DNS, SNMP, NTP, mDNS and other UDP services. Requires admin. |
 | 💻 **OS Detection** | OS fingerprinting via TTL + banner grab + TCP SYN probe. |
 | ⚠ **Device Risk Score** | Numeric risk score per device based on open ports, OUI flags, OS, and exposure. |
 | 🛡 **Known CVEs** | NVD API v2 CVE lookup for detected OS/service versions. Rate-limited; offline-safe. |
+| 📋 **CVE Tracker** | CVE lifecycle state machine per host/service: Open → Acknowledged → Accepted Risk → Remediated. Import from scan, days-open counter, owner field. Right-click to change state or open NVD. |
 | 🌍 **Exposed to Internet** | WAN IP, CGNAT detection, UPnP port-mapping enumeration. |
 | 🔑 **Login Test (SSH/SMB)** | Credential test against discovered SSH and SMB services. |
 | 🔭 **Full Device Discovery** | Parallel ARP + ICMP + TCP SYN + mDNS sweep — highest-accuracy device census. |
@@ -258,6 +235,10 @@ python app.py          # add sudo / Run as Administrator for full packet capture
 
 ## Build your own executable
 
+**Requirements before building:**
+- Python 3.11 must be installed (`winget install Python.Python.3.11` on Windows). Python 3.12+ breaks the `speedtest-cli` dependency — the build must use 3.11.
+- `build.bat` auto-creates a `.venv311` virtual environment and installs all dependencies including `speedtest-cli`. No manual pip steps needed.
+
 ```bash
 # Windows — builds GUI + CLI + Windows service
 build.bat
@@ -265,6 +246,12 @@ build.bat
 # macOS / Linux — builds GUI + CLI
 chmod +x build.sh && ./build.sh
 ```
+
+> **Speed test note:** `speedtest-cli 2.1.x` uses `ssl.wrap_socket()` which was removed in Python 3.12.
+> Always build with Python 3.11. If you see speed test errors in the exe, verify your build venv:
+> ```powershell
+> .venv311\Scripts\python.exe --version   # must show 3.11.x
+> ```
 
 Output:
 | Executable | Platform |
@@ -304,6 +291,52 @@ python svc.py start
 Config: `%PROGRAMDATA%\NetSentinel\netsentinel-svc.ini`  
 Logs: `%PROGRAMDATA%\NetSentinel\logs\netlog_YYYYMMDD.csv`  
 Load any service log in the Stability Log tab for full analysis.
+
+---
+
+## Local REST API
+
+NetSentinel exposes a read-only HTTP API so external tools can query your network data.
+
+**Disabled by default.** Enable in **Settings → Local REST API**.
+
+| Setting | Default |
+|---|---|
+| Bind address | `127.0.0.1` (localhost only) |
+| Port | `8765` |
+| External access | Off — requires explicit toggle + acknowledges warning label |
+| API key | Generated once with `secrets.token_hex(32)`, stored in OS keychain |
+
+**Endpoints:**
+
+```
+GET /health                    — heartbeat (no auth required)
+GET /devices                   — full device inventory
+GET /alerts?hours=24           — recent fired alerts
+GET /uptime/<ip>?hours=24      — uptime history for one host
+GET /speed-history?hours=168   — speed test history
+```
+
+**Authentication:**
+```
+X-API-Key: <your-key>
+# or
+?api_key=<your-key>
+```
+
+**Example (curl):**
+```bash
+curl -H "X-API-Key: abc123..." http://127.0.0.1:8765/devices
+```
+
+**Example (Home Assistant REST sensor):**
+```yaml
+sensor:
+  - platform: rest
+    resource: http://127.0.0.1:8765/devices
+    headers:
+      X-API-Key: !secret netsentinel_api_key
+```
 
 ---
 
@@ -365,6 +398,10 @@ modules/
   config_baseline.py        # Config snapshot builder, diff engine (added/removed/changed devices)
   trend_analyser.py         # OLS regression over RTT/loss/jitter time-series; ETA-to-threshold
   maintenance_window.py     # Maintenance window manager — alert suppression during defined periods
+  dhcp_lease_scanner.py     # DHCP lease inventory parser (dnsmasq / dhclient / nmcli / ARP+ipconfig)
+  dns_zone_scanner.py       # AXFR zone transfer + mDNS Bonjour/Avahi enumeration
+  threat_intel.py           # Threat intelligence DB (Feodo Tracker, ET, AbuseIPDB)
+  rest_api.py               # Local read-only Flask REST API (127.0.0.1 default, OS-keychain API key)
 
 ui/
   dashboard.py              # Main window — sidebar nav (Standard / Advanced / Security Audit)
@@ -385,10 +422,18 @@ ui/
     snmp_trap_page.py       # SNMP Trap Receiver — passive trap listener and decode table
     syslog_page.py          # Syslog Viewer — passive UDP syslog listener
     settings_page.py        # App Settings — theme picker, display preferences, keyboard shortcuts
-    notifications_page.py   # Notification routing rules — Toast / Webhook / Email channels + delivery log
+    notifications_page.py   # Notification routing rules — Toast / Webhook / Email / Pushover / ntfy / Telegram; escalation policy; delivery log
     baseline_page.py        # Config Baseline Snapshots — take, compare, diff viewer
     trend_page.py           # Predictive Trend Forecasts — OLS regression results table
     maintenance_page.py     # Maintenance Windows — schedule, manage, suppression log
+    dhcp_lease_page.py      # DHCP Lease Inventory — platform-aware lease table
+    dns_zone_page.py        # DNS Zone Map — AXFR + mDNS enumeration
+    threat_intel_page.py    # Threat Intelligence — blocklist feeds, AbuseIPDB lookup
+    cve_page.py             # CVE Tracker — lifecycle state machine per host/service
+    home_automation_page.py # Home Automation Hub — HA/MQTT/Hue/Sonos detection
+    connections_page.py     # Active Connections — process-to-socket map
+    live_bandwidth_page.py  # Live Bandwidth — 60s rolling interface chart
+    speed_test_page.py      # Speed Test — Ookla-compatible, arc gauge, history
 
 workers/
   scan_worker.py            # QThread workers (28 total)
@@ -398,6 +443,11 @@ workers/
   snmp_trap_worker.py       # SNMP trap listener worker (QThread, passive UDP)
   syslog_worker.py          # Syslog listener worker (QThread, passive UDP)
   report_scheduler_worker.py  # Scheduled report generation worker (QThread)
+  dhcp_lease_worker.py     # DHCP lease refresh worker (QThread)
+  dns_zone_worker.py       # DNS zone scan worker (QThread)
+  threat_intel_worker.py   # Threat intel feed updater worker (QThread)
+  rest_api_worker.py       # Local REST API server worker (QThread daemon)
+  iface_bw_worker.py       # Interface bandwidth sampler worker (QThread, 1s interval)
 ```
 
 ---
@@ -421,7 +471,29 @@ Edit [`offenders.json`](offenders.json) or submit a PR (see [CONTRIBUTING.md](CO
 
 ## What's new
 
-### v1.3.1 (current)
+### v1.4.0 (current)
+
+**Navigation restructure**
+- Standard section reorganised into 7 named subgroups: Discover, Live Monitor, Threat Detection, Health & History, Diagnostics, Reports & Alerts, Tools
+- Threat Detection (Broadcast Storm, Rogue Bridge, IoT Behaviour) promoted to position 3 — no longer buried at the bottom of a flat list
+- All corrupted sidebar emoji characters fixed
+
+**Active Connections** (`🔗`)
+- Process-to-socket map: every TCP/UDP connection on the machine with PID, executable name, remote IP, geo-location (country/city via ip-api.com), and connection status
+- One-click firewall block per process via `netsh advfirewall` — blocked rules panel shows all active NS-Block-* rules with unblock support
+- KPI row: Total / Established / External / FW Blocked; 5-second live poll
+
+**Live Bandwidth** (`📶`)
+- 60-second rolling dual area chart (Upload + Download Mbps) per network interface
+- Interface selector, KPI tiles (current up/down speed, peak up/down), session totals table
+- Live Bandwidth tile added to the Overview Dashboard
+
+**Security hardening**
+- SMTP email password migrated from QSettings (plaintext INI) to OS keychain via `keyring` — auto-migrates existing stored passwords on first run
+- SNMP community string field masked (`EchoMode.Password`) and persisted to OS keychain
+- `keyring~=25.0` added to `requirements.txt`
+
+### v1.3.1
 
 **Overview Dashboard**
 - Configurable live tile grid on the Overview page: Device Count, Fleet Uptime, Service Status, RTT Summary, TLS Health, Network Grade, Alert Feed, Device Events

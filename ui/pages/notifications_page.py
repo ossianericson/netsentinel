@@ -10,17 +10,56 @@ Allows users to:
   - View the recent delivery log
 
 Config is persisted via QSettings("NetSentinel", "NetSentinel").
-Passwords are stored in QSettings (local machine config file, not cloud).
+SMTP password is stored in the OS keychain via `keyring` (RULE 22-A).
+All other notification settings (host, port, username, enabled flags) use QSettings.
 
 Architecture rules observed:
   • All colours from ui/styles — no hardcoded hex values.
   • No blocking I/O on the main thread.
   • NotificationRouter injected via set_router(); page builds with router=None.
+  • RULE 22-A: SMTP password stored in OS keychain via keyring, never in QSettings/INI.
+  • RULE 22-D: Password QLineEdit uses EchoMode.Password.
 """
 from __future__ import annotations
 
 import json
 import time
+
+# ── Keyring helpers (RULE 22-A) ───────────────────────────────────────────────
+_KR_SERVICE = "NetSentinel"
+_KR_EMAIL_PASS_KEY     = "notif/email_pass"
+_KR_PUSHOVER_TOKEN_KEY = "notif/pushover_token"
+_KR_PUSHOVER_USER_KEY  = "notif/pushover_user"
+_KR_NTFY_TOKEN_KEY     = "notif/ntfy_token"
+_KR_TELEGRAM_TOKEN_KEY = "notif/telegram_token"
+
+try:
+    import keyring as _keyring
+    _KEYRING_OK = True
+except ImportError:
+    _keyring = None  # type: ignore
+    _KEYRING_OK = False
+
+
+def _save_secret(key: str, value: str) -> None:
+    """Store a secret in the OS keychain. No-op if keyring unavailable."""
+    if _KEYRING_OK and value:
+        _keyring.set_password(_KR_SERVICE, key, value)
+    elif _KEYRING_OK and not value:
+        try:
+            _keyring.delete_password(_KR_SERVICE, key)
+        except Exception:
+            pass
+
+
+def _load_secret(key: str) -> str:
+    """Retrieve a secret from the OS keychain. Returns empty string if unavailable."""
+    if not _KEYRING_OK:
+        return ""
+    try:
+        return _keyring.get_password(_KR_SERVICE, key) or ""
+    except Exception:
+        return ""
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtWidgets import (
@@ -133,7 +172,8 @@ def _severity_combo(default: str = "WARNING") -> QComboBox:
 
 _SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED}
 _SEV_BG    = {"INFO": BG_CARD, "WARNING": AMBER_BG, "CRITICAL": RED_BG}
-_CH_COLOR  = {"TOAST": ACCENT, "WEBHOOK": GREEN, "EMAIL": AMBER}
+_CH_COLOR  = {"TOAST": ACCENT, "WEBHOOK": GREEN, "EMAIL": AMBER,
+              "PUSHOVER": RED, "NTFY": GREEN, "TELEGRAM": ACCENT}
 
 
 class NotificationsPage(QWidget):
@@ -169,6 +209,10 @@ class NotificationsPage(QWidget):
         il.addWidget(self._build_toast_card())
         il.addWidget(self._build_webhook_card())
         il.addWidget(self._build_email_card())
+        il.addWidget(self._build_pushover_card())
+        il.addWidget(self._build_ntfy_card())
+        il.addWidget(self._build_telegram_card())
+        il.addWidget(self._build_escalation_card())
         il.addWidget(self._build_log_card())
         il.addStretch()
 
@@ -296,7 +340,205 @@ class NotificationsPage(QWidget):
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
         return card
 
+    # ── Pushover card ─────────────────────────────────────────────────────────
+
+    def _build_pushover_card(self) -> QWidget:
+        card, bl = _card("Pushover Mobile Push")
+
+        self._chk_pushover = QCheckBox("Enable Pushover notifications")
+        self._chk_pushover.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        self._chk_pushover.stateChanged.connect(self._save)
+        bl.addWidget(self._chk_pushover)
+
+        self._pushover_token = _lineedit("App API Token", password=True)
+        self._pushover_token.editingFinished.connect(self._save)
+        bl.addLayout(_field_row("API Token:", self._pushover_token))
+
+        self._pushover_user = _lineedit("User / Group Key", password=True)
+        self._pushover_user.editingFinished.connect(self._save)
+        bl.addLayout(_field_row("User Key:", self._pushover_user))
+
+        self._pushover_severity = _severity_combo("WARNING")
+        self._pushover_severity.currentTextChanged.connect(self._save)
+        bl.addLayout(_field_row("Minimum severity:", self._pushover_severity))
+
+        note = QLabel(
+            "Delivers instant push notifications to iOS and Android via Pushover. "
+            "Create an app at pushover.net to get an API token. "
+            "Both the API Token and User Key are stored in the OS keychain."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        bl.addWidget(note)
+
+        btn_test = QPushButton("Send Test Push")
+        btn_test.setFixedHeight(26)
+        btn_test.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
+            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+        )
+        btn_test.clicked.connect(self._test_pushover)
+        bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        return card
+
+    # ── ntfy card ─────────────────────────────────────────────────────────────
+
+    def _build_ntfy_card(self) -> QWidget:
+        card, bl = _card("ntfy Push Notification (ntfy.sh / self-hosted)")
+
+        self._chk_ntfy = QCheckBox("Enable ntfy notifications")
+        self._chk_ntfy.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        self._chk_ntfy.stateChanged.connect(self._save)
+        bl.addWidget(self._chk_ntfy)
+
+        self._ntfy_url = _lineedit("https://ntfy.sh/my-netsentinel-topic")
+        self._ntfy_url.editingFinished.connect(self._save)
+        bl.addLayout(_field_row("Topic URL:", self._ntfy_url))
+
+        self._ntfy_token = _lineedit("Access token (optional)", password=True)
+        self._ntfy_token.editingFinished.connect(self._save)
+        bl.addLayout(_field_row("Access Token:", self._ntfy_token))
+
+        self._ntfy_severity = _severity_combo("WARNING")
+        self._ntfy_severity.currentTextChanged.connect(self._save)
+        bl.addLayout(_field_row("Minimum severity:", self._ntfy_severity))
+
+        note = QLabel(
+            "ntfy.sh is a free, open-source push notification service. "
+            "Subscribe to your topic in the ntfy mobile app or browser. "
+            "The access token (required only for protected topics) is stored in the OS keychain."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        bl.addWidget(note)
+
+        btn_test = QPushButton("Send Test Notification")
+        btn_test.setFixedHeight(26)
+        btn_test.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
+            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+        )
+        btn_test.clicked.connect(self._test_ntfy)
+        bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        return card
+
+    # ── Telegram card ─────────────────────────────────────────────────────────
+
+    def _build_telegram_card(self) -> QWidget:
+        card, bl = _card("Telegram Bot Notification")
+
+        self._chk_telegram = QCheckBox("Enable Telegram notifications")
+        self._chk_telegram.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        self._chk_telegram.stateChanged.connect(self._save)
+        bl.addWidget(self._chk_telegram)
+
+        self._telegram_token = _lineedit("Bot token from @BotFather", password=True)
+        self._telegram_token.editingFinished.connect(self._save)
+        bl.addLayout(_field_row("Bot Token:", self._telegram_token))
+
+        self._telegram_chat = _lineedit("Chat ID (e.g. -100123456789)")
+        self._telegram_chat.editingFinished.connect(self._save)
+        bl.addLayout(_field_row("Chat / Channel ID:", self._telegram_chat))
+
+        self._telegram_severity = _severity_combo("WARNING")
+        self._telegram_severity.currentTextChanged.connect(self._save)
+        bl.addLayout(_field_row("Minimum severity:", self._telegram_severity))
+
+        note = QLabel(
+            "Create a bot via @BotFather on Telegram to get a token. "
+            "Add the bot to a group/channel and get the chat ID via @getidsbot. "
+            "The bot token is stored in the OS keychain; the chat ID is stored in settings."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
+        bl.addWidget(note)
+
+        btn_test = QPushButton("Send Test Message")
+        btn_test.setFixedHeight(26)
+        btn_test.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
+            f"border-radius:2px;padding:0 14px;font-size:11px;}}"
+            f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+        )
+        btn_test.clicked.connect(self._test_telegram)
+        bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        return card
+
     # ── Delivery log card ─────────────────────────────────────────────────────
+
+    def _build_escalation_card(self) -> QWidget:
+        card, bl = _card("Alert Escalation")
+
+        info = QLabel(
+            "Re-notify a second channel when an alert is not acknowledged within a set time. "
+            "Acknowledgement is available by right-clicking an alert in any alert table."
+        )
+        info.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+        info.setWordWrap(True)
+        bl.addWidget(info)
+
+        self._chk_escalation = QCheckBox("Enable escalation")
+        self._chk_escalation.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        self._chk_escalation.stateChanged.connect(self._save)
+        bl.addWidget(self._chk_escalation)
+
+        # Wait time row
+        wait_row = QHBoxLayout()
+        wait_row.setSpacing(8)
+        wait_lbl = QLabel("Escalate if unacknowledged for")
+        wait_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        from PyQt6.QtWidgets import QSpinBox
+        self._spin_escalation_wait = QSpinBox()
+        self._spin_escalation_wait.setRange(1, 1440)
+        self._spin_escalation_wait.setValue(15)
+        self._spin_escalation_wait.setSuffix(" min")
+        self._spin_escalation_wait.setFixedWidth(90)
+        self._spin_escalation_wait.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        self._spin_escalation_wait.valueChanged.connect(self._save)
+        wait_row.addWidget(wait_lbl)
+        wait_row.addWidget(self._spin_escalation_wait)
+        wait_row.addStretch()
+        bl.addLayout(wait_row)
+
+        # Channel to escalate to
+        ch_row = QHBoxLayout()
+        ch_row.setSpacing(8)
+        ch_lbl = QLabel("Escalate via channel")
+        ch_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        self._combo_escalation_channel = QComboBox()
+        self._combo_escalation_channel.addItems([
+            "Email", "Webhook", "Pushover", "ntfy", "Telegram"
+        ])
+        self._combo_escalation_channel.setFixedWidth(140)
+        self._combo_escalation_channel.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        self._combo_escalation_channel.currentTextChanged.connect(self._save)
+        ch_row.addWidget(ch_lbl)
+        ch_row.addWidget(self._combo_escalation_channel)
+        ch_row.addStretch()
+        bl.addLayout(ch_row)
+
+        # Rules to watch (comma-separated)
+        rules_row = QHBoxLayout()
+        rules_row.setSpacing(8)
+        rules_lbl = QLabel("Watch rules (blank = all):")
+        rules_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        self._txt_escalation_rules = QLineEdit()
+        self._txt_escalation_rules.setPlaceholderText("Host Down, High RTT  (comma-separated, blank = all)")
+        self._txt_escalation_rules.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;"
+        )
+        self._txt_escalation_rules.editingFinished.connect(self._save)
+        rules_row.addWidget(rules_lbl)
+        rules_row.addWidget(self._txt_escalation_rules, 1)
+        bl.addLayout(rules_row)
+
+        return card
 
     def _build_log_card(self) -> QWidget:
         card, bl = _card("Recent Delivery Log")
@@ -354,10 +596,31 @@ class NotificationsPage(QWidget):
         qs.setValue("notif/email_host",       self._email_host.text().strip())
         qs.setValue("notif/email_port",       self._email_port.text().strip())
         qs.setValue("notif/email_user",       self._email_user.text().strip())
-        qs.setValue("notif/email_pass",       self._email_pass.text())
+        # RULE 22-A: password goes to OS keychain, never QSettings
+        _save_secret(_KR_EMAIL_PASS_KEY, self._email_pass.text())
         qs.setValue("notif/email_from",       self._email_from.text().strip())
         qs.setValue("notif/email_to",         self._email_to.text().strip())
         qs.setValue("notif/email_severity",   self._email_severity.currentText())
+        # Pushover — tokens to keychain (RULE 22-A)
+        qs.setValue("notif/pushover_enabled",  self._chk_pushover.isChecked())
+        qs.setValue("notif/pushover_severity", self._pushover_severity.currentText())
+        _save_secret(_KR_PUSHOVER_TOKEN_KEY, self._pushover_token.text())
+        _save_secret(_KR_PUSHOVER_USER_KEY,  self._pushover_user.text())
+        # ntfy — access token to keychain (RULE 22-A); topic URL to QSettings (not a secret)
+        qs.setValue("notif/ntfy_enabled",    self._chk_ntfy.isChecked())
+        qs.setValue("notif/ntfy_url",        self._ntfy_url.text().strip())
+        qs.setValue("notif/ntfy_severity",   self._ntfy_severity.currentText())
+        _save_secret(_KR_NTFY_TOKEN_KEY, self._ntfy_token.text())
+        # Telegram — bot token to keychain (RULE 22-A); chat_id to QSettings (not a secret)
+        qs.setValue("notif/telegram_enabled",  self._chk_telegram.isChecked())
+        qs.setValue("notif/telegram_chat",     self._telegram_chat.text().strip())
+        qs.setValue("notif/telegram_severity", self._telegram_severity.currentText())
+        _save_secret(_KR_TELEGRAM_TOKEN_KEY, self._telegram_token.text())
+        # Escalation policy
+        qs.setValue("notif/escalation_enabled",  self._chk_escalation.isChecked())
+        qs.setValue("notif/escalation_wait",     self._spin_escalation_wait.value())
+        qs.setValue("notif/escalation_channel",  self._combo_escalation_channel.currentText())
+        qs.setValue("notif/escalation_rules",    self._txt_escalation_rules.text().strip())
         self._apply_to_router()
 
     def _restore(self) -> None:
@@ -371,10 +634,40 @@ class NotificationsPage(QWidget):
         self._email_host.setText(qs.value("notif/email_host",          ""))
         self._email_port.setText(qs.value("notif/email_port",          "587"))
         self._email_user.setText(qs.value("notif/email_user",          ""))
-        self._email_pass.setText(qs.value("notif/email_pass",          ""))
+        # RULE 22-A: load password from OS keychain, never from QSettings
+        self._email_pass.setText(_load_secret(_KR_EMAIL_PASS_KEY))
         self._email_from.setText(qs.value("notif/email_from",          ""))
         self._email_to.setText(qs.value("notif/email_to",              ""))
         self._email_severity.setCurrentText(qs.value("notif/email_severity", "CRITICAL"))
+        # Migrate: if an old plaintext password exists in QSettings, move it to keychain
+        legacy = qs.value("notif/email_pass", "")
+        if legacy:
+            _save_secret(_KR_EMAIL_PASS_KEY, legacy)
+            self._email_pass.setText(legacy)
+            qs.remove("notif/email_pass")   # delete from INI immediately
+        # Pushover
+        self._chk_pushover.setChecked(qs.value("notif/pushover_enabled", False, type=bool))
+        self._pushover_severity.setCurrentText(qs.value("notif/pushover_severity", "WARNING"))
+        self._pushover_token.setText(_load_secret(_KR_PUSHOVER_TOKEN_KEY))
+        self._pushover_user.setText(_load_secret(_KR_PUSHOVER_USER_KEY))
+        # ntfy
+        self._chk_ntfy.setChecked(qs.value("notif/ntfy_enabled", False, type=bool))
+        self._ntfy_url.setText(qs.value("notif/ntfy_url", ""))
+        self._ntfy_severity.setCurrentText(qs.value("notif/ntfy_severity", "WARNING"))
+        self._ntfy_token.setText(_load_secret(_KR_NTFY_TOKEN_KEY))
+        # Telegram
+        self._chk_telegram.setChecked(qs.value("notif/telegram_enabled", False, type=bool))
+        self._telegram_chat.setText(qs.value("notif/telegram_chat", ""))
+        self._telegram_severity.setCurrentText(qs.value("notif/telegram_severity", "WARNING"))
+        self._telegram_token.setText(_load_secret(_KR_TELEGRAM_TOKEN_KEY))
+        # Escalation
+        self._chk_escalation.setChecked(qs.value("notif/escalation_enabled", False, type=bool))
+        self._spin_escalation_wait.setValue(int(qs.value("notif/escalation_wait", 15)))
+        ch = qs.value("notif/escalation_channel", "Email")
+        idx = self._combo_escalation_channel.findText(ch)
+        if idx >= 0:
+            self._combo_escalation_channel.setCurrentIndex(idx)
+        self._txt_escalation_rules.setText(qs.value("notif/escalation_rules", ""))
         self._apply_to_router()
 
     def _apply_to_router(self) -> None:
@@ -383,6 +676,7 @@ class NotificationsPage(QWidget):
             return
         from modules.notification_router import (
             ToastChannel, WebhookChannel, EmailChannel,
+            PushoverChannel, NtfyChannel, TelegramChannel,
         )
         channels = []
         channels.append(ToastChannel(
@@ -410,6 +704,28 @@ class NotificationsPage(QWidget):
             from_addr=self._email_from.text().strip(),
             to_addrs=to_addrs,
             min_severity=self._email_severity.currentText(),
+        ))
+        channels.append(PushoverChannel(
+            enabled=self._chk_pushover.isChecked()
+                    and bool(self._pushover_token.text())
+                    and bool(self._pushover_user.text()),
+            api_token=self._pushover_token.text(),
+            user_key=self._pushover_user.text(),
+            min_severity=self._pushover_severity.currentText(),
+        ))
+        channels.append(NtfyChannel(
+            enabled=self._chk_ntfy.isChecked() and bool(self._ntfy_url.text().strip()),
+            topic_url=self._ntfy_url.text().strip(),
+            access_token=self._ntfy_token.text(),
+            min_severity=self._ntfy_severity.currentText(),
+        ))
+        channels.append(TelegramChannel(
+            enabled=self._chk_telegram.isChecked()
+                    and bool(self._telegram_token.text())
+                    and bool(self._telegram_chat.text().strip()),
+            bot_token=self._telegram_token.text(),
+            chat_id=self._telegram_chat.text().strip(),
+            min_severity=self._telegram_severity.currentText(),
         ))
         self._router.set_channels(channels)
 
@@ -501,3 +817,54 @@ class NotificationsPage(QWidget):
             severity="INFO", ts=int(_t.time()),
         )
         threading.Thread(target=_deliver_email, args=(ch, alert), daemon=True).start()
+
+    def _test_pushover(self) -> None:
+        from modules.notification_router import PushoverChannel, _deliver_pushover
+        from modules.alert_engine import AlertFired
+        import threading, time as _t
+        ch = PushoverChannel(
+            enabled=True,
+            api_token=self._pushover_token.text(),
+            user_key=self._pushover_user.text(),
+            min_severity=self._pushover_severity.currentText(),
+        )
+        alert = AlertFired(
+            rule_name="Test Alert", rule_type="RTT_THRESHOLD",
+            host="netsentinel-test", message="This is a test push from NetSentinel.",
+            severity="INFO", ts=int(_t.time()),
+        )
+        threading.Thread(target=_deliver_pushover, args=(ch, alert), daemon=True).start()
+
+    def _test_ntfy(self) -> None:
+        from modules.notification_router import NtfyChannel, _deliver_ntfy
+        from modules.alert_engine import AlertFired
+        import threading, time as _t
+        ch = NtfyChannel(
+            enabled=True,
+            topic_url=self._ntfy_url.text().strip(),
+            access_token=self._ntfy_token.text(),
+            min_severity=self._ntfy_severity.currentText(),
+        )
+        alert = AlertFired(
+            rule_name="Test Alert", rule_type="RTT_THRESHOLD",
+            host="netsentinel-test", message="This is a test notification from NetSentinel.",
+            severity="INFO", ts=int(_t.time()),
+        )
+        threading.Thread(target=_deliver_ntfy, args=(ch, alert), daemon=True).start()
+
+    def _test_telegram(self) -> None:
+        from modules.notification_router import TelegramChannel, _deliver_telegram
+        from modules.alert_engine import AlertFired
+        import threading, time as _t
+        ch = TelegramChannel(
+            enabled=True,
+            bot_token=self._telegram_token.text(),
+            chat_id=self._telegram_chat.text().strip(),
+            min_severity=self._telegram_severity.currentText(),
+        )
+        alert = AlertFired(
+            rule_name="Test Alert", rule_type="RTT_THRESHOLD",
+            host="netsentinel-test", message="This is a test message from NetSentinel.",
+            severity="INFO", ts=int(_t.time()),
+        )
+        threading.Thread(target=_deliver_telegram, args=(ch, alert), daemon=True).start()

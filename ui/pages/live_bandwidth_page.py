@@ -1,0 +1,382 @@
+"""
+ui/pages/live_bandwidth_page.py — Live Interface Bandwidth Monitor
+==================================================================
+Real-time up/down Mbps chart for all network interfaces.
+
+Layout
+------
+  Title + subtitle
+  KPI row: Up Mbps  | Down Mbps  | Peak Up  | Peak Down
+  Interface selector (combo) + Unit toggle (Mbps / KB/s)
+  60-second rolling dual area chart (matplotlib, FigureCanvasQTAgg)
+  Interface breakdown table: per-NIC totals for this session
+"""
+
+from __future__ import annotations
+
+from collections import deque
+from typing import Deque, Dict, Optional
+
+import matplotlib
+matplotlib.use("QtAgg")
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+
+from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+from PyQt6.QtGui import QColor
+
+from ui.styles import (
+    ACCENT,
+    AMBER,
+    BG_ALT_ROW,
+    BG_CARD,
+    BG_DARK,
+    BORDER,
+    GREEN,
+    RED,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+    TH_BG,
+    TH_TEXT,
+)
+
+_HISTORY_LEN  = 60          # seconds of rolling history
+_DOWN_COLOR   = "#2196F3"   # blue  — download
+_UP_COLOR     = "#4CAF50"   # green — upload
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _kpi_tile(label: str, color: str = ACCENT) -> tuple[QFrame, QLabel]:
+    tile = QFrame()
+    tile.setStyleSheet(
+        f"background:{BG_CARD}; border:1px solid {BORDER};"
+        f" border-left:3px solid {color}; border-radius:0;"
+    )
+    lay = QVBoxLayout(tile)
+    lay.setContentsMargins(12, 8, 12, 8)
+    lay.setSpacing(2)
+    lbl = QLabel(label.upper())
+    lbl.setStyleSheet(
+        f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+        f" letter-spacing:0.5px; border:none; background:transparent;"
+    )
+    val = QLabel("—")
+    val.setStyleSheet(
+        f"color:{TEXT_PRIMARY}; font-size:22px; font-weight:bold;"
+        f" border:none; background:transparent;"
+    )
+    lay.addWidget(lbl)
+    lay.addWidget(val)
+    return tile, val
+
+
+# ── Main page ─────────────────────────────────────────────────────────────────
+
+class LiveBandwidthPage(QWidget):
+    """Real-time bandwidth chart + per-interface breakdown table."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+
+        # Rolling history per interface: { iface: {"up": deque, "down": deque} }
+        self._history: Dict[str, Dict[str, Deque[float]]] = {}
+        self._peak_up   = 0.0
+        self._peak_down = 0.0
+        # Session totals per interface
+        self._session: Dict[str, Dict[str, float]] = {}   # up_mb, down_mb
+
+        self._worker = None
+        self._setup_ui()
+        self._start_worker()
+
+    # ── UI construction ───────────────────────────────────────────────────────
+
+    def _setup_ui(self) -> None:
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
+
+        # Header
+        title = QLabel("Live Bandwidth")
+        title.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            f" background:transparent; border:none;"
+        )
+        sub = QLabel("Real-time upload and download Mbps per network interface (1-second resolution)")
+        sub.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px;"
+            f" background:transparent; border:none; padding:0 0 4px 0;"
+        )
+        root.addWidget(title)
+        root.addWidget(sub)
+
+        # KPI row
+        kpi_row = QHBoxLayout()
+        kpi_row.setSpacing(8)
+        self._kpi_up,    self._lbl_up    = _kpi_tile("↑ Up",       GREEN)
+        self._kpi_down,  self._lbl_down  = _kpi_tile("↓ Down",     ACCENT)
+        self._kpi_pkup,  self._lbl_pkup  = _kpi_tile("Peak Up",    AMBER)
+        self._kpi_pkdn,  self._lbl_pkdn  = _kpi_tile("Peak Down",  RED)
+        for t in (self._kpi_up, self._kpi_down, self._kpi_pkup, self._kpi_pkdn):
+            kpi_row.addWidget(t, 1)
+        root.addLayout(kpi_row)
+
+        # Controls row: interface selector + reset peaks button
+        ctrl = QHBoxLayout()
+        ctrl.setSpacing(8)
+
+        _lbl = QLabel("Interface:")
+        _lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY};"
+            f" background:transparent; border:none;"
+        )
+        self._iface_combo = QComboBox()
+        self._iface_combo.setStyleSheet(
+            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px;"
+            f" padding:3px 8px; font-size:11px; min-height:26px; }}"
+        )
+        self._iface_combo.addItem("All interfaces (sum)")
+        self._iface_combo.currentIndexChanged.connect(self._redraw_chart)
+
+        btn_reset = QPushButton("Reset Peaks")
+        btn_reset.setObjectName("btnNetRefresh")
+        btn_reset.setFixedHeight(28)
+        btn_reset.clicked.connect(self._reset_peaks)
+
+        ctrl.addWidget(_lbl)
+        ctrl.addWidget(self._iface_combo, 1)
+        ctrl.addStretch()
+        ctrl.addWidget(btn_reset)
+        root.addLayout(ctrl)
+
+        # Matplotlib chart
+        chart_frame = QFrame()
+        chart_frame.setStyleSheet(
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;"
+        )
+        chart_lay = QVBoxLayout(chart_frame)
+        chart_lay.setContentsMargins(8, 8, 8, 8)
+
+        self._fig, self._ax = plt.subplots(figsize=(10, 3.2))
+        self._fig.patch.set_facecolor("#FFFFFF")
+        self._fig.subplots_adjust(left=0.06, right=0.99, top=0.93, bottom=0.15)
+        self._canvas = FigureCanvas(self._fig)
+        self._canvas.setStyleSheet("background:#FFFFFF; border:none;")
+        self._canvas.setMinimumHeight(220)
+        chart_lay.addWidget(self._canvas)
+        root.addWidget(chart_frame, 2)
+
+        # Per-interface breakdown table
+        tbl_label = QLabel("SESSION TOTALS BY INTERFACE")
+        tbl_label.setStyleSheet(
+            f"font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
+            f" letter-spacing:0.5px; background:transparent; border:none;"
+            f" padding:6px 0 2px 0;"
+        )
+        root.addWidget(tbl_label)
+
+        self._tbl = QTableWidget(0, 5)
+        self._tbl.setHorizontalHeaderLabels(
+            ["Interface", "↑ Up (MB)", "↓ Down (MB)", "Current Up", "Current Down"]
+        )
+        self._tbl.horizontalHeader().setStretchLastSection(True)
+        self._tbl.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch
+        )
+        self._tbl.setAlternatingRowColors(True)
+        self._tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._tbl.verticalHeader().setVisible(False)
+        self._tbl.verticalHeader().setDefaultSectionSize(24)
+        self._tbl.setMaximumHeight(180)
+        self._tbl.setStyleSheet(
+            f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            f"QHeaderView::section {{"
+            f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            f"  font-weight:bold; padding:4px 5px; border:none;"
+            f"  border-right:1px solid #254A6E;"
+            f"}}"
+            f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+            f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+            f"QTableWidget::item {{ border-bottom:1px solid #EAEAEA; }}"
+        )
+        root.addWidget(self._tbl)
+
+        self._draw_empty_chart()
+
+    # ── Worker ────────────────────────────────────────────────────────────────
+
+    def _start_worker(self) -> None:
+        from workers.iface_bw_worker import IfaceBwPoller
+        self._worker = IfaceBwPoller(interval_s=1.0, parent=self)
+        self._worker.stats_ready.connect(self._on_stats)
+        self._worker.error.connect(
+            lambda e: self._ax.set_title(f"⚠  {e}", color=RED, fontsize=9)
+        )
+        self._worker.start()
+
+    def closeEvent(self, event):
+        if self._worker:
+            self._worker.stop()
+            self._worker.wait(2000)
+        super().closeEvent(event)
+
+    # ── Data handling ─────────────────────────────────────────────────────────
+
+    @pyqtSlot(dict)
+    def _on_stats(self, stats: dict) -> None:
+        """Called every second with per-interface Mbps data."""
+        # Update combo box if new interfaces appear
+        current_ifaces = set(self._history.keys())
+        new_ifaces = set(stats.keys()) - current_ifaces
+        if new_ifaces:
+            for iface in sorted(new_ifaces):
+                self._history[iface] = {
+                    "up":   deque([0.0] * _HISTORY_LEN, maxlen=_HISTORY_LEN),
+                    "down": deque([0.0] * _HISTORY_LEN, maxlen=_HISTORY_LEN),
+                }
+                self._session[iface] = {"up_mb": 0.0, "down_mb": 0.0,
+                                         "up_mbps": 0.0, "down_mbps": 0.0}
+                self._iface_combo.addItem(iface)
+
+        # Push new samples
+        for iface, d in stats.items():
+            if iface not in self._history:
+                continue
+            up   = d["up_mbps"]
+            down = d["down_mbps"]
+            self._history[iface]["up"].append(up)
+            self._history[iface]["down"].append(down)
+            self._session[iface]["up_mb"]    += d["up_bytes"]   / 1_000_000
+            self._session[iface]["down_mb"]  += d["down_bytes"] / 1_000_000
+            self._session[iface]["up_mbps"]   = up
+            self._session[iface]["down_mbps"] = down
+
+        # KPI: aggregate current values across all ifaces
+        total_up   = sum(d["up_mbps"]   for d in self._session.values())
+        total_down = sum(d["down_mbps"] for d in self._session.values())
+        self._peak_up   = max(self._peak_up,   total_up)
+        self._peak_down = max(self._peak_down, total_down)
+
+        self._lbl_up.setText(f"{total_up:.2f}")
+        self._lbl_down.setText(f"{total_down:.2f}")
+        self._lbl_pkup.setText(f"{self._peak_up:.2f}")
+        self._lbl_pkdn.setText(f"{self._peak_down:.2f}")
+
+        self._redraw_chart()
+        self._update_table()
+
+    def _get_chart_data(self) -> tuple[list, list]:
+        """Return (up_series, down_series) for the selected interface."""
+        sel = self._iface_combo.currentText()
+        if sel == "All interfaces (sum)" or sel not in self._history:
+            # Sum all interfaces
+            if not self._history:
+                return [0.0] * _HISTORY_LEN, [0.0] * _HISTORY_LEN
+            up   = [0.0] * _HISTORY_LEN
+            down = [0.0] * _HISTORY_LEN
+            for h in self._history.values():
+                for i, (u, d) in enumerate(zip(h["up"], h["down"])):
+                    up[i]   += u
+                    down[i] += d
+            return up, down
+        h = self._history[sel]
+        return list(h["up"]), list(h["down"])
+
+    # ── Chart drawing ─────────────────────────────────────────────────────────
+
+    def _draw_empty_chart(self) -> None:
+        ax = self._ax
+        ax.clear()
+        ax.set_facecolor("#FAFAFA")
+        ax.fill_between(range(_HISTORY_LEN), 0, color=_DOWN_COLOR, alpha=0.15)
+        ax.fill_between(range(_HISTORY_LEN), 0, color=_UP_COLOR,   alpha=0.15)
+        ax.set_xlim(0, _HISTORY_LEN - 1)
+        ax.set_ylim(0, 10)
+        ax.set_xlabel("seconds ago", fontsize=8, color="#888888")
+        ax.set_ylabel("Mbps", fontsize=8, color="#888888")
+        ax.tick_params(labelsize=7, colors="#888888")
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#DDDDDD")
+        ax.grid(True, linestyle="--", linewidth=0.4, color="#EEEEEE")
+        self._canvas.draw_idle()
+
+    @pyqtSlot()
+    def _redraw_chart(self) -> None:
+        up, down = self._get_chart_data()
+        ax = self._ax
+        ax.clear()
+        ax.set_facecolor("#FAFAFA")
+
+        xs = list(range(_HISTORY_LEN))
+        ax.fill_between(xs, down, alpha=0.35, color=_DOWN_COLOR, label="↓ Download")
+        ax.plot(xs, down, color=_DOWN_COLOR, linewidth=1.2)
+        ax.fill_between(xs, up,   alpha=0.35, color=_UP_COLOR,   label="↑ Upload")
+        ax.plot(xs, up,   color=_UP_COLOR,   linewidth=1.2)
+
+        peak = max(max(up, default=0), max(down, default=0))
+        ax.set_ylim(0, max(peak * 1.25, 1.0))
+        ax.set_xlim(0, _HISTORY_LEN - 1)
+
+        # x-axis: show "now" on the right, "60s ago" on the left
+        ax.set_xticks([0, 15, 30, 45, 59])
+        ax.set_xticklabels(["-60s", "-45s", "-30s", "-15s", "now"], fontsize=7)
+        ax.set_ylabel("Mbps", fontsize=8, color="#888888")
+        ax.tick_params(labelsize=7, colors="#888888")
+        for sp in ax.spines.values():
+            sp.set_edgecolor("#DDDDDD")
+        ax.grid(True, linestyle="--", linewidth=0.4, color="#EEEEEE")
+        ax.legend(loc="upper left", fontsize=7, framealpha=0.7,
+                  facecolor="#FFFFFF", edgecolor="#DDDDDD")
+
+        # Title shows current values
+        sel = self._iface_combo.currentText()
+        ax.set_title(
+            f"{sel}  —  "
+            f"↑ {up[-1]:.2f} Mbps  ↓ {down[-1]:.2f} Mbps",
+            fontsize=8, color="#444444", pad=4,
+        )
+        self._canvas.draw_idle()
+
+    # ── Breakdown table ───────────────────────────────────────────────────────
+
+    def _update_table(self) -> None:
+        self._tbl.setRowCount(0)
+        for iface, d in sorted(self._session.items()):
+            row = self._tbl.rowCount()
+            self._tbl.insertRow(row)
+            cells = [
+                (iface,                               TEXT_PRIMARY),
+                (f"{d['up_mb']:.2f}",                 GREEN),
+                (f"{d['down_mb']:.2f}",               ACCENT),
+                (f"{d['up_mbps']:.2f} Mbps",          TEXT_SECONDARY),
+                (f"{d['down_mbps']:.2f} Mbps",        TEXT_SECONDARY),
+            ]
+            for col, (text, color) in enumerate(cells):
+                item = QTableWidgetItem(text)
+                item.setForeground(QColor(color))
+                self._tbl.setItem(row, col, item)
+
+    # ── Reset peaks ───────────────────────────────────────────────────────────
+
+    @pyqtSlot()
+    def _reset_peaks(self) -> None:
+        self._peak_up   = 0.0
+        self._peak_down = 0.0
+        self._lbl_pkup.setText("—")
+        self._lbl_pkdn.setText("—")

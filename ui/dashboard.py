@@ -250,8 +250,18 @@ class Dashboard(QMainWindow):
         self._graph_timer.setInterval(500)
         self._graph_timer.timeout.connect(self._refresh_graph)
 
-        # Matrix rain Easter egg
-        self._matrix_rain = None
+        # System tray guardian
+        self._tray_quit = False   # set True when quitting via tray menu
+        from ui.system_tray import SystemTrayManager
+        self._tray_manager = SystemTrayManager(self)
+        self._tray_manager.setup()
+        # Keep legacy _tray_icon reference so _show_alert_toast still works
+        self._tray_icon = self._tray_manager._tray
+
+        # Ctrl+Q always quits immediately regardless of tray setting
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        _quit_sc = QShortcut(QKeySequence("Ctrl+Q"), self)
+        _quit_sc.activated.connect(self._quit_app)
 
         self._build_ui()
 
@@ -294,20 +304,8 @@ class Dashboard(QMainWindow):
         self._refresh_network_info()
         # Silent background update check
         self._start_update_check()
-        # Matrix rain overlay (created after window is built)
-        from ui.matrix_rain import MatrixRainWidget
-        self._matrix_rain = MatrixRainWidget(self.centralWidget())
-        # Keyboard shortcut Ctrl+Shift+M
-        from PyQt6.QtGui import QKeySequence, QShortcut
-        _shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
-        _shortcut.activated.connect(self._toggle_matrix_rain)
         # Restore full settings (mode, scan hosts, etc.) after UI is built
         self._restore_settings()
-
-    @pyqtSlot()
-    def _toggle_matrix_rain(self):
-        if self._matrix_rain:
-            self._matrix_rain.toggle()
 
     def _build_header(self) -> QWidget:
         """Slim top bar: brand | stretch | verdict | actions."""
@@ -437,6 +435,9 @@ class Dashboard(QMainWindow):
         _menu_s.addSeparator()
         _act_app_settings = _menu_s.addAction("⚙  App Settings (Theme & Display)…")
         _act_app_settings.triggered.connect(self._open_settings_dialog)
+        _menu_s.addSeparator()
+        _act_quit = _menu_s.addAction("✕  Quit NetSentinel")
+        _act_quit.triggered.connect(self._quit_app)
 
         _btn_settings = QToolButton()
         _btn_settings.setText("⚙")
@@ -578,7 +579,8 @@ class Dashboard(QMainWindow):
         self._nav_refresh_item_text(row)
         return row
 
-    def _nav_add_subgroup(self, label: str, icon: str = "▸") -> int:
+    def _nav_add_subgroup(self, label: str, icon: str = "▸",
+                          collapsed_by_default: bool = True) -> int:
         """Add an indented collapsible sub-group header under the current section."""
         from PyQt6.QtCore import QSize
         from PyQt6.QtGui import QColor, QBrush
@@ -592,7 +594,7 @@ class Dashboard(QMainWindow):
         self._nav_item_labels[row]   = label
         self._nav_header_rows.add(row)
         self._nav_section_groups[row] = {
-            "children": [], "collapsed": False, "level": 1
+            "children": [], "collapsed": collapsed_by_default, "level": 1
         }
         self._nav_section_groups[self._nav_current_section]["children"].append(row)
         self._nav_separators.add(row)          # legacy compat
@@ -608,6 +610,29 @@ class Dashboard(QMainWindow):
         item.setSizeHint(QSize(0, 30))
         self._nav.addItem(item)
         page_idx = self._stack.addWidget(widget)
+        row = self._nav.count() - 1
+        self._nav_row_to_page[row] = page_idx
+        self._nav_item_icons[row]  = icon
+        self._nav_item_labels[row] = label
+        parent = (self._nav_current_subgroup if self._nav_current_subgroup >= 0
+                  else self._nav_current_section)
+        if parent >= 0:
+            self._nav_section_groups[parent]["children"].append(row)
+        self._nav_refresh_item_text(row)
+        return row
+
+    def _nav_add_alias(self, icon: str, label: str, page_idx: int) -> int:
+        """Add a nav entry that points to an already-registered page stack index.
+
+        Use this to expose the same page in multiple sidebar locations (e.g. the
+        Pinned quick-access section and its canonical grouped position) without
+        adding the widget to QStackedWidget a second time.
+        """
+        from PyQt6.QtCore import QSize
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        item.setSizeHint(QSize(0, 30))
+        self._nav.addItem(item)
         row = self._nav.count() - 1
         self._nav_row_to_page[row] = page_idx
         self._nav_item_icons[row]  = icon
@@ -656,6 +681,10 @@ class Dashboard(QMainWindow):
         grp["collapsed"] = not grp["collapsed"]
         self._nav_refresh_item_text(header_row)
         self._nav_apply_section_visibility(header_row, grp["collapsed"])
+        # Persist so the user's preference survives restarts
+        from PyQt6.QtCore import QSettings
+        _s = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
+        _s.setValue(f"nav/group_{header_row}_collapsed", str(grp["collapsed"]))
 
     def _nav_apply_section_visibility(self, header_row: int, hide: bool):
         """Show/hide direct children; recurse into sub-group children."""
@@ -771,6 +800,30 @@ class Dashboard(QMainWindow):
         from ui.pages.settings_page import SettingsPage
         self._settings_page = SettingsPage(parent=None)
 
+        from ui.pages.speed_test_page import SpeedTestPage
+        self._speed_test_page = SpeedTestPage(store=self._store, parent=None)
+
+        from ui.pages.home_automation_page import HomeAutomationPage
+        self._ha_page = HomeAutomationPage(store=self._store, parent=None)
+
+        from ui.pages.connections_page import ConnectionsPage
+        self._connections_page = ConnectionsPage(parent=None)
+
+        from ui.pages.live_bandwidth_page import LiveBandwidthPage
+        self._live_bandwidth_page = LiveBandwidthPage(parent=None)
+
+        from ui.pages.dhcp_lease_page import DhcpLeasePage
+        self._dhcp_lease_page = DhcpLeasePage(parent=None)
+
+        from ui.pages.dns_zone_page import DnsZonePage
+        self._dns_zone_page = DnsZonePage(parent=None)
+
+        from ui.pages.threat_intel_page import ThreatIntelPage
+        self._threat_intel_page = ThreatIntelPage(parent=None)
+
+        from ui.pages.cve_page import CvePage
+        self._cve_page = CvePage(self._store, parent=None)
+
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
         self._topology_tab_widget = self._build_topology_tab()
@@ -833,35 +886,78 @@ class Dashboard(QMainWindow):
         self._nav_current_subgroup: int  = -1
         self._nav_collapsed:     bool = False
 
-        # ── STANDARD (expanded by default) ─────────────────────────────────────
-        self._nav_add_section("Standard", icon="◼")
-        self._nav_add_page("🏠", "Overview",             self._overview_page)
-        self._nav_add_page("🖥", "Devices on Network",   m1)
-        self._nav_add_page("🌐", "WiFi Networks",        m4)
-        self._nav_add_page("📡", "DNS & Outages",        m5)
-        self._nav_add_page("🗓", "Availability History", self._history_page)
-        self._nav_add_page("📜", "Inventory Changes",    self._inventory_page)
-        self._nav_add_page("", "Uptime & SLA",        self._uptime_page)
-        self._nav_add_page("🔌", "Service Heartbeat",   self._service_page)
-        self._nav_add_page("📄", "Auto Reports",         self._reports_page)
-        self._nav_add_page("🔔", "Notifications",        self._notifications_page)
-        self._nav_add_page("📸", "Config Snapshots",     self._baseline_page)
-        self._nav_add_page("📈", "Trend Forecasts",      self._trend_page)
-        self._nav_add_page("🔧", "Maintenance Windows",  self._maintenance_page)
-        self._nav_add_page("ℹ", "Network Info",          net)
-        self._nav_add_page("📊", "Network Grade",        self._benchmark_tab_widget)
+        # ── PINNED — top 7 most-used pages; always visible, no subgroups ──────────
+        # Pages registered here are added to the stack once; STANDARD aliases them.
+        self._nav_add_section("Pinned", icon="📌")
+        _pin_overview_row = self._nav_add_page("🏠", "Overview",             self._overview_page)
+        _pin_dns_row      = self._nav_add_page("📡", "DNS & Outages",        m5)
+        _pin_bw_row       = self._nav_add_page("📶", "Live Bandwidth",       self._live_bandwidth_page)
+        _pin_speed_row    = self._nav_add_page("⚡", "Speed Test",           self._speed_test_page)
+        _pin_devices_row  = self._nav_add_page("🖥", "Devices on Network",   m1)
+        _pin_avail_row    = self._nav_add_page("🗓", "Availability History", self._history_page)
+        _pin_conns_row    = self._nav_add_page("🔗", "Active Connections",   self._connections_page)
 
-        self._nav_add_subgroup("Network Health", icon="💊")
-        self._nav_add_page("💊", "Health Check",         dia)
-        self._nav_add_page("📋", "Stability Log",        log)
-        self._nav_add_page("🔷", "IPv6 Devices",         self._ipv6_tab_widget)
-        self._nav_add_page("🔍", "Root Cause Analysis",  self._correlator_tab_widget)
+        # Helper: stack index for an already-pinned nav row
+        def _pidx(row: int) -> int:
+            return self._nav_row_to_page[row]
+
+        # ── STANDARD — full organised structure; pinned pages referenced as aliases ──
+        self._nav_add_section("Standard", icon="◼", collapsed_by_default=False)
+        self._nav_add_alias("🏠", "Overview", _pidx(_pin_overview_row))
+
+        # Discover — expanded by default so the user immediately sees what's there
+        self._nav_add_subgroup("Discover", icon="🖥", collapsed_by_default=False)
+        self._nav_add_alias("🖥", "Devices on Network",   _pidx(_pin_devices_row))
+        self._nav_add_page ("🌐", "WiFi Networks",        m4)
+        self._nav_add_page ("ℹ",  "Network Info",         net)
+        self._nav_add_page ("📋", "DHCP Lease Inventory", self._dhcp_lease_page)
+        self._nav_add_page ("🗺", "DNS Zone Map",         self._dns_zone_page)
         self._nav_current_subgroup = -1
 
-        self._nav_add_subgroup("Traffic & Behaviour", icon="⚡")
-        self._nav_add_page("⚡", "Broadcast Storm",      m3)
-        self._nav_add_page("📡", "IoT Behaviour",        self._iot_baseline_tab_widget)
+        # Live Monitor — expanded by default; shows the live-data pages immediately
+        self._nav_add_subgroup("Live Monitor", icon="📶", collapsed_by_default=False)
+        self._nav_add_alias("🔗", "Active Connections",   _pidx(_pin_conns_row))
+        self._nav_add_alias("📶", "Live Bandwidth",       _pidx(_pin_bw_row))
+        self._nav_add_alias("📡", "DNS & Outages",        _pidx(_pin_dns_row))
+        self._nav_current_subgroup = -1
+
+        # Threat Detection — collapsed; expand when you need security analysis
+        self._nav_add_subgroup("Threat Detection", icon="🛡")
+        self._nav_add_page("🌪", "Broadcast Storm",      m3)
         self._nav_add_page("🔀", "Rogue Bridge (STP)",   m2)
+        self._nav_add_page("🤖", "IoT Behaviour",        self._iot_baseline_tab_widget)
+        self._nav_current_subgroup = -1
+
+        # Health & History — collapsed; historical data on demand
+        self._nav_add_subgroup("Health & History", icon="📊")
+        self._nav_add_alias("🗓", "Availability History", _pidx(_pin_avail_row))
+        self._nav_add_page ("📜", "Inventory Changes",    self._inventory_page)
+        self._nav_add_page ("✅", "Uptime & SLA",         self._uptime_page)
+        self._nav_add_page ("🔌", "Service Heartbeat",    self._service_page)
+        self._nav_add_page ("📊", "Network Grade",        self._benchmark_tab_widget)
+        self._nav_current_subgroup = -1
+
+        # Diagnostics — collapsed; deeper investigation tools
+        self._nav_add_subgroup("Diagnostics", icon="💊")
+        self._nav_add_page("💊", "Health Check",         dia)
+        self._nav_add_page("📋", "Stability Log",        log)
+        self._nav_add_page("🔍", "Root Cause Analysis",  self._correlator_tab_widget)
+        self._nav_add_page("📈", "Trend Forecasts",      self._trend_page)
+        self._nav_add_page("🔷", "IPv6 Devices",         self._ipv6_tab_widget)
+        self._nav_current_subgroup = -1
+
+        # Reports & Alerts — collapsed; admin/config
+        self._nav_add_subgroup("Reports & Alerts", icon="🔔")
+        self._nav_add_page("🔔", "Notifications",        self._notifications_page)
+        self._nav_add_page("📄", "Auto Reports",         self._reports_page)
+        self._nav_add_page("📸", "Config Snapshots",     self._baseline_page)
+        self._nav_add_page("🔧", "Maintenance Windows",  self._maintenance_page)
+        self._nav_current_subgroup = -1
+
+        # Tools — collapsed; utilities
+        self._nav_add_subgroup("Tools", icon="⚡")
+        self._nav_add_alias("⚡", "Speed Test",          _pidx(_pin_speed_row))
+        self._nav_add_page ("🏡", "Home Automation",     self._ha_page)
         self._nav_current_subgroup = -1
 
         # ── ADVANCED (collapsed by default) ────────────────────────────────────
@@ -893,12 +989,14 @@ class Dashboard(QMainWindow):
         self._nav_recon_sep = self._nav.count()
         self._nav_add_section("Security Audit", icon="🔐", collapsed_by_default=True)
         self._nav_recon_rows = [
+            self._nav_add_page("🧠", "Threat Intelligence",   self._threat_intel_page),
             self._nav_add_page("�", "TLS Certificates",      self._cert_page),
             self._nav_add_page("�🔎", "Port Scan (SYN)",       self._recon_syn_tab_widget),
             self._nav_add_page("🔎", "Port Scan (UDP)",        self._recon_udp_tab_widget),
             self._nav_add_page("💻", "OS Detection",           self._recon_os_tab_widget),
             self._nav_add_page("⚠",  "Device Risk Score",     self._recon_risk_tab_widget),
             self._nav_add_page("🛡", "Known CVEs",             self._recon_cve_tab_widget),
+            self._nav_add_page("📋", "CVE Tracker",              self._cve_page),
             self._nav_add_page("🌍", "Exposed to Internet",    self._recon_exposure_tab_widget),
             self._nav_add_page("🔑", "Login Test (SSH/SMB)",   self._recon_cred_tab_widget),
             self._nav_add_page("🔭", "Full Device Discovery",  self._recon_discovery_tab_widget),
@@ -910,15 +1008,20 @@ class Dashboard(QMainWindow):
         self._nav_separators.add(self._nav_recon_sep)
         self._recon_tab_start_index = -1  # kept for compat
 
-        # Apply initial collapse for sections starting collapsed
+        # Apply initial collapse for ALL groups that start collapsed (both level-0
+        # sections and level-1 sub-groups).  Process level-0 first so parent
+        # hide state is established before children are evaluated.
         for _hrow, _grp in self._nav_section_groups.items():
             if _grp["collapsed"] and _grp["level"] == 0:
+                self._nav_apply_section_visibility(_hrow, True)
+        for _hrow, _grp in self._nav_section_groups.items():
+            if _grp["collapsed"] and _grp["level"] == 1:
                 self._nav_apply_section_visibility(_hrow, True)
 
         # ── Wire signals ──────────────────────────────────────────────────────
         self._nav.currentRowChanged.connect(self._on_nav_row_changed)
         self._nav.itemClicked.connect(self._on_nav_item_clicked)
-        # Select first real page (row 1 = Devices on Network)
+        # Select the Overview row (first real page in the Pinned section)
         self._nav.setCurrentRow(1)
 
         # ── Build sidebar container (search + nav list + collapse button) ──────
@@ -1007,6 +1110,16 @@ class Dashboard(QMainWindow):
         if row < 0 or row in self._nav_header_rows:
             return
         self._nav_set_page(row)
+        # Reset tray badge when user views any page (they are attending to the app)
+        if hasattr(self, "_tray_manager"):
+            self._tray_manager.reset_badge()
+
+    def _nav_go_to(self, label: str) -> None:
+        """Programmatically navigate to the page with the given sidebar label."""
+        for row, lbl in self._nav_item_labels.items():
+            if lbl == label:
+                self._nav.setCurrentRow(row)
+                return
 
     # ── Module 1 ──────────────────────────────────────────────────────────────
 
@@ -2267,9 +2380,6 @@ class Dashboard(QMainWindow):
                 self._update_stat(self._log_stat_outages,
                                   str(len(summary.outages)),
                                   RED if summary.outages else GREEN)
-                # Update MatrixRain colour from live stability score
-                if self._matrix_rain:
-                    self._matrix_rain.set_stability_score(summary.uptime_pct)
                 # Rebuild outage table
                 self._log_outage_table.setRowCount(0)
                 for o in summary.outages:
@@ -3174,34 +3284,75 @@ class Dashboard(QMainWindow):
 
     # ── Window lifecycle ──────────────────────────────────────────────────────
 
+    def _quit_app(self):
+        """Unconditional quit — bypasses minimize-to-tray logic."""
+        self._tray_quit = True
+        self.close()
+
     def closeEvent(self, event):
-        """Stop any background workers gracefully before closing."""
+        """X button hides to tray (app keeps monitoring). Quit via ⚙ menu or Ctrl+Q to exit."""
+        if (not self._tray_quit
+                and self._tray_manager.is_available()
+                and self._tray_manager.minimize_to_tray_enabled()):
+            event.ignore()
+            self._tray_manager._hide_window()
+            self._tray_manager.show_notification(
+                "NetSentinel",
+                "Still monitoring in the system tray — use ⚙ › Quit to exit.",
+                "INFO",
+            )
+            return
+
+        # ── Real shutdown path ────────────────────────────────────────────────
         self._save_window_state()
-        # Stop long-running dedicated workers
-        if self._logger_worker and self._logger_worker.isRunning():
-            self._logger_worker.stop_logger()
-            self._logger_worker.wait(2000)
-        if self._mtr_worker and self._mtr_worker.isRunning():
-            self._mtr_worker.stop()
-            self._mtr_worker.wait(2000)
-        # Stop any active scan module workers
-        for w in list(self._workers):
+
+        # Collect every worker the dashboard owns into one flat list
+        _all_workers = []
+        # Transient/one-shot workers
+        for attr in ("_net_info_worker", "_diag_worker", "_prescan_worker",
+                     "_mtr_worker", "_ps_worker", "_ipv6_worker", "_cloud_worker",
+                     "_arp_worker", "_dhcp_worker", "_bw_worker", "_sched_worker",
+                     "_snmp_worker", "_syn_worker", "_udp_worker", "_cve_worker",
+                     "_exposure_worker", "_os_worker", "_cred_worker",
+                     "_discovery_worker", "_smb_worker", "_pe_worker",
+                     "_plugin_worker"):
+            w = getattr(self, attr, None)
+            if w is not None:
+                _all_workers.append(w)
+        # Workers tracked in self._workers (scan module workers)
+        _all_workers.extend(list(self._workers))
+
+        # Signal stop to every running worker first (non-blocking)
+        for w in _all_workers:
             if w.isRunning():
                 if hasattr(w, "stop"):
                     w.stop()
-                w.wait(1500)
-        # Stop new-feature workers
-        for w in (self._arp_worker, self._dhcp_worker, self._bw_worker,
-                  self._sched_worker, self._snmp_worker,
-                  self._syn_worker, self._udp_worker, self._cve_worker,
-                  self._exposure_worker, self._os_worker, self._cred_worker,
-                  self._discovery_worker, self._smb_worker,
-                  self._pe_worker):
-            if w is not None and w.isRunning():
-                if hasattr(w, "stop"):
-                    w.stop()
-                w.wait(1500)
+                elif hasattr(w, "stop_logger"):
+                    w.stop_logger()
+                else:
+                    w.quit()  # ask the event loop to exit
+
+        # Stop the persistent logger worker
+        if self._logger_worker and self._logger_worker.isRunning():
+            self._logger_worker.stop_logger()
+            _all_workers.append(self._logger_worker)
+
+        # Wait briefly for each worker — 800 ms cap so close is responsive
+        for w in _all_workers:
+            if w.isRunning():
+                w.wait(800)
+            if w.isRunning():
+                w.terminate()
+                w.wait(2000)   # wait after terminate before object destruction
+
         super().closeEvent(event)
+        # os._exit(0) bypasses Qt destructor cleanup entirely.
+        # This is intentional: calling QApplication.quit() after terminate()
+        # can still trigger QThread destructor crashes (STATUS_STACK_BUFFER_OVERRUN)
+        # if a thread's OS handle is not yet released. os._exit(0) skips all
+        # C++/Qt destructors and exits the process cleanly at the OS level.
+        import os as _os
+        _os._exit(0)
 
     # ── Verdict area ─────────────────────────────────────────────────────────
 
@@ -3258,11 +3409,7 @@ class Dashboard(QMainWindow):
         self._status_bar.showMessage(f"  {msg}")
 
     def _show_alert_toast(self, alert) -> None:
-        """Show a desktop notification for a fired alert.
-
-        Uses QSystemTrayIcon.showMessage() when a tray icon is available,
-        otherwise falls back to the status bar.
-        """
+        """Show a desktop notification for a fired alert."""
         from ui.styles import RED, AMBER
         severity = getattr(alert, "severity", "INFO")
         message  = getattr(alert, "message",  str(alert))
@@ -3271,8 +3418,12 @@ class Dashboard(QMainWindow):
         prefix = "🔴" if severity == "CRITICAL" else "🟡"
         self._set_status(f"{prefix} {message}")
 
-        # Desktop toast via tray icon (if one exists)
-        if hasattr(self, "_tray_icon") and self._tray_icon is not None:
+        # Desktop toast via tray manager
+        if self._tray_manager.is_available():
+            self._tray_manager.show_notification("NetSentinel Alert", message, severity)
+            self._tray_manager.increment_badge()
+        elif self._tray_icon is not None:
+            # Legacy fallback (should never be reached after tray_manager setup)
             from PyQt6.QtWidgets import QSystemTrayIcon
             icon_type = (
                 QSystemTrayIcon.MessageIcon.Critical
@@ -3405,11 +3556,17 @@ class Dashboard(QMainWindow):
             self._toggle_sidebar()
         for _hrow in list(self._nav_section_groups.keys()):
             _grp = self._nav_section_groups[_hrow]
-            if _grp["level"] != 0:
-                continue
-            _saved = s.value(f"nav/section_{_hrow}_collapsed", None)
-            if _saved is not None and (_saved == "True") != _grp["collapsed"]:
-                self._nav_toggle_section(_hrow)
+            if _grp["level"] == 0:
+                # Top-level sections
+                _saved = s.value(f"nav/section_{_hrow}_collapsed", None)
+                if _saved is not None and (_saved == "True") != _grp["collapsed"]:
+                    self._nav_toggle_section(_hrow)
+            else:
+                # Subgroups: restore saved preference; fall back to the group's own default
+                _saved = s.value(f"nav/group_{_hrow}_collapsed", None)
+                _want_collapsed = (_saved == "True") if _saved is not None else _grp["collapsed"]
+                if _want_collapsed != _grp["collapsed"]:
+                    self._nav_toggle_section(_hrow)
         if hasattr(self, "_ps_host"):
             host = s.value("scan/last_port_scan_host", "")
             if host:
@@ -3520,6 +3677,14 @@ class Dashboard(QMainWindow):
                 _color_for_level(level)
             ))
             self._arp_table.setItem(row, col, item)
+        # Tray notification for ARP attacks
+        if self._tray_manager.is_available():
+            self._tray_manager.show_notification(
+                f"ARP Attack Detected — {event.event_type.replace('_', ' ').title()}",
+                f"{event.attacker_ip} ({event.attacker_mac}) → {event.verdict}",
+                "CRITICAL" if level == "HIGH" else "WARNING",
+            )
+            self._tray_manager.increment_badge()
 
     # ── DHCP monitor tab ──────────────────────────────────────────────────────
 
@@ -3718,9 +3883,18 @@ class Dashboard(QMainWindow):
         self._snmp_status = QLabel("SNMP poller not running.")
         self._snmp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl_row = QHBoxLayout()
-        self._snmp_community = QLineEdit("public")
+        self._snmp_community = QLineEdit()
         self._snmp_community.setFixedWidth(120)
         self._snmp_community.setPlaceholderText("community string")
+        self._snmp_community.setEchoMode(QLineEdit.EchoMode.Password)  # RULE 22-D
+        # RULE 22-A: load community string from OS keychain
+        try:
+            import keyring as _kr
+            _stored = _kr.get_password("NetSentinel", "snmp/community")
+            self._snmp_community.setText(_stored or "public")
+        except Exception:
+            self._snmp_community.setText("public")
+        self._snmp_community.editingFinished.connect(self._save_snmp_community)
         btn_poll = QPushButton("▶  Poll All Devices")
         btn_poll.setObjectName("btnNetRefresh")
         btn_poll.clicked.connect(self._start_snmp_poll)
@@ -3761,6 +3935,22 @@ class Dashboard(QMainWindow):
         self._snmp_worker.status.connect(self._snmp_status.setText)
         self._snmp_worker.error.connect(lambda e: self._snmp_status.setText(f"⚠ {e}"))
         self._snmp_worker.start()
+
+    @pyqtSlot()
+    def _save_snmp_community(self) -> None:
+        """Persist SNMP community string to OS keychain (RULE 22-A)."""
+        value = self._snmp_community.text().strip()
+        try:
+            import keyring as _kr
+            if value:
+                _kr.set_password("NetSentinel", "snmp/community", value)
+            else:
+                try:
+                    _kr.delete_password("NetSentinel", "snmp/community")
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     @pyqtSlot(object)
     def _on_snmp_result(self, result):
@@ -4951,9 +5141,21 @@ class Dashboard(QMainWindow):
                     msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})"
                             for d in tr.new_devices[:3]]
                     extra = f" +{len(tr.new_devices)-3} more" if len(tr.new_devices) > 3 else ""
-                    self._set_status(
-                        f"🆕 {len(tr.new_devices)} new device(s): {', '.join(msgs)}{extra}"
-                    )
+                    status_msg = f"🆕 {len(tr.new_devices)} new device(s): {', '.join(msgs)}{extra}"
+                    self._set_status(status_msg)
+                    # Tray notification for new device joins
+                    if self._tray_manager.is_available():
+                        summary = ", ".join(
+                            f"{d.ip or d.mac}" for d in tr.new_devices[:2]
+                        )
+                        if len(tr.new_devices) > 2:
+                            summary += f" +{len(tr.new_devices)-2} more"
+                        self._tray_manager.show_notification(
+                            "New Device Joined",
+                            summary,
+                            "WARNING",
+                        )
+                        self._tray_manager.increment_badge()
                 if tr.gone_devices:
                     gone_msgs = [f"{d.ip or d.mac}" for d in tr.gone_devices[:2]]
                     self._set_status(

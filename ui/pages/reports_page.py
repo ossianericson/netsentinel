@@ -19,7 +19,7 @@ from pathlib import Path
 from PyQt6.QtCore    import Qt, QTimer, pyqtSlot
 from PyQt6.QtWidgets import (
     QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QPushButton, QSizePolicy, QSpinBox,
+    QListWidgetItem, QMessageBox, QPushButton, QSizePolicy, QSpinBox,
     QVBoxLayout, QWidget, QCheckBox, QGroupBox, QFrame,
 )
 
@@ -196,8 +196,16 @@ class ReportsPage(QWidget):
             f" border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;"
         )
         self._btn_now.clicked.connect(self._generate_now)
+        self._btn_pdf = QPushButton("Export PDF")
+        self._btn_pdf.setFixedHeight(34)
+        self._btn_pdf.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{ACCENT}; background:white;"
+            f" border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;"
+        )
+        self._btn_pdf.clicked.connect(self._export_pdf)
         btn_row.addWidget(self._btn_apply)
         btn_row.addWidget(self._btn_now)
+        btn_row.addWidget(self._btn_pdf)
         btn_row.addStretch()
         cfg_lay.addLayout(btn_row)
 
@@ -295,6 +303,39 @@ class ReportsPage(QWidget):
                 subprocess.Popen(["open", path])
             else:
                 subprocess.Popen(["xdg-open", path])
+
+    def _export_pdf(self) -> None:
+        """Generate a PDF report and prompt the user where to save it."""
+        default_name = "netsentinel-report.pdf"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export PDF Report", str(Path.home() / default_name),
+            "PDF Files (*.pdf)"
+        )
+        if not path:
+            return
+
+        self._btn_pdf.setEnabled(False)
+        self._btn_pdf.setText("Generating…")
+        self._btn_pdf.repaint()
+        try:
+            from modules.report_exporter import save_pdf_report
+            save_pdf_report(Path(path))
+            QMessageBox.information(
+                self, "PDF Exported",
+                f"Report saved to:\n{path}"
+            )
+            # Also add to the recent list
+            item = QListWidgetItem(path)
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            self._report_list.insertItem(0, item)
+            self._sync_list_visibility()
+        except RuntimeError as exc:
+            QMessageBox.warning(self, "PDF Export Failed", str(exc))
+        except Exception as exc:
+            QMessageBox.warning(self, "PDF Export Error", f"Unexpected error: {exc}")
+        finally:
+            self._btn_pdf.setEnabled(True)
+            self._btn_pdf.setText("Export PDF")
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

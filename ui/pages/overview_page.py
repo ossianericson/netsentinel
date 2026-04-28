@@ -566,18 +566,156 @@ class EventFeedTile(_BaseTile):
             pass
 
 
+class HaDevicesTile(_BaseTile):
+    """Shows pinned Home Automation devices with live status dots."""
+
+    TILE_ID    = "ha_devices"
+    TILE_LABEL = "Home Automation"
+    MIN_HEIGHT = 160
+
+    def _build_body(self) -> None:
+        self._rows: List[QLabel] = []
+        self._placeholder = QLabel("No pinned HA devices yet")
+        self._placeholder.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+        )
+        self._body_layout.addWidget(self._placeholder)
+        self._body_layout.addStretch()
+
+    def refresh(self, store: Optional[MetricStore] = None) -> None:
+        s = store or self._store
+        if s is None:
+            return
+        try:
+            pinned = s.query_ha_devices()
+            pinned = [d for d in pinned if d.is_pinned]
+
+            # Clear previous rows
+            for lbl in self._rows:
+                self._body_layout.removeWidget(lbl)
+                lbl.deleteLater()
+            self._rows.clear()
+
+            self._placeholder.setVisible(len(pinned) == 0)
+
+            for kd in pinned[:8]:   # cap at 8 in overview tile
+                name  = kd.custom_name or kd.hostname or kd.mac
+                label = QLabel(f"● {name[:28]}")
+                label.setStyleSheet(
+                    f"font-size:11px; color:{TEXT_PRIMARY}; border:none;"
+                )
+                label.setToolTip(
+                    f"IP: {kd.ip or '?'}  |  "
+                    f"Room: {kd.room or '?'}  |  "
+                    f"MAC: {kd.mac}"
+                )
+                self._rows.append(label)
+                # Insert before stretch (last item)
+                self._body_layout.insertWidget(
+                    self._body_layout.count() - 1, label
+                )
+        except Exception:
+            pass
+
+    def update_ha_states(self, states: dict) -> None:
+        """states: {ip: UP/DOWN/DEGRADED/UNKNOWN} — called from dashboard."""
+        from ui.styles import GREEN, RED, AMBER, TEXT_MUTED
+        _colors = {"UP": GREEN, "DOWN": RED, "DEGRADED": AMBER, "UNKNOWN": TEXT_MUTED}
+        # We refresh on next store poll; live update done through normal refresh cycle
+
+
+class LiveBandwidthTile(_BaseTile):
+    """Shows current aggregate upload/download Mbps, updated every second."""
+
+    TILE_ID    = "live_bandwidth"
+    TILE_LABEL = "Live Bandwidth"
+    MIN_HEIGHT = 120
+
+    def _build_body(self) -> None:
+        self._worker = None
+
+        row = QHBoxLayout()
+        row.setSpacing(16)
+
+        # Upload
+        up_col = QVBoxLayout()
+        up_col.setSpacing(2)
+        up_lbl = QLabel("↑ UPLOAD")
+        up_lbl.setStyleSheet(
+            f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;"
+        )
+        self._up_val = QLabel("—")
+        self._up_val.setStyleSheet(
+            f"font-size:20px; font-weight:bold; color:#4CAF50; border:none;"
+        )
+        self._up_unit = QLabel("Mbps")
+        self._up_unit.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+        )
+        up_col.addWidget(up_lbl)
+        up_col.addWidget(self._up_val)
+        up_col.addWidget(self._up_unit)
+
+        # Download
+        dn_col = QVBoxLayout()
+        dn_col.setSpacing(2)
+        dn_lbl = QLabel("↓ DOWNLOAD")
+        dn_lbl.setStyleSheet(
+            f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;"
+        )
+        self._dn_val = QLabel("—")
+        self._dn_val.setStyleSheet(
+            f"font-size:20px; font-weight:bold; color:#2196F3; border:none;"
+        )
+        self._dn_unit = QLabel("Mbps")
+        self._dn_unit.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+        )
+        dn_col.addWidget(dn_lbl)
+        dn_col.addWidget(self._dn_val)
+        dn_col.addWidget(self._dn_unit)
+
+        row.addLayout(up_col)
+        row.addLayout(dn_col)
+        row.addStretch()
+        self._body_layout.addLayout(row)
+        self._body_layout.addStretch()
+        self._start_worker()
+
+    def _start_worker(self) -> None:
+        try:
+            from workers.iface_bw_worker import IfaceBwPoller
+            self._worker = IfaceBwPoller(interval_s=1.0, parent=self)
+            self._worker.stats_ready.connect(self._on_stats)
+            self._worker.start()
+        except Exception:
+            pass
+
+    def _on_stats(self, stats: dict) -> None:
+        up   = sum(d["up_mbps"]   for d in stats.values())
+        down = sum(d["down_mbps"] for d in stats.values())
+        self._up_val.setText(f"{up:.2f}")
+        self._dn_val.setText(f"{down:.2f}")
+
+    def refresh(self, store=None) -> None:
+        pass  # live data — no store needed
+
+
 # ── Tile registry & defaults ──────────────────────────────────────────────────
 
 _TILE_CLASSES: Dict[str, type] = {
     cls.TILE_ID: cls for cls in [
         DeviceCountTile, FleetUptimeTile, ServiceStatusTile, TlsStatusTile,
         RttSummaryTile, NetworkGradeTile, AlertFeedTile, EventFeedTile,
+        HaDevicesTile, LiveBandwidthTile,
     ]
 }
 
 _DEFAULT_ORDER: List[str] = [
     "device_count",
     "fleet_uptime",
+    "live_bandwidth",
+    "ha_devices",
     "service_status",
     "rtt_summary",
     "tls_status",

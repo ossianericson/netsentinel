@@ -80,7 +80,7 @@ class EmailChannel:
     smtp_port:    int  = 587
     use_tls:      bool = True            # STARTTLS on port 587; set False for SSL port 465
     username:     str  = ""
-    password:     str  = ""             # stored in QSettings by the UI layer
+    password:     str  = ""             # loaded from OS keychain by the UI layer (RULE 22-A)
     from_addr:    str  = ""
     to_addrs:     List[str] = field(default_factory=list)
     min_severity: str  = "CRITICAL"
@@ -88,8 +88,44 @@ class EmailChannel:
     timeout_s:    int  = 10
 
 
+@dataclass
+class PushoverChannel:
+    """Pushover mobile push notification (https://pushover.net)."""
+    name:         str  = "Pushover"
+    enabled:      bool = False
+    api_token:    str  = ""   # loaded from OS keychain by the UI layer (RULE 22-A)
+    user_key:     str  = ""   # loaded from OS keychain by the UI layer (RULE 22-A)
+    min_severity: str  = "WARNING"
+    rule_types:   List[str] = field(default_factory=list)
+    timeout_s:    int  = 8
+
+
+@dataclass
+class NtfyChannel:
+    """ntfy.sh (or self-hosted) push notification (https://ntfy.sh)."""
+    name:         str  = "ntfy"
+    enabled:      bool = False
+    topic_url:    str  = ""    # e.g. https://ntfy.sh/my-topic — stored in QSettings
+    access_token: str  = ""    # optional; loaded from OS keychain (RULE 22-A)
+    min_severity: str  = "WARNING"
+    rule_types:   List[str] = field(default_factory=list)
+    timeout_s:    int  = 8
+
+
+@dataclass
+class TelegramChannel:
+    """Telegram bot push notification."""
+    name:         str  = "Telegram"
+    enabled:      bool = False
+    bot_token:    str  = ""   # loaded from OS keychain by the UI layer (RULE 22-A)
+    chat_id:      str  = ""   # Telegram chat/channel/group ID — stored in QSettings
+    min_severity: str  = "WARNING"
+    rule_types:   List[str] = field(default_factory=list)
+    timeout_s:    int  = 8
+
+
 # Union type alias
-Channel = ToastChannel | WebhookChannel | EmailChannel
+Channel = ToastChannel | WebhookChannel | EmailChannel | PushoverChannel | NtfyChannel | TelegramChannel
 
 
 # ── Payload builder ───────────────────────────────────────────────────────────
@@ -162,6 +198,84 @@ def _deliver_email(channel: EmailChannel, alert: AlertFired) -> None:
                     smtp.login(channel.username, channel.password)
                 smtp.sendmail(msg["From"], channel.to_addrs, msg.as_string())
     except (smtplib.SMTPException, OSError):
+        pass
+
+
+def _deliver_pushover(channel: PushoverChannel, alert: AlertFired) -> None:
+    """POST to the Pushover API. Requires api_token + user_key."""
+    if not channel.api_token or not channel.user_key:
+        return
+    # Map severity to Pushover priority: -1=low, 0=normal, 1=high
+    priority = {"INFO": -1, "WARNING": 0, "CRITICAL": 1}.get(alert.severity, 0)
+    payload = json.dumps({
+        "token":    channel.api_token,
+        "user":     channel.user_key,
+        "title":    f"NetSentinel — {alert.rule_name}",
+        "message":  f"{alert.host}: {alert.message}",
+        "priority": priority,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.pushover.net/1/messages.json",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=channel.timeout_s):
+            pass
+    except (urllib.error.URLError, OSError):
+        pass
+
+
+def _deliver_ntfy(channel: NtfyChannel, alert: AlertFired) -> None:
+    """POST to ntfy.sh (or self-hosted). topic_url is the full topic endpoint."""
+    if not channel.topic_url:
+        return
+    # Map severity to ntfy priority (1=min … 5=max)
+    priority = {"INFO": "2", "WARNING": "3", "CRITICAL": "5"}.get(alert.severity, "3")
+    headers = {
+        "Title":    f"NetSentinel — {alert.rule_name}",
+        "Priority": priority,
+        "Tags":     f"netsentinel,{alert.severity.lower()}",
+    }
+    if channel.access_token:
+        headers["Authorization"] = f"Bearer {channel.access_token}"
+    body = f"{alert.host}: {alert.message}".encode()
+    req = urllib.request.Request(
+        channel.topic_url, data=body, headers=headers, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=channel.timeout_s):
+            pass
+    except (urllib.error.URLError, OSError):
+        pass
+
+
+def _deliver_telegram(channel: TelegramChannel, alert: AlertFired) -> None:
+    """POST to the Telegram Bot API sendMessage endpoint."""
+    if not channel.bot_token or not channel.chat_id:
+        return
+    text = (
+        f"*NetSentinel — {alert.rule_name}*\n"
+        f"Severity: `{alert.severity}`\n"
+        f"Host: `{alert.host}`\n"
+        f"{alert.message}"
+    )
+    payload = json.dumps({
+        "chat_id":    channel.chat_id,
+        "text":       text,
+        "parse_mode": "Markdown",
+    }).encode()
+    url = f"https://api.telegram.org/bot{channel.bot_token}/sendMessage"
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=channel.timeout_s):
+            pass
+    except (urllib.error.URLError, OSError):
         pass
 
 
@@ -249,6 +363,30 @@ class NotificationRouter:
                     t.start()
                     self._log_delivery(ch.name, "EMAIL", alert)
 
+            elif isinstance(ch, PushoverChannel):
+                if ch.api_token and ch.user_key:
+                    t = threading.Thread(
+                        target=_deliver_pushover, args=(ch, alert), daemon=True
+                    )
+                    t.start()
+                    self._log_delivery(ch.name, "PUSHOVER", alert)
+
+            elif isinstance(ch, NtfyChannel):
+                if ch.topic_url:
+                    t = threading.Thread(
+                        target=_deliver_ntfy, args=(ch, alert), daemon=True
+                    )
+                    t.start()
+                    self._log_delivery(ch.name, "NTFY", alert)
+
+            elif isinstance(ch, TelegramChannel):
+                if ch.bot_token and ch.chat_id:
+                    t = threading.Thread(
+                        target=_deliver_telegram, args=(ch, alert), daemon=True
+                    )
+                    t.start()
+                    self._log_delivery(ch.name, "TELEGRAM", alert)
+
     # ── Delivery log ──────────────────────────────────────────────────────────
 
     def _log_delivery(self, channel_name: str, channel_type: str, alert: AlertFired) -> None:
@@ -280,15 +418,28 @@ def channels_to_dict(channels: List[Channel]) -> List[dict]:
     out = []
     for ch in channels:
         if isinstance(ch, ToastChannel):
-            out.append({"type": "TOAST",   **ch.__dict__})
+            out.append({"type": "TOAST",    **ch.__dict__})
         elif isinstance(ch, WebhookChannel):
             d = ch.__dict__.copy()
-            d.pop("password", None)  # never serialise passwords here
-            out.append({"type": "WEBHOOK", **d})
+            d.pop("password", None)
+            out.append({"type": "WEBHOOK",  **d})
         elif isinstance(ch, EmailChannel):
             d = ch.__dict__.copy()
             d.pop("password", None)
-            out.append({"type": "EMAIL",   **d})
+            out.append({"type": "EMAIL",    **d})
+        elif isinstance(ch, PushoverChannel):
+            d = ch.__dict__.copy()
+            d.pop("api_token", None)   # RULE 22-A — never serialise secrets
+            d.pop("user_key",  None)
+            out.append({"type": "PUSHOVER", **d})
+        elif isinstance(ch, NtfyChannel):
+            d = ch.__dict__.copy()
+            d.pop("access_token", None)
+            out.append({"type": "NTFY",     **d})
+        elif isinstance(ch, TelegramChannel):
+            d = ch.__dict__.copy()
+            d.pop("bot_token", None)
+            out.append({"type": "TELEGRAM", **d})
     return out
 
 
@@ -305,6 +456,12 @@ def channels_from_dict(data: List[dict]) -> List[Channel]:
                 result.append(WebhookChannel(**d2))
             elif t == "EMAIL":
                 result.append(EmailChannel(**d2))
+            elif t == "PUSHOVER":
+                result.append(PushoverChannel(**d2))
+            elif t == "NTFY":
+                result.append(NtfyChannel(**d2))
+            elif t == "TELEGRAM":
+                result.append(TelegramChannel(**d2))
         except TypeError:
             pass  # schema mismatch — skip stale entry
     return result

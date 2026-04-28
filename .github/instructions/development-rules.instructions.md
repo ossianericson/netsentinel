@@ -168,6 +168,32 @@ ax.set_title("Title", color="#1A3A5C", fontsize=11, fontweight="bold")
 
 ## Version Bump Checklist
 
+### RULE 11-A: Never bump the version mid-branch
+
+**Version bumps happen exactly once: at merge/release time, not during feature development.**
+
+- All work on a feature branch shares the same version number (the one it branched from, or the one it will ship as).
+- Do **not** create separate version entries in `apm.yml`, `README.md`, or any other file for each individual backlog item implemented on the same branch.
+- Do **not** increment `X.Y.Z` between backlog items on the same branch — accumulate all changes under one combined changelog entry.
+- The version is only incremented once, in the single commit that merges or releases the branch.
+
+**Correct pattern:**
+```
+branch: feature/my-feature
+  commit A — item 7 done — version stays 1.4.0, apm.yml gets a new bullet in 1.4.0 changes
+  commit B — item 8 done — version stays 1.4.0, apm.yml gets another bullet in 1.4.0 changes
+  commit C — item 9 done — version stays 1.4.0, same
+merge → 1.4.0 ships
+```
+
+**Wrong pattern (do not do this):**
+```
+branch: feature/my-feature
+  commit A — item 7 done — bumps to 1.4.1  ← WRONG
+  commit B — item 8 done — bumps to 1.4.2  ← WRONG
+  commit C — item 9 done — bumps to 1.4.3  ← WRONG
+```
+
 **RULE 11: When bumping the application version, update ALL of the following — no exceptions.**
 
 > **AI AGENT TRIGGER:** If you change the version string in ANY of the files below, you MUST immediately
@@ -387,6 +413,14 @@ Before marking work done and presenting to the user for sign-off, the agent must
 - [ ] BACKLOG.md: completed items removed, new items added, date updated
 - [ ] All new modules have tests; full suite passes
 - [ ] New pages registered in sidebar + listed in README
+- [ ] No password / API key / token written to QSettings, MetricStore, or any file (RULE 22)
+- [ ] No credential visible in any log output (RULE 22-B)
+- [ ] All new secret-input QLineEdit fields use EchoMode.Password (RULE 22-D)
+- [ ] Serialised dicts/dataclasses strip secret fields before write or display (RULE 22-C)
+- [ ] Every new modules/*.py is listed in NetSentinel.spec hiddenimports (RULE 23)
+- [ ] Every new workers/*.py is listed in NetSentinel.spec hiddenimports (RULE 23)
+- [ ] Every new ui/pages/*.py is listed in NetSentinel.spec hiddenimports (RULE 23)
+- [ ] Every new requirements.txt package is in the collect_all loop in NetSentinel.spec (RULE 23)
 
 **Do not ask the user to do any of these. Do them.** or proper UTF-8 Unicode codepoints. Never paste text that contains Unicode replacement characters (U+FFFD `?`) or broken multi-byte sequences.**
 
@@ -472,6 +506,290 @@ row.addWidget(self._kpi_total.parent())   # ❌ RuntimeError
 tile_total, self._kpi_total = _kpi_tile("Total")
 row.addWidget(tile_total)                 # ✓
 ```
+
+---
+
+## RULE 22: Credential & Secret Security — NON-NEGOTIABLE
+
+**This rule is absolute and permanent. It has zero exceptions. Every new feature, every new module, every future backlog item must comply unconditionally.**
+
+NetSentinel is a local desktop tool. It must NEVER become a credential store, a keylogger, or a data exfiltration risk. The following rules are binding for all code written for this project:
+
+### 22-A: Never persist credentials to disk in plaintext
+
+```python
+# WRONG — credential written to SQLite, INI, JSON, or any file
+store.set("email_password", password_text)
+settings.setValue("smtp/password", password_edit.text())
+json.dump({"api_key": key}, f)
+
+# CORRECT — use the OS credential store exclusively
+import keyring
+keyring.set_password("NetSentinel", "smtp_password", password_text)
+password = keyring.get_password("NetSentinel", "smtp_password")
+```
+
+- **`QSettings` / `NetSentinel.ini`**: forbidden for any password, API key, token, or secret.
+- **`MetricStore` / `NetSentinel.db`**: forbidden for any password, API key, token, or secret.
+- **Any plain file** (JSON, CSV, txt, log): forbidden for any password, API key, token, or secret.
+- **Only permitted storage**: OS keychain via `keyring` library — Windows Credential Manager, macOS Keychain, Linux Secret Service.
+
+### 22-B: Never log credentials
+
+```python
+# WRONG
+logging.debug(f"Connecting with password={password}")
+print(f"API key: {api_key}")
+
+# CORRECT — log the action, never the value
+logging.debug("SMTP login attempt for user=%s", username)
+```
+
+- Log files (`netsentinel_debug.log`, CSV logger) must never contain passwords, tokens, or API keys.
+- String representations of config objects that contain credentials must mask the secret field:
+
+```python
+def __repr__(self):
+    return f"EmailChannel(host={self.host}, user={self.username}, password=***)"
+```
+
+### 22-C: Scrub credentials from serialisation
+
+When serialising configuration to share with the delivery log, export, or any UI display:
+
+```python
+# CORRECT — existing pattern in notification_router.py, must be followed everywhere
+d = dataclasses.asdict(channel)
+d.pop("password", None)
+d.pop("api_key", None)
+d.pop("token", None)
+```
+
+Any dict, dataclass, or object that holds a secret **must** have the secret field removed before it is:
+- Written to MetricStore
+- Written to a log file
+- Serialised to JSON for export
+- Displayed in any UI widget (table, label, tooltip)
+
+### 22-D: UI password fields must always be masked
+
+```python
+# CORRECT
+password_edit = QLineEdit()
+password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+```
+
+Never use `QLineEdit.EchoMode.Normal` for a field that accepts a password, API key, or token.
+
+### 22-E: No credentials in source code or version control
+
+- Hardcoded passwords, API keys, tokens, and secrets are forbidden in all source files.
+- `.gitignore` must exclude `NetSentinel.ini`, `NetSentinel.db`, and any file matching `*.key`, `*.pem`, `*.pfx`, `*.p12`, `secrets.*`.
+- CI/CD pipeline secrets must use GitHub Actions secrets — never inline in workflow YAML.
+
+### 22-F: Scope of credentials to localhost only
+
+For features that start local services (REST API, SNMP trap receiver, syslog receiver):
+- Bind exclusively to `127.0.0.1` — never `0.0.0.0` unless the user explicitly enables it with a visible warning in the UI.
+- API keys for local endpoints must be randomly generated (minimum 32 bytes, `secrets.token_hex(32)`) and stored in the OS keychain, not in INI or DB.
+
+### 22-G: Dependency on `keyring`
+
+`keyring` must be added to `requirements.txt` when any feature that stores user-supplied secrets is shipped. If `keyring` is unavailable at runtime, the feature must degrade gracefully (show a warning, disable the secret field) rather than falling back to plaintext storage.
+
+```python
+try:
+    import keyring
+    _KEYRING_AVAILABLE = True
+except ImportError:
+    _KEYRING_AVAILABLE = False
+
+def save_secret(service: str, key: str, value: str) -> bool:
+    if not _KEYRING_AVAILABLE:
+        # Never fall back to plaintext — fail safe
+        return False
+    keyring.set_password("NetSentinel", f"{service}/{key}", value)
+    return True
+```
+
+### 22-H: Checklist addition — security review before every commit
+
+Add this check to the pre-commit gate (RULE 21 checklist):
+- [ ] No password / API key / token written to QSettings, MetricStore, or any file
+- [ ] No credential visible in any log output
+- [ ] All new `QLineEdit` fields for secrets use `EchoMode.Password`
+- [ ] Serialised dicts/dataclasses strip secret fields before write or display
+- [ ] No hardcoded credentials in source files
+
+---
+
+## RULE 25: Exe debugging protocol — exact steps in order
+
+**This rule exists because "it works in source" was said 10+ times while the exe was broken. Follow this exact protocol whenever the exe behaves differently from `python app.py`.**
+
+### 25-A: The build environment MUST match GitHub Actions
+
+GitHub Actions uses **Python 3.11**. The local build MUST use `.venv311`:
+```powershell
+# One-time setup (already done on this machine):
+py -3.11 -m venv .venv311
+.venv311\Scripts\pip install -r requirements.txt pyinstaller
+
+# Every build:
+.venv311\Scripts\python.exe -m PyInstaller --clean -y NetSentinel.spec
+```
+**Never build with the system `python` command** — it may be a different version and will produce different bytecode. If the system python is 3.12+ and the exe crashes on ssl/asyncio/typing, the build environment is wrong.
+
+### 25-B: PyInstaller ALWAYS needs `--clean -y` — no exceptions
+
+Without `--clean`: PyInstaller reuses cached `.pyc` bytecode from `build\NetSentinel\`. Source fixes are invisible in the exe even though the build says "uptodate". Every build command must be:
+```powershell
+.venv311\Scripts\python.exe -m PyInstaller --clean -y NetSentinel.spec
+```
+`build.bat` already enforces this. Never bypass it with a direct `pyinstaller` call.
+
+### 25-C: Always wipe `dist\` AND kill the running exe before rebuilding
+
+```powershell
+Stop-Process -Name "NetSentinel" -Force -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
+```
+- If the exe is running, `NetSentinel.db` is locked → build fails with PermissionError
+- Old files in `dist\` from one-folder/one-file mode switches cause confusion about what you're actually testing
+
+### 25-D: When the exe crashes or misbehaves — build debug first, THEN diagnose
+
+```powershell
+# Build with console window ON so errors print visibly:
+$env:NETSENTINEL_DEBUG="1"
+.venv311\Scripts\python.exe -m PyInstaller --clean -y NetSentinel.spec
+
+# Run from terminal (not double-click) to see the console output:
+.\dist\NetSentinel.exe
+```
+Read the console output. The Python traceback will name the exact file and line. Fix that. Do not guess.
+
+### 25-E: Known exe-specific failure patterns and their fixes
+
+| Symptom | Root cause | Fix |
+|---------|-----------|-----|
+| Speed test crashes with `fileno` or `ssl` error | `speedtest-cli 2.1.x` calls `ssl.wrap_socket()` removed in Python 3.12+ | `ssl.wrap_socket` shim in `modules/speed_tester.py` — requires Python 3.11 build env. The shim is at the top of the file and patches `ssl.wrap_socket` at import time. It ONLY works in the exe if built with Python 3.11 (`.venv311`). If built with Python 3.12+, the shim is irrelevant because `speedtest-cli` itself is also broken at a deeper level. |
+| App starts but shows crash dialog immediately | `sys.stderr` is `None` in windowed builds; `_qt_message_handler` writes to it | Guard: `if sys.stderr is not None:` in `app.py` |
+| Close button does nothing / app hangs on close | `QThread.terminate()` called without `w.wait()` after — QThread object destroyed while OS thread handle still alive → `STATUS_STACK_BUFFER_OVERRUN` | Call `w.wait(2000)` after every `w.terminate()` in `closeEvent` |
+| CMD flash windows at startup or during scan | `subprocess.CREATE_NO_WINDOW` insufficient alone on some Windows builds | Add `STARTUPINFO` with `SW_HIDE` to every subprocess call on Windows |
+| Exe starts but feature is broken despite source fix | PyInstaller cache reuse — `build\NetSentinel\` has old `.pyc` files | Always use `--clean -y`. Delete `build\NetSentinel\` manually if needed |
+| Exe takes 40–60s to start | One-file mode: every launch decompresses to `%TEMP%` | Use `runtime_tmpdir` pointing to a fixed location so extraction is cached |
+| Module `X` not found in exe | Module added to source but not to `hiddenimports` in `NetSentinel.spec` | Add to spec — see RULE 23 |
+
+### 25-F: After every fix — verify with timestamps, not assumptions
+
+```powershell
+Get-Item dist\NetSentinel.exe | Select-Object LastWriteTime, @{n='MB';e={[math]::Round($_.Length/1MB,1)}}
+```
+The timestamp must be newer than when the fix was applied. If it is not, the build did not run or used cache.
+
+---
+
+## RULE 24: Never claim a fix is working without proof — HARD GATE
+
+**This rule exists because telling the user "it's fixed" without verifying causes repeated failed builds, wasted time, and broken trust.**
+
+### 24-A: You may NOT say a fix is working unless you have verified it
+
+"Verified" means one of:
+- The exe timestamp in `dist\` is newer than before the fix AND the post-build smoke test passed
+- `python app.py` was run via `tools/debug_launch.py` and the log shows no `UNHANDLED EXCEPTION`
+- The specific failing feature was tested and produced the expected output
+
+Saying "the fix is in this build" or "this should work now" without running any of the above is **forbidden**.
+
+### 24-B: When a build hangs or fails, always get the debug log first
+
+Do NOT retry the same command hoping it will work. If a build stalls at 0% CPU or fails:
+
+```powershell
+# Step 1 — kill the stuck build
+# Step 2 — get the actual error
+python -m PyInstaller NetSentinel.spec --log-level DEBUG 2>&1 | Tee-Object build_debug.log
+# Step 3 — read build_debug.log to find the real failure line
+# Step 4 — fix the root cause, then rebuild
+```
+
+Never re-run the same failing build command more than once without reading the error output first.
+
+### 24-C: When an exe is reported broken by the user, reproduce it before claiming a fix
+
+If the user reports an error in the compiled exe:
+1. Read the exact error message carefully
+2. Find the exact line in source that causes it (grep/read the file — do not guess)
+3. Fix the root cause — not a try/except wrapper around it
+4. Rebuild and confirm the new exe timestamp before telling the user it is fixed
+
+### 24-D: Do not confuse "source works" with "exe works"
+
+`python app.py` running cleanly does NOT mean the exe works. They are different execution environments. Always verify the specific failing behaviour in the exe, not just in source.
+
+---
+
+## RULE 23: NetSentinel.spec must stay in sync with the codebase — NON-NEGOTIABLE
+
+**This rule exists because PyInstaller's static import tracer cannot follow dynamic imports, conditional imports, or any module not directly reachable from `app.py` at parse time. If a module is not in `hiddenimports`, the compiled exe will crash or silently malfunction — even though `python app.py` works perfectly.**
+
+### 23-A: Update the spec whenever a file is added or removed
+
+Every time you create or delete any of the following, you MUST update `NetSentinel.spec` in the same commit — not later, not in a follow-up:
+
+| File added/removed | What to update in spec |
+|---|---|
+| `modules/<name>.py` | Add/remove `"modules.<name>"` from `hiddenimports` |
+| `workers/<name>.py` | Add/remove `"workers.<name>"` from `hiddenimports` |
+| `ui/pages/<name>.py` | Add/remove `"ui.pages.<name>"` from `hiddenimports` |
+| `ui/<name>.py` | Add/remove `"ui.<name>"` from `hiddenimports` |
+| New package in `requirements.txt` | Add the package to the `collect_all(...)` loop AND add key submodules to `hiddenimports` |
+
+### 23-B: New packages need collect_all
+
+When a new third-party package is added to `requirements.txt`, add it to the `collect_all` loop in the spec:
+
+```python
+for _pkg in ("scapy", "PyQt6", "matplotlib", "flask", "keyring", "<new_package>"):
+    _d, _b, _h = collect_all(_pkg)
+    datas         += _d
+    binaries      += _b
+    hiddenimports += _h
+```
+
+Also add the package's key runtime submodules explicitly to `hiddenimports` — `collect_all` catches data files and binaries but sometimes misses lazy-loaded submodules.
+
+### 23-C: New data files need a datas entry
+
+If a new file is needed at runtime (JSON, INI, database seed, icon, certificate), add it to `datas` in the spec:
+
+```python
+datas = [
+    ("offenders.json", "."),
+    ("assets/icons", "assets/icons"),
+    ("new_data_file.json", "."),   # ← add here
+]
+```
+
+### 23-D: Why `python app.py` works but the exe does not
+
+This is the most common source of confusion:
+
+- `python app.py` uses the **live filesystem** — Python finds every `.py` file by walking `sys.path`.
+- `NetSentinel.exe` is a **frozen zip** — only what PyInstaller bundled at build time is present.
+- Fixes pushed to source files are **invisible to the exe** until `build.bat --gui` is re-run.
+- Code on a **feature branch** is invisible to anyone building from `master` or a different branch.
+
+### 23-E: Checklist addition — spec sync before every commit
+
+Add this check to the pre-commit gate (RULE 21 checklist):
+- [ ] Every new `modules/*.py` file is listed in `NetSentinel.spec` `hiddenimports`
+- [ ] Every new `workers/*.py` file is listed in `NetSentinel.spec` `hiddenimports`
+- [ ] Every new `ui/pages/*.py` file is listed in `NetSentinel.spec` `hiddenimports`
+- [ ] Every new `requirements.txt` package is in the `collect_all` loop in `NetSentinel.spec`
+- [ ] Every new runtime data file is in the `datas` list in `NetSentinel.spec`
 
 ---
 
