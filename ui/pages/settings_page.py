@@ -13,16 +13,20 @@ Architecture rules observed:
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -30,9 +34,65 @@ from PyQt6.QtWidgets import (
 import ui.styles as _styles
 from ui.styles import (
     ACCENT, ACCENT_DARK, BG_ALT_ROW, BG_CARD, BG_DARK, BORDER,
-    BTN_HOVER_BG, CARD_HDR_BORDER, NAV_BAR, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
+    BTN_HOVER_BG, CARD_HDR_BORDER, GREEN, NAV_BAR, RED, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
+
+
+# ── Background workers for plugin marketplace ─────────────────────────────────
+
+class _FetchRegistryWorker(QThread):
+    """Fetch the community plugin registry off the main thread."""
+    ready = pyqtSignal(list)   # List[RegistryEntry]
+    error = pyqtSignal(str)
+
+    def __init__(self, url: str, parent=None):
+        super().__init__(parent)
+        self._url = url
+
+    def run(self) -> None:
+        try:
+            from modules.plugin_registry import fetch_registry
+            entries = fetch_registry(self._url)
+            self.ready.emit(entries)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _InstallWorker(QThread):
+    """Download and install one plugin off the main thread."""
+    done  = pyqtSignal(str)         # plugin name
+    error = pyqtSignal(str, str)    # plugin name, error message
+
+    def __init__(self, entry, parent=None):
+        super().__init__(parent)
+        self._entry = entry
+
+    def run(self) -> None:
+        try:
+            from modules.plugin_registry import install_plugin
+            install_plugin(self._entry)
+            self.done.emit(self._entry.name)
+        except Exception as exc:
+            self.error.emit(self._entry.name, str(exc))
+
+
+class _UninstallWorker(QThread):
+    """Remove a plugin file off the main thread."""
+    done  = pyqtSignal(str)       # plugin name
+    error = pyqtSignal(str, str)  # plugin name, error message
+
+    def __init__(self, entry, parent=None):
+        super().__init__(parent)
+        self._entry = entry
+
+    def run(self) -> None:
+        try:
+            from modules.plugin_registry import uninstall_plugin
+            uninstall_plugin(self._entry)
+            self.done.emit(self._entry.name)
+        except Exception as exc:
+            self.error.emit(self._entry.name, str(exc))
 
 
 def _page_header(title: str, subtitle: str = ""):
@@ -120,6 +180,7 @@ class SettingsPage(QWidget):
         bl.addWidget(self._build_display_card())
         bl.addWidget(self._build_tray_card())
         bl.addWidget(self._build_rest_api_card())
+        bl.addWidget(self._build_plugin_marketplace_card())
         bl.addWidget(self._build_shortcuts_card())
         bl.addStretch()
 
@@ -468,6 +529,217 @@ class SettingsPage(QWidget):
             )
         else:
             self._lbl_api_status.setText("API disabled — enable above and restart to activate.")
+
+    # ── Plugin Marketplace ────────────────────────────────────────────────────
+
+    def _build_plugin_marketplace_card(self) -> QFrame:
+        from modules.plugin_registry import REGISTRY_URL
+        card, bl = _card("Community Plugins — Browse & Install")
+
+        desc = QLabel(
+            "Browse community plugins hosted on GitHub. "
+            "Click Install to download a plugin to your local plugins folder."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
+        bl.addWidget(desc)
+
+        # Registry URL row
+        url_row = QHBoxLayout()
+        url_row.setSpacing(6)
+        url_lbl = QLabel("Registry URL:")
+        url_lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};")
+        url_lbl.setFixedWidth(90)
+        self._pm_url = QLineEdit(REGISTRY_URL)
+        self._pm_url.setStyleSheet(
+            f"font-size:11px;color:{TEXT_PRIMARY};border:1px solid {BORDER};padding:2px 6px;"
+        )
+        url_row.addWidget(url_lbl)
+        url_row.addWidget(self._pm_url, 1)
+        bl.addLayout(url_row)
+
+        # Toolbar
+        tb_row = QHBoxLayout()
+        tb_row.setSpacing(6)
+
+        _btn_qss = (
+            f"QPushButton{{background:{BG_CARD};color:{ACCENT};"
+            f"border:1px solid {ACCENT};border-radius:2px;"
+            f"padding:0 12px;font-size:11px;height:26px;}}"
+            f"QPushButton:hover{{background:{BTN_HOVER_BG};}}"
+            f"QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
+        )
+        self._pm_btn_refresh = QPushButton("↻  Refresh")
+        self._pm_btn_refresh.setStyleSheet(_btn_qss)
+        self._pm_btn_refresh.clicked.connect(self._pm_refresh)
+
+        self._pm_btn_install = QPushButton("▼  Install")
+        self._pm_btn_install.setStyleSheet(_btn_qss)
+        self._pm_btn_install.setEnabled(False)
+        self._pm_btn_install.clicked.connect(self._pm_install_selected)
+
+        self._pm_btn_uninstall = QPushButton("✕  Uninstall")
+        self._pm_btn_uninstall.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{RED};"
+            f"border:1px solid {RED};border-radius:2px;"
+            f"padding:0 12px;font-size:11px;height:26px;}}"
+            f"QPushButton:hover{{background:#FFF0F0;}}"
+            f"QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
+        )
+        self._pm_btn_uninstall.setEnabled(False)
+        self._pm_btn_uninstall.clicked.connect(self._pm_uninstall_selected)
+
+        self._pm_btn_folder = QPushButton("📁  Open Plugins Folder")
+        self._pm_btn_folder.setStyleSheet(_btn_qss)
+        self._pm_btn_folder.clicked.connect(self._pm_open_folder)
+
+        tb_row.addWidget(self._pm_btn_refresh)
+        tb_row.addWidget(self._pm_btn_install)
+        tb_row.addWidget(self._pm_btn_uninstall)
+        tb_row.addStretch()
+        tb_row.addWidget(self._pm_btn_folder)
+        bl.addLayout(tb_row)
+
+        # Table
+        self._pm_table = QTableWidget(0, 5)
+        self._pm_table.setHorizontalHeaderLabels(["Name", "Author", "Tags", "Version", "Status"])
+        self._pm_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self._pm_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self._pm_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self._pm_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self._pm_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        self._pm_table.verticalHeader().setDefaultSectionSize(24)
+        self._pm_table.verticalHeader().setVisible(False)
+        self._pm_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._pm_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._pm_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._pm_table.setAlternatingRowColors(True)
+        self._pm_table.setMinimumHeight(160)
+        self._pm_table.setStyleSheet(
+            f"QTableWidget{{font-size:11px;background:{BG_CARD};border:1px solid {BORDER};}}"
+            f"QHeaderView::section{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            f"font-size:11px;font-weight:bold;border:none;"
+            f"border-bottom:1px solid {BORDER};padding:3px 6px;}}"
+            f"QTableWidget::item:selected{{background:{ACCENT};color:white;}}"
+        )
+        self._pm_table.itemSelectionChanged.connect(self._pm_on_selection)
+        bl.addWidget(self._pm_table)
+
+        # Status label
+        self._pm_status = QLabel("Click ↻ Refresh to load the community plugin registry.")
+        self._pm_status.setStyleSheet(
+            f"font-size:10px;color:{TEXT_SECONDARY};background:transparent;"
+        )
+        bl.addWidget(self._pm_status)
+
+        self._pm_entries: list = []
+        self._pm_workers: list = []   # keep references so GC doesn't kill them
+        return card
+
+    # ── Plugin marketplace slots ──────────────────────────────────────────────
+
+    def _pm_refresh(self) -> None:
+        self._pm_btn_refresh.setEnabled(False)
+        self._pm_status.setText("Fetching registry…")
+        url = self._pm_url.text().strip()
+        worker = _FetchRegistryWorker(url, parent=self)
+        worker.ready.connect(self._pm_on_registry_ready)
+        worker.error.connect(self._pm_on_registry_error)
+        worker.finished.connect(lambda: self._pm_btn_refresh.setEnabled(True))
+        self._pm_workers.append(worker)
+        worker.start()
+
+    def _pm_on_registry_ready(self, entries: list) -> None:
+        from modules.plugin_registry import is_installed
+        self._pm_entries = entries
+        self._pm_table.setRowCount(0)
+        for e in entries:
+            row = self._pm_table.rowCount()
+            self._pm_table.insertRow(row)
+
+            installed = is_installed(e)
+            dot_color = GREEN if installed else TEXT_MUTED
+            dot_text  = "● Installed" if installed else "○ Available"
+
+            for col, text in enumerate([
+                e.name, e.author, e.tag_str, e.version,
+            ]):
+                item = QTableWidgetItem(text)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self._pm_table.setItem(row, col, item)
+
+            status_item = QTableWidgetItem(dot_text)
+            status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            from PyQt6.QtGui import QColor
+            status_item.setForeground(QColor(dot_color))
+            self._pm_table.setItem(row, 4, status_item)
+
+        self._pm_status.setText(
+            f"Loaded {len(entries)} plugin{'s' if len(entries) != 1 else ''} from registry."
+        )
+
+    def _pm_on_registry_error(self, msg: str) -> None:
+        self._pm_status.setText(f"Error: {msg}")
+
+    def _pm_on_selection(self) -> None:
+        rows = self._pm_table.selectedItems()
+        has_sel = bool(rows)
+        self._pm_btn_install.setEnabled(has_sel)
+        self._pm_btn_uninstall.setEnabled(has_sel)
+
+    def _pm_install_selected(self) -> None:
+        row = self._pm_table.currentRow()
+        if row < 0 or row >= len(self._pm_entries):
+            return
+        entry = self._pm_entries[row]
+        self._pm_btn_install.setEnabled(False)
+        self._pm_status.setText(f"Installing {entry.name}…")
+        worker = _InstallWorker(entry, parent=self)
+        worker.done.connect(self._pm_on_install_done)
+        worker.error.connect(self._pm_on_install_error)
+        self._pm_workers.append(worker)
+        worker.start()
+
+    def _pm_on_install_done(self, name: str) -> None:
+        self._pm_status.setText(f"✓ {name} installed successfully.")
+        self._pm_on_registry_ready(self._pm_entries)   # refresh status dots
+
+    def _pm_on_install_error(self, name: str, msg: str) -> None:
+        self._pm_status.setText(f"Error installing {name}: {msg}")
+        self._pm_btn_install.setEnabled(True)
+
+    def _pm_uninstall_selected(self) -> None:
+        row = self._pm_table.currentRow()
+        if row < 0 or row >= len(self._pm_entries):
+            return
+        entry = self._pm_entries[row]
+        self._pm_btn_uninstall.setEnabled(False)
+        self._pm_status.setText(f"Removing {entry.name}…")
+        worker = _UninstallWorker(entry, parent=self)
+        worker.done.connect(self._pm_on_uninstall_done)
+        worker.error.connect(self._pm_on_uninstall_error)
+        self._pm_workers.append(worker)
+        worker.start()
+
+    def _pm_on_uninstall_done(self, name: str) -> None:
+        self._pm_status.setText(f"✓ {name} uninstalled.")
+        self._pm_on_registry_ready(self._pm_entries)
+
+    def _pm_on_uninstall_error(self, name: str, msg: str) -> None:
+        self._pm_status.setText(f"Error removing {name}: {msg}")
+        self._pm_btn_uninstall.setEnabled(True)
+
+    def _pm_open_folder(self) -> None:
+        import subprocess, sys
+        from modules.plugin_system import plugins_dir
+        path = plugins_dir()
+        path.mkdir(parents=True, exist_ok=True)
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer", str(path)])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
 
     # ── Shortcuts reference ───────────────────────────────────────────────────
 

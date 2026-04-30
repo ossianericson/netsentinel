@@ -46,6 +46,8 @@ class SpeedTestWorker(QThread):
 
     # (phase, message)  phase ∈ {"connecting", "ping", "download", "upload", "done"}
     phase_changed = pyqtSignal(str, str)
+    # Live throughput sample: (mbps, phase) — emitted during download and upload
+    speed_sample  = pyqtSignal(float, str)
     result_ready  = pyqtSignal(object)   # SpeedTestResult
     error         = pyqtSignal(str)
 
@@ -59,6 +61,7 @@ class SpeedTestWorker(QThread):
             result = run_test(
                 server_id=self._server_id,
                 on_progress=lambda phase, msg: self.phase_changed.emit(phase, msg),
+                on_sample=lambda mbps, phase: self.speed_sample.emit(mbps, phase),
             )
             self.result_ready.emit(result)
         except Exception as exc:

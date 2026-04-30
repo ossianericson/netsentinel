@@ -76,8 +76,8 @@ def test_installer_iss_version(canonical):
 
 def test_build_bat_version(canonical):
     text = (ROOT / "build.bat").read_text(encoding="utf-8")
-    m = re.search(r'NetSentinel v([0-9]+\.[0-9]+\.[0-9]+)', text)
-    assert m, "Could not find 'NetSentinel vX.Y.Z' in build.bat"
+    m = re.search(r'NetSentinel v([0-9]+\.[0-9]+(\.[0-9]+)?)', text)
+    assert m, "Could not find 'NetSentinel vX.Y[.Z]' in build.bat"
     assert m.group(1) == canonical, (
         f"build.bat version={m.group(1)!r} does not match app.py {canonical!r}"
     )
@@ -85,8 +85,8 @@ def test_build_bat_version(canonical):
 
 def test_build_sh_version(canonical):
     text = (ROOT / "build.sh").read_text(encoding="utf-8")
-    m = re.search(r'NetSentinel v([0-9]+\.[0-9]+\.[0-9]+)', text)
-    assert m, "Could not find 'NetSentinel vX.Y.Z' in build.sh"
+    m = re.search(r'NetSentinel v([0-9]+\.[0-9]+(\.[0-9]+)?)', text)
+    assert m, "Could not find 'NetSentinel vX.Y[.Z]' in build.sh"
     assert m.group(1) == canonical, (
         f"build.sh version={m.group(1)!r} does not match app.py {canonical!r}"
     )

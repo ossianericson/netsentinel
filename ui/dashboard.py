@@ -24,7 +24,6 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QSplitter,
     QStackedWidget,
     QStatusBar,
     QTableWidget,
@@ -41,8 +40,10 @@ from ui.styles import (
     AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER, BLUE, BORDER, BORDER_MED,
     BTN_HOVER_BG, CARD_HDR_BORDER, GRADE_A_BG, GRADE_B_FG, GRADE_B_BG, GRADE_C_BG,
     GRADE_D_BG, GRADE_F_FG, GRADE_F_BG, GREEN, GREEN_BG,
-    MAIN_STYLE, NAV_BAR, NAV_DIVIDER, RED, RED_BG, RISK_BG, RISK_COLORS,
-    SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_SECTION_BG, SIDEBAR_SECTION_FG,
+    MAIN_STYLE, NAV_BAR, NAV_DIVIDER, PRO_BANNER_BORDER, PRO_WARN_BG,
+    RED, RED_BG, RISK_BG, RISK_COLORS,
+    SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, SIDEBAR_SECTION_FG,
+    SIDEBAR_SEL_BG,
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
     UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
 )
@@ -263,6 +264,25 @@ class Dashboard(QMainWindow):
         _quit_sc = QShortcut(QKeySequence("Ctrl+Q"), self)
         _quit_sc.activated.connect(self._quit_app)
 
+        # Ctrl+F focuses the sidebar search box from anywhere in the app
+        _search_sc = QShortcut(QKeySequence("Ctrl+F"), self)
+        _search_sc.activated.connect(self._focus_nav_search)
+
+        # ── Progressive-disclosure nav mode ───────────────────────────────────
+        self._nav_mode: str = "home"
+        self._nav_admin_rows: set = set()   # rows requiring admin — get ·admin badge
+        self._nav_audit_rows: set = set()   # Security Audit section rows — rendered in RED
+        self._nav_action_rows: dict = {}
+        # Read saved mode before building the UI so _build_tabs() uses it
+        try:
+            from PyQt6.QtCore import QSettings as _QS
+            _s = _QS(str(Dashboard._settings_path()), _QS.Format.IniFormat)
+            _m = _s.value("nav/mode", "home")
+            if _m in ("home", "standard", "pro"):
+                self._nav_mode = _m
+        except Exception:
+            pass
+
         self._build_ui()
 
     # ── UI Construction ──────────────────────────────────────────────────────
@@ -283,13 +303,18 @@ class Dashboard(QMainWindow):
         self._update_available.connect(self._on_update_available)
         root.addWidget(self._update_bar)
 
-        # Main splitter: sidebar+content (top) + verdict strip (bottom)
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self._build_tabs())
-        splitter.addWidget(self._build_verdict_area())
-        splitter.setSizes([560, 100])
-        splitter.setStyleSheet(f"QSplitter::handle {{ background: {BORDER}; height: 1px; }}")
-        root.addWidget(splitter, 1)
+        # Main area: sidebar+content fills window; verdict strip hidden until scan
+        _main = self._build_tabs()
+        _verdict_area = self._build_verdict_area()
+        _verdict_area.setVisible(False)
+        # Auto-show verdict strip on first scan result without touching callsites
+        _orig_vu = self._verdict.update
+        def _vu(text: str, level: str = "UNKNOWN", _ov=_orig_vu):
+            _verdict_area.setVisible(True)
+            _ov(text, level)
+        self._verdict.update = _vu  # type: ignore[method-assign]
+        root.addWidget(_main, 1)
+        root.addWidget(_verdict_area)
 
         # Status bar
         self._status_bar = QStatusBar()
@@ -306,6 +331,12 @@ class Dashboard(QMainWindow):
         self._start_update_check()
         # Restore full settings (mode, scan hosts, etc.) after UI is built
         self._restore_settings()
+
+    def _build_mode_bar(self) -> QWidget:
+        """Mode-switcher pill — now built inline inside the sidebar in _build_tabs().
+        This method is kept as a no-op for compatibility."""
+        from PyQt6.QtWidgets import QWidget as _W
+        return _W()  # empty placeholder; never added to the layout
 
     def _build_header(self) -> QWidget:
         """Slim top bar: brand | stretch | verdict | actions."""
@@ -554,7 +585,8 @@ class Dashboard(QMainWindow):
     #   _nav_collapsed          bool — sidebar in icon-only (narrow) mode
 
     def _nav_add_section(self, label: str, icon: str = "■",
-                         collapsed_by_default: bool = False) -> int:
+                         collapsed_by_default: bool = False,
+                         fg_color: str = None) -> int:
         """Add a collapsible section header row."""
         from PyQt6.QtCore import QSize
         from PyQt6.QtGui import QColor, QFont as _QFont, QBrush
@@ -571,7 +603,8 @@ class Dashboard(QMainWindow):
         self._nav_item_labels[row]   = label
         self._nav_header_rows.add(row)
         self._nav_section_groups[row] = {
-            "children": [], "collapsed": collapsed_by_default, "level": 0
+            "children": [], "collapsed": collapsed_by_default, "level": 0,
+            "fg_color": fg_color,
         }
         self._nav_current_section  = row
         self._nav_current_subgroup = -1
@@ -661,17 +694,25 @@ class Dashboard(QMainWindow):
                 item.setToolTip(label)
         elif row in self._nav_section_groups:
             grp   = self._nav_section_groups[row]
-            arrow = "▶" if grp["collapsed"] else "▼"
+            arrow = "\u25b6" if grp["collapsed"] else "\u25bc"
             from PyQt6.QtGui import QColor
             if grp["level"] == 0:
                 item.setText(f" {arrow}  {label.upper()}")
             else:
                 item.setText(f"     {arrow}  {label}")
-            item.setForeground(QColor(SIDEBAR_SECTION_FG))
+            _fg = grp.get("fg_color") or SIDEBAR_SECTION_FG
+            item.setForeground(QColor(_fg))
             item.setToolTip("")
         else:
-            item.setText(f"  {icon}  {label}")
+            _badge = "  \u00b7admin" if row in self._nav_admin_rows else ""
+            item.setText(f"  {icon}  {label}{_badge}")
             item.setToolTip("")
+            # Security Audit items are coloured RED; all others use normal foreground
+            from PyQt6.QtGui import QColor
+            if row in self._nav_audit_rows:
+                item.setForeground(QColor(RED))
+            else:
+                item.setForeground(QColor(TEXT_PRIMARY))
 
     def _nav_toggle_section(self, header_row: int):
         """Collapse or expand a section / sub-group header."""
@@ -714,10 +755,27 @@ class Dashboard(QMainWindow):
         self._nav_collapsed = not self._nav_collapsed
         new_width = 48 if self._nav_collapsed else 220
         self._nav_sidebar_container.setFixedWidth(new_width)
-        self._nav_search.setVisible(not self._nav_collapsed)
+        # Keep search visible even when collapsed; placeholder changes to ⌕
+        if self._nav_collapsed:
+            self._nav_search.setPlaceholderText("⌕")
+            self._nav_search.setFixedWidth(38)
+        else:
+            self._nav_search.setPlaceholderText("Search pages…")
+            self._nav_search.setMinimumWidth(0)
+            self._nav_search.setMaximumWidth(16777215)
+        # Hide mode pill when collapsed (no room for text)
+        if hasattr(self, "_mode_pill_btn"):
+            self._mode_pill_btn.setVisible(not self._nav_collapsed)
         self._sidebar_toggle_btn.setText("▶" if self._nav_collapsed else "◀")
         for row in range(self._nav.count()):
             self._nav_refresh_item_text(row)
+
+    def _focus_nav_search(self) -> None:
+        """Expand sidebar if collapsed, then focus the search box."""
+        if self._nav_collapsed:
+            self._toggle_sidebar()
+        self._nav_search.setFocus()
+        self._nav_search.selectAll()
 
     @pyqtSlot(str)
     def _on_nav_search_changed(self, text: str):
@@ -824,6 +882,24 @@ class Dashboard(QMainWindow):
         from ui.pages.cve_page import CvePage
         self._cve_page = CvePage(self._store, parent=None)
 
+        from ui.pages.automation_page import AutomationPage
+        self._automation_page = AutomationPage(parent=None)
+
+        from ui.pages.network_doc_page import NetworkDocPage
+        self._network_doc_page = NetworkDocPage(parent=None)
+
+        from ui.pages.mqtt_page import MqttPage
+        self._mqtt_page = MqttPage(parent=None)
+
+        from ui.pages.wifi_heatmap_page import WifiHeatmapPage
+        self._wifi_heatmap_page = WifiHeatmapPage(parent=None)
+
+        from ui.pages.geo_map_page import GeoMapPage
+        self._geo_map_page = GeoMapPage(parent=None)
+
+        from ui.pages.trigger_builder_page import TriggerBuilderPage
+        self._trigger_page = TriggerBuilderPage(store=self._store, parent=None)
+
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
         self._topology_tab_widget = self._build_topology_tab()
@@ -851,6 +927,28 @@ class Dashboard(QMainWindow):
         self._benchmark_tab_widget       = self._build_benchmark_tab()
         self._help_tab_widget            = self._build_help_tab()
 
+        # ── Store tab refs for mode nav builders ──────────────────────────────
+        self._m1_tab = m1
+        self._m2_tab = m2
+        self._m3_tab = m3
+        self._m4_tab = m4
+        self._m5_tab = m5
+        self._net_tab = net
+        self._dia_tab = dia
+        self._log_tab = log
+
+        # HomePage (pre-instantiated here; registered in stack below)
+        from ui.pages.home_page import HomePage
+        self._home_page = HomePage(store=self._store, parent=None)
+        # Wire HomePage hero buttons and incoming speed results (guard prevents
+        # double-connection if _build_tabs() is ever called more than once)
+        if not self._home_page._signals_connected:
+            self._home_page._btn_scan.clicked.connect(self._start_full_scan)
+            self._home_page._btn_isp.clicked.connect(self._open_isp_from_home)
+            self._speed_test_page.test_completed.connect(self._home_page.on_speed_result)
+            self._home_page.navigate_to.connect(self._nav_goto_label)
+            self._home_page._signals_connected = True
+
         # ── Worker refs ───────────────────────────────────────────────────────
         self._arp_worker:        Optional[object] = None
         self._dhcp_worker:       Optional[object] = None
@@ -875,6 +973,8 @@ class Dashboard(QMainWindow):
         self._nav = QListWidget()
         self._nav.setObjectName("sideNav")
         self._stack = QStackedWidget()
+        # Pre-register HomePage so _nav_ref() can find it via indexOf()
+        self._stack.addWidget(self._home_page)
         self._nav_row_to_page:   dict = {}
         self._nav_separators:    set  = set()
         # Extended nav data model
@@ -889,13 +989,13 @@ class Dashboard(QMainWindow):
         # ── PINNED — top 7 most-used pages; always visible, no subgroups ──────────
         # Pages registered here are added to the stack once; STANDARD aliases them.
         self._nav_add_section("Pinned", icon="📌")
-        _pin_overview_row = self._nav_add_page("🏠", "Overview",             self._overview_page)
-        _pin_dns_row      = self._nav_add_page("📡", "DNS & Outages",        m5)
-        _pin_bw_row       = self._nav_add_page("📶", "Live Bandwidth",       self._live_bandwidth_page)
+        _pin_overview_row = self._nav_add_page("⬡", "Overview",             self._overview_page)
+        _pin_dns_row      = self._nav_add_page("◎", "DNS & Outages",        m5)
+        _pin_bw_row       = self._nav_add_page("▲", "Live Bandwidth",       self._live_bandwidth_page)
         _pin_speed_row    = self._nav_add_page("⚡", "Speed Test",           self._speed_test_page)
-        _pin_devices_row  = self._nav_add_page("🖥", "Devices on Network",   m1)
-        _pin_avail_row    = self._nav_add_page("🗓", "Availability History", self._history_page)
-        _pin_conns_row    = self._nav_add_page("🔗", "Active Connections",   self._connections_page)
+        _pin_devices_row  = self._nav_add_page("⊞", "Devices on Network",   m1)
+        _pin_avail_row    = self._nav_add_page("⏷", "Availability History", self._history_page)
+        _pin_conns_row    = self._nav_add_page("⇄", "Active Connections",   self._connections_page)
 
         # Helper: stack index for an already-pinned nav row
         def _pidx(row: int) -> int:
@@ -908,10 +1008,10 @@ class Dashboard(QMainWindow):
         # Discover — expanded by default so the user immediately sees what's there
         self._nav_add_subgroup("Discover", icon="🖥", collapsed_by_default=False)
         self._nav_add_alias("🖥", "Devices on Network",   _pidx(_pin_devices_row))
-        self._nav_add_page ("🌐", "WiFi Networks",        m4)
+        self._nav_add_page ("〇", "WiFi Networks",        m4)
         self._nav_add_page ("ℹ",  "Network Info",         net)
-        self._nav_add_page ("📋", "DHCP Lease Inventory", self._dhcp_lease_page)
-        self._nav_add_page ("🗺", "DNS Zone Map",         self._dns_zone_page)
+        self._nav_add_page ("≡", "DHCP Lease Inventory", self._dhcp_lease_page)
+        self._nav_add_page ("⊹", "DNS Zone Map",         self._dns_zone_page)
         self._nav_current_subgroup = -1
 
         # Live Monitor — expanded by default; shows the live-data pages immediately
@@ -923,41 +1023,44 @@ class Dashboard(QMainWindow):
 
         # Threat Detection — collapsed; expand when you need security analysis
         self._nav_add_subgroup("Threat Detection", icon="🛡")
-        self._nav_add_page("🌪", "Broadcast Storm",      m3)
-        self._nav_add_page("🔀", "Rogue Bridge (STP)",   m2)
-        self._nav_add_page("🤖", "IoT Behaviour",        self._iot_baseline_tab_widget)
+        self._nav_add_page("⚠", "Broadcast Storm",      m3)
+        self._nav_add_page("⇌", "Rogue Bridge (STP)",   m2)
+        self._nav_add_page("◈", "IoT Behaviour",        self._iot_baseline_tab_widget)
         self._nav_current_subgroup = -1
 
         # Health & History — collapsed; historical data on demand
         self._nav_add_subgroup("Health & History", icon="📊")
         self._nav_add_alias("🗓", "Availability History", _pidx(_pin_avail_row))
-        self._nav_add_page ("📜", "Inventory Changes",    self._inventory_page)
-        self._nav_add_page ("✅", "Uptime & SLA",         self._uptime_page)
-        self._nav_add_page ("🔌", "Service Heartbeat",    self._service_page)
-        self._nav_add_page ("📊", "Network Grade",        self._benchmark_tab_widget)
+        self._nav_add_page ("∆", "Inventory Changes",    self._inventory_page)
+        self._nav_add_page ("✓", "Uptime & SLA",         self._uptime_page)
+        self._nav_add_page ("◉", "Service Heartbeat",    self._service_page)
+        self._nav_add_page ("▦", "Network Grade",        self._benchmark_tab_widget)
         self._nav_current_subgroup = -1
 
         # Diagnostics — collapsed; deeper investigation tools
         self._nav_add_subgroup("Diagnostics", icon="💊")
-        self._nav_add_page("💊", "Health Check",         dia)
-        self._nav_add_page("📋", "Stability Log",        log)
-        self._nav_add_page("🔍", "Root Cause Analysis",  self._correlator_tab_widget)
-        self._nav_add_page("📈", "Trend Forecasts",      self._trend_page)
-        self._nav_add_page("🔷", "IPv6 Devices",         self._ipv6_tab_widget)
+        self._nav_add_page("✚", "Health Check",         dia)
+        self._nav_add_page("≣", "Stability Log",        log)
+        self._nav_add_page("⊕", "Root Cause Analysis",  self._correlator_tab_widget)
+        self._nav_add_page("↗", "Trend Forecasts",      self._trend_page)
+        self._nav_add_page("⬡", "IPv6 Devices",         self._ipv6_tab_widget)
         self._nav_current_subgroup = -1
 
         # Reports & Alerts — collapsed; admin/config
         self._nav_add_subgroup("Reports & Alerts", icon="🔔")
-        self._nav_add_page("🔔", "Notifications",        self._notifications_page)
-        self._nav_add_page("📄", "Auto Reports",         self._reports_page)
-        self._nav_add_page("📸", "Config Snapshots",     self._baseline_page)
-        self._nav_add_page("🔧", "Maintenance Windows",  self._maintenance_page)
+        self._nav_add_page("◟", "Notifications",        self._notifications_page)
+        self._nav_add_page("⊟", "Auto Reports",         self._reports_page)
+        self._nav_add_page("⊛", "Config Snapshots",     self._baseline_page)
+        self._nav_add_page("⚙", "Maintenance Windows",  self._maintenance_page)
+        self._nav_add_page("△", "Custom Triggers",      self._trigger_page)
         self._nav_current_subgroup = -1
 
         # Tools — collapsed; utilities
         self._nav_add_subgroup("Tools", icon="⚡")
         self._nav_add_alias("⚡", "Speed Test",          _pidx(_pin_speed_row))
-        self._nav_add_page ("🏡", "Home Automation",     self._ha_page)
+        self._nav_add_page ("⌂", "Home Automation",     self._ha_page)
+        _tools_heatmap_row = self._nav_add_page("◈", "WiFi Heatmap",       self._wifi_heatmap_page)
+        _tools_geomap_row  = self._nav_add_page("⊕", "Geolocation Map",    self._geo_map_page)
         self._nav_current_subgroup = -1
 
         # ── ADVANCED (collapsed by default) ────────────────────────────────────
@@ -965,22 +1068,28 @@ class Dashboard(QMainWindow):
         self._nav_add_section("Advanced", icon="⚙", collapsed_by_default=True)
 
         self._nav_add_subgroup("Deep Analysis", icon="🔬")
-        _mtr_row  = self._nav_add_page("🗺", "Hop-by-Hop Trace",  self._mtr_tab_widget)
-        _arp_row  = self._nav_add_page("👁", "ARP Spoof Watch",    self._arp_tab_widget)
-        _snmp_row = self._nav_add_page("📟", "SNMP Device Info",   self._snmp_tab_widget)
-        _snmp_trap_row = self._nav_add_page("📥", "SNMP Trap Receiver", self._snmp_trap_page)
-        _syslog_row    = self._nav_add_page("📜", "Syslog Viewer",       self._syslog_page)
+        _mtr_row  = self._nav_add_page("⦳", "Hop-by-Hop Trace",  self._mtr_tab_widget)
+        _arp_row  = self._nav_add_page("⊙", "ARP Spoof Watch",    self._arp_tab_widget)
+        _snmp_row = self._nav_add_page("⊳", "SNMP Device Info",   self._snmp_tab_widget)
+        _snmp_trap_row = self._nav_add_page("⊲", "SNMP Trap Receiver", self._snmp_trap_page)
+        _syslog_row    = self._nav_add_page("≡", "Syslog Viewer",       self._syslog_page)
         self._nav_current_subgroup = -1
 
-        _adv_tools_row = self._nav_add_page("🔧", "Tools & Wake-on-LAN", self._adv_tab_widget)
-        _adv_map_row   = self._nav_add_page("🗺", "Network Map",          self._topology_tab_widget)
-        _adv_dhcp_row  = self._nav_add_page("📌", "DHCP Leases",          self._dhcp_tab_widget)
-        _adv_bw_row    = self._nav_add_page("📈", "Bandwidth Usage",       self._bw_tab_widget)
+        _adv_tools_row = self._nav_add_page("⚙", "Tools & Wake-on-LAN", self._adv_tab_widget)
+        _adv_map_row   = self._nav_add_page("⬡", "Network Map",          self._topology_tab_widget)
+        _adv_dhcp_row  = self._nav_add_page("⊞", "DHCP Leases",          self._dhcp_tab_widget)
+        _adv_bw_row    = self._nav_add_page("▲", "Bandwidth Usage",       self._bw_tab_widget)
         _adv_sched_row = self._nav_add_page("⏱", "Scheduled Scans",       self._sched_tab_widget)
+        _adv_auto_row  = self._nav_add_page("→", "Automation Hooks",      self._automation_page)
+        _adv_doc_row   = self._nav_add_page("▣", "Network Doc",            self._network_doc_page)
+        _adv_mqtt_row  = self._nav_add_page("◉", "MQTT / Home Assistant",  self._mqtt_page)
 
         # compat refs
         self._nav_adv_rows      = [_mtr_row, _adv_tools_row, _adv_map_row,
-                                    _arp_row, _adv_dhcp_row, _adv_bw_row, _adv_sched_row, _snmp_row, _snmp_trap_row, _syslog_row]
+                                    _arp_row, _adv_dhcp_row, _adv_bw_row, _adv_sched_row,
+                                    _snmp_row, _snmp_trap_row, _syslog_row,
+                                    _adv_auto_row, _adv_doc_row, _adv_mqtt_row,
+                                    _tools_heatmap_row, _tools_geomap_row]
         self._adv_tab_index_adv = _adv_tools_row
         self._adv_tab_index_mtr = _mtr_row
         self._nav_separators.add(self._nav_adv_sep)
@@ -990,7 +1099,7 @@ class Dashboard(QMainWindow):
         self._nav_add_section("Security Audit", icon="🔐", collapsed_by_default=True)
         self._nav_recon_rows = [
             self._nav_add_page("🧠", "Threat Intelligence",   self._threat_intel_page),
-            self._nav_add_page("�", "TLS Certificates",      self._cert_page),
+            self._nav_add_page("✚", "TLS & exposure",         self._cert_page),
             self._nav_add_page("�🔎", "Port Scan (SYN)",       self._recon_syn_tab_widget),
             self._nav_add_page("🔎", "Port Scan (UDP)",        self._recon_udp_tab_widget),
             self._nav_add_page("💻", "OS Detection",           self._recon_os_tab_widget),
@@ -1041,12 +1150,21 @@ class Dashboard(QMainWindow):
         self._nav_search.setFixedHeight(28)
         self._nav_search.setStyleSheet(
             f"QLineEdit#navSearch {{"
-            f" background:{SIDEBAR_HOVER}; color:#A8B8C8;"
-            f" border:none; border-bottom:1px solid #0A0E1A;"
+            f" background:{SIDEBAR_HOVER}; color:{SIDEBAR_ITEM_FG};"
+            f" border:none; border-bottom:1px solid {NAV_DIVIDER};"
             f" padding:0 8px; font-size:11px; }}"
             f"QLineEdit#navSearch:focus {{ color:{WHITE}; }}"
         )
         self._nav_search.textChanged.connect(self._on_nav_search_changed)
+        self._nav_search.setVisible(False)   # hidden in mode-based nav (no search needed)
+
+        # ── Single cycling mode pill — top of sidebar, before nav list ────────
+        self._mode_pill_btn = QPushButton()
+        self._mode_pill_btn.setFixedHeight(26)
+        self._mode_pill_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mode_pill_btn.setToolTip("Click to cycle: Home → Standard → Pro")
+        self._mode_pill_btn.clicked.connect(self._cycle_mode)
+        _sb_lay.addWidget(self._mode_pill_btn)
         _sb_lay.addWidget(self._nav_search)
         _sb_lay.addWidget(self._nav, 1)
 
@@ -1055,7 +1173,7 @@ class Dashboard(QMainWindow):
         self._sidebar_toggle_btn.setFixedHeight(24)
         self._sidebar_toggle_btn.setStyleSheet(
             f"QPushButton {{ background:{SIDEBAR_SECTION_BG}; color:{SIDEBAR_SECTION_FG};"
-            f" border:none; border-top:1px solid #0A0E1A; font-size:11px; }}"
+            f" border:none; border-top:1px solid {NAV_DIVIDER}; font-size:11px; }}"
             f"QPushButton:hover {{ color:{WHITE}; background:{SIDEBAR_HOVER}; }}"
         )
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
@@ -1109,6 +1227,10 @@ class Dashboard(QMainWindow):
         """Navigate to the page for the selected nav row."""
         if row < 0 or row in self._nav_header_rows:
             return
+        # Action rows trigger a callable instead of navigating
+        if row in self._nav_action_rows:
+            self._nav_action_rows[row]()
+            return
         self._nav_set_page(row)
         # Reset tray badge when user views any page (they are attending to the app)
         if hasattr(self, "_tray_manager"):
@@ -1120,6 +1242,225 @@ class Dashboard(QMainWindow):
             if lbl == label:
                 self._nav.setCurrentRow(row)
                 return
+
+    # ── Progressive-disclosure nav ────────────────────────────────────────────
+
+    def _update_mode_pill(self) -> None:
+        """Refresh the single cycling mode pill for the current _nav_mode."""
+        if not hasattr(self, "_mode_pill_btn"):
+            return
+        _is_pro  = self._nav_mode == "pro"
+        _bg      = RED if _is_pro else ACCENT
+        _bg_hover = ACCENT_DARK if not _is_pro else "#A01010"
+        _label   = {"home": "Home", "standard": "Standard", "pro": "Pro"}.get(
+            self._nav_mode, self._nav_mode.title()
+        )
+        self._mode_pill_btn.setText(f"  {_label}  \u25be")
+        self._mode_pill_btn.setStyleSheet(
+            f"QPushButton {{"
+            f"  background:{_bg}; color:{WHITE};"
+            f"  border:1px solid rgba(255,255,255,0.35);"
+            f"  border-radius:4px;"
+            f"  font-size:11px; font-weight:600;"
+            f"  text-align:left; padding:0 8px;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background:{_bg_hover};"
+            f"  border-color:rgba(255,255,255,0.65);"
+            f"}}"
+        )
+
+    def _cycle_mode(self) -> None:
+        """Cycle through home → standard → pro → home on pill click."""
+        _order = ["home", "standard", "pro"]
+        _idx = _order.index(self._nav_mode) if self._nav_mode in _order else 0
+        self._set_mode(_order[(_idx + 1) % len(_order)])
+
+    def _set_mode(self, mode: str) -> None:
+        """Switch to mode, persist, and rebuild the nav."""
+        self._nav_mode = mode
+        from PyQt6.QtCore import QSettings
+        s = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
+        s.setValue("nav/mode", mode)
+        s.sync()
+        self._rebuild_nav_for_mode()
+
+    def _open_isp_from_home(self) -> None:
+        """Navigate to ISP Report, switching out of Home mode first if needed."""
+        if self._nav_mode == "home":
+            self._set_mode("standard")
+        self._nav_go_to("ISP Report")
+
+    def _rebuild_nav_for_mode(self) -> None:
+        """Clear sidebar and rebuild it for the current _nav_mode."""
+        self._nav.clear()
+        self._nav_row_to_page.clear()
+        self._nav_item_icons.clear()
+        self._nav_item_labels.clear()
+        self._nav_header_rows.clear()
+        self._nav_section_groups.clear()
+        self._nav_separators.clear()
+        self._nav_action_rows.clear()
+        self._nav_admin_rows.clear()
+        self._nav_audit_rows.clear()
+        self._nav_current_section  = -1
+        self._nav_current_subgroup = -1
+        # Reset compat refs so methods that check them don't crash
+        self._adv_tab_index_adv = -1
+        self._adv_tab_index_mtr = -1
+
+        if self._nav_mode == "home":
+            self._build_home_nav()
+        elif self._nav_mode == "pro":
+            self._build_pro_nav()
+        else:
+            self._build_standard_nav()
+
+        # Apply initial collapse for sections that start collapsed
+        for _hrow, _grp in self._nav_section_groups.items():
+            if _grp["collapsed"] and _grp["level"] == 0:
+                self._nav_apply_section_visibility(_hrow, True)
+        for _hrow, _grp in self._nav_section_groups.items():
+            if _grp["collapsed"] and _grp["level"] == 1:
+                self._nav_apply_section_visibility(_hrow, True)
+
+        # Select first navigable row
+        for r in range(self._nav.count()):
+            if r not in self._nav_header_rows and r not in self._nav_action_rows:
+                self._nav.setCurrentRow(r)
+                self._nav_set_page(r)
+                break
+
+        self._update_mode_pill()
+
+    def _nav_ref(self, icon: str, label: str, widget: "QWidget") -> int:
+        """Add a nav alias entry for a widget already registered in the stack."""
+        idx = self._stack.indexOf(widget)
+        if idx < 0:
+            idx = self._stack.addWidget(widget)
+        return self._nav_add_alias(icon, label, idx)
+
+    def _nav_add_action(self, icon: str, label: str, action) -> int:
+        """Add a nav item that calls *action* instead of navigating to a page."""
+        from PyQt6.QtCore import QSize
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        item.setSizeHint(QSize(0, 30))
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]  = icon
+        self._nav_item_labels[row] = label
+        parent = (self._nav_current_subgroup if self._nav_current_subgroup >= 0
+                  else self._nav_current_section)
+        if parent >= 0:
+            self._nav_section_groups[parent]["children"].append(row)
+        self._nav_refresh_item_text(row)
+        self._nav_action_rows[row] = action
+        return row
+
+    def _nav_add_spacer(self) -> None:
+        """Add a non-selectable visual spacer row in the nav list."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QBrush
+        sep = QListWidgetItem()
+        sep.setFlags(Qt.ItemFlag.NoItemFlags)
+        sep.setSizeHint(QSize(0, 10))
+        sep.setBackground(QBrush(QColor(SIDEBAR_BG)))
+        self._nav.addItem(sep)
+        self._nav_header_rows.add(self._nav.count() - 1)
+
+    def _nav_add_section_label(self, label: str, fg_color: str = None) -> int:
+        """Add a NON-collapsible ALL-CAPS section divider label (not interactive)."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QFont as _QFont
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.NoItemFlags)   # not selectable, not clickable
+        item.setSizeHint(QSize(0, 26))
+        f = _QFont("Segoe UI", 9)
+        f.setBold(True)
+        item.setFont(f)
+        item.setText(f"  {label.upper()}")
+        _fg = fg_color or SIDEBAR_SECTION_FG
+        item.setForeground(QColor(_fg))
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]  = ""
+        self._nav_item_labels[row] = label
+        self._nav_header_rows.add(row)
+        # Deliberately NOT in _nav_section_groups — no collapse/expand logic
+        return row
+
+    def _build_home_nav(self) -> None:
+        """5-item minimal nav for Home mode (new users)."""
+        self._nav_ref("\u2b21", "Home",            self._home_page)
+        self._nav_ref("\u26a1", "Speed Test",       self._speed_test_page)
+        self._nav_ref("\u25ce", "DNS & Stability",  self._m5_tab)
+        self._nav_ref("\u2295", "Devices",          self._m1_tab)
+        self._nav_ref("\u25b2", "Reports",          self._benchmark_tab_widget)
+        self._nav_add_spacer()
+        self._nav_add_action("\u2261", "Show all features",
+                             lambda: self._set_mode("standard"))
+        self._nav_add_action("\u2699", "Settings", self._open_settings_dialog)
+
+    def _build_standard_nav(self) -> None:
+        """Full organised nav with non-collapsible ALL-CAPS section labels."""
+        self._nav_add_section_label("Quick Access")
+        self._nav_ref("\u25cb", "Home",              self._home_page)
+        self._nav_ref("\u26a1", "Speed Test",         self._speed_test_page)
+        self._nav_ref("\u25ce", "DNS & Stability",    self._m5_tab)
+
+        self._nav_add_section_label("Discover")
+        self._nav_ref("\u2295", "Devices",             self._m1_tab)
+        self._nav_ref("\u25cb", "WiFi Networks",       self._m4_tab)
+        self._nav_ref("\u2261", "DHCP Leases",         self._dhcp_lease_page)
+
+        self._nav_add_section_label("Monitor")
+        self._nav_ref("\u25b2", "Live Bandwidth",       self._live_bandwidth_page)
+        self._nav_ref("\u21c4", "Active Connections",   self._connections_page)
+        self._nav_ref("\u229f", "Availability History", self._history_page)
+
+        self._nav_add_section_label("Reports & Export")
+        self._nav_ref("\u25fc", "Network Grade",        self._benchmark_tab_widget)
+        self._nav_ref("\u2197", "ISP Report",           self._reports_page)
+
+        self._nav_add_spacer()
+        self._nav_add_action("\u2261", "Expert / Security Audit",
+                             lambda: self._set_mode("pro"))
+        self._nav_add_action("\u2699", "Settings", self._open_settings_dialog)
+
+    def _build_pro_nav(self) -> None:
+        """Standard items plus a RED-styled Security Audit section for Pro mode."""
+        self._nav_add_section_label("Quick Access")
+        self._nav_ref("\u25cb", "Home",            self._home_page)
+        self._nav_ref("\u26a1", "Speed Test",       self._speed_test_page)
+
+        self._nav_add_section_label("Standard")
+        self._nav_ref("\u2295", "Devices",              self._m1_tab)
+        self._nav_ref("\u25cb", "WiFi Networks",        self._m4_tab)
+        self._nav_ref("\u25b2", "Live Bandwidth",       self._live_bandwidth_page)
+        self._nav_ref("\u21c4", "Active Connections",   self._connections_page)
+        self._nav_ref("\u229f", "Availability History", self._history_page)
+
+        # Security Audit \u2014 RED label + RED item text signals the elevated-privilege zone
+        self._nav_add_section_label("\u26a0  Security Audit", fg_color=RED)
+        _r1 = self._nav_ref("\u25ce", "Port Scan (TCP)",    self._recon_syn_tab_widget)
+        self._nav_admin_rows.add(_r1)
+        self._nav_audit_rows.add(_r1)
+        _r2 = self._nav_ref("\u25ce", "Port Scan (UDP)",    self._recon_udp_tab_widget)
+        self._nav_admin_rows.add(_r2)
+        self._nav_audit_rows.add(_r2)
+        _r4 = self._nav_ref("\u25cb", "CVE Lookup",          self._recon_cve_tab_widget)
+        self._nav_audit_rows.add(_r4)
+        _r5 = self._nav_ref("\u2261", "Threat Intel",        self._threat_intel_page)
+        self._nav_audit_rows.add(_r5)
+        _r6 = self._nav_ref("\u271a", "TLS & exposure",      self._cert_page)
+        self._nav_audit_rows.add(_r6)
+        _r3 = self._nav_ref("\u2139", "Login Test",          self._recon_cred_tab_widget)
+        self._nav_admin_rows.add(_r3)
+        self._nav_audit_rows.add(_r3)
+
+        self._nav_add_spacer()
+        self._nav_add_action("\u2699", "Settings", self._open_settings_dialog)
 
     # ── Module 1 ──────────────────────────────────────────────────────────────
 
@@ -3142,6 +3483,7 @@ class Dashboard(QMainWindow):
             self._bm_score_label.setStyleSheet(f"color:{fg}; font-size:16px; font-weight:bold;")
             self._bm_verdict_label.setText(result.overall_verdict)
             self._overview_page.on_grade(result.overall_grade, result.overall_score)
+            self._home_page.on_grade(result.overall_grade, result.overall_score)
 
             # Populate dimension table
             self._bm_table.setRowCount(0)
@@ -3523,6 +3865,7 @@ class Dashboard(QMainWindow):
         s.setValue("window/geometry", self.saveGeometry().toBase64().data().decode())
         # Sidebar nav state
         s.setValue("nav/collapsed", str(self._nav_collapsed))
+        s.setValue("nav/mode", self._nav_mode)
         for _hrow, _grp in self._nav_section_groups.items():
             if _grp["level"] == 0:
                 s.setValue(f"nav/section_{_hrow}_collapsed", str(_grp["collapsed"]))
@@ -3594,6 +3937,11 @@ class Dashboard(QMainWindow):
             udp_host = s.value("scan/last_udp_host", "")
             if udp_host:
                 self._udp_host.setText(udp_host)
+        # Apply saved nav mode — must be last so sidebar is fully built
+        _saved_mode = s.value("nav/mode", "home")
+        if _saved_mode in ("home", "standard", "pro"):
+            self._nav_mode = _saved_mode
+        self._rebuild_nav_for_mode()
 
     # Keep old names as aliases so any external code still works
     def _save_window_state(self):
@@ -4584,6 +4932,9 @@ class Dashboard(QMainWindow):
             ("Root Cause Analysis",  "Correlates STP, Storm, DNS, and Logger data — ISP vs local verdict"),
             ("IoT Behaviour",        "Baselines normal IoT traffic, alerts on port scanning or new servers"),
             ("IPv6 Devices",         "Link-local segment sweep via OS neighbour cache and ping"),
+            ("WiFi Heatmap",         "Import floor plan, record signal-strength readings, IDW heatmap overlay per AP"),
+            ("Geolocation Map",      "World-map plot of internet-facing IPs — MaxMind GeoLite2 local DB, no external API"),
+            ("Custom Triggers",      'Alert expressions: avg(rtt[\"ip\"], 5m) > 80 — visual builder, test now, cooldown'),
         ]))
 
         bl.addWidget(_section("Advanced Features (toggle Advanced Mode)", [
@@ -4595,6 +4946,9 @@ class Dashboard(QMainWindow):
             ("Bandwidth Usage",      "Per-device rx/tx bps monitor via live packet capture"),
             ("Scheduled Scans",      "Automated scans every N minutes with desktop notifications"),
             ("SNMP Device Info",     "Polls SNMPv1/v2c OIDs — no extra dependencies required"),
+            ("Automation Hooks",     "Fire webhook / run script when network events occur — device-down, high RTT, new device"),
+            ("Network Documentation","Auto-generates HTML/Markdown snapshot: inventory, services, topology, TLS"),
+            ("MQTT / Home Assistant","Publish device/metric events to MQTT broker; HA Discovery payloads"),
         ]))
 
         bl.addWidget(_section("Security Audit Features (toggle Audit Mode — admin required)", [
@@ -4615,17 +4969,20 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Overview Dashboard",       "Configurable live tile grid — drag to reorder in Edit Layout mode"),
-            ("Three colour themes",      "Arctic Clean / Midnight Pro / Obsidian Neon — ⚙ top bar → App Settings"),
-            ("App Settings dialog",      "Theme picker, compact rows, tooltips, shortcuts — always one click away"),
-            ("Help & Reference",         "❓ top bar — Risk Guide, Common Scenarios, 24-term Glossary"),
-            ("First-run onboarding",     "4-slide welcome dialog on first launch; 'Don't show again' persisted"),
-            ("Notification Routing",     "Toast / Webhook / Email channels — per-channel severity filter + rule allowlist"),
-            ("Config Snapshots",         "Point-in-time device fleet snapshots with structured diff (added/removed/changed)"),
-            ("Predictive Trend Alerts",  "OLS regression over RTT/loss/jitter — predicts ETA to breach threshold"),
-            ("Maintenance Windows",      "Suppress alerts for a host (or fleet) during a defined maintenance period"),
-            ("Version consistency test", "6 automated tests catch version drift across all files at CI time"),
-            ("winget CI gate",           "submit-winget is now a needs:[release] job — never triggers on a failed build"),
+            ("Alert rules opt-in only",     "All 9 rules default to disabled — enable individually in Settings → Notifications → Alert Rules"),
+            ("New Device alert disabled",   "New-device alerts never fire until you check the box — no surprise notifications on first scan"),
+            ("Notifications page overhaul", "Alert Rules card at top of page with per-rule checkboxes and plain-English descriptions"),
+            ("HomePage upload label fix",   "Speed card now shows '/ up 88 Mbps' instead of clipped arrow glyph"),
+            ("HomePage buttons styled",     "Scan now and ISP Report buttons have correct blue/bordered appearance"),
+            ("Mode pill border",            "Home ▾ pill has visible border + border-radius so it reads as a clickable button"),
+            ("Devices zero-state",          "Devices card shows 'Run a scan to discover devices' when count is 0"),
+            ("Speed Test — multi-backend",  "Ookla CLI → speedtest-cli (8×DL/4×UL threads) → pure-Python 16-stream HTTP"),
+            ("AppData path hardening",      "Crash log + MetricStore DB now write to %LOCALAPPDATA%\\NetSentinel (no PermissionError in Program Files)"),
+            ("Sidebar icon cleanup",        "35 mixed emoji → consistent geometric Unicode symbols in collapsed 48 px rail"),
+            ("WiFi Heatmap",               "Floor plan import + signal-strength sampling + IDW heatmap overlay per AP"),
+            ("Geolocation Map",            "MaxMind GeoLite2 local DB; world-map plot of IPs; integrates with Threat Intel"),
+            ("Custom Triggers",            "avg(rtt[\"ip\"], 5m) > 80 — expression builder, test against live data, cooldown"),
+            ("Automation Hooks",           "Event-driven webhook / script rules — device-down, high RTT, new device"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -4698,8 +5055,13 @@ class Dashboard(QMainWindow):
             ("…see all open ports on a device",       "Tools & Wake-on-LAN → TCP Port Scan (Advanced section)"),
             ("…detect ARP spoofing / MITM attack",    "ARP Spoof Watch (Advanced section)"),
             ("…see who is using the most bandwidth",  "Bandwidth Usage (Advanced section)"),
-            ("…check TLS certificate expiry",         "TLS Certificates (Security Audit section)"),
+            ("…check TLS certificate expiry",         "TLS & exposure (Security Audit section)"),
             ("…trace packet loss hop-by-hop",         "Hop-by-Hop Trace / MTR (Advanced section)"),
+            ("…map WiFi coverage in a room",          "WiFi Heatmap (Tools) — import floor plan, walk space, render heatmap"),
+            ("…see where threat IPs are located",     "Geolocation Map (Tools) — import from Threat Intel or add IPs manually"),
+            ("…alert on custom metric thresholds",    "Custom Triggers (Reports & Alerts) — write expressions like avg(rtt,5m)>80"),
+            ("…trigger automation when a host drops", "Automation Hooks (Advanced) — add webhook/script rule for device-down event"),
+            ("…send events to Home Assistant",        "MQTT / Home Assistant (Advanced) — configure broker, enable Discovery"),
             ("…change the colour theme",              "⚙ Settings → Appearance — Colour Theme"),
         ]))
 
@@ -5165,6 +5527,7 @@ class Dashboard(QMainWindow):
                 if self._alert_engine is not None:
                     for a in self._alert_engine.evaluate_tracker_result(tr):
                         self._show_alert_toast(a)
+                        self._home_page.on_alert(a)
             except Exception:
                 pass   # tracker errors must never break the scan result handler
 
@@ -5724,12 +6087,21 @@ class Dashboard(QMainWindow):
         self._recon_cred_sw_table   = _table(["Package", "Version", "Source"])
         self._recon_cred_svc_table  = _table(["Service", "Status", "PID"])
         self._recon_cred_user_table = _table(["User", "UID / SID", "Home", "Shell"])
+        self._recon_cred_sessions_table = _table(["Active Session (logged-in user)"])
+
+        from PyQt6.QtWidgets import QTableWidgetItem as _TWI2
+        self._recon_cred_info_table = _table(["Field", "Value"])
+        self._recon_cred_info_table.horizontalHeader().setSectionResizeMode(
+            1, __import__("PyQt6.QtWidgets", fromlist=["QHeaderView"]).QHeaderView.ResizeMode.Stretch
+        )
 
         from PyQt6.QtWidgets import QTabWidget as _TW
         inner_tabs = _TW()
-        inner_tabs.addTab(self._recon_cred_sw_table,   "📦 Software")
-        inner_tabs.addTab(self._recon_cred_svc_table,  "⚙ Services")
-        inner_tabs.addTab(self._recon_cred_user_table, "👤 Users")
+        inner_tabs.addTab(self._recon_cred_info_table,     "▪ Device Info")
+        inner_tabs.addTab(self._recon_cred_sw_table,       "📦 Software")
+        inner_tabs.addTab(self._recon_cred_svc_table,      "⚙ Services")
+        inner_tabs.addTab(self._recon_cred_user_table,     "👤 Users")
+        inner_tabs.addTab(self._recon_cred_sessions_table, "● Active Sessions")
 
         lay.addWidget(info)
         lay.addWidget(form_w)
@@ -5751,6 +6123,8 @@ class Dashboard(QMainWindow):
         self._recon_cred_sw_table.setRowCount(0)
         self._recon_cred_svc_table.setRowCount(0)
         self._recon_cred_user_table.setRowCount(0)
+        self._recon_cred_sessions_table.setRowCount(0)
+        self._recon_cred_info_table.setRowCount(0)
         self._cred_verdict.hide()
         self._cred_worker = CredentialedScanWorker(
             host=host,
@@ -5777,6 +6151,32 @@ class Dashboard(QMainWindow):
         )
         self._cred_verdict.show()
         self._cred_status.setText("Credentialed scan complete.")
+
+        # ── Device Info tab ───────────────────────────────────────────────
+        info_rows = [
+            ("OS",             res.patch_info.os_version or res.os_type),
+            ("Kernel / Build", res.patch_info.kernel),
+            ("Last Update",    res.patch_info.last_update),
+            ("Pending Updates",str(res.patch_info.pending_updates)),
+            ("Serial Number",  res.serial_number or "—"),
+            ("Failed Logins (24 h)", str(res.failed_logins)),
+        ]
+        for field_name, value in info_rows:
+            r = self._recon_cred_info_table.rowCount()
+            self._recon_cred_info_table.insertRow(r)
+            self._recon_cred_info_table.setItem(r, 0, _TWI(field_name))
+            self._recon_cred_info_table.setItem(r, 1, _TWI(value))
+
+        # ── Active Sessions tab ───────────────────────────────────────────
+        if res.active_sessions:
+            for session_user in res.active_sessions:
+                r = self._recon_cred_sessions_table.rowCount()
+                self._recon_cred_sessions_table.insertRow(r)
+                self._recon_cred_sessions_table.setItem(r, 0, _TWI(session_user))
+        else:
+            r = self._recon_cred_sessions_table.rowCount()
+            self._recon_cred_sessions_table.insertRow(r)
+            self._recon_cred_sessions_table.setItem(r, 0, _TWI("No active interactive sessions detected"))
 
         for sw in res.software:
             r = self._recon_cred_sw_table.rowCount()

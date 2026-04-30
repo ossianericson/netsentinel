@@ -133,16 +133,16 @@ def render_chart(
         matplotlib.use("TkAgg" if _backend_available("TkAgg") else "Qt5Agg")
         import matplotlib.pyplot as plt  # re-import after backend change
 
-    DARK_BG   = "#0d0d1a"
-    CARD_BG   = "#13132a"
-    TEXT_CLR  = "#e0e0ff"
-    GRID_CLR  = "#2a2a4a"
-    RED_CLR   = "#ff3366"
-    AMBER_CLR = "#ffaa00"
-    ACCENT    = "#00c8ff"
-
-    COLORS = [ACCENT, "#a78bfa", "#34d399", "#fb923c",
-              "#f472b6", "#facc15", "#60a5fa", "#4ade80"]
+    from modules.colours import (
+        EXPORT_BG        as DARK_BG,
+        EXPORT_CARD      as CARD_BG,
+        CHART_DARK_TEXT  as TEXT_CLR,
+        EXPORT_BORDER    as GRID_CLR,
+        CHART_DARK_RED   as RED_CLR,
+        CHART_DARK_AMBER as AMBER_CLR,
+        CHART_DARK_ACCENT as ACCENT,
+        CHART_DARK_LINES  as COLORS,
+    )
 
     fig, (ax_rtt, ax_bar) = plt.subplots(
         2, 1,
@@ -206,7 +206,7 @@ def render_chart(
         if all_ts_dns:
             paired = sorted(zip(all_ts_dns, all_dns))
             all_ts_dns, all_dns = zip(*paired)
-            ax_dns.plot(all_ts_dns, all_dns, linewidth=1.0, color="#f472b6",
+            ax_dns.plot(all_ts_dns, all_dns, linewidth=1.0, color=COLORS[4],
                         alpha=0.7, linestyle="--", label="DNS latency")
             ax_dns.legend(loc="upper left", facecolor=CARD_BG,
                           edgecolor=GRID_CLR, labelcolor=TEXT_CLR, fontsize=8)

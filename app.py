@@ -89,6 +89,27 @@ def _smoke_test() -> None:
         "modules.network_benchmark",
         "modules.iot_baseline",
         "modules.root_cause_correlator",
+        "modules.speed_tester",
+        "modules.alert_engine",
+        "modules.notification_router",
+        "modules.utils",
+        "modules.maintenance_window",
+        "modules.snmp_trap_receiver",
+        "modules.syslog_receiver",
+        "modules.trend_analyser",
+        "modules.rest_api",
+        "modules.ha_detector",
+        "modules.internet_exposure",
+        "modules.dns_zone_scanner",
+        "modules.dhcp_lease_scanner",
+        "modules.threat_intel",
+        "modules.cert_monitor",
+        "modules.availability_monitor",
+        "workers.scan_worker",
+        "workers.speed_test_worker",
+        "workers.availability_worker",
+        "workers.cert_worker",
+        "workers.threat_intel_worker",
     ]
     for _mod in _checks:
         try:
@@ -185,6 +206,11 @@ def _fatal(title: str, message: str) -> None:
         import tempfile
         log_path = os.path.join(os.path.dirname(sys.executable), "netsentinel_error.log")
         try:
+            from modules.utils import get_app_data_dir
+            log_path = os.path.join(get_app_data_dir(), "netsentinel_error.log")
+        except Exception:
+            pass
+        try:
             with open(log_path, "w") as f:
                 f.write(f"{title}\n{message}\n\n")
                 traceback.print_exc(file=f)
@@ -212,6 +238,18 @@ def _check_pyqt():
 
 
 def main():
+    # Guard sys.stderr/stdout being None in windowed PyInstaller builds
+    if sys.stderr is None:
+        try:
+            from modules.utils import get_app_data_dir as _get_app_dir
+            sys.stderr = open(str(_get_app_dir() / "netsentinel_stderr.log"), "a")  # noqa: SIM115
+        except Exception:
+            import io as _io
+            sys.stderr = _io.StringIO()
+    if sys.stdout is None:
+        import io as _io
+        sys.stdout = _io.StringIO()
+
     _check_python_version()
     _check_pyqt()
 
@@ -219,10 +257,13 @@ def main():
     # Enable C-level fault handler so segfaults / access violations write a
     # traceback to a log file instead of silently closing the app.
     import faulthandler
-    _crash_log_path = os.path.join(
-        os.path.dirname(getattr(sys, "executable", os.path.abspath(__file__))),
-        "netsentinel_crash.log",
-    )
+    # Write crash log to per-user AppData to avoid PermissionError in Program Files
+    try:
+        from modules.utils import get_app_data_dir as _get_app_dir
+        _crash_log_path = str(_get_app_dir() / "netsentinel_crash.log")
+    except Exception:
+        import tempfile
+        _crash_log_path = os.path.join(tempfile.gettempdir(), "netsentinel_crash.log")
     try:
         _crash_log_fd = open(_crash_log_path, "a")  # noqa: SIM115
         faulthandler.enable(file=_crash_log_fd)
@@ -257,7 +298,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.4.0")
+    app.setApplicationVersion("1.5.1")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────
@@ -319,6 +360,15 @@ def main():
     alerts = AlertEngine(store=store)
     alerts.set_warmup_period(10)     # suppress boot-time alert noise for 10 s
 
+    # Restore user-configured rule enabled states from QSettings.
+    # All rules default to disabled (opt-in); missing key → treat as disabled.
+    from modules.alert_engine import rule_settings_key as _rk
+    _rule_qs = QSettings("NetSentinel", "NetSentinel")
+    _rules = alerts.get_rules()
+    for _r in _rules:
+        _r.enabled = _rule_qs.value(_rk(_r.name), False, type=bool)
+    alerts.set_rules(_rules)
+
     from modules.notification_router import NotificationRouter
     notif_router = NotificationRouter()
     alerts.set_on_alert(notif_router.dispatch)
@@ -365,6 +415,7 @@ def main():
     # Wire notification router → toast callback + notifications page
     notif_router.set_toast_callback(window._show_alert_toast)
     window._notifications_page.set_router(notif_router)
+    window._notifications_page.set_alert_engine(alerts)
     window._maintenance_page.set_manager(maint_manager)
 
     # Wire report worker → reports page
@@ -382,10 +433,11 @@ def main():
     syslog_worker.status.connect(window._syslog_page.on_status)
     syslog_worker.error.connect(window._syslog_page.on_error)
 
-    # Wire worker signal → history + inventory + uptime pages
+    # Wire worker signal → history + inventory + uptime + home pages
     avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._inventory_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
+    avail_worker.cycle_done.connect(window._home_page.on_cycle_done)
 
     # Wire cert worker → cert page
     cert_worker.check_done.connect(window._cert_page.on_check_done)
@@ -397,6 +449,7 @@ def main():
         fired = alerts.evaluate_service_checks(results)
         for a in fired:
             window._show_alert_toast(a)
+            window._home_page.on_alert(a)
         window._overview_page.on_svc_done(results)
 
     svc_worker.check_done.connect(_on_svc_check)
@@ -406,6 +459,7 @@ def main():
         fired = alerts.evaluate_cert_checks(results)
         for a in fired:
             window._show_alert_toast(a)
+            window._home_page.on_alert(a)
         window._overview_page.on_cert_done(results)
 
     cert_worker.check_done.connect(_on_cert_check)
@@ -415,6 +469,7 @@ def main():
         fired = alerts.evaluate_cycle(result_dict)
         for a in fired:
             window._show_alert_toast(a)
+            window._home_page.on_alert(a)
             window._overview_page.on_alert(a)
         window._overview_page.on_cycle_done(result_dict)
 

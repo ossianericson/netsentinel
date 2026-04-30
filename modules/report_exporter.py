@@ -7,38 +7,49 @@ import datetime
 import html
 import json
 from pathlib import Path
+from string import Template as _Template
 from typing import Any, Dict, Optional
 
+from modules.colours import (
+    EXPORT_BG, EXPORT_TEXT, EXPORT_HEADING_FG, EXPORT_META,
+    EXPORT_RED_BG, EXPORT_AMBER_BG, EXPORT_GREEN_BG,
+    EXPORT_RED_FG, EXPORT_AMBER_FG, EXPORT_GREEN_FG,
+    EXPORT_CARD, EXPORT_BORDER, EXPORT_ACCENT_FG,
+    EXPORT_TH_BG, EXPORT_ROW_HOVER,
+    BADGE_HIGH_BG, BADGE_HIGH_FG, BADGE_MEDIUM_BG, BADGE_MEDIUM_FG,
+    BADGE_LOW_BG, BADGE_LOW_FG, BADGE_CLEAN_BG, BADGE_CLEAN_FG,
+    BADGE_UNKNOWN_BG, BADGE_UNKNOWN_FG,
+)
 
-_CSS = """
+_CSS = _Template("""
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', Arial, sans-serif; background: #0d0d1a; color: #e0e0f0; padding: 24px; }
-h1 { color: #7c3aed; margin-bottom: 4px; font-size: 1.8rem; }
-.subtitle { color: #888; font-size: 0.9rem; margin-bottom: 24px; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: $EXPORT_BG; color: $EXPORT_TEXT; padding: 24px; }
+h1 { color: $EXPORT_HEADING_FG; margin-bottom: 4px; font-size: 1.8rem; }
+.subtitle { color: $EXPORT_META; font-size: 0.9rem; margin-bottom: 24px; }
 .verdict-box { border-radius: 12px; padding: 18px 22px; margin-bottom: 24px; }
-.verdict-box.red    { background: #3b0000; border: 2px solid #ef4444; }
-.verdict-box.amber  { background: #2d1a00; border: 2px solid #f59e0b; }
-.verdict-box.green  { background: #001a0f; border: 2px solid #22c55e; }
+.verdict-box.red    { background: $EXPORT_RED_BG; border: 2px solid $EXPORT_RED_FG; }
+.verdict-box.amber  { background: $EXPORT_AMBER_BG; border: 2px solid $EXPORT_AMBER_FG; }
+.verdict-box.green  { background: $EXPORT_GREEN_BG; border: 2px solid $EXPORT_GREEN_FG; }
 .verdict-box h2 { font-size: 1.1rem; margin-bottom: 8px; }
-.verdict-box.red h2    { color: #ef4444; }
-.verdict-box.amber h2  { color: #f59e0b; }
-.verdict-box.green h2  { color: #22c55e; }
+.verdict-box.red h2    { color: $EXPORT_RED_FG; }
+.verdict-box.amber h2  { color: $EXPORT_AMBER_FG; }
+.verdict-box.green h2  { color: $EXPORT_GREEN_FG; }
 .verdict-box p { font-size: 0.95rem; line-height: 1.6; }
-.module { background: #13132a; border-radius: 10px; padding: 18px; margin-bottom: 18px; border: 1px solid #2a2a4a; }
-.module h3 { font-size: 1rem; color: #a78bfa; margin-bottom: 12px; }
+.module { background: $EXPORT_CARD; border-radius: 10px; padding: 18px; margin-bottom: 18px; border: 1px solid $EXPORT_BORDER; }
+.module h3 { font-size: 1rem; color: $EXPORT_ACCENT_FG; margin-bottom: 12px; }
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-th { background: #1e1e3a; color: #a78bfa; text-align: left; padding: 8px 10px; }
-td { padding: 7px 10px; border-bottom: 1px solid #1e1e3a; vertical-align: top; }
-tr:hover td { background: #1a1a2e; }
+th { background: $EXPORT_TH_BG; color: $EXPORT_ACCENT_FG; text-align: left; padding: 8px 10px; }
+td { padding: 7px 10px; border-bottom: 1px solid $EXPORT_TH_BG; vertical-align: top; }
+tr:hover td { background: $EXPORT_ROW_HOVER; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; }
-.badge.HIGH   { background: #7f1d1d; color: #fca5a5; }
-.badge.MEDIUM { background: #78350f; color: #fcd34d; }
-.badge.LOW    { background: #1e3a5f; color: #93c5fd; }
-.badge.CLEAN  { background: #14532d; color: #86efac; }
-.badge.STORM  { background: #7f1d1d; color: #fca5a5; }
-.badge.WARNING { background: #78350f; color: #fcd34d; }
-.badge.UNKNOWN { background: #374151; color: #d1d5db; }
-.meta { color: #666; font-size: 0.8rem; margin-top: 24px; border-top: 1px solid #1e1e3a; padding-top: 12px; }
+.badge.HIGH   { background: $BADGE_HIGH_BG; color: $BADGE_HIGH_FG; }
+.badge.MEDIUM { background: $BADGE_MEDIUM_BG; color: $BADGE_MEDIUM_FG; }
+.badge.LOW    { background: $BADGE_LOW_BG; color: $BADGE_LOW_FG; }
+.badge.CLEAN  { background: $BADGE_CLEAN_BG; color: $BADGE_CLEAN_FG; }
+.badge.STORM  { background: $BADGE_HIGH_BG; color: $BADGE_HIGH_FG; }
+.badge.WARNING { background: $BADGE_MEDIUM_BG; color: $BADGE_MEDIUM_FG; }
+.badge.UNKNOWN { background: $BADGE_UNKNOWN_BG; color: $BADGE_UNKNOWN_FG; }
+.meta { color: $EXPORT_META; font-size: 0.8rem; margin-top: 24px; border-top: 1px solid $EXPORT_TH_BG; padding-top: 12px; }
 @media print {
   body { background: #fff !important; color: #111 !important; }
   .module, .verdict-box { border-color: #999 !important; background: #fff !important; }
@@ -47,7 +58,21 @@ tr:hover td { background: #1a1a2e; }
   th { background: #ddd !important; color: #111 !important; }
   td { border-bottom: 1px solid #ccc !important; color: #111 !important; }
 }
-"""
+""").substitute(
+    EXPORT_BG=EXPORT_BG, EXPORT_TEXT=EXPORT_TEXT,
+    EXPORT_HEADING_FG=EXPORT_HEADING_FG, EXPORT_META=EXPORT_META,
+    EXPORT_RED_BG=EXPORT_RED_BG, EXPORT_AMBER_BG=EXPORT_AMBER_BG,
+    EXPORT_GREEN_BG=EXPORT_GREEN_BG, EXPORT_RED_FG=EXPORT_RED_FG,
+    EXPORT_AMBER_FG=EXPORT_AMBER_FG, EXPORT_GREEN_FG=EXPORT_GREEN_FG,
+    EXPORT_CARD=EXPORT_CARD, EXPORT_BORDER=EXPORT_BORDER,
+    EXPORT_ACCENT_FG=EXPORT_ACCENT_FG, EXPORT_TH_BG=EXPORT_TH_BG,
+    EXPORT_ROW_HOVER=EXPORT_ROW_HOVER,
+    BADGE_HIGH_BG=BADGE_HIGH_BG, BADGE_HIGH_FG=BADGE_HIGH_FG,
+    BADGE_MEDIUM_BG=BADGE_MEDIUM_BG, BADGE_MEDIUM_FG=BADGE_MEDIUM_FG,
+    BADGE_LOW_BG=BADGE_LOW_BG, BADGE_LOW_FG=BADGE_LOW_FG,
+    BADGE_CLEAN_BG=BADGE_CLEAN_BG, BADGE_CLEAN_FG=BADGE_CLEAN_FG,
+    BADGE_UNKNOWN_BG=BADGE_UNKNOWN_BG, BADGE_UNKNOWN_FG=BADGE_UNKNOWN_FG,
+)
 
 
 def _badge(level: str) -> str:
@@ -804,31 +829,52 @@ def save_nmap_xml_report(
 
 # ── ISP Accountability Report ─────────────────────────────────────────────────
 
-_ISP_CSS = _CSS + """
-.isp-header { background: #0a0a1a; border-bottom: 3px solid #7c3aed; padding: 24px 32px 16px; }
-.isp-header h1 { color: #e0e0f0; font-size: 1.6rem; }
-.isp-header .sub { color: #888; font-size: 0.85rem; margin-top: 4px; }
+from modules.colours import (
+    EXPORT_BG, EXPORT_ISP_HEADER, EXPORT_HEADING_FG, EXPORT_TEXT, EXPORT_META,
+    EXPORT_TH_BG, EXPORT_ACCENT_FG, EXPORT_BORDER, EXPORT_NOTE_BG,
+    EXPORT_RED_FG,
+    GRADE_A_BG, GRADE_A_FG, GRADE_A_BORDER,
+    GRADE_B_BG, GRADE_B_FG, GRADE_B_BORDER,
+    GRADE_C_BG, GRADE_C_FG, GRADE_C_BORDER,
+    GRADE_D_BG, GRADE_D_FG, GRADE_D_BORDER,
+    GRADE_F_BG, GRADE_F_FG, GRADE_F_BORDER,
+)
+
+_ISP_CSS = _CSS + _Template("""
+.isp-header { background: $EXPORT_ISP_HEADER; border-bottom: 3px solid $EXPORT_HEADING_FG; padding: 24px 32px 16px; }
+.isp-header h1 { color: $EXPORT_TEXT; font-size: 1.6rem; }
+.isp-header .sub { color: $EXPORT_META; font-size: 0.85rem; margin-top: 4px; }
 .grade-box { display:inline-block; width:90px; height:90px; border-radius:50%;
   line-height:90px; text-align:center; font-size:3rem; font-weight:bold; margin-right:24px;
   vertical-align:middle; }
-.grade-A { background:#14532d; color:#4ade80; border:3px solid #22c55e; }
-.grade-B { background:#1a3a1a; color:#86efac; border:3px solid #4ade80; }
-.grade-C { background:#451a03; color:#fcd34d; border:3px solid #f59e0b; }
-.grade-D { background:#7f1d1d; color:#fca5a5; border:3px solid #ef4444; }
-.grade-F { background:#3b0000; color:#ff4444; border:3px solid #dc2626; }
-.dim-row { display:flex; align-items:center; padding:10px 0; border-bottom:1px solid #1e1e3a; }
-.dim-name { flex:0 0 200px; color:#a78bfa; font-size:0.9rem; }
-.dim-bar-wrap { flex:1; background:#1e1e3a; border-radius:6px; height:12px; margin:0 16px; }
+.grade-A { background:$GRADE_A_BG; color:$GRADE_A_FG; border:3px solid $GRADE_A_BORDER; }
+.grade-B { background:$GRADE_B_BG; color:$GRADE_B_FG; border:3px solid $GRADE_B_BORDER; }
+.grade-C { background:$GRADE_C_BG; color:$GRADE_C_FG; border:3px solid $GRADE_C_BORDER; }
+.grade-D { background:$GRADE_D_BG; color:$GRADE_D_FG; border:3px solid $GRADE_D_BORDER; }
+.grade-F { background:$GRADE_F_BG; color:$GRADE_F_FG; border:3px solid $GRADE_F_BORDER; }
+.dim-row { display:flex; align-items:center; padding:10px 0; border-bottom:1px solid $EXPORT_TH_BG; }
+.dim-name { flex:0 0 200px; color:$EXPORT_ACCENT_FG; font-size:0.9rem; }
+.dim-bar-wrap { flex:1; background:$EXPORT_TH_BG; border-radius:6px; height:12px; margin:0 16px; }
 .dim-bar { height:12px; border-radius:6px; }
 .dim-grade { flex:0 0 30px; font-weight:bold; font-size:1.1rem; text-align:center; }
-.dim-val { flex:0 0 100px; color:#888; font-size:0.8rem; text-align:right; }
+.dim-val { flex:0 0 100px; color:$EXPORT_META; font-size:0.8rem; text-align:right; }
 .hop-table { font-size:0.82rem; }
-.hop-table .loss-high { color:#ef4444; font-weight:bold; }
-.section-title { color:#7c3aed; font-size:1rem; font-weight:bold;
-  margin:20px 0 8px; padding-bottom:4px; border-bottom:1px solid #2a2a4a; }
-.evidence-note { background:#0d0d1e; border-left:3px solid #7c3aed;
-  padding:10px 14px; font-size:0.85rem; color:#aaa; margin:12px 0; border-radius:0 8px 8px 0; }
-"""
+.hop-table .loss-high { color:$EXPORT_RED_FG; font-weight:bold; }
+.section-title { color:$EXPORT_HEADING_FG; font-size:1rem; font-weight:bold;
+  margin:20px 0 8px; padding-bottom:4px; border-bottom:1px solid $EXPORT_BORDER; }
+.evidence-note { background:$EXPORT_NOTE_BG; border-left:3px solid $EXPORT_HEADING_FG;
+  padding:10px 14px; font-size:0.85rem; color:$EXPORT_META; margin:12px 0; border-radius:0 8px 8px 0; }
+""").substitute(
+    EXPORT_ISP_HEADER=EXPORT_ISP_HEADER, EXPORT_HEADING_FG=EXPORT_HEADING_FG,
+    EXPORT_TEXT=EXPORT_TEXT, EXPORT_META=EXPORT_META, EXPORT_TH_BG=EXPORT_TH_BG,
+    EXPORT_ACCENT_FG=EXPORT_ACCENT_FG, EXPORT_BORDER=EXPORT_BORDER,
+    EXPORT_NOTE_BG=EXPORT_NOTE_BG, EXPORT_RED_FG=EXPORT_RED_FG,
+    GRADE_A_BG=GRADE_A_BG, GRADE_A_FG=GRADE_A_FG, GRADE_A_BORDER=GRADE_A_BORDER,
+    GRADE_B_BG=GRADE_B_BG, GRADE_B_FG=GRADE_B_FG, GRADE_B_BORDER=GRADE_B_BORDER,
+    GRADE_C_BG=GRADE_C_BG, GRADE_C_FG=GRADE_C_FG, GRADE_C_BORDER=GRADE_C_BORDER,
+    GRADE_D_BG=GRADE_D_BG, GRADE_D_FG=GRADE_D_FG, GRADE_D_BORDER=GRADE_D_BORDER,
+    GRADE_F_BG=GRADE_F_BG, GRADE_F_FG=GRADE_F_FG, GRADE_F_BORDER=GRADE_F_BORDER,
+)
 
 
 def generate_isp_report(

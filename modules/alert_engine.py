@@ -584,8 +584,24 @@ class AlertEngine:
 
 # ── Default rules ─────────────────────────────────────────────────────────────
 
+def rule_settings_key(rule_name: str) -> str:
+    """Return the QSettings key used to persist a rule's enabled state.
+
+    Key format: ``alert_rules/<safe_name>/enabled``
+
+    Use this function in both ``app.py`` and ``NotificationsPage`` to ensure
+    the key is always consistent.
+    """
+    safe = rule_name.lower().replace(" ", "_").replace("/", "_")
+    return f"alert_rules/{safe}/enabled"
+
+
 def _default_rules() -> List[AlertRule]:
-    """Sensible out-of-box rules. Users can replace these via set_rules()."""
+    """Built-in rule set — ALL disabled by default (opt-in only).
+
+    Users must explicitly enable each rule in Settings → Notifications before
+    any alert fires.  This prevents surprise notifications on first launch.
+    """
     return [
         AlertRule(
             name="High RTT",
@@ -593,30 +609,35 @@ def _default_rules() -> List[AlertRule]:
             host=None,
             threshold_ms=200.0,
             cooldown_s=300,
+            enabled=False,
         ),
         AlertRule(
             name="Host Down",
             rule_type="HOST_DOWN",
             host=None,
             cooldown_s=120,
+            enabled=False,
         ),
         AlertRule(
             name="Host Degraded",
             rule_type="HOST_DEGRADED",
             host=None,
             cooldown_s=300,
+            enabled=False,
         ),
         AlertRule(
             name="New Device",
             rule_type="NEW_DEVICE",
             host=None,
             cooldown_s=3600,
+            enabled=False,
         ),
         AlertRule(
             name="Device Gone",
             rule_type="DEVICE_GONE",
             host=None,
             cooldown_s=3600,
+            enabled=False,
         ),
         AlertRule(
             name="Cert Expiring",
@@ -624,12 +645,14 @@ def _default_rules() -> List[AlertRule]:
             host=None,
             threshold_days=30,
             cooldown_s=86400,   # once per day per host
+            enabled=False,
         ),
         AlertRule(
             name="Cert Expired",
             rule_type="CERT_EXPIRED",
             host=None,
             cooldown_s=3600,
+            enabled=False,
         ),
         AlertRule(
             name="Host Flapping",
@@ -638,11 +661,13 @@ def _default_rules() -> List[AlertRule]:
             flap_count=4,
             flap_window_s=600,
             cooldown_s=600,
+            enabled=False,
         ),
         AlertRule(
             name="Service Down",
             rule_type="SERVICE_DOWN",
             host=None,
             cooldown_s=300,
+            enabled=False,
         ),
     ]

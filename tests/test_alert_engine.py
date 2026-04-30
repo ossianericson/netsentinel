@@ -43,6 +43,14 @@ class TestDefaultRules:
         for r in _default_rules():
             assert r.rule_type in RULE_TYPES
 
+    def test_all_default_rules_disabled(self):
+        """All built-in rules must default to disabled — users must opt in."""
+        for r in _default_rules():
+            assert r.enabled is False, (
+                f"Rule {r.name!r} must default to enabled=False "
+                f"(opt-in only — RULE: no alert fires without explicit user consent)"
+            )
+
 
 # ── evaluate_cycle — RTT_THRESHOLD ───────────────────────────────────────────
 

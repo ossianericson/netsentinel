@@ -1231,23 +1231,29 @@ class MetricStore:
     @staticmethod
     def _default_path() -> Path:
         """
-        Resolve the default DB path:
-          1. Same directory as the running exe / script (portable).
-          2. Fallback: ~/.config/NetSentinel/metrics.db
+        Resolve the default DB path (three-tier):
+          1. Same directory as the running exe (portable — write-tested first)
+          2. %LOCALAPPDATA%\\NetSentinel\\NetSentinel.db  (installed build)
+          3. ~/.config/NetSentinel/metrics.db  (Linux / macOS)
         """
         import sys as _sys
+        from modules.utils import get_app_data_dir
+
         if getattr(_sys, "frozen", False):
             exe_dir = Path(_sys.executable).parent
         else:
             exe_dir = Path(__file__).resolve().parent.parent
+
+        # Tier 1 — portable
         candidate = exe_dir / "NetSentinel.db"
         try:
             candidate.touch(exist_ok=True)
             return candidate
         except OSError:
-            fallback = Path.home() / ".config" / "NetSentinel" / "metrics.db"
-            fallback.parent.mkdir(parents=True, exist_ok=True)
-            return fallback
+            pass
+
+        # Tier 2/3 — per-user AppData
+        return get_app_data_dir() / "NetSentinel.db"
 
     # ── Config snapshot CRUD ──────────────────────────────────────────────────
 

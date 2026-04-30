@@ -680,7 +680,16 @@ class LiveBandwidthTile(_BaseTile):
         row.addStretch()
         self._body_layout.addLayout(row)
         self._body_layout.addStretch()
-        self._start_worker()
+        # Worker is started lazily in showEvent — never started in hidden/test context.
+
+    def showEvent(self, event) -> None:       # type: ignore[override]
+        super().showEvent(event)
+        if self._worker is None:
+            self._start_worker()
+
+    def hideEvent(self, event) -> None:       # type: ignore[override]
+        self._stop_worker()
+        super().hideEvent(event)
 
     def _start_worker(self) -> None:
         try:
@@ -690,6 +699,17 @@ class LiveBandwidthTile(_BaseTile):
             self._worker.start()
         except Exception:
             pass
+
+    def _stop_worker(self) -> None:
+        w = getattr(self, "_worker", None)
+        if w is not None:
+            try:
+                w.stop()
+                w.quit()
+                w.wait(2000)
+            except Exception:
+                pass
+            self._worker = None
 
     def _on_stats(self, stats: dict) -> None:
         up   = sum(d["up_mbps"]   for d in stats.values())
@@ -748,8 +768,12 @@ class OverviewPage(QWidget):
         self._filler: Optional[QWidget]   = None
         self._setup_ui()
         self._build_tiles()
-        # Defer store-backed refresh to avoid blocking startup
-        QTimer.singleShot(1500, self._refresh_store_tiles)
+        # Defer store-backed refresh — parented timer so it is destroyed with
+        # this widget and never fires after the C++ object is gone (RULE UX6).
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(self._refresh_store_tiles)
+        _t.start(1500)
 
     # ── UI shell ──────────────────────────────────────────────────────────────
 
@@ -931,6 +955,10 @@ class OverviewPage(QWidget):
         qs.setValue(_SETTINGS_KEY, ",".join(self._tile_order))
 
     def _refresh_store_tiles(self) -> None:
+        try:
+            self.objectName()   # raises RuntimeError if C++ object already deleted
+        except RuntimeError:
+            return
         for tid in ("fleet_uptime", "tls_status", "event_feed"):
             t = self._tiles.get(tid)
             if t:

@@ -1,316 +1,300 @@
 """
-FirstRunDialog — One-time onboarding walkthrough for new users.
+FirstRunDialog — 3-step action wizard shown on first launch.
 
-Shown automatically on first launch (QSettings "ui/first_run_done" not set).
-User can dismiss at any slide or check "Don't show again".
-Contains 4 slides that orient a new user and explicitly direct them to
-Settings for colour/theme customisation.
+Step 1: Scan your network  (auto-triggers Run Scan via parent Dashboard)
+Step 2: Run a speed test   (opens Speed Test page)
+Step 3: See your Network Grade (opens Network Grade page)
 
-Architecture rules observed:
-  • All colours from ui/styles — no hardcoded hex values.
-  • No blocking I/O. Pure UI widget.
+After finishing the wizard the user lands on the HomePage with all
+3 mini-cards populated.  Skippable at any step.
+
+Architecture rules:
+  • All colours from ui.styles — no hardcoded hex values.
+  • No blocking I/O.  All actions dispatched via the parent Dashboard.
+  • QSettings key: "ui/first_run_done"
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSettings
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from ui.styles import (
-    ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_PRIMARY, TEXT_SECONDARY,
-    NAV_BAR, BTN_HOVER_BG, GREEN, AMBER, RED,
+    ACCENT, BG_CARD, BG_DARK, BORDER, GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
+    NAV_BAR, AMBER,
 )
 
 _FIRST_RUN_KEY = "ui/first_run_done"
 
-SLIDES = [
-    {
-        "icon": "🛡",
-        "title": "Welcome to NetSentinel",
-        "body": (
-            "<p>NetSentinel is a <b>professional network security scanner</b> for IT administrators, "
-            "engineers, and advanced home users.</p>"
-            "<p>It discovers every device on your network, detects threats like ARP spoofing and "
-            "rogue access points, monitors uptime and latency, and generates evidence-grade reports "
-            "for ISP disputes.</p>"
-            "<p>This short guide will get you scanning in under 2 minutes.</p>"
-        ),
-    },
-    {
-        "icon": "▶",
-        "title": "Your First Scan",
-        "body": (
-            "<p><b>1. Click Run Scan</b> in the top bar.</p>"
-            "<p>NetSentinel sweeps your subnet using ARP, ICMP, and mDNS in parallel. "
-            "Most home and SMB networks complete in 10–30 seconds.</p>"
-            "<p><b>2. Right-click any table row</b> for instant actions: "
-            "Copy IP, Port Scan, Wake-on-LAN, and How to Fix guidance.</p>"
-            "<p><b>3. Hover over any risk badge</b> (CLEAN / LOW / MEDIUM / HIGH) for a plain-English "
-            "explanation of what it means and what to do.</p>"
-            "<p>The <b>Overview</b> page updates live as results come in — watch the tiles change.</p>"
-        ),
-    },
-    {
-        "icon": "⚙",
-        "title": "Unlock More Features",
-        "body": (
-            "<p>The sidebar has three sections:</p>"
-            "<p><b>STANDARD</b> — everything you need for day-to-day monitoring: "
-            "device discovery, DNS outage detection, uptime tracking, WiFi analysis, and reports. "
-            "No administrator rights needed for most of these.</p>"
-            "<p><b>ADVANCED</b> — deep analysis tools: hop-by-hop MTR trace, ARP spoof detection, "
-            "DHCP rogue server detection, bandwidth monitor, SNMP poller, and more. "
-            "Click the <b>ADVANCED</b> header in the sidebar to expand this section.</p>"
-            "<p><b>SECURITY AUDIT</b> — active scanning: SYN/UDP port scanner, OS fingerprinting, "
-            "CVE lookup, and credential testing. Requires administrator rights and explicit "
-            "authorisation on the target network.</p>"
-        ),
-    },
-    {
-        "icon": "🎨",
-        "title": "Customise NetSentinel",
-        "body": (
-            "<p><b>Change the colour theme</b> at any time:</p>"
-            "<p>Click <b>⚙</b> in the top bar → <b>App Settings (Theme &amp; Display)…</b>. "
-            "Three themes are available: <em>Arctic Clean</em> (professional light), "
-            "<em>Midnight Pro</em> (dark charcoal), and <em>Obsidian Neon</em> (true black + neon). "
-            "The theme takes effect after restarting.</p>"
-            "<p><b>Learn the features:</b> click <b>❓</b> in the top bar to open Help &amp; Reference — "
-            "feature guide, troubleshooting scenarios, risk level explanations, and networking glossary.</p>"
-            "<p>You're ready. Close this dialog and run your first scan.</p>"
-        ),
-    },
-]
-
 
 def should_show_first_run() -> bool:
-    """Return True if the first-run dialog has never been completed."""
+    """Return True if the first-run wizard has never been completed."""
     qs = QSettings("NetSentinel", "NetSentinel")
     return not qs.value(_FIRST_RUN_KEY, False, type=bool)
 
 
 def mark_first_run_done() -> None:
-    """Persist that the first-run dialog has been completed."""
+    """Persist that the first-run wizard has been completed."""
     qs = QSettings("NetSentinel", "NetSentinel")
     qs.setValue(_FIRST_RUN_KEY, True)
 
 
+# ── Step definitions ──────────────────────────────────────────────────────────
+
+_STEPS = [
+    {
+        "number": "1",
+        "colour": ACCENT,
+        "title": "Scan your network",
+        "body": (
+            "NetSentinel will sweep your subnet using ARP and ICMP to discover "
+            "every device — phones, laptops, smart TVs, and IoT gadgets.\n\n"
+            "This takes 10–30 seconds on most home networks."
+        ),
+        "action_label": "\u25b6\u2002Start scan",
+        "action_key": "scan",
+        "action_nav": None,
+    },
+    {
+        "number": "2",
+        "colour": AMBER,
+        "title": "Run a speed test",
+        "body": (
+            "Measure your actual download and upload speeds. Results populate "
+            "the Speed card on your Home page."
+        ),
+        "action_label": "\u26a1\u2002Open Speed Test",
+        "action_key": "speed",
+        "action_nav": "Speed Test",
+    },
+    {
+        "number": "3",
+        "colour": GREEN,
+        "title": "See your Network Grade",
+        "body": (
+            "NetSentinel grades your network A\u2013F across latency, packet loss, "
+            "DNS reliability, device security, uptime, open ports, and more."
+        ),
+        "action_label": "\u25fc\u2002View Network Grade",
+        "action_key": "grade",
+        "action_nav": "Network Grade",
+    },
+]
+
+
+# ── Step card ─────────────────────────────────────────────────────────────────
+
+class _StepCard(QFrame):
+    action_clicked = pyqtSignal(str)
+
+    def __init__(self, step: dict, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._key = step["action_key"]
+        self._done = False
+        self.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+        )
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 14, 20, 14)
+        lay.setSpacing(8)
+
+        # Badge + title
+        hdr = QHBoxLayout()
+        hdr.setSpacing(10)
+        badge = QLabel(step["number"])
+        badge.setFixedSize(28, 28)
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge.setStyleSheet(
+            f"font-size:14px; font-weight:bold; color:{BG_CARD};"
+            f" background:{step['colour']}; border-radius:14px; border:none;"
+        )
+        title = QLabel(step["title"])
+        title.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        hdr.addWidget(badge)
+        hdr.addWidget(title, 1)
+        lay.addLayout(hdr)
+
+        # Body
+        body = QLabel(step["body"])
+        body.setWordWrap(True)
+        body.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; padding-left:38px;"
+        )
+        lay.addWidget(body)
+
+        # Action button
+        btn_row = QHBoxLayout()
+        btn_row.addSpacing(38)
+        self._btn = QPushButton(step["action_label"])
+        self._btn.setFixedHeight(26)
+        self._btn.setStyleSheet(
+            f"QPushButton {{ background:{step['colour']}; color:{BG_CARD};"
+            f" border:none; border-radius:3px;"
+            f" font-size:11px; font-weight:bold; padding:0 14px; }}"
+            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_SECONDARY}; }}"
+        )
+        self._btn.clicked.connect(lambda: self.action_clicked.emit(self._key))
+
+        self._done_lbl = QLabel("\u2713\u2002Done")
+        self._done_lbl.setStyleSheet(
+            f"font-size:11px; color:{GREEN}; background:transparent; border:none;"
+        )
+        self._done_lbl.setVisible(False)
+
+        btn_row.addWidget(self._btn)
+        btn_row.addSpacing(8)
+        btn_row.addWidget(self._done_lbl)
+        btn_row.addStretch()
+        lay.addLayout(btn_row)
+
+    def mark_done(self) -> None:
+        self._done = True
+        self._btn.setEnabled(False)
+        self._done_lbl.setVisible(True)
+
+
+# ── Main dialog ───────────────────────────────────────────────────────────────
+
 class FirstRunDialog(QDialog):
     """
-    Four-slide onboarding walkthrough.
+    3-step action wizard.  Parent must be the Dashboard window.
 
     Usage::
         if should_show_first_run():
-            dlg = FirstRunDialog(parent=window)
-            dlg.exec()
+            FirstRunDialog(parent=window).exec()
     """
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Welcome to NetSentinel")
+        self.setWindowTitle("Get started with NetSentinel")
         self.setModal(True)
-        self.setFixedSize(560, 460)
+        self.setFixedSize(560, 500)
         self.setStyleSheet(
-            f"QDialog{{background:{BG_CARD};border:1px solid {BORDER};}}"
+            f"QDialog {{ background:{BG_DARK}; border:1px solid {BORDER}; }}"
         )
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # Progress indicator strip
-        self._prog_strip = _ProgressStrip(len(SLIDES), parent=self)
-        outer.addWidget(self._prog_strip)
-
-        # Slides
-        self._stack = QStackedWidget(parent=self)
-        for slide_data in SLIDES:
-            self._stack.addWidget(_SlideWidget(slide_data, parent=self._stack))
-        outer.addWidget(self._stack, 1)
-
-        # Bottom bar
-        bottom = QFrame(parent=self)
-        bottom.setStyleSheet(
-            f"background:{BG_DARK};border-top:1px solid {BORDER};"
+        # Header
+        hdr = QWidget()
+        hdr.setFixedHeight(50)
+        hdr.setStyleSheet(f"background:{NAV_BAR};")
+        hdr_lay = QHBoxLayout(hdr)
+        hdr_lay.setContentsMargins(20, 0, 20, 0)
+        title_lbl = QLabel("Welcome to NetSentinel")
+        title_lbl.setStyleSheet(
+            f"color:{BG_CARD}; font-size:13px; font-weight:bold; background:transparent;"
         )
-        bot_l = QHBoxLayout(bottom)
-        bot_l.setContentsMargins(16, 8, 16, 8)
-        bot_l.setSpacing(8)
-
-        self._chk_skip = QCheckBox("Don't show this again", parent=bottom)
-        self._chk_skip.setStyleSheet(
-            f"font-size:11px;color:{TEXT_SECONDARY};"
+        sub_lbl = QLabel("Three steps to populate your Home page")
+        sub_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent;"
         )
-        bot_l.addWidget(self._chk_skip)
-        bot_l.addStretch()
+        hdr_lay.addWidget(title_lbl)
+        hdr_lay.addStretch()
+        hdr_lay.addWidget(sub_lbl)
+        outer.addWidget(hdr)
 
-        self._btn_back = QPushButton("← Back", parent=bottom)
-        self._btn_back.setFixedWidth(80)
-        self._btn_back.setStyleSheet(self._outline_style())
-        self._btn_back.clicked.connect(self._go_back)
-        bot_l.addWidget(self._btn_back)
+        # Cards
+        cards_w = QWidget()
+        cards_w.setStyleSheet(f"background:{BG_DARK};")
+        cards_lay = QVBoxLayout(cards_w)
+        cards_lay.setContentsMargins(16, 14, 16, 8)
+        cards_lay.setSpacing(10)
 
-        self._btn_next = QPushButton("Next →", parent=bottom)
-        self._btn_next.setFixedWidth(100)
-        self._btn_next.setStyleSheet(self._primary_style())
-        self._btn_next.clicked.connect(self._go_next)
-        bot_l.addWidget(self._btn_next)
+        self._cards: list[_StepCard] = []
+        for step in _STEPS:
+            card = _StepCard(step, parent=cards_w)
+            card.action_clicked.connect(self._on_action)
+            self._cards.append(card)
+            cards_lay.addWidget(card)
 
-        outer.addWidget(bottom)
+        cards_lay.addStretch()
+        outer.addWidget(cards_w, 1)
 
-        self._update_buttons()
+        # Footer
+        footer = QFrame()
+        footer.setFixedHeight(52)
+        footer.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border-top:1px solid {BORDER}; }}"
+        )
+        foot_lay = QHBoxLayout(footer)
+        foot_lay.setContentsMargins(20, 0, 20, 0)
+        foot_lay.setSpacing(8)
 
-    # ── Navigation ────────────────────────────────────────────────────────────
+        self._status_lbl = QLabel(
+            "You\u2019re in Home mode \u2014 only the essentials are shown. "
+            "Click the mode pill in the sidebar to unlock more."
+        )
+        self._status_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        self._status_lbl.setWordWrap(True)
+        foot_lay.addWidget(self._status_lbl, 1)
 
-    def _go_next(self):
-        idx = self._stack.currentIndex()
-        if idx < len(SLIDES) - 1:
-            self._stack.setCurrentIndex(idx + 1)
-            self._prog_strip.set_step(idx + 1)
-            self._update_buttons()
-        else:
-            self._finish()
+        btn_skip = QPushButton("Skip")
+        btn_skip.setFixedHeight(26)
+        btn_skip.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; border-radius:3px;"
+            f" font-size:11px; padding:0 12px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        btn_skip.clicked.connect(self._finish)
+        foot_lay.addWidget(btn_skip)
 
-    def _go_back(self):
-        idx = self._stack.currentIndex()
-        if idx > 0:
-            self._stack.setCurrentIndex(idx - 1)
-            self._prog_strip.set_step(idx - 1)
-            self._update_buttons()
+        btn_finish = QPushButton("Finish \u2192")
+        btn_finish.setFixedHeight(26)
+        btn_finish.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{BG_CARD};"
+            f" border:none; border-radius:3px;"
+            f" font-size:11px; font-weight:bold; padding:0 16px; }}"
+        )
+        btn_finish.clicked.connect(self._finish)
+        foot_lay.addWidget(btn_finish)
 
-    def _finish(self):
-        if self._chk_skip.isChecked():
-            mark_first_run_done()
+        outer.addWidget(footer)
+
+    # ── Dispatch ──────────────────────────────────────────────────────────────
+
+    def _on_action(self, key: str) -> None:
+        p = self.parent()
+        step = next((s for s in _STEPS if s["action_key"] == key), None)
+        card = next((c for c in self._cards if c._key == key), None)
+
+        if p is not None and step is not None:
+            if key == "scan" and hasattr(p, "_start_full_scan"):
+                p._start_full_scan()
+            elif step["action_nav"] and hasattr(p, "_nav_go_to"):
+                # Standard mode has all nav labels; switch out of Home mode first
+                if getattr(p, "_nav_mode", "standard") == "home" and hasattr(p, "_set_mode"):
+                    p._set_mode("standard")
+                p._nav_go_to(step["action_nav"])
+
+        if card is not None:
+            card.mark_done()
+
+        if all(c._done for c in self._cards):
+            self._status_lbl.setText(
+                "All steps complete! Your Home page is now populated."
+            )
+
+    def _finish(self) -> None:
+        mark_first_run_done()
+        p = self.parent()
+        if p is not None and hasattr(p, "_nav_go_to"):
+            p._nav_go_to("Home")
         self.accept()
 
-    def _update_buttons(self):
-        idx = self._stack.currentIndex()
-        self._btn_back.setVisible(idx > 0)
-        is_last = idx == len(SLIDES) - 1
-        self._btn_next.setText("Get Started" if is_last else "Next →")
-        self._btn_next.setFixedWidth(110 if is_last else 100)
-
-    # ── Button styles ─────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _primary_style() -> str:
-        return (
-            f"QPushButton{{background:{ACCENT};color:{NAV_BAR};"
-            f"border:1px solid {ACCENT};border-radius:4px;"
-            f"padding:5px 14px;font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT}dd;}}"
-        )
-
-    @staticmethod
-    def _outline_style() -> str:
-        return (
-            f"QPushButton{{background:{BG_CARD};color:{ACCENT};"
-            f"border:1px solid {ACCENT};border-radius:4px;"
-            f"padding:5px 14px;font-size:11px;}}"
-            f"QPushButton:hover{{background:{BTN_HOVER_BG};}}"
-        )
-
-
-class _ProgressStrip(QWidget):
-    """Row of filled/empty dots showing which slide is active."""
-
-    def __init__(self, total: int, parent: QWidget | None = None):
-        super().__init__(parent)
-        self._total = total
-        self._step = 0
-        self.setFixedHeight(28)
-        self.setStyleSheet(f"background:{NAV_BAR};")
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(16, 0, 16, 0)
-        lay.setSpacing(6)
-
-        self._dots: list[QLabel] = []
-        for i in range(total):
-            dot = QLabel("●", parent=self)
-            dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._dots.append(dot)
-            lay.addWidget(dot)
-        lay.addStretch()
-
-        step_lbl = QLabel(f"  GETTING STARTED", parent=self)
-        step_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY};font-size:10px;font-weight:bold;background:transparent;"
-        )
-        lay.addWidget(step_lbl)
-        self._step_lbl = step_lbl
-        self.set_step(0)
-
-    def set_step(self, step: int):
-        self._step = step
-        for i, dot in enumerate(self._dots):
-            if i == step:
-                dot.setStyleSheet(f"color:{ACCENT};font-size:14px;background:transparent;")
-            elif i < step:
-                dot.setStyleSheet(f"color:{GREEN};font-size:10px;background:transparent;")
-            else:
-                dot.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;background:transparent;")
-        self._step_lbl.setText(f"  STEP {step + 1} OF {self._total}")
-
-
-class _SlideWidget(QWidget):
-    """A single onboarding slide: icon + title + rich-text body."""
-
-    def __init__(self, data: dict, parent: QWidget | None = None):
-        super().__init__(parent)
-        self.setStyleSheet(f"background:{BG_CARD};")
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(32, 24, 32, 16)
-        lay.setSpacing(12)
-
-        # Icon + title row
-        header = QWidget(parent=self)
-        header.setStyleSheet(f"background:{BG_CARD};")
-        hl = QHBoxLayout(header)
-        hl.setContentsMargins(0, 0, 0, 0)
-        hl.setSpacing(10)
-
-        icon_lbl = QLabel(data["icon"], parent=header)
-        icon_lbl.setStyleSheet(
-            f"font-size:28px;background:transparent;color:{ACCENT};"
-        )
-        icon_lbl.setFixedWidth(40)
-        hl.addWidget(icon_lbl)
-
-        title_lbl = QLabel(data["title"], parent=header)
-        f = QFont("Segoe UI", 15)
-        f.setBold(True)
-        title_lbl.setFont(f)
-        title_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY};background:transparent;"
-        )
-        hl.addWidget(title_lbl, 1)
-        lay.addWidget(header)
-
-        # Divider
-        div = QFrame(parent=self)
-        div.setFrameShape(QFrame.Shape.HLine)
-        div.setStyleSheet(f"color:{BORDER};background:{BORDER};")
-        div.setFixedHeight(1)
-        lay.addWidget(div)
-
-        # Body
-        body_lbl = QLabel(parent=self)
-        body_lbl.setTextFormat(Qt.TextFormat.RichText)
-        body_lbl.setText(
-            f"<span style='font-size:11px;color:{TEXT_PRIMARY};"
-            f"line-height:1.7;'>{data['body']}</span>"
-        )
-        body_lbl.setWordWrap(True)
-        body_lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
-        body_lbl.setStyleSheet(f"background:transparent;")
-        lay.addWidget(body_lbl, 1)

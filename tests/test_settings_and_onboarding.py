@@ -57,8 +57,8 @@ _app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscre
 from ui.pages.settings_page import SettingsPage
 from ui.first_run_dialog import (
     FirstRunDialog,
-    SLIDES,
-    _ProgressStrip,
+    _STEPS,
+    _StepCard,
     should_show_first_run,
     mark_first_run_done,
     _FIRST_RUN_KEY,
@@ -145,35 +145,36 @@ class TestSettingsPage:
 
 
 # ===========================================================================
-# SLIDES constant
+# _STEPS constant
 # ===========================================================================
 
 class TestSlidesConstant:
 
-    def test_four_slides(self):
-        assert len(SLIDES) == 4
+    def test_three_steps(self):
+        assert len(_STEPS) == 3
 
-    def test_slide_keys(self):
-        for slide in SLIDES:
-            assert "icon" in slide
-            assert "title" in slide
-            assert "body" in slide
+    def test_step_keys(self):
+        for step in _STEPS:
+            assert "number" in step
+            assert "title" in step
+            assert "body" in step
+            assert "action_key" in step
+            assert "action_label" in step
 
-    def test_slide_titles_non_empty(self):
-        for slide in SLIDES:
-            assert slide["title"].strip()
+    def test_step_titles_non_empty(self):
+        for step in _STEPS:
+            assert step["title"].strip()
 
-    def test_slide_bodies_non_empty(self):
-        for slide in SLIDES:
-            assert slide["body"].strip()
+    def test_step_bodies_non_empty(self):
+        for step in _STEPS:
+            assert step["body"].strip()
 
-    def test_last_slide_mentions_settings(self):
-        last = SLIDES[-1]
-        assert "Settings" in last["body"] or "Settings" in last["title"]
+    def test_step_keys_unique(self):
+        keys = [s["action_key"] for s in _STEPS]
+        assert len(keys) == len(set(keys))
 
-    def test_last_slide_mentions_theme(self):
-        last = SLIDES[-1]
-        assert "theme" in last["body"].lower() or "Theme" in last["body"]
+    def test_step_numbers_are_1_2_3(self):
+        assert [s["number"] for s in _STEPS] == ["1", "2", "3"]
 
 
 # ===========================================================================
@@ -222,67 +223,26 @@ class TestFirstRunDialog:
     def test_constructs_without_error(self):
         assert self.dlg is not None
 
-    def test_correct_slide_count(self):
-        assert self.dlg._stack.count() == len(SLIDES)
+    def test_correct_card_count(self):
+        assert len(self.dlg._cards) == len(_STEPS)
 
-    def test_initial_slide_is_zero(self):
-        assert self.dlg._stack.currentIndex() == 0
-
-    def test_back_hidden_on_first_slide(self):
-        assert not self.dlg._btn_back.isVisible()
-
-    def test_next_text_on_first_slide(self):
-        assert "Next" in self.dlg._btn_next.text()
-
-    def test_next_text_on_last_slide(self):
-        self.dlg._stack.setCurrentIndex(len(SLIDES) - 1)
-        self.dlg._update_buttons()
-        assert "Get Started" in self.dlg._btn_next.text()
-
-    def test_go_next_advances_slide(self):
-        self.dlg._go_next()
-        assert self.dlg._stack.currentIndex() == 1
-
-    def test_go_next_shows_back_button(self):
-        self.dlg._go_next()
-        assert not self.dlg._btn_back.isHidden()
-
-    def test_go_back_retreats_slide(self):
-        self.dlg._go_next()
-        self.dlg._go_back()
-        assert self.dlg._stack.currentIndex() == 0
-
-    def test_go_back_hides_back_button_at_start(self):
-        self.dlg._go_next()
-        self.dlg._go_back()
-        assert not self.dlg._btn_back.isVisible()
-
-    def test_go_next_does_not_overflow(self):
-        for _ in range(len(SLIDES) + 5):
-            self.dlg._go_next()
-        # Slide index should not exceed last
-        assert self.dlg._stack.currentIndex() <= len(SLIDES) - 1
+    def test_cards_are_step_cards(self):
+        for card in self.dlg._cards:
+            assert isinstance(card, _StepCard)
 
     def test_finish_calls_accept(self):
         self.dlg.accept = MagicMock()
         self.dlg._finish()
         self.dlg.accept.assert_called_once()
 
-    def test_finish_marks_done_when_checkbox_checked(self):
-        self.dlg._chk_skip.setChecked(True)
+    def test_finish_marks_done(self):
         with patch("ui.first_run_dialog.mark_first_run_done") as mock_done:
             self.dlg._finish()
         mock_done.assert_called_once()
 
-    def test_finish_does_not_mark_done_when_unchecked(self):
-        self.dlg._chk_skip.setChecked(False)
-        with patch("ui.first_run_dialog.mark_first_run_done") as mock_done:
-            self.dlg._finish()
-        mock_done.assert_not_called()
-
     def test_fixed_size(self):
         assert self.dlg.width() == 560
-        assert self.dlg.height() == 460
+        assert self.dlg.height() == 500
 
     def test_is_modal(self):
         assert self.dlg.isModal()
@@ -290,44 +250,33 @@ class TestFirstRunDialog:
     def test_window_title(self):
         assert "NetSentinel" in self.dlg.windowTitle()
 
+    def test_mark_done_disables_button(self):
+        card = self.dlg._cards[0]
+        card.mark_done()
+        assert not card._btn.isEnabled()
+        assert card._done is True
+
+    def test_mark_done_shows_done_label(self):
+        card = self.dlg._cards[0]
+        card.mark_done()
+        assert not card._done_lbl.isHidden()
+
 
 # ===========================================================================
-# _ProgressStrip
+# _StepCard
 # ===========================================================================
 
-class TestProgressStrip:
+class TestStepCard:
 
     def test_constructs(self):
-        strip = _ProgressStrip(4)
-        assert strip is not None
+        card = _StepCard(_STEPS[0])
+        assert card is not None
 
-    def test_correct_dot_count(self):
-        strip = _ProgressStrip(4)
-        assert len(strip._dots) == 4
+    def test_initial_not_done(self):
+        card = _StepCard(_STEPS[0])
+        assert card._done is False
 
-    def test_initial_step_zero(self):
-        strip = _ProgressStrip(4)
-        assert strip._step == 0
-
-    def test_set_step_updates_step(self):
-        strip = _ProgressStrip(4)
-        strip.set_step(2)
-        assert strip._step == 2
-
-    def test_step_label_updates(self):
-        strip = _ProgressStrip(4)
-        strip.set_step(3)
-        assert "4" in strip._step_lbl.text()
-        assert "4" in strip._step_lbl.text()
-
-    def test_active_dot_uses_accent_color(self):
-        strip = _ProgressStrip(4)
-        strip.set_step(1)
-        style = strip._dots[1].styleSheet()
-        assert _styles.ACCENT in style
-
-    def test_completed_dot_uses_green(self):
-        strip = _ProgressStrip(4)
-        strip.set_step(2)
-        style = strip._dots[0].styleSheet()
-        assert _styles.GREEN in style
+    def test_mark_done_sets_flag(self):
+        card = _StepCard(_STEPS[0])
+        card.mark_done()
+        assert card._done is True

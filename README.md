@@ -22,7 +22,7 @@ winget install NetSentinel.NetSentinel
 ```
 Or download the installer from the latest release:
 
-### 👉 [Latest Release](https://github.com/ossianericson/netsentinel/releases/latest) — v1.4.0
+### 👉 [Latest Release](https://github.com/ossianericson/netsentinel/releases/latest) — v1.5.1
 
 | OS | File | How to run |
 |---|---|---|
@@ -106,17 +106,21 @@ NetSentinel is the single tool that:
 | 📸 **Config Snapshots** | Point-in-time snapshots of the full device fleet with structured diff between any two snapshots — added/removed devices, port changes, SNMP drift. |
 | 📈 **Trend Forecasts** | OLS regression over stored RTT/loss/jitter data predicts when metrics will breach thresholds. ETA column colour-coded CRITICAL / WARNING / CLEAN. |
 | 🔧 **Maintenance Windows** | Suppress all alerts for a device (or fleet-wide) during a defined maintenance period. Suppression log, auto-refresh, purge of expired windows. |
+| ⚡ **Custom Triggers** | Write custom alert conditions using a metric expression language — e.g. `avg(rtt["ip"], 5m) > 80 AND loss%["ip"] > 5`. Visual rule builder with live plain-English preview, per-rule severity and cooldown. Rules evaluated every monitoring cycle. |
+| 📶 **WiFi Heatmap** | Import a floor plan image and walk your space collecting signal-strength readings per scan. IDW interpolation renders a colour-coded heatmap overlay showing coverage gaps per access point. Export as PNG. |
+| 🗺 **Geolocation Map** | Plot internet-facing IPs on an offline world map using a local MaxMind GeoLite2-City database — no external API calls, no telemetry. One-click import from Threat Intelligence blocklist results. |
+
 ### UI & Customisation
 
 | Feature | Details |
 |---|---|
-| 📌 **Pinned sidebar section** | Seven most-used pages pinned at the top of the sidebar — always visible, never collapsed. The full Standard section is collapsed by default and expands on demand. |
+| ◆ **3-mode progressive navigation** | The sidebar operates in three modes cycled by a pill at the top: **Home** (5 essentials + grade circle + recent alerts), **Standard** (full flat list under section headers), and **Pro** (adds Security Audit items with admin badges). The active mode is saved across sessions. |
 | 🔒 **Single-instance guard** | Launching a second copy of NetSentinel restores and focuses the already-running window instead of opening a duplicate. Works across minimised and tray-hidden states. |
 | 🔕 **Boot alert warmup** | Network alerts are suppressed for the first 10 seconds after startup to prevent spurious notifications before the first monitoring cycle completes. |
 | 🔔 **Tray restore on any click** | Clicking the tray icon (single or double), or clicking a notification bubble, always restores and focuses the main window. |
 | 🎨 **Three Colour Themes** | Arctic Clean (professional light), Midnight Pro (deep charcoal + electric cyan), Obsidian Neon (true black + neon lime). Click **⚙** in the top bar → **App Settings (Theme & Display)…**; takes effect on next launch. |
 | ❓ **Help & Reference** | Click **❓** in the top bar to open Help from any page. Contains Risk Level Guide (CLEAN→STORM), Common Scenarios lookup table, and a 24-term networking glossary. |
-| 👋 **First-Run Onboarding** | 4-slide welcome dialog on first launch. Explains Standard / Advanced / Security Audit sections and directs new users to App Settings. “Don’t show again” persisted to QSettings. |
+| 👋 **First-Run Onboarding** | 3-step action wizard on first launch. Each step has a one-click action button: Scan your network → Run a speed test → See your Network Grade. Completing steps populates the Home page mini-cards live; skippable at any time. State persisted to QSettings. |
 
 ### Advanced Mode tabs
 
@@ -132,6 +136,9 @@ NetSentinel is the single tool that:
 | 📟 **SNMP Device Info** | Polls basic SNMP OIDs (sysDescr, sysName, sysUpTime, ifTable) — no pysnmp dependency. |
 | 📥 **SNMP Trap Receiver** | Passive UDP listener (port 162, falls back to 16200 without admin). Decodes SNMPv1/v2c traps with stdlib-only BER/ASN.1 parser. Live trap table with varbind detail dialog. |
 | 📜 **Syslog Viewer** | Passive UDP/514 listener (falls back to 5140 without admin). RFC 3164 and RFC 5424 decoding. Severity/facility colour-coding, text + severity filter, double-click detail dialog. |
+| ⚙ **Automation Hooks** | Event-driven rules that fire a webhook URL or run a local script when network events occur (device down, high RTT, new device, alert fired). Rules stored locally; no cloud dependency. |
+| 📄 **Network Documentation** | Auto-generates a formatted HTML or Markdown snapshot of your full network — device inventory, services, open ports, topology description, and TLS status — on demand or on schedule. |
+| 📡 **MQTT / Home Assistant** | Publishes device discovery, availability, and metric events to any MQTT broker. Pre-formatted Home Assistant MQTT Discovery payloads; configurable topic prefix, QoS, and broker credentials (OS keychain). |
 
 ### Security Audit Mode tabs (for IT professionals)
 
@@ -402,6 +409,12 @@ modules/
   dns_zone_scanner.py       # AXFR zone transfer + mDNS Bonjour/Avahi enumeration
   threat_intel.py           # Threat intelligence DB (Feodo Tracker, ET, AbuseIPDB)
   rest_api.py               # Local read-only Flask REST API (127.0.0.1 default, OS-keychain API key)
+  automation_hooks.py       # Event-driven automation: webhook/script triggers on network events
+  net_doc_generator.py      # Auto-generates HTML/Markdown network documentation snapshots
+  mqtt_publisher.py         # MQTT event publisher — Home Assistant Discovery + metric topics
+  geo_locator.py            # Local IP geolocation via MaxMind GeoLite2-City.mmdb (no external API)
+  wifi_heatmap.py           # WiFi signal-strength heatmap — IDW interpolation, JSON survey storage
+  trigger_expression.py     # Custom alert trigger expression language, parser, and rule evaluator
 
 ui/
   dashboard.py              # Main window — sidebar nav (Standard / Advanced / Security Audit)
@@ -434,6 +447,12 @@ ui/
     connections_page.py     # Active Connections — process-to-socket map
     live_bandwidth_page.py  # Live Bandwidth — 60s rolling interface chart
     speed_test_page.py      # Speed Test — Ookla-compatible, arc gauge, history
+    automation_page.py      # Automation Hooks — event-driven webhook/script trigger rules
+    network_doc_page.py     # Network Documentation — auto-generates HTML/Markdown network docs
+    mqtt_page.py            # MQTT / Home Assistant — publishes device events to MQTT broker
+    wifi_heatmap_page.py    # WiFi Heatmap — floor plan import + IDW signal-strength overlay
+    geo_map_page.py         # Geolocation Map — world-map visualisation of internet-facing IPs
+    trigger_builder_page.py # Custom Triggers — visual rule builder for alert expressions
 
 workers/
   scan_worker.py            # QThread workers (28 total)
@@ -471,7 +490,112 @@ Edit [`offenders.json`](offenders.json) or submit a PR (see [CONTRIBUTING.md](CO
 
 ## What's new
 
-### v1.4.0 (current)
+### v1.5.1 (current)
+
+**Alert rules opt-in only**
+- All 9 built-in alert rules now default to `enabled=False` — no alert fires on a fresh install
+- Settings → Notifications has a new **Alert Rules** card with a checkbox per rule and a plain-English description
+- Rule enabled states persisted in QSettings; missing key treated as disabled
+- Delivery channels (toast, email, webhook, Pushover, ntfy, Telegram) only receive alerts for rules the user has explicitly enabled
+- Desktop toast channel also defaults to off
+
+**HomePage fixes**
+- Upload speed label changed from clipped `↑ 88 Mbps` to `/ up 88 Mbps` (arrow glyph was clipped on some fonts)
+- Scan now and ISP Report buttons now have explicit `setStyleSheet()` calls — no longer render as flat text
+- Mode pill gains a visible border (`1px solid`, `border-radius:4px`, `padding:0 8px`) so it reads as a clickable button
+- Devices mini-card shows `Run a scan to discover devices` when count is 0; `All healthy` only when count > 0
+
+**Bug fixes**
+- `NotificationsPage._rule_checkboxes` initialised before card builders run — fixes `AttributeError` crash on launch
+- `_restore()` wrapped in `try/finally` with `_restoring` guard — prevents mid-restore `_save()` calls clobbering QSettings values
+- Added `LICENSE` file — fixes WinGet `URL-Validation-Error` on manifest PR
+
+---
+
+### v1.50
+
+**Progressive-disclosure navigation**
+- Three sidebar modes cycled by a mode pill: **Home** (5 essentials, no clutter), **Standard** (full feature set under static ALL-CAPS section headers), **Pro** (adds Security Audit items with `·admin` badges)
+- Mode persisted to QSettings; restores on next launch
+- Section headers are non-interactive dividers — no collapse/expand click targets
+
+**Home page**
+- Dedicated landing page shown in Home mode: network grade circle (A–F, colour-coded), three mini-cards (Download speed, Stability/packet-loss, Devices online), recent-alerts strip
+- Mini-cards update live from the monitoring cycle: coloured value labels (green/amber/red), sub-line with units, status badge
+- Alert strip prepends new alerts as rows (max 3 shown); permanent footer shows when no further alerts occurred in the last 24 h
+
+**First-run action wizard**
+- Replaced 4-slide informational walkthrough with a 3-step action wizard
+- Step 1 (blue): Scan your network — calls `_start_full_scan()` on the parent dashboard
+- Step 2 (amber): Run a speed test — navigates to Speed Test page
+- Step 3 (green): See your Network Grade — navigates to Network Grade page
+- Each completed step shows a ✓ Done badge; finishing marks first-run done in QSettings
+
+**Speed Test — multi-backend engine**
+- 3-tier backend cascade: Ookla CLI binary (1 Gbps+) → speedtest-cli (8 download / 4 upload threads) → pure-Python 16-stream HTTP fallback (no extra deps)
+- Ookla CLI auto-detected next to exe, in `%LOCALAPPDATA%\NetSentinel\`, or on PATH; Windows `CREATE_NO_WINDOW`
+- `ssl.wrap_socket` shim preserves Python 3.12 compatibility for speedtest-cli 2.1.x
+
+**AppData path hardening**
+- `get_app_data_dir()` added to `modules/utils.py` — platform-aware per-user data directory (`%LOCALAPPDATA%\NetSentinel` / `~/Library/Application Support/NetSentinel` / `~/.config/NetSentinel`)
+- `MetricStore._default_path()` upgraded to 3-tier strategy — portable → AppData → `~/.config`; no longer crashes with `PermissionError` when installed in `C:\Program Files\`
+- Crash log and faulthandler output now write to `get_app_data_dir()` instead of the exe directory
+
+**Windowed-build stability**
+- `sys.stderr = None` guard at top of `main()` — redirects to `netsentinel_stderr.log` in AppData instead of `AttributeError` crashing the process
+
+**Sidebar UX**
+- 35 mixed emoji replaced with consistent geometric Unicode symbols — icon strip is readable in collapsed (48 px) mode
+- Ctrl+F shortcut focuses the sidebar search box from any page; auto-expands collapsed sidebar
+- Search box now always visible in collapsed mode with `⌕` placeholder
+
+**WiFi Signal-Strength Heatmap** (Tools section)
+- Import any floor plan image (PNG/JPEG/BMP) as a canvas background
+- Walk your space clicking where you stand — each click records the current WiFi scan result with per-BSSID dBm values at that spatial position
+- IDW (Inverse Distance Weighting) interpolation generates a smooth `RdYlGn` heatmap overlay
+- AP selector combo shows all discovered BSSIDs; "All APs" averages across all access points
+- Coverage stats card: Excellent / Good / Fair / Weak / Very Weak % breakdown per survey
+- Surveys saved as JSON to `%LOCALAPPDATA%\NetSentinel\heatmap_surveys\`; export heatmap as PNG
+
+**Geolocation Map** (Tools section)
+- Plots internet-facing IPs on a world map using a local MaxMind GeoLite2-City `.mmdb` database — no API key, no external calls, fully offline
+- One-click DB download from `download.maxmind.com` with progress bar; host allowlist enforced (host-validation security fix)
+- Colour-coded marker categories: Threat Intel (red), Exposed Services (amber), Manual Entry (blue)
+- `set_threat_entries()` method: Threat Intelligence page can push blocklist IPs directly to the map
+- Detail panel shows country, city, lat/lon, organisation, and any linked service entries
+- Bogon / RFC1918 addresses automatically filtered from map plot
+
+**Custom Trigger Expressions** (Reports & Alerts section)
+- Expression language: `avg(rtt["ip"], 5m) > 80`, `loss%["ip"] > 5 AND state["ip"] != "UP"`, `uptime%["ip"] < 95`
+- Supported metrics: `rtt`, `loss%`, `jitter`, `state`, `uptime%`; aggregates: `avg`, `max`, `min` with `s`/`m`/`h` windows
+- Visual rule builder dialog — name, severity (INFO/WARNING/CRITICAL), expression editor, live plain-English preview label, cooldown, 6 built-in examples
+- Test Now button evaluates selected rule against live MetricStore data off-thread
+- `evaluate_all()` integrates with dashboard monitoring cycle to fire alerts automatically
+- Rules stored as JSON to `%LOCALAPPDATA%\NetSentinel\trigger_rules.json`
+
+**Automation Hooks** (Advanced section)
+- Event-driven rules: fire a webhook HTTP POST or execute a local script/command when a network event occurs
+- Supported triggers: device-down, high RTT, new device discovered, alert fired
+- Rules editor with method (GET/POST), URL, payload template, and per-event-type enable toggles
+- Test button fires a rule immediately; execution log with timestamp, status, and response
+
+**Network Documentation** (Advanced section)
+- Generates a formatted HTML or Markdown document snapshot of your full network on demand or on schedule
+- Covers: device inventory table, service status, open ports, TLS certificate status, topology summary
+- Output saved to `%LOCALAPPDATA%\NetSentinel\` or a user-chosen directory; open in browser with one click
+
+**MQTT / Home Assistant Publisher** (Advanced section)
+- Publishes device discovery, availability (`online`/`offline`), and metric events to any MQTT broker
+- Home Assistant MQTT Discovery payloads auto-formatted for binary_sensor (availability) and sensor (RTT, loss%, jitter) device types
+- Configurable broker host/port/topic prefix/QoS; credentials stored in OS keychain (RULE 22-A)
+- Connection status indicator; publish log in the UI
+
+**Credentialed Scan — WMI enrichment**
+- `_parse_windows()` now captures BIOS serial number via `wmic bios get SerialNumber`
+- Active session detection via `query session` output: correctly identifies STATE as last column; filters `Active`/`Conn` states, skips `Disc`
+- `CredScanResult.serial_number` and `CredScanResult.active_sessions` fields available to all callers
+
+### v1.4.0
 
 **Navigation restructure**
 - Standard section reorganised into 7 named subgroups: Discover, Live Monitor, Threat Detection, Health & History, Diagnostics, Reports & Alerts, Tools

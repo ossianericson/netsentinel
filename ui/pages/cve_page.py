@@ -26,8 +26,8 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, CRITICAL, GREEN, RED,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
 # ── CVE state definitions ─────────────────────────────────────────────────────
@@ -37,16 +37,16 @@ CVE_STATES = ["Open", "Acknowledged", "Accepted Risk", "Remediated"]
 _STATE_COLORS = {
     "Open":          RED,
     "Acknowledged":  AMBER,
-    "Accepted Risk": "#5A6A7A",
+    "Accepted Risk": TEXT_SECONDARY,
     "Remediated":    GREEN,
 }
 
 _SEVERITY_COLORS = {
-    "CRITICAL": "#8B0000",
+    "CRITICAL": CRITICAL,
     "HIGH":     RED,
     "MEDIUM":   AMBER,
-    "LOW":      "#0078D4",
-    "NONE":     "#9BA8B4",
+    "LOW":      ACCENT,
+    "NONE":     TEXT_MUTED,
 }
 
 
@@ -250,16 +250,16 @@ class CvePage(QWidget):
         _, self._kpi_total   = _kpi_tile("Total CVEs",      "0", ACCENT)
         _, self._kpi_open    = _kpi_tile("Open",             "0", RED)
         _, self._kpi_ack     = _kpi_tile("Acknowledged",     "0", AMBER)
-        _, self._kpi_risk    = _kpi_tile("Accepted Risk",    "0", "#5A6A7A")
+        _, self._kpi_risk    = _kpi_tile("Accepted Risk",    "0", TEXT_SECONDARY)
         _, self._kpi_fixed   = _kpi_tile("Remediated",       "0", GREEN)
-        _, self._kpi_crit    = _kpi_tile("Critical/High",    "0", "#8B0000")
+        _, self._kpi_crit    = _kpi_tile("Critical/High",    "0", CRITICAL)
         for tile, _ in [
             _kpi_tile("Total CVEs", "0", ACCENT),
             _kpi_tile("Open", "0", RED),
             _kpi_tile("Acknowledged", "0", AMBER),
-            _kpi_tile("Accepted Risk", "0", "#5A6A7A"),
+            _kpi_tile("Accepted Risk", "0", TEXT_SECONDARY),
             _kpi_tile("Remediated", "0", GREEN),
-            _kpi_tile("Critical/High", "0", "#8B0000"),
+            _kpi_tile("Critical/High", "0", CRITICAL),
         ]:
             kpi_row.addWidget(tile)
         kpi_row.addStretch()
@@ -270,9 +270,9 @@ class CvePage(QWidget):
         t1, self._kpi_total = _kpi_tile("Total CVEs",   "0", ACCENT)
         t2, self._kpi_open  = _kpi_tile("Open",         "0", RED)
         t3, self._kpi_ack   = _kpi_tile("Acknowledged", "0", AMBER)
-        t4, self._kpi_risk  = _kpi_tile("Accepted Risk","0", "#5A6A7A")
+        t4, self._kpi_risk  = _kpi_tile("Accepted Risk","0", TEXT_SECONDARY)
         t5, self._kpi_fixed = _kpi_tile("Remediated",   "0", GREEN)
-        t6, self._kpi_crit  = _kpi_tile("Critical/High","0", "#8B0000")
+        t6, self._kpi_crit  = _kpi_tile("Critical/High","0", CRITICAL)
         for t in (t1, t2, t3, t4, t5, t6):
             kpi_row2.addWidget(t)
         kpi_row2.addStretch()
@@ -424,7 +424,7 @@ class CvePage(QWidget):
             score_item = _item(f"{r['cvss_score']:.1f}")
             score_val = float(r["cvss_score"])
             if score_val >= 9.0:
-                score_item.setForeground(QColor("#8B0000"))
+                score_item.setForeground(QColor(CRITICAL))
             elif score_val >= 7.0:
                 score_item.setForeground(QColor(RED))
             elif score_val >= 4.0:

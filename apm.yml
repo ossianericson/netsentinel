@@ -1,10 +1,34 @@
 name: netsentinel
-version: 1.4.0
+version: 1.5.1
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
 
 changelog:
+  - version: 1.5.1
+    date: 2026-04-30
+    summary: Multithreaded speed test (Ookla CLI + pure-Python fallback), Windows least-privilege path hardening, sidebar icon normalization
+    changes:
+      - speed_tester.py rewritten with 3-tier backend cascade
+        1. Ookla CLI binary (1 Gbps+) — auto-detected in 7 locations including WinGet Links dir
+        2. speedtest-cli library — bumped to 8 download / 4 upload threads; SSL-patched for Python 3.12
+        3. Pure-Python HTTP — 16 download / 8 upload ThreadPoolExecutor TCP streams; zero new deps
+      - "_find_ookla_cli() now searches %LOCALAPPDATA%\\Microsoft\\WinGet\\Links\\, WinGet Packages glob, Ookla MSI paths, homebrew/Linux prefix paths, and system PATH"
+      - OoklaCliBanner widget in ui/pages/ookla_cli_banner.py — dismissible install strip that runs
+        winget install Ookla.Speedtest.CLI in a background thread
+      - Ookla.Speedtest.CLI declared as PackageDependency in WinGet installer manifest
+      - "installer.iss: optional checked-by-default task runs winget install Ookla.Speedtest.CLI silently; PrepareToInstall() warns if winget is absent"
+      - "get_app_data_dir() added to modules/utils.py - Windows: %LOCALAPPDATA%\\NetSentinel\\, macOS: ~/Library/Application Support/NetSentinel/, Linux: $XDG_CONFIG_HOME/NetSentinel/"
+      - MetricStore._default_path() updated to 3-tier: exe dir → get_app_data_dir() → ~/.config
+      - app.py crash log now writes to get_app_data_dir() instead of exe dir (PermissionError fix)
+      - app.py main() guards sys.stderr/stdout = None in windowed PyInstaller builds
+      - Sidebar icons normalized: geometric Unicode symbols replace photo-emoji in _nav_add_page()
+      - Ctrl+F / _focus_nav_search() added — focuses sidebar search from anywhere in the app
+      - Sidebar search visible in collapsed mode (shows ⌕ placeholder)
+      - Architecture rule RULE 23 (AppData paths), RULE 24 (speed tester cascade), RULE 25 (icons)
+        added to .apm/instructions/development-rules.instructions.md
+      - Architecture layout table updated in .apm/instructions/architecture.instructions.md
+
   - version: 1.4.0
     date: 2026-04-29
     summary: Speed Test, Home Automation Hub, Active Connections, Live Bandwidth, push notifications, threat intelligence, DHCP Lease Inventory, DNS Zone Mapping, security hardening
@@ -16,30 +40,16 @@ changelog:
       - Run on startup toggle (Windows HKCU registry)
       - Active Connections page: process-to-socket map (psutil), kill-connection firewall rule
       - Live Bandwidth page: 60s rolling dual area chart per interface; LiveBandwidthTile
-      - Sidebar nav restructured into 7 subgroups (Discover / Live Monitor / Threat Detection /
-        Health & History / Diagnostics / Reports & Alerts / Tools)
-      - Push notifications: PushoverChannel, NtfyChannel, TelegramChannel added to
-        notification_router.py; 3 new channel cards in Notifications page; all tokens
-        stored in OS keychain (RULE 22-A)
-      - Threat Intelligence page: ThreatIntelDB (Feodo Tracker + Emerging Threats feeds),
-        AbuseIPDB v2 lookup (consent-gated, public IPs only, key in OS keychain)
-      - DHCP Lease Inventory page: dnsmasq/dhclient/nmcli/ARP+ipconfig; auto-refresh
-      - DNS Zone Mapping page: AXFR (raw TCP/53, full RR parser) + mDNS Bonjour/Avahi
+      - Sidebar nav restructured into 7 subgroups
+      - Push notifications: PushoverChannel, NtfyChannel, TelegramChannel
+      - Threat Intelligence page: ThreatIntelDB, AbuseIPDB v2 lookup (consent-gated)
+      - DHCP Lease Inventory page
+      - DNS Zone Mapping page: AXFR + mDNS
       - Security hardening: SMTP password + SNMP community moved to OS keychain (RULE 22-A)
-      - keyring~=25.0 added to requirements.txt
-      - psutil~=7.0 added to requirements.txt
-      - BACKLOG.md full rewrite: 30-item roadmap; items 1, 7, 9 (WoL), 17, 18, 20 (themes)
-        all confirmed built and moved to already-built table
-      - MAC clone / dual-claim detection: MAC_CLONE event in arp_monitor.py
-      - CVE lifecycle tracker: cve_page.py + metric_store schema v7 (cve_lifecycle + alert_fired tables)
-      - PDF report export: save_pdf_report() in report_exporter.py (weasyprint/headless browser chain)
-      - Alert escalation: EscalationPolicy dataclass + check_escalations() in alert_engine.py;
-        escalation config card in Notifications page; alert_fired table in MetricStore
-      - REST API (read-only, local): modules/rest_api.py (Flask, 127.0.0.1 default, OS-keychain
-        API key, 5 endpoints); workers/rest_api_worker.py (QThread); REST API card in Settings page;
-        disabled by default; flask~=3.0 added to requirements.txt
-      - Sidebar nav: Standard subgroups now collapsed by default (7+2=9 visible items on first
-        launch); collapse state persisted to QSettings per subgroup
+      - CVE lifecycle tracker: cve_page.py + metric_store schema v7
+      - PDF report export: save_pdf_report()
+      - Alert escalation: EscalationPolicy + check_escalations()
+      - REST API: read-only Flask, 127.0.0.1 default, OS-keychain API key
 
   - version: 1.3.1
     date: 2026-04-28
@@ -50,3 +60,192 @@ changelog:
 
 dependencies:
   apm: []
+
+rules:
+
+  # ── Testing Enforcement ────────────────────────────────────────────────────
+  - id: RULE-T1
+    title: "Every new module must have a test file"
+    severity: blocking
+    description: >
+      Every new file added under modules/ must have a corresponding
+      tests/test_<name>.py created in the same PR. The test file must contain
+      at minimum one import test and one behavioural test covering the primary
+      function or class.
+
+  - id: RULE-T2
+    title: "Every new worker must have a start/stop lifecycle test"
+    severity: blocking
+    description: >
+      Every new file added under workers/ must have at minimum a test that:
+      (1) imports the worker class, (2) instantiates it, (3) calls start(),
+      waits briefly, calls stop(), and asserts isRunning() is False.
+      This catches hidden import errors in PyInstaller bundles.
+
+  - id: RULE-T3
+    title: "Every bug fix must include a regression test"
+    severity: blocking
+    description: >
+      Every bug fix PR must include a new test that reproduces the original
+      failure and verifies the fix. The test must fail on the code before the
+      fix and pass after. No exceptions.
+
+  - id: RULE-T4
+    title: "Smoke test list must stay current"
+    severity: blocking
+    description: >
+      app.py _smoke_test() must be updated whenever a new module or worker is
+      added. The smoke test must import the module and verify it does not crash
+      on import. A PR adding a module without updating _smoke_test() is incomplete.
+
+  # ── Release Integrity ─────────────────────────────────────────────────────
+  - id: RULE-R1
+    title: "installer.iss version must match app.py before tagging"
+    severity: blocking
+    description: >
+      Before any git tag is pushed, installer.iss MyAppVersion must already
+      equal the version string in app.py. The CI patch step is a safety net
+      only — it is not a substitute for keeping files in sync manually.
+      Run tests/test_version_consistency.py locally before tagging.
+    checklist:
+      - "app.py → app.setApplicationVersion(\"X.Y.Z\")"
+      - "cli.py → _VERSION = \"X.Y.Z\""
+      - "apm.yml → version: X.Y.Z"
+      - "installer.iss → #define MyAppVersion \"X.Y.Z\""
+      - "build.bat → echo version string"
+      - "build.sh → echo version string"
+      - "README.md → badge/link + changelog entry"
+      - "ui/dashboard.py → _build_help_tab() What's New content"
+      - "tools/debug_launch.py → app.setApplicationVersion(\"X.Y.Z\")"
+      - "modules/rest_api.py → \"version\" in /health endpoint"
+      - ".github/winget/NetSentinel.NetSentinel.yaml → PackageVersion: X.Y.Z"
+      - ".github/winget/NetSentinel.NetSentinel.installer.yaml → PackageVersion: X.Y.Z"
+      - ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml → PackageVersion: X.Y.Z"
+
+  - id: RULE-R2
+    title: "Winget locale manifest must be full — never minimal"
+    severity: blocking
+    description: >
+      Every winget submission (both static .github/winget/ and CI-generated)
+      must include the complete locale fields: Description, Tags, Moniker,
+      PublisherUrl, PublisherSupportUrl, PackageUrl, LicenseUrl, and
+      ReleaseNotesUrl. The minimal 9-field skeleton loses community repo
+      metadata on every release. The CI generate step must use the full template.
+
+  - id: RULE-R3
+    title: "Ookla.Speedtest.CLI must be ExternalDependencies, not PackageDependencies"
+    severity: blocking
+    description: >
+      Ookla.Speedtest.CLI must be declared as ExternalDependencies in all
+      winget manifests. PackageDependencies causes winget to block the install
+      if the package is not in the official winget index — a broken install
+      is the highest-severity user-facing bug possible.
+
+  # ── UX Baseline ───────────────────────────────────────────────────────────
+  - id: RULE-UX1
+    title: "New pages must show content within 200 ms"
+    severity: required
+    description: >
+      Every new UI page must display meaningful content (cached data, last-known
+      state, or a skeleton placeholder) within 200 ms of navigation. No blank
+      panels while a worker starts. Use the MetricStore cache as the initial
+      render source, then refresh via worker signal.
+
+  - id: RULE-UX2
+    title: "Destructive and slow actions must have a visible loading state"
+    severity: required
+    description: >
+      Any action that takes more than 500 ms (network scan, speed test, file
+      export, service restart) must show a visible in-progress indicator —
+      spinner, progress bar, or disabled button with "Running…" label — before
+      the operation starts. Never leave the UI in a silent waiting state.
+
+  - id: RULE-UX3
+    title: "Every scan result row must have a right-click context menu"
+    severity: required
+    description: >
+      Every QTableWidget showing scan results must have a context menu
+      (right-click) with at minimum: "Copy" (copies selected row as text)
+      and "How to Fix" (opens a plain-English remediation panel or dialog).
+      Use customContextMenuRequested signal — never override mousePressEvent.
+
+  - id: RULE-UX4
+    title: "Ctrl+F must always focus the sidebar search"
+    severity: required
+    description: >
+      The global Ctrl+F shortcut must focus the sidebar search box from any
+      page in the application. This is implemented via Dashboard._focus_nav_search()
+      bound to QShortcut. New pages must not intercept or consume Ctrl+F.
+
+  # ── Home User / Professional Dual Audience ────────────────────────────────
+  - id: RULE-A1
+    title: "Every feature must have a plain-English summary and a technical detail view"
+    severity: required
+    description: >
+      Scan results must be presented at two levels: a plain-English summary
+      (what it means, what to do) visible by default, and full technical detail
+      (raw values, MACs, exact RTTs, OIDs) accessible via a collapsible section
+      or "Details" button. Never hide data entirely — the professional user
+      must be able to reach it without a separate tool.
+
+  - id: RULE-A2
+    title: "Error messages must be translated — no raw exceptions shown to users"
+    severity: required
+    description: >
+      No raw Python exception (traceback, AttributeError, etc.) may ever appear
+      in the UI. All worker error signals must be caught and translated to an
+      actionable message: what failed, why it likely failed, and what the user
+      should try next. Use a helper like _friendly_error(exc) → str in each page.
+
+  - id: RULE-A3
+    title: "Severity labels must use the canonical set only"
+    severity: required
+    description: >
+      All severity / risk labels visible in the UI must be one of exactly:
+      Info, Warning, High, Critical. No other strings. The existing RISK_COLORS
+      / RISK_BG maps in ui/styles.py define the visual treatment. Do not invent
+      new severity strings (e.g. "SEVERE", "NOTICE", "ALERT") — map them to
+      the canonical four.
+
+  # ── Long-term Architecture Health ─────────────────────────────────────────
+  - id: RULE-AH1
+    title: "Module files must not exceed 600 lines"
+    severity: required
+    description: >
+      No single file under modules/ may grow beyond 600 lines. At that point
+      the file must be split: extract cohesive sub-concerns into new sibling
+      modules. Large files are a maintenance hazard and indicate mixed concerns.
+      Measure with: wc -l modules/<name>.py or equivalent.
+
+  - id: RULE-AH2
+    title: "Workers must not block their thread for more than 5 seconds without a progress signal"
+    severity: required
+    description: >
+      Any QThread worker that performs an operation expected to take more than
+      5 seconds must emit a progress signal (progress(str) or status(str)) at
+      least once every 5 seconds. This prevents the UI from appearing frozen
+      and allows the user to cancel. Long polling loops must yield via msleep()
+      and check a _running flag on each iteration.
+
+  - id: RULE-AH3
+    title: "No raw hex colour strings outside ui/styles.py and modules/colours.py"
+    severity: blocking
+    description: >
+      Grep for raw hex strings (#[0-9a-fA-F]{6}) in any Python file outside
+      ui/styles.py and modules/colours.py must return zero matches. This is a
+      CI failure condition. All colours used in UI files must be imported from
+      ui/styles.py. All colours used in module-layer exports (charts, HTML
+      reports) must be imported from modules/colours.py. Add the colour to the
+      appropriate file first if it does not exist.
+
+  - id: RULE-AH4
+    title: "Optional dependencies must be lazy-imported and have a graceful fallback"
+    severity: required
+    description: >
+      Any dependency that is not universally available (nmap, scapy, speedtest,
+      npcap-dependent libs) must not be imported at module level. Use lazy
+      imports inside the function that needs them, wrapped in try/except
+      ImportError. The fallback must degrade gracefully (return empty results,
+      emit an error signal, or show a banner) — never crash on import.
+      Example: speedtest-cli inside _run_speedtest_cli(), nmap inside port_scanner.
+

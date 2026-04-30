@@ -12,7 +12,10 @@ applyTo: "**"
 | Charts / graphs | matplotlib (QtAgg backend embedded in QWidget) |
 | Network scanning | scapy, nmap, python-nmap |
 | Packaging | PyInstaller (produces single-exe builds) |
+| Distribution | Inno Setup installer + WinGet (Ookla.Speedtest.CLI as PackageDependency) |
 | Config persistence | QSettings / INI file (NetSentinel.ini) |
+| Data persistence | SQLite via MetricStore (WAL mode, schema v7) |
+| Secrets | OS keychain via `keyring` (RULE 22-A) |
 | Logging | Python `logging` module + custom CSV logger |
 
 ## Repository Layout
@@ -24,68 +27,154 @@ netsentinel/
 ├── svc.py                  # Windows service wrapper
 ├── requirements.txt
 ├── apm.yml                 # APM manifest
+├── installer.iss           # Inno Setup — includes optional Ookla CLI winget task
+├── .github/
+│   ├── winget/             # WinGet manifests (Ookla.Speedtest.CLI PackageDependency)
+│   └── workflows/
+│       └── release.yml     # CI: build → release → winget submit (RULE 20)
 ├── modules/                # All backend logic (no PyQt imports)
-│   ├── arp_monitor.py      # Live ARP spoof detection
+│   ├── alert_engine.py
+│   ├── availability_monitor.py
 │   ├── bandwidth_monitor.py
-│   ├── cloud_metadata.py
-│   ├── combined_discovery.py  # Main scan orchestrator
-│   ├── credentialed_scan.py
+│   ├── cert_monitor.py
+│   ├── combined_discovery.py   # Main scan orchestrator
+│   ├── config_baseline.py
 │   ├── cve_lookup.py
-│   ├── device_classifier.py   # OUI → device type + risk score
+│   ├── device_classifier.py    # OUI → device type + risk score
+│   ├── device_tracker.py
 │   ├── dhcp_detector.py
-│   ├── dns_correlator.py      # Ping/DNS latency + outage detection
+│   ├── dhcp_lease_scanner.py
+│   ├── dns_correlator.py       # Ping/DNS latency + outage detection
+│   ├── ha_detector.py
 │   ├── internet_exposure.py
 │   ├── iot_baseline.py
-│   ├── mac_registry.py        # OUI database (offenders.json)
-│   ├── network_logger.py      # Background ping logger
+│   ├── mac_registry.py         # OUI database (offenders.json)
+│   ├── metric_store.py         # SQLite time-series DB (singleton)
+│   ├── network_benchmark.py
+│   ├── network_logger.py       # Background ping logger (CSV → ~/Documents/NetSentinel/logs)
+│   ├── notification_router.py
 │   ├── os_fingerprint.py
 │   ├── port_scanner.py
+│   ├── rest_api.py             # Read-only Flask API (127.0.0.1, API key in keychain)
 │   ├── risk_scorer.py
 │   ├── rogue_device.py
+│   ├── root_cause_correlator.py
 │   ├── scheduler.py
 │   ├── snmp_poller.py
+│   ├── snmp_trap_receiver.py
+│   ├── speed_tester.py         # 3-tier: Ookla CLI → speedtest-cli → pure-Python
 │   ├── storm_analyser.py
 │   ├── stp_detector.py
 │   ├── syn_scanner.py
+│   ├── threat_intel.py
 │   ├── tls_checker.py
-│   └── utils.py               # get_network_info, is_admin, etc.
+│   ├── trend_analyser.py
+│   └── utils.py                # get_app_data_dir(), is_admin(), ping_sweep, etc.
 ├── ui/
-│   ├── styles.py           # SINGLE SOURCE OF TRUTH for all colours and QSS
-│   ├── dashboard.py        # Main window — all tab pages built here
-│   ├── live_graph.py       # Matplotlib RTT line chart (Module 5)
-│   ├── topology_widget.py  # Matplotlib network topology map
-│   └── matrix_rain.py      # Easter egg (Ctrl+Shift+M)
-├── workers/
-│   └── scan_worker.py      # QThread workers for background scans
+│   ├── styles.py               # SINGLE SOURCE OF TRUTH for all colours and QSS
+│   ├── dashboard.py            # Main window + sidebar nav (_nav_add_page pattern)
+│   ├── live_graph.py           # Matplotlib RTT line chart
+│   ├── topology_widget.py      # Matplotlib network topology map
+│   ├── system_tray.py
+│   └── pages/
+│       ├── baseline_page.py
+│       ├── cert_page.py
+│       ├── connections_page.py
+│       ├── cve_page.py
+│       ├── dhcp_lease_page.py
+│       ├── dns_zone_page.py
+│       ├── history_page.py
+│       ├── home_automation_page.py
+│       ├── inventory_page.py
+│       ├── live_bandwidth_page.py
+│       ├── maintenance_page.py
+│       ├── notifications_page.py
+│       ├── ookla_cli_banner.py     # Dismissible install banner for Ookla CLI
+│       ├── overview_page.py
+│       ├── reports_page.py
+│       ├── service_page.py
+│       ├── settings_page.py
+│       ├── snmp_trap_page.py
+│       ├── speed_test_page.py
+│       ├── syslog_page.py
+│       ├── threat_intel_page.py
+│       ├── trend_page.py
+│       └── uptime_page.py
+├── workers/                    # QThread wrappers (signals only, no logic)
+│   ├── availability_worker.py
+│   ├── cert_worker.py
+│   ├── dhcp_lease_worker.py
+│   ├── dns_zone_worker.py
+│   ├── ha_worker.py
+│   ├── iface_bw_worker.py
+│   ├── report_scheduler_worker.py
+│   ├── rest_api_worker.py
+│   ├── scan_worker.py
+│   ├── service_worker.py
+│   ├── snmp_trap_worker.py
+│   ├── speed_test_worker.py    # FetchServersWorker + SpeedTestWorker
+│   ├── syslog_worker.py
+│   └── threat_intel_worker.py
 └── tests/
 ```
 
 ## Key Architectural Patterns
 
-### Single stylesheet
-All colours, fonts, and QSS rules live in `ui/styles.py`. **Never** hardcode hex colours or font sizes anywhere else in the codebase. Always import from `ui/styles.py`.
+### Three-layer separation (ARCH RULE 1)
+
+```
+UI LAYER       ui/dashboard.py (shell/router), ui/pages/*.py (page widgets)
+               • Reads from MetricStore for display
+               • NEVER writes to MetricStore directly
+               • NEVER imports from modules/alert_engine.py
+
+DATA LAYER     modules/metric_store.py  ←→  NetSentinel.db (AppData)
+               • Single source of truth for all persisted metrics
+
+MODULE LAYER   modules/*.py
+               • Pure business logic — NO PyQt imports, NO direct DB writes
+```
+
+### File write locations (ARCH RULE 23)
+All file writes must use `get_app_data_dir()` from `modules/utils.py`:
+- Windows: `%LOCALAPPDATA%\NetSentinel\`
+- macOS: `~/Library/Application Support/NetSentinel/`
+- Linux: `$XDG_CONFIG_HOME/NetSentinel/`
+
+The exe directory is **read-only** when installed via WinGet or Inno Setup into `Program Files`.
+The only exception is `network_logger.py` which writes CSVs to `~/Documents/NetSentinel/logs/` by design (user-accessible log files).
+
+### MetricStore singleton (ARCH RULE 2)
+`MetricStore` is instantiated **once** in `app.py` or `svc.py` and injected as a dependency.
+Never construct it inside a page widget or module.
+
+### Speed tester cascade (ARCH RULE 24)
+`modules/speed_tester.py` tries backends in order:
+1. **Ookla CLI binary** — `_find_ookla_cli()` searches 7 locations including WinGet Links dir
+2. **speedtest-cli library** — 8 download / 4 upload threads; SSL-patched for Python 3.12
+3. **Pure-Python HTTP** — 16 download / 8 upload `ThreadPoolExecutor` TCP streams
+
+Frontend (`SpeedTestResult` dataclass) is identical regardless of backend.
 
 ### Dashboard navigation model
-The main window uses a `QListWidget` sidebar (`objectName="sideNav"`) + `QStackedWidget` — **not** `QTabWidget`. Pages are registered via `_nav_add_page()`. Section headers via `_nav_add_section()`.
+Main window: `QListWidget` sidebar (`objectName="sideNav"`) + `QStackedWidget`.
+Pages registered via `_nav_add_page(icon, label, widget)`.
+Section headers via `_nav_add_section(label)`.
+Subgroups via `_nav_add_subgroup(label)`.
+Ctrl+F focuses the sidebar search box from anywhere.
 
-Sidebar sections:
-- **Standard** — core scan modules
-- **Advanced** — MTR, topology, ARP watch, DHCP, bandwidth
-- **Security Audit** — SYN/UDP scan, OS detect, CVE, credentials
+### Sidebar icon standard
+Icons in `_nav_add_page()` must be geometric Unicode symbols (not photo-emoji):
+- Consistent at 12px in the collapsed 48px icon rail
+- One unique symbol per conceptual domain
+- Safe fallback set: `■ □ ▪ ● ○ ◆ ▲ △ ▶ → ← ↑ ↓ ⚡ ⚙ ✓ ✚ ℹ ⊞ ⊙ ⊕`
 
 ### Scan workers
-All network operations run in `workers/scan_worker.py` (QThread subclasses). They emit `result_ready` and `error` signals. The Dashboard connects these signals to UI update slots. **Never** do blocking I/O on the main thread.
-
-### Module result objects
-Each scan module returns a dict with at minimum:
-- `devices` — list of device dicts
-- `verdict` — plain-English summary string
-- `level` — `"CLEAN"` | `"LOW"` | `"MEDIUM"` | `"HIGH"` | `"STORM"`
+All network operations run in `workers/` (QThread subclasses). Emit `result_ready` and `error` signals. **Never** do blocking I/O on the main thread.
 
 ### Risk levels (canonical)
 `HIGH` > `STORM` > `MEDIUM` > `WARNING` > `LOW` > `CLEAN` > `UNKNOWN`
-
-Colours are defined in `RISK_COLORS` and `RISK_BG` in `ui/styles.py`.
+Colours in `RISK_COLORS` and `RISK_BG` in `ui/styles.py`.
 
 ## Colour Palette (ui/styles.py constants)
 
@@ -107,5 +196,11 @@ AMBER  = "#F59E0B"
 GREEN  = "#2E7D32"
 ```
 
-## Settings Persistence
-`Dashboard._save_settings()` / `_restore_settings()` use `QSettings` to persist: scan mode (standard/advanced/audit), checkbox states, spinbox values, window geometry, and last-used directory.
+## WinGet Distribution
+
+`Ookla.Speedtest.CLI` is declared as a `PackageDependency` in the installer manifest.
+WinGet installs it automatically alongside NetSentinel.
+The Inno Setup installer has an optional task that runs `winget install Ookla.Speedtest.CLI --silent`.
+`OoklaCliBanner` in `ui/pages/ookla_cli_banner.py` handles in-app one-click install for portable users.
+
+**Never bundle `speedtest.exe` inside the installer** — it has a proprietary Ookla EULA.

@@ -56,6 +56,8 @@ from ui.styles import (
     BG_HOVER,
     BORDER,
     CARD_HDR_BORDER,
+    CHART_GRID,
+    CHART_PLOT_BG,
     GREEN,
     RED,
     TEXT_MUTED,
@@ -251,7 +253,7 @@ class _RttMiniChart(QWidget):
     def _draw_empty(self) -> None:
         ax = self._ax
         ax.cla()
-        ax.set_facecolor("#FAFBFC")
+        ax.set_facecolor(CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color(BORDER)
@@ -261,7 +263,7 @@ class _RttMiniChart(QWidget):
         ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
         ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
                 ha="center", va="center", color=TEXT_MUTED, fontsize=9)
-        ax.grid(True, color="#E8EDF2", linewidth=0.6)
+        ax.grid(True, color=CHART_GRID, linewidth=0.6)
         self._fig.tight_layout(pad=0.5)
         self._canvas.draw_idle()
 
@@ -269,14 +271,14 @@ class _RttMiniChart(QWidget):
         """points: list of RttPoint objects."""
         ax = self._ax
         ax.cla()
-        ax.set_facecolor("#FAFBFC")
+        ax.set_facecolor(CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.spines["left"].set_color(BORDER)
         ax.spines["bottom"].set_color(BORDER)
         ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
         ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
-        ax.grid(True, color="#E8EDF2", linewidth=0.6)
+        ax.grid(True, color=CHART_GRID, linewidth=0.6)
 
         if not points:
             self._draw_empty()

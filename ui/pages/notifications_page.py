@@ -84,6 +84,8 @@ from ui.styles import (
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
+from modules.alert_engine import rule_settings_key as _rule_key
+
 
 # ── Helpers (shared with settings_page pattern) ───────────────────────────────
 
@@ -175,6 +177,19 @@ _SEV_BG    = {"INFO": BG_CARD, "WARNING": AMBER_BG, "CRITICAL": RED_BG}
 _CH_COLOR  = {"TOAST": ACCENT, "WEBHOOK": GREEN, "EMAIL": AMBER,
               "PUSHOVER": RED, "NTFY": GREEN, "TELEGRAM": ACCENT}
 
+# (name, rule_type, friendly description) — matches _default_rules() in alert_engine.py
+_ALERT_RULE_DEFS = [
+    ("High RTT",      "RTT_THRESHOLD",  "Fires when a host\'s round-trip time exceeds the threshold"),
+    ("Host Down",     "HOST_DOWN",      "Fires when a monitored host becomes unreachable"),
+    ("Host Degraded", "HOST_DEGRADED",  "Fires when a host responds slowly or intermittently"),
+    ("New Device",    "NEW_DEVICE",     "Fires when a device with a new MAC address is seen on the network"),
+    ("Device Gone",   "DEVICE_GONE",    "Fires when a known device has not been seen recently"),
+    ("Cert Expiring", "CERT_EXPIRY",    "Fires when a TLS certificate is within the expiry threshold"),
+    ("Cert Expired",  "CERT_EXPIRED",   "Fires when a TLS certificate has already expired"),
+    ("Host Flapping", "FLAP",           "Fires when a host oscillates between UP and DOWN repeatedly"),
+    ("Service Down",  "SERVICE_DOWN",   "Fires when a monitored TCP service stops responding"),
+]
+
 
 class NotificationsPage(QWidget):
     """Notification routing configuration and delivery log page."""
@@ -183,6 +198,8 @@ class NotificationsPage(QWidget):
         super().__init__(parent)
         self.setObjectName("contentArea")
         self._router = router
+        self._alert_engine = None
+        self._rule_checkboxes: dict = {}
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -206,6 +223,7 @@ class NotificationsPage(QWidget):
         il.setContentsMargins(16, 8, 16, 16)
         il.setSpacing(12)
 
+        il.addWidget(self._build_alert_rules_card())
         il.addWidget(self._build_toast_card())
         il.addWidget(self._build_webhook_card())
         il.addWidget(self._build_email_card())
@@ -220,6 +238,43 @@ class NotificationsPage(QWidget):
         outer.addWidget(scroll, 1)
 
         self._restore()
+
+    # ── Alert rules card ──────────────────────────────────────────────────────
+
+    def _build_alert_rules_card(self) -> QWidget:
+        card, bl = _card("Alert Rules")
+
+        info = QLabel(
+            "All alert rules are disabled by default \u2014 you must opt in. "
+            "Enable the rules you want; alerts only fire for rules that are active."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none; padding-bottom:4px;"
+        )
+        bl.addWidget(info)
+
+        from PyQt6.QtWidgets import QGridLayout
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(6)
+
+        for row_idx, (name, _rule_type, description) in enumerate(_ALERT_RULE_DEFS):
+            chk = QCheckBox(name)
+            chk.setFixedWidth(140)
+            chk.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+            chk.stateChanged.connect(self._save)
+            desc_lbl = QLabel(description)
+            desc_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+            )
+            grid.addWidget(chk, row_idx, 0)
+            grid.addWidget(desc_lbl, row_idx, 1)
+            self._rule_checkboxes[name] = chk
+
+        bl.addLayout(grid)
+        return card
 
     # ── Toast card ────────────────────────────────────────────────────────────
 
@@ -586,6 +641,8 @@ class NotificationsPage(QWidget):
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def _save(self) -> None:
+        if getattr(self, "_restoring", False):
+            return
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("notif/toast_enabled",    self._chk_toast.isChecked())
         qs.setValue("notif/toast_severity",   self._toast_severity.currentText())
@@ -621,53 +678,64 @@ class NotificationsPage(QWidget):
         qs.setValue("notif/escalation_wait",     self._spin_escalation_wait.value())
         qs.setValue("notif/escalation_channel",  self._combo_escalation_channel.currentText())
         qs.setValue("notif/escalation_rules",    self._txt_escalation_rules.text().strip())
+        # Alert rule enabled states (one key per rule, opt-in defaults to False)
+        for name, chk in self._rule_checkboxes.items():
+            qs.setValue(_rule_key(name), chk.isChecked())
+        self._apply_to_engine()
         self._apply_to_router()
 
     def _restore(self) -> None:
-        qs = QSettings("NetSentinel", "NetSentinel")
-        self._chk_toast.setChecked(qs.value("notif/toast_enabled",    True,  type=bool))
-        self._toast_severity.setCurrentText(qs.value("notif/toast_severity", "WARNING"))
-        self._chk_webhook.setChecked(qs.value("notif/webhook_enabled", False, type=bool))
-        self._webhook_url.setText(qs.value("notif/webhook_url",        ""))
-        self._webhook_severity.setCurrentText(qs.value("notif/webhook_severity", "CRITICAL"))
-        self._chk_email.setChecked(qs.value("notif/email_enabled",     False, type=bool))
-        self._email_host.setText(qs.value("notif/email_host",          ""))
-        self._email_port.setText(qs.value("notif/email_port",          "587"))
-        self._email_user.setText(qs.value("notif/email_user",          ""))
-        # RULE 22-A: load password from OS keychain, never from QSettings
-        self._email_pass.setText(_load_secret(_KR_EMAIL_PASS_KEY))
-        self._email_from.setText(qs.value("notif/email_from",          ""))
-        self._email_to.setText(qs.value("notif/email_to",              ""))
-        self._email_severity.setCurrentText(qs.value("notif/email_severity", "CRITICAL"))
-        # Migrate: if an old plaintext password exists in QSettings, move it to keychain
-        legacy = qs.value("notif/email_pass", "")
-        if legacy:
-            _save_secret(_KR_EMAIL_PASS_KEY, legacy)
-            self._email_pass.setText(legacy)
-            qs.remove("notif/email_pass")   # delete from INI immediately
-        # Pushover
-        self._chk_pushover.setChecked(qs.value("notif/pushover_enabled", False, type=bool))
-        self._pushover_severity.setCurrentText(qs.value("notif/pushover_severity", "WARNING"))
-        self._pushover_token.setText(_load_secret(_KR_PUSHOVER_TOKEN_KEY))
-        self._pushover_user.setText(_load_secret(_KR_PUSHOVER_USER_KEY))
-        # ntfy
-        self._chk_ntfy.setChecked(qs.value("notif/ntfy_enabled", False, type=bool))
-        self._ntfy_url.setText(qs.value("notif/ntfy_url", ""))
-        self._ntfy_severity.setCurrentText(qs.value("notif/ntfy_severity", "WARNING"))
-        self._ntfy_token.setText(_load_secret(_KR_NTFY_TOKEN_KEY))
-        # Telegram
-        self._chk_telegram.setChecked(qs.value("notif/telegram_enabled", False, type=bool))
-        self._telegram_chat.setText(qs.value("notif/telegram_chat", ""))
-        self._telegram_severity.setCurrentText(qs.value("notif/telegram_severity", "WARNING"))
-        self._telegram_token.setText(_load_secret(_KR_TELEGRAM_TOKEN_KEY))
-        # Escalation
-        self._chk_escalation.setChecked(qs.value("notif/escalation_enabled", False, type=bool))
-        self._spin_escalation_wait.setValue(int(qs.value("notif/escalation_wait", 15)))
-        ch = qs.value("notif/escalation_channel", "Email")
-        idx = self._combo_escalation_channel.findText(ch)
-        if idx >= 0:
-            self._combo_escalation_channel.setCurrentIndex(idx)
-        self._txt_escalation_rules.setText(qs.value("notif/escalation_rules", ""))
+        self._restoring = True
+        try:
+            qs = QSettings("NetSentinel", "NetSentinel")
+            self._chk_toast.setChecked(qs.value("notif/toast_enabled",    False, type=bool))
+            self._toast_severity.setCurrentText(qs.value("notif/toast_severity", "WARNING"))
+            self._chk_webhook.setChecked(qs.value("notif/webhook_enabled", False, type=bool))
+            self._webhook_url.setText(qs.value("notif/webhook_url",        ""))
+            self._webhook_severity.setCurrentText(qs.value("notif/webhook_severity", "CRITICAL"))
+            self._chk_email.setChecked(qs.value("notif/email_enabled",     False, type=bool))
+            self._email_host.setText(qs.value("notif/email_host",          ""))
+            self._email_port.setText(qs.value("notif/email_port",          "587"))
+            self._email_user.setText(qs.value("notif/email_user",          ""))
+            # RULE 22-A: load password from OS keychain, never from QSettings
+            self._email_pass.setText(_load_secret(_KR_EMAIL_PASS_KEY))
+            self._email_from.setText(qs.value("notif/email_from",          ""))
+            self._email_to.setText(qs.value("notif/email_to",              ""))
+            self._email_severity.setCurrentText(qs.value("notif/email_severity", "CRITICAL"))
+            # Migrate: if an old plaintext password exists in QSettings, move it to keychain
+            legacy = qs.value("notif/email_pass", "")
+            if legacy:
+                _save_secret(_KR_EMAIL_PASS_KEY, legacy)
+                self._email_pass.setText(legacy)
+                qs.remove("notif/email_pass")   # delete from INI immediately
+            # Pushover
+            self._chk_pushover.setChecked(qs.value("notif/pushover_enabled", False, type=bool))
+            self._pushover_severity.setCurrentText(qs.value("notif/pushover_severity", "WARNING"))
+            self._pushover_token.setText(_load_secret(_KR_PUSHOVER_TOKEN_KEY))
+            self._pushover_user.setText(_load_secret(_KR_PUSHOVER_USER_KEY))
+            # ntfy
+            self._chk_ntfy.setChecked(qs.value("notif/ntfy_enabled", False, type=bool))
+            self._ntfy_url.setText(qs.value("notif/ntfy_url", ""))
+            self._ntfy_severity.setCurrentText(qs.value("notif/ntfy_severity", "WARNING"))
+            self._ntfy_token.setText(_load_secret(_KR_NTFY_TOKEN_KEY))
+            # Telegram
+            self._chk_telegram.setChecked(qs.value("notif/telegram_enabled", False, type=bool))
+            self._telegram_chat.setText(qs.value("notif/telegram_chat", ""))
+            self._telegram_severity.setCurrentText(qs.value("notif/telegram_severity", "WARNING"))
+            self._telegram_token.setText(_load_secret(_KR_TELEGRAM_TOKEN_KEY))
+            # Escalation
+            self._chk_escalation.setChecked(qs.value("notif/escalation_enabled", False, type=bool))
+            self._spin_escalation_wait.setValue(int(qs.value("notif/escalation_wait", 15)))
+            ch = qs.value("notif/escalation_channel", "Email")
+            idx = self._combo_escalation_channel.findText(ch)
+            if idx >= 0:
+                self._combo_escalation_channel.setCurrentIndex(idx)
+            self._txt_escalation_rules.setText(qs.value("notif/escalation_rules", ""))
+            # Alert rule enabled states (missing key → False, opt-in only)
+            for name, chk in self._rule_checkboxes.items():
+                chk.setChecked(qs.value(_rule_key(name), False, type=bool))
+        finally:
+            self._restoring = False
         self._apply_to_router()
 
     def _apply_to_router(self) -> None:
@@ -734,6 +802,24 @@ class NotificationsPage(QWidget):
     def set_router(self, router) -> None:
         self._router = router
         self._apply_to_router()
+
+    # ── Alert engine injection ────────────────────────────────────────────────
+
+    def set_alert_engine(self, engine) -> None:
+        """Inject the live AlertEngine so rule changes take effect immediately."""
+        self._alert_engine = engine
+        self._apply_to_engine()
+
+    def _apply_to_engine(self) -> None:
+        """Push current rule checkbox states into the live AlertEngine."""
+        if self._alert_engine is None:
+            return
+        rules = self._alert_engine.get_rules()
+        for rule in rules:
+            chk = self._rule_checkboxes.get(rule.name)
+            if chk is not None:
+                rule.enabled = chk.isChecked()
+        self._alert_engine.set_rules(rules)
 
     # ── Log refresh ───────────────────────────────────────────────────────────
 

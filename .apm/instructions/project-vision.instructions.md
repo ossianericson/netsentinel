@@ -17,6 +17,7 @@ The tool performs:
 - **Background network logging** — continuous ping/RTT/jitter/DNS logging with analysis
 - **Network topology visualisation** — live matplotlib graph showing device relationships
 - **IoT behaviour baselining** — detect devices going outside their normal behaviour
+- **Internet speed test** — Ookla CLI (1 Gbps+) → speedtest-cli (8 threads) → pure-Python (16 TCP streams)
 
 ## Core Product Values
 
@@ -24,6 +25,7 @@ The tool performs:
 2. **Professional, not playful** — the UI should feel like an enterprise monitoring tool, not a gaming dashboard
 3. **Actionable output** — every scan result must include a clear severity indicator and remediation path
 4. **Zero unnecessary friction** — one click to run, right-click to act, keyboard shortcuts everywhere
+5. **Least privilege** — all file writes go to `%LOCALAPPDATA%\NetSentinel\` via `get_app_data_dir()`; no writes to the exe directory or `Program Files`
 
 ## Target Users
 
@@ -36,3 +38,4 @@ The tool performs:
 - Do not add consumer-style gamification (glow effects, neon colours, oversized animations)
 - Do not abstract away technical detail — show MAC addresses, full IP ranges, exact RTTs
 - Do not add cloud sync, accounts, or telemetry
+- Do not bundle third-party binaries that have their own licences (Ookla CLI, Npcap)

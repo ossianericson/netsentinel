@@ -22,13 +22,14 @@
 ; ============================================================================
 
 #define MyAppName        "NetSentinel"
-#define MyAppVersion     "1.4.0"
+#define MyAppVersion     "1.5.1"
 #define MyAppPublisher   "NetSentinel Project"
 #define MyAppURL         "https://github.com/ossianericson/netsentinel"
 #define MyAppExeName     "NetSentinel.exe"
 #define MyAppCliName     "NetSentinel-cli.exe"
 #define MyAppSvcName     "NetSentinel-svc.exe"
 #define MyAppID          "com.netsentinel.app"
+#define OoklaCliId       "Ookla.Speedtest.CLI"
 
 [Setup]
 ; ── Identity ────────────────────────────────────────────────────────────────
@@ -76,9 +77,15 @@ ChangesEnvironment        = yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon";    Description: "{cm:CreateDesktopIcon}";                GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "addtopath";      Description: "Add NetSentinel CLI to system PATH";    GroupDescription: "Command line integration"; Flags: checkedonce
+Name: "desktopicon";    Description: "{cm:CreateDesktopIcon}";                              GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "addtopath";      Description: "Add NetSentinel CLI to system PATH";                  GroupDescription: "Command line integration"; Flags: checkedonce
 Name: "installservice"; Description: "Install NetSentinel as a background Windows service (requires Administrator)"; GroupDescription: "Background monitoring"; Flags: unchecked
+
+; ── Ookla Speedtest CLI task ────────────────────────────────────────────────────────────────
+; Checked by default — users who don't want it can uncheck.
+; Installed via winget (Ookla.Speedtest.CLI) so no binary redistribution.
+; NetSentinel works perfectly without it; this just unlocks 1 Gbps+ test speeds.
+Name: "installookla";   Description: "Install Ookla Speedtest CLI (recommended — enables 1 Gbps+ speed tests)"; GroupDescription: "Speed testing"; Flags: checkedonce
 
 [Files]
 ; Application icon
@@ -113,6 +120,18 @@ Name: "{autodesktop}\{#MyAppName}";               Filename: "{app}\{#MyAppExeNam
 Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: PathNotInPath('{app}'); Tasks: addtopath; Flags: preservestringtype
 
 [Run]
+; ── Ookla Speedtest CLI install (optional task) ───────────────────────────────────────────────
+; Runs: winget install --id Ookla.Speedtest.CLI --silent --accept-package-agreements
+; No binary is redistributed — winget downloads directly from Ookla's servers.
+; The --source winget flag avoids disambiguation prompts.
+; Failure is silently ignored — NetSentinel falls back to its built-in multithreaded
+; backend if the CLI is not present.
+Filename: "cmd.exe"; \
+  Parameters: "/c winget install --id {#OoklaCliId} --source winget --silent --accept-package-agreements --accept-source-agreements 2>nul"; \
+  Flags: runhidden waituntilterminated; \
+  Tasks: installookla; \
+  StatusMsg: "Installing Ookla Speedtest CLI (for 1 Gbps+ speed tests)..."
+
 ; Install service after copy (optional task)
 Filename: "{app}\{#MyAppSvcName}"; Parameters: "install"; Flags: runhidden waituntilterminated; Tasks: installservice; StatusMsg: "Installing background service..."
 
@@ -123,6 +142,10 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 ; Stop and uninstall service if it was installed
 Filename: "{app}\{#MyAppSvcName}"; Parameters: "stop";      Flags: runhidden; StatusMsg: "Stopping service..."
 Filename: "{app}\{#MyAppSvcName}"; Parameters: "uninstall"; Flags: runhidden; StatusMsg: "Removing service..."
+
+; Note: Ookla CLI is NOT uninstalled here — it's a separate package the user may
+; want to keep for other uses. Users can uninstall it via:
+;   winget uninstall Ookla.Speedtest.CLI
 
 [Code]
 // Helper: check whether a path segment is already in the system PATH
@@ -138,4 +161,38 @@ begin
     Exit;
   end;
   Result := Pos(LowerCase(PathToAdd), LowerCase(CurrentPath)) = 0;
+end;
+
+// Helper: check if an executable exists anywhere on PATH
+function FindProc(const ExeName: String): Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{cmd}'), '/c where ' + ExeName + ' >nul 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := Result and (ResultCode = 0);
+end;
+
+// Pre-installation check: warn if winget is missing when Ookla CLI task is selected
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  NeedsRestart := False;
+
+  if not IsTaskSelected('installookla') then Exit;
+
+  // Check common winget location and PATH
+  if FileExists(ExpandConstant('{localappdata}\Microsoft\WindowsApps\winget.exe')) then Exit;
+  if FindProc('winget') then Exit;
+
+  // winget not found — warn but don't block installation
+  MsgBox(
+    'The Ookla Speedtest CLI could not be automatically installed because winget ' +
+    '(Windows Package Manager) was not found on this system.' + #13#10 + #13#10 +
+    'NetSentinel will still work — it includes a built-in multithreaded speed test backend.' + #13#10 + #13#10 +
+    'To get 1 Gbps+ speed tests later, install the Ookla CLI manually:' + #13#10 +
+    '  1. Install winget from the Microsoft Store (App Installer)' + #13#10 +
+    '  2. Run: winget install Ookla.Speedtest.CLI' + #13#10 + #13#10 +
+    'Or use the "Install via winget" button in the Speed Test page inside NetSentinel.',
+    mbInformation, MB_OK
+  );
 end;

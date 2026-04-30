@@ -20,7 +20,7 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QFrame,
@@ -48,13 +48,19 @@ from ui.styles import (
     BORDER,
     CARD_HDR_BORDER,
     GREEN,
+    PROGRESS_TRACK,
     RED,
+    TABLE_ROW_BORDER,
+    TABLE_SEL,
+    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    TEXT_MUTED,
     TH_BG,
+    TH_BORDER,
     TH_TEXT,
 )
+
+from ui.pages.ookla_cli_banner import OoklaCliBanner
 
 # ── Gauge constants ───────────────────────────────────────────────────────────
 _GAUGE_START_DEG = 210     # 7 o'clock — 0 Mbps (left)
@@ -71,8 +77,8 @@ _GAUGE_MAJOR = {0, 10, 100, 1000}   # ticks that get a text label
 
 _COLOR_DOWNLOAD = ACCENT             # brand blue
 _COLOR_UPLOAD   = GREEN              # green
-_COLOR_IDLE     = "#9BA8B4"          # muted grey
-_COLOR_TRACK    = "#E0E8EF"          # light grey track
+_COLOR_IDLE     = TEXT_MUTED         # muted grey
+_COLOR_TRACK    = PROGRESS_TRACK     # light grey track
 
 
 def _speed_fraction(mbps: float, max_mbps: float = _GAUGE_MAX_MBPS) -> float:
@@ -198,7 +204,7 @@ class SpeedGaugeWidget(QWidget):
             ax.plot(
                 [cx + r_inner_tick * math.cos(rad), cx + r_outer_tick * math.cos(rad)],
                 [cy + r_inner_tick * math.sin(rad), cy + r_outer_tick * math.sin(rad)],
-                color="#9BA8B4", linewidth=0.9, zorder=3,
+                color=_COLOR_IDLE, linewidth=0.9, zorder=3,
             )
             if t in _GAUGE_MAJOR:
                 r_lbl = _GAUGE_R_OUTER + 0.115
@@ -264,7 +270,7 @@ class _ServerList(QListWidget):
             f"  padding:5px 8px; border-bottom:1px solid {BORDER};"
             f"}}"
             f"QListWidget#serverList::item:selected {{"
-            f"  background:#CCE4F7; color:{TEXT_PRIMARY};"
+            f"  background:{TABLE_SEL}; color:{TEXT_PRIMARY};"
             f"}}"
             f"QListWidget#serverList::item:hover:!selected {{"
             f"  background:{BG_HOVER};"
@@ -356,6 +362,9 @@ class SpeedTestPage(QWidget):
     Ookla-style internet speed test page.
     """
 
+    #: Emitted when a speed test completes successfully. Carries the SpeedTestResult.
+    test_completed = pyqtSignal(object)
+
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._store = store  # MetricStore | None
@@ -363,6 +372,7 @@ class SpeedTestPage(QWidget):
         self._selected_server_id: Optional[str] = None
         self._fetch_worker  = None
         self._test_worker   = None
+        self._last_fetch_ts: float = 0.0   # epoch; 0 = never
         self._history: List[dict] = []
         self._anim_timer = QTimer(self)
         self._anim_timer.setInterval(80)
@@ -397,6 +407,11 @@ class SpeedTestPage(QWidget):
         )
         root.addWidget(title)
         root.addWidget(sub)
+
+        # ── Ookla CLI install banner (hidden if CLI already present) ──────────
+        self._ookla_banner = OoklaCliBanner(parent=self)
+        self._ookla_banner.installed.connect(self._on_ookla_installed)
+        root.addWidget(self._ookla_banner)
 
         # ── Top row: server card + gauge card ─────────────────────────────────
         top_row = QHBoxLayout()
@@ -491,7 +506,21 @@ class SpeedTestPage(QWidget):
             f" background:transparent; border:none;"
         )
 
+        # Engine badge — shows which backend will be used
+        self._engine_lbl = QLabel()
+        self._engine_lbl.setStyleSheet(
+            f"font-size:10px; background:transparent; border:none; padding:0 4px;"
+        )
+        self._engine_lbl.setToolTip(
+            "Speed test engine in use.\n"
+            "Ookla CLI = highest accuracy (1 Gbps+)\n"
+            "speedtest-cli = 8-thread library fallback\n"
+            "Pure-Python = built-in 16-stream fallback"
+        )
+        self._refresh_engine_badge()
+
         action_row.addWidget(self._btn_run)
+        action_row.addWidget(self._engine_lbl)
         action_row.addWidget(self._status_lbl, 1)
         root.addLayout(action_row)
 
@@ -517,17 +546,17 @@ class SpeedTestPage(QWidget):
         self._hist_table.setColumnWidth(3, 75)
         self._hist_table.setColumnWidth(4, 105)
         self._hist_table.setColumnWidth(5, 105)
-        self._hist_table.setColumnWidth(6, 70)
+        self._hist_table.setColumnWidth(6, 100)
         self._hist_table.setStyleSheet(
             f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
             f"QHeaderView::section {{"
             f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
             f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid #254A6E;"
+            f"  border-right:1px solid {TH_BORDER};"
             f"}}"
-            f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
             f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid #EAEAEA; }}"
+            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
         )
 
         hist_body.addWidget(self._hist_table)
@@ -552,8 +581,17 @@ class SpeedTestPage(QWidget):
         self._fetch_worker.error.connect(self._on_fetch_error)
         self._fetch_worker.start()
 
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        """Auto-refresh server list if it is more than 30 minutes old."""
+        super().showEvent(event)
+        import time
+        if time.time() - self._last_fetch_ts > 1800:
+            self._fetch_servers()
+
     @pyqtSlot(list)
     def _on_servers_ready(self, servers: list) -> None:
+        import time
+        self._last_fetch_ts = time.time()
         self._servers = servers
         self._server_list.clear()
         self._populate_server_list(servers)
@@ -600,6 +638,42 @@ class SpeedTestPage(QWidget):
         if cur:
             self._selected_server_id = cur.data(Qt.ItemDataRole.UserRole)
 
+    # ── Engine badge ──────────────────────────────────────────────────────────
+
+    def _refresh_engine_badge(self) -> None:
+        """Update the engine badge based on what _find_ookla_cli() returns."""
+        try:
+            from modules.speed_tester import _find_ookla_cli
+            cli = _find_ookla_cli()
+        except Exception:
+            cli = None
+
+        if cli:
+            self._engine_lbl.setText(f"Engine: Ookla CLI ✓")
+            self._engine_lbl.setStyleSheet(
+                f"font-size:10px; background:transparent; border:none;"
+                f" color:{GREEN}; padding:0 4px;"
+            )
+        else:
+            try:
+                import speedtest  # noqa: F401
+                label = "Engine: speedtest-cli"
+            except ImportError:
+                label = "Engine: Pure-Python"
+            self._engine_lbl.setText(label)
+            self._engine_lbl.setStyleSheet(
+                f"font-size:10px; background:transparent; border:none;"
+                f" color:{AMBER}; padding:0 4px;"
+            )
+
+    # ── Ookla CLI banner callback ─────────────────────────────────────────────
+
+    @pyqtSlot()
+    def _on_ookla_installed(self) -> None:
+        """Called after OoklaCliBanner successfully installs the Ookla CLI."""
+        self._refresh_engine_badge()
+        self._set_status("\u2713  Ookla CLI installed \u2014 rerun the test for 1 Gbps+ speeds.")
+
     # ── Test execution ────────────────────────────────────────────────────────
 
     @pyqtSlot()
@@ -624,6 +698,7 @@ class SpeedTestPage(QWidget):
             parent=self,
         )
         self._test_worker.phase_changed.connect(self._on_phase_changed)
+        self._test_worker.speed_sample.connect(self._on_speed_sample)
         self._test_worker.result_ready.connect(self._on_result_ready)
         self._test_worker.error.connect(self._on_test_error)
         self._test_worker.start()
@@ -660,12 +735,20 @@ class SpeedTestPage(QWidget):
         elif phase == "done":
             self._anim_timer.stop()
 
+    @pyqtSlot(float, str)
+    def _on_speed_sample(self, mbps: float, phase: str) -> None:
+        """Receive a live throughput sample and update the gauge target."""
+        self._anim_phase  = phase
+        self._anim_target = mbps
+        if not self._anim_timer.isActive():
+            self._anim_timer.start()
+
     @pyqtSlot(object)
     def _on_result_ready(self, result: object) -> None:
         self._anim_timer.stop()
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶   Run Speed Test")
-
+        self.test_completed.emit(result)
         self._lbl_ping.setText(f"{result.ping_ms:.0f}")
         self._lbl_down.setText(f"{result.download_mbps:.1f}")
         self._lbl_up.setText(f"{result.upload_mbps:.1f}")
@@ -724,6 +807,8 @@ class SpeedTestPage(QWidget):
         self._hist_table.insertRow(0)  # newest at top
 
         if result:
+            backend = getattr(result, "backend", "") or "OK"
+            backend_color = GREEN if backend == "Ookla CLI" else AMBER
             cells = [
                 result.timestamp.replace("T", "  "),
                 result.server_name,
@@ -731,12 +816,12 @@ class SpeedTestPage(QWidget):
                 f"{result.ping_ms:.0f}",
                 f"{result.download_mbps:.1f} Mbps",
                 f"{result.upload_mbps:.1f} Mbps",
-                "OK",
+                backend,
             ]
             colors = [None, None, None, None,
                       GREEN if result.download_mbps >= 25 else AMBER,
                       GREEN if result.upload_mbps >= 5  else AMBER,
-                      GREEN]
+                      backend_color]
         else:
             cells = ["—", "—", "—", "—", "—", "—", "Error"]
             colors = [None]*6 + [RED]

@@ -1,12 +1,13 @@
+﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 # NetSentinel winget manifest — installer file
 # The SHA256 and installer URL are updated automatically by wingetcreate on each release.
 # Do not edit InstallerSha256 manually.
 
 PackageIdentifier: NetSentinel.NetSentinel
-PackageVersion: 1.1.2
+PackageVersion: 1.5.1
 Platform:
   - Windows.Desktop
-MinimumOSVersion: 10.0.0.0
+MinimumOSVersion: 10.0.17763.0
 InstallerType: inno
 Scope: machine
 InstallModes:
@@ -18,9 +19,11 @@ InstallerSwitches:
   SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART
   Log: /LOG="{localappdata}\NetSentinel\install.log"
   InstallLocation: /DIR="{INSTALLDIR}"
+
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/ossianericson/netsentinel/releases/download/v1.1.2/NetSentinel-Setup-1.1.2.exe
+    InstallerUrl: https://github.com/ossianericson/netsentinel/releases/download/v1.50/NetSentinel-Setup-1.50.exe
     InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+
 ManifestType: installer
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0

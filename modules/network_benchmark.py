@@ -25,6 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from modules.colours import EXPORT_GREEN_FG, EXPORT_AMBER_FG, EXPORT_RED_FG
+
 
 # ── Grade bands ────────────────────────────────────────────────────────────────
 
@@ -38,9 +40,9 @@ def _letter(score: float) -> str:
 
 def _score_to_color(score: float) -> str:
     """Return a hex colour string matching the score."""
-    if score >= 80: return "#22c55e"   # green
-    if score >= 60: return "#f59e0b"   # amber
-    return "#ef4444"                   # red
+    if score >= 80: return EXPORT_GREEN_FG
+    if score >= 60: return EXPORT_AMBER_FG
+    return EXPORT_RED_FG
 
 
 # ── Dimension result ──────────────────────────────────────────────────────────
@@ -182,7 +184,7 @@ def _score_dns(avg_dns_ms: float) -> DimensionResult:
     if avg_dns_ms <= 0:
         return DimensionResult(
             name="DNS Response Speed", score=0, grade="F",
-            color="#ef4444", value_label="Failed",
+            color=EXPORT_RED_FG, value_label="Failed",
             ideal_label="≤ 30 ms",
             verdict="DNS resolution failed — websites will not load even if connectivity works.",
             tip="Set DNS to 1.1.1.1 (Cloudflare) or 8.8.8.8 (Google) in your router or adapter settings.",
@@ -219,7 +221,7 @@ def _score_download(mbps: float) -> DimensionResult:
     if mbps <= 0:
         return DimensionResult(
             name="Download Speed", score=0, grade="F",
-            color="#ef4444", value_label="Not measured",
+            color=EXPORT_RED_FG, value_label="Not measured",
             ideal_label="≥ 25 Mbps",
             verdict="Download speed not measured this session.",
             tip="Run the Health Check to measure download speed.",

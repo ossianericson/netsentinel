@@ -26,10 +26,34 @@ jobs:
           pip install -r requirements.txt
           pip install pywin32
 
+      - name: Get version from tag
+        id: tag_version
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Patch version strings
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.tag_version.outputs.VERSION }}"
+          # installer.iss
+          (Get-Content installer.iss) -replace '#define MyAppVersion\s+"[^"]+"', "#define MyAppVersion `"$ver`"" |
+            Set-Content installer.iss
+          # app.py
+          (Get-Content app.py) -replace 'setApplicationVersion\("[^"]+"\)', "setApplicationVersion(`"$ver`")" |
+            Set-Content app.py
+          # cli.py
+          (Get-Content cli.py) -replace '_VERSION\s*=\s*"[^"]+"', "_VERSION = `"$ver`"" |
+            Set-Content cli.py
+          echo "Patched to $ver"
+
       - name: Pre-build smoke test
         run: python app.py --smoke
 
       - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/ -v --tb=short
 
       - name: Build Windows executable
@@ -43,20 +67,6 @@ jobs:
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
-
-      - name: Get version from tag
-        id: tag_version
-        shell: pwsh
-        run: |
-          $ver = "${{ github.ref_name }}" -replace '^v', ''
-          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
-
-      - name: Patch installer.iss version
-        shell: pwsh
-        run: |
-          $ver = "${{ steps.tag_version.outputs.VERSION }}"
-          (Get-Content installer.iss) -replace '#define MyAppVersion\s+"[^"]+"', "#define MyAppVersion `"$ver`"" |
-            Set-Content installer.iss
 
       - name: Build Inno Setup installer
         run: iscc installer.iss
@@ -118,6 +128,8 @@ jobs:
         run: python app.py --smoke
 
       - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/ -v --tb=short
 
       - name: Build macOS app
@@ -180,6 +192,8 @@ jobs:
         run: python app.py --smoke
 
       - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/ -v --tb=short
 
       - name: Build Linux binary
@@ -356,6 +370,15 @@ jobs:
             "PackageVersion: $ver",
             "InstallerLocale: en-US",
             "InstallerType: inno",
+            "Scope: machine",
+            "InstallModes:",
+            "- interactive",
+            "- silent",
+            "UpgradeBehavior: install",
+            "InstallerSwitches:",
+            "  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
+            "  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART",
+            "  Log: /`"{localappdata}\NetSentinel\install.log`"",
             "Installers:",
             "- Architecture: x64",
             "  InstallerUrl: $url",
@@ -364,16 +387,58 @@ jobs:
             "ManifestVersion: 1.12.0"
           ) | Set-Content "$dir\NetSentinel.NetSentinel.installer.yaml" -Encoding UTF8
 
-          # Default locale manifest
+          # Default locale manifest — full rich metadata, mirrors the static file
           @(
             "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json",
             "PackageIdentifier: NetSentinel.NetSentinel",
             "PackageVersion: $ver",
             "PackageLocale: en-US",
             "Publisher: NetSentinel Project",
+            "PublisherUrl: https://github.com/ossianericson/netsentinel",
+            "PublisherSupportUrl: https://github.com/ossianericson/netsentinel/issues",
             "PackageName: NetSentinel",
+            "PackageUrl: https://github.com/ossianericson/netsentinel",
             "License: MIT",
-            "ShortDescription: Network monitoring and security tool for Windows",
+            "LicenseUrl: https://github.com/ossianericson/netsentinel/blob/main/LICENSE",
+            "ShortDescription: Network security scanner — rogue device detector, STP monitor, and connectivity analyser",
+            "Description: |-",
+            "  NetSentinel is a one-stop network diagnostic and security tool for Windows.",
+            "  It combines several tools that previously required separate utilities:",
+            "",
+            "    • Device Fingerprinter  — scans your LAN's ARP table and identifies every",
+            "      device by MAC OUI, hostname, and device type (camera, smart speaker, router, etc.)",
+            "    • Rogue Bridge Detector — captures 802.1D/RSTP BPDUs and flags any device",
+            "      that steals the Root Bridge role and causes periodic 15-45 second outages.",
+            "    • Broadcast Storm Analyser — measures broadcast/multicast packet rates and",
+            "      identifies which device is flooding the network.",
+            "    • IoT Behavioral Baseline — learns normal IoT traffic patterns and raises",
+            "      an alert if your smart fridge starts port-scanning or talking to a C2 server.",
+            "    • Root Cause Correlator — links trace results, storm data, and STP findings",
+            "      into a single plain-English verdict with actionable remediation steps.",
+            "    • Connection Stability Monitor — long-term background ping logger with",
+            "      outage detection, jitter analysis, and a 24-hour stability score.",
+            "    • TCP Port Scanner, OS Fingerprinter, CVE Lookup, DNS Leak Test, Speed Test,",
+            "      ARP spoof detector, DHCP monitor, SNMP poller, and more.",
+            "",
+            "  Most features require Administrator privileges for raw packet capture.",
+            "  Install Npcap (https://npcap.com) for STP, Storm, and ARP modules.",
+            "Moniker: netsentinel",
+            "Tags:",
+            "- network",
+            "- security",
+            "- scanner",
+            "- rogue-device",
+            "- stp",
+            "- lan",
+            "- diagnostics",
+            "- iot",
+            "- monitoring",
+            "- arp",
+            "- broadcast-storm",
+            "- wifi",
+            "- dns",
+            "- port-scanner",
+            "ReleaseNotesUrl: https://github.com/ossianericson/netsentinel/releases/tag/v$ver",
             "ManifestType: defaultLocale",
             "ManifestVersion: 1.12.0"
           ) | Set-Content "$dir\NetSentinel.NetSentinel.locale.en-US.yaml" -Encoding UTF8

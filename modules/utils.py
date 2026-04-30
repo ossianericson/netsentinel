@@ -90,6 +90,33 @@ def get_offenders_path() -> Path:
     return base / "offenders.json"
 
 
+def get_app_data_dir() -> Path:
+    """
+    Return the per-user application data directory for NetSentinel.
+
+    Platform mapping
+    ────────────────
+    Windows  → %LOCALAPPDATA%\\NetSentinel
+    macOS    → ~/Library/Application Support/NetSentinel
+    Linux    → $XDG_CONFIG_HOME/NetSentinel  (default: ~/.config/NetSentinel)
+
+    The directory is created with exist_ok=True before returning.
+    """
+    import platform as _plat
+    system = _plat.system()
+    if system == "Windows":
+        local = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        app_dir = Path(local) / "NetSentinel"
+    elif system == "Darwin":
+        app_dir = Path.home() / "Library" / "Application Support" / "NetSentinel"
+    else:
+        xdg = os.environ.get("XDG_CONFIG_HOME", "")
+        base = Path(xdg) if xdg else Path.home() / ".config"
+        app_dir = base / "NetSentinel"
+    app_dir.mkdir(parents=True, exist_ok=True)
+    return app_dir
+
+
 # ── Network-cache flushing ────────────────────────────────────────────────────
 
 def flush_network_caches() -> List[Tuple[str, bool]]:

@@ -44,6 +44,13 @@ from ui.styles import (
     BG_CARD,
     BG_DARK,
     BORDER,
+    CHART_AXIS,
+    CHART_BG,
+    CHART_DOWN,
+    CHART_GRID,
+    CHART_PLOT_BG,
+    CHART_TITLE,
+    CHART_UP,
     GREEN,
     RED,
     TEXT_MUTED,
@@ -54,8 +61,8 @@ from ui.styles import (
 )
 
 _HISTORY_LEN  = 60          # seconds of rolling history
-_DOWN_COLOR   = "#2196F3"   # blue  — download
-_UP_COLOR     = "#4CAF50"   # green — upload
+_DOWN_COLOR   = CHART_DOWN  # blue  — download
+_UP_COLOR     = CHART_UP    # green — upload
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -173,10 +180,10 @@ class LiveBandwidthPage(QWidget):
         chart_lay.setContentsMargins(8, 8, 8, 8)
 
         self._fig, self._ax = plt.subplots(figsize=(10, 3.2))
-        self._fig.patch.set_facecolor("#FFFFFF")
+        self._fig.patch.set_facecolor(CHART_BG)
         self._fig.subplots_adjust(left=0.06, right=0.99, top=0.93, bottom=0.15)
         self._canvas = FigureCanvas(self._fig)
-        self._canvas.setStyleSheet("background:#FFFFFF; border:none;")
+        self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")
         self._canvas.setMinimumHeight(220)
         chart_lay.addWidget(self._canvas)
         root.addWidget(chart_frame, 2)
@@ -303,17 +310,17 @@ class LiveBandwidthPage(QWidget):
     def _draw_empty_chart(self) -> None:
         ax = self._ax
         ax.clear()
-        ax.set_facecolor("#FAFAFA")
+        ax.set_facecolor(CHART_PLOT_BG)
         ax.fill_between(range(_HISTORY_LEN), 0, color=_DOWN_COLOR, alpha=0.15)
         ax.fill_between(range(_HISTORY_LEN), 0, color=_UP_COLOR,   alpha=0.15)
         ax.set_xlim(0, _HISTORY_LEN - 1)
         ax.set_ylim(0, 10)
-        ax.set_xlabel("seconds ago", fontsize=8, color="#888888")
-        ax.set_ylabel("Mbps", fontsize=8, color="#888888")
-        ax.tick_params(labelsize=7, colors="#888888")
+        ax.set_xlabel("seconds ago", fontsize=8, color=CHART_AXIS)
+        ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
+        ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor("#DDDDDD")
-        ax.grid(True, linestyle="--", linewidth=0.4, color="#EEEEEE")
+            sp.set_edgecolor(BORDER)
+        ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
         self._canvas.draw_idle()
 
     @pyqtSlot()
@@ -321,7 +328,7 @@ class LiveBandwidthPage(QWidget):
         up, down = self._get_chart_data()
         ax = self._ax
         ax.clear()
-        ax.set_facecolor("#FAFAFA")
+        ax.set_facecolor(CHART_PLOT_BG)
 
         xs = list(range(_HISTORY_LEN))
         ax.fill_between(xs, down, alpha=0.35, color=_DOWN_COLOR, label="↓ Download")
@@ -336,20 +343,20 @@ class LiveBandwidthPage(QWidget):
         # x-axis: show "now" on the right, "60s ago" on the left
         ax.set_xticks([0, 15, 30, 45, 59])
         ax.set_xticklabels(["-60s", "-45s", "-30s", "-15s", "now"], fontsize=7)
-        ax.set_ylabel("Mbps", fontsize=8, color="#888888")
-        ax.tick_params(labelsize=7, colors="#888888")
+        ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
+        ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor("#DDDDDD")
-        ax.grid(True, linestyle="--", linewidth=0.4, color="#EEEEEE")
+            sp.set_edgecolor(BORDER)
+        ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
         ax.legend(loc="upper left", fontsize=7, framealpha=0.7,
-                  facecolor="#FFFFFF", edgecolor="#DDDDDD")
+                  facecolor=CHART_BG, edgecolor=BORDER)
 
         # Title shows current values
         sel = self._iface_combo.currentText()
         ax.set_title(
             f"{sel}  —  "
             f"↑ {up[-1]:.2f} Mbps  ↓ {down[-1]:.2f} Mbps",
-            fontsize=8, color="#444444", pad=4,
+            fontsize=8, color=TEXT_SECONDARY, pad=4,
         )
         self._canvas.draw_idle()
 

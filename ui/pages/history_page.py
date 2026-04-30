@@ -30,7 +30,8 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, BG_CARD, BG_DARK, BORDER, GREEN, AMBER, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    CHART_GRID, CHART_PLOT_BG, CHART_PURPLE,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
 )
 
 if TYPE_CHECKING:
@@ -39,19 +40,19 @@ if TYPE_CHECKING:
 
 # ── Chart style helpers ───────────────────────────────────────────────────────
 
-_SERIES_COLORS = ["#0078D4", "#2E7D32", "#F59E0B", "#5A6A7A", "#D93025", "#8E44AD"]
+_SERIES_COLORS = [ACCENT, GREEN, AMBER, TEXT_SECONDARY, RED, CHART_PURPLE]
 _STATE_COLORS  = {"UP": GREEN, "DEGRADED": AMBER, "DOWN": RED}
 
 
 def _style_ax(ax, title: str) -> None:
-    ax.set_facecolor("#FAFBFC")
+    ax.set_facecolor(CHART_PLOT_BG)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     for spine in ("bottom", "left"):
         ax.spines[spine].set_color(BORDER)
     ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
     ax.set_title(title, color=TH_BG, fontsize=10, fontweight="bold", pad=6)
-    ax.grid(True, color="#E8EDF2", linewidth=0.7, axis="y")
+    ax.grid(True, color=CHART_GRID, linewidth=0.7, axis="y")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=8))
 
@@ -419,7 +420,7 @@ class HistoryPage(QWidget):
                 continue
             for pt in hist:
                 dt = datetime.datetime.fromtimestamp(pt.ts)
-                color = _STATE_COLORS.get(pt.state, "#9BA8B4")
+                color = _STATE_COLORS.get(pt.state, TEXT_MUTED)
                 ax.barh(y, 1 / 60, left=mdates.date2num(dt),
                         height=0.6, color=color, linewidth=0)
 

@@ -150,6 +150,7 @@ hiddenimports: list = [
     "ui.pages.settings_page",
     "ui.pages.snmp_trap_page",
     "ui.pages.speed_test_page",
+    "ui.pages.ookla_cli_banner",
     "ui.pages.syslog_page",
     "ui.pages.threat_intel_page",
     "ui.pages.trend_page",
@@ -204,7 +205,7 @@ exe = EXE(
     debug=_debug_build,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
     console=_debug_build,              # False in production, True for debug

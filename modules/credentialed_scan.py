@@ -133,6 +133,9 @@ class CredScanResult:
     failed_logins: int = 0
     sudo_nopasswd_entries: List[str] = field(default_factory=list)
     raw_notes: List[str] = field(default_factory=list)
+    # Windows-specific enrichment
+    serial_number: str = ""      # wmic bios get serialnumber
+    active_sessions: List[str] = field(default_factory=list)  # query session output
 
     @property
     def risk_flags(self) -> List[str]:
@@ -405,6 +408,10 @@ def _parse_linux(outputs: dict[str, str]) -> CredScanResult:
 _WINDOWS_CMDS: List[str] = [
     # OS version
     "wmic os get Caption,Version,LastBootUpTime /value",
+    # Hardware serial number
+    "wmic bios get SerialNumber /value",
+    # Active interactive sessions (who is logged in right now)
+    "query session",
     # Installed software
     "wmic product get Name,Version /value",
     # Running services
@@ -459,6 +466,39 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
                 if svc_name and "RUNNING" in line:
                     result.services.append(ServiceEntry(name=svc_name, status="running"))
                     svc_name = ""
+            break
+
+    for key in outputs:
+        if "wmic bios" in key:
+            m = re.search(r'SerialNumber=(.+)', outputs[key])
+            if m:
+                result.serial_number = m.group(1).strip()
+            break
+
+    for key in outputs:
+        if "query session" in key:
+            sessions: List[str] = []
+            for line in outputs[key].splitlines()[1:]:   # skip header
+                line = line.strip()
+                if not line:
+                    continue
+                # Format after split:
+                #   4 tokens → [SESSIONNAME, USERNAME, ID, STATE]
+                #   3 tokens → [USERNAME, ID, STATE]  (no session name col)
+                parts = line.split()
+                if len(parts) < 3:
+                    continue
+                state = parts[-1].lower()
+                if state not in ("active", "conn"):
+                    continue
+                # USERNAME is the second-to-last-of-fixed columns:
+                # 4 tokens: session username id state → parts[1]
+                # 3 tokens: username id state        → parts[0]
+                username_col = parts[1] if len(parts) >= 4 else parts[0]
+                username_col = username_col.lstrip(">")
+                if username_col and username_col not in ("0", "1", "2", "3", "4", "5"):
+                    sessions.append(username_col)
+            result.active_sessions = sessions
             break
 
     for key in outputs:

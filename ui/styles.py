@@ -77,6 +77,9 @@ _ARCTIC_CLEAN = {
     "ADMIN_WARN_BG":      "#FFF3CD",
     "ADMIN_WARN_BORDER":  "#F0A500",
     "ADMIN_WARN_HOVER":   "#5A3A00",
+    # Pro mode banner colours
+    "PRO_BANNER_BORDER":  "#F4C2C2",
+    "PRO_WARN_BG":        "#FFF0F0",
     # Sidebar section headers
     "SIDEBAR_SECTION_BG": "#172333",
     "SIDEBAR_SECTION_FG": "#6A8099",
@@ -95,6 +98,8 @@ _ARCTIC_CLEAN = {
     "CHART_PLOT_BG":      "#FAFBFC",
     "CHART_GRID":         "#E8EDF2",
     "CHART_TITLE":        "#1A3A5C",
+    # Critical severity (CVE, risk — darker than RED for emphasis)
+    "CRITICAL":           "#8B0000",
 }
 
 _MIDNIGHT_PRO = {
@@ -159,6 +164,9 @@ _MIDNIGHT_PRO = {
     "ADMIN_WARN_BG":      "#2A1A00",
     "ADMIN_WARN_BORDER":  "#704000",
     "ADMIN_WARN_HOVER":   "#FFD080",
+    # Pro mode banner colours
+    "PRO_BANNER_BORDER":  "#7A2020",
+    "PRO_WARN_BG":        "#2D0A0A",
     # Sidebar section headers
     "SIDEBAR_SECTION_BG": "#0D1218",
     "SIDEBAR_SECTION_FG": "#4A6080",
@@ -177,6 +185,8 @@ _MIDNIGHT_PRO = {
     "CHART_PLOT_BG":      "#101620",
     "CHART_GRID":         "#1E2A38",
     "CHART_TITLE":        "#40E0FF",
+    # Critical severity
+    "CRITICAL":           "#FF8080",
 }
 
 _OBSIDIAN_NEON = {
@@ -241,6 +251,9 @@ _OBSIDIAN_NEON = {
     "ADMIN_WARN_BG":      "#1A1000",
     "ADMIN_WARN_BORDER":  "#664400",
     "ADMIN_WARN_HOVER":   "#FFCC44",
+    # Pro mode banner colours
+    "PRO_BANNER_BORDER":  "#7A2020",
+    "PRO_WARN_BG":        "#1A0000",
     # Sidebar section headers
     "SIDEBAR_SECTION_BG": "#050505",
     "SIDEBAR_SECTION_FG": "#558800",
@@ -259,6 +272,8 @@ _OBSIDIAN_NEON = {
     "CHART_PLOT_BG":      "#080808",
     "CHART_GRID":         "#1A1A1A",
     "CHART_TITLE":        "#B6FF3B",
+    # Critical severity
+    "CRITICAL":           "#FF8080",
 }
 
 # ── Theme registry ────────────────────────────────────────────────────────────
@@ -301,6 +316,14 @@ def set_active_theme_name(name: str) -> None:
 
 _ACTIVE_THEME: str = get_active_theme_name()
 globals().update(THEMES[_ACTIVE_THEME])
+
+# ── Theme-independent chart constants ──────────────────────────────────────────────
+# These represent fixed semantic data dimensions, not UI chrome, so they
+# do not change with the active theme.
+CHART_DOWN   = "#2196F3"   # bandwidth download line (Material Blue)
+CHART_UP     = "#4CAF50"   # bandwidth upload line (Material Green)
+CHART_AXIS   = "#888888"   # matplotlib axis tick / label text
+CHART_PURPLE = "#8E44AD"   # 6th data-series colour (history charts)
 
 # ── Computed colour maps (built after palette is applied) ─────────────────────
 
