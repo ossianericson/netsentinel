@@ -40,3 +40,15 @@ netsentinel_report_*.html
 
 # APM dependencies
 apm_modules/
+
+# Runtime user data — never commit
+NetSentinel.db
+NetSentinel.db-shm
+NetSentinel.db-wal
+NetSentinel.ini
+
+# Generated output
+repomix-output.txt
+
+# Claude Code memory
+.claude/

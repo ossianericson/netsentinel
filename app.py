@@ -1,4 +1,4 @@
-"""
+﻿"""
 NetSentinel — entry point.
 
 Network Security Scanner & Long-Term Connectivity Monitor.
@@ -298,7 +298,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.5.1")
+    app.setApplicationVersion("1.6.0")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────

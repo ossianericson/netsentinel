@@ -80,13 +80,13 @@ class TestThemeRegistry:
         from ui.styles import THEMES
         assert "Arctic Clean" in THEMES
 
-    def test_midnight_pro_present(self):
+    def test_dark_pro_present(self):
         from ui.styles import THEMES
-        assert "Midnight Pro" in THEMES
+        assert "Dark Pro" in THEMES
 
-    def test_obsidian_neon_present(self):
+    def test_slate_present(self):
         from ui.styles import THEMES
-        assert "Obsidian Neon" in THEMES
+        assert "Slate" in THEMES
 
     def test_default_theme_valid(self):
         from ui.styles import DEFAULT_THEME, THEMES
@@ -101,14 +101,14 @@ class TestThemeRegistry:
 # Palette completeness
 # ---------------------------------------------------------------------------
 class TestPaletteCompleteness:
-    @pytest.mark.parametrize("theme_name", ["Arctic Clean", "Midnight Pro", "Obsidian Neon"])
+    @pytest.mark.parametrize("theme_name", ["Arctic Clean", "Dark Pro", "Slate"])
     def test_all_required_keys_present(self, theme_name):
         from ui.styles import THEMES
         palette = THEMES[theme_name]
         missing = _REQUIRED_KEYS - set(palette.keys())
         assert not missing, f"{theme_name} missing keys: {missing}"
 
-    @pytest.mark.parametrize("theme_name", ["Arctic Clean", "Midnight Pro", "Obsidian Neon"])
+    @pytest.mark.parametrize("theme_name", ["Arctic Clean", "Dark Pro", "Slate"])
     def test_all_values_are_hex_colours(self, theme_name):
         from ui.styles import THEMES
         palette = THEMES[theme_name]
@@ -144,8 +144,8 @@ class TestThemePersistence:
         from ui.styles import set_active_theme_name
         with patch("PyQt6.QtCore.QSettings") as MockQS:
             inst = MockQS.return_value
-            set_active_theme_name("Midnight Pro")
-            inst.setValue.assert_called_once_with("ui/theme", "Midnight Pro")
+            set_active_theme_name("Dark Pro")
+            inst.setValue.assert_called_once_with("ui/theme", "Dark Pro")
 
     def test_set_active_theme_rejects_unknown(self):
         from ui.styles import set_active_theme_name
@@ -155,7 +155,7 @@ class TestThemePersistence:
     def test_set_active_theme_silent_on_qsettings_error(self):
         from ui.styles import set_active_theme_name
         with patch("PyQt6.QtCore.QSettings", side_effect=RuntimeError("no app")):
-            set_active_theme_name("Obsidian Neon")  # must not raise
+            set_active_theme_name("Slate")  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -246,29 +246,31 @@ class TestThemeCharacter:
         from ui.styles import THEMES
         assert THEMES["Arctic Clean"]["BG_DARK"].startswith("#F")
 
-    def test_midnight_pro_has_dark_bg(self):
-        """Midnight Pro BG_DARK should be dark (luminance < 0.1)."""
+    def test_dark_pro_has_dark_bg(self):
+        """Dark Pro BG_DARK should be dark (luminance < 40)."""
         from ui.styles import THEMES
-        bg = THEMES["Midnight Pro"]["BG_DARK"].lstrip("#")
+        bg = THEMES["Dark Pro"]["BG_DARK"].lstrip("#")
         r, g, b = int(bg[0:2], 16), int(bg[2:4], 16), int(bg[4:6], 16)
         luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
         assert luminance < 40, f"Expected dark BG, got luminance={luminance}"
 
-    def test_obsidian_neon_has_very_dark_bg(self):
+    def test_slate_has_dark_bg(self):
+        """Slate BG_DARK should be dark (luminance < 40)."""
         from ui.styles import THEMES
-        bg = THEMES["Obsidian Neon"]["BG_DARK"].lstrip("#")
+        bg = THEMES["Slate"]["BG_DARK"].lstrip("#")
         r, g, b = int(bg[0:2], 16), int(bg[2:4], 16), int(bg[4:6], 16)
         luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        assert luminance < 10
+        assert luminance < 40, f"Expected dark BG, got luminance={luminance}"
 
-    def test_obsidian_neon_has_neon_accent(self):
-        """Obsidian Neon accent should be the neon lime."""
+    def test_dark_pro_has_blue_accent(self):
+        """Dark Pro uses GitHub-inspired blue accent."""
         from ui.styles import THEMES
-        assert THEMES["Obsidian Neon"]["ACCENT"] == "#B6FF3B"
+        assert THEMES["Dark Pro"]["ACCENT"] == "#2F81F7"
 
-    def test_midnight_pro_has_cyan_accent(self):
+    def test_slate_has_violet_accent(self):
+        """Slate uses Catppuccin Mocha violet accent."""
         from ui.styles import THEMES
-        assert THEMES["Midnight Pro"]["ACCENT"] == "#40E0FF"
+        assert THEMES["Slate"]["ACCENT"] == "#7C3AED"
 
     def test_themes_have_distinct_accents(self):
         from ui.styles import THEMES
@@ -280,10 +282,10 @@ class TestThemeCharacter:
         bgs = [t["BG_DARK"] for t in THEMES.values()]
         assert len(set(bgs)) == 3
 
-    def test_obsidian_neon_red_is_pink(self):
-        """Obsidian Neon uses laser pink for alerts, not standard red."""
+    def test_slate_red_is_pink(self):
+        """Slate uses Catppuccin Mocha pink-red for alerts."""
         from ui.styles import THEMES
-        assert THEMES["Obsidian Neon"]["RED"] == "#FF3BD4"
+        assert THEMES["Slate"]["RED"] == "#F38BA8"
 
     def test_arctic_clean_red_is_standard(self):
         from ui.styles import THEMES

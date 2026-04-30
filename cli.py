@@ -1,4 +1,4 @@
-"""
+﻿"""
 NetSentinel CLI — headless command-line interface.
 
 Run as Administrator (Windows) or with sudo (Linux/macOS) for full functionality.
@@ -35,7 +35,7 @@ from pathlib import Path
 # Allow running from the project root without installation.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-_VERSION = "1.5.1"
+_VERSION = "1.6.0"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

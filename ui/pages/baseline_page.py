@@ -79,18 +79,30 @@ class _SnapshotWorker(QThread):
 
 # ── Helper widgets ────────────────────────────────────────────────────────────
 
-def _page_header(title: str, subtitle: str = ""):
+def _page_header(title: str, subtitle: str = "") -> QFrame:
+    container = QFrame()
+    container.setObjectName("pageHeader")
+    container.setStyleSheet(
+        f"QFrame#pageHeader {{ background: transparent; border: none;"
+        f" border-bottom: 1px solid {BORDER}; }}"
+    )
+    vbox = QVBoxLayout(container)
+    vbox.setContentsMargins(20, 16, 20, 12)
+    vbox.setSpacing(2)
     t = QLabel(title)
     t.setStyleSheet(
-        f"color:{TEXT_PRIMARY};font-size:18px;font-weight:bold;"
-        "padding:0;background:transparent;border:none;"
+        f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+        "padding:0; background:transparent; border:none;"
     )
-    s = QLabel(subtitle)
-    s.setStyleSheet(
-        f"color:{TEXT_SECONDARY};font-size:11px;"
-        "padding:0 0 8px 0;background:transparent;border:none;"
-    )
-    return t, s
+    vbox.addWidget(t)
+    if subtitle:
+        s = QLabel(subtitle)
+        s.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px;"
+            "padding:0; background:transparent; border:none;"
+        )
+        vbox.addWidget(s)
+    return container
 
 
 def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
@@ -176,12 +188,10 @@ class BaselinePage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(10)
 
-        pt, ps = _page_header(
+        outer.addWidget(_page_header(
             "Configuration Baseline Snapshots",
             "Capture network state and compare snapshots to detect configuration drift",
-        )
-        outer.addWidget(pt)
-        outer.addWidget(ps)
+        ))
 
         # KPI row
         self._kpi_count   = _kpi_tile("Snapshots",    "—")

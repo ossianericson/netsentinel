@@ -25,8 +25,9 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.metric_store import MetricStore
+from ui.expanding_table import ExpandingTable
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, CRITICAL, GREEN, RED,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CRITICAL, GREEN, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
@@ -219,7 +220,8 @@ class CvePage(QWidget):
     def __init__(self, store: MetricStore, parent=None):
         super().__init__(parent)
         self._store = store
-        self._rows: list[dict] = []       # current displayed rows
+        self._rows: list[dict] = []          # all rows (post-filter)
+        self._displayed_rows: list[dict] = [] # rows currently in table
         self._setup_ui()
         self._refresh()
 
@@ -330,10 +332,29 @@ class CvePage(QWidget):
         card, card_lay = _card("CVE Inventory")
         card_lay.setContentsMargins(0, 0, 0, 0)
 
-        self._table = _table([
-            "CVE ID", "CVSS", "Severity", "Service", "Host",
-            "State", "Owner", "Days Open", "Description",
-        ])
+        _cols = ["CVE ID", "CVSS", "Severity", "Service", "Host",
+                 "State", "Owner", "Days Open", "Description"]
+        self._table = ExpandingTable(
+            0, len(_cols),
+            detail_builder=lambda r: self._build_cve_detail(r),
+            detail_height=130,
+        )
+        # Apply the same styling as the _table() helper
+        self._table.setHorizontalHeaderLabels(_cols)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setAlternatingRowColors(True)
+        self._table.verticalHeader().setVisible(False)
+        self._table.verticalHeader().setDefaultSectionSize(24)
+        self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.setStyleSheet(
+            f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:#EAEAEA;"
+            f" alternate-background-color:#F7F9FC; background:{BG_CARD}; border:none; }}"
+            f"QTableWidget::item:hover {{ background:#EEF4FF; }}"
+            f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+            f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
+            f" font-weight:bold; padding:4px 5px; border:none; }}"
+        )
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 50)
         self._table.setColumnWidth(2, 75)
@@ -404,6 +425,8 @@ class CvePage(QWidget):
         )
 
     def _populate_table(self, rows: list[dict]) -> None:
+        self._table.clear_detail()
+        self._displayed_rows = rows
         self._table.setRowCount(0)
         now = int(time.time())
         for r in rows:
@@ -520,6 +543,115 @@ class CvePage(QWidget):
                 dlg.notes,
             )
             self._refresh()
+
+    # ── Inline detail panel ───────────────────────────────────────────────────
+
+    def _build_cve_detail(self, logical_row: int) -> QWidget:
+        if logical_row >= len(self._displayed_rows):
+            return QWidget()
+        r = self._displayed_rows[logical_row]
+        severity = (r["severity"] or "").upper()
+        border_color = _SEVERITY_COLORS.get(severity, BORDER)
+        now = int(time.time())
+        days_open = max(0, (now - r["opened_ts"]) // 86400)
+
+        outer = QWidget()
+        outer.setStyleSheet(
+            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f" border-left:3px solid {border_color}; }}"
+        )
+        lay = QHBoxLayout(outer)
+        lay.setContentsMargins(16, 10, 16, 10)
+        lay.setSpacing(24)
+
+        def _lbl(text: str, color: str = TEXT_PRIMARY) -> QLabel:
+            l = QLabel(str(text))
+            l.setStyleSheet(
+                f"font-size:11px; color:{color}; background:transparent; border:none;"
+            )
+            return l
+
+        def _hdr(text: str) -> QLabel:
+            l = QLabel(text)
+            l.setStyleSheet(
+                f"font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
+                " background:transparent; border:none;"
+            )
+            return l
+
+        state_color = _STATE_COLORS.get(r["state"], TEXT_PRIMARY)
+        score_val = float(r["cvss_score"])
+        score_color = (
+            CRITICAL if score_val >= 9.0 else
+            RED      if score_val >= 7.0 else
+            AMBER    if score_val >= 4.0 else TEXT_PRIMARY
+        )
+
+        meta = QWidget()
+        meta.setStyleSheet("QWidget { background:transparent; border:none; }")
+        grid = QFormLayout(meta)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(3)
+        grid.setHorizontalSpacing(12)
+        grid.addRow(_hdr("CVE ID"),    _lbl(r["cve_id"]))
+        grid.addRow(_hdr("CVSS"),      _lbl(f"{r['cvss_score']:.1f}", score_color))
+        grid.addRow(_hdr("Severity"),  _lbl(severity, border_color))
+        grid.addRow(_hdr("Service"),   _lbl(r["service"] or "—"))
+        grid.addRow(_hdr("Host"),      _lbl(r["host"] or "—"))
+        grid.addRow(_hdr("State"),     _lbl(r["state"], state_color))
+        grid.addRow(_hdr("Owner"),     _lbl(r["owner"] or "—"))
+        grid.addRow(_hdr("Days Open"), _lbl(str(days_open)))
+        lay.addWidget(meta)
+
+        desc_col = QVBoxLayout()
+        desc_col.setSpacing(4)
+        desc_col.setContentsMargins(0, 0, 0, 0)
+        desc_col.addWidget(_hdr("Description"))
+        desc_txt = QLabel(r["description"] or "No description available.")
+        desc_txt.setWordWrap(True)
+        desc_txt.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        desc_col.addWidget(desc_txt)
+        if r["notes"]:
+            desc_col.addWidget(_hdr("Notes"))
+            notes_txt = QLabel(r["notes"])
+            notes_txt.setWordWrap(True)
+            notes_txt.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            desc_col.addWidget(notes_txt)
+        desc_col.addStretch()
+        lay.addLayout(desc_col, 1)
+
+        btn_state = QPushButton("Change State…")
+        btn_state.setFixedHeight(28)
+        btn_state.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:white; background:{ACCENT};"
+            f" border:none; padding:0 12px; border-radius:4px;"
+        )
+        btn_state.clicked.connect(lambda: self._change_state(r))
+
+        btn_nvd = QPushButton("Open in NVD")
+        btn_nvd.setFixedHeight(28)
+        btn_nvd.setStyleSheet(
+            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            f" background:transparent; padding:0 12px; border-radius:4px;"
+        )
+        import webbrowser as _wb
+        btn_nvd.clicked.connect(
+            lambda: _wb.open(f"https://nvd.nist.gov/vuln/detail/{r['cve_id']}")
+        )
+
+        actions = QVBoxLayout()
+        actions.setSpacing(6)
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.addWidget(btn_state)
+        actions.addWidget(btn_nvd)
+        actions.addStretch()
+        lay.addLayout(actions)
+
+        return outer
 
     # ── Import dialog ─────────────────────────────────────────────────────────
 

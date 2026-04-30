@@ -22,7 +22,7 @@ winget install NetSentinel.NetSentinel
 ```
 Or download the installer from the latest release:
 
-### 👉 [Latest Release](https://github.com/ossianericson/netsentinel/releases/latest) — v1.5.1
+### 👉 [Latest Release](https://github.com/ossianericson/netsentinel/releases/latest) — v1.6.0
 
 | OS | File | How to run |
 |---|---|---|
@@ -115,6 +115,8 @@ NetSentinel is the single tool that:
 | Feature | Details |
 |---|---|
 | ◆ **3-mode progressive navigation** | The sidebar operates in three modes cycled by a pill at the top: **Home** (5 essentials + grade circle + recent alerts), **Standard** (full flat list under section headers), and **Pro** (adds Security Audit items with admin badges). The active mode is saved across sessions. |
+| 🔍 **Command palette (Ctrl+K)** | Global quick-navigation overlay — type to fuzzy-match any page or trigger an action (Run Scan, Open Settings, Toggle Sidebar). Arrow keys + Enter to navigate; Esc to dismiss. Available from any page. |
+| 📌 **Pinnable sidebar pages** | Right-click any sidebar item to Pin / Unpin it. Pinned pages always appear in a ★ Favourites section at the top of the nav regardless of sidebar mode. State persisted across sessions. |
 | 🔒 **Single-instance guard** | Launching a second copy of NetSentinel restores and focuses the already-running window instead of opening a duplicate. Works across minimised and tray-hidden states. |
 | 🔕 **Boot alert warmup** | Network alerts are suppressed for the first 10 seconds after startup to prevent spurious notifications before the first monitoring cycle completes. |
 | 🔔 **Tray restore on any click** | Clicking the tray icon (single or double), or clicking a notification bubble, always restores and focuses the main window. |
@@ -151,7 +153,7 @@ NetSentinel is the single tool that:
 | 💻 **OS Detection** | OS fingerprinting via TTL + banner grab + TCP SYN probe. |
 | ⚠ **Device Risk Score** | Numeric risk score per device based on open ports, OUI flags, OS, and exposure. |
 | 🛡 **Known CVEs** | NVD API v2 CVE lookup for detected OS/service versions. Rate-limited; offline-safe. |
-| 📋 **CVE Tracker** | CVE lifecycle state machine per host/service: Open → Acknowledged → Accepted Risk → Remediated. Import from scan, days-open counter, owner field. Right-click to change state or open NVD. |
+| 📋 **CVE Tracker** | CVE lifecycle state machine per host/service: Open → Acknowledged → Accepted Risk → Remediated. Import from scan, days-open counter, owner field. Click a row to expand an inline detail panel with full metadata, notes, Change State, and NVD link — no dialog required. |
 | 🌍 **Exposed to Internet** | WAN IP, CGNAT detection, UPnP port-mapping enumeration. |
 | 🔑 **Login Test (SSH/SMB)** | Credential test against discovered SSH and SMB services. |
 | 🔭 **Full Device Discovery** | Parallel ARP + ICMP + TCP SYN + mDNS sweep — highest-accuracy device census. |
@@ -488,27 +490,79 @@ Edit [`offenders.json`](offenders.json) or submit a PR (see [CONTRIBUTING.md](CO
 
 ---
 
+## FAQ
+
+**Why do I need to run as Administrator?**
+Raw packet capture (STP, ARP monitor, Broadcast Storm, Bandwidth) requires direct access to the network adapter. On Windows this needs Npcap + admin rights. Standard tabs (device list, DNS, Health Check, ping) work without elevation.
+
+**Why does Npcap need to be installed separately?**
+Npcap is a third-party driver from the Nmap project. Bundling it would add 3–4 MB to every release and require users to accept Npcap's EULA automatically. Installing it separately keeps things transparent.
+
+**My internet drops every 30–45 seconds. Can NetSentinel find the cause?**
+Yes — this is the most common STP rogue-bridge symptom. Run NetSentinel as Administrator, open the **Rogue Bridge (STP)** tab, and click Start. If a device other than your router is listed as Root Bridge, that device is causing your drops. Right-click it for remediation steps.
+
+**It says "unknown device" for half my network — is that normal?**
+Some manufacturers register multiple OUI prefixes and not all are in the database. Right-click the device → Port Scan to see what services it runs, which usually identifies it. You can also check the MAC OUI manually at [maclookup.app](https://maclookup.app).
+
+**Does NetSentinel send any data anywhere?**
+No telemetry, no cloud, no accounts. The only external connections are ones you explicitly trigger (speed test, CVE lookup, DNS leak test, update check). See the Privacy section below.
+
+**Can I run it headless / on a server?**
+Yes — `python cli.py scan` or the compiled `NetSentinel-cli` binary runs all discovery and outputs JSON or CSV. Use `--help` for options.
+
+**The app crashes on launch on Linux.**
+Most common cause: missing Qt platform plugin. Install `libxcb-cursor0`:
+```bash
+sudo apt-get install libxcb-cursor0
+```
+Then run with `QT_QPA_PLATFORM=xcb ./NetSentinel`.
+
+**How do I add a device vendor that NetSentinel doesn't recognise?**
+Add an entry to `offenders.json` and submit a PR — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
 ## What's new
 
-### v1.5.1 (current)
+### v1.6.0 (current)
 
-**Alert rules opt-in only**
+**Command palette (Ctrl+K)**
+- Global quick-navigation overlay — type to fuzzy-match any sidebar page or trigger actions (Run Scan, Open Settings, Toggle Sidebar)
+- Arrow keys + Enter to navigate; Esc to dismiss; accessible from any page without leaving current context
+
+**Pinnable sidebar pages**
+- Right-click any nav item to Pin / Unpin it
+- Pinned pages appear in a permanent ★ Favourites section at the top of the nav, always visible regardless of current sidebar mode
+- Pin state persisted across sessions via QSettings
+
+**Inline row expansion (CVE Tracker + Active Connections)**
+- Click any table row to expand an inline detail panel below it — GitHub PR list style; click again to collapse
+- **CVE panel**: full metadata grid (CVE ID, CVSS, severity, service, host, state, owner, days open), description, notes, "Change State…" and "Open in NVD" buttons — no dialog needed
+- **Connections panel**: process/PID, protocol, full local + remote address, EXE path, Block/Unblock firewall button inline
+
+**Live status tiles with animated counters**
+- Device Count, Service Heartbeat, and Fleet Uptime overview tiles now animate their numbers with an ease-out count-up on each data refresh
+- 3 px health bar at the bottom of each tile shows green / amber / red based on current fleet status
+
+**Alert badge on Security Audit nav section**
+- Unacknowledged CVE count displayed as a live pill badge next to the Security Audit section header in the sidebar
+- Updates every 30 seconds automatically
+
+**Empty-state overlays**
+- All major tables now show a centred icon + title placeholder when empty, instead of a blank white area
+- No layout restructuring required — overlay positions itself over the viewport automatically
+
+**Winget installer hardening**
+- Three-layer fix for persistent E_ABORT (0x80004004) failures in the winget validation sandbox:
+  1. `PrivilegesRequiredOverridesAllowed = dialog commandline` — prevents UAC `ShellExecuteEx runas` in headless environments
+  2. `ShouldInstallOokla()` check guard in `installer.iss` — skips nested `winget install` call during silent runs
+  3. `/TASKS="!installookla"` in all winget manifest Silent/SilentWithProgress switches
+- Root cause: nested `winget install Ookla.Speedtest.CLI` during validation sandbox silent install timed out → E_ABORT
+
+**Alert rules opt-in**
 - All 9 built-in alert rules now default to `enabled=False` — no alert fires on a fresh install
-- Settings → Notifications has a new **Alert Rules** card with a checkbox per rule and a plain-English description
-- Rule enabled states persisted in QSettings; missing key treated as disabled
-- Delivery channels (toast, email, webhook, Pushover, ntfy, Telegram) only receive alerts for rules the user has explicitly enabled
+- Settings → Notifications shows an **Alert Rules** card with a checkbox and plain-English description per rule
 - Desktop toast channel also defaults to off
-
-**HomePage fixes**
-- Upload speed label changed from clipped `↑ 88 Mbps` to `/ up 88 Mbps` (arrow glyph was clipped on some fonts)
-- Scan now and ISP Report buttons now have explicit `setStyleSheet()` calls — no longer render as flat text
-- Mode pill gains a visible border (`1px solid`, `border-radius:4px`, `padding:0 8px`) so it reads as a clickable button
-- Devices mini-card shows `Run a scan to discover devices` when count is 0; `All healthy` only when count > 0
-
-**Bug fixes**
-- `NotificationsPage._rule_checkboxes` initialised before card builders run — fixes `AttributeError` crash on launch
-- `_restore()` wrapped in `try/finally` with `_restoring` guard — prevents mid-restore `_save()` calls clobbering QSettings values
-- Added `LICENSE` file — fixes WinGet `URL-Validation-Error` on manifest PR
 
 ---
 

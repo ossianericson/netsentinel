@@ -2,6 +2,8 @@
 
 Thanks for your interest. Contributions are welcome — especially new offenders.json entries, bug fixes, and plugin examples.
 
+For a complete developer guide see **[docs/contributing.md](docs/contributing.md)**.
+
 ---
 
 ## Dev setup
@@ -12,10 +14,24 @@ cd netsentinel
 pip install -r requirements.txt
 python app.py              # GUI — add sudo / Run as Administrator for full scan
 python cli.py scan         # Headless
-python -m pytest           # Run all tests
+python -m pytest tests/ -v --tb=short   # Run all tests
 ```
 
-Run as Administrator (Windows) or with `sudo` (Linux/macOS) for any feature that requires raw packet capture (STP, Storm, ARP monitor, DHCP detector).
+On Windows, install [Npcap](https://npcap.com) for packet-capture features (STP, Storm, ARP monitor, DHCP detector). Run as Administrator for those tabs.
+
+### Bumping the version
+
+Never edit version strings manually. Use the script:
+
+```bash
+python bump_version.py 1.60
+```
+
+This updates all 12 tracked locations atomically and runs the consistency test suite.
+
+### Reporting security vulnerabilities
+
+Please do not open a public issue. Email **ossian.ericson@gmail.com** with steps to reproduce and impact — response within 48 hours.
 
 ---
 

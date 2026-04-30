@@ -90,3 +90,36 @@ def test_build_sh_version(canonical):
     assert m.group(1) == canonical, (
         f"build.sh version={m.group(1)!r} does not match app.py {canonical!r}"
     )
+
+
+def test_appxmanifest_msix_version_format(canonical):
+    """
+    MSIX version MUST be exactly 4 parts: X.Y.Z.W format.
+    bump_version.py generates {canonical}.0, which is correct.
+    makeappx.exe rejects 5-part versions (e.g., X.Y.Z.0.0) — test that we never do this.
+    """
+    text = (ROOT / "packaging" / "AppxManifest.xml").read_text(encoding="utf-8")
+    m = re.search(r'Version="([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)"', text)
+    assert m, "Could not find Version=... in AppxManifest.xml"
+    
+    msix_version = m.group(1)
+    parts = msix_version.split(".")
+    
+    # CRITICAL: Must be exactly 4 parts
+    assert len(parts) == 4, (
+        f"AppxManifest.xml Version has {len(parts)} parts ({msix_version!r}), "
+        f"expected exactly 4 (e.g., {canonical}.0)"
+    )
+    
+    # Fourth part must be 0 (the .0 suffix)
+    assert parts[3] == "0", (
+        f"AppxManifest.xml Version fourth part must be 0, got {parts[3]!r} "
+        f"in {msix_version!r}"
+    )
+    
+    # First three parts must match the canonical version
+    expected_msix = f"{canonical}.0"
+    assert msix_version == expected_msix, (
+        f"AppxManifest.xml Version={msix_version!r} does not match "
+        f"expected {expected_msix!r} (canonical={canonical!r})"
+    )

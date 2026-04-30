@@ -43,9 +43,39 @@ from ui.styles import (
     GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 
-_MIME_TYPE   = "application/x-netsentinel-tile"
-_COLS        = 3
+_MIME_TYPE    = "application/x-netsentinel-tile"
+_COLS         = 3
 _SETTINGS_KEY = "overview/tile_order"
+
+
+# ── Animated count label ──────────────────────────────────────────────────────
+
+class _AnimatedNumberLabel(QLabel):
+    """QLabel that count-up animates when its numeric value changes."""
+
+    def __init__(self, text: str = "–", fmt: str = "{}", parent=None):
+        super().__init__(text, parent)
+        self._target: float  = 0.0
+        self._current: float = 0.0
+        self._fmt = fmt
+        self._timer = QTimer(self)
+        self._timer.setInterval(20)  # ~50 fps
+        self._timer.timeout.connect(self._step)
+
+    def animate_to(self, value: float) -> None:
+        self._target = float(value)
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def _step(self) -> None:
+        diff = self._target - self._current
+        if abs(diff) < 0.5:
+            self._current = self._target
+            self.setText(self._fmt.format(int(round(self._current))))
+            self._timer.stop()
+        else:
+            self._current += diff * 0.25  # ease-out
+            self.setText(self._fmt.format(int(round(self._current))))
 
 
 # ── Base tile ─────────────────────────────────────────────────────────────────
@@ -134,6 +164,12 @@ class _BaseTile(QFrame):
         self._body_layout.setSpacing(4)
         outer.addWidget(body, 1)
 
+        # Health bar — 3 px coloured bottom strip reflecting tile status
+        self._health_bar = QFrame()
+        self._health_bar.setFixedHeight(3)
+        self._health_bar.setStyleSheet(f"background:{BORDER}; border:none;")
+        outer.addWidget(self._health_bar)
+
     def _build_body(self) -> None:
         pass
 
@@ -200,6 +236,9 @@ class _BaseTile(QFrame):
             f"QFrame#overviewTile:hover {{ border-color:{ACCENT}; }}"
         )
 
+    def _set_health(self, color: str) -> None:
+        self._health_bar.setStyleSheet(f"background:{color}; border:none;")
+
 
 # ── Concrete tiles ────────────────────────────────────────────────────────────
 
@@ -208,7 +247,7 @@ class DeviceCountTile(_BaseTile):
     TILE_LABEL = "Devices on Network"
 
     def _build_body(self) -> None:
-        self._count_lbl = QLabel("–")
+        self._count_lbl = _AnimatedNumberLabel("–", parent=self)
         self._count_lbl.setStyleSheet(
             f"font-size:38px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;"
         )
@@ -224,11 +263,13 @@ class DeviceCountTile(_BaseTile):
         total = len(states)
         up    = sum(1 for s in states.values() if s == "UP")
         down  = sum(1 for s in states.values() if s == "DOWN")
-        self._count_lbl.setText(str(total))
+        self._count_lbl.animate_to(total)
         parts = []
         if up:   parts.append(f"{up} up")
         if down: parts.append(f"{down} ↓ down")
         self._sub_lbl.setText("  ·  ".join(parts) if parts else "No devices monitored")
+        colour = RED if down else (AMBER if total == 0 else GREEN)
+        self._set_health(colour)
 
 
 class FleetUptimeTile(_BaseTile):
@@ -236,7 +277,7 @@ class FleetUptimeTile(_BaseTile):
     TILE_LABEL = "Fleet Uptime (24 h)"
 
     def _build_body(self) -> None:
-        self._pct_lbl = QLabel("–")
+        self._pct_lbl = QLabel("–", parent=self)
         self._pct_lbl.setStyleSheet(
             f"font-size:38px; font-weight:bold; color:{GREEN}; border:none;"
         )
@@ -265,6 +306,7 @@ class FleetUptimeTile(_BaseTile):
             )
             n = len(rows)
             self._sub_lbl.setText(f"across {n} monitored host{'s' if n != 1 else ''}")
+            self._set_health(colour)
         except Exception:
             pass
 
@@ -278,7 +320,7 @@ class ServiceStatusTile(_BaseTile):
         row.setSpacing(20)
 
         up_col = QVBoxLayout()
-        self._up_lbl = QLabel("–")
+        self._up_lbl = _AnimatedNumberLabel("–", parent=self)
         self._up_lbl.setStyleSheet(
             f"font-size:30px; font-weight:bold; color:{GREEN}; border:none;"
         )
@@ -290,7 +332,7 @@ class ServiceStatusTile(_BaseTile):
         up_col.addWidget(up_sub)
 
         dn_col = QVBoxLayout()
-        self._dn_lbl = QLabel("–")
+        self._dn_lbl = _AnimatedNumberLabel("–", parent=self)
         self._dn_lbl.setStyleSheet(
             f"font-size:30px; font-weight:bold; color:{RED}; border:none;"
         )
@@ -311,8 +353,9 @@ class ServiceStatusTile(_BaseTile):
         up = sum(1 for r in results if
                  (r.get("up") if isinstance(r, dict) else getattr(r, "up", False)))
         dn = len(results) - up
-        self._up_lbl.setText(str(up))
-        self._dn_lbl.setText(str(dn))
+        self._up_lbl.animate_to(up)
+        self._dn_lbl.animate_to(dn)
+        self._set_health(RED if dn > 0 else GREEN)
 
 
 class TlsStatusTile(_BaseTile):

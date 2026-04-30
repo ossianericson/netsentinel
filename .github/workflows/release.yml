@@ -15,9 +15,9 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -46,6 +46,9 @@ jobs:
           # cli.py
           (Get-Content cli.py) -replace '_VERSION\s*=\s*"[^"]+"', "_VERSION = `"$ver`"" |
             Set-Content cli.py
+          # packaging\AppxManifest.xml  — 4-part MSIX version (X.Y.Z.W format, not X.Y.Z.0.0)
+          (Get-Content "packaging\AppxManifest.xml") -replace 'Version="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"', "Version=`"$ver.0`"" |
+            Set-Content "packaging\AppxManifest.xml"
           echo "Patched to $ver"
 
       - name: Pre-build smoke test
@@ -81,29 +84,67 @@ jobs:
           echo "SHA256=$hash" >> $env:GITHUB_OUTPUT
           echo "Installer SHA256: $hash"
 
+      - name: Build MSIX package
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.tag_version.outputs.VERSION }}"
+
+          # Staging layout: AppxManifest.xml + Assets\ + NetSentinel\
+          $stage = "msix-staging"
+          New-Item -ItemType Directory -Force "$stage\NetSentinel" | Out-Null
+          New-Item -ItemType Directory -Force "$stage\Assets"      | Out-Null
+
+          Copy-Item "dist\NetSentinel.exe" "$stage\NetSentinel\NetSentinel.exe"
+          Copy-Item "assets\icons\StoreLogo.png"         "$stage\Assets\"
+          Copy-Item "assets\icons\Square44x44Logo.png"   "$stage\Assets\"
+          Copy-Item "assets\icons\Square71x71Logo.png"   "$stage\Assets\"
+          Copy-Item "assets\icons\Square150x150Logo.png" "$stage\Assets\"
+          Copy-Item "assets\icons\Square310x310Logo.png" "$stage\Assets\"
+          Copy-Item "assets\icons\Wide310x150Logo.png"   "$stage\Assets\"
+          Copy-Item "assets\icons\SplashScreen.png"      "$stage\Assets\"
+
+          Copy-Item "packaging\AppxManifest.xml" "$stage\AppxManifest.xml"
+
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Filter "makeappx.exe" -Recurse |
+            Where-Object { $_.FullName -match "x64" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $makeappx) { throw "makeappx.exe not found" }
+          & $makeappx pack /d $stage /p "dist\NetSentinel-$ver.msix" /nv
+          Write-Host "MSIX built: dist\NetSentinel-$ver.msix"
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-msix
+          path: dist/NetSentinel-*.msix
+          overwrite: true
+
       - name: Upload Windows installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: dist/NetSentinel-Setup-*.exe
           overwrite: true
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-exe
           path: dist/NetSentinel.exe
           overwrite: true
 
       - name: Upload Windows CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-cli
           path: dist/NetSentinel-cli.exe
           overwrite: true
 
       - name: Upload Windows service artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-svc
           path: dist/NetSentinel-svc.exe
@@ -115,9 +156,9 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -151,14 +192,14 @@ jobs:
             zip NetSentinel-macOS.zip NetSentinel
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-app
           path: dist/NetSentinel-macOS.zip
           overwrite: true
 
       - name: Upload macOS CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-cli
           path: dist/NetSentinel-cli-macOS
@@ -170,9 +211,9 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -211,14 +252,14 @@ jobs:
         run: dist/NetSentinel --smoke
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-binary
           path: dist/NetSentinel
           overwrite: true
 
       - name: Upload Linux CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-cli
           path: dist/NetSentinel-cli-linux
@@ -231,15 +272,15 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: "NetSentinel ${{ github.ref_name }}"
@@ -285,6 +326,7 @@ jobs:
             - HTML, JSON, CSV, Nmap XML report export
           files: |
             artifacts/windows-installer/NetSentinel-Setup-*.exe
+            artifacts/windows-msix/NetSentinel-*.msix
             artifacts/windows-exe/NetSentinel.exe
             artifacts/windows-cli/NetSentinel-cli.exe
             artifacts/windows-svc/NetSentinel-svc.exe
@@ -299,9 +341,11 @@ jobs:
   submit-winget:
     needs: [release]
     runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Version comes directly from the tag — no API call needed.
       - name: Resolve version
@@ -376,8 +420,8 @@ jobs:
             "- silent",
             "UpgradeBehavior: install",
             "InstallerSwitches:",
-            "  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
-            "  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART",
+            "  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=`"!installookla`"",
+            "  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=`"!installookla`"",
             "  Log: /`"{localappdata}\NetSentinel\install.log`"",
             "Installers:",
             "- Architecture: x64",
@@ -399,7 +443,7 @@ jobs:
             "PackageName: NetSentinel",
             "PackageUrl: https://github.com/ossianericson/netsentinel",
             "License: MIT",
-            "LicenseUrl: https://github.com/ossianericson/netsentinel/blob/main/LICENSE",
+            "LicenseUrl: https://raw.githubusercontent.com/ossianericson/netsentinel/master/LICENSE",
             "ShortDescription: Network security scanner — rogue device detector, STP monitor, and connectivity analyser",
             "Description: |-",
             "  NetSentinel is a one-stop network diagnostic and security tool for Windows.",

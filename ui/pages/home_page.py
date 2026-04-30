@@ -43,6 +43,7 @@ from ui.styles import (
     RED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    WHITE,
 )
 
 
@@ -201,7 +202,8 @@ class HomePage(QWidget):
     # ── UI build ──────────────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        self.setObjectName("homePageRoot")
+        self.setStyleSheet(f"QWidget#homePageRoot {{ background:{BG_DARK}; }}")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
@@ -212,7 +214,8 @@ class HomePage(QWidget):
         scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
 
         inner = QWidget()
-        inner.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        inner.setObjectName("homepageInner")
+        inner.setStyleSheet(f"QWidget#homepageInner {{ background:{BG_DARK}; }}")
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
@@ -259,10 +262,19 @@ class HomePage(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        self._btn_scan = QPushButton("\u25b6\u2002Scan now")
-        self._btn_scan.setObjectName("btnScan")
-        self._btn_isp = QPushButton("\u2197\u2002ISP Report")
-        self._btn_isp.setObjectName("btnNetRefresh")
+        self._btn_scan = QPushButton("\u25b6  Scan now")
+        self._btn_isp = QPushButton("\ud83d\udcca  ISP Report")
+        _action_btn_qss = (
+            f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY};"
+            f" border: 1px solid {BORDER_MED}; border-radius: 6px;"
+            f" padding: 0 16px; min-height: 34px; font-size: 12px; font-weight: 600; }}"
+            f"QPushButton:hover {{ background: {ACCENT}; color: {WHITE};"
+            f" border-color: {ACCENT}; }}"
+            f"QPushButton:disabled {{ color: {BTN_DISABLED_FG};"
+            f" border-color: {BTN_DISABLED_BORDER}; }}"
+        )
+        self._btn_scan.setStyleSheet(_action_btn_qss)
+        self._btn_isp.setStyleSheet(_action_btn_qss)
         btn_row.addWidget(self._btn_scan)
         btn_row.addWidget(self._btn_isp)
         btn_row.addStretch()
@@ -531,7 +543,8 @@ class StandardWelcomePage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
 
         inner = QWidget()
-        inner.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        inner.setObjectName("homepageInner")
+        inner.setStyleSheet(f"QWidget#homepageInner {{ background:{BG_DARK}; }}")
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 
@@ -635,7 +648,8 @@ class ProWelcomePage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
 
         inner = QWidget()
-        inner.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        inner.setObjectName("homepageInner")
+        inner.setStyleSheet(f"QWidget#homepageInner {{ background:{BG_DARK}; }}")
         scroll.setWidget(inner)
         outer.addWidget(scroll)
 

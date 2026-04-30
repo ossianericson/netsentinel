@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for NetSentinel (Desktop Bridge / Win32 package).
+  
+  Version: MUST be 4-part format (X.Y.Z.W). Release workflow patches this
+  automatically with the format: ${VERSION}.0 (e.g., 1.5.8 → 1.5.8.0).
+  Never use 5-part versions (e.g., 1.5.8.0.0) — makeappx.exe will reject them.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  IgnorableNamespaces="uap mp uap3 rescap desktop">
+
+  <Identity
+    Name="OssianEricson.NetSentinel"
+    Publisher="CN=4D6C5786-0D89-4E01-B2AA-FFB9E72FF4CA"
+    Version="1.6.0.0"
+    ProcessorArchitecture="x64" />
+
+  <mp:PhoneIdentity
+    PhoneProductId="00000000-0000-0000-0000-000000000000"
+    PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+
+  <Properties>
+    <DisplayName>NetSentinel</DisplayName>
+    <PublisherDisplayName>Ossian Ericson</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <!-- Windows 10 1809 (build 17763) minimum — required for Desktop Bridge full trust -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="1.6.0.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="NetSentinel"
+      Executable="NetSentinel\NetSentinel.exe"
+      EntryPoint="Windows.FullTrustApplication">
+
+      <uap:VisualElements
+        DisplayName="NetSentinel"
+        Description="Network security scanner — rogue device detector, STP monitor, and connectivity analyser"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- Allows the packaged Win32 exe to run with full trust (admin elevation) -->
+        <desktop:Extension Category="windows.fullTrustProcess"
+          Executable="NetSentinel\NetSentinel.exe" />
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Standard network capabilities -->
+    <Capability Name="internetClient" />
+    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer" />
+    <!--
+      runFullTrust — required for raw socket access, Npcap integration, and
+      administrator-level network operations (ARP, BPDU capture, port scanning).
+      Microsoft reviews this capability manually; allow 1–3 weeks extra.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+</Package>

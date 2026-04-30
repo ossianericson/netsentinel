@@ -1,10 +1,51 @@
-name: netsentinel
-version: 1.5.1
+﻿name: netsentinel
+version: 1.6.0
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
 
 changelog:
+  - version: 1.6.0
+    date: 2026-05-01
+    summary: Command palette, pinnable sidebar pages, inline row expansion, animated tiles, alert badge, empty-state overlays
+    changes:
+      - "ui/command_palette.py (NEW): Ctrl+K global fuzzy-search overlay — navigate any page or trigger Run Scan / Open Settings / Toggle Sidebar"
+      - "ui/dashboard.py: Pinnable sidebar pages — right-click to pin/unpin; ★ Favourites section at top of nav; QSettings persistence"
+      - "ui/dashboard.py: Alert count badge on Security Audit nav section header (30s poll, unacked CVE count)"
+      - "ui/empty_state.py (NEW): EmptyStateOverlay — zero-boilerplate empty-table placeholder, auto-shows/hides via model signals"
+      - "ui/expanding_table.py (NEW): ExpandingTable — inline master-detail row expansion (GitHub PR list pattern)"
+      - "ui/pages/cve_page.py: wired ExpandingTable + _build_cve_detail() — inline CVE metadata panel with Change State and NVD buttons"
+      - "ui/pages/connections_page.py: wired ExpandingTable + _build_connection_detail() — inline process/address/firewall panel"
+      - "ui/pages/overview_page.py: _AnimatedNumberLabel with ease-out count-up; _set_health() 3px colour bar on DeviceCountTile, ServiceStatusTile, FleetUptimeTile"
+      - "tests/test_overview_page.py: animated label assertions updated to check _target (logical value) instead of text() (visual state)"
+
+  - version: 1.5.9
+    date: 2026-05-01
+    summary: Bulletproof winget E_ABORT fix (nested winget + UAC in headless sandbox)
+    changes:
+      - "installer.iss: PrivilegesRequiredOverridesAllowed = dialog commandline — prevents UAC ShellExecuteEx runas in headless validation environments"
+      - "installer.iss: ShouldInstallOokla() guard — returns not WizardSilent(); used as Check: on Ookla [Run] entry — prevents nested winget install during silent/automated runs"
+      - "All winget manifests (static + CI-generated): Silent and SilentWithProgress switches now include /TASKS=\"!installookla\" — belt-and-suspenders suppression of Ookla task in silent mode"
+      - "apm.yml: RULE-W1 (silent installs must not run nested winget) and RULE-W2 (PrivilegesRequiredOverridesAllowed must include commandline)"
+      - "CLAUDE.md: winget E_ABORT root cause analysis and three-layer fix documentation"
+      - "Root cause confirmed: v1.4.0 was last approved submission (no Ookla task); every submission since v1.5.1 failed due to installookla task spawning nested winget in validation sandbox"
+
+  - version: 1.5.8
+    date: 2026-05-01
+    summary: Fix corrupted __init__ in baseline + notifications pages (SyntaxError CI failure)
+    changes:
+      - "baseline_page.py: restored __init__(self, store=None, parent) from git history — corrupt fragment from previous session caused SyntaxError on all 3 CI platforms"
+      - "notifications_page.py: same — restored __init__(self, router=None, parent)"
+      - "1412/1412 tests passing after restore"
+
+  - version: 1.5.7
+    date: 2026-05-01
+    summary: Fix MSIX CI failure (onefile exe staging), add CLAUDE.md
+    changes:
+      - "release.yml Build MSIX step: Copy-Item now copies dist\\NetSentinel.exe directly into staging dir (not glob of a nonexistent directory) — fixes run #56 CI failure"
+      - "PyInstaller builds onefile on all platforms — MSIX staging must use single-file copy, never directory glob"
+      - "CLAUDE.md added with build/release/CI notes for Claude Code sessions"
+
   - version: 1.5.1
     date: 2026-04-30
     summary: Multithreaded speed test (Ookla CLI + pure-Python fallback), Windows least-privilege path hardening, sidebar icon normalization
@@ -100,26 +141,33 @@ rules:
 
   # ── Release Integrity ─────────────────────────────────────────────────────
   - id: RULE-R1
-    title: "installer.iss version must match app.py before tagging"
+    title: "Use bump_version.py for all version bumps — never edit files manually"
     severity: blocking
     description: >
-      Before any git tag is pushed, installer.iss MyAppVersion must already
-      equal the version string in app.py. The CI patch step is a safety net
-      only — it is not a substitute for keeping files in sync manually.
-      Run tests/test_version_consistency.py locally before tagging.
-    checklist:
+      To bump the version, run ONE command from the repo root:
+        python bump_version.py X.Y.Z
+      This updates all 13 tracked locations atomically and self-verifies by
+      running tests/test_version_consistency.py. Never edit version strings
+      manually across files — use the script every time without exception.
+      The What's New section in ui/dashboard.py reads QApplication.applicationVersion()
+      dynamically and requires no manual update.
+    how_to_bump:
+      - "python bump_version.py 1.60"
+      - "git add -p  (review changes)"
+      - "git commit -m \"chore: bump version to 1.60\""
+      - "git tag v1.60 && git push && git push --tags"
+    files_managed_by_script:
       - "app.py → app.setApplicationVersion(\"X.Y.Z\")"
       - "cli.py → _VERSION = \"X.Y.Z\""
-      - "apm.yml → version: X.Y.Z"
+      - "apm.yml → top-level version: X.Y.Z"
       - "installer.iss → #define MyAppVersion \"X.Y.Z\""
       - "build.bat → echo version string"
       - "build.sh → echo version string"
-      - "README.md → badge/link + changelog entry"
-      - "ui/dashboard.py → _build_help_tab() What's New content"
+      - "README.md → badge/link + What's New header"
       - "tools/debug_launch.py → app.setApplicationVersion(\"X.Y.Z\")"
       - "modules/rest_api.py → \"version\" in /health endpoint"
       - ".github/winget/NetSentinel.NetSentinel.yaml → PackageVersion: X.Y.Z"
-      - ".github/winget/NetSentinel.NetSentinel.installer.yaml → PackageVersion: X.Y.Z"
+      - ".github/winget/NetSentinel.NetSentinel.installer.yaml → PackageVersion + installer URL"
       - ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml → PackageVersion: X.Y.Z"
 
   - id: RULE-R2
@@ -131,6 +179,28 @@ rules:
       PublisherUrl, PublisherSupportUrl, PackageUrl, LicenseUrl, and
       ReleaseNotesUrl. The minimal 9-field skeleton loses community repo
       metadata on every release. The CI generate step must use the full template.
+
+  - id: RULE-R4
+    title: "MSIX Version format must be exactly 4 parts (X.Y.Z.0)"
+    severity: blocking
+    description: >
+      The AppxManifest.xml Version attribute must be in 4-part format only: X.Y.Z.0
+      (e.g., 1.5.8.0). The makeappx.exe packaging tool rejects 5-part versions (X.Y.Z.0.0).
+      bump_version.py automatically generates the correct format: it appends .0 to the
+      semantic version. Never edit AppxManifest.xml manually or use 5-part versions.
+      The release.yml workflow also enforces this via the Patch version strings step.
+    title: "MSIX staging must copy the onefile exe — never glob a directory"
+    severity: blocking
+    description: >
+      NetSentinel is built as a PyInstaller onefile executable on all platforms.
+      The Windows artifact is dist\NetSentinel.exe — a single file, NOT a directory.
+      The MSIX staging step must use:
+        Copy-Item "dist\NetSentinel.exe" "$stage\NetSentinel\NetSentinel.exe"
+      Never use:
+        Copy-Item -Recurse "dist\NetSentinel\*" "$stage\NetSentinel\"
+      The latter path (dist\NetSentinel\) does not exist and the CI step will fail
+      silently or throw. AppxManifest.xml expects Executable="NetSentinel\NetSentinel.exe"
+      so the single exe must land at that path inside the staging layout.
 
   - id: RULE-R3
     title: "Ookla.Speedtest.CLI must be ExternalDependencies, not PackageDependencies"
@@ -248,4 +318,37 @@ rules:
       ImportError. The fallback must degrade gracefully (return empty results,
       emit an error signal, or show a banner) — never crash on import.
       Example: speedtest-cli inside _run_speedtest_cli(), nmap inside port_scanner.
+
+  # ── Winget Submission ─────────────────────────────────────────────────────
+  - id: RULE-W1
+    title: "Silent installs must never run nested winget calls"
+    severity: blocking
+    description: >
+      The installer MUST NOT spawn `winget install` (or any long-running network
+      process) during silent/automated installs. Winget validation sandboxes run
+      the installer with /VERYSILENT; a nested winget call hangs and causes the
+      outer installer to return E_ABORT (0x80004004 / -2147467260), failing
+      submission every time.
+      Three-layer defence:
+      1. installer.iss [Run] Ookla entry: `Check: ShouldInstallOokla;`
+         where ShouldInstallOokla() returns `not WizardSilent()`.
+      2. installer.iss [Setup]: `PrivilegesRequiredOverridesAllowed = dialog commandline`
+         so headless commandline installs can run without UAC elevation (which
+         also returns E_ABORT in headless environments).
+      3. All winget manifests (static .github/winget/ AND CI-generated): Silent
+         and SilentWithProgress switches must include `/TASKS="!installookla"`
+         to explicitly opt out of the Ookla task.
+      Never remove any of these three defences independently.
+
+  - id: RULE-W2
+    title: "PrivilegesRequiredOverridesAllowed must include commandline"
+    severity: blocking
+    description: >
+      installer.iss [Setup] must have:
+        PrivilegesRequiredOverridesAllowed = dialog commandline
+      Without `commandline`, Inno Setup attempts UAC elevation via ShellExecuteEx
+      "runas" during silent commandline installs. In headless environments (winget
+      validation, CI) that elevation fails and the installer exits with E_ABORT.
+      The `commandline` keyword allows a non-elevated silent install to proceed
+      as the current user when /VERYSILENT is passed from the command line.
 

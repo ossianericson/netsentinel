@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFormLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -42,6 +43,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from ui.expanding_table import ExpandingTable
 
 from ui.styles import (
     ACCENT,
@@ -185,6 +188,7 @@ class ConnectionsPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._connections: list = []
+        self._displayed_conns: list = []
         self._blocked_rules: list[str] = []
         self._worker = None
         self._poller = None
@@ -300,7 +304,11 @@ class ConnectionsPage(QWidget):
         root.addWidget(self._status_lbl)
 
         # Connections table
-        self._tbl = QTableWidget(0, len(_TABLE_HEADERS))
+        self._tbl = ExpandingTable(
+            0, len(_TABLE_HEADERS),
+            detail_builder=lambda r: self._build_connection_detail(r),
+            detail_height=110,
+        )
         self._tbl.setHorizontalHeaderLabels(_TABLE_HEADERS)
         self._tbl.horizontalHeader().setStretchLastSection(False)
         self._tbl.horizontalHeader().setSectionResizeMode(
@@ -436,6 +444,8 @@ class ConnectionsPage(QWidget):
         self._populate_table(visible)
 
     def _populate_table(self, conns: list) -> None:
+        self._tbl.clear_detail()
+        self._displayed_conns = conns
         self._tbl.setRowCount(0)
         for c in conns:
             row = self._tbl.rowCount()
@@ -487,6 +497,98 @@ class ConnectionsPage(QWidget):
                     item.setData(Qt.ItemDataRole.UserRole, conns.index(c))
                 self._tbl.setItem(row, col, item)
 
+    # ── Inline detail panel ───────────────────────────────────────────────────
+
+    def _build_connection_detail(self, logical_row: int) -> QWidget:
+        if logical_row >= len(self._displayed_conns):
+            return QWidget()
+        c = self._displayed_conns[logical_row]
+
+        status_color = _STATUS_COLOR.get(c.status, TEXT_MUTED)
+        is_blocked = c.exe_name in self._blocked_rules
+
+        outer = QWidget()
+        outer.setStyleSheet(
+            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f" border-left:3px solid {ACCENT}; }}"
+        )
+        lay = QHBoxLayout(outer)
+        lay.setContentsMargins(16, 10, 16, 10)
+        lay.setSpacing(24)
+
+        def _lbl(text: str, color: str = TEXT_PRIMARY) -> QLabel:
+            l = QLabel(str(text))
+            l.setStyleSheet(
+                f"font-size:11px; color:{color}; background:transparent; border:none;"
+            )
+            return l
+
+        def _hdr(text: str) -> QLabel:
+            l = QLabel(text)
+            l.setStyleSheet(
+                f"font-size:10px; font-weight:bold; color:{TEXT_MUTED};"
+                " background:transparent; border:none;"
+            )
+            return l
+
+        # Process column
+        proc = QWidget()
+        proc.setStyleSheet("QWidget { background:transparent; border:none; }")
+        pg = QFormLayout(proc)
+        pg.setContentsMargins(0, 0, 0, 0)
+        pg.setSpacing(3)
+        pg.setHorizontalSpacing(12)
+        pg.addRow(_hdr("Process"),  _lbl(f"{c.exe_name}  (PID {c.pid or '—'})"))
+        pg.addRow(_hdr("Protocol"), _lbl(c.proto, ACCENT))
+        pg.addRow(_hdr("Status"),   _lbl(c.status, status_color))
+        country_str = f"{c.flag}  {c.country}" if c.flag else (c.country or "—")
+        pg.addRow(_hdr("Country"),  _lbl(country_str))
+        lay.addWidget(proc)
+
+        # Address column
+        addr = QWidget()
+        addr.setStyleSheet("QWidget { background:transparent; border:none; }")
+        ag = QFormLayout(addr)
+        ag.setContentsMargins(0, 0, 0, 0)
+        ag.setSpacing(3)
+        ag.setHorizontalSpacing(12)
+        ag.addRow(_hdr("Local"),  _lbl(c.local_addr or "—", TEXT_MUTED))
+        remote = f"{c.remote_ip}:{c.remote_port}" if c.remote_ip else "—"
+        ag.addRow(_hdr("Remote"), _lbl(remote))
+        path_lbl = QLabel(c.exe_path or "—")
+        path_lbl.setWordWrap(True)
+        path_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        ag.addRow(_hdr("EXE Path"), path_lbl)
+        lay.addLayout(ag, 1)
+
+        # Actions column
+        if is_blocked:
+            btn_fw = QPushButton(f"Unblock {c.exe_name}")
+            btn_fw.setStyleSheet(
+                f"font-size:11px; font-weight:bold; color:white; background:{AMBER};"
+                f" border:none; padding:0 12px; border-radius:4px;"
+            )
+            btn_fw.clicked.connect(lambda: self._toggle_block(c, True))
+        else:
+            btn_fw = QPushButton(f"Block {c.exe_name}")
+            btn_fw.setStyleSheet(
+                f"font-size:11px; font-weight:bold; color:white; background:{RED};"
+                f" border:none; padding:0 12px; border-radius:4px;"
+            )
+            btn_fw.clicked.connect(lambda: self._toggle_block(c, False))
+        btn_fw.setFixedHeight(28)
+
+        actions = QVBoxLayout()
+        actions.setSpacing(6)
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.addWidget(btn_fw)
+        actions.addStretch()
+        lay.addLayout(actions)
+
+        return outer
+
     # ── Context menu ──────────────────────────────────────────────────────────
 
     def _context_menu(self, pos) -> None:
@@ -497,12 +599,9 @@ class ConnectionsPage(QWidget):
         if not item:
             return
         idx = item.data(Qt.ItemDataRole.UserRole)
-
-        # Find the connection from the currently displayed set
-        visible = self._get_visible_conns()
-        if idx is None or idx >= len(visible):
+        if idx is None or idx >= len(self._displayed_conns):
             return
-        c = visible[idx]
+        c = self._displayed_conns[idx]
 
         menu = QMenu(self)
         menu.setStyleSheet(

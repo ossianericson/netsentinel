@@ -1,4 +1,4 @@
-"""
+﻿"""
 REST API — read-only local HTTP API for NetSentinel (Tier 2 item 5).
 
 Exposes network scan data to external tools (Grafana, Home Assistant,
@@ -142,7 +142,7 @@ def create_app(store: MetricStore) -> "Flask":
         return jsonify({
             "status":     "ok",
             "uptime_s":   round(time.time() - _start_ts, 1),
-            "version":    "1.5.1",
+            "version":    "1.6.0",
         })
 
     @app.route("/devices")

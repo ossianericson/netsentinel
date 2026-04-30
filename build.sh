@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 set -e
 
 echo "================================================"
-echo " NetSentinel v1.5.1 — macOS / Linux Build"
+echo " NetSentinel v1.6.0 — macOS / Linux Build"
 echo "================================================"
 echo ""
 echo "Usage:"

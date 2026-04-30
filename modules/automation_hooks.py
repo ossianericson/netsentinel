@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import threading
@@ -263,17 +265,24 @@ def _build_argv(script: str, args_str: str) -> List[str]:
 
 def template_wol(target_mac: str = "", broadcast: str = "255.255.255.255") -> AutomationRule:
     """Rule: send Wake-on-LAN to target_mac using the built-in wol helper."""
-    # Uses Python itself so no external script is needed
-    wol_script = str(Path(sys.executable).parent / "python.exe") if sys.platform == "win32" else sys.executable
+    if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", broadcast):
+        broadcast = "255.255.255.255"
     ns_root = str(Path(__file__).resolve().parent.parent)
-    script = sys.executable
-    args = f"-c \"import sys; sys.path.insert(0, '{ns_root}'); from modules.utils import send_wol; send_wol('{target_mac}', '{broadcast}')\" "
+    # MAC comes from NS_MAC env var injected by the engine at runtime; ns_root
+    # and broadcast are passed as argv so no user data is embedded in the code string.
+    code = (
+        "import sys,os;"
+        "sys.path.insert(0,sys.argv[1]);"
+        "from modules.utils import send_wol;"
+        "send_wol(os.environ.get('NS_MAC',''),sys.argv[2])"
+    )
+    args = f"-c {shlex.quote(code)} {shlex.quote(ns_root)} {shlex.quote(broadcast)}"
     return AutomationRule(
         name="Wake-on-LAN",
         trigger=Trigger.DEVICE_JOINED.value,
         match_field="mac",
         match_value=target_mac or "*",
-        script_path=script,
+        script_path=sys.executable,
         args=args,
         description="Send WoL magic packet when a device joins. Set match_value to the trigger MAC.",
     )
@@ -283,21 +292,27 @@ def template_log_to_file(log_path: str = "") -> AutomationRule:
     """Rule: append event JSON to a log file."""
     if not log_path:
         log_path = str(get_app_data_dir() / "automation_events.jsonl")
-    script = sys.executable
     ns_root = str(Path(__file__).resolve().parent.parent)
-    args = (
-        f'-c "import sys,json,datetime; '
-        f'sys.path.insert(0,\'{ns_root}\'); '
-        f'f=open(\'{log_path}\',\'a\'); '
-        f'f.write(json.dumps({{\'ts\':str(datetime.datetime.now()),\'mac\':\'$MAC\',\'ip\':\'$IP\'}})+\'\\\\n\'); '
-        f'f.close()"'
+    # MAC/IP come from NS_MAC/NS_IP env vars injected by the engine; log_path
+    # and ns_root are passed as argv so no user data is embedded in the code string.
+    code = (
+        "import sys,os,json,datetime;"
+        "sys.path.insert(0,sys.argv[1]);"
+        "f=open(sys.argv[2],'a');"
+        "f.write(json.dumps({"
+        "'ts':str(datetime.datetime.now()),"
+        "'mac':os.environ.get('NS_MAC',''),"
+        "'ip':os.environ.get('NS_IP','')"
+        "})+chr(10));"
+        "f.close()"
     )
+    args = f"-c {shlex.quote(code)} {shlex.quote(ns_root)} {shlex.quote(log_path)}"
     return AutomationRule(
         name="Log Event to File",
         trigger=Trigger.DEVICE_JOINED.value,
         match_field="any",
         match_value="*",
-        script_path=script,
+        script_path=sys.executable,
         args=args,
         description=f"Append device join event to {log_path}.",
     )

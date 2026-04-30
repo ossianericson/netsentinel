@@ -1,4 +1,4 @@
-; ============================================================================
+﻿; ============================================================================
 ; NetSentinel — Inno Setup installer script
 ;
 ; Builds a standard Windows setup EXE that:
@@ -22,7 +22,7 @@
 ; ============================================================================
 
 #define MyAppName        "NetSentinel"
-#define MyAppVersion     "1.5.1"
+#define MyAppVersion     "1.6.0"
 #define MyAppPublisher   "NetSentinel Project"
 #define MyAppURL         "https://github.com/ossianericson/netsentinel"
 #define MyAppExeName     "NetSentinel.exe"
@@ -62,7 +62,7 @@ ArchitecturesInstallIn64BitMode = x64compatible
 ; STP/Storm modules need raw sockets → installer asks for admin.
 ; The shortcut uses runas so the app itself elevates on launch.
 PrivilegesRequired        = admin
-PrivilegesRequiredOverridesAllowed = dialog
+PrivilegesRequiredOverridesAllowed = dialog commandline
 
 ; ── Uninstaller ──────────────────────────────────────────────────────────────
 UninstallDisplayIcon      = {app}\{#MyAppExeName}
@@ -130,6 +130,7 @@ Filename: "cmd.exe"; \
   Parameters: "/c winget install --id {#OoklaCliId} --source winget --silent --accept-package-agreements --accept-source-agreements 2>nul"; \
   Flags: runhidden waituntilterminated; \
   Tasks: installookla; \
+  Check: ShouldInstallOokla; \
   StatusMsg: "Installing Ookla Speedtest CLI (for 1 Gbps+ speed tests)..."
 
 ; Install service after copy (optional task)
@@ -172,6 +173,15 @@ begin
   Result := Result and (ResultCode = 0);
 end;
 
+// Guard: skip Ookla CLI installation during silent/automated runs.
+// Winget validation sandboxes run /VERYSILENT — a nested winget call hangs,
+// times out, and causes the outer installer to return E_ABORT (0x80004004).
+// Interactive users still get the install; headless/CI runs skip it cleanly.
+function ShouldInstallOokla(): Boolean;
+begin
+  Result := not WizardSilent();
+end;
+
 // Pre-installation check: warn if winget is missing when Ookla CLI task is selected
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
@@ -184,15 +194,16 @@ begin
   if FileExists(ExpandConstant('{localappdata}\Microsoft\WindowsApps\winget.exe')) then Exit;
   if FindProc('winget') then Exit;
 
-  // winget not found — warn but don't block installation
-  MsgBox(
-    'The Ookla Speedtest CLI could not be automatically installed because winget ' +
-    '(Windows Package Manager) was not found on this system.' + #13#10 + #13#10 +
-    'NetSentinel will still work — it includes a built-in multithreaded speed test backend.' + #13#10 + #13#10 +
-    'To get 1 Gbps+ speed tests later, install the Ookla CLI manually:' + #13#10 +
-    '  1. Install winget from the Microsoft Store (App Installer)' + #13#10 +
-    '  2. Run: winget install Ookla.Speedtest.CLI' + #13#10 + #13#10 +
-    'Or use the "Install via winget" button in the Speed Test page inside NetSentinel.',
-    mbInformation, MB_OK
-  );
+  // winget not found — warn interactively only; silent installs (winget validation) must not block
+  if not WizardSilent then
+    MsgBox(
+      'The Ookla Speedtest CLI could not be automatically installed because winget ' +
+      '(Windows Package Manager) was not found on this system.' + #13#10 + #13#10 +
+      'NetSentinel will still work — it includes a built-in multithreaded speed test backend.' + #13#10 + #13#10 +
+      'To get 1 Gbps+ speed tests later, install the Ookla CLI manually:' + #13#10 +
+      '  1. Install winget from the Microsoft Store (App Installer)' + #13#10 +
+      '  2. Run: winget install Ookla.Speedtest.CLI' + #13#10 + #13#10 +
+      'Or use the "Install via winget" button in the Speed Test page inside NetSentinel.',
+      mbInformation, MB_OK
+    );
 end;

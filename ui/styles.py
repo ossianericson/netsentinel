@@ -17,9 +17,9 @@ restart the application.
 
 _ARCTIC_CLEAN = {
     # Structural
-    "NAV_BAR":            "#141B2D",
-    "SIDEBAR_BG":         "#1F2B3E",
-    "SIDEBAR_HOVER":      "#2A3A52",
+    "NAV_BAR":            "#0C1014",
+    "SIDEBAR_BG":         "#0D1117",
+    "SIDEBAR_HOVER":      "#161B22",
     "SIDEBAR_SEL":        "#0078D4",
     "SIDEBAR_ITEM_FG":    "#A8B8C8",
     "SIDEBAR_SEL_BG":     "#243348",
@@ -52,9 +52,9 @@ _ARCTIC_CLEAN = {
     "GREEN_BG":           "#F2FBF4",
     # Borders / dividers
     "BORDER":             "#D4D4D4",
+    "BORDER_LITE":        "#EBEBEB",
     "BORDER_MED":         "#B8C4CF",
     "CARD_HDR_BORDER":    "#ECECEC",
-    "NAV_DIVIDER":        "#0A0E1A",
     # Buttons
     "BTN_HOVER_BG":       "#E8F4FF",
     "BTN_EXPORT_HOVER":   "#EBF7EC",
@@ -81,8 +81,11 @@ _ARCTIC_CLEAN = {
     "PRO_BANNER_BORDER":  "#F4C2C2",
     "PRO_WARN_BG":        "#FFF0F0",
     # Sidebar section headers
-    "SIDEBAR_SECTION_BG": "#172333",
+    "SIDEBAR_SECTION_BG": "#0C1014",
     "SIDEBAR_SECTION_FG": "#6A8099",
+    # Special-purpose nav colours (keep here so one file owns all colours)
+    "AUDIT_RED":          "#FF5252",
+    "NAV_DIVIDER":        "#060810",
     # Pure white
     "WHITE":              "#FFFFFF",
     # Network benchmark grade colours
@@ -102,176 +105,180 @@ _ARCTIC_CLEAN = {
     "CRITICAL":           "#8B0000",
 }
 
-_MIDNIGHT_PRO = {
-    # Structural
-    "NAV_BAR":            "#0B0D10",
-    "SIDEBAR_BG":         "#151A21",
-    "SIDEBAR_HOVER":      "#1E2A36",
-    "SIDEBAR_SEL":        "#40E0FF",
-    "SIDEBAR_ITEM_FG":    "#8A9BB0",
-    "SIDEBAR_SEL_BG":     "#1A3A5A",
-    "BG_DARK":            "#101620",
-    "BG_CARD":            "#151A21",
-    "BG_HOVER":           "#1A2D42",
-    "BG_ALT_ROW":         "#131820",
+_DARK_PRO = {
+    # Structural — GitHub Dark palette
+    "NAV_BAR":            "#0D1117",
+    "SIDEBAR_BG":         "#161B22",
+    "SIDEBAR_HOVER":      "#21262D",
+    "SIDEBAR_SEL":        "#2F81F7",
+    "SIDEBAR_ITEM_FG":    "#8B949E",
+    "SIDEBAR_SEL_BG":     "#1D3045",
+    "BG_DARK":            "#0D1117",
+    "BG_CARD":            "#161B22",
+    "BG_HOVER":           "#1A2233",
+    "BG_ALT_ROW":         "#111820",
     # Accent
-    "ACCENT":             "#40E0FF",
-    "ACCENT_LITE":        "#6AECFF",
-    "ACCENT_DARK":        "#25B8D8",
+    "ACCENT":             "#2F81F7",
+    "ACCENT_LITE":        "#58A6FF",
+    "ACCENT_DARK":        "#1A6BC4",
     # Text
-    "TEXT_PRIMARY":       "#E9EEF5",
-    "TEXT_SECONDARY":     "#8A9BB0",
-    "TEXT_MUTED":         "#5A6A7A",
+    "TEXT_PRIMARY":       "#E6EDF3",
+    "TEXT_SECONDARY":     "#8B949E",
+    "TEXT_MUTED":         "#6E7681",
     # Table headers
     "TH_BG":              "#0D1520",
-    "TH_TEXT":            "#E9EEF5",
+    "TH_TEXT":            "#E6EDF3",
     "TH_BORDER":          "#1E3A55",
-    "TABLE_SEL":          "#1A3A5A",
-    "TABLE_ROW_BORDER":   "#1E2A38",
+    "TABLE_SEL":          "#1D3045",
+    "TABLE_ROW_BORDER":   "#21262D",
     # Status colours
-    "RED":                "#FF4D4D",
-    "AMBER":              "#F59E0B",
-    "GREEN":              "#4ADE80",
-    "BLUE":               "#40E0FF",
+    "RED":                "#F85149",
+    "AMBER":              "#E3B341",
+    "GREEN":              "#3FB950",
+    "BLUE":               "#2F81F7",
     # Status badge backgrounds
     "RED_BG":             "#2D0F0F",
-    "AMBER_BG":           "#2D1F00",
+    "AMBER_BG":           "#2A1A00",
     "GREEN_BG":           "#0D2D15",
     # Borders / dividers
-    "BORDER":             "#273140",
-    "BORDER_MED":         "#2A3A4A",
-    "CARD_HDR_BORDER":    "#1E2A38",
-    "NAV_DIVIDER":        "#050708",
+    "BORDER":             "#30363D",
+    "BORDER_LITE":        "#484F58",
+    "BORDER_MED":         "#3A424B",
+    "CARD_HDR_BORDER":    "#21262D",
+    "NAV_DIVIDER":        "#070B0F",
     # Buttons
     "BTN_HOVER_BG":       "#1A2D42",
-    "BTN_EXPORT_HOVER":   "#0D2D1A",
-    "BTN_DISABLED_BORDER":"#2A3A4A",
-    "BTN_DISABLED_FG":    "#4A5A6A",
-    "INPUT_BTN_BG":       "#1E2A38",
+    "BTN_EXPORT_HOVER":   "#0D2A1A",
+    "BTN_DISABLED_BORDER":"#30363D",
+    "BTN_DISABLED_FG":    "#6E7681",
+    "INPUT_BTN_BG":       "#21262D",
     # Scrollbar / progress
-    "PROGRESS_TRACK":     "#0D1520",
-    "SCROLLBAR_TRACK":    "#101620",
-    "SCROLLBAR_HANDLE":   "#2A3A4A",
+    "PROGRESS_TRACK":     "#0D1117",
+    "SCROLLBAR_TRACK":    "#0D1117",
+    "SCROLLBAR_HANDLE":   "#30363D",
     # Labels / tooltips
-    "LABEL_SUBTITLE":     "#5A7A9A",
-    "TOOLTIP_BG":         "#0D1520",
-    "TOOLTIP_BORDER":     "#1E3050",
+    "LABEL_SUBTITLE":     "#58A6FF",
+    "TOOLTIP_BG":         "#0D1117",
+    "TOOLTIP_BORDER":     "#30363D",
     # Notification bars
     "UPDATE_BAR_BG":      "#102030",
     "UPDATE_BAR_BORDER":  "#204050",
-    "UPDATE_BAR_FG":      "#6AECFF",
-    "ADMIN_WARN_FG":      "#F0A500",
+    "UPDATE_BAR_FG":      "#58A6FF",
+    "ADMIN_WARN_FG":      "#E3B341",
     "ADMIN_WARN_BG":      "#2A1A00",
-    "ADMIN_WARN_BORDER":  "#704000",
-    "ADMIN_WARN_HOVER":   "#FFD080",
+    "ADMIN_WARN_BORDER":  "#664400",
+    "ADMIN_WARN_HOVER":   "#F0CC66",
     # Pro mode banner colours
     "PRO_BANNER_BORDER":  "#7A2020",
     "PRO_WARN_BG":        "#2D0A0A",
     # Sidebar section headers
-    "SIDEBAR_SECTION_BG": "#0D1218",
-    "SIDEBAR_SECTION_FG": "#4A6080",
-    # Pure white (off-white in dark mode)
-    "WHITE":              "#E9EEF5",
+    "SIDEBAR_SECTION_BG": "#0D1117",
+    "SIDEBAR_SECTION_FG": "#6E7681",
+    "AUDIT_RED":          "#F85149",
+    # Pure white
+    "WHITE":              "#E6EDF3",
     # Network benchmark grade colours
     "GRADE_A_BG":         "#14532d",
-    "GRADE_B_FG":         "#4ade80",
-    "GRADE_B_BG":         "#1a3a1a",
-    "GRADE_C_BG":         "#451a03",
-    "GRADE_D_BG":         "#7f1d1d",
-    "GRADE_F_FG":         "#ff4444",
-    "GRADE_F_BG":         "#3b0000",
+    "GRADE_B_FG":         "#3FB950",
+    "GRADE_B_BG":         "#0D2D15",
+    "GRADE_C_BG":         "#2A1A00",
+    "GRADE_D_BG":         "#3D0F0F",
+    "GRADE_F_FG":         "#F85149",
+    "GRADE_F_BG":         "#2D0707",
     # Chart (matplotlib)
-    "CHART_BG":           "#151A21",
-    "CHART_PLOT_BG":      "#101620",
-    "CHART_GRID":         "#1E2A38",
-    "CHART_TITLE":        "#40E0FF",
+    "CHART_BG":           "#161B22",
+    "CHART_PLOT_BG":      "#0D1117",
+    "CHART_GRID":         "#21262D",
+    "CHART_TITLE":        "#58A6FF",
     # Critical severity
-    "CRITICAL":           "#FF8080",
+    "CRITICAL":           "#FF6E6E",
 }
 
-_OBSIDIAN_NEON = {
-    # Structural
-    "NAV_BAR":            "#050505",
-    "SIDEBAR_BG":         "#0A0A0A",
-    "SIDEBAR_HOVER":      "#1A1A1A",
-    "SIDEBAR_SEL":        "#B6FF3B",
-    "SIDEBAR_ITEM_FG":    "#888888",
-    "SIDEBAR_SEL_BG":     "#0D1A00",
-    "BG_DARK":            "#080808",
-    "BG_CARD":            "#111111",
-    "BG_HOVER":           "#1A2500",
-    "BG_ALT_ROW":         "#0D0D0D",
+_SLATE = {
+    # Structural — warm charcoal with violet accent (Catppuccin Mocha-inspired)
+    "NAV_BAR":            "#181825",
+    "SIDEBAR_BG":         "#1E1E2E",
+    "SIDEBAR_HOVER":      "#2A2A3F",
+    "SIDEBAR_SEL":        "#7C3AED",
+    "SIDEBAR_ITEM_FG":    "#A6ADC8",
+    "SIDEBAR_SEL_BG":     "#2D1F4A",
+    "BG_DARK":            "#181825",
+    "BG_CARD":            "#1E1E2E",
+    "BG_HOVER":           "#2A2A3F",
+    "BG_ALT_ROW":         "#181825",
     # Accent
-    "ACCENT":             "#B6FF3B",
-    "ACCENT_LITE":        "#CCFF6A",
-    "ACCENT_DARK":        "#88CC00",
+    "ACCENT":             "#7C3AED",
+    "ACCENT_LITE":        "#9D5CF6",
+    "ACCENT_DARK":        "#5B21B6",
     # Text
-    "TEXT_PRIMARY":       "#FFFFFF",
-    "TEXT_SECONDARY":     "#AAAAAA",
-    "TEXT_MUTED":         "#666666",
+    "TEXT_PRIMARY":       "#CDD6F4",
+    "TEXT_SECONDARY":     "#A6ADC8",
+    "TEXT_MUTED":         "#6C7086",
     # Table headers
-    "TH_BG":              "#0A0A0A",
-    "TH_TEXT":            "#B6FF3B",
-    "TH_BORDER":          "#222222",
-    "TABLE_SEL":          "#1A2500",
-    "TABLE_ROW_BORDER":   "#1A1A1A",
+    "TH_BG":              "#12101D",
+    "TH_TEXT":            "#CDD6F4",
+    "TH_BORDER":          "#302040",
+    "TABLE_SEL":          "#2D1F4A",
+    "TABLE_ROW_BORDER":   "#262638",
     # Status colours
-    "RED":                "#FF3BD4",
-    "AMBER":              "#FFB800",
-    "GREEN":              "#B6FF3B",
-    "BLUE":               "#40E0FF",
+    "RED":                "#F38BA8",
+    "AMBER":              "#FAB387",
+    "GREEN":              "#A6E3A1",
+    "BLUE":               "#89DCEB",
     # Status badge backgrounds
-    "RED_BG":             "#200016",
-    "AMBER_BG":           "#201000",
-    "GREEN_BG":           "#0D1A00",
+    "RED_BG":             "#2D0F1A",
+    "AMBER_BG":           "#2A1A00",
+    "GREEN_BG":           "#0D2018",
     # Borders / dividers
-    "BORDER":             "#333333",
-    "BORDER_MED":         "#444444",
-    "CARD_HDR_BORDER":    "#222222",
-    "NAV_DIVIDER":        "#000000",
+    "BORDER":             "#302040",
+    "BORDER_LITE":        "#4A3065",
+    "BORDER_MED":         "#3A2F5A",
+    "CARD_HDR_BORDER":    "#262638",
+    "NAV_DIVIDER":        "#0D0B14",
     # Buttons
-    "BTN_HOVER_BG":       "#1A2500",
-    "BTN_EXPORT_HOVER":   "#0D1800",
-    "BTN_DISABLED_BORDER":"#333333",
-    "BTN_DISABLED_FG":    "#555555",
-    "INPUT_BTN_BG":       "#1A1A1A",
+    "BTN_HOVER_BG":       "#2D1F4A",
+    "BTN_EXPORT_HOVER":   "#0D2018",
+    "BTN_DISABLED_BORDER":"#302040",
+    "BTN_DISABLED_FG":    "#6C7086",
+    "INPUT_BTN_BG":       "#262638",
     # Scrollbar / progress
-    "PROGRESS_TRACK":     "#0A0A0A",
-    "SCROLLBAR_TRACK":    "#0A0A0A",
-    "SCROLLBAR_HANDLE":   "#333333",
+    "PROGRESS_TRACK":     "#181825",
+    "SCROLLBAR_TRACK":    "#181825",
+    "SCROLLBAR_HANDLE":   "#302040",
     # Labels / tooltips
-    "LABEL_SUBTITLE":     "#666666",
-    "TOOLTIP_BG":         "#050505",
-    "TOOLTIP_BORDER":     "#333333",
+    "LABEL_SUBTITLE":     "#9D5CF6",
+    "TOOLTIP_BG":         "#181825",
+    "TOOLTIP_BORDER":     "#302040",
     # Notification bars
-    "UPDATE_BAR_BG":      "#0A1A00",
-    "UPDATE_BAR_BORDER":  "#336600",
-    "UPDATE_BAR_FG":      "#B6FF3B",
-    "ADMIN_WARN_FG":      "#FFB800",
-    "ADMIN_WARN_BG":      "#1A1000",
+    "UPDATE_BAR_BG":      "#1A1030",
+    "UPDATE_BAR_BORDER":  "#3A2060",
+    "UPDATE_BAR_FG":      "#9D5CF6",
+    "ADMIN_WARN_FG":      "#FAB387",
+    "ADMIN_WARN_BG":      "#2A1500",
     "ADMIN_WARN_BORDER":  "#664400",
-    "ADMIN_WARN_HOVER":   "#FFCC44",
+    "ADMIN_WARN_HOVER":   "#FAD0A0",
     # Pro mode banner colours
-    "PRO_BANNER_BORDER":  "#7A2020",
-    "PRO_WARN_BG":        "#1A0000",
+    "PRO_BANNER_BORDER":  "#7A2040",
+    "PRO_WARN_BG":        "#2D0A18",
     # Sidebar section headers
-    "SIDEBAR_SECTION_BG": "#050505",
-    "SIDEBAR_SECTION_FG": "#558800",
+    "SIDEBAR_SECTION_BG": "#181825",
+    "SIDEBAR_SECTION_FG": "#6C7086",
+    "AUDIT_RED":          "#F38BA8",
     # Pure white
-    "WHITE":              "#FFFFFF",
+    "WHITE":              "#CDD6F4",
     # Network benchmark grade colours
-    "GRADE_A_BG":         "#0A2200",
-    "GRADE_B_FG":         "#B6FF3B",
-    "GRADE_B_BG":         "#0A1800",
-    "GRADE_C_BG":         "#1A1000",
-    "GRADE_D_BG":         "#200010",
-    "GRADE_F_FG":         "#FF3BD4",
-    "GRADE_F_BG":         "#200010",
+    "GRADE_A_BG":         "#0D2018",
+    "GRADE_B_FG":         "#A6E3A1",
+    "GRADE_B_BG":         "#0A1A10",
+    "GRADE_C_BG":         "#2A1500",
+    "GRADE_D_BG":         "#2D0F1A",
+    "GRADE_F_FG":         "#F38BA8",
+    "GRADE_F_BG":         "#2D0F1A",
     # Chart (matplotlib)
-    "CHART_BG":           "#111111",
-    "CHART_PLOT_BG":      "#080808",
-    "CHART_GRID":         "#1A1A1A",
-    "CHART_TITLE":        "#B6FF3B",
+    "CHART_BG":           "#1E1E2E",
+    "CHART_PLOT_BG":      "#181825",
+    "CHART_GRID":         "#262638",
+    "CHART_TITLE":        "#9D5CF6",
     # Critical severity
     "CRITICAL":           "#FF8080",
 }
@@ -279,9 +286,9 @@ _OBSIDIAN_NEON = {
 # ── Theme registry ────────────────────────────────────────────────────────────
 
 THEMES: dict = {
-    "Arctic Clean":  _ARCTIC_CLEAN,
-    "Midnight Pro":  _MIDNIGHT_PRO,
-    "Obsidian Neon": _OBSIDIAN_NEON,
+    "Arctic Clean": _ARCTIC_CLEAN,
+    "Dark Pro":     _DARK_PRO,
+    "Slate":        _SLATE,
 }
 
 DEFAULT_THEME = "Arctic Clean"
@@ -366,13 +373,13 @@ QWidget {{
 }}
 
 /* ── Top application bar (objectName="appBar") ── */
-QWidget#appBar {{
+#appBar {{
     background-color: {NAV_BAR};
     border-bottom: 1px solid {NAV_DIVIDER};
     min-height: 42px;
     max-height: 42px;
 }}
-QWidget#appBar QLabel {{
+#appBar QLabel {{
     background: transparent;
     color: {WHITE};
 }}
@@ -384,22 +391,28 @@ QListWidget#sideNav {{
     outline: none;
 }}
 QListWidget#sideNav::item {{
-    color: {SIDEBAR_ITEM_FG};
-    padding: 5px 12px;
-    border-radius: 0px;
-    margin: 0px;
-    font-size: 12px;
-    border-left: 3px solid transparent;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin: 1px 6px;
+    font-size: 13px;
+    font-weight: 600;
+    border-left: none;
 }}
 QListWidget#sideNav::item:selected {{
-    background-color: {SIDEBAR_SEL_BG};
+    background-color: {SIDEBAR_SEL};
     color: {WHITE};
-    border-left: 3px solid {SIDEBAR_SEL};
+    border-left: 3px solid {ACCENT_LITE};
+    border-top: none;
+    border-bottom: none;
+    border-right: none;
     font-weight: bold;
+    border-radius: 0px;
+    padding-left: 7px;
 }}
 QListWidget#sideNav::item:hover:!selected {{
     background-color: {SIDEBAR_HOVER};
     color: {WHITE};
+    border-radius: 6px;
 }}
 
 /* ── Content area ── */
@@ -411,7 +424,9 @@ QWidget#contentArea {{
 QFrame#card {{
     background-color: {BG_CARD};
     border: 1px solid {BORDER};
-    border-radius: 0px;
+    border-top: 1px solid {BORDER_LITE};
+    border-left: 1px solid {BORDER_LITE};
+    border-radius: 8px;
 }}
 QFrame#cardHeader {{
     background-color: {BG_CARD};
@@ -470,15 +485,17 @@ QTreeWidget::item:selected {{
     color: {TEXT_PRIMARY};
 }}
 
-/* ── Primary scan button ── */
+/* ── Primary scan button (header / inline compact) ── */
 QPushButton#btnScan {{
     background-color: {ACCENT};
-    color: {NAV_BAR};
+    color: {WHITE};
     border: none;
-    border-radius: 3px;
-    padding: 5px 20px;
+    border-radius: 6px;
+    padding: 0 18px;
     font-size: 12px;
     font-weight: bold;
+    min-height: 26px;
+    max-height: 26px;
 }}
 QPushButton#btnScan:hover {{
     background-color: {ACCENT_LITE};
@@ -491,12 +508,34 @@ QPushButton#btnScan:disabled {{
     color: {BTN_DISABLED_FG};
 }}
 
+/* ── Hero scan button (home page call-to-action) ── */
+QPushButton#btnScanHero {{
+    background-color: {ACCENT};
+    color: {WHITE};
+    border: none;
+    border-radius: 8px;
+    padding: 10px 28px;
+    font-size: 13px;
+    font-weight: bold;
+    min-height: 38px;
+}}
+QPushButton#btnScanHero:hover {{
+    background-color: {ACCENT_LITE};
+}}
+QPushButton#btnScanHero:pressed {{
+    background-color: {ACCENT_DARK};
+}}
+QPushButton#btnScanHero:disabled {{
+    background-color: {BTN_DISABLED_BORDER};
+    color: {BTN_DISABLED_FG};
+}}
+
 /* ── Standard buttons ── */
 QPushButton {{
     background-color: {BG_CARD};
     color: {ACCENT};
     border: 1px solid {ACCENT};
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 5px 14px;
     font-size: 11px;
 }}
@@ -506,7 +545,7 @@ QPushButton:hover {{
 }}
 QPushButton:pressed {{
     background-color: {ACCENT};
-    color: {NAV_BAR};
+    color: {WHITE};
 }}
 QPushButton:disabled {{
     background-color: {BG_CARD};
@@ -520,9 +559,11 @@ QPushButton#btnExport {{
     color: {GREEN};
     border: 1px solid {GREEN};
     border-radius: 4px;
-    padding: 5px 14px;
+    padding: 0 14px;
     font-size: 11px;
     font-weight: bold;
+    min-height: 24px;
+    max-height: 24px;
 }}
 QPushButton#btnExport:hover {{
     background-color: {BTN_EXPORT_HOVER};
@@ -535,7 +576,7 @@ QPushButton#btnExport:disabled {{
 /* ── Diagnostics / action button ── */
 QPushButton#btnDiag {{
     background-color: {ACCENT};
-    color: {NAV_BAR};
+    color: {WHITE};
     border: none;
     border-radius: 4px;
     padding: 5px 16px;
@@ -553,15 +594,18 @@ QPushButton#btnDiag:disabled {{
 /* ── Utility / refresh buttons ── */
 QPushButton#btnNetRefresh {{
     background-color: {BG_CARD};
-    color: {ACCENT};
-    border: 1px solid {BORDER_MED};
-    border-radius: 4px;
-    padding: 4px 12px;
-    font-size: 11px;
+    color: {TEXT_PRIMARY};
+    border: 1px solid {BORDER};
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 12px;
+    font-weight: 500;
+    min-height: 34px;
 }}
 QPushButton#btnNetRefresh:hover {{
     background-color: {BTN_HOVER_BG};
     border-color: {ACCENT};
+    color: {ACCENT};
 }}
 
 /* ── Router link buttons ── */
@@ -580,7 +624,7 @@ QPushButton#btnRouterLink:hover {{
 /* ── Checkable mode toggles ── */
 QPushButton#btnNetRefresh:checked {{
     background-color: {ACCENT};
-    color: {NAV_BAR};
+    color: {WHITE};
     border-color: {ACCENT_DARK};
 }}
 

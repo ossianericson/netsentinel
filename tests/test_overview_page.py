@@ -139,7 +139,7 @@ class TestDeviceCountTile:
     def test_update_cycle_total(self):
         t = self._make()
         t.update_cycle({"10.0.0.1": "UP", "10.0.0.2": "UP", "10.0.0.3": "DOWN"})
-        assert t._count_lbl.text() == "3"
+        assert t._count_lbl._target == 3
 
     def test_update_cycle_sub_label_up_down(self):
         t = self._make()
@@ -150,7 +150,7 @@ class TestDeviceCountTile:
     def test_update_cycle_empty(self):
         t = self._make()
         t.update_cycle({})
-        assert t._count_lbl.text() == "0"
+        assert t._count_lbl._target == 0
         assert "No devices" in t._sub_lbl.text()
 
     def test_update_cycle_all_up(self):
@@ -234,25 +234,25 @@ class TestServiceStatusTile:
     def test_update_services_dict(self):
         t = self._make()
         t.update_services([{"up": True}, {"up": False}, {"up": True}])
-        assert t._up_lbl.text() == "2"
-        assert t._dn_lbl.text() == "1"
+        assert t._up_lbl._target == 2
+        assert t._dn_lbl._target == 1
 
     def test_update_services_dataclass(self):
         t = self._make()
         t.update_services([FakeSvc("h", 80, None, True), FakeSvc("h", 443, None, False)])
-        assert t._up_lbl.text() == "1"
-        assert t._dn_lbl.text() == "1"
+        assert t._up_lbl._target == 1
+        assert t._dn_lbl._target == 1
 
     def test_update_services_all_down(self):
         t = self._make()
         t.update_services([{"up": False}, {"up": False}])
-        assert t._up_lbl.text() == "0"
-        assert t._dn_lbl.text() == "2"
+        assert t._up_lbl._target == 0
+        assert t._dn_lbl._target == 2
 
     def test_update_services_empty(self):
         t = self._make()
         t.update_services([])
-        assert t._up_lbl.text() == "0"
+        assert t._up_lbl._target == 0
 
 
 # ---------------------------------------------------------------------------
@@ -675,7 +675,7 @@ class TestDataSlots:
     def test_on_cycle_done_updates_device_count(self):
         page = self._page()
         page.on_cycle_done({"states": {"a": "UP", "b": "DOWN"}, "rtts": {}})
-        assert page._tiles["device_count"]._count_lbl.text() == "2"
+        assert page._tiles["device_count"]._count_lbl._target == 2
 
     def test_on_cycle_done_updates_rtt_summary(self):
         page = self._page()
@@ -689,7 +689,7 @@ class TestDataSlots:
     def test_on_svc_done_updates_service_status(self):
         page = self._page()
         page.on_svc_done([{"up": True}, {"up": False}])
-        assert page._tiles["service_status"]._up_lbl.text() == "1"
+        assert page._tiles["service_status"]._up_lbl._target == 1
 
     def test_on_alert_updates_alert_feed(self):
         page = self._page()
