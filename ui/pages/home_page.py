@@ -27,23 +27,18 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT,
-    ACCENT_DARK,
-    ACCENT_LITE,
     AMBER,
     BG_CARD,
     BG_DARK,
     BORDER,
-    BORDER_MED,
-    BTN_DISABLED_BORDER,
-    BTN_DISABLED_FG,
-    BTN_HOVER_BG,
     GREEN,
-    NAV_BAR,
     PRO_WARN_BG,
     RED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    WHITE,
+    UPDATE_BAR_BG,
+    UPDATE_BAR_BORDER,
+    UPDATE_BAR_FG,
 )
 
 
@@ -186,6 +181,7 @@ class HomePage(QWidget):
         super().__init__(parent)
         self._store = store
         self._alert_count = 0
+        self._device_count: int = 0
         self._signals_connected: bool = False
         self._setup_ui()
         if self._store is not None:
@@ -223,6 +219,34 @@ class HomePage(QWidget):
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSpacing(10)
 
+        # ── Guided Troubleshooter banner ──────────────────────────────────────
+        banner = QFrame()
+        banner.setStyleSheet(
+            f"QFrame {{ background:{UPDATE_BAR_BG}; border:1px solid {UPDATE_BAR_BORDER};"
+            f" border-radius:4px; }}"
+        )
+        banner_lay = QHBoxLayout(banner)
+        banner_lay.setContentsMargins(12, 6, 12, 6)
+        banner_lay.setSpacing(8)
+        _banner_icon = QLabel("✦")
+        _banner_icon.setStyleSheet(
+            f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+        )
+        _banner_icon.setFixedWidth(18)
+        _banner_text = QLabel(
+            "Not sure where to start? The Guided Troubleshooter walks you through"
+            " common network issues."
+        )
+        _banner_text.setStyleSheet(
+            f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+        )
+        _banner_text.setWordWrap(True)
+        self._btn_diagnose = QPushButton("✦  Guided Troubleshooter")
+        banner_lay.addWidget(_banner_icon)
+        banner_lay.addWidget(_banner_text, 1)
+        banner_lay.addWidget(self._btn_diagnose)
+        lay.addWidget(banner)
+
         # ── Hero card ─────────────────────────────────────────────────────────
         hero = QFrame()
         hero.setStyleSheet(
@@ -252,7 +276,7 @@ class HomePage(QWidget):
             " background:transparent; border:none;"
         )
         self._hero_sub = QLabel(
-            "Click \u25b6\u2002Scan now to discover devices and check connectivity."
+            "Run a scan to discover devices and check connectivity."
         )
         self._hero_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY};"
@@ -262,19 +286,12 @@ class HomePage(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        self._btn_scan = QPushButton("\u25b6  Scan now")
-        self._btn_isp = QPushButton("\ud83d\udcca  ISP Report")
-        _action_btn_qss = (
-            f"QPushButton {{ background: transparent; color: {TEXT_PRIMARY};"
-            f" border: 1px solid {BORDER_MED}; border-radius: 6px;"
-            f" padding: 0 16px; min-height: 34px; font-size: 12px; font-weight: 600; }}"
-            f"QPushButton:hover {{ background: {ACCENT}; color: {WHITE};"
-            f" border-color: {ACCENT}; }}"
-            f"QPushButton:disabled {{ color: {BTN_DISABLED_FG};"
-            f" border-color: {BTN_DISABLED_BORDER}; }}"
+        self._btn_scan = QPushButton("\u25b6  Run First Scan")
+        self._btn_scan.setObjectName("btnScanHero")
+        self._btn_isp = QPushButton("\ud83d\udcca  View ISP Report")
+        self._btn_isp.setStyleSheet(
+            "QPushButton { min-height: 34px; font-size: 12px; font-weight: 600; }"
         )
-        self._btn_scan.setStyleSheet(_action_btn_qss)
-        self._btn_isp.setStyleSheet(_action_btn_qss)
         btn_row.addWidget(self._btn_scan)
         btn_row.addWidget(self._btn_isp)
         btn_row.addStretch()
@@ -344,6 +361,13 @@ class HomePage(QWidget):
         lay.addWidget(alert_card)
         lay.addStretch()
 
+    def _update_scan_button_label(self) -> None:
+        label = (
+            "▶  Run First Scan" if self._device_count == 0
+            else "▶  Start Scan"
+        )
+        self._btn_scan.setText(label)
+
     # ── Startup preload ───────────────────────────────────────────────────────
 
     def _preload_from_store(self) -> None:
@@ -375,6 +399,8 @@ class HomePage(QWidget):
             # Devices card — count of known devices
             devices = self._store.get_known_devices()
             n = len(devices)
+            self._device_count = n
+            self._update_scan_button_label()
             if n > 0:
                 self._devices_card.set_value(
                     str(n),
@@ -406,6 +432,8 @@ class HomePage(QWidget):
             f"{n_at_risk} at risk" if n_at_risk
             else ("All healthy" if n_total > 0 else "Run a scan to discover devices")
         )
+        self._device_count = n_total
+        self._update_scan_button_label()
         self._devices_card.set_value(str(n_total), dev_sub, dev_status, dev_colour)
 
         # Stability card \u2014 average RTT across all hosts

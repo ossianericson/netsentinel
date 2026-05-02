@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.6.0
+version: 1.6.2
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -169,6 +169,34 @@ rules:
       - ".github/winget/NetSentinel.NetSentinel.yaml → PackageVersion: X.Y.Z"
       - ".github/winget/NetSentinel.NetSentinel.installer.yaml → PackageVersion + installer URL"
       - ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml → PackageVersion: X.Y.Z"
+
+  - id: RULE-R1b
+    title: "Every version bump must include a README changelog entry for that version"
+    severity: blocking
+    description: >
+      When bumping the version with bump_version.py, the README.md changelog section
+      must already contain a ### vX.Y.Z header for the new version with at least one
+      bullet describing what changed. bump_version.py updates the first changelog
+      header it finds (count=1) — so the new version's entry must be the topmost one
+      before running the bump.
+
+      Correct workflow:
+        1. Add a new ### vX.Y.Z section at the top of ## Changelog in README.md
+           with bullets describing what changed.
+        2. Run: python bump_version.py X.Y.Z
+        3. The script promotes the header; all 7 consistency tests pass.
+
+      What belongs in a changelog entry (small is not a reason to omit):
+        - Any UI change a user would notice (icon, layout, new button, new page)
+        - Any new file a contributor would use (scripts, generators, new modules)
+        - Any bug fix that affected observable behaviour
+        - Any tooling or build change that affects the release pipeline
+      What to omit:
+        - Pure internal refactors with no observable effect
+        - The version bump commit itself (no self-referential bullet needed)
+
+      The README changelog keeps only the last 3 versions. When adding a new entry,
+      drop the oldest — move its content to BACKLOG.md Completed if worth archiving.
 
   - id: RULE-R2
     title: "Winget locale manifest must be full — never minimal"
@@ -351,4 +379,98 @@ rules:
       validation, CI) that elevation fails and the installer exits with E_ABORT.
       The `commandline` keyword allows a non-elevated silent install to proceed
       as the current user when /VERYSILENT is passed from the command line.
+
+  # ── Icon and Brand Assets ─────────────────────────────────────────────────
+  - id: RULE-I1
+    title: "Never hand-edit PNG or ICO icon files — regenerate via generate_icons.py"
+    severity: blocking
+    description: >
+      All raster icon assets (PNG tiles, ICO) are generated programmatically from
+      the embedded design in generate_icons.py. Never edit PNG/ICO files manually
+      in an image editor — the changes will be overwritten on the next build and
+      create inconsistency across sizes.
+
+      To update any icon, edit generate_icons.py (the render_icon / render_wide /
+      render_splash functions), then run:
+        python generate_icons.py
+      This regenerates all assets in assets/icons/ atomically.
+
+      Output files managed by the script:
+        assets/icons/NetSentinel.ico            — Windows app icon (16/24/32/48/64/128/256 px)
+        assets/icons/netsentinel.png            — macOS / Linux app icon (512x512)
+        assets/icons/StoreLogo.png              — MS Store / winget tile (50x50)
+        assets/icons/Square44x44Logo.png        — Windows taskbar (44x44)
+        assets/icons/Square71x71Logo.png        — Start menu small (71x71)
+        assets/icons/Square150x150Logo.png      — Start menu medium (150x150)
+        assets/icons/Square310x310Logo.png      — Start menu large (310x310)
+        assets/icons/Wide310x150Logo.png        — Start menu wide (310x150)
+        assets/icons/SplashScreen.png           — Inno Setup installer splash (620x300)
+
+      The SVG files in assets/icons/ are reference artwork only (for designers /
+      documentation); the build pipeline uses the PNG/ICO files directly.
+
+  - id: RULE-I2
+    title: "Icon design language must stay consistent — hexagon, shield, blue/cyan palette"
+    severity: required
+    description: >
+      All NetSentinel icon assets must follow this design language. Deviating
+      without updating this rule first is a review failure.
+
+      Core elements (all required):
+        Shape:     Pointy-top regular hexagon — the primary container
+        Interior:  White shield outline centred inside the hexagon
+        Palette:   Primary fill  #0078D4 (Windows blue)
+                   Border        #005A9E (dark blue, hex outline only)
+                   Accent rings  #00B4D8 (cyan, for ripple rings at ≥48 px)
+                   Shield stroke white
+        Ripple:    Three concentric cyan circles at ratios 0.722 / 0.537 / 0.333
+                   of the hex vertex radius, at opacity 0.15 / 0.35 / 0.60
+                   Only rendered at final sizes ≥ 48 px (visual noise below that)
+        Background: Transparent for all square tiles and the tray icon
+                    White (#FFFFFF) for the splash screen and wide tile
+        Stroke:    2 px visual weight at any size; rounded joins and linecaps
+
+      What must NOT change without a deliberate design decision:
+        - No gradients on the hexagon fill (flat #0078D4 only)
+        - No drop shadows or bevels
+        - No emoji or bitmap textures inside any icon
+        - The shield must remain centred and proportional (half-width = 0.370 × r,
+          proportions defined in generate_icons.py render_icon())
+        - Sidebar nav icons remain geometric Unicode only (RULE-25 / RULE-I4)
+
+  - id: RULE-I3
+    title: "Top-bar brand icon must use the netsentinel.png asset — never a letter fallback in production"
+    severity: required
+    description: >
+      The 24×24 brand icon in the top-left of the application header
+      (ui/dashboard.py _build_header) must render assets/icons/netsentinel.png
+      scaled with Qt.TransformationMode.SmoothTransformation.
+
+      The "N" letter fallback only exists for the edge case where the PNG file
+      is missing (e.g. a partial checkout). It must never become the default.
+      If the icon is missing in a build, fix the build — do not promote the
+      fallback to the primary path.
+
+      Path resolution must use the PyInstaller-aware pattern already established
+      in _build_header:
+        _base = Path(sys._MEIPASS) if getattr(sys, "frozen", False)
+                else Path(__file__).parent.parent
+        _pix  = QPixmap(str(_base / "assets" / "icons" / "netsentinel.png"))
+      Never hardcode an absolute path or use a relative path without this guard.
+
+  - id: RULE-I4
+    title: "Sidebar nav icons must be geometric Unicode — never emoji"
+    severity: blocking
+    description: >
+      All sidebar navigation item icons (the prefix character in _nav_add_page()
+      and related helpers in ui/dashboard.py) must use geometric Unicode symbols
+      only: ■ □ ▲ △ ● ○ ◆ ◇ ▶ ▷ ⬡ ⬢ ≡ ⌕ ⊕ etc.
+
+      Emoji (🏠 🔍 🔔 🌐 etc.) must never be used as sidebar icons. Emoji render
+      inconsistently across Windows versions, scale poorly in the 48 px collapsed
+      sidebar, and break the visual consistency of the geometric icon strip.
+
+      This rule applies to: ui/dashboard.py _nav_add_page() calls, section header
+      strings, and any other sidebar label that includes a leading icon character.
+      It does NOT apply to README.md, help text, or dialogs.
 

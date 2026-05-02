@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <clipPath id="hex">
+      <polygon points="128,20 221.5,74 221.5,182 128,236 34.5,182 34.5,74"/>
+    </clipPath>
+  </defs>
+
+  <!-- Hexagon fill — primary blue with subtle darker border -->
+  <polygon points="128,20 221.5,74 221.5,182 128,236 34.5,182 34.5,74"
+           fill="#0078D4" stroke="#005A9E" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- Radar/ping ripple rings — cyan accent at decreasing opacity, clipped to hexagon -->
+  <g clip-path="url(#hex)">
+    <circle cx="128" cy="128" r="78" fill="none" stroke="#00B4D8" stroke-width="1.5" opacity="0.15"/>
+    <circle cx="128" cy="128" r="58" fill="none" stroke="#00B4D8" stroke-width="1.5" opacity="0.35"/>
+    <circle cx="128" cy="128" r="36" fill="none" stroke="#00B4D8" stroke-width="1.5" opacity="0.6"/>
+  </g>
+
+  <!-- Centre origin dot for the radar effect -->
+  <circle cx="128" cy="128" r="4" fill="#00B4D8" opacity="0.8"/>
+
+  <!-- Shield outline — white on the blue fill -->
+  <path d="M 94 75 L 162 75 Q 168 75 168 81 L 168 148 L 128 185 L 88 148 L 88 81 Q 88 75 94 75 Z"
+        fill="none" stroke="white" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

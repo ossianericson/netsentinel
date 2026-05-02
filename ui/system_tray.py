@@ -139,6 +139,7 @@ class SystemTrayManager:
         self._tray:  QSystemTrayIcon | None = None
         self._badge_count = 0
         self._base_icon: QIcon | None = None
+        self._grade: str = "?"
         self._qs = QSettings("NetSentinel", "NetSentinel")
 
     # ── Setup ─────────────────────────────────────────────────────────────────
@@ -152,9 +153,11 @@ class SystemTrayManager:
         self._tray = QSystemTrayIcon(self._base_icon, self._window)
         self._tray.setToolTip("NetSentinel — Network Guardian")
 
-        self._tray.setContextMenu(self._build_menu())
+        menu = self._build_menu()
+        menu.aboutToShow.connect(self._on_menu_about_to_show)
+        self._tray.setContextMenu(menu)
         self._tray.activated.connect(self._on_activated)
-        self._tray.messageClicked.connect(self._show_window)  # notification bubble click
+        self._tray.messageClicked.connect(self._show_window)
         self._tray.show()
         return True
 
@@ -187,6 +190,7 @@ class SystemTrayManager:
             f" border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
             f"QMenu::item {{ padding:5px 20px; }}"
             f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
+            f"QMenu::separator {{ height:1px; background:{BORDER}; margin:3px 8px; }}"
         )
 
         self._act_show = QAction("Show NetSentinel", menu)
@@ -196,6 +200,24 @@ class SystemTrayManager:
         self._act_hide = QAction("Hide to Tray", menu)
         self._act_hide.triggered.connect(self._hide_window)
         menu.addAction(self._act_hide)
+
+        menu.addSeparator()
+
+        act_diagnose = QAction("◈  What's Wrong?", menu)
+        act_diagnose.triggered.connect(self._open_diagnosis)
+        menu.addAction(act_diagnose)
+
+        act_scan = QAction("⟳  Run Full Scan", menu)
+        act_scan.triggered.connect(self._run_full_scan)
+        menu.addAction(act_scan)
+
+        menu.addSeparator()
+
+        self._act_startup = QAction("Launch at Startup", menu)
+        self._act_startup.setCheckable(True)
+        self._act_startup.setChecked(get_run_on_startup())
+        self._act_startup.triggered.connect(self._on_startup_toggled)
+        menu.addAction(self._act_startup)
 
         menu.addSeparator()
 
@@ -210,6 +232,11 @@ class SystemTrayManager:
         menu.addAction(act_quit)
 
         return menu
+
+    def _on_menu_about_to_show(self) -> None:
+        """Refresh dynamic state each time the menu opens."""
+        if hasattr(self, "_act_startup"):
+            self._act_startup.setChecked(get_run_on_startup())
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -239,6 +266,11 @@ class SystemTrayManager:
 
     def set_badge(self, count: int) -> None:
         self._badge_count = max(0, count)
+        self._refresh_icon()
+
+    def set_grade(self, grade: str) -> None:
+        """Update the network grade shown in the tray tooltip."""
+        self._grade = grade[:1].upper() if grade else "?"
         self._refresh_icon()
 
     def is_available(self) -> bool:
@@ -274,9 +306,31 @@ class SystemTrayManager:
         self._act_show.setEnabled(True)
         self._act_hide.setEnabled(False)
 
+    def _open_diagnosis(self) -> None:
+        self._show_window()
+        if hasattr(self._window, "_open_diagnosis"):
+            self._window._open_diagnosis()
+
+    def _run_full_scan(self) -> None:
+        self._show_window()
+        if hasattr(self._window, "_start_full_scan"):
+            self._window._start_full_scan()
+
+    def _on_startup_toggled(self, checked: bool) -> None:
+        set_run_on_startup(checked)
+        # Sync the Settings page checkbox if it is currently open
+        try:
+            sp = getattr(self._window, "_settings_page", None)
+            chk = getattr(sp, "_chk_startup", None)
+            if chk is not None:
+                chk.blockSignals(True)
+                chk.setChecked(checked)
+                chk.blockSignals(False)
+        except Exception:
+            pass
+
     def _open_alerts(self) -> None:
         self._show_window()
-        # Navigate to the Alerts page if dashboard exposes a nav method
         if hasattr(self._window, "_nav_go_to"):
             self._window._nav_go_to("Alerts & Activity")
 
@@ -292,6 +346,7 @@ class SystemTrayManager:
             return
         icon = _build_badge_icon(self._base_icon, self._badge_count)
         self._tray.setIcon(icon)
-        count_str = (f" ({self._badge_count} alert{'s' if self._badge_count != 1 else ''})"
-                     if self._badge_count else "")
-        self._tray.setToolTip(f"NetSentinel — Network Guardian{count_str}")
+        parts = [f"Grade: {self._grade}"]
+        if self._badge_count:
+            parts.append(f"{self._badge_count} alert{'s' if self._badge_count != 1 else ''}")
+        self._tray.setToolTip(f"NetSentinel — {' | '.join(parts)}")

@@ -1,0 +1,114 @@
+"""Orchestrates all detection modules for one-click 'What's Wrong?' diagnosis."""
+
+from __future__ import annotations
+
+import logging
+import threading
+from typing import Optional
+
+from PyQt6.QtCore import QThread, pyqtSignal
+
+from modules.utils import get_offenders_path
+
+log = logging.getLogger(__name__)
+
+
+class DiagnosisWorker(QThread):
+    """Runs all detection modules sequentially, skipping any that fail."""
+
+    progress = pyqtSignal(int, str)  # (0–100, step label)
+    finished = pyqtSignal(object)    # CorrelationResult | None (None = cancelled/error)
+
+    def __init__(
+        self,
+        gateway_ip: Optional[str] = None,
+        gateway_mac: Optional[str] = None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._gateway_ip  = gateway_ip
+        self._gateway_mac = gateway_mac
+        self._stop        = threading.Event()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def run(self) -> None:
+        from modules.root_cause_correlator import correlate
+
+        diag_result: object          = None
+        storm_result: object         = None
+        stp_bpdus: list              = []
+        fingerprint_devices: list    = []
+
+        # ── Step 1: Network diagnostics (~15 s) ───────────────────────────────
+        self.progress.emit(5, "Running network diagnostics…")
+        try:
+            from modules import network_diagnostics
+            diag_result = network_diagnostics.scan(
+                gateway_ip=self._gateway_ip,
+                progress_cb=lambda msg: self.progress.emit(20, msg),
+                stop_event=self._stop,
+            )
+        except Exception:
+            log.exception("diagnosis: network_diagnostics failed, skipping")
+        if self._stop.is_set():
+            self.finished.emit(None)
+            return
+
+        # ── Step 2: Broadcast storm analysis (~6 s) ───────────────────────────
+        self.progress.emit(55, "Measuring broadcast traffic…")
+        try:
+            from modules import storm_analyser
+            storm_result = storm_analyser.scan(duration=6)
+        except Exception:
+            log.exception("diagnosis: storm_analyser failed, skipping")
+        if self._stop.is_set():
+            self.finished.emit(None)
+            return
+
+        # ── Step 3: Rogue device fingerprint (fast ARP scan) ──────────────────
+        self.progress.emit(65, "Scanning for rogue devices…")
+        try:
+            from modules import rogue_device
+            rd_result = rogue_device.scan(get_offenders_path())
+            fingerprint_devices = rd_result.get("devices", [])
+        except Exception:
+            log.exception("diagnosis: rogue_device failed, skipping")
+        if self._stop.is_set():
+            self.finished.emit(None)
+            return
+
+        # ── Step 4: STP / rogue bridge detection (~6 s) ───────────────────────
+        self.progress.emit(75, "Listening for rogue bridge frames…")
+        try:
+            from modules import stp_detector
+            stp_detector.scan(
+                gateway_mac=self._gateway_mac,
+                on_bpdu=stp_bpdus.append,
+                on_error=lambda msg: log.warning("stp_detector: %s", msg),
+                duration=6,
+                stop_event=self._stop,
+            )
+        except Exception:
+            log.exception("diagnosis: stp_detector failed, skipping")
+        if self._stop.is_set():
+            self.finished.emit(None)
+            return
+
+        # ── Step 5: Correlate all findings ────────────────────────────────────
+        self.progress.emit(95, "Correlating findings…")
+        try:
+            result = correlate(
+                diag_result=diag_result,
+                storm_result=storm_result,
+                stp_bpdus=stp_bpdus or None,
+                fingerprint_devices=fingerprint_devices or None,
+                gateway_mac=self._gateway_mac,
+            )
+        except Exception:
+            log.exception("diagnosis: correlate failed")
+            self.finished.emit(None)
+            return
+
+        self.finished.emit(result)

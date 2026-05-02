@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 300" width="620" height="300">
+  <!-- White background -->
+  <rect width="620" height="300" fill="#FFFFFF"/>
+
+  <!-- Left accent strip — 8 px primary blue column -->
+  <rect x="0" y="0" width="8" height="300" fill="#0078D4"/>
+
+  <!-- App icon — hexagon + ripple + shield scaled to ~120 px tall, centred at (159, 150).
+       Transform: translate(88,79) places the icon origin; scale(0.556) maps the 256 px
+       coordinate space down to 120 px. Stroke widths are set larger here to compensate
+       for the scale factor (they render at approximately the same visual weight as the
+       256 px master). -->
+  <g transform="translate(88,79) scale(0.556)">
+    <polygon points="128,20 221.5,74 221.5,182 128,236 34.5,182 34.5,74"
+             fill="#0078D4" stroke="#005A9E" stroke-width="5" stroke-linejoin="round"/>
+    <circle cx="128" cy="128" r="78" fill="none" stroke="#00B4D8" stroke-width="2.5" opacity="0.15"/>
+    <circle cx="128" cy="128" r="58" fill="none" stroke="#00B4D8" stroke-width="2.5" opacity="0.35"/>
+    <circle cx="128" cy="128" r="36" fill="none" stroke="#00B4D8" stroke-width="2.5" opacity="0.6"/>
+    <circle cx="128" cy="128" r="4" fill="#00B4D8" opacity="0.8"/>
+    <path d="M 94 75 L 162 75 Q 168 75 168 81 L 168 148 L 128 185 L 88 148 L 88 81 Q 88 75 94 75 Z"
+          fill="none" stroke="white" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+
+  <!-- App name -->
+  <text x="330" y="148"
+        font-family="'Segoe UI', 'SF Pro Display', system-ui, -apple-system, sans-serif"
+        font-size="42" font-weight="600" fill="#0078D4">NetSentinel</text>
+
+  <!-- Subtitle -->
+  <text x="330" y="177"
+        font-family="'Segoe UI', 'SF Pro Display', system-ui, -apple-system, sans-serif"
+        font-size="17" font-weight="300" fill="#5A6A7A">Network Security Scanner</text>
+
+  <!-- Bottom-right caption -->
+  <text x="608" y="283"
+        font-family="'Segoe UI', 'SF Pro Display', system-ui, -apple-system, sans-serif"
+        font-size="13" fill="#8A9AB0" text-anchor="end">Free · Open Source · Local</text>
+</svg>

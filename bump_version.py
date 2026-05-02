@@ -25,9 +25,9 @@ _VER = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?"
 _VER4 = r"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"
 
 
-def _sub(path: Path, pattern: str, replacement: str, flags: int = 0) -> None:
+def _sub(path: Path, pattern: str, replacement: str, flags: int = 0, count: int = 0) -> None:
     text = path.read_text(encoding="utf-8")
-    new_text, n = re.subn(pattern, replacement, text, flags=flags)
+    new_text, n = re.subn(pattern, replacement, text, count=count, flags=flags)
     if n == 0:
         print(f"  WARN  no match — {path.relative_to(ROOT)}  ({pattern!r})")
         return
@@ -99,13 +99,12 @@ def bump(ver: str) -> None:
          rf'(releases/download/v){_VER}(/NetSentinel-Setup-){_VER}(\.exe)',
          rf'\g<1>{ver}\g<2>{ver}\g<3>')
 
-    # README.md  ── release badge line + "What's New" changelog header
+    # README.md  ── only the first changelog header (current version); count=1 prevents
+    # the wildcard _VER from also replacing older version headers below it
     _sub(ROOT / "README.md",
-         rf'(\[Latest Release\]\([^)]+\)\s*—\s*v){_VER}',
-         rf'\g<1>{ver}')
-    _sub(ROOT / "README.md",
-         rf'(###\s+v){_VER}(\s*\(current\))',
-         rf'\g<1>{ver}\g<2>')
+         rf'(###\s+v){_VER}',
+         rf'\g<1>{ver}',
+         count=1)
 
     # ── verify ────────────────────────────────────────────────────────────────
     print("\nRunning version consistency tests…")

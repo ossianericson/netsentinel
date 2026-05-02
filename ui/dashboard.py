@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtGui import QFont, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -427,13 +427,25 @@ class Dashboard(QMainWindow):
         lay.setSpacing(6)
 
         # ── Brand (left, fixed) ───────────────────────────────────────────────
-        _icon = QLabel("N")
+        import sys as _sys
+        _base = Path(_sys._MEIPASS) if getattr(_sys, "frozen", False) else Path(__file__).parent.parent
+        _pix = QPixmap(str(_base / "assets" / "icons" / "netsentinel.png"))
+        _icon = QLabel()
         _icon.setFixedSize(24, 24)
         _icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _icon.setStyleSheet(
-            f"background:{ACCENT}; color:{WHITE}; border-radius:5px;"
-            " font-size:13px; font-weight:bold;"
-        )
+        _icon.setStyleSheet("background:transparent;")
+        if not _pix.isNull():
+            _icon.setPixmap(
+                _pix.scaled(24, 24,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation)
+            )
+        else:
+            _icon.setText("N")
+            _icon.setStyleSheet(
+                f"background:{ACCENT}; color:{WHITE}; border-radius:5px;"
+                " font-size:13px; font-weight:bold;"
+            )
         lay.addWidget(_icon)
         lay.addSpacing(6)
 
@@ -1046,6 +1058,9 @@ class Dashboard(QMainWindow):
         from ui.pages.overview_page import OverviewPage
         self._overview_page = OverviewPage(store=self._store, parent=None)
 
+        from ui.pages.diagnosis_page import DiagnosisPage
+        self._diagnosis_page = DiagnosisPage(store=self._store, parent=None)
+
         from ui.pages.settings_page import SettingsPage
         self._settings_page = SettingsPage(parent=None)
 
@@ -1139,9 +1154,12 @@ class Dashboard(QMainWindow):
         if not self._home_page._signals_connected:
             self._home_page._btn_scan.clicked.connect(self._start_full_scan)
             self._home_page._btn_isp.clicked.connect(self._open_isp_from_home)
+            self._home_page._btn_diagnose.clicked.connect(self._open_diagnosis)
             self._speed_test_page.test_completed.connect(self._home_page.on_speed_result)
-            self._home_page.navigate_to.connect(self._nav_goto_label)
+            self._home_page.navigate_to.connect(self._on_overview_navigate)
             self._home_page._signals_connected = True
+        self._overview_page.navigate_to.connect(self._on_overview_navigate)
+        self._diagnosis_page.navigate_to.connect(self._on_overview_navigate)
 
         # ── Worker refs ───────────────────────────────────────────────────────
         self._arp_worker:        Optional[object] = None
@@ -1174,6 +1192,7 @@ class Dashboard(QMainWindow):
         self._stack = QStackedWidget()
         # Pre-register HomePage so _nav_ref() can find it via indexOf()
         self._stack.addWidget(self._home_page)
+        self._stack.addWidget(self._diagnosis_page)
         self._nav_row_to_page:   dict = {}
         self._nav_separators:    set  = set()
         # Extended nav data model
@@ -1638,6 +1657,7 @@ class Dashboard(QMainWindow):
     def _build_home_nav(self) -> None:
         """5-item minimal nav for Home mode (new users)."""
         self._nav_ref("\u2b21", "Home",            self._home_page)
+        self._nav_ref("\u26f6", "Overview",         self._overview_page)
         self._nav_ref("\u26a1", "Speed Test",       self._speed_test_page)
         self._nav_ref("\u25ce", "DNS & Stability",  self._m5_tab)
         self._nav_ref("\u2295", "Devices",          self._m1_tab)
@@ -1651,6 +1671,7 @@ class Dashboard(QMainWindow):
         """Full organised nav \u2014 everything a home/intermediate user needs."""
         self._nav_add_section_label("Quick Access")
         self._nav_ref("\u25cb", "Home",              self._home_page)
+        self._nav_ref("\u26f6", "Overview",           self._overview_page)
         self._nav_ref("\u26a1", "Speed Test",         self._speed_test_page)
         self._nav_ref("\u25ce", "DNS & Stability",    self._m5_tab)
 
@@ -1683,6 +1704,7 @@ class Dashboard(QMainWindow):
         """All capabilities \u2014 standard features + deep analysis + automation + security audit."""
         self._nav_add_section_label("Quick Access")
         self._nav_ref("\u25cb", "Home",            self._home_page)
+        self._nav_ref("\u26f6", "Overview",         self._overview_page)
         self._nav_ref("\u26a1", "Speed Test",       self._speed_test_page)
 
         # Full standard section so switching to Pro doesn't lose any Standard items
@@ -1818,6 +1840,7 @@ class Dashboard(QMainWindow):
             {"icon": "⟳", "label": "Run Full Scan",  "kind": "action"},
             {"icon": "⚙", "label": "Open Settings",  "kind": "action"},
             {"icon": "◄", "label": "Toggle Sidebar", "kind": "action"},
+            {"icon": "◈", "label": "What's Wrong?",  "kind": "action"},
         ]
         return pages + actions
 
@@ -1835,6 +1858,17 @@ class Dashboard(QMainWindow):
             self._open_settings_dialog()
         elif action == "Toggle Sidebar":
             self._toggle_sidebar()
+        elif action == "What's Wrong?":
+            self._open_diagnosis()
+
+    def _on_overview_navigate(self, label: str) -> None:
+        if label == "What's Wrong?":
+            self._open_diagnosis()
+        else:
+            self._nav_goto_label(label)
+
+    def _open_diagnosis(self) -> None:
+        self._stack.setCurrentWidget(self._diagnosis_page)
 
     # ── Alert badge on Security Audit nav section ─────────────────────────────
 
@@ -2426,6 +2460,10 @@ class Dashboard(QMainWindow):
     def _update_net_info_ui(self, info: dict):
         """Populate the Network Info tab from a get_network_info() dict."""
         self._net_info = info
+        self._diagnosis_page.set_network_info(
+            info.get("gateway"),
+            info.get("gateway_mac"),
+        )
 
         lines = []
         for entry in info.get("local_ips", []):
@@ -3875,6 +3913,8 @@ class Dashboard(QMainWindow):
             self._bm_verdict_label.setText(result.overall_verdict)
             self._overview_page.on_grade(result.overall_grade, result.overall_score)
             self._home_page.on_grade(result.overall_grade, result.overall_score)
+            if hasattr(self, "_tray_manager") and self._tray_manager:
+                self._tray_manager.set_grade(result.overall_grade)
 
             # Populate dimension table
             self._bm_table.setRowCount(0)

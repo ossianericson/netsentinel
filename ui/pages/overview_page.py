@@ -30,7 +30,7 @@ from __future__ import annotations
 import datetime
 from typing import Callable, Dict, List, Optional
 
-from PyQt6.QtCore    import QMimeData, QPoint, QSettings, QSize, Qt, QTimer, pyqtSlot
+from PyQt6.QtCore    import QMimeData, QPoint, QSettings, QSize, Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QCursor, QDrag, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
@@ -802,6 +802,9 @@ class OverviewPage(QWidget):
       on_grade(grade: str, score: float)
     """
 
+    #: Emitted when the user clicks "What's Wrong?"; carries the target page label.
+    navigate_to = pyqtSignal(str)
+
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store      = store
@@ -842,6 +845,19 @@ class OverviewPage(QWidget):
         title_col.addWidget(title_lbl)
         title_col.addWidget(sub_lbl)
         hdr.addLayout(title_col, 1)
+
+        self._diagnose_btn = QPushButton("What's Wrong?")
+        self._diagnose_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+        )
+        self._diagnose_btn.setToolTip("Run a full diagnosis to find out what is wrong")
+        self._diagnose_btn.clicked.connect(
+            lambda: self.navigate_to.emit("What's Wrong?")
+        )
+        hdr.addWidget(self._diagnose_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
         self._edit_btn = QPushButton("Edit Layout")
         self._edit_btn.setCheckable(True)

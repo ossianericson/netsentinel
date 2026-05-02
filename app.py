@@ -298,7 +298,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.6.0")
+    app.setApplicationVersion("1.6.2")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────
