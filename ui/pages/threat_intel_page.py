@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -181,6 +181,8 @@ def _secondary_btn(text: str) -> QPushButton:
 
 class ThreatIntelPage(QWidget):
     """Threat Intelligence Feed — IP/domain blocklist with AbuseIPDB lookup."""
+
+    entries_updated = pyqtSignal(list)  # emitted after each feed load with list[ThreatEntry]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -397,6 +399,7 @@ class ThreatIntelPage(QWidget):
             f"{len(db)} indicator(s) loaded from {source_label}. "
             f"Last updated {self._last_updated}."
         )
+        self.entries_updated.emit(db.all_entries())
 
     # ── Table population ──────────────────────────────────────────────────────
 

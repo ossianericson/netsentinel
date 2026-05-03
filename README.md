@@ -22,13 +22,7 @@ Or download the installer from the [latest release](https://github.com/ossianeri
 
 Layer 2 features (STP, broadcast storm, ARP monitor) require [Npcap](https://npcap.com) — free, one-click installer maintained by the Nmap project. Standard features work without it.
 
-If you downloaded the `.exe` directly, Windows may block it on first run. Unblock it before running:
-
-```powershell
-Unblock-File -Path "$env:USERPROFILE\Downloads\NetSentinel.exe"
-```
-
-Then right-click → **Run as Administrator**. This does not apply to winget installs.
+If Windows blocks the installer on first run, right-click the downloaded file → **Properties** → check **Unblock** → **OK**, then run it. This does not apply to winget installs.
 
 ### macOS
 
@@ -111,6 +105,9 @@ All analysis runs 100% locally. Nothing leaves your machine unless you explicitl
 | Topology diagram | Visual map of device relationships on your network |
 | Automation hooks | Webhook and script triggers on network events — device down, high RTT, new device discovered |
 | REST API | Read-only local HTTP API at `http://127.0.0.1:8765` — query devices, alerts, and uptime from Home Assistant or scripts |
+| "What's Wrong?" diagnosis | One-click root-cause analysis across slow / dropping / can't-connect symptoms — sequences network, storm, rogue device, and STP checks then surfaces a prioritised plain-English finding |
+| Shareable diagnostic card | "Share Card" button on the Overview page — exports a 520×300 summary card (grade, ISP, top 3 findings) as PNG, clipboard image, or standalone HTML; zero external dependencies |
+| Lab / Scenario Mode | Four guided exercises — Find the Rogue Device, Diagnose Slow DNS, Identify the Broadcast Storm Source, Map Your Subnet — with progressive hints, solution reveal, and exportable HTML result report |
 
 ### Requires admin + Npcap (Windows) / libpcap (macOS, Linux)
 
@@ -145,8 +142,8 @@ NetSentinel runs real scans against a live network, which means every result map
 
 **On the roadmap for structured learning:**
 - Interactive protocol visualizer — animated step-by-step diagrams of ARP resolution, DNS lookup, TCP handshake, DHCP lease, and STP election using real scan data from your own network
-- Lab/scenario mode — structured exercises ("Find the rogue device", "Diagnose slow DNS") with hints, solution reveals, and exportable results for assignment submission
 - CompTIA Network+ / CCNA curriculum alignment tags on each feature page, plus an exportable study-session report
+- Classroom export — signed scan reports with machine fingerprint for instructor aggregation and graded lab submissions
 
 If you use NetSentinel in a course or lab and need curriculum-specific features, open an issue — feedback from educators shapes the roadmap directly.
 
@@ -198,40 +195,27 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.6.5
+
+- Empty-state with inline CTA on four pages — Network Grade shows "Scan & Grade" button, ISP Report runs diagnostics automatically when clicked cold, Network Doc shows "Scan & Document", Availability History shows "Start Monitoring"; each page uses a `QStackedWidget` so the user gets the action they need from wherever they are instead of a dead-end "run a scan first" message
+- Complete dashboard wiring audit — all overview tiles (Fleet Devices, Fleet Services) now animate live from AvailabilityWorker and ServiceWorker cycles; SNMP Trap and Syslog pages now receive live data from their workers; Threat Intelligence page now feeds discovered indicators to the Geolocation Map automatically
+- Two new APM rules — RULE-DW2 (always-on worker signals must be wired in `app.py`, not inside Dashboard) and RULE-UX5 (empty-state with inline CTA pattern for all data-dependent pages)
+
+### v1.6.4
+
+- One-click "What's Wrong?" diagnosis — symptom tiles (slow / dropping / can't connect), sequences network diagnostics → storm → rogue device → STP checks, surfaces a "Do this first" priority finding card; distinct green healthy state
+- Shareable diagnostic card — "Share Card ▾" button on Overview, enabled after first benchmark run; QMenu with Save PNG, Copy PNG, and Save HTML; card shows grade circle, ISP, top 3 findings, device count, and timestamp
+- Lab / Scenario Mode — four guided exercises (Find the Rogue Device, Diagnose Slow DNS, Identify the Broadcast Storm Source, Map Your Subnet) with progressive hints, solution reveal, and exportable HTML result report; accessible from the new Education nav section
+- Network Doc page now receives real data after every scan — device list, cert inventory from MetricStore, topology widget, and accumulated port scan results; previously showed 0 devices even after a full scan
+- MQTT / HA page wiring — device join/leave events, alerts, and per-device uptime states now flow to the MQTT publisher automatically; AvailabilityWorker starts after the first scan and drives live updates to Availability History and Home Automation Hub
+- Fixed `ModuleNotFoundError` crash on startup in installed builds — `diagnosis_page` and `diagnosis_worker` were missing from PyInstaller `hiddenimports`
+- Release cleanup — standalone Windows portable exe and CLI dropped from GitHub Releases; Windows users install via `winget install NetSentinel.NetSentinel`
+
 ### v1.6.2
 
 - Top-bar brand icon — replaced the "N" letter placeholder with the actual app icon (24×24, smooth-scaled from `assets/icons/netsentinel.png`)
 - New icon design — hexagon + shield identity across all sizes: ICO (7 resolutions), MS Store tiles, Start Menu tiles, installer splash, macOS/Linux PNG
 - `generate_icons.py` — new script regenerates all raster assets from the embedded design; run after any brand change
-
-### v1.6.0
-
-- Command palette (Ctrl+K) — fuzzy-match any page or action from anywhere in the app; arrow keys + Enter to navigate
-- Pinnable sidebar pages — right-click any nav item to pin it to a permanent Favourites section; state persists across sessions
-- Inline row expansion in CVE Tracker and Active Connections — GitHub-style detail panel below each row, no dialog required
-- Animated counter tiles on Overview — ease-out count-up on each data refresh with a 3 px health bar per tile
-- Alert badge on Security Audit section header showing the live unacknowledged CVE count
-- Empty-state overlays on all major tables — replaces blank areas with a centred icon and placeholder text
-- Winget E_ABORT fix — three-layer defence against nested winget calls and UAC failures in the validation sandbox
-
-### v1.5.0
-
-- Progressive sidebar navigation — Home / Standard / Pro modes cycled by a pill at the top; mode persists across sessions
-- Wi-Fi signal-strength heatmap — floor plan import, per-BSSID IDW interpolation, PNG export
-- Geolocation map — offline MaxMind GeoLite2-City, no API key, no external calls
-- Custom trigger expressions — metric expression language (`avg(rtt["ip"], 5m) > 80`) with visual rule builder
-- Automation hooks — event-driven webhook and script triggers on device-down, high RTT, new device
-- Network documentation generator — one-click HTML/Markdown snapshot of the full network
-- MQTT / Home Assistant publisher — Discovery payloads for binary_sensor and sensor device types
-- AppData path hardening — no PermissionError when installed in `C:\Program Files\`
-- Sidebar emoji replaced with geometric Unicode symbols (35 items)
-
-### v1.4.0
-
-- Active Connections tab — process-to-socket map with one-click firewall block/unblock per process
-- Live Bandwidth tab — 60-second rolling upload/download chart per interface
-- SMTP and SNMP credentials migrated from QSettings plaintext to OS keychain
-- Navigation restructured into 7 named subgroups
 
 ---
 

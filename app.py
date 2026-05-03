@@ -110,6 +110,8 @@ def _smoke_test() -> None:
         "workers.availability_worker",
         "workers.cert_worker",
         "workers.threat_intel_worker",
+        "ui.pages.diagnosis_page",
+        "workers.diagnosis_worker",
     ]
     for _mod in _checks:
         try:
@@ -298,7 +300,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.6.2")
+    app.setApplicationVersion("1.6.5")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────
@@ -450,7 +452,7 @@ def main():
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
-        window._overview_page.on_svc_done(results)
+        window._overview_page.on_svc_done(results)  # delegates to ServiceStatusTile.update_services
 
     svc_worker.check_done.connect(_on_svc_check)
 
@@ -471,9 +473,18 @@ def main():
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             window._overview_page.on_alert(a)
-        window._overview_page.on_cycle_done(result_dict)
+        window._overview_page.on_cycle_done(result_dict)  # delegates to DeviceCountTile + RttSummaryTile
 
     avail_worker.cycle_done.connect(_on_cycle)
+
+    # Wire threat intel page → geo map threat overlay
+    window._threat_intel_page.entries_updated.connect(
+        window._geo_map_page.set_threat_entries
+    )
+
+    # Wire empty-state CTAs → full scan
+    window._network_doc_page.scan_requested.connect(window._start_full_scan)
+    window._history_page.scan_requested.connect(window._start_full_scan)
 
     # ── Show window after all wiring is complete (prevents startup flash) ─────
     window.show()
@@ -494,11 +505,16 @@ def main():
     if _instance_server is not None:
         _instance_server.newConnection.connect(_on_second_instance)
 
-    # First-run onboarding — deferred so the window is fully painted first
+    # First-run onboarding — deferred so the window is fully painted first.
+    # Use a parented QTimer (not singleShot) so Qt destroys it with the window;
+    # an unparented singleShot can fire after the C++ object is deleted → SIGABRT.
     from ui.first_run_dialog import FirstRunDialog, should_show_first_run
     if should_show_first_run():
         from PyQt6.QtCore import QTimer as _QTimer
-        _QTimer.singleShot(250, lambda: FirstRunDialog(parent=window).exec())
+        _onboarding_timer = _QTimer(window)
+        _onboarding_timer.setSingleShot(True)
+        _onboarding_timer.timeout.connect(lambda: FirstRunDialog(parent=window).exec())
+        _onboarding_timer.start(250)
 
     ret = app.exec()
     avail_worker.stop()

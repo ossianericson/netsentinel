@@ -1,6 +1,6 @@
 ﻿@echo off
 echo ================================================
-echo  NetSentinel v1.6.2 — Windows Build Script
+echo  NetSentinel v1.6.5 — Windows Build Script
 echo ================================================
 echo.
 echo Usage:
@@ -102,6 +102,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+echo   OK: pre-build import check passed.
 
 echo.
 :: --------------------------------------------------------------------------
@@ -183,6 +184,7 @@ if "%BUILD_GUI%"=="1" (
         pause
         exit /b 1
     )
+    echo   OK: post-build smoke test passed.
 )
 
 echo.

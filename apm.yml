@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.6.2
+version: 1.6.5
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -347,6 +347,34 @@ rules:
       emit an error signal, or show a banner) — never crash on import.
       Example: speedtest-cli inside _run_speedtest_cli(), nmap inside port_scanner.
 
+  - id: RULE-AH5
+    title: "User-visible names in code must match the names used in docs and UI"
+    severity: blocking
+    description: >
+      Any string that a user sees — theme names, page labels, feature names —
+      must be identical in the code registry, the docstring, and every doc
+      reference (README, BACKLOG, apm.yml). Drift between internal identifiers
+      and documented names causes support confusion and silent QSettings fallbacks
+      (e.g. a saved theme name no longer in the registry silently resets to default).
+
+      Canonical locations to keep in sync:
+        Theme names  → ui/styles.py THEMES dict keys
+                     → ui/styles.py module docstring
+                     → README.md (features table and changelog)
+                     → BACKLOG.md (completed entries)
+        Page labels  → Dashboard._nav_add_page() call label argument
+                     → README.md features table
+        Feature names→ README.md, BACKLOG.md, and any RULE description that names them
+
+      When renaming a theme or page label:
+        1. Update the registry key (THEMES dict, nav label string).
+        2. Grep for the old name across *.py, *.md, *.yml — fix every occurrence.
+        3. Note in the commit: QSettings values that stored the old name will fall
+           back to the default; document this as expected behaviour.
+
+      This rule does NOT require internal variable names (e.g. _SLATE, _DARK_PRO)
+      to match the public name — only the user-facing registry key must match.
+
   # ── Winget Submission ─────────────────────────────────────────────────────
   - id: RULE-W1
     title: "Silent installs must never run nested winget calls"
@@ -379,6 +407,32 @@ rules:
       validation, CI) that elevation fails and the installer exits with E_ABORT.
       The `commandline` keyword allows a non-elevated silent install to proceed
       as the current user when /VERYSILENT is passed from the command line.
+
+  # ── PyInstaller Bundle ────────────────────────────────────────────────────
+  - id: RULE-B1
+    title: "Every new ui/pages/, workers/, and modules/ file must be added to NetSentinel.spec hiddenimports"
+    severity: blocking
+    description: >
+      NetSentinel is a PyInstaller onefile build. PyInstaller cannot auto-discover
+      modules that are imported dynamically at runtime (e.g. page classes loaded by
+      dashboard._build_tabs, workers started on demand). Every new Python file added
+      under ui/pages/, workers/, or modules/ MUST be registered in the hiddenimports
+      list in NetSentinel.spec in the same commit/PR that introduces the file.
+
+      Pattern:
+        ui/pages/foo_page.py   → add "ui.pages.foo_page"   to hiddenimports
+        workers/foo_worker.py  → add "workers.foo_worker"   to hiddenimports
+        modules/foo.py         → add "modules.foo"          to hiddenimports
+
+      Omitting an entry produces a build that passes CI but crashes at runtime
+      with ModuleNotFoundError — only reproducible from the installed/winget package,
+      not from source. This is the hardest category of bug to diagnose post-release.
+
+      Checklist before merging any PR that adds a new file in these directories:
+        1. grep hiddenimports NetSentinel.spec for the module dotted path
+        2. If missing, add it under the relevant section comment in the spec
+        3. Run a local PyInstaller build and launch dist/NetSentinel.exe to confirm
+           the new page/worker loads without ModuleNotFoundError
 
   # ── Icon and Brand Assets ─────────────────────────────────────────────────
   - id: RULE-I1
@@ -473,4 +527,164 @@ rules:
       This rule applies to: ui/dashboard.py _nav_add_page() calls, section header
       strings, and any other sidebar label that includes a leading icon character.
       It does NOT apply to README.md, help text, or dialogs.
+
+  # ── Dashboard Data Feed Wiring ────────────────────────────────────────────
+  - id: RULE-DW1
+    title: "Every page data-feed method must be explicitly wired from the correct result handler"
+    severity: blocking
+    description: >
+      Pages in ui/pages/ expose data-feed methods (e.g. set_scan_data(),
+      on_device_event(), on_alert(), on_availability_update(), add_ips()) that
+      are only useful if called from the corresponding result handler. There are
+      two canonical wiring locations depending on the worker type:
+
+        dashboard.py _on_*_result handlers — for scan workers started by the user
+        app.py closures after window = Dashboard(...) — for always-on background workers
+
+      When adding a new page or a new feed method to an existing page:
+        1. Identify which result handler or worker produces the data.
+        2. Call the method from that handler, wrapped in try/except so errors
+           never propagate to break the scan result chain.
+        3. Add a comment "── Feed <PageName>" above the call block.
+
+      Known feed points after the full audit (May 2026):
+
+      dashboard.py result handlers (user-triggered scans):
+        _on_m1_result        → NetworkDocPage.set_scan_data (devices, cert, topo)
+                             → MqttPage.on_alert + on_device_event
+                             → GeoMapPage.add_ips
+                             → AvailabilityWorker start/update (targets from devices)
+        _on_port_scan_result → NetworkDocPage.set_scan_data (port_data accumulated)
+        _on_syn_result       → NetworkDocPage.set_scan_data (port_data accumulated)
+        _on_avail_cycle_done → HistoryPage.on_cycle_done
+                             → HomeAutomationPage.on_availability_update
+                             → MqttPage.on_uptime_state
+
+      app.py closures (always-on background workers, after window = Dashboard(...)):
+        avail_worker.cycle_done  → HistoryPage / InventoryPage / UptimePage / HomePage .on_cycle_done
+                                 → OverviewPage.on_cycle_done
+                                   (on_cycle_done internally delegates to DeviceCountTile.update_cycle
+                                    and RttSummaryTile.update_cycle — do NOT call tile methods directly)
+                                   (via _on_cycle closure that also fires alert engine)
+        cert_worker.check_done   → CertPage.on_check_done
+                                 → OverviewPage.on_cert_done
+                                   (via _on_cert_check closure that also fires cert alerts)
+        svc_worker.check_done    → ServicePage.on_check_done
+                                 → OverviewPage.on_svc_done
+                                   (on_svc_done internally delegates to ServiceStatusTile.update_services
+                                    — do NOT call tile methods directly on OverviewPage)
+                                   (via _on_svc_check closure that also fires service alerts)
+        snmp_trap_worker         → SnmpTrapPage.on_trap_received / on_status / on_error
+        syslog_worker            → SyslogPage.on_message_received / on_status / on_error
+        threat_intel_page.entries_updated → GeoMapPage.set_threat_entries
+
+      Symptoms of a broken wire: the page shows stale data or "—" tiles
+      even after a successful scan, because the page never received a data push.
+
+  - id: RULE-DW2
+    title: "Always-on worker signals must be wired in app.py, not inside Dashboard"
+    severity: blocking
+    description: >
+      Workers that run continuously and independently of user scans
+      (AvailabilityWorker, CertWorker, SvcWorker, SnmpTrapWorker, SyslogWorker,
+      ReportSchedulerWorker) are started in app.py before Dashboard is created.
+      Their signals must be connected to page slots in app.py, in the block
+      immediately after `window = Dashboard(...)`, using window._page_name.slot.
+
+      Why app.py, not dashboard.py:
+        The workers exist before Dashboard is instantiated. Connecting inside
+        Dashboard.__init__ would require injecting them as constructor arguments
+        or accessing app-level state from a widget — both architecture violations.
+        All wiring in one canonical location makes auditing trivial:
+        grep for window._ in app.py to see every page that receives live data.
+
+      Pattern for new always-on workers:
+        1. Start the worker in app.py before window = Dashboard(...).
+        2. After window = Dashboard(...), connect signals:
+             worker.signal_name.connect(window._page_name.slot_name)
+           For signals that also need alert evaluation, use a closure that calls
+           the alert engine and then the page slot (see _on_cycle, _on_cert_check,
+           _on_svc_check in app.py as reference implementations).
+        3. Document the new wire in RULE-DW1 Known feed points.
+
+  - id: RULE-DW3
+    title: "Never call internal tile or subwidget methods directly on a page object — use the page's public proxy methods"
+    severity: blocking
+    description: >
+      Some page classes (most notably OverviewPage) use an internal tile registry
+      (self._tiles: Dict[str, _BaseTile]) where each tile is a private subclass
+      holding its own update method (e.g. ServiceStatusTile.update_services,
+      DeviceCountTile.update_cycle, HaDevicesTile.update_ha_states). These tile
+      classes and their methods are NOT part of the page's public API.
+
+      The page always exposes named proxy methods (e.g. on_svc_done, on_cycle_done,
+      on_cert_done, on_alert, on_grade) that delegate internally to the correct tile.
+      External callers — result handlers in dashboard.py and closures in app.py —
+      MUST call the proxy methods, not the tile methods directly.
+
+      Forbidden pattern (AttributeError at runtime):
+        window._overview_page.update_services(results)    # tile method, not on page
+        window._overview_page.update_cycle(states)        # tile method, not on page
+        window._overview_page.update_ha_states(states)    # tile method, not on page
+
+      Correct pattern (proxy methods, always valid):
+        window._overview_page.on_svc_done(results)        # delegates to ServiceStatusTile
+        window._overview_page.on_cycle_done(result_dict)  # delegates to DeviceCountTile + RttSummaryTile
+        window._overview_page.on_cert_done(results)       # delegates to CertCountTile
+
+      How to verify before wiring a new call:
+        1. Open the page's .py file and grep for `def ` at the class level.
+        2. Only call methods that appear there — never call methods on classes
+           nested inside the page (tiles, sub-panels, inner widgets).
+        3. If the data you need to deliver has no proxy method yet, add one to
+           the page class first — do not reach through the page to call a tile.
+
+      This rule applies to all page classes in ui/pages/ and ui/dashboard.py,
+      not only OverviewPage. Any class that composes sub-widgets should be
+      treated as having an opaque interior from the caller's perspective.
+
+  # ── Empty-State UX ────────────────────────────────────────────────────────
+  - id: RULE-UX5
+    title: "Pages requiring scan data must show an empty state with an inline CTA — never dead-end text"
+    severity: blocking
+    description: >
+      Any page that requires a scan or background worker to have produced data
+      before it can show meaningful content MUST use the QStackedWidget
+      empty-state pattern. Static text like "Run a scan first" with no action
+      button is a blocking UX violation — it sends the user away from the page
+      they navigated to on purpose.
+
+      Required pattern:
+        1. Add `scan_requested = pyqtSignal()` to the page class.
+        2. Build a QStackedWidget (self._content_stack or similar):
+             page 0 — centered empty state:
+                       short description (≤ 2 sentences, muted TEXT_SECONDARY)
+                       one primary QPushButton (objectName="btnScan") that emits
+                       scan_requested. No secondary actions in the empty state.
+             page 1 — the normal content (KPI tiles, tables, charts).
+        3. Default to page 0 (setCurrentIndex(0) is the QStackedWidget default).
+        4. In the data-arrival method (set_scan_data, on_cycle_done, _refresh, etc.),
+           switch to page 1 when data is present:
+               if data:
+                   self._content_stack.setCurrentIndex(1)
+        5. Wire the signal in app.py after window = Dashboard(...):
+               window._my_page.scan_requested.connect(window._start_full_scan)
+
+      Button label conventions (use the most specific label that applies):
+        "Scan & Grade"      — pages needing device scan + benchmark result
+        "Scan & Document"   — Network Doc page
+        "Start Monitoring"  — Availability History page
+        "Run Diagnostics"   — pages needing DiagnosticsWorker data
+        "Run Scan"          — generic fallback
+
+      DO NOT auto-trigger scans on navigation. Scans take 30+ seconds, consume
+      CPU and network bandwidth, and may require admin rights. The user must
+      always initiate explicitly — but from wherever they are, not by navigating
+      back to Home.
+
+      Pages that implement this pattern (May 2026):
+        NetworkDocPage  (_content_stack, scan_requested → _start_full_scan)
+        HistoryPage     (_content_stack, scan_requested → _start_full_scan)
+        Benchmark tab   (_bm_stack, _scan_and_grade inline method)
+        Devices tab     (_m1_stack, pre-existing pattern)
 

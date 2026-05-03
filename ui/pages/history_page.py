@@ -22,10 +22,10 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -169,6 +169,8 @@ class HistoryPage(QWidget):
     parent : QWidget | None
     """
 
+    scan_requested = pyqtSignal()  # emitted by the empty-state CTA; wire to _start_full_scan
+
     REFRESH_MS = 30_000   # re-query every 30 s
 
     def __init__(self, store: "Optional[MetricStore]" = None, parent=None):
@@ -241,7 +243,48 @@ class HistoryPage(QWidget):
         title_row.addWidget(refresh_btn)
         root.addLayout(title_row)
 
-        # ── KPI row ───────────────────────────────────────────────────────────
+        # Content stack: page 0 = empty state, page 1 = data content
+        self._content_stack = QStackedWidget()
+
+        # ── Page 0: empty state ────────────────────────────────────────────────
+        _empty_w = QWidget()
+        _el = QVBoxLayout(_empty_w)
+        _el.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el.setSpacing(10)
+        _el.setContentsMargins(40, 60, 40, 60)
+
+        _icon_lbl = QLabel("◌")
+        _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _icon_lbl.setStyleSheet(
+            f"font-size:40px; color:{BORDER}; background:transparent; border:none;"
+        )
+        _desc_lbl = QLabel(
+            "No monitoring data yet. Run a scan to discover devices —\n"
+            "availability monitoring begins automatically after the first scan."
+        )
+        _desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _desc_lbl.setWordWrap(True)
+        _desc_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        _btn_cta = QPushButton("Start Monitoring")
+        _btn_cta.setObjectName("btnScan")
+        _btn_cta.setFixedHeight(34)
+        _btn_cta.clicked.connect(self.scan_requested.emit)
+        _el.addWidget(_icon_lbl)
+        _el.addSpacing(4)
+        _el.addWidget(_desc_lbl)
+        _el.addSpacing(8)
+        _el.addWidget(_btn_cta, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._content_stack.addWidget(_empty_w)
+
+        # ── Page 1: content ────────────────────────────────────────────────────
+        _content_w = QWidget()
+        _cl = QVBoxLayout(_content_w)
+        _cl.setContentsMargins(0, 0, 0, 0)
+        _cl.setSpacing(8)
+
+        # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         self._kpi_uptime  = _KpiTile("Uptime",    "—", GREEN)
@@ -253,9 +296,9 @@ class HistoryPage(QWidget):
                      self._kpi_max_rtt, self._kpi_hosts):
             kpi_row.addWidget(tile)
         kpi_row.addStretch()
-        root.addLayout(kpi_row)
+        _cl.addLayout(kpi_row)
 
-        # ── Scrollable chart area ─────────────────────────────────────────────
+        # Scrollable chart area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -266,28 +309,20 @@ class HistoryPage(QWidget):
         self._charts_layout.setContentsMargins(0, 0, 0, 0)
         self._charts_layout.setSpacing(10)
         scroll.setWidget(inner)
-        root.addWidget(scroll, 1)
+        _cl.addWidget(scroll, 1)
 
         # Chart cards (created once, redrawn on refresh)
-        self._rtt_card  = _ChartCard("RTT History (ms)",       height=220)
-        self._avail_card = _ChartCard("Device Availability",   height=160)
+        self._rtt_card   = _ChartCard("RTT History (ms)",    height=220)
+        self._avail_card = _ChartCard("Device Availability", height=160)
         self._charts_layout.addWidget(self._rtt_card)
         self._charts_layout.addWidget(self._avail_card)
         self._charts_layout.addStretch()
 
+        self._content_stack.addWidget(_content_w)
+        root.addWidget(self._content_stack, 1)
+
         # Set initial zoom button state
         self._set_window("1h")
-
-        # No-store placeholder
-        if not self._store:
-            for card in (self._rtt_card, self._avail_card):
-                card.ax.text(
-                    0.5, 0.5, "No data store connected",
-                    ha="center", va="center",
-                    color=TEXT_SECONDARY, fontsize=11,
-                    transform=card.ax.transAxes,
-                )
-                card.canvas.draw_idle()
 
     # ── Window / host selection ───────────────────────────────────────────────
 
@@ -322,6 +357,10 @@ class HistoryPage(QWidget):
         if not self._store:
             return
         self._populate_host_combo()
+        has_data = self._host_combo.count() > 0
+        self._content_stack.setCurrentIndex(1 if has_data else 0)
+        if not has_data:
+            return
         self._draw_rtt()
         self._draw_availability()
         self._update_kpis()

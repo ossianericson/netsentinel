@@ -23,11 +23,13 @@ class DiagnosisWorker(QThread):
         self,
         gateway_ip: Optional[str] = None,
         gateway_mac: Optional[str] = None,
+        symptom: str = "",
         parent=None,
     ):
         super().__init__(parent)
         self._gateway_ip  = gateway_ip
         self._gateway_mac = gateway_mac
+        self._symptom     = symptom   # "slow" | "dropping" | "noconn" | ""
         self._stop        = threading.Event()
 
     def stop(self) -> None:
@@ -36,13 +38,21 @@ class DiagnosisWorker(QThread):
     def run(self) -> None:
         from modules.root_cause_correlator import correlate
 
+        # Symptom routing: skip steps that can't explain the reported symptom.
+        # "noconn" → gateway/DNS are the priority; storm/STP are secondary noise.
+        # "slow"   → diagnostics + storm matter; STP loops are less likely.
+        # "dropping" → all steps relevant; STP/storm are primary suspects.
+        # ""       → run everything (default / command-palette entry).
+        _run_storm = self._symptom in ("dropping", "slow", "")
+        _run_stp   = self._symptom in ("dropping", "")
+
         diag_result: object          = None
         storm_result: object         = None
         stp_bpdus: list              = []
         fingerprint_devices: list    = []
 
         # ── Step 1: Network diagnostics (~15 s) ───────────────────────────────
-        self.progress.emit(5, "Running network diagnostics…")
+        self.progress.emit(5, "Checking your router…")
         try:
             from modules import network_diagnostics
             diag_result = network_diagnostics.scan(
@@ -56,19 +66,20 @@ class DiagnosisWorker(QThread):
             self.finished.emit(None)
             return
 
-        # ── Step 2: Broadcast storm analysis (~6 s) ───────────────────────────
-        self.progress.emit(55, "Measuring broadcast traffic…")
-        try:
-            from modules import storm_analyser
-            storm_result = storm_analyser.scan(duration=6)
-        except Exception:
-            log.exception("diagnosis: storm_analyser failed, skipping")
-        if self._stop.is_set():
-            self.finished.emit(None)
-            return
+        # ── Step 2: Broadcast storm analysis (~6 s) — skipped for "noconn" ───
+        if _run_storm:
+            self.progress.emit(55, "Scanning for broadcast problems…")
+            try:
+                from modules import storm_analyser
+                storm_result = storm_analyser.scan(duration=6)
+            except Exception:
+                log.exception("diagnosis: storm_analyser failed, skipping")
+            if self._stop.is_set():
+                self.finished.emit(None)
+                return
 
         # ── Step 3: Rogue device fingerprint (fast ARP scan) ──────────────────
-        self.progress.emit(65, "Scanning for rogue devices…")
+        self.progress.emit(65, "Scanning for problem devices…")
         try:
             from modules import rogue_device
             rd_result = rogue_device.scan(get_offenders_path())
@@ -79,25 +90,26 @@ class DiagnosisWorker(QThread):
             self.finished.emit(None)
             return
 
-        # ── Step 4: STP / rogue bridge detection (~6 s) ───────────────────────
-        self.progress.emit(75, "Listening for rogue bridge frames…")
-        try:
-            from modules import stp_detector
-            stp_detector.scan(
-                gateway_mac=self._gateway_mac,
-                on_bpdu=stp_bpdus.append,
-                on_error=lambda msg: log.warning("stp_detector: %s", msg),
-                duration=6,
-                stop_event=self._stop,
-            )
-        except Exception:
-            log.exception("diagnosis: stp_detector failed, skipping")
-        if self._stop.is_set():
-            self.finished.emit(None)
-            return
+        # ── Step 4: STP / rogue bridge detection (~6 s) — skipped for "slow" / "noconn"
+        if _run_stp:
+            self.progress.emit(75, "Listening for network loops…")
+            try:
+                from modules import stp_detector
+                stp_detector.scan(
+                    gateway_mac=self._gateway_mac,
+                    on_bpdu=stp_bpdus.append,
+                    on_error=lambda msg: log.warning("stp_detector: %s", msg),
+                    duration=6,
+                    stop_event=self._stop,
+                )
+            except Exception:
+                log.exception("diagnosis: stp_detector failed, skipping")
+            if self._stop.is_set():
+                self.finished.emit(None)
+                return
 
         # ── Step 5: Correlate all findings ────────────────────────────────────
-        self.progress.emit(95, "Correlating findings…")
+        self.progress.emit(95, "Putting it all together…")
         try:
             result = correlate(
                 diag_result=diag_result,

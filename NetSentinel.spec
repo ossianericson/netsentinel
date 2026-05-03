@@ -108,6 +108,8 @@ hiddenimports: list = [
     "modules.rest_api",
     "modules.risk_scorer",
     "modules.rogue_device",
+    "modules.diagnostic_card",
+    "modules.lab_scenarios",
     "modules.root_cause_correlator",
     "modules.scheduler",
     "modules.service_monitor",
@@ -155,6 +157,8 @@ hiddenimports: list = [
     "ui.pages.threat_intel_page",
     "ui.pages.trend_page",
     "ui.pages.uptime_page",
+    "ui.pages.diagnosis_page",
+    "ui.pages.lab_mode_page",
     # ── workers/ — all QThread workers ────────────────────────────────────────
     "workers.availability_worker",
     "workers.cert_worker",
@@ -171,6 +175,7 @@ hiddenimports: list = [
     "workers.speed_test_worker",
     "workers.syslog_worker",
     "workers.threat_intel_worker",
+    "workers.diagnosis_worker",
 ]
 
 for _pkg in ("scapy", "PyQt6", "matplotlib", "flask", "keyring"):

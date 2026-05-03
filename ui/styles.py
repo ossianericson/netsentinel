@@ -3,8 +3,8 @@ UI colour palette and QSS stylesheet for NetSentinel.
 
 Three built-in themes:
   • Arctic Clean  — professional light (default)
-  • Midnight Pro  — modern dark with electric cyan
-  • Obsidian Neon — high-contrast true-black with neon lime
+  • Midnight Pro  — modern dark with electric blue (GitHub Dark palette)
+  • Obsidian Neon — warm dark with violet accent (Catppuccin Mocha-inspired)
 
 Theme is persisted in QSettings under "ui/theme".
 All colour constants are injected into module globals at import time
@@ -286,9 +286,9 @@ _SLATE = {
 # ── Theme registry ────────────────────────────────────────────────────────────
 
 THEMES: dict = {
-    "Arctic Clean": _ARCTIC_CLEAN,
-    "Dark Pro":     _DARK_PRO,
-    "Slate":        _SLATE,
+    "Arctic Clean":  _ARCTIC_CLEAN,
+    "Midnight Pro":  _DARK_PRO,
+    "Obsidian Neon": _SLATE,
 }
 
 DEFAULT_THEME = "Arctic Clean"

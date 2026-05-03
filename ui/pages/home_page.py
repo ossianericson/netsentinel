@@ -270,13 +270,14 @@ class HomePage(QWidget):
         right = QVBoxLayout()
         right.setSpacing(4)
 
-        self._hero_title = QLabel("Run a scan to analyse your network")
+        self._hero_title = QLabel("What's on your network?")
         self._hero_title.setStyleSheet(
             f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
             " background:transparent; border:none;"
         )
         self._hero_sub = QLabel(
-            "Run a scan to discover devices and check connectivity."
+            "One scan discovers every device, checks connection health, and"
+            " fills in the Devices, DNS, and Security tabs with live data."
         )
         self._hero_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY};"
@@ -286,7 +287,7 @@ class HomePage(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        self._btn_scan = QPushButton("\u25b6  Run First Scan")
+        self._btn_scan = QPushButton("\u25b6  Discover My Network")
         self._btn_scan.setObjectName("btnScanHero")
         self._btn_isp = QPushButton("\ud83d\udcca  View ISP Report")
         self._btn_isp.setStyleSheet(
@@ -321,10 +322,70 @@ class HomePage(QWidget):
         self._speed_card.clicked.connect(
             lambda: self.navigate_to.emit("Speed Test"))
         self._stability_card.clicked.connect(
-            lambda: self.navigate_to.emit("DNS & Stability"))
+            lambda: self.navigate_to.emit("DNS & Outages"))
         self._devices_card.clicked.connect(
-            lambda: self.navigate_to.emit("Devices"))
+            lambda: self.navigate_to.emit("Devices on Network"))
         lay.addLayout(card_row)
+
+        # ── Post-scan results strip (hidden until first scan completes) ────────
+        self._results_strip = QFrame()
+        self._results_strip.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+        )
+        self._results_strip.setVisible(False)
+        _strip_lay = QVBoxLayout(self._results_strip)
+        _strip_lay.setContentsMargins(12, 8, 12, 8)
+        _strip_lay.setSpacing(6)
+
+        _strip_hdr = QLabel("EXPLORE YOUR RESULTS")
+        _strip_hdr.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; letter-spacing:1px;"
+        )
+        _strip_lay.addWidget(_strip_hdr)
+
+        def _result_row(default_text: str, btn_label: str, target: str):
+            rw = QWidget()
+            rw.setStyleSheet("background:transparent;")
+            rl = QHBoxLayout(rw)
+            rl.setContentsMargins(0, 0, 0, 0)
+            rl.setSpacing(8)
+            dot = QLabel("●")
+            dot.setFixedWidth(12)
+            dot.setStyleSheet(
+                f"font-size:8px; color:{TEXT_SECONDARY};"
+                " background:transparent; border:none;"
+            )
+            lbl = QLabel(default_text)
+            lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_PRIMARY};"
+                " background:transparent; border:none;"
+            )
+            btn = QPushButton(btn_label)
+            btn.setFlat(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:11px;"
+                f" background:transparent; border:none; padding:0; }}"
+                f"QPushButton:hover {{ color:#005A9E; }}"
+            )
+            btn.clicked.connect(lambda: self.navigate_to.emit(target))
+            rl.addWidget(dot)
+            rl.addWidget(lbl, 1)
+            rl.addWidget(btn)
+            return rw, lbl, dot
+
+        _dev_row, self._res_devices_lbl, self._res_devices_dot = \
+            _result_row("–", "View Devices →", "Devices on Network")
+        _conn_row, self._res_conn_lbl, self._res_conn_dot = \
+            _result_row("–", "View Connection →", "DNS & Outages")
+        _sec_row, self._res_security_lbl, self._res_security_dot = \
+            _result_row("–", "View Overview →", "Overview")
+
+        _strip_lay.addWidget(_dev_row)
+        _strip_lay.addWidget(_conn_row)
+        _strip_lay.addWidget(_sec_row)
+        lay.addWidget(self._results_strip)
 
         # ── Recent alerts section label ───────────────────────────────────────
         _sec2 = QLabel("RECENT ALERTS")
@@ -363,8 +424,8 @@ class HomePage(QWidget):
 
     def _update_scan_button_label(self) -> None:
         label = (
-            "▶  Run First Scan" if self._device_count == 0
-            else "▶  Start Scan"
+            "▶  Discover My Network" if self._device_count == 0
+            else "▶  Rescan"
         )
         self._btn_scan.setText(label)
 
@@ -473,6 +534,49 @@ class HomePage(QWidget):
                 f"{n_total} device{'s' if n_total != 1 else ''} online"
                 f"{rtt_part}{risk_part}"
             )
+
+        # \u2500\u2500 Results strip \u2014 show after first scan, update on every cycle \u2500\u2500\u2500\u2500\u2500\u2500
+        if n_total > 0:
+            # Devices row
+            _s = "s" if n_total != 1 else ""
+            _new = f"  \u00b7  {n_new} new" if n_new else ""
+            self._res_devices_lbl.setText(
+                f"{n_total} device{_s} found{_new}"
+            )
+            _dev_colour = GREEN if n_at_risk == 0 else AMBER
+            self._res_devices_dot.setStyleSheet(
+                f"font-size:8px; color:{_dev_colour};"
+                " background:transparent; border:none;"
+            )
+
+            # Connection row
+            if avg_rtt is not None:
+                _conn_colour = GREEN if avg_rtt < 50 else (AMBER if avg_rtt < 150 else RED)
+                self._res_conn_lbl.setText(f"{avg_rtt:.0f} ms avg latency")
+            else:
+                _conn_colour = GREEN
+                self._res_conn_lbl.setText("Connection monitoring active")
+            self._res_conn_dot.setStyleSheet(
+                f"font-size:8px; color:{_conn_colour};"
+                " background:transparent; border:none;"
+            )
+
+            # Security row
+            if n_at_risk == 0:
+                _sec_colour = GREEN
+                self._res_security_lbl.setText("No security issues detected")
+            else:
+                _sec_colour = RED
+                _i = "s" if n_at_risk != 1 else ""
+                self._res_security_lbl.setText(
+                    f"{n_at_risk} device{_i} need attention"
+                )
+            self._res_security_dot.setStyleSheet(
+                f"font-size:8px; color:{_sec_colour};"
+                " background:transparent; border:none;"
+            )
+
+            self._results_strip.setVisible(True)
 
     @pyqtSlot(object)
     def on_speed_result(self, result) -> None:

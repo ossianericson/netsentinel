@@ -423,3 +423,71 @@ class TestScanWorkerImport:
         w = BandwidthWorker(interval_s=3600)
         assert hasattr(w, "snapshot")
         assert hasattr(w, "stop")
+
+
+# ── DiagnosisWorker ───────────────────────────────────────────────────────────
+
+class TestDiagnosisWorker:
+    def test_import(self):
+        from workers.diagnosis_worker import DiagnosisWorker
+        assert DiagnosisWorker is not None
+
+    def test_signals_exist(self, qt_app):
+        from workers.diagnosis_worker import DiagnosisWorker
+        w = DiagnosisWorker()
+        assert hasattr(w, "progress")
+        assert hasattr(w, "finished")
+        assert hasattr(w, "stop")
+
+    def test_start_stop(self, qt_app):
+        from workers.diagnosis_worker import DiagnosisWorker
+        from modules.root_cause_correlator import CorrelationResult
+
+        _empty_result = CorrelationResult()
+
+        with patch("modules.network_diagnostics.scan", return_value=MagicMock(
+                trace_hops=[], ping_results=[], dns_results=[],
+                download_mbps=-1.0, dns_leak=None)):
+            with patch("modules.storm_analyser.scan", return_value=MagicMock(
+                    storm_level="CLEAN", top_sources=[], bcast_per_sec=0.0)):
+                with patch("modules.rogue_device.scan", return_value={"devices": []}):
+                    with patch("modules.stp_detector.scan", return_value=None):
+                        with patch("modules.root_cause_correlator.correlate",
+                                   return_value=_empty_result):
+                            w = DiagnosisWorker(symptom="slow")
+                            _start_stop(w)
+                            assert not w.isRunning()
+
+    def test_symptom_routing_skips_stp(self, qt_app):
+        from workers.diagnosis_worker import DiagnosisWorker
+        from modules.root_cause_correlator import CorrelationResult
+
+        with patch("modules.network_diagnostics.scan", return_value=MagicMock(
+                trace_hops=[], ping_results=[], dns_results=[],
+                download_mbps=-1.0, dns_leak=None)):
+            with patch("modules.storm_analyser.scan", return_value=MagicMock(
+                    storm_level="CLEAN", top_sources=[], bcast_per_sec=0.0)):
+                with patch("modules.rogue_device.scan", return_value={"devices": []}):
+                    with patch("modules.stp_detector.scan") as mock_stp:
+                        with patch("modules.root_cause_correlator.correlate",
+                                   return_value=CorrelationResult()):
+                            w = DiagnosisWorker(symptom="slow")
+                            _start_stop(w)
+                            mock_stp.assert_not_called()
+
+    def test_symptom_routing_skips_storm_and_stp_for_noconn(self, qt_app):
+        from workers.diagnosis_worker import DiagnosisWorker
+        from modules.root_cause_correlator import CorrelationResult
+
+        with patch("modules.network_diagnostics.scan", return_value=MagicMock(
+                trace_hops=[], ping_results=[], dns_results=[],
+                download_mbps=-1.0, dns_leak=None)):
+            with patch("modules.storm_analyser.scan") as mock_storm:
+                with patch("modules.rogue_device.scan", return_value={"devices": []}):
+                    with patch("modules.stp_detector.scan") as mock_stp:
+                        with patch("modules.root_cause_correlator.correlate",
+                                   return_value=CorrelationResult()):
+                            w = DiagnosisWorker(symptom="noconn")
+                            _start_stop(w)
+                            mock_storm.assert_not_called()
+                            mock_stp.assert_not_called()

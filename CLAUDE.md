@@ -22,6 +22,17 @@ At the end of each session, write one paragraph covering:
 - What was not reached
 - What the next session should pick up first
 
+## Code rules — scope of enforcement
+
+Rules like RULE 1 (single colour source), RULE 3 (table row height 24px), and RULE 26 (smoke test registration) apply to **new code only**. Do not audit or retrofit existing files for compliance — the app is working and the churn has no runtime value.
+
+Apply these rules when:
+- Creating a new page (`ui/pages/*.py`)
+- Creating a new module (`modules/*.py`) or worker (`workers/*_worker.py`)
+- Substantially rewriting an existing file as part of a planned feature
+
+Do not apply these rules as a standalone task against files that are not being touched for a feature.
+
 ## Version management
 
 **Always use `bump_version.py` for version changes.** It patches all tracked files atomically and runs consistency tests.

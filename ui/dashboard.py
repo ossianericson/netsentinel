@@ -259,6 +259,13 @@ class Dashboard(QMainWindow):
         # Cached results
         self._net_info: dict = {}
         self._diag_result = None
+        self._last_scan_devices: list = []    # for NetworkDocPage port_data accumulation
+        self._port_data_cache:   dict = {}    # {ip: [port_dict, ...]} across scan types
+        self._auto_report_pending:   bool = False  # True while full-report run is in progress
+        self._auto_report_scan_done: bool = False
+        self._auto_report_diag_done: bool = False
+        self._pending_benchmark:     bool = False  # True when Grade My Network triggered a scan
+        self._pending_isp_report:    bool = False  # True when ISP Report triggered diagnostics
 
         # Graph update timer
         self._graph_timer = QTimer()
@@ -568,6 +575,16 @@ class Dashboard(QMainWindow):
         _btn_settings.setStyleSheet(_icon_btn_qss)
         lay.addSpacing(4)
         lay.addWidget(_btn_settings)
+
+        # ── Full Report button ────────────────────────────────────────────────
+        self._btn_full_report = QToolButton()
+        self._btn_full_report.setText("▣  Report")
+        self._btn_full_report.setToolTip(
+            "Run all modules + diagnostics and auto-open the full HTML report"
+        )
+        self._btn_full_report.setStyleSheet(_icon_btn_qss)
+        self._btn_full_report.clicked.connect(self._run_full_report)
+        lay.addWidget(self._btn_full_report)
 
         # ── Help button — matches mockup: "? Help" with visible border ────────
         _btn_help = QToolButton()
@@ -1109,6 +1126,9 @@ class Dashboard(QMainWindow):
         from ui.pages.trigger_builder_page import TriggerBuilderPage
         self._trigger_page = TriggerBuilderPage(store=self._store, parent=None)
 
+        from ui.pages.lab_mode_page import LabModePage
+        self._lab_mode_page = LabModePage(store=self._store, parent=None)
+
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
         self._topology_tab_widget = self._build_topology_tab()
@@ -1193,6 +1213,7 @@ class Dashboard(QMainWindow):
         # Pre-register HomePage so _nav_ref() can find it via indexOf()
         self._stack.addWidget(self._home_page)
         self._stack.addWidget(self._diagnosis_page)
+        self._stack.addWidget(self._lab_mode_page)
         self._nav_row_to_page:   dict = {}
         self._nav_separators:    set  = set()
         # Extended nav data model
@@ -1334,6 +1355,12 @@ class Dashboard(QMainWindow):
         ]
         self._nav_separators.add(self._nav_recon_sep)
         self._recon_tab_start_index = -1  # kept for compat
+
+        # ── EDUCATION (collapsed by default) ───────────────────────────────────
+        self._nav_edu_sep = self._nav.count()
+        self._nav_add_section("Education", icon="◎", collapsed_by_default=True)
+        self._nav_add_page("⬡", "Lab Mode", self._lab_mode_page)
+        self._nav_separators.add(self._nav_edu_sep)
 
         # Apply initial collapse for ALL groups that start collapsed (both level-0
         # sections and level-1 sub-groups).  Process level-0 first so parent
@@ -3066,6 +3093,31 @@ class Dashboard(QMainWindow):
             self._ps_status.setText(data.plain_verdict)
         if self._adv_tab_index_adv >= 0:
             self._nav.setCurrentRow(self._adv_tab_index_adv)
+        # ── Update NetworkDocPage with accumulated port data ──────────────────
+        try:
+            if data.open_ports:
+                _host_key = getattr(data, "host", "") or getattr(data, "ip", "")
+                if _host_key:
+                    self._port_data_cache[_host_key] = [
+                        {"port": str(p.port), "protocol": "tcp",
+                         "service": p.name or "", "state": "open",
+                         "banner": p.banner or p.service_version or ""}
+                        for p in data.open_ports
+                    ]
+            _nd_cert: list = []
+            if self._store is not None:
+                for _c in self._store.query_cert_status():
+                    _nd_cert.append({"host": _c.host, "cn": _c.subject or "",
+                                     "issuer": _c.issuer or "", "not_after": _c.not_after or "",
+                                     "days_remaining": _c.days_remaining})
+            self._network_doc_page.set_scan_data(
+                devices=self._last_scan_devices,
+                port_data=self._port_data_cache,
+                cert_data=_nd_cert,
+                topo_widget=getattr(self, "_topology_widget", None),
+            )
+        except Exception:
+            pass
 
     # ── WoL handler ───────────────────────────────────────────────────────────
 
@@ -3800,16 +3852,57 @@ class Dashboard(QMainWindow):
     # ── Network Grade (Benchmark) tab ─────────────────────────────────────────
 
     def _build_benchmark_tab(self) -> QWidget:
-        from PyQt6.QtWidgets import QDialog, QDialogButtonBox
+        from PyQt6.QtWidgets import QStackedWidget as _SW
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
 
+        # Content stack: page 0 = empty state, page 1 = grade content
+        self._bm_stack = _SW()
+
+        # ── Page 0: empty state ────────────────────────────────────────────────
+        _empty_w = QWidget()
+        _el = QVBoxLayout(_empty_w)
+        _el.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el.setSpacing(10)
+        _el.setContentsMargins(40, 60, 40, 60)
+
+        _icon_lbl = QLabel("◎")
+        _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _icon_lbl.setStyleSheet(
+            f"font-size:48px; color:{BORDER_MED}; background:transparent; border:none;"
+        )
+        _desc_lbl = QLabel(
+            "Grade your network across 8 health dimensions — Uptime, Latency, Jitter, "
+            "DNS Speed, Download Speed, Device Safety, STP Health, and Broadcast Storm Level — "
+            "compared against a perfect home network baseline."
+        )
+        _desc_lbl.setWordWrap(True)
+        _desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _desc_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none; max-width:520px;"
+        )
+        _btn_scan_grade = QPushButton("📊  Scan & Grade")
+        _btn_scan_grade.setObjectName("btnScan")
+        _btn_scan_grade.setFixedHeight(36)
+        _btn_scan_grade.clicked.connect(self._scan_and_grade)
+        _el.addWidget(_icon_lbl)
+        _el.addSpacing(4)
+        _el.addWidget(_desc_lbl)
+        _el.addSpacing(12)
+        _el.addWidget(_btn_scan_grade, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._bm_stack.addWidget(_empty_w)
+
+        # ── Page 1: grade content ──────────────────────────────────────────────
+        _content_w = QWidget()
+        _cl = QVBoxLayout(_content_w)
+        _cl.setContentsMargins(0, 0, 0, 0)
+        _cl.setSpacing(6)
+
         info = QLabel(
             "Compares your network against a 'Perfect Home Network' baseline and gives "
             "an A–F letter grade across Uptime, Latency, Jitter, DNS Speed, Download Speed, "
-            "Device Safety, STP Health, and Broadcast Storm Level. "
-            "Run scans and/or the Stability Logger first, then click Grade My Network."
+            "Device Safety, STP Health, and Broadcast Storm Level."
         )
         info.setWordWrap(True)
         info.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
@@ -3827,7 +3920,7 @@ class Dashboard(QMainWindow):
         self._bm_score_label.setStyleSheet(
             f"color:{TEXT_PRIMARY}; font-size:16px; font-weight:bold;"
         )
-        self._bm_verdict_label = QLabel("Run scans first, then click Grade My Network.")
+        self._bm_verdict_label = QLabel("Click Grade My Network to score your connection.")
         self._bm_verdict_label.setWordWrap(True)
         self._bm_verdict_label.setStyleSheet(
             f"color:{TEXT_SECONDARY}; font-size:11px; max-width:500px;"
@@ -3864,15 +3957,27 @@ class Dashboard(QMainWindow):
         self._bm_table.setColumnWidth(3, 90)
         self._bm_table.setColumnWidth(4, 280)
 
-        lay.addWidget(info)
-        lay.addLayout(grade_row)
-        lay.addSpacing(6)
-        lay.addLayout(ctrl)
-        lay.addWidget(self._bm_table, 1)
+        _cl.addWidget(info)
+        _cl.addLayout(grade_row)
+        _cl.addSpacing(6)
+        _cl.addLayout(ctrl)
+        _cl.addWidget(self._bm_table, 1)
+        self._bm_stack.addWidget(_content_w)
+
+        lay.addWidget(self._bm_stack, 1)
         return w
 
     @pyqtSlot()
+    def _scan_and_grade(self):
+        """Empty-state CTA: start a full scan then auto-grade when done."""
+        self._bm_stack.setCurrentIndex(1)
+        self._bm_verdict_label.setText("Scanning your network…")
+        self._pending_benchmark = True
+        self._start_full_scan()
+
+    @pyqtSlot()
     def _run_benchmark(self):
+        self._bm_stack.setCurrentIndex(1)
         from PyQt6.QtGui import QColor
         try:
             from modules.network_benchmark import grade as bm_grade
@@ -3913,6 +4018,10 @@ class Dashboard(QMainWindow):
             self._bm_verdict_label.setText(result.overall_verdict)
             self._overview_page.on_grade(result.overall_grade, result.overall_score)
             self._home_page.on_grade(result.overall_grade, result.overall_score)
+            from modules.diagnostic_card import build_card_data
+            self._overview_page.set_card_data(
+                build_card_data(result, self._diag_result, self._store)
+            )
             if hasattr(self, "_tray_manager") and self._tray_manager:
                 self._tray_manager.set_grade(result.overall_grade)
 
@@ -3937,6 +4046,13 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot()
     def _export_isp_report(self):
+        if self._m1_result is None and getattr(self, "_diag_result", None) is None:
+            self._bm_stack.setCurrentIndex(1)
+            self._bm_verdict_label.setText("Running diagnostics to build the ISP report…")
+            self._pending_isp_report = True
+            self._start_diagnostics()
+            return
+
         try:
             from modules.report_exporter import save_isp_report
             from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit as _QLE
@@ -4230,6 +4346,10 @@ class Dashboard(QMainWindow):
             self._btn_export.setEnabled(_has_results)
             if hasattr(self, "_act_export"):
                 self._act_export.setEnabled(_has_results)
+            # Re-enable report button if scan ended without triggering auto-report
+            if hasattr(self, "_btn_full_report") and not self._auto_report_pending:
+                self._btn_full_report.setEnabled(True)
+                self._btn_full_report.setText("▣  Report")
 
     # ── Shared copy-to-clipboard for tables ──────────────────────────────────
 
@@ -4843,6 +4963,31 @@ class Dashboard(QMainWindow):
                 item.setForeground(QColor(color))
                 self._recon_syn_table.setItem(row, col, item)
         self._syn_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
+        # ── Update NetworkDocPage with accumulated port data ──────────────────
+        try:
+            if result.open_ports:
+                _host_key = getattr(result, "host", "") or getattr(result, "ip", "")
+                if _host_key:
+                    self._port_data_cache[_host_key] = [
+                        {"port": str(p.port), "protocol": p.proto or "tcp",
+                         "service": p.service or "", "state": p.state or "open",
+                         "banner": ""}
+                        for p in result.open_ports
+                    ]
+            _nd_cert: list = []
+            if self._store is not None:
+                for _c in self._store.query_cert_status():
+                    _nd_cert.append({"host": _c.host, "cn": _c.subject or "",
+                                     "issuer": _c.issuer or "", "not_after": _c.not_after or "",
+                                     "days_remaining": _c.days_remaining})
+            self._network_doc_page.set_scan_data(
+                devices=self._last_scan_devices,
+                port_data=self._port_data_cache,
+                cert_data=_nd_cert,
+                topo_widget=getattr(self, "_topology_widget", None),
+            )
+        except Exception:
+            pass
 
     # ── Recon: UDP Scan tab ───────────────────────────────────────────────────
 
@@ -6107,6 +6252,28 @@ class Dashboard(QMainWindow):
         except Exception as _exc:
             self._bl_new_lbl.setText(f"Baseline check failed: {_exc}")
 
+        # ── Feed Network Doc page ─────────────────────────────────────────────
+        self._last_scan_devices = data.get("devices", [])
+        _cert_data: list = []
+        if self._store is not None:
+            try:
+                for _c in self._store.query_cert_status():
+                    _cert_data.append({
+                        "host": _c.host,
+                        "cn":   _c.subject or "",
+                        "issuer":        _c.issuer or "",
+                        "not_after":     _c.not_after or "",
+                        "days_remaining": _c.days_remaining,
+                    })
+            except Exception:
+                pass
+        self._network_doc_page.set_scan_data(
+            devices=self._last_scan_devices,
+            port_data=self._port_data_cache,
+            cert_data=_cert_data,
+            topo_widget=getattr(self, "_topology_widget", None),
+        )
+
         # ── Persistent device tracking (MetricStore) ──────────────────────────
         if self._store is not None:
             try:
@@ -6144,18 +6311,70 @@ class Dashboard(QMainWindow):
                     self._set_status(
                         f"⚠  {len(tr.gone_devices)} device(s) gone: {', '.join(gone_msgs)}"
                     )
-                # Feed tracker result into alert engine
+                # Feed tracker result into alert engine + MQTT
                 if self._alert_engine is not None:
                     for a in self._alert_engine.evaluate_tracker_result(tr):
                         self._show_alert_toast(a)
                         self._home_page.on_alert(a)
+                        self._mqtt_page.on_alert(a.severity, a.message, a.host)
+                # Forward device events to MQTT publisher
+                for _d in tr.new_devices:
+                    self._mqtt_page.on_device_event("joined", {
+                        "mac": _d.mac or "", "ip": _d.ip or "",
+                        "hostname": _d.hostname or "", "vendor": _d.vendor or "",
+                    })
+                for _d in tr.gone_devices:
+                    self._mqtt_page.on_device_event("left", {
+                        "mac": _d.mac or "", "ip": _d.ip or "",
+                        "hostname": _d.hostname or "", "vendor": _d.vendor or "",
+                    })
             except Exception:
                 pass   # tracker errors must never break the scan result handler
+
+        # ── Feed Geo Map with discovered device IPs (public ones auto-filtered) ─
+        try:
+            _ips = [
+                (d.ip if not isinstance(d, dict) else d.get("ip", ""))
+                for d in data.get("devices", [])
+            ]
+            self._geo_map_page.add_ips([ip for ip in _ips if ip])
+        except Exception:
+            pass
+
+        # ── Start / refresh AvailabilityWorker after each scan ────────────────
+        try:
+            if self._store is not None and data.get("devices"):
+                from workers.availability_worker import AvailabilityWorker
+                from modules.availability_monitor import TargetConfig
+                _targets = []
+                for _d in data.get("devices", []):
+                    _ip  = _d.ip       if not isinstance(_d, dict) else _d.get("ip", "")
+                    _mac = _d.mac      if not isinstance(_d, dict) else _d.get("mac", "")
+                    _hn  = _d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")
+                    if _ip:
+                        _targets.append(TargetConfig(
+                            host=_ip, mac=_mac or None,
+                            hostname=_hn or None, label=_hn or _ip,
+                        ))
+                if _targets:
+                    if hasattr(self, "_avail_worker") and self._avail_worker.isRunning():
+                        self._avail_worker.set_targets(_targets)
+                    else:
+                        self._avail_worker = AvailabilityWorker(
+                            store=self._store, targets=_targets, interval_s=60,
+                        )
+                        self._avail_worker.cycle_done.connect(self._on_avail_cycle_done)
+                        self._avail_worker.start()
+        except Exception:
+            pass
 
         self._update_overall_verdict()
         self._update_kpi_tiles(data)
         # Show the table (hide the empty-state placeholder)
         self._m1_stack.setCurrentIndex(1)
+        # Show benchmark content pane (user can now grade without being sent elsewhere)
+        if hasattr(self, "_bm_stack"):
+            self._bm_stack.setCurrentIndex(1)
         # Refresh topology widget with new device list
         try:
             gw_ip  = self._net_info.get("gateway") if self._net_info else None
@@ -6205,6 +6424,25 @@ class Dashboard(QMainWindow):
             )
         except Exception as exc:
             self._m1_status.setText(f"Filter error: {exc}")
+
+    @pyqtSlot(dict)
+    def _on_avail_cycle_done(self, result: dict) -> None:
+        """Route AvailabilityWorker cycle results to HistoryPage, HA page, and MQTT."""
+        states = result.get("states", {})
+        rtts   = result.get("rtts",   {})
+        try:
+            self._history_page.on_cycle_done(result)
+        except Exception:
+            pass
+        try:
+            self._ha_page.on_availability_update(states)
+        except Exception:
+            pass
+        try:
+            for _ip, _state in states.items():
+                self._mqtt_page.on_uptime_state(_ip, _state, rtts.get(_ip) or 0.0)
+        except Exception:
+            pass
 
     @pyqtSlot(object)
     def _on_bpdu_found(self, bpdu):
@@ -6344,6 +6582,12 @@ class Dashboard(QMainWindow):
             self._graph_timer.stop()
             self._graph.redraw()
             self._workers.clear()
+            if self._auto_report_pending:
+                self._auto_report_scan_done = True
+                self._maybe_auto_report()
+            if getattr(self, "_pending_benchmark", False):
+                self._pending_benchmark = False
+                self._run_benchmark()
 
     # ── Overall verdict ───────────────────────────────────────────────────────
 
@@ -6440,6 +6684,77 @@ class Dashboard(QMainWindow):
         self._verdict_badge.setVisible(True)
 
     # ── Export ────────────────────────────────────────────────────────────────
+
+    @pyqtSlot()
+    def _run_full_report(self):
+        """Run all modules + diagnostics, then auto-open the HTML report. No dialogs."""
+        if self._active_count > 0:
+            self._set_status("Scan already in progress — please wait.")
+            return
+
+        # Arm the auto-report flags
+        self._auto_report_pending   = True
+        self._auto_report_scan_done = False
+        # Diagnostics: start them now; mark done immediately if they were already run
+        self._auto_report_diag_done = False
+        self._chk_stp.setChecked(True)
+        self._chk_storm.setChecked(True)
+        self._chk_wifi.setChecked(True)
+        self._chk_dns.setChecked(True)
+        self._btn_full_report.setEnabled(False)
+        self._btn_full_report.setText("▣  Running…")
+
+        # Start diagnostics in the background (runs in parallel with the scan)
+        if self._diag_worker and self._diag_worker.isRunning():
+            self._auto_report_diag_done = True   # already running; result will arrive
+        else:
+            self._start_diagnostics()
+
+        # Start the full scan (M1–M5 all checked above)
+        self._start_full_scan()
+
+    def _maybe_auto_report(self) -> None:
+        """Generate and open the report once both scan and diagnostics are done."""
+        if not self._auto_report_pending:
+            return
+        if not (self._auto_report_scan_done and self._auto_report_diag_done):
+            return
+        self._auto_report_pending   = False
+        self._auto_report_scan_done = False
+        self._auto_report_diag_done = False
+        self._btn_full_report.setEnabled(True)
+        self._btn_full_report.setText("▣  Report")
+        try:
+            import datetime as _dt
+            from modules.utils import get_app_data_dir
+            from modules.report_exporter import save_report
+            _ts  = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+            _out = get_app_data_dir() / "reports" / f"netsentinel_report_{_ts}.html"
+            _out.parent.mkdir(parents=True, exist_ok=True)
+            _level = "CLEAN"
+            if self._m1_result and self._m1_result.get("high_risk_count", 0):
+                _level = "HIGH"
+            if self._m2_result and self._m2_result.get("rogue_count", 0):
+                _level = "HIGH"
+            _verdict = self._verdict._text.text() if hasattr(self._verdict, "_text") else ""
+            save_report(
+                _out,
+                module1_data=self._m1_result,
+                module2_data=self._m2_result,
+                module3_data=self._m3_result,
+                module4_data=self._m4_result,
+                module5_data=self._m5_result,
+                diagnostics_data=self._diag_result,
+                network_info_data=self._net_info if self._net_info else None,
+                overall_verdict=_verdict,
+                overall_level=_level,
+            )
+            webbrowser.open(_out.as_uri())
+            self._set_status(f"Report ready — {_out.name}")
+        except Exception as _exc:
+            self._set_status(f"Auto-report failed: {_exc}")
+            self._btn_full_report.setEnabled(True)
+            self._btn_full_report.setText("▣  Report")
 
     @pyqtSlot()
     def _export_report(self):
@@ -6647,6 +6962,12 @@ class Dashboard(QMainWindow):
                     self._diag_leak_table.setItem(r, col, QTableWidgetItem(val))
 
         self._update_overall_verdict()
+        if self._auto_report_pending:
+            self._auto_report_diag_done = True
+            self._maybe_auto_report()
+        if getattr(self, "_pending_isp_report", False):
+            self._pending_isp_report = False
+            self._export_isp_report()
 
     # ── Recon: Credentialed SSH Scan ─────────────────────────────────────────
 

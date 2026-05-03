@@ -23,7 +23,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QPlainTextEdit, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QPlainTextEdit, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -122,6 +122,8 @@ class NetworkDocPage(QWidget):
     from the dashboard after each scan to keep the data fresh.
     """
 
+    scan_requested = pyqtSignal()  # emitted by the empty-state CTA; wire to _start_full_scan
+
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._devices:     List[Dict] = []
@@ -156,7 +158,48 @@ class NetworkDocPage(QWidget):
         root.addWidget(title)
         root.addWidget(sub)
 
-        # ── KPI tiles ─────────────────────────────────────────────────────────
+        # Content stack: page 0 = empty state, page 1 = data content
+        self._content_stack = QStackedWidget()
+
+        # ── Page 0: empty state ────────────────────────────────────────────────
+        _empty_w = QWidget()
+        _el = QVBoxLayout(_empty_w)
+        _el.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el.setSpacing(10)
+        _el.setContentsMargins(40, 60, 40, 60)
+
+        _icon_lbl = QLabel("⊟")
+        _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _icon_lbl.setStyleSheet(
+            f"font-size:40px; color:{BORDER}; background:transparent; border:none;"
+        )
+        _desc_lbl = QLabel(
+            "Run a scan to discover devices, open ports, and certificates —\n"
+            "then generate a full network inventory document."
+        )
+        _desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _desc_lbl.setWordWrap(True)
+        _desc_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        _btn_cta = QPushButton("Scan & Document")
+        _btn_cta.setObjectName("btnScan")
+        _btn_cta.setFixedHeight(34)
+        _btn_cta.clicked.connect(self.scan_requested.emit)
+        _el.addWidget(_icon_lbl)
+        _el.addSpacing(4)
+        _el.addWidget(_desc_lbl)
+        _el.addSpacing(8)
+        _el.addWidget(_btn_cta, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._content_stack.addWidget(_empty_w)
+
+        # ── Page 1: content ────────────────────────────────────────────────────
+        _content_w = QWidget()
+        _cl = QVBoxLayout(_content_w)
+        _cl.setContentsMargins(0, 0, 0, 0)
+        _cl.setSpacing(8)
+
+        # KPI tiles
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         self._kpi_devices = _kpi("Devices", "0")
@@ -164,11 +207,10 @@ class NetworkDocPage(QWidget):
         self._kpi_certs   = _kpi("Certificates", "0")
         for w in (self._kpi_devices, self._kpi_ports, self._kpi_certs):
             kpi_row.addWidget(w, 1)
-        root.addLayout(kpi_row)
+        _cl.addLayout(kpi_row)
 
-        # ── Options card ──────────────────────────────────────────────────────
+        # Options card
         opt_frame, opt_body = _card("Report Contents")
-
         _chk_qss = (
             f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
             f"QCheckBox::indicator {{ width:13px; height:13px; border:1px solid {BORDER};"
@@ -183,18 +225,16 @@ class NetworkDocPage(QWidget):
             c.setChecked(True)
             c.setStyleSheet(_chk_qss)
             opt_body.addWidget(c)
-        root.addWidget(opt_frame)
+        _cl.addWidget(opt_frame)
 
-        # ── Action row ────────────────────────────────────────────────────────
+        # Action row
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
-
         self._btn_generate = QPushButton("▣  Generate Network Doc")
         self._btn_generate.setObjectName("btnScan")
         self._btn_generate.setFixedHeight(34)
         self._btn_generate.setMinimumWidth(200)
         self._btn_generate.clicked.connect(self._generate)
-
         self._btn_open = QPushButton("Open in Browser")
         self._btn_open.setFixedHeight(34)
         self._btn_open.setEnabled(False)
@@ -205,25 +245,22 @@ class NetworkDocPage(QWidget):
             f"QPushButton:hover {{ background:{ACCENT}; color:white; border-color:{ACCENT}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
         )
-
         self._btn_save_as = QPushButton("Save As…")
         self._btn_save_as.setFixedHeight(34)
         self._btn_save_as.setEnabled(False)
         self._btn_save_as.clicked.connect(self._save_as)
         self._btn_save_as.setStyleSheet(self._btn_open.styleSheet())
-
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet(
             f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
         )
-
         action_row.addWidget(self._btn_generate)
         action_row.addWidget(self._btn_open)
         action_row.addWidget(self._btn_save_as)
         action_row.addWidget(self._status_lbl, 1)
-        root.addLayout(action_row)
+        _cl.addLayout(action_row)
 
-        # ── Log card ──────────────────────────────────────────────────────────
+        # Log card
         log_frame, log_body = _card("Generation Log")
         self._log = QPlainTextEdit()
         self._log.setReadOnly(True)
@@ -232,9 +269,11 @@ class NetworkDocPage(QWidget):
             f" font-size:11px; border:none; padding:4px 8px; }}"
         )
         self._log.setMaximumBlockCount(500)
-        self._log.appendPlainText("Run a scan first, then click Generate Network Doc.")
         log_body.addWidget(self._log)
-        root.addWidget(log_frame, 1)
+        _cl.addWidget(log_frame, 1)
+
+        self._content_stack.addWidget(_content_w)
+        root.addWidget(self._content_stack, 1)
 
     # ── Data injection ────────────────────────────────────────────────────────
 
@@ -250,6 +289,8 @@ class NetworkDocPage(QWidget):
         self._port_data = port_data or {}
         self._cert_data = cert_data or []
         self._topo_widget = topo_widget
+        if self._devices:
+            self._content_stack.setCurrentIndex(1)
         n_ports = sum(len(v) for v in self._port_data.values())
         # Update KPI tiles
         for kpi, val in [

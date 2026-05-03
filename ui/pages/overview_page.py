@@ -33,6 +33,7 @@ from typing import Callable, Dict, List, Optional
 from PyQt6.QtCore    import QMimeData, QPoint, QSettings, QSize, Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QCursor, QDrag, QPainter, QPixmap
 from PyQt6.QtWidgets import (
+    QApplication, QFileDialog, QMenu,
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
@@ -812,6 +813,7 @@ class OverviewPage(QWidget):
         self._tile_order = self._load_order()
         self._tiles: Dict[str, _BaseTile] = {}
         self._filler: Optional[QWidget]   = None
+        self._card_data  = None  # CardData instance; None until first benchmark
         self._setup_ui()
         self._build_tiles()
         # Defer store-backed refresh — parented timer so it is destroyed with
@@ -858,6 +860,20 @@ class OverviewPage(QWidget):
             lambda: self.navigate_to.emit("What's Wrong?")
         )
         hdr.addWidget(self._diagnose_btn, alignment=Qt.AlignmentFlag.AlignBottom)
+
+        _btn_qss = (
+            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+        )
+        self._share_btn = QPushButton("Share Card ▾")
+        self._share_btn.setStyleSheet(_btn_qss)
+        self._share_btn.setToolTip("Export a compact network health card as PNG or HTML")
+        self._share_btn.setEnabled(False)
+        self._share_btn.clicked.connect(self._show_share_menu)
+        hdr.addWidget(self._share_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
         self._edit_btn = QPushButton("Edit Layout")
         self._edit_btn.setCheckable(True)
@@ -990,6 +1006,56 @@ class OverviewPage(QWidget):
         t = self._tiles.get("alert_feed")
         if t:
             t.push_alert(alert)
+
+    def set_card_data(self, card_data) -> None:
+        """Receive a CardData instance from the dashboard after each benchmark."""
+        self._card_data = card_data
+        self._share_btn.setEnabled(True)
+
+    def _show_share_menu(self) -> None:
+        menu = QMenu(self)
+        menu.addAction("Save PNG…",  self._export_png)
+        menu.addAction("Copy PNG",   self._copy_png)
+        menu.addAction("Save HTML…", self._export_html)
+        menu.exec(self._share_btn.mapToGlobal(self._share_btn.rect().bottomLeft()))
+
+    def _render_pixmap(self):
+        from modules.diagnostic_card import render_card_widget
+        widget = render_card_widget(self._card_data)
+        widget.show()          # must be visible for grab() to paint correctly
+        widget.hide()
+        return widget.grab()
+
+    def _export_png(self) -> None:
+        if not self._card_data:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Card as PNG",
+            f"netsentinel_card_{self._card_data.generated_at[:10]}.png",
+            "PNG images (*.png)",
+        )
+        if path:
+            self._render_pixmap().save(path, "PNG")
+
+    def _copy_png(self) -> None:
+        if not self._card_data:
+            return
+        QApplication.clipboard().setPixmap(self._render_pixmap())
+
+    def _export_html(self) -> None:
+        if not self._card_data:
+            return
+        from pathlib import Path
+        from modules.report_exporter import save_card_html
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Card as HTML",
+            f"netsentinel_card_{self._card_data.generated_at[:10]}.html",
+            "HTML files (*.html)",
+        )
+        if path:
+            out = save_card_html(self._card_data.to_dict(), Path(path))
+            import webbrowser
+            webbrowser.open(out.as_uri())
 
     def on_grade(self, grade: str, score: float = 0.0) -> None:
         t = self._tiles.get("network_grade")

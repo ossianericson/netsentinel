@@ -129,20 +129,6 @@ jobs:
           path: dist/NetSentinel-Setup-*.exe
           overwrite: true
 
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-exe
-          path: dist/NetSentinel.exe
-          overwrite: true
-
-      - name: Upload Windows CLI artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-cli
-          path: dist/NetSentinel-cli.exe
-          overwrite: true
-
       - name: Upload Windows service artifact
         uses: actions/upload-artifact@v7
         with:
@@ -299,10 +285,8 @@ jobs:
 
             | Platform | File | Notes |
             |---|---|---|
-            | **Windows** | `NetSentinel-Setup-*.exe` | **Recommended** — full installer, adds to Start Menu + PATH. Registers with winget. |
-            | **Windows** | `NetSentinel.exe` | Portable GUI — right-click → Run as Administrator. |
-            | **Windows** | `NetSentinel-cli.exe` | Headless CLI — no GUI required. |
-            | **Windows** | `NetSentinel-svc.exe` | Background Windows service. |
+            | **Windows** | `NetSentinel-Setup-*.exe` | Installer — adds to Start Menu + PATH. Use winget (above) instead if possible. |
+            | **Windows** | `NetSentinel-svc.exe` | Background Windows service (not in winget). |
             | **macOS** | `NetSentinel-macOS.zip` | GUI — unzip, right-click → Open. |
             | **macOS** | `NetSentinel-cli-macOS` | Headless CLI. |
             | **Linux** | `NetSentinel` | GUI — `chmod +x NetSentinel && sudo ./NetSentinel` |
@@ -327,8 +311,6 @@ jobs:
           files: |
             artifacts/windows-installer/NetSentinel-Setup-*.exe
             artifacts/windows-msix/NetSentinel-*.msix
-            artifacts/windows-exe/NetSentinel.exe
-            artifacts/windows-cli/NetSentinel-cli.exe
             artifacts/windows-svc/NetSentinel-svc.exe
             artifacts/macos-app/NetSentinel-macOS.zip
             artifacts/macos-cli/NetSentinel-cli-macOS

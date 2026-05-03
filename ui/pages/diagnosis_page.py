@@ -13,7 +13,7 @@ from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton,
+    QButtonGroup, QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton,
     QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -46,6 +46,7 @@ class DiagnosisPage(QWidget):
         self._worker       = None
         self._gateway_ip   = None
         self._gateway_mac  = None
+        self._symptom      = ""   # set by symptom tile before _start()
         self._setup_ui()
 
     def set_network_info(
@@ -100,18 +101,68 @@ class DiagnosisPage(QWidget):
         w.setStyleSheet("background:transparent;")
         lay = QVBoxLayout(w)
         lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.setSpacing(10)
+        lay.setSpacing(20)
 
-        self._run_btn = QPushButton("Run Diagnosis")
-        self._run_btn.setFixedWidth(220)
-        self._run_btn.setFixedHeight(52)
-        self._run_btn.setStyleSheet(
+        prompt = QLabel("What's happening?")
+        prompt.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        prompt.setStyleSheet(
+            f"font-size:15px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
+        )
+        lay.addWidget(prompt)
+
+        _SYMPTOMS = [
+            ("My internet is slow",          "slow"),
+            ("My connection keeps dropping", "dropping"),
+            ("I can't connect at all",       "noconn"),
+        ]
+
+        tiles_row = QHBoxLayout()
+        tiles_row.setSpacing(12)
+        self._symptom_group = QButtonGroup(w)
+        self._symptom_group.setExclusive(True)
+
+        _tile_base = (
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:2px solid {BORDER}; border-radius:8px;"
+            f" font-size:12px; padding:18px 12px; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
+            f"QPushButton:checked {{ border-color:{ACCENT}; background:{ACCENT};"
+            f" color:#fff; }}"
+        )
+
+        self._symptom_btns: dict = {}
+        for label, key in _SYMPTOMS:
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setFixedHeight(72)
+            btn.setMinimumWidth(160)
+            btn.setStyleSheet(_tile_base)
+            btn.setProperty("symptom_key", key)
+            self._symptom_group.addButton(btn)
+            self._symptom_btns[key] = btn
+            tiles_row.addWidget(btn)
+
+        # Default selection
+        self._symptom_btns["slow"].setChecked(True)
+        self._symptom = "slow"
+
+        def _on_symptom_clicked(btn):
+            self._symptom = btn.property("symptom_key")
+
+        self._symptom_group.buttonClicked.connect(_on_symptom_clicked)
+
+        lay.addLayout(tiles_row)
+
+        run_btn = QPushButton("Run Diagnosis")
+        run_btn.setFixedWidth(180)
+        run_btn.setFixedHeight(44)
+        run_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
-            f" font-size:15px; font-weight:bold; border-radius:6px; }}"
+            f" font-size:13px; font-weight:bold; border-radius:6px; }}"
             f"QPushButton:hover {{ background:#005A9E; }}"
         )
-        self._run_btn.clicked.connect(self._start)
-        lay.addWidget(self._run_btn)
+        run_btn.clicked.connect(self._start)
+        lay.addWidget(run_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         hint = QLabel("Takes about 30 seconds.")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -193,12 +244,33 @@ class DiagnosisPage(QWidget):
         vc_lay.addWidget(self._verdict_text)
         outer.addWidget(self._verdict_card)
 
+        # "Do this first" hero finding card (top priority, always visible)
+        self._hero_card_container = QWidget()
+        self._hero_card_container.setStyleSheet("background:transparent;")
+        self._hero_card_layout = QVBoxLayout(self._hero_card_container)
+        self._hero_card_layout.setContentsMargins(0, 0, 0, 0)
+        self._hero_card_layout.setSpacing(0)
+        outer.addWidget(self._hero_card_container)
+
+        # "Other findings" toggle + remaining cards
+        self._other_toggle = QPushButton("▶  Other findings (0)")
+        self._other_toggle.setFlat(True)
+        self._other_toggle.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:4px 0; text-align:left; }}"
+            f"QPushButton:hover {{ color:#005A9E; }}"
+        )
+        self._other_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._other_toggle.clicked.connect(self._toggle_other_findings)
+        self._other_expanded = False
+        outer.addWidget(self._other_toggle)
+
         # Findings list in a scroll area
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"QScrollArea {{ background:{BG_DARK}; border:none; }}")
+        self._findings_scroll = QScrollArea()
+        self._findings_scroll.setWidgetResizable(True)
+        self._findings_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._findings_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._findings_scroll.setStyleSheet(f"QScrollArea {{ background:{BG_DARK}; border:none; }}")
 
         self._findings_container = QWidget()
         self._findings_container.setStyleSheet(f"background:{BG_DARK};")
@@ -207,8 +279,8 @@ class DiagnosisPage(QWidget):
         self._findings_layout.setSpacing(6)
         self._findings_layout.addStretch()
 
-        scroll.setWidget(self._findings_container)
-        outer.addWidget(scroll, 1)
+        self._findings_scroll.setWidget(self._findings_container)
+        outer.addWidget(self._findings_scroll, 1)
 
         # Run Again button
         btn_row = QHBoxLayout()
@@ -227,9 +299,16 @@ class DiagnosisPage(QWidget):
 
         return w
 
+    def _toggle_other_findings(self) -> None:
+        self._other_expanded = not self._other_expanded
+        self._findings_scroll.setVisible(self._other_expanded)
+        n = self._findings_layout.count() - 1  # subtract stretch
+        arrow = "▼" if self._other_expanded else "▶"
+        self._other_toggle.setText(f"{arrow}  Other findings ({n})")
+
     # ── Finding card ──────────────────────────────────────────────────────────
 
-    def _make_finding_card(self, finding) -> QFrame:
+    def _make_finding_card(self, finding, *, hero: bool = False) -> QFrame:
         sev      = getattr(finding, "severity",    "INFO")
         headline = getattr(finding, "headline",    "")
         remedy   = getattr(finding, "remediation", "")
@@ -237,14 +316,23 @@ class DiagnosisPage(QWidget):
 
         card = QFrame()
         card.setObjectName("findingCard")
+        border_w = "4px" if hero else "3px"
         card.setStyleSheet(
             f"QFrame#findingCard {{ background:{BG_CARD};"
-            f" border-left:3px solid {color}; border-top:1px solid {BORDER};"
+            f" border-left:{border_w} solid {color}; border-top:1px solid {BORDER};"
             f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
         )
         lay = QVBoxLayout(card)
-        lay.setContentsMargins(12, 8, 12, 8)
-        lay.setSpacing(4)
+        lay.setContentsMargins(14 if hero else 12, 12 if hero else 8, 14 if hero else 12, 12 if hero else 8)
+        lay.setSpacing(6 if hero else 4)
+
+        if hero:
+            do_this = QLabel("Do this first:")
+            do_this.setStyleSheet(
+                f"font-size:10px; font-weight:bold; color:{color}; text-transform:uppercase;"
+                f" letter-spacing:1px; border:none; background:transparent;"
+            )
+            lay.addWidget(do_this)
 
         hdr = QHBoxLayout()
         badge = QLabel(sev)
@@ -257,8 +345,9 @@ class DiagnosisPage(QWidget):
         )
         hl = QLabel(headline)
         hl.setWordWrap(True)
+        hl_size = "14px" if hero else "12px"
         hl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f"font-size:{hl_size}; font-weight:bold; color:{TEXT_PRIMARY};"
             f" border:none; background:transparent;"
         )
         hdr.addWidget(badge)
@@ -268,8 +357,9 @@ class DiagnosisPage(QWidget):
         if remedy:
             rem = QLabel(remedy)
             rem.setWordWrap(True)
+            rem_size = "12px" if hero else "11px"
             rem.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+                f"font-size:{rem_size}; color:{TEXT_SECONDARY}; border:none; background:transparent;"
             )
             lay.addWidget(rem)
 
@@ -285,6 +375,7 @@ class DiagnosisPage(QWidget):
         self._worker = DiagnosisWorker(
             gateway_ip=self._gateway_ip,
             gateway_mac=self._gateway_mac,
+            symptom=self._symptom,
             parent=self,
         )
         self._worker.progress.connect(self._on_progress)
@@ -319,30 +410,72 @@ class DiagnosisPage(QWidget):
         summary  = getattr(result, "plain_summary",   "") or "No issues detected."
         findings = getattr(result, "findings",        [])
 
-        color = _SEV_COLOR.get(sev, ACCENT)
-        self._verdict_card.setStyleSheet(
-            f"QFrame#verdictCard {{ background:{BG_CARD};"
-            f" border-left:4px solid {color}; border-top:1px solid {BORDER};"
-            f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
-        )
-        self._verdict_title.setText(f"Diagnosis — {sev}")
-        self._verdict_title.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{color};"
-            f" border:none; background:transparent;"
-        )
-        self._verdict_text.setText(summary)
+        # Clear hero card
+        while self._hero_card_layout.count():
+            item = self._hero_card_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
 
-        # Clear old finding cards (preserve trailing stretch)
+        # Clear other findings (preserve trailing stretch)
         while self._findings_layout.count() > 1:
             item = self._findings_layout.takeAt(0)
             w = item.widget()
             if w:
                 w.deleteLater()
 
-        for finding in findings[:5]:
-            card = self._make_finding_card(finding)
-            self._findings_layout.insertWidget(
-                self._findings_layout.count() - 1, card
+        if not findings:
+            self._verdict_card.setStyleSheet(
+                f"QFrame#verdictCard {{ background:{BG_CARD};"
+                f" border-left:4px solid {GREEN}; border-top:1px solid {BORDER};"
+                f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
             )
+            self._verdict_title.setText("Your network looks healthy")
+            self._verdict_title.setStyleSheet(
+                f"font-size:13px; font-weight:bold; color:{GREEN};"
+                f" border:none; background:transparent;"
+            )
+            self._verdict_text.setText(
+                "Gateway responding  ·  DNS working  ·  No broadcast storms"
+                "  ·  No rogue devices  ·  No network loops"
+            )
+            self._hero_card_container.hide()
+            self._other_toggle.hide()
+            self._findings_scroll.hide()
+        else:
+            color = _SEV_COLOR.get(sev, ACCENT)
+            self._verdict_card.setStyleSheet(
+                f"QFrame#verdictCard {{ background:{BG_CARD};"
+                f" border-left:4px solid {color}; border-top:1px solid {BORDER};"
+                f" border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
+            )
+            self._verdict_title.setText(f"Diagnosis — {sev}")
+            self._verdict_title.setStyleSheet(
+                f"font-size:13px; font-weight:bold; color:{color};"
+                f" border:none; background:transparent;"
+            )
+            self._verdict_text.setText(summary)
+
+            # Hero card — "Do this first": top finding, larger label
+            hero_finding = findings[0]
+            hero = self._make_finding_card(hero_finding, hero=True)
+            self._hero_card_layout.addWidget(hero)
+            self._hero_card_container.show()
+
+            # Remaining findings in the collapsible section
+            rest = findings[1:5]
+            if rest:
+                for finding in rest:
+                    card = self._make_finding_card(finding)
+                    self._findings_layout.insertWidget(
+                        self._findings_layout.count() - 1, card
+                    )
+                self._other_expanded = False
+                self._findings_scroll.hide()
+                self._other_toggle.setText(f"▶  Other findings ({len(rest)})")
+                self._other_toggle.show()
+            else:
+                self._other_toggle.hide()
+                self._findings_scroll.hide()
 
         self._stack.setCurrentIndex(_DONE)

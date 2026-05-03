@@ -144,6 +144,42 @@ class TestOnCycleDone:
         page.on_cycle_done({"devices": [], "rtts": {}})
         assert page._devices_card._val_lbl.text() == "0"
 
+    def test_results_strip_hidden_before_first_scan(self):
+        page = _make_page()
+        assert page._results_strip.isHidden()
+
+    def test_results_strip_shown_after_first_scan(self):
+        page = _make_page()
+        devices = [{"ip": "192.168.1.1", "risk_level": "LOW"}]
+        page.on_cycle_done({"devices": devices, "rtts": {}})
+        assert not page._results_strip.isHidden()
+
+    def test_results_strip_device_count_text(self):
+        page = _make_page()
+        devices = [{"ip": f"192.168.1.{i}", "risk_level": "LOW"} for i in range(7)]
+        page.on_cycle_done({"devices": devices, "rtts": {}})
+        assert "7" in page._res_devices_lbl.text()
+
+    def test_results_strip_security_green_when_no_at_risk(self):
+        from ui.styles import GREEN
+        page = _make_page()
+        devices = [{"ip": "192.168.1.1", "risk_level": "LOW"}]
+        page.on_cycle_done({"devices": devices, "rtts": {}})
+        assert GREEN in page._res_security_dot.styleSheet()
+
+    def test_results_strip_security_red_when_at_risk(self):
+        from ui.styles import RED
+        page = _make_page()
+        devices = [{"ip": "192.168.1.1", "risk_level": "HIGH"}]
+        page.on_cycle_done({"devices": devices, "rtts": {}})
+        assert RED in page._res_security_dot.styleSheet()
+
+    def test_results_strip_connection_rtt_shown(self):
+        page = _make_page()
+        devices = [{"ip": "192.168.1.1", "risk_level": "LOW"}]
+        page.on_cycle_done({"devices": devices, "rtts": {"8.8.8.8": 35.0}})
+        assert "ms" in page._res_conn_lbl.text()
+
 
 # ---------------------------------------------------------------------------
 # on_alert()
