@@ -31,6 +31,7 @@ from ui.styles import (
     BG_CARD,
     BG_HOVER,
     BORDER,
+    CARD_RADIUS,
     GREEN,
     RED,
     TEXT_PRIMARY,
@@ -85,7 +86,7 @@ class CertPage(QWidget):
         # Card
         card = QFrame()
         card.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: 0px; }}"
+            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
         )
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(0, 0, 0, 0)

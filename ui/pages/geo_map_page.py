@@ -62,6 +62,7 @@ from ui.styles import (
     BG_HOVER,
     BORDER,
     CARD_HDR_BORDER,
+    CARD_RADIUS,
     CHART_BG,
     CHART_GRID,
     CHART_PLOT_BG,
@@ -141,7 +142,7 @@ def _card(title: str) -> Tuple[QWidget, QVBoxLayout]:
     card = QWidget()
     card.setObjectName("geoCard")
     card.setStyleSheet(
-        f"QWidget#geoCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; }}"
+        f"QWidget#geoCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
     )
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)

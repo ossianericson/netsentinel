@@ -44,7 +44,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, CARD_HDR_BORDER, GREEN, GREEN_BG, RED, RED_BG,
+    BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from modules.config_baseline import (
@@ -109,7 +109,7 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     card = QFrame()
     card.setObjectName("card")
     card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:0px;}}"
+        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};border-radius:{CARD_RADIUS};}}"
     )
     cl = QVBoxLayout(card)
     cl.setContentsMargins(0, 0, 0, 0)

@@ -26,6 +26,8 @@ If Windows blocks the installer on first run, right-click the downloaded file �
 
 ### macOS
 
+> **Note:** Windows is the primary supported platform with a binary installer. macOS support is run-from-source only — no pre-built binary is provided. Most features work, but the experience is less polished and Gatekeeper bypass may be required.
+
 ```bash
 git clone https://github.com/ossianericson/netsentinel
 cd netsentinel
@@ -33,11 +35,17 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Layer 2 features require libpcap: `brew install libpcap`
+Layer 2 features (STP, storm detection, ARP monitor) require libpcap:
 
-Run with `sudo python app.py` to enable packet capture features.
+```bash
+brew install libpcap
+```
+
+Run with `sudo python app.py` to enable packet capture features. On Apple Silicon, ensure you are using a native arm64 Python build — x86_64 Python via Rosetta may have issues with Scapy and libpcap.
 
 ### Linux
+
+> **Note:** Windows is the primary supported platform with a binary installer. Linux support is run-from-source only — no pre-built binary is provided. Tested on Ubuntu 22.04+ and Debian 12+.
 
 ```bash
 git clone https://github.com/ossianericson/netsentinel
@@ -46,9 +54,19 @@ pip install -r requirements.txt
 sudo python app.py
 ```
 
-Layer 2 features require libpcap: `sudo apt-get install libpcap-dev`
+Layer 2 features require libpcap:
 
-If the app fails on launch with a platform plugin error: `sudo apt-get install libxcb-cursor0`, then run with `QT_QPA_PLATFORM=xcb sudo python app.py`.
+```bash
+sudo apt-get install libpcap-dev   # Debian/Ubuntu
+sudo dnf install libpcap-devel     # Fedora/RHEL
+```
+
+If the app fails on launch with a Qt platform plugin error:
+
+```bash
+sudo apt-get install libxcb-cursor0
+QT_QPA_PLATFORM=xcb sudo python app.py
+```
 
 ---
 
@@ -136,12 +154,13 @@ NetSentinel runs real scans against a live network, which means every result map
 - **Layer 2 vs. Layer 3** — STP, ARP, and broadcast storm features operate at Layer 2 (MAC/frame); device discovery, DNS, and traceroute operate at Layer 3 (IP); each tab makes the distinction explicit
 
 **Built-in reference material:**
+- **Protocol Visualizer** — animated step-by-step diagrams of ARP resolution, DNS lookup, TCP handshake, DHCP lease, and STP election using real scan data from your own network (not placeholder addresses)
+- **Lab / Scenario Mode** — four guided exercises (Find the Rogue Device, Diagnose Slow DNS, Identify the Broadcast Storm Source, Map Your Subnet) with progressive hints, solution reveal, and exportable HTML result reports
 - IP and subnet calculator with reference panels explaining CIDR notation, subnetting rules, and address classes
 - 24-term networking glossary (ARP, BPDU, CGNAT, CVE, mDNS, STP, TLS, and more) — accessible via the help button from any page without leaving current context
-- In-app "Common Scenarios" lookup table mapping 12 user goals to the correct feature
+- In-app "Common Scenarios" lookup table mapping 17 user goals to the correct feature
 
 **On the roadmap for structured learning:**
-- Interactive protocol visualizer — animated step-by-step diagrams of ARP resolution, DNS lookup, TCP handshake, DHCP lease, and STP election using real scan data from your own network
 - CompTIA Network+ / CCNA curriculum alignment tags on each feature page, plus an exportable study-session report
 - Classroom export — signed scan reports with machine fingerprint for instructor aggregation and graded lab submissions
 
@@ -195,7 +214,7 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.6.5
+### v1.6.10
 
 - Empty-state with inline CTA on four pages — Network Grade shows "Scan & Grade" button, ISP Report runs diagnostics automatically when clicked cold, Network Doc shows "Scan & Document", Availability History shows "Start Monitoring"; each page uses a `QStackedWidget` so the user gets the action they need from wherever they are instead of a dead-end "run a scan first" message
 - Complete dashboard wiring audit — all overview tiles (Fleet Devices, Fleet Services) now animate live from AvailabilityWorker and ServiceWorker cycles; SNMP Trap and Syslog pages now receive live data from their workers; Threat Intelligence page now feeds discovered indicators to the Geolocation Map automatically

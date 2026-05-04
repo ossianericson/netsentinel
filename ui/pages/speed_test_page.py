@@ -47,6 +47,7 @@ from ui.styles import (
     BG_HOVER,
     BORDER,
     CARD_HDR_BORDER,
+    CARD_RADIUS,
     GREEN,
     PROGRESS_TRACK,
     RED,
@@ -286,7 +287,7 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame.setObjectName("card")
     frame.setStyleSheet(
         f"QFrame#card {{"
-        f"  background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
+        f"  background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
         f"}}"
     )
     outer = QVBoxLayout(frame)

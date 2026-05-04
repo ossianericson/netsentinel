@@ -213,6 +213,15 @@ CREATE TABLE IF NOT EXISTS alert_fired (
 );
 CREATE INDEX IF NOT EXISTS idx_af_ts    ON alert_fired(ts);
 CREATE INDEX IF NOT EXISTS idx_af_acked ON alert_fired(acked_ts);
+
+-- Last network grade result — only one row ever kept (schema v8)
+CREATE TABLE IF NOT EXISTS grade_result (
+    id      INTEGER PRIMARY KEY,
+    ts      INTEGER NOT NULL,
+    grade   TEXT    NOT NULL,
+    score   REAL    NOT NULL,
+    verdict TEXT    NOT NULL DEFAULT ''
+);
 """
 
 
@@ -1304,3 +1313,26 @@ class MetricStore:
         self._execute_write(
             "DELETE FROM config_snapshot WHERE id = ?", (snapshot_id,)
         )
+
+    # ── Grade result ──────────────────────────────────────────────────────────
+
+    def record_grade(self, grade: str, score: float, verdict: str) -> None:
+        """Persist the latest network grade, replacing any previous result."""
+        import time as _time
+        self._execute_write("DELETE FROM grade_result", ())
+        self._execute_write(
+            "INSERT INTO grade_result(ts, grade, score, verdict) VALUES(?, ?, ?, ?)",
+            (int(_time.time()), grade, score, verdict),
+        )
+
+    def query_last_grade(self) -> Optional[dict]:
+        """Return {grade, score, verdict, ts} or None if no grade has been run."""
+        rows = self._execute_read(
+            "SELECT ts, grade, score, verdict FROM grade_result ORDER BY ts DESC LIMIT 1",
+            (),
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        return {"grade": r["grade"], "score": r["score"],
+                "verdict": r["verdict"], "ts": r["ts"]}

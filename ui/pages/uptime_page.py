@@ -14,15 +14,17 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QFormLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.expanding_table import ExpandingTable
 
 from modules.metric_store import MetricStore
 from ui.styles import (
@@ -32,8 +34,10 @@ from ui.styles import (
     BG_CARD,
     BG_HOVER,
     BORDER,
+    CARD_RADIUS,
     GREEN,
     RED,
+    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TH_BG,
@@ -66,6 +70,7 @@ class UptimePage(QWidget):
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store = store
+        self._rows: list = []
         self._setup_ui()
         self._refresh()
         timer = QTimer(self)
@@ -107,7 +112,7 @@ class UptimePage(QWidget):
         # Card
         card = QFrame()
         card.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: 0px; }}"
+            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
         )
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(0, 0, 0, 0)
@@ -132,8 +137,12 @@ class UptimePage(QWidget):
         tb_layout.addWidget(hint)
         card_layout.addWidget(title_bar)
 
-        # Table — IP / Hostname / 24h / 7d / 30d / Trend
-        self._table = QTableWidget(0, 6)
+        # Table — IP / Hostname / 24h / 7d / 30d / Status
+        self._table = ExpandingTable(
+            0, 6,
+            detail_builder=lambda r: self._build_uptime_detail(r),
+            detail_height=100,
+        )
         self._table.setHorizontalHeaderLabels(
             ["IP ADDRESS", "HOSTNAME", "UPTIME 24H", "UPTIME 7D", "UPTIME 30D", "STATUS"]
         )
@@ -145,8 +154,8 @@ class UptimePage(QWidget):
         hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self._table.verticalHeader().setVisible(False)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setEditTriggers(ExpandingTable.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(ExpandingTable.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.setSortingEnabled(True)
         self._table.setStyleSheet(
@@ -219,7 +228,9 @@ class UptimePage(QWidget):
     # ── Table population ──────────────────────────────────────────────────────
 
     def _populate(self, rows: list) -> None:
+        self._rows = list(rows)
         self._table.setSortingEnabled(False)
+        self._table.clear_detail()
         self._table.setRowCount(0)
 
         if not rows:
@@ -290,6 +301,74 @@ class UptimePage(QWidget):
                       f"{worst_pct}% ({worst_ip})")
 
         self._table.setSortingEnabled(True)
+
+    # ── Detail panel ──────────────────────────────────────────────────────────
+
+    def _build_uptime_detail(self, logical_row: int) -> QWidget:
+        if logical_row >= len(self._rows):
+            return QWidget()
+        r = self._rows[logical_row]
+
+        pct_24  = r.get("24.0",  100.0)
+        pct_7d  = r.get("168.0", 100.0)
+        pct_30d = r.get("720.0", 100.0)
+        worst   = min(pct_24, pct_7d, pct_30d)
+
+        if worst < _CRIT:
+            status_text  = "DEGRADED"
+            status_color = RED
+        elif worst < _WARN:
+            status_text  = "WARNING"
+            status_color = AMBER
+        else:
+            status_text  = "HEALTHY"
+            status_color = GREEN
+
+        outer = QWidget()
+        outer.setStyleSheet(
+            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f" border-left:3px solid {status_color}; }}"
+        )
+        lay = QHBoxLayout(outer)
+        lay.setContentsMargins(16, 10, 16, 10)
+        lay.setSpacing(32)
+
+        def _hdr(t):
+            l = QLabel(t)
+            l.setStyleSheet(f"font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
+            return l
+
+        def _val(t, c=TEXT_PRIMARY):
+            l = QLabel(str(t))
+            l.setStyleSheet(f"font-size:11px; color:{c}; background:transparent; border:none;")
+            return l
+
+        col1 = QWidget()
+        col1.setStyleSheet("QWidget { background:transparent; border:none; }")
+        g1 = QFormLayout(col1)
+        g1.setContentsMargins(0, 0, 0, 0)
+        g1.setSpacing(3)
+        g1.setHorizontalSpacing(12)
+        g1.addRow(_hdr("IP Address"), _val(r["ip"]))
+        g1.addRow(_hdr("Hostname"),   _val(r.get("hostname") or "—"))
+        g1.addRow(_hdr("Status"),     _val(status_text, status_color))
+
+        col2 = QWidget()
+        col2.setStyleSheet("QWidget { background:transparent; border:none; }")
+        g2 = QFormLayout(col2)
+        g2.setContentsMargins(0, 0, 0, 0)
+        g2.setSpacing(3)
+        g2.setHorizontalSpacing(12)
+        g2.addRow(_hdr("Uptime 24h"),  _val(f"{pct_24:.1f}%",  _uptime_color(pct_24)))
+        g2.addRow(_hdr("Uptime 7d"),   _val(f"{pct_7d:.1f}%",  _uptime_color(pct_7d)))
+        g2.addRow(_hdr("Uptime 30d"),  _val(f"{pct_30d:.1f}%", _uptime_color(pct_30d)))
+
+        lay.addWidget(col1)
+        lay.addWidget(col2)
+        lay.addStretch()
+        return outer
+
+    # ── Table helpers ─────────────────────────────────────────────────────────
 
     def _pct_cell(self, pct: float) -> QTableWidgetItem:
         item = QTableWidgetItem(f"{pct:.1f}%")

@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
     GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 from modules.automation_hooks import (
@@ -41,7 +41,7 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setObjectName("card")
     frame.setStyleSheet(
-        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; }}"
+        f"QFrame#card {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
     )
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(0, 0, 0, 0)

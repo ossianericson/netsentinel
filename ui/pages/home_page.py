@@ -31,6 +31,7 @@ from ui.styles import (
     BG_CARD,
     BG_DARK,
     BORDER,
+    CARD_RADIUS,
     GREEN,
     PRO_WARN_BG,
     RED,
@@ -47,6 +48,8 @@ class HomePage(QWidget):
 
     #: Emitted when a mini-card is clicked; carries the target page label string.
     navigate_to = pyqtSignal(str)
+    #: Emitted when the user clicks "Start Monitoring" on the stability card.
+    start_monitoring_requested = pyqtSignal()
 
     # ── _MiniCard ─────────────────────────────────────────────────────────────
 
@@ -71,7 +74,7 @@ class HomePage(QWidget):
             self.setCursor(Qt.CursorShape.PointingHandCursor)
             self.setStyleSheet(
                 f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-                f" border-radius:0px; }}"
+                f" border-radius:{CARD_RADIUS}; }}"
             )
             lay = QVBoxLayout(self)
             lay.setContentsMargins(12, 8, 12, 8)
@@ -241,17 +244,41 @@ class HomePage(QWidget):
             f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
         )
         _banner_text.setWordWrap(True)
-        self._btn_diagnose = QPushButton("✦  Guided Troubleshooter")
+        self._btn_diagnose = QPushButton("◆  Guided Troubleshooter")
         banner_lay.addWidget(_banner_icon)
         banner_lay.addWidget(_banner_text, 1)
         banner_lay.addWidget(self._btn_diagnose)
         lay.addWidget(banner)
 
+        # ── Since you were last here (hidden until data loaded) ───────────────
+        self._last_visit_card = QFrame()
+        self._last_visit_card.setStyleSheet(
+            f"QFrame {{ background:{PRO_WARN_BG}; border:1px solid {UPDATE_BAR_BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._last_visit_card.setVisible(False)
+        lv_lay = QHBoxLayout(self._last_visit_card)
+        lv_lay.setContentsMargins(12, 8, 12, 8)
+        lv_lay.setSpacing(10)
+        _lv_icon = QLabel("◷")
+        _lv_icon.setFixedWidth(18)
+        _lv_icon.setStyleSheet(
+            f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+        )
+        self._lv_text = QLabel("")
+        self._lv_text.setWordWrap(True)
+        self._lv_text.setStyleSheet(
+            f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+        )
+        lv_lay.addWidget(_lv_icon)
+        lv_lay.addWidget(self._lv_text, 1)
+        lay.addWidget(self._last_visit_card)
+
         # ── Hero card ─────────────────────────────────────────────────────────
         hero = QFrame()
         hero.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:0px; }}"
+            f" border-radius:{CARD_RADIUS}; }}"
         )
         hero_lay = QHBoxLayout(hero)
         hero_lay.setContentsMargins(16, 16, 16, 16)
@@ -327,6 +354,61 @@ class HomePage(QWidget):
             lambda: self.navigate_to.emit("Devices on Network"))
         lay.addLayout(card_row)
 
+        # ── Stability monitoring card ─────────────────────────────────────────
+        _sec_mon = QLabel("STABILITY MONITORING")
+        _sec_mon.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; padding-top:4px; letter-spacing:1px;"
+        )
+        lay.addWidget(_sec_mon)
+
+        mon_card = QFrame()
+        mon_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        mon_lay = QHBoxLayout(mon_card)
+        mon_lay.setContentsMargins(14, 10, 14, 10)
+        mon_lay.setSpacing(10)
+
+        self._mon_dot = QLabel("●")
+        self._mon_dot.setFixedWidth(12)
+        self._mon_dot.setStyleSheet(
+            f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        self._mon_status_lbl = QLabel(
+            "Not running — start to log connection stability over time."
+        )
+        self._mon_status_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        self._mon_status_lbl.setWordWrap(True)
+
+        self._btn_mon_start = QPushButton("Start Monitoring")
+        self._btn_mon_start.setFixedHeight(28)
+        self._btn_mon_start.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
+            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
+            f"QPushButton:hover {{ background:#1a6fc4; }}"
+        )
+        self._btn_mon_start.clicked.connect(self.start_monitoring_requested)
+
+        self._btn_mon_view = QPushButton("View Log →")
+        self._btn_mon_view.setFlat(True)
+        self._btn_mon_view.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_mon_view.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px;"
+            f" background:transparent; border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:#005A9E; }}"
+        )
+        self._btn_mon_view.clicked.connect(lambda: self.navigate_to.emit("Stability Log"))
+
+        mon_lay.addWidget(self._mon_dot)
+        mon_lay.addWidget(self._mon_status_lbl, 1)
+        mon_lay.addWidget(self._btn_mon_start)
+        mon_lay.addWidget(self._btn_mon_view)
+        lay.addWidget(mon_card)
+
         # ── Post-scan results strip (hidden until first scan completes) ────────
         self._results_strip = QFrame()
         self._results_strip.setStyleSheet(
@@ -387,6 +469,26 @@ class HomePage(QWidget):
         _strip_lay.addWidget(_sec_row)
         lay.addWidget(self._results_strip)
 
+        # ── Suggested next steps (hidden until computed) ──────────────────────
+        self._suggestions_sec = QLabel("WHAT TO DO NEXT")
+        self._suggestions_sec.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; padding-top:4px; letter-spacing:1px;"
+        )
+        self._suggestions_sec.setVisible(False)
+        lay.addWidget(self._suggestions_sec)
+
+        self._suggestions_card = QFrame()
+        self._suggestions_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._suggestions_card.setVisible(False)
+        self._suggestions_inner = QVBoxLayout(self._suggestions_card)
+        self._suggestions_inner.setContentsMargins(12, 8, 12, 8)
+        self._suggestions_inner.setSpacing(4)
+        lay.addWidget(self._suggestions_card)
+
         # ── Recent alerts section label ───────────────────────────────────────
         _sec2 = QLabel("RECENT ALERTS")
         _sec2.setStyleSheet(
@@ -399,7 +501,7 @@ class HomePage(QWidget):
         alert_card = QFrame()
         alert_card.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:0px; }}"
+            f" border-radius:{CARD_RADIUS}; }}"
         )
         self._alert_inner = QVBoxLayout(alert_card)
         self._alert_inner.setContentsMargins(12, 8, 12, 8)
@@ -618,6 +720,120 @@ class HomePage(QWidget):
         self._alert_count += 1
 
     @pyqtSlot(str, float)
+    def set_monitoring_status(self, running: bool, elapsed_str: str = "",
+                              outage_count: int = 0) -> None:
+        """Update the stability monitoring card on the home page."""
+        if running:
+            dot_color = GREEN
+            outage_txt = f" · {outage_count} outage{'s' if outage_count != 1 else ''}" if outage_count else " · no outages"
+            elapsed_txt = f"  {elapsed_str}" if elapsed_str else ""
+            self._mon_status_lbl.setText(
+                f"Running{elapsed_txt}{outage_txt} — leave the app open to keep logging."
+            )
+            self._mon_status_lbl.setStyleSheet(
+                f"font-size:11px; color:{GREEN}; background:transparent; border:none;"
+            )
+            self._mon_dot.setStyleSheet(
+                f"font-size:9px; color:{GREEN}; background:transparent; border:none;"
+            )
+            self._btn_mon_start.setText("Stop")
+            self._btn_mon_start.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+                f" border-radius:4px; font-size:11px; padding:0 12px; }}"
+                f"QPushButton:hover {{ background:{BORDER}; }}"
+            )
+        else:
+            self._mon_status_lbl.setText(
+                "Not running — start to log connection stability over time."
+            )
+            self._mon_status_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            self._mon_dot.setStyleSheet(
+                f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            self._btn_mon_start.setText("Start Monitoring")
+            self._btn_mon_start.setStyleSheet(
+                f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
+                f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
+                f"QPushButton:hover {{ background:#1a6fc4; }}"
+            )
+
+    def set_last_visit_summary(
+        self,
+        joined_count: int,
+        outage_count: int,
+        last_visit_str: str,
+    ) -> None:
+        """Show or hide the 'Since you were last here' banner."""
+        parts = []
+        if joined_count > 0:
+            s = "s" if joined_count != 1 else ""
+            parts.append(f"{joined_count} new device{s} joined")
+        if outage_count > 0:
+            s = "s" if outage_count != 1 else ""
+            parts.append(f"{outage_count} outage{s} recorded")
+        if not parts:
+            self._last_visit_card.setVisible(False)
+            return
+        self._lv_text.setText(f"Since {last_visit_str}: {'  ·  '.join(parts)}.")
+        self._last_visit_card.setVisible(True)
+
+    def set_suggestions(self, suggestions: list) -> None:
+        """Populate and show the 'What to do next' strip."""
+        while self._suggestions_inner.count():
+            item = self._suggestions_inner.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+
+        if not suggestions:
+            self._suggestions_sec.setVisible(False)
+            self._suggestions_card.setVisible(False)
+            return
+
+        for sug in suggestions[:4]:
+            text     = sug.get("text", "")
+            action   = sug.get("action_label", "Fix →")
+            target   = sug.get("target")       # None = emit start_monitoring_requested
+            priority = sug.get("priority", "medium")
+            colour   = RED if priority == "high" else (AMBER if priority == "medium" else ACCENT)
+
+            row = QWidget()
+            row.setStyleSheet("background:transparent;")
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 2, 0, 2)
+            rl.setSpacing(8)
+
+            dot = QLabel("●")
+            dot.setFixedWidth(12)
+            dot.setStyleSheet(
+                f"font-size:8px; color:{colour}; background:transparent; border:none;"
+            )
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            )
+            btn = QPushButton(action)
+            btn.setFlat(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:11px;"
+                f" background:transparent; border:none; padding:0; }}"
+                f"QPushButton:hover {{ color:#005A9E; }}"
+            )
+            if target is not None:
+                btn.clicked.connect(lambda _c=False, t=target: self.navigate_to.emit(t))
+            else:
+                btn.clicked.connect(self.start_monitoring_requested)
+
+            rl.addWidget(dot)
+            rl.addWidget(lbl, 1)
+            rl.addWidget(btn)
+            self._suggestions_inner.addWidget(row)
+
+        self._suggestions_sec.setVisible(True)
+        self._suggestions_card.setVisible(True)
+
     def on_grade(self, grade: str, score: float) -> None:  # noqa: ARG002
         """Update the hero grade circle text and colour."""
         if grade in ("A", "B"):

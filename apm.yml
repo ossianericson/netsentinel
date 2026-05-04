@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.6.5
+version: 1.6.10
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -527,6 +527,62 @@ rules:
       This rule applies to: ui/dashboard.py _nav_add_page() calls, section header
       strings, and any other sidebar label that includes a leading icon character.
       It does NOT apply to README.md, help text, or dialogs.
+
+  # ── Navigation Wiring ─────────────────────────────────────────────────────
+  - id: RULE-NAV1
+    title: "Every registered page must be reachable from at least one mode nav builder"
+    severity: blocking
+    description: >
+      Pages are registered in _build_tabs() via _nav_add_page() — this adds them to
+      the QStackedWidget and the legacy full-nav (which is wiped on every startup when
+      _rebuild_nav_for_mode() runs).  For a page to actually be reachable by users it
+      must also appear via _nav_ref() in at least one of:
+        _build_home_nav()      — 5-item minimal nav (new users)
+        _build_standard_nav()  — full home/intermediate nav
+        _build_pro_nav()       — all capabilities
+
+      The automated test tests/test_nav_completeness.py enforces this.  It fails at CI
+      time if a page is registered but not wired into any mode builder, catching the
+      "invisible feature" class of bug before it reaches users.
+
+      What to do when adding a new page:
+        1. Add _nav_add_page("icon", "Label", self._new_page) in _build_tabs().
+        2. Add _nav_ref("icon", "Label", self._new_page) in _build_standard_nav()
+           and/or _build_pro_nav() under the appropriate section header.
+           (Home mode is deliberately minimal — only add to _build_home_nav() for
+           truly essential everyday features.)
+        3. Run: python -m pytest tests/test_nav_completeness.py -v
+           All 3 nav tests must pass before merging.
+
+      If a page is intentionally absent from all mode navs (e.g. accessed only via
+      a dedicated button elsewhere), add its widget attribute to the
+      _INTENTIONALLY_UNLISTED set in test_nav_completeness.py with a comment.
+
+      Section placement guide:
+        Standard nav sections:
+          Quick Access  — daily-use core tools (5-7 items max)
+          Discover      — network inventory and topology
+          Monitor       — live data and history streams
+          Reports & Export — grading, ISP reports, network docs
+          Education     — learning tools (Protocol Visualizer, Lab Mode)
+        Pro nav adds:
+          Standard      — full mirror of Standard nav items
+          Network Analysis — deep packet / protocol analysis tools
+          Automation    — scheduled scans, hooks, MQTT
+          ⚠ Security Audit — RED-labelled; elevated-privilege scan tools
+          Education     — same as Standard
+
+  - id: RULE-NAV2
+    title: "Home mode nav must stay minimal — 10 items maximum"
+    severity: required
+    description: >
+      _build_home_nav() is the first-run experience for non-technical users.
+      It must contain at most 10 _nav_ref() entries (the test enforces this).
+      Before adding anything to home mode, ask: would a user who has never
+      touched a network tool need this on day one?  If not, put it in Standard.
+
+      The test tests/test_nav_completeness.py::test_home_nav_stays_minimal
+      fails if the count exceeds 10 — this prevents scope creep in home mode.
 
   # ── Dashboard Data Feed Wiring ────────────────────────────────────────────
   - id: RULE-DW1

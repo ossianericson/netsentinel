@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, BG_CARD, BG_DARK, BORDER, GREEN, AMBER, RED,
+    ACCENT, BG_CARD, BG_DARK, BORDER, CARD_RADIUS, GREEN, AMBER, RED,
     CHART_GRID, CHART_PLOT_BG, CHART_PURPLE,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
 )
@@ -103,7 +103,7 @@ class _ChartCard(QFrame):
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:0px; }}"
+            f" border-radius:{CARD_RADIUS}; }}"
         )
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)

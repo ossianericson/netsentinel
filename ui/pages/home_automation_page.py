@@ -463,7 +463,7 @@ class HomeAutomationPage(QWidget):
         self._search_box.setStyleSheet(inp_style)
         self._search_box.textChanged.connect(self._apply_filters)
 
-        btn_scan = QPushButton("🔍  Scan Network")
+        btn_scan = QPushButton("⊕  Scan Network")
         btn_scan.setObjectName("btnScan")
         btn_scan.setFixedHeight(30)
         btn_scan.setToolTip("Scan all known devices for HA protocol signatures")
@@ -623,7 +623,7 @@ class HomeAutomationPage(QWidget):
         self._btn_pin.setFixedHeight(26)
         self._btn_pin.clicked.connect(self._pin_selected)
 
-        self._btn_lookup = QPushButton("🔍  Look up MAC")
+        self._btn_lookup = QPushButton("⊕  Look up MAC")
         self._btn_lookup.setObjectName("btnNetRefresh")
         self._btn_lookup.setFixedHeight(26)
         self._btn_lookup.setToolTip("Look up vendor for this MAC address online")

@@ -1,4 +1,4 @@
-﻿"""
+"""
 REST API — read-only local HTTP API for NetSentinel (Tier 2 item 5).
 
 Exposes network scan data to external tools (Grafana, Home Assistant,
@@ -15,10 +15,12 @@ Security design (mandatory constraints from architecture.instructions.md):
 
 Endpoints:
   GET /health                    — server heartbeat + uptime
+  GET /dashboard                 — self-contained browser dashboard (no auth; key embedded)
   GET /devices                   — current known device inventory
   GET /alerts                    — recent fired alerts (last 24h)
   GET /uptime/<ip>               — uptime stats for a specific host
   GET /speed-history             — speed test history (last 7 days)
+  GET /grade                     — last network grade result
 
 Flask is an optional dependency. If not installed the module still imports
 cleanly — the worker will surface the missing dependency gracefully.
@@ -107,8 +109,8 @@ def create_app(store: MetricStore) -> "Flask":
 
     @app.before_request
     def _auth():
-        # Health endpoint is public (useful for monitoring tools without auth)
-        if request.path == "/health":
+        # Health and dashboard HTML are public — key is embedded in the served page
+        if request.path in ("/health", "/dashboard"):
             return None
         expected = get_stored_api_key()
         if not expected:
@@ -142,7 +144,7 @@ def create_app(store: MetricStore) -> "Flask":
         return jsonify({
             "status":     "ok",
             "uptime_s":   round(time.time() - _start_ts, 1),
-            "version":    "1.6.5",
+            "version":    "1.6.10",
         })
 
     @app.route("/devices")
@@ -200,6 +202,20 @@ def create_app(store: MetricStore) -> "Flask":
             }
             for p in points
         ])
+
+    @app.route("/grade")
+    def grade():
+        result = store.query_last_grade()
+        if result is None:
+            return jsonify({"grade": None, "score": None, "verdict": None, "ts": None})
+        return jsonify(result)
+
+    @app.route("/dashboard")
+    def dashboard():
+        from modules.web_dashboard import build_html
+        key = get_stored_api_key()
+        html = build_html(api_key=key)
+        return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
     return app
 

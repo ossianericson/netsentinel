@@ -15,15 +15,17 @@ from typing import List, Optional
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QFormLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.expanding_table import ExpandingTable
 
 from modules.metric_store import MetricStore, ServiceCheckPoint
 from ui.styles import (
@@ -33,8 +35,10 @@ from ui.styles import (
     BG_CARD,
     BG_HOVER,
     BORDER,
+    CARD_RADIUS,
     GREEN,
     RED,
+    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TH_BG,
@@ -56,6 +60,7 @@ class ServicePage(QWidget):
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store = store
+        self._rows: list[ServiceCheckPoint] = []
         self._setup_ui()
         self._refresh()
         timer = QTimer(self)
@@ -96,7 +101,7 @@ class ServicePage(QWidget):
         # Card
         card = QFrame()
         card.setStyleSheet(
-            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: 0px; }}"
+            f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
         )
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(0, 0, 0, 0)
@@ -119,7 +124,11 @@ class ServicePage(QWidget):
         card_layout.addWidget(title_bar)
 
         # Table
-        self._table = QTableWidget(0, 6)
+        self._table = ExpandingTable(
+            0, 6,
+            detail_builder=lambda r: self._build_service_detail(r),
+            detail_height=110,
+        )
         self._table.setHorizontalHeaderLabels(
             ["SERVICE", "HOST", "PORT", "STATUS", "RTT (ms)", "LAST CHECK"]
         )
@@ -131,8 +140,8 @@ class ServicePage(QWidget):
         hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self._table.verticalHeader().setVisible(False)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setEditTriggers(ExpandingTable.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(ExpandingTable.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.setSortingEnabled(True)
         self._table.setStyleSheet(
@@ -205,7 +214,9 @@ class ServicePage(QWidget):
     # ── Table population ──────────────────────────────────────────────────────
 
     def _populate(self, rows: List[ServiceCheckPoint]) -> None:
+        self._rows = list(rows)
         self._table.setSortingEnabled(False)
+        self._table.clear_detail()
         self._table.setRowCount(0)
 
         if not rows:
@@ -282,3 +293,78 @@ class ServicePage(QWidget):
         item = QTableWidgetItem(text)
         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         return item
+
+    # ── Detail panel ──────────────────────────────────────────────────────────
+
+    def _build_service_detail(self, logical_row: int) -> QWidget:
+        if logical_row >= len(self._rows):
+            return QWidget()
+        r = self._rows[logical_row]
+        status_color = GREEN if r.up else RED
+
+        outer = QWidget()
+        outer.setStyleSheet(
+            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f" border-left:3px solid {status_color}; }}"
+        )
+        lay = QHBoxLayout(outer)
+        lay.setContentsMargins(16, 10, 16, 10)
+        lay.setSpacing(32)
+
+        def _hdr(t):
+            l = QLabel(t)
+            l.setStyleSheet(f"font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
+            return l
+
+        def _val(t, c=TEXT_PRIMARY):
+            l = QLabel(str(t))
+            l.setStyleSheet(f"font-size:11px; color:{c}; background:transparent; border:none;")
+            return l
+
+        col1 = QWidget()
+        col1.setStyleSheet("QWidget { background:transparent; border:none; }")
+        g1 = QFormLayout(col1)
+        g1.setContentsMargins(0, 0, 0, 0)
+        g1.setSpacing(3)
+        g1.setHorizontalSpacing(12)
+        g1.addRow(_hdr("Service"),    _val(r.label or f"{r.host}:{r.port}"))
+        g1.addRow(_hdr("Host"),       _val(r.host))
+        g1.addRow(_hdr("Port"),       _val(str(r.port)))
+
+        rtt_str = f"{r.rtt_ms:.1f} ms" if r.rtt_ms is not None else "—"
+        col2 = QWidget()
+        col2.setStyleSheet("QWidget { background:transparent; border:none; }")
+        g2 = QFormLayout(col2)
+        g2.setContentsMargins(0, 0, 0, 0)
+        g2.setSpacing(3)
+        g2.setHorizontalSpacing(12)
+        g2.addRow(_hdr("Status"),     _val("UP" if r.up else "DOWN", status_color))
+        g2.addRow(_hdr("RTT"),        _val(rtt_str))
+        g2.addRow(_hdr("Last Check"), _val(_ts_label(r.ts)))
+        if not r.up and r.error:
+            g2.addRow(_hdr("Error"), _val(r.error, RED))
+
+        # Recent history from store (last 5 checks)
+        if self._store:
+            history = self._store.query_service_history(r.host, r.port, hours=1.0)[-5:]
+            if history:
+                dots = "  ".join(
+                    ("●" if p.up else "○") for p in reversed(history)
+                )
+                col3 = QWidget()
+                col3.setStyleSheet("QWidget { background:transparent; border:none; }")
+                g3 = QFormLayout(col3)
+                g3.setContentsMargins(0, 0, 0, 0)
+                g3.setSpacing(3)
+                g3.setHorizontalSpacing(12)
+                recent_lbl = _val(dots)
+                recent_lbl.setStyleSheet(
+                    f"font-size:14px; color:{GREEN}; background:transparent; border:none; letter-spacing:2px;"
+                )
+                g3.addRow(_hdr("Last 5 checks"), recent_lbl)
+                lay.addWidget(col3)
+
+        lay.addWidget(col1)
+        lay.addWidget(col2)
+        lay.addStretch()
+        return outer

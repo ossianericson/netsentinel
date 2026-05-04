@@ -12,17 +12,19 @@ Items in this track lower the barrier for non-technical users. Each item should 
 
 ---
 
-### 1. Local browser dashboard (web UI)
+### ~~1. Local browser dashboard (web UI)~~ ✅ done in v1.6.8
 
-**Description:** A read-only HTML dashboard served by the existing REST API worker, accessible at `http://localhost:8765` from any browser on the LAN. Shows: current device list, network grade, recent alerts, and speed test history. No login required on localhost; external access still requires the API key.
+**Description:** A read-only HTML dashboard served by the existing REST API worker, accessible at `http://localhost:8765/dashboard` from any browser on the LAN. Shows: current device list, network grade, recent alerts, and speed test history. No login required on localhost; external access still requires the API key.
 
 **Why it matters:** Mobile access and household sharing without requiring anyone to install the app. Also makes NetSentinel usable on headless servers where the PyQt6 GUI cannot run. The REST API already exists — this adds the front end.
 
-**Effort:** M
+**Effort:** S (was M — REST API was fully built before this was started)
 
-**Files likely affected:**
-- `workers/rest_api_worker.py` — add a static file route and serve the dashboard HTML
-- `modules/web_dashboard.py` — new module, generates the HTML + embedded JS
+**Files affected:**
+- `modules/metric_store.py` — `grade_result` table + `record_grade()` / `query_last_grade()`
+- `modules/rest_api.py` — `/grade` endpoint; `/dashboard` route (exempt from auth, key embedded in served HTML)
+- `modules/web_dashboard.py` — new module, `build_html(api_key)` returns self-contained dark-theme HTML + JS
+- `ui/dashboard.py` — `_run_benchmark()` now calls `store.record_grade()` so grade persists across restarts
 
 ---
 
@@ -41,13 +43,16 @@ Items in this track lower the barrier for non-technical users. Each item should 
 
 ---
 
+
+---
+
 ## Priority 2 — Educational Standard
 
 Items in this track make NetSentinel usable in structured learning contexts. Each item should produce output that maps directly to a textbook concept or exam objective and can be submitted as evidence of work.
 
 ---
 
-### 1. Interactive protocol visualizer
+### ~~1. Interactive protocol visualizer~~ ✅ done in v1.6.9
 
 **Description:** Animated step-by-step diagrams of five protocols — ARP resolution, DNS lookup, TCP handshake, DHCP lease, and STP election — using real data from the most recent scan to populate device names, IP addresses, and timing. Each step shows which frame is sent, which device handles it, and what state changes.
 
@@ -106,22 +111,106 @@ Items in this track make NetSentinel usable in structured learning contexts. Eac
 
 ## Priority 3 — Polish and Retention
 
-Brief list. These are low-effort improvements that reduce visual rough edges or friction for existing users.
+Items ordered by visual impact. Each is self-contained and can be implemented independently.
 
-- Card border radius 8 px — currently 0 px; one QSS line in `ui/styles.py`
-- Sidebar left accent bar on the selected item — 3 px coloured strip on the left edge of the active row
-- "Abyss" WCAG AA high-contrast theme — fourth theme alongside Arctic Clean, Midnight Pro, Obsidian Neon
-- Skeleton loading rows while scan workers are running — prevents layout jump when data arrives
-- Collapsible inline row detail in tables that do not yet have it (Devices, Services, Availability History)
-- Breadcrumb strip above the QStackedWidget showing current section → current page
-- Keyboard shortcut reference card in the Help panel (currently only in Settings)
-- Per-page documentation link — small link on each page that opens the relevant section of the wiki
+### Tier 1 — Highest visual impact (do these first)
+
+- ~~**Card border radius 8 px**~~ — ✅ done in v1.6.6
+- ~~**Sidebar left accent bar on selected item**~~ — ✅ already present (`border-left: 3px solid {ACCENT_LITE}` in global QSS)
+- ~~**Remove emoji from action buttons**~~ — ✅ done in v1.6.6 (8 buttons replaced with geometric Unicode)
+
+### Tier 2 — Structural polish
+
+- ~~**Font size tokens in `ui/styles.py`**~~ — ✅ done in v1.6.6 (`FONT_XS` through `FONT_XL` added; new pages must use them)
+- ~~**Focus ring visible in dark themes**~~ — ✅ done in v1.6.6 (`QPushButton/QCheckBox/QRadioButton:focus` outline in `_build_qss()`)
+
+- **Skeleton loading rows while scan workers are running** — prevents layout jump when data arrives; use a `QStandardItemModel` with placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results.
+
+### Tier 3 — Interaction and discoverability
+
+- ~~**Page transitions — 120 ms opacity fade on QStackedWidget switches**~~ — ✅ done in v1.6.7 (`QGraphicsOpacityEffect` + `QPropertyAnimation` 120 ms OutCubic in `Dashboard._nav_set_page()`; effect removed on `finished` to avoid child widget painting interference)
+
+- ~~**Table sort indicators**~~ — ✅ done in v1.6.7 (`QHeaderView::sort-indicator` sizing rule added to `_build_qss()` in `ui/styles.py`; Qt Fusion native arrow rendered on all sortable tables)
+
+- ~~**Window title follows navigation**~~ — ✅ done in v1.6.6 (`_nav_set_page()` calls `setWindowTitle(f"NetSentinel — {label}")`)
+
+- ~~**Collapsible inline row detail**~~ — ✅ done in v1.6.7 (`ExpandingTable` extended to `inventory_page.py` (Devices), `service_page.py` (Services), `uptime_page.py` (Availability History); click row to expand detail panel with colored border-left accent and QFormLayout columns)
+
+### Tier 4 — Nice-to-have
+
+- **"Abyss" WCAG AA high-contrast theme** — fourth theme; true black background, high-contrast text, no low-opacity elements. Required for users with visual impairments.
+- **Breadcrumb strip** — above the `QStackedWidget`, shows `Section › Page`. One `QLabel` updated in `_switch_page()`.
+- **Keyboard shortcut reference card in Help panel** — currently the shortcut list only appears in Settings.
+- **Per-page documentation link** — small `?` link on each page header opening the relevant wiki section.
+- **Passive 802.11 monitor mode capture** — optional advanced capture path that puts a supported NIC into monitor mode (via Npcap on Windows) and reads raw 802.11 management/probe/beacon frames, bypassing normal Ethernet capture. Primarily useful on networks with AP client isolation. Silently falls back to standard capture if unsupported. Pro-tier feature — too advanced and too NIC-dependent to be a home-user default.
 
 ---
 
 ## Completed
 
 Most recent first.
+
+### v1.6.10 — May 2026
+
+**Home-user retention — three engagement improvements**
+
+- **"Since you were last here" banner** — appears on home page load when the app has been closed for 30+ minutes; counts new devices joined and outages recorded since last visit (via `query_device_events()`); stores `app/last_visit_ts` in QSettings on each launch; hidden on first-ever launch and on quick re-launches
+- **Contextual "What to do next" suggestions strip** — appears after every scan completion on the home page; up to four colour-coded action cards (red = high priority, amber = medium, blue = low); checks: high-risk device count, logger not running, no speed test in 7 days, open CVEs, poor network grade (C/D/F); each card has a navigation button; all hidden when no suggestions exist
+- **Weekly digest tray notification** — fires on startup if 7+ days since last digest (`app/last_digest_ts`); summarises last 7 days: download speed, new devices joined, network grade; gracefully skipped if tray is unavailable or store has no data
+- `ui/pages/home_page.py` — `set_last_visit_summary()`, `set_suggestions()` methods; `_last_visit_card` panel and `_suggestions_card` strip added to layout
+- `ui/dashboard.py` — `_compute_suggestions()`, `_compute_last_visit_summary()`, `_maybe_send_weekly_digest()` methods; `_compute_suggestions()` called at end of `_on_m1_result`; last-visit and digest helpers scheduled via `QTimer.singleShot` in `_restore_settings()`
+
+---
+
+### v1.6.9 — May 2026
+
+**Closes P2-1 (Interactive protocol visualizer)**
+
+- `ui/pages/protocol_viz_page.py` — new page in Education nav; five protocol picker buttons; auto-plays on selection; play/pause, reset, step-forward, step-back controls; step description panel with plain-English explanation per step
+- `ui/widgets/protocol_canvas.py` — `ProtocolCanvas(QWidget)` custom QPainter animation; 30 fps tick via `QTimer`; ease-out-cubic dot travel; node cards coloured by role; dashed arrows for broadcasts; ghost trail of completed steps; arrowhead drawn on current step
+- `modules/protocol_animator.py` — `AnimNode`, `AnimStep`, `ProtocolSceneData` dataclasses; five builders: `build_arp_scene`, `build_dns_scene`, `build_tcp_scene`, `build_dhcp_scene`, `build_stp_scene`; ARP and DNS use real gateway/resolver addresses from last scan; TCP and DHCP are conceptual illustrations labelled as such; STP uses live BPDU data when available
+- `ui/dashboard.py` — `ProtocolVizPage` instantiated and added to Education section; `set_context()` called from `_update_net_info_ui` and `_on_diag_result` so the page refreshes on every scan
+- `NetSentinel.spec` — three new hidden imports added
+
+---
+
+### v1.6.8 — May 2026
+
+**Closes P1-1 (Local browser dashboard)**
+
+- `GET /dashboard` — self-contained dark-theme HTML page served directly from the Flask REST API; no auth prompt (API key baked into the page JS at render time); auto-refreshes every 30 s with a live countdown; manual Refresh button; zero CDN dependencies
+- Dashboard panels: Network Grade circle (coloured A–F), device table (name/IP/MAC/vendor/auth badge/last-seen), recent alerts (last 24 h with severity badges)
+- `GET /grade` — new endpoint returning `{grade, score, verdict, ts}` (null fields if no benchmark has run)
+- `modules/web_dashboard.py` — new module; `build_html(api_key)` generates the full page
+- `modules/metric_store.py` — `grade_result` table (schema v8); `record_grade()` / `query_last_grade()`; grade persists across app restarts
+- `ui/dashboard.py` — `_run_benchmark()` calls `store.record_grade()` after each benchmark run
+- `modules/rest_api.py` — `/dashboard` and `/grade` added; docstring endpoint list updated; UTF-8 BOM stripped (was present on file, same issue as `cli.py` in v1.6.7)
+
+---
+
+### v1.6.7 — May 2026
+
+**Priority 3 Tier 3 interaction polish**
+
+- 120 ms opacity fade page transitions — `QGraphicsOpacityEffect` + `QPropertyAnimation` (OutCubic) applied to incoming widget in `Dashboard._nav_set_page()`; running animation aborted cleanly before new switch; effect removed on `finished` signal to avoid Qt painting interference with child widgets
+- Sort indicator QSS — `QHeaderView::sort-indicator` sizing rule added to `_build_qss()` in `ui/styles.py`; native Qt Fusion arrow now visible on all sortable tables without image assets
+- Collapsible inline row detail on three remaining pages — `ExpandingTable` replaces `QTableWidget` in `inventory_page.py` (Devices), `service_page.py` (Services), `uptime_page.py` (Availability History); each detail panel uses `border-left:3px solid {status_color}`, two `QFormLayout` columns, `BG_HOVER` background; `service_page.py` includes last-5-checks ●/○ dot history strip
+- `ui.skeleton`, `ui.empty_state`, `ui.expanding_table`, `ui.command_palette` added to `NetSentinel.spec` `hiddenimports` — fixes macOS/Linux smoke-test failure where `ui.skeleton` was not reachable by PyInstaller static analysis
+- `cli.py` UTF-8 BOM stripped — `SyntaxError: invalid non-printable character U+FEFF` at line 1 resolved
+
+---
+
+### v1.6.6 — May 2026
+
+**Priority 3 Tier 1–2 UI polish**
+
+- `CARD_RADIUS = "8px"` token added to `ui/styles.py`; all content card `QFrame`/`QWidget` styleSheets across 21 page files and `dashboard.py` updated — accent strips and card inner headers intentionally remain 0 px
+- `FONT_XS`/`FONT_SM`/`FONT_MD`/`FONT_LG`/`FONT_XL` typography tokens added to `ui/styles.py`; new pages must use these (RULE-AH3 scope)
+- Focus ring added to `_build_qss()` — `QPushButton/QCheckBox/QRadioButton:focus` gets `outline: 1px solid {ACCENT}` in every theme
+- `QHeaderView::section:hover` background rule added to `_build_qss()`
+- 8 action buttons / nav icon had emoji replaced with geometric Unicode glyphs: `◎ Scan & Grade`, `◎ Grade My Network`, `⊟ Generate ISP Report`, `◆ Guided Troubleshooter`, `⊕ Scan Network`, `⊕ Look up MAC`, `⊕ Load & Analyse Log`, `◎ View Chart`, `◉` Health & History nav group
+- Window title now follows navigation: `_nav_set_page()` calls `self.setWindowTitle(f"NetSentinel — {label}")` on every switch
+- `ui.skeleton`, `ui.empty_state`, `ui.expanding_table`, `ui.command_palette` added to `NetSentinel.spec` `hiddenimports` — fixes macOS/Linux smoke-test failure where `ui.skeleton` was never reached by PyInstaller static analysis
 
 ### v1.6.5 — May 2026
 

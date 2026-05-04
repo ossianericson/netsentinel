@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BORDER,
-    CARD_HDR_BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE,
 )
 
@@ -86,7 +86,7 @@ class IpCalculatorPage(QWidget):
         card.setObjectName("card")
         card.setStyleSheet(
             f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-            f"border-radius:0px;}}"
+            f"border-radius:{CARD_RADIUS};}}"
         )
         cl = QVBoxLayout(card)
         cl.setContentsMargins(0, 0, 0, 0)

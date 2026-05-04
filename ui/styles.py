@@ -194,7 +194,7 @@ _DARK_PRO = {
     "CRITICAL":           "#FF6E6E",
 }
 
-_SLATE = {
+_OBSIDIAN_NEON = {
     # Structural — warm charcoal with violet accent (Catppuccin Mocha-inspired)
     "NAV_BAR":            "#181825",
     "SIDEBAR_BG":         "#1E1E2E",
@@ -288,7 +288,7 @@ _SLATE = {
 THEMES: dict = {
     "Arctic Clean":  _ARCTIC_CLEAN,
     "Midnight Pro":  _DARK_PRO,
-    "Obsidian Neon": _SLATE,
+    "Obsidian Neon": _OBSIDIAN_NEON,
 }
 
 DEFAULT_THEME = "Arctic Clean"
@@ -331,6 +331,15 @@ CHART_DOWN   = "#2196F3"   # bandwidth download line (Material Blue)
 CHART_UP     = "#4CAF50"   # bandwidth upload line (Material Green)
 CHART_AXIS   = "#888888"   # matplotlib axis tick / label text
 CHART_PURPLE = "#8E44AD"   # 6th data-series colour (history charts)
+
+# ── Layout / typography tokens ────────────────────────────────────────────────
+# Theme-independent. Import these instead of hardcoding values in page files.
+CARD_RADIUS = "8px"   # border-radius for all content cards and panels
+FONT_XS = "10px"      # labels, timestamps, section headers
+FONT_SM = "11px"      # body text, table cells, descriptions
+FONT_MD = "12px"      # default widget font (matches QSS base)
+FONT_LG = "14px"      # page titles, hero labels
+FONT_XL = "20px"      # large metric values (KPI tiles)
 
 # ── Computed colour maps (built after palette is applied) ─────────────────────
 
@@ -471,6 +480,16 @@ QHeaderView::section {{
 }}
 QHeaderView::section:last {{
     border-right: none;
+}}
+QHeaderView::section:hover {{
+    background-color: {SIDEBAR_HOVER};
+    cursor: pointer;
+}}
+QHeaderView::sort-indicator {{
+    subcontrol-origin: content;
+    subcontrol-position: right center;
+    width: 14px;
+    height: 14px;
 }}
 QTreeWidget {{
     background-color: {BG_CARD};
@@ -794,6 +813,10 @@ QLineEdit {{
 }}
 QLineEdit:focus {{
     border-color: {ACCENT};
+}}
+QPushButton:focus, QCheckBox:focus, QRadioButton:focus {{
+    outline: 1px solid {ACCENT};
+    outline-offset: 1px;
 }}
 
 /* ── ToolTip ── */

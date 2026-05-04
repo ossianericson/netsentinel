@@ -73,6 +73,7 @@ from ui.styles import (
     BG_HOVER,
     BORDER,
     CARD_HDR_BORDER,
+    CARD_RADIUS,
     CHART_BG,
     CHART_GRID,
     CHART_PLOT_BG,
@@ -111,7 +112,7 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
         f"QWidget#heatmapCard {{"
         f"  background:{BG_CARD};"
         f"  border:1px solid {BORDER};"
-        f"  border-radius:0px;"
+        f"  border-radius:{CARD_RADIUS};"
         f"}}"
     )
     outer = QVBoxLayout(card)
@@ -234,7 +235,7 @@ class WifiHeatmapPage(QWidget):
     def _build_toolbar(self) -> QWidget:
         bar = QWidget()
         bar.setStyleSheet(f"background:{BG_CARD}; border:1px solid {BORDER};"
-                          f"border-radius:0px;")
+                          f"border-radius:{CARD_RADIUS};")
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(6)

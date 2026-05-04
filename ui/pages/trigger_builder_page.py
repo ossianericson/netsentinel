@@ -64,6 +64,7 @@ from ui.styles import (
     BG_HOVER,
     BORDER,
     CARD_HDR_BORDER,
+    CARD_RADIUS,
     GREEN,
     RED,
     TEXT_MUTED,
@@ -96,7 +97,7 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     card = QWidget()
     card.setObjectName("trigCard")
     card.setStyleSheet(
-        f"QWidget#trigCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; }}"
+        f"QWidget#trigCard {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
     )
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)

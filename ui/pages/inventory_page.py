@@ -17,14 +17,16 @@ from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSlot
 from PyQt6.QtWidgets import (
-    QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QTableWidget, QTableWidgetItem,
+    QCheckBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QPushButton,
+    QScrollArea, QSizePolicy, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
+from ui.expanding_table import ExpandingTable
+
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    BORDER, CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
 if TYPE_CHECKING:
@@ -85,6 +87,7 @@ class InventoryPage(QWidget):
         self._store    = store
         self._window_h = 24
         self._active_types: set[str] = set(_ALL_TYPES)
+        self._rows: list = []
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
@@ -175,18 +178,22 @@ class InventoryPage(QWidget):
         # ── Event table ───────────────────────────────────────────────────────
         card = QFrame()
         card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; }}"
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
         )
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
 
         cols = ["Time", "Event", "IP / Host", "MAC", "Vendor", "Detail"]
-        self._table = QTableWidget(0, len(cols))
+        self._table = ExpandingTable(
+            0, len(cols),
+            detail_builder=lambda r: self._build_event_detail(r),
+            detail_height=96,
+        )
         self._table.setHorizontalHeaderLabels(cols)
         self._table.verticalHeader().setVisible(False)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setEditTriggers(ExpandingTable.EditTrigger.NoEditTriggers)
+        self._table.setSelectionBehavior(ExpandingTable.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.setSortingEnabled(True)
         self._table.setShowGrid(False)
@@ -324,7 +331,9 @@ class InventoryPage(QWidget):
 
         # Table
         self._table.setSortingEnabled(False)
+        self._table.clear_detail()
         self._table.setRowCount(0)
+        self._rows = []
 
         if not events:
             self._empty_lbl.setVisible(True)
@@ -334,7 +343,14 @@ class InventoryPage(QWidget):
         self._empty_lbl.setVisible(False)
         self._table.setVisible(True)
 
+        known_devices = self._store.get_known_devices()
         for evt in events:
+            vendor = ""
+            kd = known_devices.get((evt.mac or "").lower())
+            if kd:
+                vendor = kd.vendor or ""
+            self._rows.append((evt, vendor))
+
             row = self._table.rowCount()
             self._table.insertRow(row)
             dt_str = datetime.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
@@ -343,11 +359,6 @@ class InventoryPage(QWidget):
             self._table.setItem(row, 1, _badge_item(evt.event_type, color))
             self._table.setItem(row, 2, _plain_item(evt.ip or "—"))
             self._table.setItem(row, 3, _plain_item(evt.mac or "—"))
-            # Look up vendor from known_devices
-            vendor = ""
-            kd = self._store.get_known_devices().get((evt.mac or "").lower())
-            if kd:
-                vendor = kd.vendor or ""
             self._table.setItem(row, 4, _plain_item(vendor or "—"))
             self._table.setItem(row, 5, _plain_item(evt.detail or ""))
             self._table.setRowHeight(row, 24)
@@ -358,3 +369,57 @@ class InventoryPage(QWidget):
     def on_cycle_done(self, _result: dict) -> None:
         """Slot for AvailabilityWorker.cycle_done — refresh on each monitoring cycle."""
         self._refresh()
+
+    # ── Detail panel ──────────────────────────────────────────────────────────
+
+    def _build_event_detail(self, logical_row: int) -> QWidget:
+        if logical_row >= len(self._rows):
+            return QWidget()
+        evt, vendor = self._rows[logical_row]
+        color, _ = _EVENT_STYLE.get(evt.event_type, (TEXT_SECONDARY, evt.event_type))
+
+        outer = QWidget()
+        outer.setStyleSheet(
+            f"QWidget {{ background:{BG_HOVER}; border:none;"
+            f" border-left:3px solid {color}; }}"
+        )
+        lay = QHBoxLayout(outer)
+        lay.setContentsMargins(16, 10, 16, 10)
+        lay.setSpacing(32)
+
+        def _hdr(t):
+            l = QLabel(t)
+            l.setStyleSheet(f"font-size:10px; font-weight:bold; color:{TEXT_MUTED}; background:transparent; border:none;")
+            return l
+
+        def _val(t, c=TEXT_PRIMARY):
+            l = QLabel(str(t))
+            l.setStyleSheet(f"font-size:11px; color:{c}; background:transparent; border:none;")
+            return l
+
+        ts_str = datetime.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
+        col1 = QWidget()
+        col1.setStyleSheet("QWidget { background:transparent; border:none; }")
+        g1 = QFormLayout(col1)
+        g1.setContentsMargins(0, 0, 0, 0)
+        g1.setSpacing(3)
+        g1.setHorizontalSpacing(12)
+        g1.addRow(_hdr("Timestamp"), _val(ts_str))
+        g1.addRow(_hdr("Event"),     _val(evt.event_type, color))
+        g1.addRow(_hdr("IP"),        _val(evt.ip or "—"))
+
+        col2 = QWidget()
+        col2.setStyleSheet("QWidget { background:transparent; border:none; }")
+        g2 = QFormLayout(col2)
+        g2.setContentsMargins(0, 0, 0, 0)
+        g2.setSpacing(3)
+        g2.setHorizontalSpacing(12)
+        g2.addRow(_hdr("MAC"),    _val(evt.mac or "—"))
+        g2.addRow(_hdr("Vendor"), _val(vendor or "—"))
+        if evt.detail:
+            g2.addRow(_hdr("Detail"), _val(evt.detail))
+
+        lay.addWidget(col1)
+        lay.addWidget(col2)
+        lay.addStretch()
+        return outer

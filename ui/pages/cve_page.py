@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 from modules.metric_store import MetricStore
 from ui.expanding_table import ExpandingTable
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CRITICAL, GREEN, RED,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, CRITICAL, GREEN, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
@@ -76,7 +76,7 @@ def _table(cols: list[str]) -> QTableWidget:
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     outer = QWidget()
     outer.setStyleSheet(
-        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; }}"
+        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
     )
     ol = QVBoxLayout(outer)
     ol.setContentsMargins(0, 0, 0, 0)

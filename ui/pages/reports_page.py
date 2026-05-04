@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 from modules.metric_store      import MetricStore
 from modules.report_scheduler  import ReportConfig, ReportScheduler
 from ui.styles                 import (
-    ACCENT, BG_CARD, BG_DARK, BORDER, GREEN, RED, TEXT_PRIMARY,
+    ACCENT, BG_CARD, BG_DARK, BORDER, CARD_RADIUS, GREEN, RED, TEXT_PRIMARY,
     TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
@@ -37,7 +37,7 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     """Return a card container + its body layout."""
     outer = QWidget()
     outer.setStyleSheet(
-        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; }}"
+        f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
     )
     outer_lay = QVBoxLayout(outer)
     outer_lay.setContentsMargins(0, 0, 0, 0)

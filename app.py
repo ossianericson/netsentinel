@@ -54,6 +54,7 @@ def _smoke_test() -> None:
         "PyQt6.QtNetwork",
         "matplotlib.backends.backend_qtagg",
         "scapy.layers.all",
+        "ui.styles",
         "ui.dashboard",
         "ui.live_graph",
         "modules.rogue_device",
@@ -102,6 +103,10 @@ def _smoke_test() -> None:
         "modules.internet_exposure",
         "modules.dns_zone_scanner",
         "modules.dhcp_lease_scanner",
+        "modules.colours",
+        "ui.command_palette",
+        "ui.empty_state",
+        "ui.expanding_table",
         "modules.threat_intel",
         "modules.cert_monitor",
         "modules.availability_monitor",
@@ -112,6 +117,48 @@ def _smoke_test() -> None:
         "workers.threat_intel_worker",
         "ui.pages.diagnosis_page",
         "workers.diagnosis_worker",
+        "modules.metric_store",
+        "modules.lab_scenarios",
+        "modules.diagnostic_card",
+        "workers.service_worker",
+        "workers.report_scheduler_worker",
+        "workers.snmp_trap_worker",
+        "workers.syslog_worker",
+        "workers.rest_api_worker",
+        "ui.first_run_dialog",
+        "ui.pages.home_page",
+        "ui.pages.overview_page",
+        "ui.pages.history_page",
+        "ui.pages.inventory_page",
+        "ui.pages.uptime_page",
+        "ui.pages.cert_page",
+        "ui.pages.service_page",
+        "ui.pages.reports_page",
+        "ui.pages.snmp_trap_page",
+        "ui.pages.syslog_page",
+        "ui.pages.threat_intel_page",
+        "ui.pages.geo_map_page",
+        "ui.pages.network_doc_page",
+        "ui.pages.notifications_page",
+        "ui.pages.maintenance_page",
+        "ui.pages.lab_mode_page",
+        "ui.pages.mqtt_page",
+        "ui.pages.speed_test_page",
+        "ui.pages.connections_page",
+        "ui.pages.cve_page",
+        "ui.pages.dns_zone_page",
+        "ui.pages.dhcp_lease_page",
+        "ui.pages.ookla_cli_banner",
+        "ui.pages.live_bandwidth_page",
+        "ui.pages.wifi_heatmap_page",
+        "ui.pages.home_automation_page",
+        "ui.pages.trigger_builder_page",
+        "ui.pages.ip_calculator_page",
+        "ui.pages.baseline_page",
+        "ui.pages.automation_page",
+        "ui.pages.settings_page",
+        "ui.pages.trend_page",
+        "ui.skeleton",
     ]
     for _mod in _checks:
         try:
@@ -300,7 +347,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.6.5")
+    app.setApplicationVersion("1.6.10")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────
@@ -513,7 +560,13 @@ def main():
         from PyQt6.QtCore import QTimer as _QTimer
         _onboarding_timer = _QTimer(window)
         _onboarding_timer.setSingleShot(True)
-        _onboarding_timer.timeout.connect(lambda: FirstRunDialog(parent=window).exec())
+        def _show_onboarding():
+            try:
+                if window.isVisible():
+                    FirstRunDialog(parent=window).exec()
+            except RuntimeError:
+                return
+        _onboarding_timer.timeout.connect(_show_onboarding)
         _onboarding_timer.start(250)
 
     ret = app.exec()
