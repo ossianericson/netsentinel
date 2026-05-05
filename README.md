@@ -16,28 +16,23 @@ The free, open-source network troubleshooting tool that replaces five separate u
 
 ## Install
 
-### Windows
+**Windows** — prefer winget (keeps the app updated automatically):
 
 ```powershell
 winget install NetSentinel.NetSentinel
 ```
 
-Or download the installer from the [latest release](https://github.com/ossianericson/netsentinel/releases/latest).
+**macOS / Linux / manual Windows** — download the binary for your platform from the [latest release](https://github.com/ossianericson/netsentinel/releases/latest).
+
+### Windows notes
 
 Layer 2 features (STP, broadcast storm, ARP monitor) require [Npcap](https://npcap.com) — free, one-click installer maintained by the Nmap project. Standard features work without it.
 
 If Windows blocks the installer on first run, right-click the downloaded file → **Properties** → check **Unblock** → **OK**, then run it. This does not apply to winget installs.
 
-### macOS
+### macOS notes
 
-> **Note:** Windows is the primary supported platform with a binary installer. macOS support is run-from-source only — no pre-built binary is provided. Most features work, but the experience is less polished and Gatekeeper bypass may be required.
-
-```bash
-git clone https://github.com/ossianericson/netsentinel
-cd netsentinel
-pip install -r requirements.txt
-python app.py
-```
+> **Note:** Most features work on macOS. Gatekeeper bypass is required on first launch — right-click the app → **Open**.
 
 Layer 2 features (STP, storm detection, ARP monitor) require libpcap:
 
@@ -45,11 +40,9 @@ Layer 2 features (STP, storm detection, ARP monitor) require libpcap:
 brew install libpcap
 ```
 
-Run with `sudo python app.py` to enable packet capture features. On Apple Silicon, ensure you are using a native arm64 Python build — x86_64 Python via Rosetta may have issues with Scapy and libpcap.
+Run with `sudo` to enable packet capture features. On Apple Silicon, ensure you are using a native arm64 Python build — x86_64 Python via Rosetta may have issues with Scapy and libpcap.
 
-### Linux
-
-> **Note:** Windows is the primary supported platform with a binary installer. Linux support is run-from-source only — no pre-built binary is provided. Tested on Ubuntu 22.04+ and Debian 12+.
+To run from source instead of the pre-built binary:
 
 ```bash
 git clone https://github.com/ossianericson/netsentinel
@@ -57,6 +50,10 @@ cd netsentinel
 pip install -r requirements.txt
 sudo python app.py
 ```
+
+### Linux notes
+
+> **Note:** Tested on Ubuntu 22.04+ and Debian 12+.
 
 Layer 2 features require libpcap:
 
@@ -69,7 +66,16 @@ If the app fails on launch with a Qt platform plugin error:
 
 ```bash
 sudo apt-get install libxcb-cursor0
-QT_QPA_PLATFORM=xcb sudo python app.py
+QT_QPA_PLATFORM=xcb sudo ./NetSentinel
+```
+
+To run from source instead of the pre-built binary:
+
+```bash
+git clone https://github.com/ossianericson/netsentinel
+cd netsentinel
+pip install -r requirements.txt
+sudo python app.py
 ```
 
 ---

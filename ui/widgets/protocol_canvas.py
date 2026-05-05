@@ -331,8 +331,8 @@ class ProtocolCanvas(QWidget):
         px_n, py_n = -dy / length, dx / length
         if py_n > 0:   # flip so offset is always above
             px_n, py_n = -px_n, -py_n
-        ox = mx + px_n * 28
-        oy = my + py_n * 28
+        ox = mx + px_n * 52
+        oy = my + py_n * 52
 
         # Measure actual text so the pill fits snugly rather than using a fixed width
         w1 = QFontMetrics(_FONT_PKT).horizontalAdvance(step.packet_label)

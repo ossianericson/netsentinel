@@ -276,7 +276,10 @@ def get_network_info() -> dict:
 
             def _rval(key, name, default=""):
                 try:
-                    return _wr.QueryValueEx(key, name)[0] or default
+                    v = _wr.QueryValueEx(key, name)[0]
+                    if isinstance(v, list):
+                        v = v[0] if v else ""
+                    return v or default
                 except OSError:
                     return default
 
