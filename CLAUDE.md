@@ -24,7 +24,7 @@ At the end of each session, write one paragraph covering:
 
 ## Code rules — scope of enforcement
 
-Rules like RULE 1 (single colour source), RULE 3 (table row height 24px), and RULE 26 (smoke test registration) apply to **new code only**. Do not audit or retrofit existing files for compliance — the app is working and the churn has no runtime value.
+Rules like RULE-AH3 (single colour source), RULE-UX5 (empty-state with inline CTA), and RULE-T4 (smoke test registration) apply to **new code only**. Do not audit or retrofit existing files for compliance — the app is working and the churn has no runtime value.
 
 Apply these rules when:
 - Creating a new page (`ui/pages/*.py`)
@@ -44,9 +44,9 @@ python -m pytest tests/test_version_consistency.py -v   # verify
 
 Never pass flags like `--current` to bump_version.py — it has no flags; the first positional arg is the new version string.
 
-Current version: **v1.6.10**
+Current version: **v1.7.0**
 
-Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10
+Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10 → v1.7.0
 Note: tags v1.55 and v1.56 were published as two-part (missing dot); treat as v1.5.5/v1.5.6.
 
 ## Releasing
@@ -95,7 +95,7 @@ git push origin vX.Y
 1. ✅ bump_version.py now generates `{ver}.0` (correct 4-part format)
 2. ✅ AppxManifest.xml has clear comments explaining the requirement
 3. ✅ test_version_consistency.py has new test `test_appxmanifest_msix_version_format()` that validates exactly 4 parts
-4. ✅ apm.yml documents RULE-R4: "MSIX Version format must be exactly 4 parts (X.Y.Z.0)"
+4. ✅ apm.yml documents RULE-R4 (MSIX version format 4 parts) and RULE-R5 (staging copy pattern)
 5. ✅ release.yml now uses correct format `$ver.0` in Patch version strings step
 
 **How to prevent regression:**
@@ -132,3 +132,8 @@ Belt-and-suspenders: items 2 and 3 both prevent the Ookla task from running duri
 | `NetSentinelSvc.spec` | PyInstaller spec for Windows service |
 | `installer.iss` | Inno Setup installer script |
 | `tests/test_version_consistency.py` | Ensures all version strings stay in sync + validates MSIX 4-part format |
+| `ui/pages/discover_page.py` | Feature Guide — 24-entry `_FEATURES` list; add an entry here for every new page (RULE-D2) |
+| `ui/pages/log_hub_page.py` | Log Hub — live logger output table; emits `live_challenge_detected` to wire Lab Mode live injection |
+| `ui/pages/protocol_viz_page.py` | Protocol Visualizer — animated protocol diagram; uses `ProtocolSceneData` from `modules/protocol_animator.py` |
+| `ui/widgets/protocol_canvas.py` | QPainter animation engine for protocol diagrams |
+| `ui/widgets/explainer_panel.py` | Reusable inline explanation widget used by Lab Mode and Protocol Visualizer |

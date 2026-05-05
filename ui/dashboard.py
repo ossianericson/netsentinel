@@ -5,13 +5,15 @@ Main Dashboard — NetSentinel network security scanner and monitor.
 import datetime
 import html
 import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt, QEasingCurve, QPoint, QPropertyAnimation, QRect, QSettings, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QFont, QIcon, QPixmap
+from PyQt6.QtCore import Qt, QByteArray, QEasingCurve, QObject, QPoint, QPropertyAnimation, QRect, QSettings, QSize, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -211,6 +213,951 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
     return container
 
 
+# ─── Activity-Rail Navigation widgets ────────────────────────────────────────
+
+# Lucide icon library (MIT) — 24×24 viewBox, stroke="currentColor"
+_LUCIDE: dict = {
+    "home": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+        '<polyline points="9 22 9 12 15 12 15 22"/></svg>'
+    ),
+    "activity": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
+    ),
+    "grid": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/>'
+        '<rect x="14" y="3" width="7" height="7"/>'
+        '<rect x="14" y="14" width="7" height="7"/>'
+        '<rect x="3" y="14" width="7" height="7"/></svg>'
+    ),
+    "monitor": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/>'
+        '<line x1="8" y1="21" x2="16" y2="21"/>'
+        '<line x1="12" y1="17" x2="12" y2="21"/></svg>'
+    ),
+    "shield": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
+    ),
+    "bar-chart": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/>'
+        '<line x1="18" y1="20" x2="18" y2="4"/>'
+        '<line x1="6" y1="20" x2="6" y2="16"/></svg>'
+    ),
+    "book-open": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>'
+        '<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>'
+    ),
+    "settings": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><circle cx="12" cy="12" r="3"/>'
+        '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06'
+        'a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09'
+        'A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06'
+        'A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09'
+        'A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06'
+        'A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09'
+        'a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06'
+        'A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09'
+        'a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+    ),
+    "search": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><circle cx="11" cy="11" r="8"/>'
+        '<line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
+    ),
+    "wifi": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/>'
+        '<path d="M1.42 9a16 16 0 0 1 21.16 0"/>'
+        '<path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>'
+        '<line x1="12" y1="20" x2="12.01" y2="20"/></svg>'
+    ),
+    "network": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/>'
+        '<rect x="2" y="16" width="6" height="6" rx="1"/>'
+        '<rect x="9" y="2" width="6" height="6" rx="1"/>'
+        '<path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/>'
+        '<path d="M12 12V8"/></svg>'
+    ),
+    "zap": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>'
+    ),
+    "server": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/>'
+        '<rect x="2" y="14" width="20" height="8" rx="2"/>'
+        '<line x1="6" y1="6" x2="6.01" y2="6"/>'
+        '<line x1="6" y1="18" x2="6.01" y2="18"/></svg>'
+    ),
+    "map-pin": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>'
+        '<circle cx="12" cy="10" r="3"/></svg>'
+    ),
+    "terminal": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/>'
+        '<line x1="12" y1="19" x2="20" y2="19"/></svg>'
+    ),
+    "layers": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/>'
+        '<polyline points="2 17 12 22 22 17"/>'
+        '<polyline points="2 12 12 17 22 12"/></svg>'
+    ),
+    "globe": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><circle cx="12" cy="12" r="10"/>'
+        '<line x1="2" y1="12" x2="22" y2="12"/>'
+        '<path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10'
+        ' 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+    ),
+    "log": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12'
+        'a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>'
+        '<line x1="16" y1="13" x2="8" y2="13"/>'
+        '<line x1="16" y1="17" x2="8" y2="17"/>'
+        '<polyline points="10 9 9 9 8 9"/></svg>'
+    ),
+    "alert-triangle": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94'
+        'a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>'
+        '<line x1="12" y1="9" x2="12" y2="13"/>'
+        '<line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+    ),
+    "eye": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>'
+        '<circle cx="12" cy="12" r="3"/></svg>'
+    ),
+    "pin": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><line x1="12" y1="17" x2="12" y2="22"/>'
+        '<path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1'
+        'a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9'
+        'A2 2 0 0 0 5 15.24z"/></svg>'
+    ),
+    "x": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/>'
+        '<line x1="6" y1="6" x2="18" y2="18"/></svg>'
+    ),
+    "chevron-right": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>'
+    ),
+    "scan": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/>'
+        '<path d="M17 3h2a2 2 0 0 1 2 2v2"/>'
+        '<path d="M21 17v2a2 2 0 0 1-2 2h-2"/>'
+        '<path d="M7 21H5a2 2 0 0 1-2-2v-2"/>'
+        '<line x1="7" y1="12" x2="17" y2="12"/></svg>'
+    ),
+    "lock": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/>'
+        '<path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'
+    ),
+    "tool": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0'
+        'l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91'
+        'a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>'
+    ),
+    "bell": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>'
+        '<path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>'
+    ),
+    "cpu": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/>'
+        '<rect x="9" y="9" width="6" height="6"/>'
+        '<line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>'
+        '<line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>'
+        '<line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>'
+        '<line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>'
+    ),
+    "info": (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"'
+        ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+        ' stroke-linejoin="round"><circle cx="12" cy="12" r="10"/>'
+        '<line x1="12" y1="16" x2="12" y2="12"/>'
+        '<line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    ),
+}
+
+
+def _make_nav_icon(icon_name: str, size: int = 20, color: str = "#A8B8C8") -> QIcon:
+    """Render a Lucide SVG string to a QIcon at the given pixel size and colour."""
+    from PyQt6.QtSvg import QSvgRenderer
+    svg_str = _LUCIDE.get(icon_name, _LUCIDE["activity"])
+    svg_str = svg_str.replace("currentColor", color)
+    renderer = QSvgRenderer(QByteArray(svg_str.encode("utf-8")))
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pix)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pix)
+
+
+@dataclass
+class _NavEntry:
+    label: str
+    page: "QWidget"
+    action: Optional[Callable] = None
+    admin_required: bool = False
+    audit_item: bool = False
+    pinned: bool = False
+
+
+class _RailButton(QPushButton):
+    """48×58 icon + label button for the activity rail."""
+
+    _COLOR_NORMAL = "#A8B8C8"
+    _COLOR_ACTIVE = "#FFFFFF"
+    _LABEL_COLOR  = "#6B7A8D"
+
+    def __init__(self, icon_name: str, tooltip: str, parent=None):
+        super().__init__(parent)
+        self._icon_name = icon_name
+        # First word of section name, max 9 chars — shown below the icon
+        self._short_label = (tooltip.split()[0]) if tooltip else ""
+        self.setCheckable(True)
+        self.setFixedSize(48, 58)
+        self.setToolTip(tooltip)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._refresh_icon()
+        self.setStyleSheet(
+            "QPushButton {"
+            "  background: transparent;"
+            "  border: none;"
+            "  border-radius: 0px;"
+            "}"
+            "QPushButton:hover {"
+            "  background: rgba(255,255,255,0.07);"
+            "}"
+            f"QPushButton:checked {{"
+            f"  background: rgba(255,255,255,0.10);"
+            f"}}"
+        )
+
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics
+        from PyQt6.QtCore import QRect
+        # QSS background + hover/checked effects
+        super().paintEvent(event)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+        # Accent bar — painted after QSS so it sits on top of background
+        if self.isChecked():
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(ACCENT))
+            p.drawRect(0, 10, 3, 38)   # spans the 48px icon zone, inset 10px top/bottom
+
+        # Short label below the icon
+        font = QFont("Segoe UI", 7)
+        p.setFont(font)
+        lbl_color = self._COLOR_ACTIVE if self.isChecked() else self._LABEL_COLOR
+        p.setPen(QColor(lbl_color))
+        fm = QFontMetrics(font)
+        text = fm.elidedText(self._short_label, Qt.TextElideMode.ElideRight, self.width() - 4)
+        p.drawText(QRect(0, 46, self.width(), 12),
+                   Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                   text)
+        p.end()
+
+    def _refresh_icon(self):
+        color = self._COLOR_ACTIVE if self.isChecked() else self._COLOR_NORMAL
+        self.setIcon(_make_nav_icon(self._icon_name, 20, color))
+        self.setIconSize(QSize(20, 20))
+
+    def setChecked(self, checked: bool):
+        super().setChecked(checked)
+        self._refresh_icon()
+
+
+class _FlyoutItem(QPushButton):
+    """Single row in the flyout panel — checkable, left-aligned, pin-aware."""
+
+    pin_toggled = pyqtSignal(str, bool)   # (label, is_pinned_now)
+
+    def __init__(self, label: str, pinned: bool = False, danger: bool = False, parent=None):
+        super().__init__(label, parent)
+        self._label = label
+        self._pinned = pinned
+        self.setCheckable(True)
+        self.setMinimumHeight(28)
+        self.setMaximumHeight(36)
+        self.setMinimumWidth(280)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_ctx_menu)
+        _fg = AUDIT_RED if danger else SIDEBAR_ITEM_FG
+        self.setStyleSheet(
+            f"QPushButton {{"
+            f"  text-align: left; padding: 0 12px;"
+            f"  background: transparent; color: {_fg};"
+            f"  border: none; font-size: 12px;"
+            f"}}"
+            f"QPushButton:hover {{ background: {SIDEBAR_HOVER}; color: {WHITE}; }}"
+            f"QPushButton:checked {{ background: {SIDEBAR_SEL_BG}; color: {WHITE}; }}"
+        )
+
+    def _show_ctx_menu(self, pos):
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        txt = "Unpin from Quick Access" if self._pinned else "Pin to Quick Access"
+        menu.addAction(txt).triggered.connect(self._toggle_pin)
+        menu.exec(self.mapToGlobal(pos))
+
+    def _toggle_pin(self):
+        self._pinned = not self._pinned
+        self.pin_toggled.emit(self._label, self._pinned)
+
+    @property
+    def item_label(self) -> str:
+        return self._label
+
+
+class _FlyoutPanel(QWidget):
+    """280px animated slide-in panel that appears next to the activity rail."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumWidth(0)
+        self.setMaximumWidth(0)
+        self.setStyleSheet(f"background: {SIDEBAR_BG};")
+
+        self._anim = QPropertyAnimation(self, b"maximumWidth")
+        self._anim.setDuration(150)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.finished.connect(self._on_anim_finished)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Header bar: section title + pin toggle
+        hdr = QWidget()
+        hdr.setFixedHeight(36)
+        hdr.setStyleSheet(
+            f"background: {SIDEBAR_SECTION_BG}; border-bottom: 1px solid {NAV_DIVIDER};"
+        )
+        hlay = QHBoxLayout(hdr)
+        hlay.setContentsMargins(12, 0, 4, 0)
+        hlay.setSpacing(4)
+        self._title_lbl = QLabel()
+        self._title_lbl.setStyleSheet(
+            f"color: {TEXT_PRIMARY}; font-size: 11px; font-weight: 600;"
+            f" background: transparent; border: none;"
+        )
+        self._pin_btn = QPushButton("⊞")
+        self._pin_btn.setFixedSize(24, 24)
+        self._pin_btn.setCheckable(True)
+        self._pin_btn.setToolTip("Pin panel open")
+        self._pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._pin_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none;"
+            f" color: {TEXT_SECONDARY}; font-size: 14px; }}"
+            f"QPushButton:hover {{ color: {WHITE}; }}"
+            f"QPushButton:checked {{ color: {ACCENT}; }}"
+        )
+        hlay.addWidget(self._title_lbl, 1)
+        hlay.addWidget(self._pin_btn)
+        outer.addWidget(hdr)
+
+        # Scrollable item list
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+            "QScrollBar:vertical { width: 4px; }"
+        )
+        self._item_container = QWidget()
+        self._item_layout = QVBoxLayout(self._item_container)
+        self._item_layout.setContentsMargins(0, 4, 0, 4)
+        self._item_layout.setSpacing(0)
+        self._item_layout.addStretch()
+        scroll.setWidget(self._item_container)
+        outer.addWidget(scroll, 1)
+
+        self._items: dict = {}   # label -> _FlyoutItem
+
+    @property
+    def is_pinned(self) -> bool:
+        return self._pin_btn.isChecked()
+
+    def load_section(
+        self,
+        title: str,
+        entries: list,
+        active_label: str,
+        on_click: Callable,
+        on_pin_toggle: Callable,
+    ) -> None:
+        while self._item_layout.count() > 1:
+            w = self._item_layout.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        self._items.clear()
+        self._title_lbl.setText(title.upper())
+        for label, pinned, danger in entries:
+            btn = _FlyoutItem(label, pinned, danger)
+            btn.setChecked(label == active_label)
+            btn.clicked.connect(lambda _c, lbl=label: on_click(lbl))
+            btn.pin_toggled.connect(on_pin_toggle)
+            self._item_layout.insertWidget(self._item_layout.count() - 1, btn)
+            self._items[label] = btn
+
+    def set_active(self, label: str) -> None:
+        for lbl, btn in self._items.items():
+            btn.setChecked(lbl == label)
+
+    def open(self) -> None:
+        self._anim.stop()
+        # setMinimumWidth forces the parent layout to allocate full width;
+        # without this the flyout is clipped to whatever the rail panel was given.
+        self.setMinimumWidth(280)
+        self._anim.setStartValue(self.maximumWidth())
+        self._anim.setEndValue(280)
+        self.setVisible(True)
+        self._anim.start()
+
+    def close_panel(self) -> None:
+        self._anim.stop()
+        self.setMinimumWidth(0)
+        self._anim.setStartValue(self.maximumWidth())
+        self._anim.setEndValue(0)
+        self._anim.start()
+
+    def _on_anim_finished(self) -> None:
+        if self.maximumWidth() == 0:
+            self.setVisible(False)
+
+
+class _CanvasClickFilter(QObject):
+    """Event filter on the content wrapper — requests flyout close on canvas click."""
+
+    close_requested = pyqtSignal()
+
+    def eventFilter(self, obj, event) -> bool:
+        from PyQt6.QtCore import QEvent
+        if event.type() == QEvent.Type.MouseButtonPress:
+            self.close_requested.emit()
+        return False
+
+
+class _ClickLabel(QLabel):
+    """QLabel that emits clicked() when pressed — used for status-bar pulse segments."""
+    clicked = pyqtSignal()
+
+    def mousePressEvent(self, ev):
+        self.clicked.emit()
+        super().mousePressEvent(ev)
+
+
+# ── Per-page contextual help content ─────────────────────────────────────────
+# Shown in the "?" strip below the breadcrumb.
+# Keys are exact nav page labels. "what" = 1-2 sentences. "hidden" = bullet list.
+
+_PAGE_HELP: dict[str, dict] = {
+    # ── Getting Started ────────────────────────────────────────────────────────
+    "Home": {
+        "what": "Your network at a glance — live status, device count, speed, and stability.",
+        "hidden": [
+            "The 'What to do next' strip surfaces features you haven't tried yet — it updates as you explore.",
+            "When the logger detects something interesting, an amber card appears here. Click 'Investigate →' to open a live Lab exercise.",
+            "Click the mini cards (Speed, Stability, Devices) to jump directly to those pages.",
+        ],
+    },
+    "Overview": {
+        "what": "Live summary of all scan results — device list, graded health, port scan summary, and bandwidth at a glance.",
+        "hidden": [
+            "The 'Share Card' button exports a 520×300 summary card as PNG, clipboard image, or standalone HTML — useful for ISP escalations.",
+            "All tiles here update live from background workers — you don't need to re-scan to see fresh data.",
+        ],
+    },
+    "Speed Test": {
+        "what": "Measures your actual download speed using Ookla CLI, speedtest-cli, or a built-in pure-Python fallback.",
+        "hidden": [
+            "Results are logged to the Network Logger so you can track speed changes over days or weeks.",
+            "The three-tier engine falls through automatically — if Ookla is not installed, speedtest-cli is tried, then the built-in fallback.",
+        ],
+    },
+    "DNS & Stability": {
+        "what": "Measures DNS resolver latency over time and detects outages as short as one ping interval.",
+        "hidden": [
+            "The 'Explain This' strip explains DNS and why slow DNS makes everything feel slow even on a fast connection.",
+            "Outage timestamps are recorded even when the logger is running in the background with no visible indicator.",
+            "Switch to the 'DNS Benchmark' tab to compare Cloudflare, Google, and Quad9 against your system resolver side-by-side.",
+        ],
+    },
+    "Diagnose": {
+        "what": "One-click root-cause analysis — sequences network, storm, rogue device, and STP checks to surface the most likely cause of your problem.",
+        "hidden": [
+            "Pick a symptom tile (Slow / Dropping / Can't Connect) before running — this scopes the checks to the most relevant modules.",
+            "The 'Do this first' priority card at the top is the single most actionable finding. Fix that before looking at the rest.",
+        ],
+    },
+    # ── Discover ───────────────────────────────────────────────────────────────
+    "Devices": {
+        "what": "Every device on your subnet with IP, MAC, vendor, hostname, and risk level.",
+        "hidden": [
+            "Right-click any row for quick actions: How to Fix, block from network, view availability history.",
+            "The 'Explain This' strip at the bottom explains how ARP works and what a rogue device is.",
+            "Click the column headers to sort by IP, risk level, or vendor.",
+            "Vendor and model are resolved offline using the OUI database — no internet call needed.",
+        ],
+    },
+    "WiFi Networks": {
+        "what": "Scans visible SSIDs for hidden networks, rogue APs, WPS-enabled routers, and co-channel interference.",
+        "hidden": [
+            "Hidden SSIDs appear as '<hidden>' — a rogue AP advertising no SSID is still listed here.",
+            "WPS-enabled networks are flagged because WPS PIN attacks can bypass WPA2 in minutes.",
+            "Co-channel interference is flagged when two strong APs on the same channel are detected — switch one to a non-overlapping channel.",
+        ],
+    },
+    "WiFi Heatmap": {
+        "what": "Visual signal-strength heatmap — drag the floor plan, click positions to capture dBm readings.",
+        "hidden": [
+            "Click any point on the floor plan to record the current signal level at that position — walk through rooms while clicking.",
+            "Red = strong, blue = weak. Areas below −75 dBm are likely to cause connection drops.",
+            "Export the heatmap as PNG to attach to a support ticket or share with a Wi-Fi installer.",
+        ],
+    },
+    "Network Map": {
+        "what": "Auto-generated topology diagram showing how discovered devices relate to each other.",
+        "hidden": [
+            "The topology is rebuilt after every scan — devices are positioned based on ARP and gateway relationships.",
+            "Click any node to jump to that device's row in the Devices page.",
+        ],
+    },
+    "DHCP Leases": {
+        "what": "Live view of all active DHCP leases on your network — flags unexpected or rogue DHCP servers.",
+        "hidden": [
+            "A rogue DHCP server flag means two devices are handing out IP addresses — this can cause connection failures across the whole network.",
+            "Lease data is read from the OS lease table — no packet capture needed, works without Npcap.",
+        ],
+    },
+    "Home Automation": {
+        "what": "Device join/leave events, alerts, and per-device uptime states forwarded to Home Assistant or an MQTT broker.",
+        "hidden": [
+            "Set up the MQTT broker address in Settings first — the page will show 'not connected' until that is done.",
+            "Device presence events arrive within seconds of a device appearing or disappearing on the network.",
+        ],
+    },
+    # ── Monitor ────────────────────────────────────────────────────────────────
+    "Logs": {
+        "what": "Unified log viewer: Network Logger CSV, Syslog messages, and SNMP traps in three tabs.",
+        "hidden": [
+            "Any row with an ARP event shows a '▶ ARP' button — click it to jump to the Protocol Visualizer pre-loaded with that event.",
+            "Use the 'Syslog' and 'SNMP Traps' tabs to see messages from routers and switches.",
+            "Click '↺ Reload' to load the latest CSV entries from disk.",
+            "Filter the Network Log by hostname using the filter box — useful on busy networks.",
+        ],
+    },
+    "Live Bandwidth": {
+        "what": "Rolling 60-second upload/download chart per network interface — updates every second.",
+        "hidden": [
+            "Switch between interfaces using the dropdown if you have both Wi-Fi and Ethernet active.",
+            "Spikes that correlate with Broadcast Storm events help confirm a storm is saturating the link.",
+        ],
+    },
+    "Bandwidth Usage": {
+        "what": "Per-device bandwidth usage collected during packet capture sessions.",
+        "hidden": [
+            "Packet capture requires Npcap on Windows — install it from npcap.com for this tab to populate.",
+            "Click a row to see the breakdown of protocols that device is using.",
+        ],
+    },
+    "Active Connections": {
+        "what": "Process-to-socket map showing which app owns each open connection — one-click firewall block per process.",
+        "hidden": [
+            "Click 'Block' on any process to add a Windows Firewall outbound rule — you can unblock it from the same row.",
+            "Processes with many connections to non-local IPs are worth investigating — click the destination IP to run a WHOIS.",
+            "The list refreshes every few seconds automatically — watch for processes that appear briefly and disappear.",
+        ],
+    },
+    "Availability History": {
+        "what": "RTT and UP/DEGRADED/DOWN state charts per device — 1 h / 12 h / 24 h / 7 d zoom.",
+        "hidden": [
+            "Data accumulates as long as the Network Logger is running — start it early and leave it on for evidence-grade output.",
+            "Use the 7-day view to find patterns: if a device drops every night at 2 AM, that is a strong clue about what is rebooting it.",
+        ],
+    },
+    "Geolocation Map": {
+        "what": "Offline world map showing where internet-facing IPs are located — no API key, no external calls.",
+        "hidden": [
+            "Uses the MaxMind GeoLite2-City database bundled with the app — all lookups are local.",
+            "IPs that map to unexpected countries may indicate traffic going through a VPN exit node or a compromised proxy.",
+        ],
+    },
+    "IPv6 Devices": {
+        "what": "Discovers IPv6-addressed devices on your network using NDP and multicast probes.",
+        "hidden": [
+            "Many home networks have IPv6 active without the owner knowing — this tab reveals the full device census.",
+            "Link-local addresses (fe80::) are not routable — global unicast addresses (2xxx:) are the ones exposed to the internet.",
+        ],
+    },
+    "Network Logger": {
+        "what": "Background CSV logger recording every ping, DNS latency, and ARP change — evidence-grade output for ISP disputes.",
+        "hidden": [
+            "The logger runs even when the app window is minimised — check the status bar dot to confirm it is active.",
+            "CSV files are saved to the logs/ folder in the app data directory — you can open them in Excel for custom analysis.",
+            "Enable 'Start automatically' in Settings so logging begins the moment the app opens, even before you interact with it.",
+        ],
+    },
+    "Service Heartbeat": {
+        "what": "Monitors specific hosts and ports on a schedule — alerts when a service goes down.",
+        "hidden": [
+            "Add your router's management page, NAS, or home server here to get notified the moment they become unreachable.",
+            "Heartbeat checks run on their own schedule independent of the main scanner — no need to rescan to refresh them.",
+        ],
+    },
+    # ── Reports ────────────────────────────────────────────────────────────────
+    "Network Grade": {
+        "what": "Scores your network A–F across speed, latency, DNS, packet loss, device security, and STP health.",
+        "hidden": [
+            "Each grade dimension has an actionable 'Fix tip' — expand the row to see what to do.",
+            "Run 'Grade My Network' after making changes to see whether they improved the score.",
+        ],
+    },
+    "ISP Report": {
+        "what": "Generates a standalone HTML report with MTR hop table, packet-loss %, DNS latency, and timestamped outage log — formatted for ISP support escalation.",
+        "hidden": [
+            "The report is a single self-contained HTML file — email it or attach it to a support ticket with no extra files needed.",
+            "Run the Network Logger for at least an hour before generating the report so the outage log has enough data.",
+        ],
+    },
+    "Network Doc": {
+        "what": "Auto-assembled network documentation page — device list, cert inventory, topology diagram, and accumulated port scan results.",
+        "hidden": [
+            "Export as PDF or HTML to hand to an IT consultant or keep as a record before making network changes.",
+            "The device count and cert status update automatically after every scan — you don't need to regenerate manually.",
+        ],
+    },
+    "IP Calculator": {
+        "what": "Subnet calculator with CIDR notation reference, subnetting rules, and address class tables.",
+        "hidden": [
+            "Enter any IP/prefix (e.g. 192.168.1.50/24) to instantly see the network address, broadcast, usable range, and host count.",
+            "The reference panels explain CIDR and subnetting concepts — useful if you are studying for Network+ or CCNA.",
+        ],
+    },
+    "Notifications": {
+        "what": "Configure where alerts go — desktop notifications, webhook URLs, and email targets.",
+        "hidden": [
+            "Webhooks can point to Slack, Discord, or any service with an incoming webhook URL — no plugin needed.",
+            "Test the webhook before relying on it — use the 'Send Test' button to confirm delivery.",
+        ],
+    },
+    # ── Analysis ───────────────────────────────────────────────────────────────
+    "Connectivity Tests": {
+        "what": "One-click ping, DNS, HTTP, and MTR tests with a plain-English verdict.",
+        "hidden": [
+            "MTR (traceroute) shows exactly which hop is introducing packet loss — useful for ISP complaints.",
+            "The status bar 'Online/Offline' dot reflects the last logger result, not this page — run a test here for an immediate check.",
+        ],
+    },
+    "Hop-by-Hop Trace": {
+        "what": "MTR-style traceroute showing per-hop latency and packet-loss — identifies exactly which ISP hop is the problem.",
+        "hidden": [
+            "Run the trace twice — once when things are good and once when they are slow — then compare the hop-by-hop RTTs.",
+            "High loss at a hop that still delivers traffic is usually ICMP rate-limiting, not a real problem. Loss that persists on all hops after it is the real issue.",
+        ],
+    },
+    "ARP Spoof Watch": {
+        "what": "Watches for MAC address conflicts that indicate a man-in-the-middle attack on the local segment.",
+        "hidden": [
+            "The 'Explain This' strip shows a step-by-step ARP spoofing diagram — useful for understanding how the attack works.",
+            "Requires Npcap on Windows and admin rights — the tab shows a banner if these are missing.",
+        ],
+    },
+    "SNMP Device Info": {
+        "what": "Queries routers and switches via SNMP for port stats, CPU load, and uptime.",
+        "hidden": [
+            "Most home routers have SNMP disabled by default — enable it in the router admin panel first.",
+            "Use SNMPv2c with the 'public' community string to start — change this if your router uses a custom community.",
+        ],
+    },
+    "SNMP Trap Receiver": {
+        "what": "Listens for SNMP trap messages from routers and switches — catches interface-down events automatically.",
+        "hidden": [
+            "Configure your router to send traps to this machine's IP address and port 162.",
+            "Trap events appear in the Logs page 'SNMP Traps' tab as well as here.",
+        ],
+    },
+    "Syslog Viewer": {
+        "what": "Receives and displays syslog messages from network devices over UDP 514.",
+        "hidden": [
+            "Configure your router or switch to forward syslog to this machine's IP address.",
+            "Syslog messages also appear in the Logs page 'Syslog' tab for unified viewing.",
+        ],
+    },
+    "Tools & Wake-on-LAN": {
+        "what": "Ping, traceroute, WHOIS, port check, and Wake-on-LAN utilities in one place.",
+        "hidden": [
+            "Wake-on-LAN requires the target device to have WoL enabled in its BIOS and the NIC driver settings.",
+            "The WHOIS lookup works on both IP addresses and domain names.",
+        ],
+    },
+    "Broadcast Storm": {
+        "what": "Listens for abnormal broadcast traffic and identifies the source device or loop.",
+        "hidden": [
+            "The 'Explain This' strip explains what causes a broadcast storm and how STP is supposed to prevent them.",
+            "Storm level SAFE / WARNING / CRITICAL is shown with the broadcast packets-per-second rate.",
+        ],
+    },
+    "Rogue Bridge (STP)": {
+        "what": "Captures BPDU frames and alerts when an unexpected switch claims the STP root election.",
+        "hidden": [
+            "The 'Explain This' strip explains STP, what a root election is, and why rogue bridges cause 30-second periodic outages.",
+            "Mesh Wi-Fi nodes connected via Ethernet cable are a common source of rogue bridge events.",
+        ],
+    },
+    "IoT Behaviour": {
+        "what": "Learns normal traffic per IoT device and alerts on port scans, new destinations, and traffic rate spikes.",
+        "hidden": [
+            "Run the baseline for at least 24 hours before expecting accurate alerts — the model needs time to learn normal behaviour.",
+            "Alerts fire when a device contacts a destination it has never used before — common after firmware updates.",
+        ],
+    },
+    "Trend Forecasts": {
+        "what": "Extrapolates RTT and packet-loss trends to predict future degradation based on historical data.",
+        "hidden": [
+            "Forecasts are only meaningful after several days of Network Logger data — short runs produce wide confidence intervals.",
+        ],
+    },
+    "Root Cause Analysis": {
+        "what": "Correlates events across modules to surface the most likely root cause of complex multi-symptom problems.",
+        "hidden": [
+            "Run a full scan and let the Network Logger collect data for at least an hour before using this — it needs events to correlate.",
+        ],
+    },
+    # ── Automation ─────────────────────────────────────────────────────────────
+    "Automation Hooks": {
+        "what": "Webhook and script triggers on network events — device down, high RTT, new device discovered.",
+        "hidden": [
+            "Hooks fire in the background — configure a webhook URL and watch your Slack or Discord channel for events.",
+            "Script hooks run any executable on your machine, so you can trigger Home Assistant scenes, send emails, or log to a database.",
+        ],
+    },
+    "Scheduled Scans": {
+        "what": "Run discovery and port scans on a repeating schedule — useful for overnight audits or compliance snapshots.",
+        "hidden": [
+            "Scheduled scans run even when the main window is not visible — the background service handles them.",
+            "Combine with Config Snapshots to automatically save the state after each scheduled scan.",
+        ],
+    },
+    "Custom Triggers": {
+        "what": "Build your own event rules: if RTT exceeds a threshold for N consecutive pings, fire an action.",
+        "hidden": [
+            "Triggers can call webhooks, run scripts, or send desktop notifications — the same actions as Automation Hooks.",
+        ],
+    },
+    "MQTT / Home Assistant": {
+        "what": "Publishes device presence, uptime, and alerts to an MQTT broker for Home Assistant integration.",
+        "hidden": [
+            "Set the MQTT broker address and port in Settings — the page will show connection status once configured.",
+            "Each device gets its own Home Assistant entity — ideal for automations like 'if the kids' tablet leaves the network, run a script'.",
+        ],
+    },
+    "Config Snapshots": {
+        "what": "Takes point-in-time snapshots of your scan results — compare current state to a baseline.",
+        "hidden": [
+            "Take a snapshot right after a clean setup, then compare against it after any change to see exactly what shifted.",
+        ],
+    },
+    "Maintenance Windows": {
+        "what": "Suppress alerts during planned downtime so you don't get paged for your own maintenance.",
+        "hidden": [
+            "Windows are one-time or recurring — set a recurring window for regular router reboots or backup jobs.",
+        ],
+    },
+    # ── Security Audit ─────────────────────────────────────────────────────────
+    "Port Scan (TCP)": {
+        "what": "SYN stealth port scanner — identifies open TCP ports on discovered devices. Requires admin + Npcap.",
+        "hidden": [
+            "SYN scan is faster and quieter than a connect scan because it never completes the three-way handshake.",
+            "Scan results feed into Device Risk Score and CVE Lookup automatically.",
+        ],
+    },
+    "Port Scan (UDP)": {
+        "what": "UDP port scanner — identifies open UDP services including DNS, SNMP, and NTP.",
+        "hidden": [
+            "UDP scanning is slower than TCP because closed ports respond with ICMP unreachable, which routers often rate-limit.",
+            "Focus on ports 53, 161, 123, and 5353 for the most common home-network UDP services.",
+        ],
+    },
+    "CVE Lookup": {
+        "what": "Cross-references discovered OS and service versions against the NVD database on demand.",
+        "hidden": [
+            "CVE data is fetched from services.nvd.nist.gov — this is the only external call in this tab.",
+            "Run a port scan first so there are service versions to look up — CVE Lookup needs version strings to match against.",
+        ],
+    },
+    "Threat Intel": {
+        "what": "Checks IP addresses from your scan results against threat intelligence feeds for known malicious hosts.",
+        "hidden": [
+            "Click any flagged IP to see which feed reported it and when it was last seen.",
+        ],
+    },
+    "TLS & Exposure": {
+        "what": "Monitors TLS certificate expiry per host and checks for accidental internet exposure of internal services.",
+        "hidden": [
+            "Certificates are checked hourly — you will see an alert badge 30 days before any cert expires.",
+            "Exposure checks probe from the internet side — a result of 'exposed' means the port is reachable from outside your network.",
+        ],
+    },
+    "Login Test": {
+        "what": "Tests common default credentials against discovered services — for authorised use on networks you own.",
+        "hidden": [
+            "This test only tries documented factory-default passwords, not brute-force lists — it is designed for auditing your own devices.",
+            "Results feed into Device Risk Score — a device with default credentials gets a critical risk flag.",
+        ],
+    },
+    "OS Detection": {
+        "what": "Fingerprints device operating systems using TCP/IP stack analysis.",
+        "hidden": [
+            "Accuracy improves when port scan data is available — run a TCP port scan first.",
+        ],
+    },
+    "Device Risk Score": {
+        "what": "Calculates a per-device risk score based on open ports, OS age, CVEs, and default credentials.",
+        "hidden": [
+            "Scores update automatically as port scan, CVE lookup, and login test results come in.",
+            "Click any device row to see the specific findings that are driving its score up.",
+        ],
+    },
+    "CVE Tracker": {
+        "what": "Tracks active CVEs for your network devices over time — shows newly discovered vulnerabilities since last scan.",
+        "hidden": [
+            "Newly discovered CVEs appear with a 'New' badge — these are the ones to prioritise for patching.",
+        ],
+    },
+    "Exposed to Internet": {
+        "what": "Checks whether services on your network are reachable from the public internet via your external IP.",
+        "hidden": [
+            "A result of 'exposed' means someone outside your network could connect to that port — check your router's port-forwarding rules.",
+        ],
+    },
+    "Full Device Discovery": {
+        "what": "Parallel ARP + ICMP + TCP SYN + mDNS sweep for maximum device census accuracy. Requires admin + Npcap.",
+        "hidden": [
+            "This finds devices that don't respond to ARP alone — smart TVs and IoT devices that block pings are often missed by standard discovery.",
+        ],
+    },
+    "Windows Shares (SMB)": {
+        "what": "Enumerates accessible SMB shares on Windows devices on your network.",
+        "hidden": [
+            "Shared folders that are visible without a password are flagged — these are a common data-exfiltration risk on home networks.",
+        ],
+    },
+    "Plugin Modules": {
+        "what": "Third-party scan modules — drop a .py plugin file into the plugins/ directory to add new capabilities.",
+        "hidden": [
+            "See CONTRIBUTING.md for the plugin API — a plugin is a single Python class with a run() method.",
+        ],
+    },
+    "Private Endpoint Check": {
+        "what": "Verifies that cloud private endpoints are not accidentally exposed on your local network.",
+        "hidden": [
+            "Useful if you run cloud VMs with VPN-connected private endpoints — this confirms the endpoint is not leaking.",
+        ],
+    },
+    "Cloud Metadata Probe": {
+        "what": "Detects cloud metadata service exposure (169.254.169.254) on the local subnet.",
+        "hidden": [
+            "A reachable metadata endpoint from a device that should not have cloud access indicates a misconfigured VM or container.",
+        ],
+    },
+    "DHCP Rogue Monitor": {
+        "what": "Watches for unauthorised DHCP servers responding on your network — a sign of a misconfigured device or attack.",
+        "hidden": [
+            "Requires Npcap on Windows — the monitor listens for DHCP OFFER frames on the wire.",
+            "A rogue DHCP server can redirect your DNS to a malicious resolver — this is a common attack on public Wi-Fi.",
+        ],
+    },
+    # ── Education ──────────────────────────────────────────────────────────────
+    "Protocol Visualizer": {
+        "what": "Animated step-by-step diagrams of ARP, DNS, TCP, DHCP, and STP using your real device addresses.",
+        "hidden": [
+            "Click any step in the step list to jump directly to it — you don't have to watch the full animation.",
+            "The '▸ Why this protocol matters' panel at the bottom links the animation to real threats NetSentinel detects.",
+            "The 'See diagram' button in any Explain This panel jumps here with the right protocol pre-selected.",
+        ],
+    },
+    "Lab Mode": {
+        "what": "Guided exercises that walk you through diagnosing your live network step by step.",
+        "hidden": [
+            "When the Home page shows a live event card, clicking 'Investigate →' drops you straight into a one-step lab built from that event.",
+            "After finishing an exercise, click 'Export Report (HTML)' to save a portable lab report.",
+            "Hints don't penalise you — use them freely. The solution is always there if you're stuck.",
+        ],
+    },
+    "Feature Guide": {
+        "what": "Every NetSentinel feature in one place — searchable, with descriptions and direct navigation.",
+        "hidden": [
+            "Use the search bar to find features by keyword — 'heatmap', 'arp', 'stp', or 'hidden' all work.",
+            "Features marked with a badge (Npcap, admin) need extra setup — hover the badge for details.",
+            "Click 'Open →' on any feature card to jump directly to that page.",
+        ],
+    },
+}
+
+
+# Pages that auto-expand the tip bar on first visit (they have non-obvious interactions)
+_AUTO_HELP_PAGES: frozenset[str] = frozenset({
+    "Logs", "Lab Mode", "Protocol Visualizer",
+    "Automation Hooks", "MQTT / Home Assistant", "TLS & Exposure",
+    "Service Heartbeat", "SNMP Trap Receiver", "Syslog Viewer",
+    "IoT Behaviour", "Scheduled Scans",
+})
+
+
 # ─── Main Window ─────────────────────────────────────────────────────────────
 
 class Dashboard(QMainWindow):
@@ -267,6 +1214,10 @@ class Dashboard(QMainWindow):
         self._pending_benchmark:     bool = False  # True when Grade My Network triggered a scan
         self._pending_isp_report:    bool = False  # True when ISP Report triggered diagnostics
 
+        # Network pulse bar state
+        self._last_scan_time:   float = 0.0  # epoch set on each m1 result
+        self._last_log_status:  str   = ""   # "OK" | "SLOW" | "FAIL" | ""
+
         # Page transition animation
         self._fade_anim: QPropertyAnimation | None = None
 
@@ -296,6 +1247,10 @@ class Dashboard(QMainWindow):
         _palette_sc = QShortcut(QKeySequence("Ctrl+K"), self)
         _palette_sc.activated.connect(self._open_command_palette)
 
+        # Esc closes the flyout panel in Standard/Pro mode
+        _esc_sc = QShortcut(QKeySequence("Escape"), self)
+        _esc_sc.activated.connect(self._on_canvas_click)
+
         # Pinned pages — persisted across sessions
         self._nav_pinned_labels: set = self._load_pinned_labels()
         self._nav_label_to_widget: dict = {}
@@ -305,6 +1260,12 @@ class Dashboard(QMainWindow):
         self._nav_admin_rows: set = set()   # rows requiring admin — get ·admin badge
         self._nav_audit_rows: set = set()   # Security Audit section rows — rendered in RED
         self._nav_action_rows: dict = {}
+        # Rail-mode state (Standard/Pro)
+        self._nav_sections: list = []        # [{name, icon, entries:[_NavEntry]}]
+        self._nav_open_section: str = ""     # name of currently expanded flyout section
+        self._nav_rail_buttons: dict = {}    # section_name -> _RailButton
+        self._nav_page_to_section: dict = {} # page_label -> section_name
+        self._nav_current_page_label: str = ""
         # Read saved mode before building the UI so _build_tabs() uses it
         try:
             from PyQt6.QtCore import QSettings as _QS
@@ -355,8 +1316,62 @@ class Dashboard(QMainWindow):
         self._progress.setFixedHeight(4)
         self._progress.setVisible(False)
         self._status_bar.addPermanentWidget(self._progress)
+
+        # ── Network pulse widgets (permanent, right-aligned) ─────────────────
+        _pulse_base = (
+            "QLabel { padding: 0 8px; font-size: 11px; background: transparent;"
+            f" border: none; color: {TEXT_MUTED}; }}"
+            "QLabel:hover { color: #FFFFFF; }"
+        )
+        _pulse_sep = QFrame()
+        _pulse_sep.setFrameShape(QFrame.Shape.VLine)
+        _pulse_sep.setFixedWidth(1)
+        _pulse_sep.setStyleSheet(f"background: {NAV_DIVIDER}; border: none;")
+
+        self._pulse_online_lbl  = _ClickLabel("○  —")
+        self._pulse_devices_lbl = _ClickLabel("■  —")
+        self._pulse_scan_lbl    = _ClickLabel("Last scan: —")
+        self._pulse_logger_lbl  = _ClickLabel("○  Logger off")
+        for _l in (self._pulse_online_lbl, self._pulse_devices_lbl,
+                   self._pulse_scan_lbl, self._pulse_logger_lbl):
+            _l.setStyleSheet(_pulse_base)
+            _l.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._pulse_online_lbl.setToolTip(
+            "Connection status (last logger result)\nClick to open Connectivity Tests"
+        )
+        self._pulse_devices_lbl.setToolTip(
+            "Number of devices seen in the last scan\nClick to open Overview"
+        )
+        self._pulse_scan_lbl.setToolTip(
+            "Time since the last network scan completed\nClick to open Overview"
+        )
+        self._pulse_logger_lbl.setToolTip(
+            "Network logger state — starts automatically on first launch\nClick to open Logs"
+        )
+
+        self._pulse_online_lbl.clicked.connect(
+            lambda: self._nav_rail_go_to("Connectivity Tests"))
+        self._pulse_devices_lbl.clicked.connect(
+            lambda: self._nav_rail_go_to("Overview"))
+        self._pulse_scan_lbl.clicked.connect(
+            lambda: self._nav_rail_go_to("Overview"))
+        self._pulse_logger_lbl.clicked.connect(
+            lambda: self._nav_rail_go_to("Logs"))
+
+        self._status_bar.addPermanentWidget(_pulse_sep)
+        self._status_bar.addPermanentWidget(self._pulse_online_lbl)
+        self._status_bar.addPermanentWidget(self._pulse_devices_lbl)
+        self._status_bar.addPermanentWidget(self._pulse_scan_lbl)
+        self._status_bar.addPermanentWidget(self._pulse_logger_lbl)
+
         self.setStatusBar(self._status_bar)
         self._set_status("Ready. Click RUN FULL SCAN to begin.")
+
+        # 10-second pulse timer — keeps status-bar indicators current
+        self._pulse_timer = QTimer()
+        self._pulse_timer.setInterval(10_000)
+        self._pulse_timer.timeout.connect(self._refresh_pulse_bar)
+        self._pulse_timer.start()
         # Load network info in background on startup
         self._refresh_network_info()
         # Silent background update check
@@ -684,7 +1699,7 @@ class Dashboard(QMainWindow):
             from PyQt6.QtCore import QEvent
             if event.type() == QEvent.Type.WindowStateChange:
                 # ChromeRestore / ChromeMaximize in Segoe MDL2 Assets
-                self._maximize_btn.setText("" if self.isMaximized() else "")
+                self._maximize_btn.setText("" if self.isMaximized() else "")
                 self._maximize_btn.setToolTip(
                     "Restore" if self.isMaximized() else "Maximise"
                 )
@@ -809,8 +1824,11 @@ class Dashboard(QMainWindow):
             return bw + self._GAP
 
         def paint(self, painter, option, index):
-            super().paint(painter, option, index)
+            from PyQt6.QtWidgets import QStyle, QStyleOptionViewItem
             from PyQt6.QtGui import QPainter
+            opt = QStyleOptionViewItem(option)
+            opt.state &= ~QStyle.StateFlag.State_HasFocus
+            super().paint(painter, opt, index)
             row = index.row()
             painter.save()
             right_offset = 0
@@ -1017,6 +2035,9 @@ class Dashboard(QMainWindow):
 
     def _nav_goto_label(self, label: str):
         """Navigate to the sidebar page whose label matches exactly."""
+        if self._nav_mode != "home":
+            self._nav_rail_go_to(label)
+            return
         for row, lbl in self._nav_item_labels.items():
             if lbl == label and row not in self._nav_header_rows:
                 self._nav.setCurrentRow(row)
@@ -1025,24 +2046,10 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot()
     def _toggle_sidebar(self):
-        """Toggle between full-width sidebar and icon-only narrow mode."""
-        self._nav_collapsed = not self._nav_collapsed
-        new_width = 48 if self._nav_collapsed else 220
-        self._nav_sidebar_container.setFixedWidth(new_width)
-        # Keep search visible even when collapsed; placeholder changes to ⌕
-        if self._nav_collapsed:
-            self._nav_search.setPlaceholderText("⌕")
-            self._nav_search.setFixedWidth(38)
-        else:
-            self._nav_search.setPlaceholderText("Search pages…")
-            self._nav_search.setMinimumWidth(0)
-            self._nav_search.setMaximumWidth(16777215)
-        # Hide mode pill when collapsed (no room for text)
-        if hasattr(self, "_mode_pill_btn"):
-            self._mode_pill_btn.setVisible(not self._nav_collapsed)
-        self._sidebar_toggle_btn.setText("▶" if self._nav_collapsed else "◀")
-        for row in range(self._nav.count()):
-            self._nav_refresh_item_text(row)
+        """Show/hide the rail sidebar (VSCode-style: toggle entire panel)."""
+        visible = not self._nav_rail_panel.isVisible()
+        self._nav_rail_panel.setVisible(visible)
+        self._sidebar_toggle_btn.setText("▶" if not visible else "◀")
 
     def _focus_nav_search(self) -> None:
         """Expand sidebar if collapsed, then focus the search box."""
@@ -1126,6 +2133,11 @@ class Dashboard(QMainWindow):
         from ui.pages.syslog_page import SyslogPage
         self._syslog_page = SyslogPage(parent=None)
 
+        from ui.pages.log_hub_page import LogHubPage
+        self._log_hub_page = LogHubPage(parent=None)
+        self._log_hub_page.animate_requested.connect(self._on_animate_log_entry)
+        self._log_hub_page.live_challenge_detected.connect(self._on_live_challenge)
+
         from ui.pages.overview_page import OverviewPage
         self._overview_page = OverviewPage(store=self._store, parent=None)
 
@@ -1185,6 +2197,11 @@ class Dashboard(QMainWindow):
 
         from ui.pages.protocol_viz_page import ProtocolVizPage
         self._protocol_viz_page = ProtocolVizPage(parent=None)
+        self._protocol_viz_page.navigate_to.connect(self._nav_rail_go_to)
+
+        from ui.pages.discover_page import FeatureGuidePage
+        self._discover_page = FeatureGuidePage(parent=None)
+        self._discover_page.navigate_to.connect(self._nav_rail_go_to)
 
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
@@ -1228,6 +2245,7 @@ class Dashboard(QMainWindow):
         self._home_page = HomePage(store=self._store, parent=None)
         # Wire HomePage hero buttons and incoming speed results (guard prevents
         # double-connection if _build_tabs() is ever called more than once)
+        self._pending_live_scenario = None
         if not self._home_page._signals_connected:
             self._home_page._btn_scan.clicked.connect(self._start_full_scan)
             self._home_page._btn_isp.clicked.connect(self._open_isp_from_home)
@@ -1235,9 +2253,14 @@ class Dashboard(QMainWindow):
             self._speed_test_page.test_completed.connect(self._home_page.on_speed_result)
             self._home_page.navigate_to.connect(self._on_overview_navigate)
             self._home_page.start_monitoring_requested.connect(self._toggle_logger)
+            self._home_page.investigate_live_requested.connect(self._on_investigate_live)
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
         self._diagnosis_page.navigate_to.connect(self._on_overview_navigate)
+
+        # Populate home page suggestions on first build (deferred so _home_page exists)
+        from PyQt6.QtCore import QTimer as _QTr
+        _QTr.singleShot(0, self._refresh_home_suggestions)
 
         # ── Worker refs ───────────────────────────────────────────────────────
         self._arp_worker:        Optional[object] = None
@@ -1273,6 +2296,7 @@ class Dashboard(QMainWindow):
         self._stack.addWidget(self._diagnosis_page)
         self._stack.addWidget(self._lab_mode_page)
         self._stack.addWidget(self._protocol_viz_page)
+        self._stack.addWidget(self._discover_page)
         self._nav_row_to_page:   dict = {}
         self._nav_separators:    set  = set()
         # Extended nav data model
@@ -1338,7 +2362,7 @@ class Dashboard(QMainWindow):
         # Diagnostics — collapsed; deeper investigation tools
         self._nav_add_subgroup("Diagnostics", icon="💊")
         self._nav_add_page("✚", "Health Check",         dia)
-        self._nav_add_page("≣", "Stability Log",        log)
+        self._nav_add_page("≣", "Network Logger",        log)
         self._nav_add_page("⊕", "Root Cause Analysis",  self._correlator_tab_widget)
         self._nav_add_page("↗", "Trend Forecasts",      self._trend_page)
         self._nav_add_page("⬡", "IPv6 Devices",         self._ipv6_tab_widget)
@@ -1420,6 +2444,7 @@ class Dashboard(QMainWindow):
         self._nav_add_section("Education", icon="◎", collapsed_by_default=True)
         self._nav_add_page("⬡", "Lab Mode",             self._lab_mode_page)
         self._nav_add_page("◈", "Protocol Visualizer",  self._protocol_viz_page)
+        self._nav_add_page("◉", "Feature Guide",        self._discover_page)
         self._nav_separators.add(self._nav_edu_sep)
 
         # Apply initial collapse for ALL groups that start collapsed (both level-0
@@ -1438,17 +2463,47 @@ class Dashboard(QMainWindow):
         # Select the Overview row (first real page in the Pinned section)
         self._nav.setCurrentRow(1)
 
-        # ── Build sidebar container (search + nav list + collapse button) ──────
-        self._nav_sidebar_container = QWidget()
-        self._nav_sidebar_container.setFixedWidth(220)
-        self._nav_sidebar_container.setStyleSheet(
-            f"QWidget {{ background:{SIDEBAR_BG}; }}"
-        )
-        _sb_lay = QVBoxLayout(self._nav_sidebar_container)
-        _sb_lay.setContentsMargins(0, 0, 0, 0)
-        _sb_lay.setSpacing(0)
+        # ── Build sidebar panels ───────────────────────────────────────────────
+        # Panel 0 — flat QListWidget sidebar (Home mode)
+        self._nav_flat_panel = QWidget()
+        self._nav_flat_panel.setFixedWidth(220)
+        self._nav_flat_panel.setStyleSheet(f"QWidget {{ background:{SIDEBAR_BG}; }}")
+        _fp_lay = QVBoxLayout(self._nav_flat_panel)
+        _fp_lay.setContentsMargins(0, 0, 0, 0)
+        _fp_lay.setSpacing(0)
 
-        # Search / filter input
+        # Mode segmented control — 3-button selector: [Home] [Standard] [Pro]
+        self._mode_seg = QWidget()
+        self._mode_seg.setFixedHeight(34)
+        self._mode_seg.setStyleSheet("QWidget { background: transparent; }")
+        _seg_lay = QHBoxLayout(self._mode_seg)
+        _seg_lay.setContentsMargins(8, 5, 8, 5)
+        _seg_lay.setSpacing(0)
+        self._mode_seg_btns: dict = {}
+        _seg_items = [
+            ("home",     "Home",     ACCENT,     "4px 0px 0px 4px"),
+            ("standard", "Standard", "#2E7D32",  "0px"),
+            ("pro",      "Pro",      "#C62828",   "0px 4px 4px 0px"),
+        ]
+        for _sk, _sl, _sa, _sr in _seg_items:
+            _sb = QPushButton(_sl)
+            _sb.setCheckable(True)
+            _sb.setFixedHeight(24)
+            _sb.setCursor(Qt.CursorShape.PointingHandCursor)
+            _sb.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            _sb.setStyleSheet(
+                f"QPushButton {{ background:{SIDEBAR_SECTION_BG}; color:{SIDEBAR_SECTION_FG};"
+                f" border:1px solid {NAV_DIVIDER}; border-radius:{_sr};"
+                f" font-size:10px; font-weight:600; padding:0 4px; }}"
+                f"QPushButton:hover {{ background:{SIDEBAR_HOVER}; color:{WHITE}; }}"
+                f"QPushButton:checked {{ background:{_sa}; color:{WHITE}; border-color:{_sa}; }}"
+                f"QPushButton:checked:hover {{ background:{_sa}; color:{WHITE}; }}"
+            )
+            _sb.clicked.connect(lambda _c, m=_sk: self._set_mode(m))
+            _seg_lay.addWidget(_sb, 1)
+            self._mode_seg_btns[_sk] = _sb
+
+        # Search / filter (flat panel only — hidden by default)
         self._nav_search = QLineEdit()
         self._nav_search.setObjectName("navSearch")
         self._nav_search.setPlaceholderText("  Filter…")
@@ -1461,32 +2516,9 @@ class Dashboard(QMainWindow):
             f"QLineEdit#navSearch:focus {{ color:{WHITE}; }}"
         )
         self._nav_search.textChanged.connect(self._on_nav_search_changed)
-        self._nav_search.setVisible(False)   # hidden in mode-based nav (no search needed)
+        self._nav_search.setVisible(False)
 
-        # ── Single cycling mode pill — top of sidebar, before nav list ────────
-        self._mode_pill_btn = QFrame()
-        self._mode_pill_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._mode_pill_btn.setToolTip("Click to cycle: Home → Standard → Pro")
-        self._mode_pill_btn.mousePressEvent = lambda _e: self._cycle_mode()
-        _pill_h = QHBoxLayout(self._mode_pill_btn)
-        _pill_h.setContentsMargins(10, 5, 10, 5)
-        _pill_h.setSpacing(5)
-        self._mode_pill_dot = QLabel("•")
-        self._mode_pill_dot.setStyleSheet(
-            f"font-size:12px; font-weight:900; background:transparent; border:none;"
-        )
-        self._mode_pill_lbl = QLabel()
-        self._mode_pill_lbl.setWordWrap(True)
-        self._mode_pill_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:600; color:{WHITE}; background:transparent; border:none;"
-        )
-        _pill_h.addWidget(self._mode_pill_dot)
-        _pill_h.addWidget(self._mode_pill_lbl, 1)
-        _sb_lay.addWidget(self._mode_pill_btn)
-        _sb_lay.addWidget(self._nav_search)
-        _sb_lay.addWidget(self._nav, 1)
-
-        # Collapse ◀ / ▶ toggle button
+        # Collapse ◀ / ▶ toggle (flat panel footer)
         self._sidebar_toggle_btn = QPushButton("◀")
         self._sidebar_toggle_btn.setFixedHeight(24)
         self._sidebar_toggle_btn.setStyleSheet(
@@ -1495,7 +2527,83 @@ class Dashboard(QMainWindow):
             f"QPushButton:hover {{ color:{WHITE}; background:{SIDEBAR_HOVER}; }}"
         )
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
-        _sb_lay.addWidget(self._sidebar_toggle_btn)
+
+        _fp_lay.addWidget(self._mode_seg)
+        _fp_lay.addWidget(self._nav_search)
+        _fp_lay.addWidget(self._nav, 1)
+        _fp_lay.addWidget(self._sidebar_toggle_btn)
+
+        # Panel 1 — activity rail + flyout (Standard/Pro mode)
+        self._nav_rail_panel = QWidget()
+        self._nav_rail_panel.setStyleSheet(f"QWidget {{ background:{SIDEBAR_BG}; }}")
+        _rp_lay = QHBoxLayout(self._nav_rail_panel)
+        _rp_lay.setContentsMargins(0, 0, 0, 0)
+        _rp_lay.setSpacing(0)
+
+        # 48px icon rail
+        self._nav_rail = QWidget()
+        self._nav_rail.setFixedWidth(48)
+        self._nav_rail.setStyleSheet(
+            f"background: {SIDEBAR_BG}; border-right: 1px solid {NAV_DIVIDER};"
+        )
+        self._nav_rail_lay = QVBoxLayout(self._nav_rail)
+        self._nav_rail_lay.setContentsMargins(0, 0, 0, 0)
+        self._nav_rail_lay.setSpacing(0)
+
+        # Mode pill at top of rail (cycling dot)
+        self._rail_mode_btn = QPushButton("●")
+        self._rail_mode_btn.setFixedSize(48, 32)
+        self._rail_mode_btn.setToolTip("Click to cycle: Standard → Pro → Home")
+        self._rail_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._rail_mode_btn.clicked.connect(self._cycle_mode)
+        self._rail_mode_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none;"
+            f" color: {ACCENT}; font-size: 10px; }}"
+            f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
+        )
+        self._rail_mode_btn.setVisible(False)  # mode switcher removed
+
+        # Persistent search button — always visible at top of rail, opens Ctrl+K palette
+        _rail_search_btn = QPushButton()
+        _rail_search_btn.setFixedSize(48, 36)
+        _rail_search_btn.setToolTip("Search all pages  (Ctrl+K)")
+        _rail_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _rail_search_btn.setIcon(_make_nav_icon("search", 18, "#6B7A8D"))
+        _rail_search_btn.setIconSize(QSize(18, 18))
+        _rail_search_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none; outline: none;"
+            f" border-bottom: 1px solid {NAV_DIVIDER}; }}"
+            f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
+            f"QPushButton:focus, QPushButton:focus-visible {{"
+            f" outline: none; border: none; border-bottom: 1px solid {NAV_DIVIDER}; }}"
+        )
+        _rail_search_btn.clicked.connect(self._open_command_palette)
+        self._nav_rail_lay.addWidget(_rail_search_btn)
+        self._nav_rail_lay.addStretch()
+
+        # Settings button pinned at bottom of rail
+        self._rail_settings_btn = _RailButton("settings", "Settings")
+        self._rail_settings_btn.clicked.connect(self._open_settings_dialog)
+        self._nav_rail_lay.addWidget(self._rail_settings_btn)
+
+        # Flyout panel (zero-width when closed)
+        self._nav_flyout = _FlyoutPanel(self._nav_rail_panel)
+
+        _rp_lay.addWidget(self._nav_rail)
+        _rp_lay.addWidget(self._nav_flyout)
+
+        # Sidebar container — show/hide panels so the layout respects their widths
+        self._nav_sidebar_container = QWidget()
+        _sc_lay = QHBoxLayout(self._nav_sidebar_container)
+        _sc_lay.setContentsMargins(0, 0, 0, 0)
+        _sc_lay.setSpacing(0)
+        _sc_lay.addWidget(self._nav_flat_panel)
+        _sc_lay.addWidget(self._nav_rail_panel)
+        self._nav_rail_panel.setVisible(True)    # always visible — no mode switcher
+
+        # Canvas click filter — closes flyout when user clicks content area
+        self._canvas_filter = _CanvasClickFilter(self)
+        self._canvas_filter.close_requested.connect(self._on_canvas_click)
 
         # ── Assemble sidebar + content area ───────────────────────────────────
         container = QWidget()
@@ -1504,19 +2612,76 @@ class Dashboard(QMainWindow):
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
         h.addWidget(self._nav_sidebar_container)
-        # 1px divider
+        # 1px divider between sidebar stack and content
         div = QFrame()
         div.setFrameShape(QFrame.Shape.VLine)
         div.setStyleSheet(f"background: {NAV_DIVIDER}; max-width: 1px;")
         h.addWidget(div)
-        # light content wrapper with padding
+        # Content wrapper
         content_wrapper = QWidget()
         content_wrapper.setObjectName("contentArea")
         cw_lay = QVBoxLayout(content_wrapper)
         cw_lay.setContentsMargins(12, 10, 12, 8)
         cw_lay.setSpacing(0)
+
+        # Breadcrumb row — label + "?" help button
+        bc_row = QHBoxLayout()
+        bc_row.setContentsMargins(0, 0, 0, 0)
+        bc_row.setSpacing(4)
+        self._breadcrumb_lbl = QLabel("Getting Started  ›  Home")
+        self._breadcrumb_lbl.setFixedHeight(20)
+        self._breadcrumb_lbl.setStyleSheet(
+            f"color: {TEXT_SECONDARY}; font-size: 11px; padding: 0 2px;"
+            f" background: transparent; border: none;"
+        )
+        bc_row.addWidget(self._breadcrumb_lbl, 1)
+
+        cw_lay.addLayout(bc_row)
+
+        self._tip_bar = QPushButton("ⓘ  Tips  ▾")
+        self._tip_bar.setCheckable(True)
+        self._tip_bar.setFixedHeight(22)
+        self._tip_bar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tip_bar.setStyleSheet(
+            f"QPushButton {{ text-align:left; padding:0 10px; font-size:10px;"
+            f" color:{ACCENT}; background:transparent; border:none;"
+            f" border-bottom:1px solid {BORDER}; }}"
+            f"QPushButton:hover {{ color:{WHITE}; }}"
+            f"QPushButton:checked {{ color:{WHITE}; font-weight:bold;"
+            f" border-bottom:1px solid {ACCENT}; }}"
+        )
+        self._tip_bar.toggled.connect(self._toggle_help_panel)
+        cw_lay.addWidget(self._tip_bar)
+
+        # Collapsible help strip — shown below breadcrumb, hidden by default
+        self._help_panel = QFrame()
+        self._help_panel.setObjectName("pageHelpPanel")
+        self._help_panel.setStyleSheet(
+            f"QFrame#pageHelpPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:6px; }}"
+        )
+        self._help_panel.setVisible(False)
+        hp_lay = QVBoxLayout(self._help_panel)
+        hp_lay.setContentsMargins(12, 8, 12, 8)
+        hp_lay.setSpacing(4)
+        self._help_what_lbl = QLabel()
+        self._help_what_lbl.setWordWrap(True)
+        self._help_what_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        hp_lay.addWidget(self._help_what_lbl)
+        self._help_hidden_lbl = QLabel()
+        self._help_hidden_lbl.setWordWrap(True)
+        self._help_hidden_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        hp_lay.addWidget(self._help_hidden_lbl)
+        cw_lay.addWidget(self._help_panel)
+
+        cw_lay.setSpacing(6)
         cw_lay.addWidget(self._stack)
         h.addWidget(content_wrapper, 1)
+        content_wrapper.installEventFilter(self._canvas_filter)
 
         # Copy-to-clipboard right-click menus
         for tbl in (
@@ -1570,6 +2735,9 @@ class Dashboard(QMainWindow):
 
     def _nav_go_to(self, label: str) -> None:
         """Programmatically navigate to the page with the given sidebar label."""
+        if self._nav_mode != "home":
+            self._nav_rail_go_to(label)
+            return
         for row, lbl in self._nav_item_labels.items():
             if lbl == label:
                 self._nav.setCurrentRow(row)
@@ -1578,39 +2746,24 @@ class Dashboard(QMainWindow):
     # ── Progressive-disclosure nav ────────────────────────────────────────────
 
     def _update_mode_pill(self) -> None:
-        """Refresh the single cycling mode pill for the current _nav_mode."""
-        if not hasattr(self, "_mode_pill_btn"):
-            return
-        # Per-mode accent colour \u2014 pill is transparent with a coloured border + dot
-        _accent, _accent_hover = {
-            "home":     (ACCENT,      ACCENT_DARK),
-            "standard": ("#2E7D32",   "#1B5E20"),
-            "pro":      ("#C62828",   "#8B0000"),
-        }.get(self._nav_mode, (ACCENT, ACCENT_DARK))
-        _label = {"home": "Home", "standard": "Standard", "pro": "Pro"}.get(
-            self._nav_mode, self._nav_mode.title()
-        )
+        """Highlight the active segment in the mode segmented control."""
+        if hasattr(self, "_mode_seg_btns"):
+            for _mk, _mb in self._mode_seg_btns.items():
+                _mb.setChecked(_mk == self._nav_mode)
         if hasattr(self, "_header_mode_lbl"):
             self._header_mode_lbl.setVisible(False)
-        # Dot in accent colour, text in white
-        self._mode_pill_dot.setStyleSheet(
-            f"font-size:12px; font-weight:900; color:{_accent};"
-            f" background:transparent; border:none;"
-        )
-        self._mode_pill_lbl.setText(f"{_label} mode \u00b7")
-        # Frame: transparent background, coloured border \u2014 sidebar shows through
-        self._mode_pill_btn.setStyleSheet(
-            f"QFrame {{"
-            f"  background: transparent;"
-            f"  border: 1px solid {_accent};"
-            f"  border-radius: 12px;"
-            f"  margin: 6px 4px 4px 4px;"
-            f"}}"
-            f"QFrame:hover {{"
-            f"  background: rgba(255,255,255,0.07);"
-            f"  border-color: {_accent_hover};"
-            f"}}"
-        )
+        # Rail mode button shows the current mode letter
+        if hasattr(self, "_rail_mode_btn"):
+            _short = {"home": "H", "standard": "S", "pro": "P"}.get(self._nav_mode, "?")
+            _accent = {"home": ACCENT, "standard": "#2E7D32", "pro": "#C62828"}.get(
+                self._nav_mode, ACCENT
+            )
+            self._rail_mode_btn.setText(_short)
+            self._rail_mode_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; border: none;"
+                f" color: {_accent}; font-size: 11px; font-weight: bold; }}"
+                f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
+            )
 
     def _cycle_mode(self) -> None:
         """Cycle through home → standard → pro → home on pill click."""
@@ -1635,6 +2788,7 @@ class Dashboard(QMainWindow):
 
     def _rebuild_nav_for_mode(self) -> None:
         """Clear sidebar and rebuild it for the current _nav_mode."""
+        # ── Reset flat-nav state ───────────────────────────────────────────────
         self._nav.clear()
         self._nav_row_to_page.clear()
         self._nav_item_icons.clear()
@@ -1651,28 +2805,50 @@ class Dashboard(QMainWindow):
         self._adv_tab_index_adv = -1
         self._adv_tab_index_mtr = -1
 
-        self._build_favourites_section()
-        if self._nav_mode == "home":
-            self._build_home_nav()
-        elif self._nav_mode == "pro":
-            self._build_pro_nav()
-        else:
-            self._build_standard_nav()
+        # ── Reset rail-nav state ───────────────────────────────────────────────
+        self._nav_sections.clear()
+        self._nav_page_to_section.clear()
+        self._nav_open_section = ""
+        if hasattr(self, "_nav_flyout") and self._nav_flyout.maximumWidth() > 0:
+            self._nav_flyout.close_panel()
 
-        # Apply initial collapse for sections that start collapsed
-        for _hrow, _grp in self._nav_section_groups.items():
-            if _grp["collapsed"] and _grp["level"] == 0:
-                self._nav_apply_section_visibility(_hrow, True)
-        for _hrow, _grp in self._nav_section_groups.items():
-            if _grp["collapsed"] and _grp["level"] == 1:
-                self._nav_apply_section_visibility(_hrow, True)
+        # ── Sidebar panel — rail is permanent, flat panel zeroed out ─────────────
+        # setFixedWidth(0) removes the flat panel's contribution to the container's
+        # max-width, letting the flyout expand freely to its full 260 px.
+        self._nav_flat_panel.setFixedWidth(0)
+        self._nav_flat_panel.setVisible(False)
+        self._nav_rail_panel.setVisible(True)
 
-        # Select first navigable row
-        for r in range(self._nav.count()):
-            if r not in self._nav_header_rows and r not in self._nav_action_rows:
-                self._nav.setCurrentRow(r)
-                self._nav_set_page(r)
-                break
+        # ── Build nav content — always the full Pro set ───────────────────────
+        self._build_pro_nav()
+
+        # ── Inject Pinned section at the top if user has pins ─────────────────
+        # _build_pro_nav populates _nav_label_to_widget so widget lookups work here
+        if self._nav_pinned_labels:
+            _pinned_entries = []
+            for _lbl in sorted(self._nav_pinned_labels):
+                _w = self._nav_label_to_widget.get(_lbl)
+                if _w is not None:
+                    _pinned_entries.append(_NavEntry(
+                        label=_lbl, page=_w,
+                        admin_required=False, audit_item=False, pinned=True,
+                    ))
+            if _pinned_entries:
+                self._nav_sections.insert(0, {
+                    "name": "Pinned", "icon": "pin", "entries": _pinned_entries,
+                })
+
+        # ── Finalise rail and restore last-used section (VSCode style) ────────
+        self._nav_finalize_rail()
+        _qs = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
+        _last = _qs.value("nav/last_section", "")
+        _open = _last if any(s["name"] == _last for s in self._nav_sections) \
+                else (self._nav_sections[0]["name"] if self._nav_sections else "")
+        if _open:
+            self._nav_rail_toggle(_open)
+            _sec = next((s for s in self._nav_sections if s["name"] == _open), None)
+            if _sec and _sec["entries"]:
+                self._nav_rail_go_to(_sec["entries"][0].label)
 
         self._update_mode_pill()
 
@@ -1690,6 +2866,16 @@ class Dashboard(QMainWindow):
             idx = self._stack.addWidget(widget)
         self._nav_label_to_widget[label] = widget
         return self._nav_add_alias(icon, label, idx)
+
+    def _nav_flat_item(self, icon: str, label: str, widget: "QWidget",
+                       admin_required: bool = False, audit_item: bool = False) -> int:
+        """Add a flat-nav item and optionally mark it admin/audit for red styling."""
+        row = self._nav_ref(icon, label, widget)
+        if admin_required:
+            self._nav_admin_rows.add(row)
+        if audit_item:
+            self._nav_audit_rows.add(row)
+        return row
 
     def _nav_add_action(self, icon: str, label: str, action) -> int:
         """Add a nav item that calls *action* instead of navigating to a page."""
@@ -1741,6 +2927,241 @@ class Dashboard(QMainWindow):
         # Deliberately NOT in _nav_section_groups — no collapse/expand logic
         return row
 
+    # ── Rail-mode nav helpers ─────────────────────────────────────────────────
+
+    def _nav_begin_section(self, name: str, icon: str) -> None:
+        """Start a new section in rail mode. Must be followed by _nav_add_rail_item calls."""
+        self._nav_sections.append({"name": name, "icon": icon, "entries": []})
+
+    def _nav_add_rail_item(
+        self,
+        label: str,
+        widget: "QWidget",
+        pinned: bool = False,
+        admin_required: bool = False,
+        audit_item: bool = False,
+    ) -> None:
+        """Register a page under the current rail section (last in _nav_sections)."""
+        if not self._nav_sections:
+            return
+        # Ensure widget is in the stack
+        if self._stack.indexOf(widget) < 0:
+            self._stack.addWidget(widget)
+        self._nav_label_to_widget[label] = widget
+        entry = _NavEntry(
+            label=label,
+            page=widget,
+            admin_required=admin_required,
+            audit_item=audit_item,
+            pinned=label in self._nav_pinned_labels or pinned,
+        )
+        self._nav_sections[-1]["entries"].append(entry)
+        self._nav_page_to_section[label] = self._nav_sections[-1]["name"]
+
+    def _nav_finalize_rail(self) -> None:
+        """Build _RailButton widgets from _nav_sections and wire them up."""
+        # Clear old rail buttons (between the mode-btn and settings-btn)
+        stretch_idx = None
+        for i in range(self._nav_rail_lay.count()):
+            item = self._nav_rail_lay.itemAt(i)
+            if item and item.spacerItem():
+                stretch_idx = i
+                break
+        # Remove all rail section buttons (inserted between mode btn and stretch)
+        while stretch_idx and stretch_idx > 1:
+            item = self._nav_rail_lay.takeAt(1)
+            if item and item.widget():
+                item.widget().deleteLater()
+            stretch_idx -= 1
+
+        self._nav_rail_buttons.clear()
+        for sec in self._nav_sections:
+            btn = _RailButton(sec["icon"], sec["name"])
+            btn.clicked.connect(lambda _c, s=sec["name"]: self._nav_rail_toggle(s))
+            if sec["name"] == "Security Audit":
+                btn.setToolTip(
+                    "Security Audit\n"
+                    "Items shown in red require admin rights or run\n"
+                    "active probes against devices on your network."
+                )
+            # Insert before the stretch (index = count - 2: stretch + settings)
+            insert_at = self._nav_rail_lay.count() - 2
+            self._nav_rail_lay.insertWidget(insert_at, btn)
+            self._nav_rail_buttons[sec["name"]] = btn
+
+    def _nav_rail_toggle(self, section_name: str) -> None:
+        """Toggle the flyout for the given section; close if already open."""
+        if self._nav_open_section == section_name and self._nav_flyout.maximumWidth() > 0:
+            # Clicking the active section icon collapses the flyout
+            if not self._nav_flyout.is_pinned:
+                self._nav_flyout.close_panel()
+                self._nav_open_section = ""
+                self._nav_rail_buttons[section_name].setChecked(False)
+            return
+        # Switch to the new section
+        self._nav_open_section = section_name
+        for name, btn in self._nav_rail_buttons.items():
+            btn.setChecked(name == section_name)
+        sec = next((s for s in self._nav_sections if s["name"] == section_name), None)
+        if sec is None:
+            return
+        entries = [
+            (e.label, e.label in self._nav_pinned_labels, e.admin_required or e.audit_item)
+            for e in sec["entries"]
+        ]
+        self._nav_flyout.load_section(
+            title=section_name,
+            entries=entries,
+            active_label=self._nav_current_page_label,
+            on_click=self._nav_rail_go_to,
+            on_pin_toggle=self._on_rail_pin_toggle,
+        )
+        self._nav_flyout.open()
+        _qs = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
+        _qs.setValue("nav/last_section", section_name)
+
+    def _nav_rail_go_to(self, label: str) -> None:
+        """Navigate to a page by label in rail mode. Flyout stays open."""
+        widget = self._nav_label_to_widget.get(label)
+        if widget is None:
+            return
+        self._nav_current_page_label = label
+        self._stack.setCurrentWidget(widget)
+        self._nav_flyout.set_active(label)
+        section = self._nav_page_to_section.get(label, "")
+        if hasattr(self, "_breadcrumb_lbl"):
+            self._breadcrumb_lbl.setText(f"{section}  ›  {label}" if section else label)
+        if hasattr(self, "_help_panel"):
+            self._update_help_panel(label)
+        if hasattr(self, "_tray_manager"):
+            self._tray_manager.reset_badge()
+        # Auto-expand tips on first visit to pages with non-obvious interactions
+        if label in _AUTO_HELP_PAGES and _PAGE_HELP.get(label) and hasattr(self, "_tip_bar"):
+            import json as _json
+            _qs2 = QSettings("NetSentinel", "NetSentinel")
+            try:
+                _visited2 = _json.loads(_qs2.value("discover/visited_pages", "[]"))
+            except Exception:
+                _visited2 = []
+            if label not in _visited2:
+                self._tip_bar.setChecked(True)
+        self._track_page_visit(label)
+
+    def _update_help_panel(self, label: str) -> None:
+        """Refresh tip bar text and collapse the help panel when the page changes."""
+        info = _PAGE_HELP.get(label, {})
+        self._tip_bar_has_content = bool(info)
+
+        # Collapse panel silently on page change
+        if hasattr(self, "_tip_bar"):
+            self._tip_bar.blockSignals(True)
+            self._tip_bar.setChecked(False)
+            self._tip_bar.blockSignals(False)
+        if hasattr(self, "_help_panel"):
+            self._help_panel.setVisible(False)
+
+        if not info:
+            if hasattr(self, "_tip_bar"):
+                self._tip_bar.setText("ⓘ  Open Feature Guide  →")
+            return
+
+        if hasattr(self, "_tip_bar"):
+            self._tip_bar.setText(f"ⓘ  Tips for {label}  ▾")
+
+        what = info.get("what", "")
+        bullets = info.get("hidden", [])
+        if hasattr(self, "_help_what_lbl"):
+            self._help_what_lbl.setText(what)
+        if hasattr(self, "_help_hidden_lbl"):
+            if bullets:
+                hidden_text = "\n".join(f"  •  {b}" for b in bullets)
+                self._help_hidden_lbl.setText(f"Hidden interactions:\n{hidden_text}")
+                self._help_hidden_lbl.setVisible(True)
+            else:
+                self._help_hidden_lbl.setVisible(False)
+
+    def _toggle_help_panel(self, checked: bool) -> None:
+        if not getattr(self, "_tip_bar_has_content", False):
+            # No tips for this page — clicking navigates to Feature Guide instead
+            if hasattr(self, "_tip_bar"):
+                self._tip_bar.blockSignals(True)
+                self._tip_bar.setChecked(False)
+                self._tip_bar.blockSignals(False)
+            self._nav_rail_go_to("Feature Guide")
+            return
+        if hasattr(self, "_help_panel"):
+            self._help_panel.setVisible(checked)
+
+    # ── Visited-feature tracking ───────────────────────────────────────────────
+
+    # Ordered list of high-value pages to surface to unvisited users.
+    _DISCOVERY_PAGES = [
+        ("Protocol Visualizer", "See animated diagrams of ARP, DNS, TCP and more — using your real devices"),
+        ("Lab Mode",            "Try a guided exercise: find a rogue device or diagnose slow DNS on your live network"),
+        ("Network Grade",       "Get an A–F score for your network health across 8 dimensions"),
+        ("ISP Report",          "Generate a professional report to send to your ISP when things go wrong"),
+        ("Connectivity Tests",  "Run ping, DNS, HTTP, and MTR in one click — plain-English verdict"),
+        ("Feature Guide",       "See everything this app can do — including features most users never find"),
+        ("Logs",                "View a continuous log of your connection stability, ARP events, and outages"),
+    ]
+
+    def _track_page_visit(self, label: str) -> None:
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        raw = qs.value("discover/visited_pages", "[]")
+        try:
+            visited: list = _json.loads(raw)
+        except Exception:
+            visited = []
+        if label not in visited:
+            visited.append(label)
+            qs.setValue("discover/visited_pages", _json.dumps(visited))
+            self._refresh_home_suggestions()
+
+    def _refresh_home_suggestions(self) -> None:
+        if not hasattr(self, "_home_page"):
+            return
+        # Don't overwrite a live challenge card
+        if getattr(self, "_pending_live_scenario", None) is not None:
+            return
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        raw = qs.value("discover/visited_pages", "[]")
+        try:
+            visited: set = set(_json.loads(raw))
+        except Exception:
+            visited = set()
+        suggestions = []
+        for page_label, description in self._DISCOVERY_PAGES:
+            if page_label not in visited:
+                suggestions.append({
+                    "text": description,
+                    "action_label": "Try it →",
+                    "target": page_label,
+                    "priority": "low",
+                })
+            if len(suggestions) >= 3:
+                break
+        self._home_page.set_suggestions(suggestions)
+
+    def _on_rail_pin_toggle(self, label: str, is_pinned: bool) -> None:
+        """Update pinned set, persist, and rebuild nav so Pinned section appears/disappears."""
+        if is_pinned:
+            self._nav_pinned_labels.add(label)
+        else:
+            self._nav_pinned_labels.discard(label)
+        self._save_pinned_labels()
+        self._rebuild_nav_for_mode()
+
+    def _on_canvas_click(self) -> None:
+        """Close flyout on canvas click (only if not pinned)."""
+        if hasattr(self, "_nav_flyout") and not self._nav_flyout.is_pinned:
+            if self._nav_flyout.maximumWidth() > 0:
+                self._nav_flyout.close_panel()
+                self._nav_open_section = ""
+                for btn in self._nav_rail_buttons.values():
+                    btn.setChecked(False)
+
     def _build_home_nav(self) -> None:
         """5-item minimal nav for Home mode (new users)."""
         self._nav_ref("\u2b21", "Home",            self._home_page)
@@ -1748,157 +3169,136 @@ class Dashboard(QMainWindow):
         self._nav_ref("\u26a1", "Speed Test",       self._speed_test_page)
         self._nav_ref("\u25ce", "DNS & Stability",  self._m5_tab)
         self._nav_ref("\u2295", "Devices",          self._m1_tab)
+        self._nav_ref("\u2263", "Network Logger",   self._log_tab)
         self._nav_ref("\u25b2", "Reports",          self._benchmark_tab_widget)
+        self._nav_add_section_label("Education")
+        self._nav_ref("\u29c6", "Protocol Visualizer", self._protocol_viz_page)
+        self._nav_ref("\u2b21", "Lab Mode",            self._lab_mode_page)
+        self._nav_ref("\u25c9", "Feature Guide",       self._discover_page)
         self._nav_add_spacer()
         self._nav_add_action("\u2261", "Show all features",
                              lambda: self._set_mode("standard"))
         self._nav_add_action("\u2699", "Settings", self._open_settings_dialog)
 
     def _build_standard_nav(self) -> None:
-        """Full organised nav \u2014 everything a home/intermediate user needs."""
-        self._nav_add_section_label("Quick Access")
-        self._nav_ref("\u25cb", "Home",              self._home_page)
-        self._nav_ref("\u26f6", "Overview",           self._overview_page)
-        self._nav_ref("\u26a1", "Speed Test",         self._speed_test_page)
-        self._nav_ref("\u25ce", "DNS & Stability",    self._m5_tab)
-        self._nav_ref("\u271a", "Health Check",       self._dia_tab)
+        """Standard mode \u2014 activity rail + flyout panels."""
+        self._nav_begin_section("Getting Started", "grid")
+        self._nav_add_rail_item("Home",               self._home_page)
+        self._nav_add_rail_item("Overview",            self._overview_page)
+        self._nav_add_rail_item("Speed Test",          self._speed_test_page)
+        self._nav_add_rail_item("DNS & Stability",     self._m5_tab)
+        self._nav_add_rail_item("Diagnose",            self._diagnosis_page)
 
-        self._nav_add_section_label("Discover")
-        self._nav_ref("\u2295", "Devices",             self._m1_tab)
-        self._nav_ref("\u25cb", "WiFi Networks",       self._m4_tab)
-        self._nav_ref("\u25c8", "WiFi Heatmap",        self._wifi_heatmap_page)
-        self._nav_ref("\u2b21", "Network Map",         self._topology_tab_widget)
-        self._nav_ref("\u2261", "DHCP Leases",         self._dhcp_lease_page)
-        self._nav_ref("\u2302", "Home Automation",     self._ha_page)
+        self._nav_begin_section("Discover", "network")
+        self._nav_add_rail_item("Devices",             self._m1_tab)
+        self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
+        self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
+        self._nav_add_rail_item("Network Map",         self._topology_tab_widget)
+        self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
+        self._nav_add_rail_item("Home Automation",     self._ha_page)
 
-        self._nav_add_section_label("Monitor")
-        self._nav_ref("\u25b2", "Live Bandwidth",       self._live_bandwidth_page)
-        self._nav_ref("\u25b2", "Bandwidth Usage",      self._bw_tab_widget)
-        self._nav_ref("\u21c4", "Active Connections",   self._connections_page)
-        self._nav_ref("\u229f", "Availability History", self._history_page)
-        self._nav_ref("\u2295", "Geolocation Map",      self._geo_map_page)
-        self._nav_ref("\u2b21", "IPv6 Devices",          self._ipv6_tab_widget)
-        self._nav_ref("\u2263", "Stability Log",        self._log_tab)
-        self._nav_ref("\u25ce", "Service Heartbeat",    self._service_page)
+        self._nav_begin_section("Monitor", "monitor")
+        self._nav_add_rail_item("Logs",                self._log_hub_page)
+        self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
+        self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
+        self._nav_add_rail_item("Active Connections",  self._connections_page)
+        self._nav_add_rail_item("Availability History", self._history_page)
+        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
+        self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
+        self._nav_add_rail_item("Network Logger",      self._log_tab)
+        self._nav_add_rail_item("Service Heartbeat",   self._service_page)
 
-        self._nav_add_section_label("Reports & Export")
-        self._nav_ref("\u25fc", "Network Grade",        self._benchmark_tab_widget)
-        self._nav_ref("\u2197", "ISP Report",           self._reports_page)
-        self._nav_ref("\u25a3", "Network Doc",          self._network_doc_page)
-        self._nav_ref("\u2299", "IP Calculator",        self._ip_calc_page)
-        self._nav_ref("\u25df", "Notifications",        self._notifications_page)
+        self._nav_begin_section("Reports", "bar-chart")
+        self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)
+        self._nav_add_rail_item("ISP Report",          self._reports_page)
+        self._nav_add_rail_item("Network Doc",         self._network_doc_page)
+        self._nav_add_rail_item("IP Calculator",       self._ip_calc_page)
+        self._nav_add_rail_item("Notifications",       self._notifications_page)
 
-        self._nav_add_section_label("Education")
-        self._nav_ref("\u29c6", "Protocol Visualizer",  self._protocol_viz_page)
-        self._nav_ref("\u2b21", "Lab Mode",             self._lab_mode_page)
-
-        self._nav_add_spacer()
-        self._nav_add_action("\u2261", "Expert / Security Audit",
-                             lambda: self._set_mode("pro"))
-        self._nav_add_action("\u2699", "Settings", self._open_settings_dialog)
+        self._nav_begin_section("Education", "book-open")
+        self._nav_add_rail_item("Protocol Visualizer", self._protocol_viz_page)
+        self._nav_add_rail_item("Lab Mode",            self._lab_mode_page)
+        self._nav_add_rail_item("Feature Guide",       self._discover_page)
 
     def _build_pro_nav(self) -> None:
-        """All capabilities \u2014 standard features + deep analysis + automation + security audit."""
-        self._nav_add_section_label("Quick Access")
-        self._nav_ref("\u25cb", "Home",            self._home_page)
-        self._nav_ref("\u26f6", "Overview",         self._overview_page)
-        self._nav_ref("\u26a1", "Speed Test",       self._speed_test_page)
+        """Full nav \u2014 activity rail + flyout. No mode switcher; this is the only nav."""
+        self._nav_begin_section("Getting Started", "grid")
+        self._nav_add_rail_item("Home",               self._home_page)
+        self._nav_add_rail_item("Overview",            self._overview_page)
+        self._nav_add_rail_item("Speed Test",          self._speed_test_page)
+        self._nav_add_rail_item("DNS & Stability",     self._m5_tab)
+        self._nav_add_rail_item("Diagnose",            self._diagnosis_page)
 
-        # Full standard section so switching to Pro doesn't lose any Standard items
-        self._nav_add_section_label("Standard")
-        self._nav_ref("\u25ce", "DNS & Stability",    self._m5_tab)
-        self._nav_ref("\u2295", "Devices",              self._m1_tab)
-        self._nav_ref("\u25cb", "WiFi Networks",        self._m4_tab)
-        self._nav_ref("\u25c8", "WiFi Heatmap",         self._wifi_heatmap_page)
-        self._nav_ref("\u2b21", "Network Map",          self._topology_tab_widget)
-        self._nav_ref("\u2261", "DHCP Leases",          self._dhcp_lease_page)
-        self._nav_ref("\u2302", "Home Automation",      self._ha_page)
-        self._nav_ref("\u25b2", "Live Bandwidth",        self._live_bandwidth_page)
-        self._nav_ref("\u25b2", "Bandwidth Usage",       self._bw_tab_widget)
-        self._nav_ref("\u21c4", "Active Connections",    self._connections_page)
-        self._nav_ref("\u229f", "Availability History",  self._history_page)
-        self._nav_ref("\u2295", "Geolocation Map",       self._geo_map_page)
-        self._nav_ref("\u2b21", "IPv6 Devices",          self._ipv6_tab_widget)
-        self._nav_ref("\u2263", "Stability Log",         self._log_tab)
-        self._nav_ref("\u25ce", "Service Heartbeat",     self._service_page)
-        self._nav_ref("\u271a", "Health Check",          self._dia_tab)
-        self._nav_ref("\u25fc", "Network Grade",         self._benchmark_tab_widget)
-        self._nav_ref("\u2197", "ISP Report",            self._reports_page)
-        self._nav_ref("\u25a3", "Network Doc",           self._network_doc_page)
-        self._nav_ref("\u2299", "IP Calculator",         self._ip_calc_page)
-        self._nav_ref("\u259f", "Notifications",         self._notifications_page)
+        self._nav_begin_section("Discover", "network")
+        self._nav_add_rail_item("Devices",             self._m1_tab)
+        self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
+        self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
+        self._nav_add_rail_item("Network Map",         self._topology_tab_widget)
+        self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
+        self._nav_add_rail_item("Home Automation",     self._ha_page)
 
-        # Deep analysis tools
-        self._nav_add_section_label("Network Analysis")
-        self._nav_ref("\u2bd3", "Hop-by-Hop Trace",       self._mtr_tab_widget)
-        self._nav_ref("\u25ce", "ARP Spoof Watch",         self._arp_tab_widget)
-        self._nav_ref("\u22b3", "SNMP Device Info",        self._snmp_tab_widget)
-        self._nav_ref("\u22b2", "SNMP Trap Receiver",      self._snmp_trap_page)
-        self._nav_ref("\u2261", "Syslog Viewer",           self._syslog_page)
-        self._nav_ref("\u2699", "Tools & Wake-on-LAN",     self._adv_tab_widget)
-        self._nav_ref("\u25c8", "Broadcast Storm",         self._m3_tab)
-        self._nav_ref("\u21cc", "Rogue Bridge (STP)",      self._m2_tab)
-        self._nav_ref("\u25c8", "IoT Behaviour",           self._iot_baseline_tab_widget)
-        self._nav_ref("\u2206", "Trend Forecasts",         self._trend_page)
-        self._nav_ref("\u2295", "Root Cause Analysis",     self._correlator_tab_widget)
+        self._nav_begin_section("Monitor", "monitor")
+        self._nav_add_rail_item("Logs",                self._log_hub_page)
+        self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
+        self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
+        self._nav_add_rail_item("Active Connections",  self._connections_page)
+        self._nav_add_rail_item("Availability History", self._history_page)
+        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
+        self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
+        self._nav_add_rail_item("Network Logger",      self._log_tab)
+        self._nav_add_rail_item("Service Heartbeat",   self._service_page)
 
-        # Automation & scheduling
-        self._nav_add_section_label("Automation")
-        self._nav_ref("\u2192", "Automation Hooks",        self._automation_page)
-        self._nav_ref("\u23f1", "Scheduled Scans",         self._sched_tab_widget)
-        self._nav_ref("\u25b3", "Custom Triggers",         self._trigger_page)
-        self._nav_ref("\u25c9", "MQTT / Home Assistant",   self._mqtt_page)
-        self._nav_ref("\u229b", "Config Snapshots",        self._baseline_page)
-        self._nav_ref("\u2699", "Maintenance Windows",     self._maintenance_page)
+        self._nav_begin_section("Reports", "bar-chart")
+        self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)
+        self._nav_add_rail_item("ISP Report",          self._reports_page)
+        self._nav_add_rail_item("Network Doc",         self._network_doc_page)
+        self._nav_add_rail_item("IP Calculator",       self._ip_calc_page)
+        self._nav_add_rail_item("Notifications",       self._notifications_page)
 
-        # Security Audit \u2014 RED label + RED item text signals the elevated-privilege zone.
-        # Sets are populated BEFORE _nav_refresh_item_text so foreground is RED on first render.
-        self._nav_add_section_label("\u26a0  Security Audit", fg_color=RED)
-        _r1 = self._nav_ref("\u25ce", "Port Scan (TCP)",    self._recon_syn_tab_widget)
-        self._nav_admin_rows.add(_r1); self._nav_audit_rows.add(_r1)
-        self._nav_refresh_item_text(_r1)
-        _r2 = self._nav_ref("\u25ce", "Port Scan (UDP)",    self._recon_udp_tab_widget)
-        self._nav_admin_rows.add(_r2); self._nav_audit_rows.add(_r2)
-        self._nav_refresh_item_text(_r2)
-        _r4 = self._nav_ref("\u25cb", "CVE Lookup",          self._recon_cve_tab_widget)
-        self._nav_audit_rows.add(_r4)
-        self._nav_refresh_item_text(_r4)
-        _r5 = self._nav_ref("\u2261", "Threat Intel",        self._threat_intel_page)
-        self._nav_audit_rows.add(_r5)
-        self._nav_refresh_item_text(_r5)
-        _r6 = self._nav_ref("\u271a", "TLS & exposure",      self._cert_page)
-        self._nav_audit_rows.add(_r6)
-        self._nav_refresh_item_text(_r6)
-        _r3 = self._nav_ref("\u2139", "Login Test",          self._recon_cred_tab_widget)
-        self._nav_admin_rows.add(_r3); self._nav_audit_rows.add(_r3)
-        self._nav_refresh_item_text(_r3)
-        _ra = self._nav_ref("\u25cb", "OS Detection",           self._recon_os_tab_widget)
-        self._nav_audit_rows.add(_ra); self._nav_refresh_item_text(_ra)
-        _rb = self._nav_ref("\u26a0", "Device Risk Score",      self._recon_risk_tab_widget)
-        self._nav_audit_rows.add(_rb); self._nav_refresh_item_text(_rb)
-        _rc = self._nav_ref("\u2295", "CVE Tracker",             self._cve_page)
-        self._nav_audit_rows.add(_rc); self._nav_refresh_item_text(_rc)
-        _rd = self._nav_ref("\u2609", "Exposed to Internet",    self._recon_exposure_tab_widget)
-        self._nav_audit_rows.add(_rd); self._nav_refresh_item_text(_rd)
-        _re = self._nav_ref("\u25b7", "Full Device Discovery",  self._recon_discovery_tab_widget)
-        self._nav_audit_rows.add(_re); self._nav_refresh_item_text(_re)
-        _rf = self._nav_ref("\u2610", "Windows Shares (SMB)",   self._recon_smb_tab_widget)
-        self._nav_audit_rows.add(_rf); self._nav_refresh_item_text(_rf)
-        _rg = self._nav_ref("\u25a1", "Plugin Modules",         self._recon_plugin_tab_widget)
-        self._nav_audit_rows.add(_rg); self._nav_refresh_item_text(_rg)
-        _rh = self._nav_ref("\u25aa", "Private Endpoint Check", self._recon_pe_tab_widget)
-        self._nav_audit_rows.add(_rh); self._nav_refresh_item_text(_rh)
-        _ri = self._nav_ref("\u2601", "Cloud Metadata Probe",   self._recon_cloud_tab_widget)
-        self._nav_audit_rows.add(_ri); self._nav_refresh_item_text(_ri)
-        _rj = self._nav_ref("\u22c4", "DHCP Rogue Monitor",     self._dhcp_tab_widget)
-        self._nav_audit_rows.add(_rj); self._nav_refresh_item_text(_rj)
+        self._nav_begin_section("Analysis", "cpu")
+        self._nav_add_rail_item("Connectivity Tests",  self._dia_tab)
+        self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
+        self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
+        self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
+        self._nav_add_rail_item("SNMP Trap Receiver",  self._snmp_trap_page)
+        self._nav_add_rail_item("Syslog Viewer",       self._syslog_page)
+        self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
+        self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
+        self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
+        self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
+        self._nav_add_rail_item("Trend Forecasts",     self._trend_page)
+        self._nav_add_rail_item("Root Cause Analysis", self._correlator_tab_widget)
 
-        self._nav_add_section_label("Education")
-        self._nav_ref("\u29c6", "Protocol Visualizer",  self._protocol_viz_page)
-        self._nav_ref("\u2b21", "Lab Mode",             self._lab_mode_page)
+        self._nav_begin_section("Automation", "zap")
+        self._nav_add_rail_item("Automation Hooks",    self._automation_page)
+        self._nav_add_rail_item("Scheduled Scans",     self._sched_tab_widget)
+        self._nav_add_rail_item("Custom Triggers",     self._trigger_page)
+        self._nav_add_rail_item("MQTT / Home Assistant", self._mqtt_page)
+        self._nav_add_rail_item("Config Snapshots",    self._baseline_page)
+        self._nav_add_rail_item("Maintenance Windows", self._maintenance_page)
 
-        self._nav_add_spacer()
-        self._nav_add_action("\u2699", "Settings", self._open_settings_dialog)
+        self._nav_begin_section("Security Audit", "shield")
+        self._nav_add_rail_item("Port Scan (TCP)",      self._recon_syn_tab_widget,       admin_required=True, audit_item=True)
+        self._nav_add_rail_item("Port Scan (UDP)",      self._recon_udp_tab_widget,       admin_required=True, audit_item=True)
+        self._nav_add_rail_item("CVE Lookup",           self._recon_cve_tab_widget,       audit_item=True)
+        self._nav_add_rail_item("Threat Intel",         self._threat_intel_page,          audit_item=True)
+        self._nav_add_rail_item("TLS & Exposure",       self._cert_page,                  audit_item=True)
+        self._nav_add_rail_item("Login Test",           self._recon_cred_tab_widget,      admin_required=True, audit_item=True)
+        self._nav_add_rail_item("OS Detection",         self._recon_os_tab_widget,        audit_item=True)
+        self._nav_add_rail_item("Device Risk Score",    self._recon_risk_tab_widget,      audit_item=True)
+        self._nav_add_rail_item("CVE Tracker",          self._cve_page,                   audit_item=True)
+        self._nav_add_rail_item("Exposed to Internet",  self._recon_exposure_tab_widget,  audit_item=True)
+        self._nav_add_rail_item("Full Device Discovery", self._recon_discovery_tab_widget, audit_item=True)
+        self._nav_add_rail_item("Windows Shares (SMB)", self._recon_smb_tab_widget,       audit_item=True)
+        self._nav_add_rail_item("Plugin Modules",       self._recon_plugin_tab_widget,    audit_item=True)
+        self._nav_add_rail_item("Private Endpoint Check", self._recon_pe_tab_widget,      audit_item=True)
+        self._nav_add_rail_item("Cloud Metadata Probe", self._recon_cloud_tab_widget,     audit_item=True)
+        self._nav_add_rail_item("DHCP Rogue Monitor",   self._dhcp_tab_widget,            audit_item=True)
+
+        self._nav_begin_section("Education", "book-open")
+        self._nav_add_rail_item("Protocol Visualizer", self._protocol_viz_page)
+        self._nav_add_rail_item("Lab Mode",            self._lab_mode_page)
+        self._nav_add_rail_item("Feature Guide",       self._discover_page)
 
     #── Favourites / pinnable pages ───────────────────────────────────────────
 
@@ -1962,19 +3362,27 @@ class Dashboard(QMainWindow):
     def _build_palette_items(self) -> list:
         seen: set = set()
         pages = []
-        for row in range(self._nav.count()):
-            if row in self._nav_header_rows or row in self._nav_action_rows:
-                continue
-            label = self._nav_item_labels.get(row, "")
-            icon  = self._nav_item_icons.get(row, "◎")
-            if label and label not in seen:
-                seen.add(label)
-                pages.append({"icon": icon, "label": label, "kind": "page"})
+        if self._nav_mode != "home":
+            # Rail mode: enumerate all sections and entries
+            for sec in self._nav_sections:
+                for entry in sec["entries"]:
+                    if entry.label and entry.label not in seen:
+                        seen.add(entry.label)
+                        pages.append({"icon": "◎", "label": entry.label, "kind": "page"})
+        else:
+            for row in range(self._nav.count()):
+                if row in self._nav_header_rows or row in self._nav_action_rows:
+                    continue
+                label = self._nav_item_labels.get(row, "")
+                icon  = self._nav_item_icons.get(row, "◎")
+                if label and label not in seen:
+                    seen.add(label)
+                    pages.append({"icon": icon, "label": label, "kind": "page"})
         actions = [
             {"icon": "⟳", "label": "Run Full Scan",  "kind": "action"},
             {"icon": "⚙", "label": "Open Settings",  "kind": "action"},
             {"icon": "◄", "label": "Toggle Sidebar", "kind": "action"},
-            {"icon": "◈", "label": "What's Wrong?",  "kind": "action"},
+            {"icon": "◈", "label": "Diagnose Network", "kind": "action"},
         ]
         return pages + actions
 
@@ -1992,17 +3400,17 @@ class Dashboard(QMainWindow):
             self._open_settings_dialog()
         elif action == "Toggle Sidebar":
             self._toggle_sidebar()
-        elif action == "What's Wrong?":
+        elif action == "Diagnose Network":
             self._open_diagnosis()
 
     def _on_overview_navigate(self, label: str) -> None:
-        if label == "What's Wrong?":
+        if label == "Diagnose Network":
             self._open_diagnosis()
         else:
             self._nav_goto_label(label)
 
     def _open_diagnosis(self) -> None:
-        self._stack.setCurrentWidget(self._diagnosis_page)
+        self._nav_rail_go_to("Diagnose")
 
     # ── Alert badge on Security Audit nav section ─────────────────────────────
 
@@ -2013,6 +3421,13 @@ class Dashboard(QMainWindow):
             count = len(self._store.get_unacked_alerts())
         except Exception:
             count = 0
+        if self._nav_mode != "home":
+            # Rail mode: update tooltip on Security Audit rail button
+            btn = self._nav_rail_buttons.get("Security Audit")
+            if btn:
+                label = f"Security Audit ({count})" if count else "Security Audit"
+                btn.setToolTip(label)
+            return
         for row, label in self._nav_item_labels.items():
             if "Security Audit" in label and row in self._nav_section_groups:
                 self._nav_delegate.set_count_badge(row, count, AUDIT_RED)
@@ -2184,6 +3599,11 @@ class Dashboard(QMainWindow):
 
         lay.addWidget(self._m1_status)
         lay.addWidget(m1_card, 1)
+
+        from ui.widgets.explainer_panel import ExplainerPanel
+        self._m1_explainer = ExplainerPanel("rogue_device")
+        self._m1_explainer.navigate_to.connect(self._nav_rail_go_to)
+        lay.addWidget(self._m1_explainer)
         return w
 
     def _m1_context_menu(self, pos):
@@ -2236,22 +3656,41 @@ class Dashboard(QMainWindow):
     # ── Module 2 ──────────────────────────────────────────────────────────────
 
     def _build_m2_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
+        from PyQt6.QtWidgets import QStackedWidget
+
+        # ── Page 0: empty state ───────────────────────────────────────────────
+        empty = QWidget()
+        evl = QVBoxLayout(empty)
+        evl.addWidget(NpcapMissingBanner(parent=empty))
+        evl.addStretch()
+        em_desc = QLabel(
+            "STP/BPDU frame capture identifies unauthorised Spanning Tree root bridges\n"
+            "that cause intermittent network drops and DNS failures."
+        )
+        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        em_desc.setWordWrap(True)
+        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        em_btn = QPushButton("Start STP Capture")
+        em_btn.setObjectName("btnScan")
+        em_btn.setFixedWidth(200)
+        em_btn.clicked.connect(self._start_full_scan)
+        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addSpacing(12)
+        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addStretch()
+
+        # ── Page 1: content ───────────────────────────────────────────────────
+        content = QWidget()
+        lay = QVBoxLayout(content)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
-
-        lay.addWidget(NpcapMissingBanner(parent=w))
-
         lay.addWidget(_page_header(
             "Rogue Bridge Detection",
             "STP/BPDU frame capture — identifies unauthorised Spanning Tree root bridges"
         ))
-
         self._m2_status = QLabel("Not yet scanned.")
         self._m2_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m2_status)
-
         card, card_body = _make_card("STP Frames Detected")
         self._m2_table = _table([
             "Source MAC", "BPDU Type", "Root MAC", "Bridge Priority",
@@ -2264,7 +3703,15 @@ class Dashboard(QMainWindow):
         self._m2_table.customContextMenuRequested.connect(self._m2_context_menu)
         card_body.addWidget(self._m2_table)
         lay.addWidget(card, 1)
-        return w
+        from ui.widgets.explainer_panel import ExplainerPanel
+        self._m2_explainer = ExplainerPanel("stp_rogue")
+        self._m2_explainer.navigate_to.connect(self._nav_rail_go_to)
+        lay.addWidget(self._m2_explainer)
+
+        self._m2_stack = QStackedWidget()
+        self._m2_stack.addWidget(empty)
+        self._m2_stack.addWidget(content)
+        return self._m2_stack
 
     def _m2_context_menu(self, pos):
         from PyQt6.QtWidgets import QMenu
@@ -2303,34 +3750,51 @@ class Dashboard(QMainWindow):
     # ── Module 3 ──────────────────────────────────────────────────────────────
 
     def _build_m3_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
+        from PyQt6.QtWidgets import QStackedWidget
+
+        # ── Page 0: empty state ───────────────────────────────────────────────
+        empty = QWidget()
+        evl = QVBoxLayout(empty)
+        evl.addWidget(NpcapMissingBanner(parent=empty))
+        evl.addStretch()
+        em_desc = QLabel(
+            "Live packet capture measures broadcast and multicast rates\n"
+            "and identifies the device causing a broadcast storm."
+        )
+        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        em_desc.setWordWrap(True)
+        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        em_btn = QPushButton("Start Broadcast Capture")
+        em_btn.setObjectName("btnScan")
+        em_btn.setFixedWidth(220)
+        em_btn.clicked.connect(self._start_full_scan)
+        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addSpacing(12)
+        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addStretch()
+
+        # ── Page 1: content ───────────────────────────────────────────────────
+        content = QWidget()
+        lay = QVBoxLayout(content)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
-
-        lay.addWidget(NpcapMissingBanner(parent=w))
-
         lay.addWidget(_page_header(
             "Broadcast Storm Analysis",
             "Live packet capture — measures broadcast/multicast rates and storm level"
         ))
-
         self._m3_status = QLabel("Not yet scanned.")
         self._m3_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m3_status)
-
-        # KPI stats row
         stats = QHBoxLayout()
-        self._m3_bcast_lbl  = self._stat_label("Broadcast/s", "—")
-        self._m3_mcast_lbl  = self._stat_label("Multicast/s", "—")
-        self._m3_ratio_lbl  = self._stat_label("Bcast ratio", "—")
-        self._m3_level_lbl  = self._stat_label("Storm level", "—")
+        self._m3_bcast_lbl = self._stat_label("Broadcast/s", "—")
+        self._m3_mcast_lbl = self._stat_label("Multicast/s", "—")
+        self._m3_ratio_lbl = self._stat_label("Bcast ratio", "—")
+        self._m3_level_lbl = self._stat_label("Storm level", "—")
         for w2 in (self._m3_bcast_lbl, self._m3_mcast_lbl,
                    self._m3_ratio_lbl, self._m3_level_lbl):
             stats.addWidget(w2)
         stats.addStretch()
         lay.addLayout(stats)
-
         card, card_body = _make_card("Broadcast Sources")
         self._m3_table = _table(["Source MAC", "Broadcast Packets", "Rogue Match?"])
         self._m3_table.setColumnWidth(0, 160)
@@ -2339,7 +3803,15 @@ class Dashboard(QMainWindow):
         self._m3_table.customContextMenuRequested.connect(self._m3_context_menu)
         card_body.addWidget(self._m3_table)
         lay.addWidget(card, 1)
-        return w
+        from ui.widgets.explainer_panel import ExplainerPanel
+        self._m3_explainer = ExplainerPanel("broadcast_storm")
+        self._m3_explainer.navigate_to.connect(self._nav_rail_go_to)
+        lay.addWidget(self._m3_explainer)
+
+        self._m3_stack = QStackedWidget()
+        self._m3_stack.addWidget(empty)
+        self._m3_stack.addWidget(content)
+        return self._m3_stack
 
     def _m3_context_menu(self, pos):
         from PyQt6.QtWidgets import QMenu
@@ -2374,20 +3846,41 @@ class Dashboard(QMainWindow):
     # ── Module 4 ──────────────────────────────────────────────────────────────
 
     def _build_m4_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
+        from PyQt6.QtWidgets import QStackedWidget
+
+        # ── Page 0: empty state ───────────────────────────────────────────────
+        empty = QWidget()
+        evl = QVBoxLayout(empty)
+        evl.addStretch()
+        em_desc = QLabel(
+            "No WiFi scan has been run yet.\n"
+            "NetSentinel will enumerate nearby networks, detect rogue SSIDs,\n"
+            "and flag co-channel interference."
+        )
+        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        em_desc.setWordWrap(True)
+        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        em_btn = QPushButton("Scan for WiFi Networks")
+        em_btn.setObjectName("btnScan")
+        em_btn.setFixedWidth(220)
+        em_btn.clicked.connect(self._start_full_scan)
+        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addSpacing(12)
+        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addStretch()
+
+        # ── Page 1: content ───────────────────────────────────────────────────
+        content = QWidget()
+        lay = QVBoxLayout(content)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
-
         lay.addWidget(_page_header(
             "WiFi Networks",
             "Wireless scan — SSID enumeration, rogue AP detection, co-channel interference"
         ))
-
         self._m4_status = QLabel("Not yet scanned.")
         self._m4_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m4_status)
-
         card, card_body = _make_card("Detected Networks")
         self._m4_table = _table([
             "SSID", "BSSID", "Channel", "Band", "Signal (dBm)",
@@ -2397,36 +3890,67 @@ class Dashboard(QMainWindow):
         self._m4_table.setColumnWidth(1, 150)
         card_body.addWidget(self._m4_table)
         lay.addWidget(card, 1)
-        return w
+
+        self._m4_stack = QStackedWidget()
+        self._m4_stack.addWidget(empty)
+        self._m4_stack.addWidget(content)
+        return self._m4_stack
 
     # ── Module 5 ──────────────────────────────────────────────────────────────
 
     def _build_m5_tab(self) -> QWidget:
-        w = QWidget()
-        lay = QVBoxLayout(w)
+        from PyQt6.QtWidgets import QStackedWidget
+
+        # ── Page 0: empty state ───────────────────────────────────────────────
+        empty = QWidget()
+        evl = QVBoxLayout(empty)
+        evl.addStretch()
+        em_desc = QLabel(
+            "Continuous RTT and DNS monitoring hasn't started yet.\n"
+            "Run a scan to begin measuring latency and detecting outages."
+        )
+        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        em_desc.setWordWrap(True)
+        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        em_btn = QPushButton("Start Monitoring")
+        em_btn.setObjectName("btnScan")
+        em_btn.setFixedWidth(180)
+        em_btn.clicked.connect(self._start_full_scan)
+        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addSpacing(12)
+        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addStretch()
+
+        # ── Page 1: content ───────────────────────────────────────────────────
+        content = QWidget()
+        lay = QVBoxLayout(content)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(6)
-
         lay.addWidget(_page_header(
             "DNS & Outage Monitor",
             "Continuous RTT/DNS monitoring — latency graph, outage detection, STP correlation"
         ))
-
         self._m5_status = QLabel("Not yet scanned.")
         self._m5_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m5_status)
-
         self._graph = LiveGraphWidget()
         self._graph.setMinimumHeight(220)
         lay.addWidget(self._graph, 2)
-
         card, card_body = _make_card("Detected Outages")
         self._m5_outage_table = _table([
             "Target", "Duration (s)", "Consecutive Drops", "STP Signature?", "Severity"
         ])
         card_body.addWidget(self._m5_outage_table)
         lay.addWidget(card, 1)
-        return w
+        from ui.widgets.explainer_panel import ExplainerPanel
+        self._m5_explainer = ExplainerPanel("dns_stability")
+        self._m5_explainer.navigate_to.connect(self._nav_rail_go_to)
+        lay.addWidget(self._m5_explainer)
+
+        self._m5_stack = QStackedWidget()
+        self._m5_stack.addWidget(empty)
+        self._m5_stack.addWidget(content)
+        return self._m5_stack
 
     # ── Network Info tab ──────────────────────────────────────────────────────
 
@@ -2834,6 +4358,29 @@ class Dashboard(QMainWindow):
         self._log_interval.setFixedWidth(70)
         self._log_interval.setToolTip("How often to ping each host (seconds)")
 
+        # File rotation combo
+        rot_lbl = QLabel("Rotate file:")
+        rot_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        self._log_rotation = QComboBox()
+        self._log_rotation.addItems(["Off", "1 hour", "6 hours", "12 hours", "24 hours"])
+        self._log_rotation.setFixedWidth(90)
+        self._log_rotation.setToolTip(
+            "Start a new CSV file after this interval — keeps files to a manageable size\n"
+            "and makes it easy to share a single day's log.  12 h is best practice."
+        )
+        _rot_vals = [0, 1, 6, 12, 24]
+        self._log_rotation_vals = _rot_vals
+        _qs = QSettings("NetSentinel", "NetSentinel")
+        _saved_rot = _qs.value("logger/rotation_hours", 12, type=int)
+        self._log_rotation.setCurrentIndex(
+            _rot_vals.index(_saved_rot) if _saved_rot in _rot_vals else 3
+        )
+        self._log_rotation.currentIndexChanged.connect(
+            lambda i, v=_rot_vals: QSettings("NetSentinel", "NetSentinel").setValue(
+                "logger/rotation_hours", v[i]
+            )
+        )
+
         self._btn_log_start = QPushButton("▶  Start Logger")
         self._btn_log_start.setObjectName("btnDiag")
         self._btn_log_start.setFixedHeight(34)
@@ -2856,6 +4403,9 @@ class Dashboard(QMainWindow):
 
         top.addWidget(int_lbl)
         top.addWidget(self._log_interval)
+        top.addSpacing(8)
+        top.addWidget(rot_lbl)
+        top.addWidget(self._log_rotation)
         top.addSpacing(10)
         top.addWidget(self._btn_log_start)
         top.addWidget(self._btn_log_open)
@@ -3277,17 +4827,20 @@ class Dashboard(QMainWindow):
             import time as _time
             from workers.scan_worker import LoggerWorker
             interval = self._log_interval.value()
+            rotation_h = self._log_rotation_vals[self._log_rotation.currentIndex()]
             self._logger_worker = LoggerWorker(
                 interval_s=interval,
                 enable_jitter=self._log_chk_jitter.isChecked(),
                 enable_dns=self._log_chk_dns.isChecked(),
                 enable_http=self._log_chk_http.isChecked(),
                 enable_arp=self._log_chk_arp.isChecked(),
+                rotation_hours=rotation_h,
             )
             self._logger_start_ts = _time.time()
             self._logger_outage_count = 0
             self._logger_worker.entry_received.connect(self._on_log_entry)
             self._logger_worker.status.connect(self._log_status_lbl.setText)
+            self._logger_worker.rotated.connect(self._on_log_rotate)
             self._logger_worker.error.connect(
                 lambda e: self._log_status_lbl.setText(f"Error: {e}")
             )
@@ -3301,6 +4854,39 @@ class Dashboard(QMainWindow):
     @pyqtSlot(object)
     def _on_log_entry(self, entry):
         """Called from LoggerWorker for each new ping result."""
+        self._last_log_status = entry.status
+        self._refresh_pulse_bar()
+        if hasattr(self, "_log_hub_page"):
+            self._log_hub_page.add_log_entry(entry)
+
+    @pyqtSlot(object)
+    def _on_live_challenge(self, scenario) -> None:
+        """Show an amber suggestion card on Home when a live lab scenario is ready."""
+        self._pending_live_scenario = scenario
+        if hasattr(self, "_home_page"):
+            self._home_page.set_suggestions([{
+                "text": f"Something just happened — {scenario.title.lower()}",
+                "action_label": "Investigate →",
+                "target": "__live__",
+                "priority": "medium",
+            }])
+
+    def _on_investigate_live(self) -> None:
+        """Navigate to Lab Mode and inject the pending live challenge scenario."""
+        scenario = self._pending_live_scenario
+        self._pending_live_scenario = None
+        if scenario is None:
+            return
+        self._nav_rail_go_to("Lab Mode")
+        if hasattr(self, "_lab_mode_page"):
+            self._lab_mode_page.inject_live_challenge(scenario)
+
+    @pyqtSlot(object)
+    def _on_animate_log_entry(self, entry) -> None:
+        """Navigate to Protocol Visualizer and pre-load the protocol for this log entry."""
+        self._nav_rail_go_to("Protocol Visualizer")
+        if hasattr(self, "_protocol_viz_page"):
+            self._protocol_viz_page.load_from_event(entry)
         from PyQt6.QtGui import QColor
         color_map = {"OK": GREEN, "SLOW": AMBER, "FAIL": RED}
         status_color = color_map.get(entry.status, TEXT_SECONDARY)
@@ -3359,6 +4945,13 @@ class Dashboard(QMainWindow):
                             __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(RED)
                         )
                         self._log_outage_table.setItem(row, col, item)
+
+    @pyqtSlot(str, int)
+    def _on_log_rotate(self, filename: str, segment: int):
+        """Called when NetworkLogger starts a new CSV segment."""
+        self._log_status_lbl.setText(
+            f"Segment {segment} started — now logging to {filename}"
+        )
 
     def _open_log_file(self):
         """Open the log CSV in the default text editor / Excel."""
@@ -4605,6 +6198,61 @@ class Dashboard(QMainWindow):
     def _set_status(self, msg: str):
         self._status_bar.showMessage(f"  {msg}")
 
+    def _refresh_pulse_bar(self) -> None:
+        """Update the four permanent status-bar indicators (called every 10 s)."""
+        import time as _t
+
+        _muted  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {TEXT_MUTED}; }} QLabel:hover {{ color: #FFFFFF; }}"
+        _green  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {GREEN}; }} QLabel:hover {{ color: #FFFFFF; }}"
+        _amber  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {AMBER}; }} QLabel:hover {{ color: #FFFFFF; }}"
+        _red    = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {RED}; }} QLabel:hover {{ color: #FFFFFF; }}"
+
+        # Online / Offline
+        status = self._last_log_status
+        if status == "OK":
+            self._pulse_online_lbl.setText("●  Online")
+            self._pulse_online_lbl.setStyleSheet(_green)
+        elif status == "SLOW":
+            self._pulse_online_lbl.setText("●  Slow")
+            self._pulse_online_lbl.setStyleSheet(_amber)
+        elif status == "FAIL":
+            self._pulse_online_lbl.setText("●  Offline")
+            self._pulse_online_lbl.setStyleSheet(_red)
+        else:
+            self._pulse_online_lbl.setText("○  —")
+            self._pulse_online_lbl.setStyleSheet(_muted)
+
+        # Device count
+        n = len(self._last_scan_devices)
+        if n > 0:
+            self._pulse_devices_lbl.setText(f"■  {n} device{'s' if n != 1 else ''}")
+        else:
+            self._pulse_devices_lbl.setText("■  —")
+        self._pulse_devices_lbl.setStyleSheet(_muted)
+
+        # Last scan age
+        if self._last_scan_time > 0:
+            elapsed = _t.time() - self._last_scan_time
+            if elapsed < 60:
+                age = "just now"
+            elif elapsed < 3600:
+                age = f"{int(elapsed // 60)}m ago"
+            else:
+                age = f"{int(elapsed // 3600)}h ago"
+            self._pulse_scan_lbl.setText(f"Last scan: {age}")
+        else:
+            self._pulse_scan_lbl.setText("Last scan: —")
+        self._pulse_scan_lbl.setStyleSheet(_muted)
+
+        # Logger status
+        logging_on = bool(self._logger_worker and self._logger_worker.isRunning())
+        if logging_on:
+            self._pulse_logger_lbl.setText("⏺  Logging")
+            self._pulse_logger_lbl.setStyleSheet(_green)
+        else:
+            self._pulse_logger_lbl.setText("○  Logger off")
+            self._pulse_logger_lbl.setStyleSheet(_muted)
+
     def _show_alert_toast(self, alert) -> None:
         """Show a desktop notification for a fired alert."""
         from ui.styles import RED, AMBER
@@ -4723,8 +6371,10 @@ class Dashboard(QMainWindow):
     def _save_settings(self):
         from PyQt6.QtCore import QSettings
         s = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
-        # Window geometry
+        # Window geometry (save maximized state separately — restoreGeometry alone
+        # is unreliable for frameless windows before show() is called)
         s.setValue("window/geometry", self.saveGeometry().toBase64().data().decode())
+        s.setValue("window/maximized", str(self.isMaximized()))
         # Sidebar nav state
         s.setValue("nav/collapsed", str(self._nav_collapsed))
         s.setValue("nav/mode", self._nav_mode)
@@ -4751,11 +6401,16 @@ class Dashboard(QMainWindow):
         s = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
         # Window geometry
         geom_b64 = s.value("window/geometry", "")
+        was_maximized = s.value("window/maximized", "False") == "True"
         if geom_b64:
             try:
                 self.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
             except Exception:
                 pass
+        # Explicit maximize — restoreGeometry before show() doesn't reliably
+        # restore the maximized state on frameless Windows.
+        if was_maximized:
+            self.showMaximized()
         # Sidebar nav state
         if s.value("nav/collapsed", "False") == "True" and not self._nav_collapsed:
             self._toggle_sidebar()
@@ -4805,8 +6460,15 @@ class Dashboard(QMainWindow):
             self._nav_mode = _saved_mode
         self._rebuild_nav_for_mode()
 
-        # Auto-start stability logger if the user opted in
-        if QSettings("NetSentinel", "NetSentinel").value("logger/auto_start", False, type=bool):
+        # On first launch, default the logger to auto-start so monitoring begins immediately.
+        _qs_app = QSettings("NetSentinel", "NetSentinel")
+        if _qs_app.value("logger/auto_start") is None:
+            _qs_app.setValue("logger/auto_start", True)
+            if hasattr(self, "_log_chk_autostart"):
+                self._log_chk_autostart.setChecked(True)
+
+        # Auto-start stability logger if the user opted in (or on first launch)
+        if _qs_app.value("logger/auto_start", True, type=bool):
             from PyQt6.QtCore import QTimer as _QTimer
             _QTimer.singleShot(1500, self._toggle_logger)
 
@@ -6400,6 +8062,12 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot()
     def _start_full_scan(self):
+        # Track whether this scan was triggered from the home page so we can
+        # auto-navigate to Overview once device results arrive.
+        self._scan_from_home = (
+            hasattr(self, "_home_page")
+            and self._stack.currentWidget() is self._home_page
+        )
         # Reset UI
         self._m1_result = self._m2_result = self._m3_result = None
         self._m4_result = self._m5_result = None
@@ -6524,6 +8192,8 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(dict)
     def _on_m1_result(self, data: dict):
+        import time as _t
+        self._last_scan_time = _t.time()
         self._m1_result = data
         devices = data.get("devices", [])
         self._m1_table.setRowCount(0)
@@ -6723,6 +8393,11 @@ class Dashboard(QMainWindow):
 
         self._compute_suggestions()
 
+        # Auto-navigate to Overview when the user kicked off a scan from the home page
+        if getattr(self, "_scan_from_home", False) and len(devices) > 0:
+            self._scan_from_home = False
+            self._nav_rail_go_to("Overview")
+
     @pyqtSlot(str)
     def _filter_m1_by_nl(self, text: str):
         """Filter Device Fingerprinter rows using the NL query engine."""
@@ -6797,6 +8472,7 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(dict)
     def _on_m2_result(self, data: dict):
+        self._m2_stack.setCurrentIndex(1)
         self._m2_result = data
         rogue = data.get("rogue_count", 0)
         total = data.get("total_bpdus", 0)
@@ -6807,6 +8483,7 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(object)
     def _on_m3_result(self, storm):
+        self._m3_stack.setCurrentIndex(1)
         self._m3_result = storm
         level = storm.storm_level if not isinstance(storm, dict) else storm.get("storm_level", "?")
         bps   = storm.bcast_per_sec if not isinstance(storm, dict) else storm.get("bcast_per_sec", 0)
@@ -6834,6 +8511,7 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(object)
     def _on_m4_result(self, wifi):
+        self._m4_stack.setCurrentIndex(1)
         self._m4_result = wifi
         networks = wifi.networks if not isinstance(wifi, dict) else wifi.get("networks", [])
         self._m4_table.setRowCount(0)
@@ -6867,6 +8545,8 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(object)
     def _on_ping_point(self, pt):
+        if self._m5_stack.currentIndex() == 0:
+            self._m5_stack.setCurrentIndex(1)
         self._graph.add_ping_point(pt.timestamp, pt.target, pt.rtt_ms)
 
     @pyqtSlot(object)
@@ -6914,6 +8594,7 @@ class Dashboard(QMainWindow):
             self._active_count = 0
             self._set_scanning(False)
             self._set_status("Scan complete.")
+            self._refresh_pulse_bar()
             self._graph_timer.stop()
             self._graph.redraw()
             self._workers.clear()

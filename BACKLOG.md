@@ -6,25 +6,258 @@ NetSentinel has two parallel strategic goals: become the first tool recommended 
 
 ---
 
-## Priority 1 — De-facto Home Standard
+## Priority 0 — VSCode for Networking ✅ Complete in v1.7.0
 
-Items in this track lower the barrier for non-technical users. Each item should be self-contained, require no configuration, and produce output that a non-technical person can act on immediately.
+Items in this track transform NetSentinel from a scanner you run occasionally into a monitor that is always running, always showing state, and always explaining what it sees. All items extend existing infrastructure — no new backends or animation engines.
+
+Implementation order: 1-A → 1-B → 2-A → 3-B → 3-A → 2-B → 3-C. All shipped in v1.7.0.
 
 ---
 
-### ~~1. Local browser dashboard (web UI)~~ ✅ done in v1.6.8
+### 1-A: Persistent status bar ✅ v1.7.0
 
-**Description:** A read-only HTML dashboard served by the existing REST API worker, accessible at `http://localhost:8765/dashboard` from any browser on the LAN. Shows: current device list, network grade, recent alerts, and speed test history. No login required on localhost; external access still requires the API key.
+**Description:** A permanent 24 px strip at the bottom of the main window showing four live segments: ● Online/Offline (from MetricStore last RTT), N devices (from MetricStore device count), "Last scan: Xm ago" (from MetricStore scan timestamp), and ⏺ Logger running / ○ Logger off (from `NetworkLogger.is_running()`). Updates on a 10-second QTimer. Clicking any segment navigates to the relevant page.
 
-**Why it matters:** Mobile access and household sharing without requiring anyone to install the app. Also makes NetSentinel usable on headless servers where the PyQt6 GUI cannot run. The REST API already exists — this adds the front end.
+**Why it matters:** A new user who opens the app has no signal that anything is monitoring their network unless they navigate to a specific page. The status bar makes the app feel alive and contextual at all times — exactly what VSCode's status bar does for the editor state.
 
-**Effort:** S (was M — REST API was fully built before this was started)
+**Effort:** S
 
-**Files affected:**
-- `modules/metric_store.py` — `grade_result` table + `record_grade()` / `query_last_grade()`
-- `modules/rest_api.py` — `/grade` endpoint; `/dashboard` route (exempt from auth, key embedded in served HTML)
-- `modules/web_dashboard.py` — new module, `build_html(api_key)` returns self-contained dark-theme HTML + JS
-- `ui/dashboard.py` — `_run_benchmark()` now calls `store.record_grade()` so grade persists across restarts
+**Files likely affected:**
+- `ui/dashboard.py` — new `_StatusBar` widget added below `_stack`; wired to MetricStore + NetworkLogger reference
+
+---
+
+### 1-B: Network Logger enabled by default ✅ v1.7.0
+
+**Description:** On first launch (no `QSettings("logger/enabled")` key), enable the network logger for `8.8.8.8` and the detected default gateway. Users who want to disable it can via Settings. Also: default log rotation to 24 h so the CSV does not grow unbounded on a first-launch user.
+
+**Why it matters:** The logger is the most valuable always-on tool in the app — it records outages with exact timestamps. But it requires manual opt-in. A new user who closes the app after a week has no record of what happened on their network.
+
+**Effort:** XS
+
+**Files likely affected:**
+- `ui/dashboard.py` — first-launch detection + default logger start
+- `ui/pages/settings_page.py` — UI copy update
+
+---
+
+### 2-A: Log Hub page ✅ v1.7.0
+
+**Description:** New page `ui/pages/log_hub_page.py` presenting three inner tabs (not primary nav): Network Log (stream from the CSV files written by `network_logger.py`, colour-coded by status, filterable by host), Syslog (replicate the table from `syslog_page.py`), SNMP Traps (replicate the table from `snmp_trap_page.py`). Registered in the Monitor section as "Logs". Existing deep pages stay in nav.
+
+**Why it matters:** Three log sources live in three separate nav sections. A new user who sees "Syslog Viewer" and "SNMP Trap Receiver" has no idea these are related to logging, or that the Network Logger writes CSV files at all. VSCode's Output panel with channels is the model: one place, filter by source.
+
+**Effort:** M
+
+**Files likely affected:**
+- `ui/pages/log_hub_page.py` — new page
+- `ui/dashboard.py` — register in Monitor section as "Logs"
+
+---
+
+### 3-B: "Explain This" collapsible panel on detection pages ✅ v1.7.0
+
+**Description:** After a scan completes on any detection page (rogue device, DNS, storm, CVE), a collapsed "→ What just happened, technically?" bar appears at the bottom of the results card. Expanding it shows 3–5 sentences about the protocol exercised and a "▶ See animated diagram" button navigating to Protocol Visualizer. Content is a static `dict[page_id, str]` inside the new widget — no new network calls.
+
+**Why it matters:** Passive learning with zero friction. A student who sees a rogue bridge detected also sees what STP does and why this causes periodic drops — without navigating away.
+
+**Effort:** M
+
+**Files likely affected:**
+- `ui/widgets/explainer_panel.py` — new reusable collapsible widget
+- Detection page files — add explainer panel below results card
+
+---
+
+### 3-A: Protocol Visualizer "What this means" panel ✅ v1.7.0
+
+**Description:** Add a collapsible right panel (180 px, toggled by a "?" button) in `protocol_viz_page.py`. Two sections per protocol: "Why this protocol exists" (2–3 sentences) and "What can go wrong / what NetSentinel checks for" (with a link to the relevant scan page). Content is a static dict inside the page file.
+
+**Why it matters:** The protocol visualizer currently shows how ARP works in general but gives no connection to why a user should care or what NetSentinel does about it. The "What this means" panel bridges animation → action.
+
+**Effort:** S
+
+**Files likely affected:**
+- `ui/pages/protocol_viz_page.py` — collapsible panel + content dict
+
+---
+
+### 2-B: Log entry → protocol animation link ✅ v1.7.0
+
+**Description:** Any row in the Log Hub Network Log tab with a non-empty `arp_event` column gets a clickable "▶ See ARP animation" cell. Clicking pre-loads Protocol Visualizer with the addresses from that ARP event via a new `load_from_event(entry)` method on `ProtocolVizPage`. The `build_arp_scene()` function already accepts addresses as parameters.
+
+**Why it matters:** Makes the connection explicit: "something happened → here is the protocol that caused it → here is an animation of exactly that exchange with your real devices."
+
+**Effort:** S
+
+**Files likely affected:**
+- `ui/pages/log_hub_page.py` — clickable delegate cell
+- `ui/pages/protocol_viz_page.py` — `load_from_event()` method
+- `ui/dashboard.py` — navigation wiring
+
+---
+
+### 3-C: Live Lab injection from logger events ✅ v1.7.0
+
+**Description:** When the network logger detects an interesting event (new device, ARP change, DNS latency > 200 ms, FAIL streak ≥ 3), a flag is set on Dashboard. The Home page "What to do next" suggestions strip shows a new amber card: "Something just happened — investigate it." Clicking opens Lab Mode with a dynamically-generated one-step `LabScenario` built from the real event using the existing `LabScenario` / `LabStep` dataclasses. New method: `LabModePage.inject_live_challenge(scenario)`.
+
+**Why it matters:** Transforms the protocol visualizer from "watch a scripted animation" to "here is what ARP looked like on your network 2 minutes ago — now figure out what it means." Bridges passive logging → active learning.
+
+**Effort:** M
+
+**Files likely affected:**
+- `ui/pages/log_hub_page.py` — event detection and flag emission
+- `ui/pages/lab_mode_page.py` — `inject_live_challenge()` method
+- `ui/dashboard.py` — route live challenge signal to lab mode + suggestions strip
+
+---
+
+## Priority 0 — Feature Wiring
+
+These features have backend workers and page UI but are permanently non-functional because no path exists for the user to configure them. The principle is absolute: a feature that cannot be activated from within the UI does not exist.
+
+---
+
+### FW-1: Service Heartbeat — target configuration UI ✅ Done
+
+**Description:** `ServiceWorker` starts with `targets=[]` and `set_targets()` is never called. The Service Heartbeat page always shows an empty table and KPIs of "—". No user path exists to add a service to monitor.
+
+Fix in three parts:
+1. `ui/pages/service_page.py` — add inline "Add service" row (host input + port spinner + label field + "Add" button) above the table card. Each table row gets a "Remove" action. On every add/remove, emit `services_changed = pyqtSignal(list)` carrying the full updated `ServiceTarget` list. Persist the list to `QSettings("service_monitor/targets")` as a JSON array. On `__init__`, load from QSettings and populate the table. Apply RULE-UX5: QStackedWidget with page 0 = empty state + inline "Add a service to monitor" prompt, page 1 = content.
+2. `app.py` — on startup, load `QSettings("service_monitor/targets")` JSON, deserialise to `[ServiceTarget(…)]`, call `svc_worker.set_targets(loaded_targets)`. Wire `window._service_page.services_changed.connect(svc_worker.set_targets)`.
+3. `ui/pages/settings_page.py` (optional) — no change required; target management lives on the page.
+
+**Why it matters:** A user who opens Service Heartbeat has no way to make it do anything. The feature is structurally dead on every install.
+
+**Effort:** S
+
+**Files:** `ui/pages/service_page.py`, `app.py`
+
+---
+
+### FW-2: TLS Certificate Monitor — target configuration UI ✅ Done
+
+**Description:** Identical structural gap to FW-1. `CertWorker` starts with `targets=[]` and `set_targets()` is never called. The TLS Certificate Monitor page always shows an empty table.
+
+Fix in three parts:
+1. `ui/pages/cert_page.py` — add inline "Add host" row (hostname input + optional port list input + "Add" button) above the table card. Each table row gets a "Remove" action. Emit `certs_changed = pyqtSignal(list)` on every change. Persist to `QSettings("cert_monitor/targets")` as JSON. Load on `__init__`. Apply RULE-UX5: empty state with "Add a hostname to monitor its TLS certificate" prompt.
+2. `app.py` — load `QSettings("cert_monitor/targets")`, deserialise to `[CertTarget(…)]`, call `cert_worker.set_targets(loaded_targets)`. Wire `window._cert_page.certs_changed.connect(cert_worker.set_targets)`.
+3. No change to the worker or monitor module — `set_targets()` already exists.
+
+**Why it matters:** Same as FW-1. A user who navigates to TLS Certificate Monitor has no way to add any hosts. The page has been in nav since v1.6.7 and has never been functional.
+
+**Effort:** S
+
+**Files:** `ui/pages/cert_page.py`, `app.py`
+
+---
+
+### FW-3: REST API — complete and gated endpoint reference ✅ Done
+
+**Description:** Settings → REST API has a partial endpoint label (lines 528–536 of `settings_page.py`) that lists `/health`, `/devices`, `/alerts`, `/uptime/<ip>`, `/speed-history` but is missing `/dashboard` and `/grade` (both added in v1.6.8). The label is always visible regardless of whether the API is enabled, which makes it noise when disabled. There are no clickable or copyable full URLs.
+
+Fix:
+1. `ui/pages/settings_page.py` — replace the static `ref_lbl` with a `_build_endpoint_table()` helper that generates a compact two-column widget (GET path | full URL with current port). Include all 7 endpoints: `/health`, `/dashboard`, `/devices`, `/alerts`, `/uptime/<ip>`, `/speed-history`, `/grade`. Show the widget only when the API is enabled — hide/show it in `_update_api_status_label()`. Each row's URL label uses `setTextInteractionFlags(TextSelectableByMouse)` so the user can copy it. Auth reminder stays below the table.
+2. No change to the REST API module or worker.
+
+**Why it matters:** A user who enables the API and wants to query `/grade` or `/dashboard` from another tool has to read the source code to find those endpoints. Two endpoints added five months ago are invisible.
+
+**Effort:** XS
+
+**Files:** `ui/pages/settings_page.py`
+
+---
+
+## Priority 0 — Discoverability
+
+Every powerful feature that a user cannot find, understand, or act on is a feature that does not exist. This track fixes the discoverability layer — making the full surface area of the app reachable and self-explanatory without requiring documentation.
+
+Implementation order: D-1 → D-2 → D-3 → D-4 → D-5.
+
+---
+
+### D-REST: REST API — discoverable outside Settings ✅ Done
+
+**Description:** FW-3 fixed the endpoint reference inside Settings. But a user who never opens Settings → REST API card never knows the API exists. Two surfaces needed:
+
+1. **Feature Guide** (`ui/pages/discover_page.py` → `_FEATURES` list): add a "Local REST API" entry — group "Advanced", icon `⬡`, description "A read-only HTTP API at `localhost:{port}` — query devices, alerts, uptime, and network grade from any script, browser, or tool.", action button "Open Settings →" that navigates to the Settings page. Always shown regardless of API enabled/disabled state.
+2. **Home page strip** (already exists when API enabled in `ui/dashboard.py`): extend the strip text to say "REST API running — dashboard + 7 endpoints available" and add a "Settings →" button alongside the existing "Open ↗" button so users can reach the full endpoint reference from the home screen.
+
+**Why it matters:** The API is invisible to any user who hasn't already opened the Settings page. FW-3 fixed the reference; this fixes discovery.
+
+**Effort:** XS
+
+**Files:** `ui/pages/discover_page.py`, `ui/dashboard.py`
+
+---
+
+### D-AWARE: Feature Guide entries for all configurable features ✅ Done
+
+**Description:** Service Heartbeat and TLS Certificate Monitor now have inline add forms (FW-1, FW-2), but a user who never navigates there still doesn't know these features exist. Feature Guide entries make them discoverable.
+
+Add two entries to `_FEATURES` in `ui/pages/discover_page.py`:
+- "Service Heartbeat" — group "Monitoring", description "TCP port reachability checker — monitors whether your router, NAS, server, or any host:port is accepting connections. Add targets directly on the page."
+- "TLS Certificate Monitor" — group "Monitoring", description "Tracks HTTPS certificate expiry for any hostname you specify — alerts you before certs expire. Add hostnames directly on the page."
+
+Both get "Open →" navigation buttons. No badge needed (the pages are already reachable via nav).
+
+**Effort:** XS
+
+**Files:** `ui/pages/discover_page.py`
+
+---
+
+### D-1: Status bar tooltips ✅ Done
+
+**Description:** Each of the four status bar pulse segments (`● Online`, `■ N devices`, `Last scan: Xm ago`, `○ Logger off`) gets a `setToolTip()` call explaining what it shows and that it is clickable. A user who hovers a segment for the first time immediately understands what it represents and where clicking takes them.
+
+**Effort:** XS
+
+**Files:** `ui/dashboard.py`
+
+---
+
+### D-2: REST API — access from other devices guidance ✅ Done
+
+**Description:** Settings → REST API adds an inline info label after the external-access checkbox: *"To reach the dashboard from a phone or another computer, enable external access above and browse to `http://[this-machine's-LAN-IP]:[port]/dashboard` from that device."* The label auto-formats with the current port number.
+
+**Effort:** XS
+
+**Files:** `ui/pages/settings_page.py`
+
+---
+
+### D-3: Feature Guide page ✅ Done
+
+**Description:** A new `ui/pages/discover_page.py` page listing every NetSentinel feature with icon, name, one-sentence description, "Open →" navigation button, and an optional "requires" badge (Npcap, admin). Features are grouped: Monitoring, Diagnostics, Security, Learning, Hidden features, Advanced. A filter bar at the top narrows by name or description. Registered in the Education section of all three nav modes and in home nav.
+
+**Why it matters:** The canonical answer to "what can this app do?" — a user who opens it once has a complete mental model.
+
+**Effort:** M
+
+**Files:** `ui/pages/discover_page.py` (new), `ui/dashboard.py`
+
+---
+
+### D-4: Per-page contextual help ✅ Done
+
+**Description:** Replaced the original 20×20 hidden `?` button with a persistent full-width tip bar (`_tip_bar`) below the breadcrumb. Always visible. Shows "ⓘ Tips for {page} ▾" when the page has content; clicking expands the panel. Shows "ⓘ Open Feature Guide →" and navigates there directly when no content exists. Auto-expands on first visit to 11 complex pages. `_PAGE_HELP` expanded from 12 entries to 50 covering every nav page in both Standard and Pro nav. Fixed two broken keys (`"Devices on Network"` → `"Devices"`, `"DNS & Outages"` → `"DNS & Stability"`).
+
+**Files:** `ui/dashboard.py`
+
+---
+
+### D-5: Visited-feature tracking + persistent Home suggestions ✅ Done
+
+**Description:** Dashboard tracks which page labels the user has visited via `QSettings("discover/visited_pages")`. The Home page "What to do next" strip always shows 2–3 feature cards for high-value pages the user has never opened. Cards rotate through an ordered list (Protocol Visualizer → Lab Mode → Network Grade → ISP Report → Connectivity Tests → Feature Guide). Once a page is visited, its card disappears from the strip permanently.
+
+**Files:** `ui/dashboard.py`
+
+---
+
+## Priority 1 — De-facto Home Standard
+
+Items in this track lower the barrier for non-technical users. Each item should be self-contained, require no configuration, and produce output that a non-technical person can act on immediately.
 
 ---
 
@@ -49,20 +282,6 @@ Items in this track lower the barrier for non-technical users. Each item should 
 ## Priority 2 — Educational Standard
 
 Items in this track make NetSentinel usable in structured learning contexts. Each item should produce output that maps directly to a textbook concept or exam objective and can be submitted as evidence of work.
-
----
-
-### ~~1. Interactive protocol visualizer~~ ✅ done in v1.6.9
-
-**Description:** Animated step-by-step diagrams of five protocols — ARP resolution, DNS lookup, TCP handshake, DHCP lease, and STP election — using real data from the most recent scan to populate device names, IP addresses, and timing. Each step shows which frame is sent, which device handles it, and what state changes.
-
-**Why it matters:** Nothing teaches like seeing your own network's traffic explained visually. Static protocol diagrams in textbooks use placeholder addresses. This uses your actual router, your actual devices, your actual resolver. The protocol becomes a real process rather than an abstract description.
-
-**Effort:** L
-
-**Files likely affected:**
-- `ui/pages/protocol_viz_page.py` — new page, animation engine (SVG or canvas-based)
-- `modules/protocol_animator.py` — new module, data extraction from MetricStore and live scan results
 
 ---
 
@@ -113,33 +332,13 @@ Items in this track make NetSentinel usable in structured learning contexts. Eac
 
 Items ordered by visual impact. Each is self-contained and can be implemented independently.
 
-### Tier 1 — Highest visual impact (do these first)
-
-- ~~**Card border radius 8 px**~~ — ✅ done in v1.6.6
-- ~~**Sidebar left accent bar on selected item**~~ — ✅ already present (`border-left: 3px solid {ACCENT_LITE}` in global QSS)
-- ~~**Remove emoji from action buttons**~~ — ✅ done in v1.6.6 (8 buttons replaced with geometric Unicode)
-
 ### Tier 2 — Structural polish
 
-- ~~**Font size tokens in `ui/styles.py`**~~ — ✅ done in v1.6.6 (`FONT_XS` through `FONT_XL` added; new pages must use them)
-- ~~**Focus ring visible in dark themes**~~ — ✅ done in v1.6.6 (`QPushButton/QCheckBox/QRadioButton:focus` outline in `_build_qss()`)
-
 - **Skeleton loading rows while scan workers are running** — prevents layout jump when data arrives; use a `QStandardItemModel` with placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results.
-
-### Tier 3 — Interaction and discoverability
-
-- ~~**Page transitions — 120 ms opacity fade on QStackedWidget switches**~~ — ✅ done in v1.6.7 (`QGraphicsOpacityEffect` + `QPropertyAnimation` 120 ms OutCubic in `Dashboard._nav_set_page()`; effect removed on `finished` to avoid child widget painting interference)
-
-- ~~**Table sort indicators**~~ — ✅ done in v1.6.7 (`QHeaderView::sort-indicator` sizing rule added to `_build_qss()` in `ui/styles.py`; Qt Fusion native arrow rendered on all sortable tables)
-
-- ~~**Window title follows navigation**~~ — ✅ done in v1.6.6 (`_nav_set_page()` calls `setWindowTitle(f"NetSentinel — {label}")`)
-
-- ~~**Collapsible inline row detail**~~ — ✅ done in v1.6.7 (`ExpandingTable` extended to `inventory_page.py` (Devices), `service_page.py` (Services), `uptime_page.py` (Availability History); click row to expand detail panel with colored border-left accent and QFormLayout columns)
 
 ### Tier 4 — Nice-to-have
 
 - **"Abyss" WCAG AA high-contrast theme** — fourth theme; true black background, high-contrast text, no low-opacity elements. Required for users with visual impairments.
-- **Breadcrumb strip** — above the `QStackedWidget`, shows `Section › Page`. One `QLabel` updated in `_switch_page()`.
 - **Keyboard shortcut reference card in Help panel** — currently the shortcut list only appears in Settings.
 - **Per-page documentation link** — small `?` link on each page header opening the relevant wiki section.
 - **Passive 802.11 monitor mode capture** — optional advanced capture path that puts a supported NIC into monitor mode (via Npcap on Windows) and reads raw 802.11 management/probe/beacon frames, bypassing normal Ethernet capture. Primarily useful on networks with AP client isolation. Silently falls back to standard capture if unsupported. Pro-tier feature — too advanced and too NIC-dependent to be a home-user default.
@@ -149,6 +348,73 @@ Items ordered by visual impact. Each is self-contained and can be implemented in
 ## Completed
 
 Most recent first.
+
+### Unreleased — May 2026
+
+**Help system overhaul (D-4 completion)**
+
+- `_help_btn` (hidden 20×20 `?` in breadcrumb) replaced with `_tip_bar` — a persistent full-width `QPushButton(checkable)` below the breadcrumb; always visible; text updates per-page
+- `_PAGE_HELP` expanded from 12 entries to 50, covering every nav page in Standard and Pro nav; fixed broken keys `"Devices on Network"` → `"Devices"` and `"DNS & Outages"` → `"DNS & Stability"` (they never matched any rail page label)
+- `_AUTO_HELP_PAGES` frozenset — 11 complex pages auto-expand the tip bar on first visit (Logs, Lab Mode, Protocol Visualizer, Automation Hooks, MQTT / Home Assistant, TLS & Exposure, Service Heartbeat, SNMP Trap Receiver, Syslog Viewer, IoT Behaviour, Scheduled Scans)
+- Pages with no tips show `"ⓘ  Open Feature Guide  →"`; clicking navigates to Feature Guide directly
+- `_toggle_help_panel` gates on `_tip_bar_has_content`; uses `blockSignals` on page change so the panel collapses silently without firing the toggled signal
+- `_nav_rail_go_to` checks `_AUTO_HELP_PAGES` before `_track_page_visit` — if first visit and page has content, calls `self._tip_bar.setChecked(True)`
+- `"info"` Lucide SVG added to `_LUCIDE`
+
+**Feature Guide expansion**
+
+- `_FEATURES` in `ui/pages/discover_page.py` expanded from 24 to 44 entries; all entries have `tags` list for synonym search
+- Added missing features: Overview, Speed Test, WiFi Heatmap, WiFi Networks, Network Map, Active Connections, ARP Spoof Watch, CVE Lookup, Threat Intel, IoT Behaviour, Automation Hooks, Scheduled Scans, MQTT / Home Assistant, Geolocation Map, Network Doc, IP Calculator, Tools & Wake-on-LAN, Hop-by-Hop Trace, and others
+- `_apply_filter` now searches `name`, `desc`, `group`, `page` label, and `tags` — "heatmap" now finds WiFi Heatmap
+- Fixed page refs that never matched nav labels: `"Devices on Network"` → `"Devices"`, `"DNS & Outages"` → `"DNS & Stability"`
+
+**Bug fixes**
+
+- `SettingsPage._endpoint_ref` crash at startup — `_update_api_status_label()` was called before `self._endpoint_ref` was created; moved call to after all widgets are built
+- Rail button text clipping — removed `[:9]` truncation (caused "Automatio"); widened drawText rect from 10 px to 12 px (fixed descender clip on "Getting")
+- Rail button text quality — replaced `QFont() + setPixelSize(8)` with `QFont("Segoe UI", 7)` + `TextAntialiasing` render hint
+- Protocol canvas pill sizing — replaced hardcoded 228 px width with `QFontMetrics.horizontalAdvance()` measurement + 14 px padding; pill now fits snugly around text
+- Protocol canvas label offset — `px_n * 18` → `px_n * 28` (pill no longer overlaps the arrow line)
+
+---
+
+**Navigation overhaul — permanent rail, full discoverability**
+
+Mode switcher removed; the VSCode-style activity rail is now always visible and always shows the full feature set. Progressive disclosure is replaced by pinning (user self-selects), Ctrl+K (find anything), section labels, and red audit items.
+
+- `_build_pro_nav()` is the sole nav builder; `_build_standard_nav()` kept as dead code path for QSettings compatibility
+- `_nav_flat_panel.setFixedWidth(0)` — zeroes the legacy flat panel so it contributes no width to the layout
+- "Quick Access" section renamed "Getting Started" — reflects that it is a curated entry point, not a user-customised shortcut list
+- `_RailButton` height 48→58 px; `paintEvent` draws the section name (first word, 9 px, `QFontMetrics.elidedText`) below the icon — sections are legible without hovering
+- Accent bar moved from QSS `border-left` (which shifted icon centre) to `paintEvent` overlay — icon stays perfectly centred in the 48 px icon zone
+- Persistent search button (48×36, "search" SVG) pinned at the top of the rail above all section buttons; clicking it opens the Ctrl+K command palette; visible at all times
+- Breadcrumb strip (`_breadcrumb_lbl`, 20 px QLabel) inserted above `_stack` in the content wrapper; updated on every `_nav_rail_go_to()` call with `"{Section}  ›  {Page}"`
+- Pinning bug fixed: `_rebuild_nav_for_mode()` now injects a "Pinned" rail section (pin icon) at index 0 of `_nav_sections` when `_nav_pinned_labels` is non-empty; `_on_rail_pin_toggle()` calls `_rebuild_nav_for_mode()` after saving so the section appears and disappears immediately
+- Security Audit rail button tooltip extended to explain why items are red: "require admin rights or run active probes against devices on your network"
+- Flyout width bug fixed: `_FlyoutPanel.open()` calls `setMinimumWidth(280)` before animating, forcing the parent `QHBoxLayout` to allocate the full width; `close_panel()` resets to 0; bumped 260→280 px
+
+**Home page discoverability**
+
+- Dismissible browser dashboard strip — appears when REST API is enabled; "Open ↗" button, "×" dismiss; dismissal persisted via `QSettings("home/dashboard_strip_dismissed")`
+- Dismissible Quick Tips card — four tips covering Ctrl+K, right-click pin, right-click device rows, REST API; REST API tip hidden when API already enabled; dismissal persisted via `QSettings("home/tips_dismissed")`
+
+**Settings page**
+
+- REST API status label is now a live HTML link; `setOpenExternalLinks(True)` on the label; `_update_api_status_label()` renders `<a href="http://localhost:{port}/dashboard">` in accent colour
+
+**Network Logger improvements**
+
+- Renamed "Stability Log" → "Network Logger" everywhere (nav labels, tab header, UI copy)
+- File rotation: Off / 1 h / 6 h / 12 h / 24 h combo in the logger tab; `NetworkLogger` accepts `rotation_hours` and rolls to a new timestamped CSV segment; `LoggerWorker` emits `rotated(path, segment_n)` signal on each roll
+- Network Logger and Education section added to Home mode nav — users no longer need to switch modes to reach them
+
+**Other UX fixes**
+
+- Maximize button: `_save_settings` now persists `window/maximized` as a separate bool; `_restore_settings` calls `showMaximized()` explicitly after `restoreGeometry()` — fixes the frameless-window ordering bug where the button showed maximize but the window was already maximised
+- Flyout auto-close: flyout no longer closes on item click; closes only on canvas click (`_CanvasClickFilter`) or Esc (new `QShortcut`)
+- Last-open rail section restored from `QSettings("nav/last_section")` on every startup
+
+---
 
 ### v1.6.10 — May 2026
 

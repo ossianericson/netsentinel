@@ -1,10 +1,30 @@
 ﻿name: netsentinel
-version: 1.6.10
+version: 1.7.0
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
 
 changelog:
+  - version: 1.7.0
+    date: 2026-05-05
+    summary: VSCode for Networking (Protocol Visualizer, Lab Mode live injection, Log Hub), Feature Guide, discoverability (page help, status tooltips, visit tracking, home suggestions)
+    changes:
+      - "ui/pages/protocol_viz_page.py (NEW): Protocol Visualizer — animated step-through of how real protocols work (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); tabbed with context panel showing protocol detail"
+      - "ui/widgets/protocol_canvas.py (NEW): QPainter animation engine — dot travels between nodes with packet label; play/pause/step controls; labels drawn last so always on top of arrows and nodes"
+      - "modules/protocol_animator.py (NEW): ProtocolSceneData + AnimStep dataclasses; 9 built-in protocol scenes with node layout, animation steps, packet labels, and frame-level detail"
+      - "ui/pages/log_hub_page.py (NEW): Log Hub — live network logger output with filterable table; emits live_challenge_detected signal when interesting events occur (DNS FAIL, slow gateway, 3 consecutive failures)"
+      - "ui/pages/lab_mode_page.py: inject_live_challenge() — accepts LabScenario generated from real logger events; bridges live monitoring to guided Lab Mode exercises"
+      - "ui/pages/home_page.py: investigate_live_requested signal + __live__ target sentinel in set_suggestions() — home card for live events routes to Lab Mode without triggering a navigate_to emit"
+      - "ui/dashboard.py: _on_live_challenge() and _on_investigate_live() handlers; _pending_live_scenario guard; live challenge card on home page from logger events"
+      - "ui/pages/discover_page.py (NEW): Feature Guide — 24 feature descriptors grouped by category (Monitoring, Diagnostics, Security, Learning, Hidden, Advanced); filter bar; requires badges for Npcap/admin features; navigate_to signal from Open buttons"
+      - "ui/dashboard.py: _PAGE_HELP dict with contextual help for all 12 pages; ? button in breadcrumb row; collapsible help panel below breadcrumb; per-page help shown on navigation"
+      - "ui/dashboard.py: _track_page_visit() persists visited pages to QSettings JSON; _refresh_home_suggestions() surfaces unvisited high-value pages on home screen"
+      - "ui/dashboard.py: status bar tooltips on all 4 pulse labels (online, devices, scan time, logger state); each tooltip names the destination page"
+      - "ui/pages/settings_page.py: REST API remote access guidance (D-2) — 3-step instructions with ipconfig tip and URL format for accessing from other devices on the LAN"
+      - "ui/widgets/protocol_canvas.py: text-over-line fix — _draw_labels() called as final step in paintEvent() so packet labels are always on top; dark pill background behind text for legibility"
+      - "ui/pages/protocol_viz_page.py: crash fix — disconnect() catch expanded to (RuntimeError, TypeError) so first-show with no prior connections does not abort startup"
+      - "apm.yml: RULE-R4 split into RULE-R4 (MSIX version format) and RULE-R5 (MSIX staging copy); RULE-NAV2 updated to 12-item limit; RULE-D1 and RULE-D2 added for discoverability compliance"
+
   - version: 1.6.0
     date: 2026-05-01
     summary: Command palette, pinnable sidebar pages, inline row expansion, animated tiles, alert badge, empty-state overlays
@@ -217,6 +237,9 @@ rules:
       bump_version.py automatically generates the correct format: it appends .0 to the
       semantic version. Never edit AppxManifest.xml manually or use 5-part versions.
       The release.yml workflow also enforces this via the Patch version strings step.
+      test_version_consistency.py::test_appxmanifest_msix_version_format() validates this.
+
+  - id: RULE-R5
     title: "MSIX staging must copy the onefile exe — never glob a directory"
     severity: blocking
     description: >
@@ -573,16 +596,64 @@ rules:
           Education     — same as Standard
 
   - id: RULE-NAV2
-    title: "Home mode nav must stay minimal — 10 items maximum"
+    title: "Home mode nav must stay minimal — 12 items maximum"
     severity: required
     description: >
       _build_home_nav() is the first-run experience for non-technical users.
-      It must contain at most 10 _nav_ref() entries (the test enforces this).
+      It must contain at most 12 _nav_ref() entries (the test enforces this).
       Before adding anything to home mode, ask: would a user who has never
       touched a network tool need this on day one?  If not, put it in Standard.
 
       The test tests/test_nav_completeness.py::test_home_nav_stays_minimal
-      fails if the count exceeds 10 — this prevents scope creep in home mode.
+      fails if the count exceeds 12 — this prevents scope creep in home mode.
+
+  # ── Discoverability ───────────────────────────────────────────────────────
+  - id: RULE-D1
+    title: "Every new page must have a _PAGE_HELP entry in dashboard.py"
+    severity: required
+    description: >
+      The module-level _PAGE_HELP dict in ui/dashboard.py maps page nav labels
+      to contextual help text shown when the user clicks the ? button in the
+      breadcrumb row. Every new page added via _nav_add_page() must have a
+      corresponding entry in this dict.
+
+      Format:
+        _PAGE_HELP["My Page Label"] = (
+            "Short title (≤ 60 chars)",
+            "One or two sentences explaining what the page does and how to start."
+        )
+
+      The ? button is hidden automatically when no entry exists for the current
+      page, so a missing entry silently removes help for that page. Add the entry
+      in the same commit that creates the page — do not defer it.
+
+  - id: RULE-D2
+    title: "Every new page must have a _FEATURES entry in discover_page.py"
+    severity: required
+    description: >
+      The _FEATURES list in ui/pages/discover_page.py is the Feature Guide shown
+      to users from the home screen and Education nav section. Every new page or
+      significant capability added to NetSentinel must appear as a feature dict
+      in this list so users can discover it.
+
+      Required fields:
+        name:     str  — short display name (≤ 40 chars)
+        group:    str  — one of: "Monitoring", "Diagnostics", "Security",
+                         "Learning", "Hidden Features", "Advanced"
+        desc:     str  — one sentence describing what the feature does
+        page:     str  — nav label string to navigate to (or None for hidden features)
+        requires: list — zero or more of: "Npcap", "Admin", "Speedtest CLI"
+
+      For features that require user configuration before they produce data
+      (e.g. target lists, API keys, enable toggles): the desc must explicitly
+      state what configuration step is needed AND the configuration UI must be
+      present on the page itself — not hidden in Settings or a separate dialog.
+      A Feature Guide entry that says "monitors X" for a feature that silently
+      produces nothing until the user finds a buried setting is a discoverability
+      failure equivalent to not listing the feature at all.
+
+      Add the entry in the same commit that creates the page — the Feature Guide
+      is the primary discoverability surface for new capabilities.
 
   # ── Dashboard Data Feed Wiring ────────────────────────────────────────────
   - id: RULE-DW1
@@ -743,4 +814,92 @@ rules:
         HistoryPage     (_content_stack, scan_requested → _start_full_scan)
         Benchmark tab   (_bm_stack, _scan_and_grade inline method)
         Devices tab     (_m1_stack, pre-existing pattern)
+
+  # ── Feature Wiring ────────────────────────────────────────────────────────
+  - id: RULE-FW1
+    title: "Workers with set_targets() require inline target management UI, QSettings persistence, and app.py wiring"
+    severity: blocking
+    description: >
+      Any worker class that exposes a set_targets() method is permanently
+      non-functional until that method is called with at least one target. A
+      worker with an empty target list silently produces no data — this is
+      indistinguishable from a broken feature from the user's perspective.
+
+      When a page owns a worker that has set_targets():
+        1. The page must include an inline target management UI (add/remove form)
+           using the RULE-UX5 QStackedWidget pattern:
+             page 0 — empty state with an add form as the primary CTA
+             page 1 — content, with an add form in the card title bar
+        2. Targets must be persisted via QSettings using the key
+           "<feature>/targets" as a JSON array.
+        3. The page must expose a targets_changed = pyqtSignal(list) signal
+           that emits the updated target list whenever it changes.
+        4. In app.py, immediately after window = Dashboard(...):
+             a. Load saved targets and call worker.set_targets() on startup.
+             b. Connect window._page.targets_changed to worker.set_targets.
+
+      Never launch a feature where the only path to configuring targets is a
+      settings page, a config file, or code — the user must be able to configure
+      it directly on the feature page.
+
+      Workers known to require this treatment (May 2026):
+        CertWorker   → CertPage.certs_changed → cert_worker.set_targets()
+        SvcWorker    → ServicePage.services_changed → svc_worker.set_targets()
+
+  - id: RULE-FW2
+    title: "Every REST API route must appear in settings_page endpoint reference in the same session"
+    severity: blocking
+    description: >
+      The REST API runs on localhost and is invisible to users unless they know
+      to look for it. The _ENDPOINTS list in
+      settings_page._update_api_status_label() is the canonical user-visible
+      reference for all available routes.
+
+      When adding a new route to modules/rest_api.py:
+        1. Add the route path and a plain-English description to _ENDPOINTS in
+           settings_page._update_api_status_label() in the same session.
+        2. The endpoint reference is shown as clickable HTML links when the REST
+           API is enabled — the new route must appear there and be clickable for
+           non-parameterised paths.
+        3. Update the Feature Guide (RULE-D2) desc for the REST API feature if
+           the new endpoint is user-facing.
+
+      A route that exists in rest_api.py but not in the endpoint reference is
+      effectively invisible — users and other developers have no way to know it
+      exists without reading source code.
+
+      Current endpoints (May 2026): /health, /dashboard, /devices, /alerts,
+      /uptime/<ip>, /speed-history, /grade.
+
+  - id: RULE-UI1
+    title: "Verify PyQt6 API signatures before use — run debug_launch.py after every UI change"
+    severity: blocking
+    description: >
+      PyQt6 method signatures differ subtly from PyQt5 and online documentation
+      examples. Many incorrect calls pass syntax and import checks but raise
+      TypeError at runtime — only detectable by actually launching the app.
+
+      Known footguns:
+        QVBoxLayout.addLayout(layout)          → valid
+        QVBoxLayout.addLayout(layout, stretch) → valid
+        QVBoxLayout.addLayout(layout, alignment=...) → INVALID — TypeError at runtime
+        QVBoxLayout.addWidget(widget, stretch, alignment) → valid (alignment is the 3rd positional)
+
+        Centering a layout inside a QVBoxLayout requires a wrapper QHBoxLayout:
+          center = QHBoxLayout()
+          center.addStretch()
+          center.addLayout(inner_form)
+          center.addStretch()
+          evl.addLayout(center)
+
+      Before using any new layout or widget method with keyword arguments:
+        1. Check the PyQt6 (not PyQt5) docs or the C++ Qt docs for the exact
+           overload signatures.
+        2. After every UI change — including small layout tweaks — run:
+             python tools/debug_launch.py
+           and confirm `Dashboard() instantiated OK` and `window.show() called OK`
+           appear in netsentinel_debug.log before declaring UI work complete.
+
+      COMMIT GATE Step 2 exists precisely to catch these errors. Skipping it
+      means a TypeError that only manifests at startup will reach the user.
 

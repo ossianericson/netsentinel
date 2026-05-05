@@ -406,6 +406,7 @@ QListWidget#sideNav::item {{
     font-size: 13px;
     font-weight: 600;
     border-left: none;
+    outline: 0;
 }}
 QListWidget#sideNav::item:selected {{
     background-color: {SIDEBAR_SEL};
@@ -417,6 +418,10 @@ QListWidget#sideNav::item:selected {{
     font-weight: bold;
     border-radius: 0px;
     padding-left: 7px;
+    outline: 0;
+}}
+QListWidget#sideNav::item:focus {{
+    outline: 0;
 }}
 QListWidget#sideNav::item:hover:!selected {{
     background-color: {SIDEBAR_HOVER};
@@ -815,8 +820,7 @@ QLineEdit:focus {{
     border-color: {ACCENT};
 }}
 QPushButton:focus, QCheckBox:focus, QRadioButton:focus {{
-    outline: 1px solid {ACCENT};
-    outline-offset: 1px;
+    outline: none;
 }}
 
 /* ── ToolTip ── */

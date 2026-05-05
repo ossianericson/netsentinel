@@ -704,3 +704,7 @@ class LabModePage(QWidget):
             self._worker.stop()
             self._worker.wait(2000)
         self._stack.setCurrentIndex(_PICKER)
+
+    def inject_live_challenge(self, scenario: LabScenario) -> None:
+        """Start a dynamically-generated scenario from a live logger event."""
+        self._start_scenario(scenario)

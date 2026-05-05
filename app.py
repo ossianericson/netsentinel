@@ -347,7 +347,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.6.10")
+    app.setApplicationVersion("1.7.0")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────
@@ -472,13 +472,15 @@ def main():
     report_worker.error.connect(window._reports_page.on_worker_error)
     window._reports_page.set_worker(report_worker)
 
-    # Wire SNMP trap worker → trap page
+    # Wire SNMP trap worker → trap page + log hub
     snmp_trap_worker.trap_received.connect(window._snmp_trap_page.on_trap_received)
+    snmp_trap_worker.trap_received.connect(window._log_hub_page.on_snmp_trap)
     snmp_trap_worker.status.connect(window._snmp_trap_page.on_status)
     snmp_trap_worker.error.connect(window._snmp_trap_page.on_error)
 
-    # Wire syslog worker → syslog page
+    # Wire syslog worker → syslog page + log hub
     syslog_worker.message_received.connect(window._syslog_page.on_message_received)
+    syslog_worker.message_received.connect(window._log_hub_page.on_syslog_message)
     syslog_worker.status.connect(window._syslog_page.on_status)
     syslog_worker.error.connect(window._syslog_page.on_error)
 
@@ -488,11 +490,21 @@ def main():
     avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._home_page.on_cycle_done)
 
-    # Wire cert worker → cert page
+    # Wire cert worker → cert page; load persisted targets
     cert_worker.check_done.connect(window._cert_page.on_check_done)
+    _cert_targets = window._cert_page._load_targets()
+    if _cert_targets:
+        from modules.cert_monitor import CertTarget as _CertTarget
+        cert_worker.set_targets([_CertTarget(host=t["host"], ports=t.get("ports", [443])) for t in _cert_targets])
+    window._cert_page.certs_changed.connect(cert_worker.set_targets)
 
-    # Wire service worker → service page + alert engine
+    # Wire service worker → service page + alert engine; load persisted targets
     svc_worker.check_done.connect(window._service_page.on_check_done)
+    _svc_targets = window._service_page._load_targets()
+    if _svc_targets:
+        from modules.service_monitor import ServiceTarget as _SvcTarget
+        svc_worker.set_targets([_SvcTarget(t["host"], t["port"], t.get("label", "")) for t in _svc_targets])
+    window._service_page.services_changed.connect(svc_worker.set_targets)
 
     def _on_svc_check(results: list) -> None:
         fired = alerts.evaluate_service_checks(results)
@@ -532,6 +544,8 @@ def main():
     # Wire empty-state CTAs → full scan
     window._network_doc_page.scan_requested.connect(window._start_full_scan)
     window._history_page.scan_requested.connect(window._start_full_scan)
+    window._uptime_page.scan_requested.connect(window._start_full_scan)
+    window._inventory_page.scan_requested.connect(window._start_full_scan)
 
     # ── Show window after all wiring is complete (prevents startup flash) ─────
     window.show()

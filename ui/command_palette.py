@@ -8,25 +8,13 @@ from PyQt6.QtWidgets import (
 from ui.styles import ACCENT, BG_CARD, BORDER, SIDEBAR_HOVER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE
 
 
-def _fuzzy(query: str, text: str) -> bool:
-    """True when all chars of query appear in order in text (case-insensitive)."""
-    text = text.lower()
-    i = 0
-    for ch in query.lower():
-        idx = text.find(ch, i)
-        if idx < 0:
-            return False
-        i = idx + 1
-    return True
-
-
 class CommandPalette(QDialog):
     page_requested   = pyqtSignal(str)  # emits page label
     action_requested = pyqtSignal(str)  # emits action key
 
     def __init__(self, items: list, parent=None):
         """items: list of {'icon': str, 'label': str, 'kind': 'page'|'action'}"""
-        super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.Popup)
+        super().__init__(parent, Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._all_items = items
         self._build()
@@ -79,6 +67,7 @@ class CommandPalette(QDialog):
             f"}}"
             f"QListWidget::item:hover:!selected {{ background:{SIDEBAR_HOVER}; }}"
         )
+        self._list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._list.itemActivated.connect(self._activate)
         wl.addWidget(self._list)
 
@@ -105,7 +94,7 @@ class CommandPalette(QDialog):
         if not text:
             self._populate(self._all_items)
             return
-        matched = [it for it in self._all_items if _fuzzy(text, it["label"])]
+        matched = [it for it in self._all_items if text.lower() in it["label"].lower()]
         self._populate(matched)
 
     def _activate(self, item: QListWidgetItem):
@@ -133,12 +122,12 @@ class CommandPalette(QDialog):
 
     def showEvent(self, event):
         super().showEvent(event)
-        self._search.setFocus()
         self._search.clear()
-        self._populate(self._all_items)
         if self.parent():
             pw  = self.parent()
             geo = pw.frameGeometry()
             x   = geo.x() + (geo.width() - self.width()) // 2
             y   = geo.y() + geo.height() // 5
             self.move(x, y)
+        self.activateWindow()
+        self._search.setFocus()

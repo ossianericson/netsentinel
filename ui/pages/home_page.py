@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import datetime
 
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QSettings, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -42,6 +44,11 @@ from ui.styles import (
     UPDATE_BAR_FG,
 )
 
+try:
+    from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
+except ImportError:
+    _GUIDE_FEATURES: list = []
+
 
 class HomePage(QWidget):
     """Simple landing page for new / Home-mode users."""
@@ -50,6 +57,8 @@ class HomePage(QWidget):
     navigate_to = pyqtSignal(str)
     #: Emitted when the user clicks "Start Monitoring" on the stability card.
     start_monitoring_requested = pyqtSignal()
+    #: Emitted when the user clicks "Investigate →" on a live challenge suggestion.
+    investigate_live_requested = pyqtSignal()
 
     # ── _MiniCard ─────────────────────────────────────────────────────────────
 
@@ -186,6 +195,7 @@ class HomePage(QWidget):
         self._alert_count = 0
         self._device_count: int = 0
         self._signals_connected: bool = False
+        self._dashboard_url = "http://localhost:8765/dashboard"
         self._setup_ui()
         if self._store is not None:
             from PyQt6.QtCore import QTimer
@@ -222,33 +232,48 @@ class HomePage(QWidget):
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSpacing(10)
 
-        # ── Guided Troubleshooter banner ──────────────────────────────────────
-        banner = QFrame()
-        banner.setStyleSheet(
+        # ── Browser dashboard strip (visible when API enabled + not dismissed) ─
+        self._dashboard_strip = QFrame()
+        self._dashboard_strip.setStyleSheet(
             f"QFrame {{ background:{UPDATE_BAR_BG}; border:1px solid {UPDATE_BAR_BORDER};"
             f" border-radius:4px; }}"
         )
-        banner_lay = QHBoxLayout(banner)
-        banner_lay.setContentsMargins(12, 6, 12, 6)
-        banner_lay.setSpacing(8)
-        _banner_icon = QLabel("✦")
-        _banner_icon.setStyleSheet(
-            f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+        self._dashboard_strip.setVisible(False)
+        _ds_lay = QHBoxLayout(self._dashboard_strip)
+        _ds_lay.setContentsMargins(12, 5, 8, 5)
+        _ds_lay.setSpacing(8)
+        _ds_icon = QLabel("🌐")
+        _ds_icon.setFixedWidth(18)
+        _ds_icon.setStyleSheet(
+            f"font-size:12px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
         )
-        _banner_icon.setFixedWidth(18)
-        _banner_text = QLabel(
-            "Not sure where to start? The Guided Troubleshooter walks you through"
-            " common network issues."
-        )
-        _banner_text.setStyleSheet(
+        self._ds_text = QLabel("")
+        self._ds_text.setStyleSheet(
             f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
         )
-        _banner_text.setWordWrap(True)
-        self._btn_diagnose = QPushButton("◆  Guided Troubleshooter")
-        banner_lay.addWidget(_banner_icon)
-        banner_lay.addWidget(_banner_text, 1)
-        banner_lay.addWidget(self._btn_diagnose)
-        lay.addWidget(banner)
+        _ds_open = QPushButton("Open ↗")
+        _ds_open.setFixedHeight(24)
+        _ds_open.setCursor(Qt.CursorShape.PointingHandCursor)
+        _ds_open.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
+            f" border-radius:3px; font-size:11px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:#1a6fc4; }}"
+        )
+        _ds_open.clicked.connect(self._open_dashboard)
+        _ds_dismiss = QPushButton("×")
+        _ds_dismiss.setFixedSize(20, 20)
+        _ds_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _ds_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{UPDATE_BAR_FG}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        _ds_dismiss.clicked.connect(self._dismiss_dashboard_strip)
+        _ds_lay.addWidget(_ds_icon)
+        _ds_lay.addWidget(self._ds_text, 1)
+        _ds_lay.addWidget(_ds_open)
+        _ds_lay.addWidget(_ds_dismiss)
+        lay.addWidget(self._dashboard_strip)
 
         # ── Since you were last here (hidden until data loaded) ───────────────
         self._last_visit_card = QFrame()
@@ -303,8 +328,8 @@ class HomePage(QWidget):
             " background:transparent; border:none;"
         )
         self._hero_sub = QLabel(
-            "One scan discovers every device, checks connection health, and"
-            " fills in the Devices, DNS, and Security tabs with live data."
+            "Scan your network to discover every device and check connectivity."
+            " Something not working? Diagnose to get a plain-English verdict."
         )
         self._hero_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY};"
@@ -314,13 +339,21 @@ class HomePage(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
-        self._btn_scan = QPushButton("\u25b6  Discover My Network")
+        self._btn_scan = QPushButton("\u25b6  Scan Network")
         self._btn_scan.setObjectName("btnScanHero")
+        self._btn_diagnose = QPushButton("\u25c6  Diagnose Network")
+        self._btn_diagnose.setStyleSheet(
+            f"QPushButton {{ min-height: 34px; font-size: 12px; font-weight: 600;"
+            f" background: transparent; color: {ACCENT};"
+            f" border: 1px solid {ACCENT}; border-radius: 4px; padding: 0 12px; }}"
+            f"QPushButton:hover {{ background: {ACCENT}; color: #ffffff; }}"
+        )
         self._btn_isp = QPushButton("\ud83d\udcca  View ISP Report")
         self._btn_isp.setStyleSheet(
             "QPushButton { min-height: 34px; font-size: 12px; font-weight: 600; }"
         )
         btn_row.addWidget(self._btn_scan)
+        btn_row.addWidget(self._btn_diagnose)
         btn_row.addWidget(self._btn_isp)
         btn_row.addStretch()
 
@@ -329,6 +362,39 @@ class HomePage(QWidget):
         right.addLayout(btn_row)
         hero_lay.addLayout(right, 1)
         lay.addWidget(hero)
+
+        # ── Feature search bar ────────────────────────────────────────────────
+        search_card = QFrame()
+        search_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        search_outer = QVBoxLayout(search_card)
+        search_outer.setContentsMargins(10, 8, 10, 8)
+        search_outer.setSpacing(6)
+
+        self._home_search = QLineEdit()
+        self._home_search.setPlaceholderText(
+            "Search features — try 'wifi', 'arp', 'heatmap', 'dns'…"
+        )
+        self._home_search.setFixedHeight(30)
+        self._home_search.setStyleSheet(
+            f"QLineEdit {{ background:{BG_DARK}; border:1px solid {BORDER};"
+            f" border-radius:4px; color:{TEXT_PRIMARY}; font-size:11px; padding:0 8px; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        self._home_search.textChanged.connect(self._apply_home_search)
+        search_outer.addWidget(self._home_search)
+
+        self._search_results = QFrame()
+        self._search_results.setStyleSheet("QFrame { background:transparent; border:none; }")
+        self._search_results.setVisible(False)
+        self._search_results_inner = QVBoxLayout(self._search_results)
+        self._search_results_inner.setContentsMargins(0, 2, 0, 0)
+        self._search_results_inner.setSpacing(3)
+        search_outer.addWidget(self._search_results)
+
+        lay.addWidget(search_card)
 
         # ── "Three things" section label ──────────────────────────────────────
         _sec1 = QLabel("THE THREE THINGS THAT MATTER")
@@ -349,9 +415,9 @@ class HomePage(QWidget):
         self._speed_card.clicked.connect(
             lambda: self.navigate_to.emit("Speed Test"))
         self._stability_card.clicked.connect(
-            lambda: self.navigate_to.emit("DNS & Outages"))
+            lambda: self.navigate_to.emit("DNS & Stability"))
         self._devices_card.clicked.connect(
-            lambda: self.navigate_to.emit("Devices on Network"))
+            lambda: self.navigate_to.emit("Devices"))
         lay.addLayout(card_row)
 
         # ── Stability monitoring card ─────────────────────────────────────────
@@ -401,7 +467,7 @@ class HomePage(QWidget):
             f" background:transparent; border:none; padding:0; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
         )
-        self._btn_mon_view.clicked.connect(lambda: self.navigate_to.emit("Stability Log"))
+        self._btn_mon_view.clicked.connect(lambda: self.navigate_to.emit("Logs"))
 
         mon_lay.addWidget(self._mon_dot)
         mon_lay.addWidget(self._mon_status_lbl, 1)
@@ -458,9 +524,9 @@ class HomePage(QWidget):
             return rw, lbl, dot
 
         _dev_row, self._res_devices_lbl, self._res_devices_dot = \
-            _result_row("–", "View Devices →", "Devices on Network")
+            _result_row("–", "View Devices →", "Devices")
         _conn_row, self._res_conn_lbl, self._res_conn_dot = \
-            _result_row("–", "View Connection →", "DNS & Outages")
+            _result_row("–", "View Connection →", "DNS & Stability")
         _sec_row, self._res_security_lbl, self._res_security_dot = \
             _result_row("–", "View Overview →", "Overview")
 
@@ -522,7 +588,174 @@ class HomePage(QWidget):
         )
         self._alert_inner.addWidget(self._no_other_alerts_lbl)
         lay.addWidget(alert_card)
+
+        # ── Quick tips card (dismissible; hidden once user dismisses) ──────────
+        self._tips_card = QFrame()
+        self._tips_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._tips_card.setVisible(False)
+        _tips_lay = QVBoxLayout(self._tips_card)
+        _tips_lay.setContentsMargins(12, 8, 12, 8)
+        _tips_lay.setSpacing(3)
+
+        _tips_hdr_row = QHBoxLayout()
+        _tips_hdr_row.setContentsMargins(0, 0, 0, 0)
+        _tips_hdr_row.setSpacing(0)
+        _tips_hdr = QLabel("QUICK TIPS")
+        _tips_hdr.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; letter-spacing:1px;"
+        )
+        _tips_x = QPushButton("×")
+        _tips_x.setFixedSize(18, 18)
+        _tips_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        _tips_x.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:13px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        _tips_x.clicked.connect(self._dismiss_tips)
+        _tips_hdr_row.addWidget(_tips_hdr)
+        _tips_hdr_row.addStretch()
+        _tips_hdr_row.addWidget(_tips_x)
+        _tips_lay.addLayout(_tips_hdr_row)
+
+        def _tip_row(icon: str, text: str) -> QWidget:
+            w = QWidget()
+            w.setStyleSheet("background:transparent;")
+            rl = QHBoxLayout(w)
+            rl.setContentsMargins(0, 2, 0, 2)
+            rl.setSpacing(8)
+            ic = QLabel(icon)
+            ic.setFixedWidth(16)
+            ic.setStyleSheet("font-size:12px; background:transparent; border:none;")
+            lb = QLabel(text)
+            lb.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            lb.setWordWrap(True)
+            rl.addWidget(ic)
+            rl.addWidget(lb, 1)
+            return w
+
+        _tips_lay.addWidget(_tip_row("⌨", "Press  Ctrl+K  to open the command palette — search any page instantly."))
+        _tips_lay.addWidget(_tip_row("📌", "Right-click any nav item to pin it to the sidebar for quick access."))
+        _tips_lay.addWidget(_tip_row("⚙", "Right-click a device row for quick actions: block, How to Fix, history."))
+        self._tip_row_rest_api = _tip_row("🌐", "Enable the REST API in  Settings → REST API  for a live browser dashboard at localhost:8765/dashboard.")
+        _tips_lay.addWidget(self._tip_row_rest_api)
+
+        lay.addWidget(self._tips_card)
         lay.addStretch()
+
+    # ── Feature search ────────────────────────────────────────────────────────
+
+    def _apply_home_search(self, text: str) -> None:
+        while self._search_results_inner.count():
+            item = self._search_results_inner.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+
+        q = text.strip().lower()
+        if not q:
+            self._search_results.setVisible(False)
+            return
+
+        filtered = [
+            f for f in _GUIDE_FEATURES
+            if q in f["name"].lower()
+            or q in f["desc"].lower()
+            or q in f.get("group", "").lower()
+            or q in (f.get("page") or "").lower()
+            or any(q in t.lower() for t in f.get("tags", []))
+        ][:6]
+
+        if not filtered:
+            lbl = QLabel(f'No features matching "{text}"')
+            lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY};"
+                " background:transparent; border:none;"
+            )
+            self._search_results_inner.addWidget(lbl)
+        else:
+            for feat in filtered:
+                self._search_results_inner.addWidget(
+                    self._make_search_result_row(feat)
+                )
+        self._search_results.setVisible(True)
+
+    def _make_search_result_row(self, feat: dict) -> QWidget:
+        row = QWidget()
+        row.setStyleSheet("background:transparent;")
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(2, 3, 2, 3)
+        rl.setSpacing(8)
+
+        name_lbl = QLabel(feat["name"])
+        name_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none; min-width:130px;"
+        )
+        desc_lbl = QLabel(feat["desc"])
+        desc_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+        desc_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        btn = QPushButton("Open →")
+        btn.setFlat(True)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px;"
+            f" background:transparent; border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        target = feat.get("page") or "Feature Guide"
+        btn.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
+
+        rl.addWidget(name_lbl)
+        rl.addWidget(desc_lbl, 1)
+        rl.addWidget(btn)
+        return row
+
+    # ── Discoverability strips ────────────────────────────────────────────────
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        qs = QSettings("NetSentinel", "NetSentinel")
+        api_enabled = qs.value("rest_api/enabled", False, type=bool)
+        strip_dismissed = qs.value("home/dashboard_strip_dismissed", False, type=bool)
+        if api_enabled and not strip_dismissed:
+            port = int(qs.value("rest_api/port", 8765))
+            self._dashboard_url = f"http://localhost:{port}/dashboard"
+            self._ds_text.setText(
+                f"REST API running at localhost:{port} — browser dashboard + 7 endpoints "
+                f"(devices, alerts, uptime, grade…). Open Settings to see the full list."
+            )
+            self._dashboard_strip.setVisible(True)
+        else:
+            self._dashboard_strip.setVisible(False)
+        tips_dismissed = qs.value("home/tips_dismissed", False, type=bool)
+        if not tips_dismissed:
+            self._tip_row_rest_api.setVisible(not api_enabled)
+            self._tips_card.setVisible(True)
+        else:
+            self._tips_card.setVisible(False)
+
+    def _open_dashboard(self) -> None:
+        QDesktopServices.openUrl(QUrl(self._dashboard_url))
+
+    def _dismiss_dashboard_strip(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            "home/dashboard_strip_dismissed", True
+        )
+        self._dashboard_strip.setVisible(False)
+
+    def _dismiss_tips(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("home/tips_dismissed", True)
+        self._tips_card.setVisible(False)
 
     def _update_scan_button_label(self) -> None:
         label = (
@@ -821,7 +1054,9 @@ class HomePage(QWidget):
                 f" background:transparent; border:none; padding:0; }}"
                 f"QPushButton:hover {{ color:#005A9E; }}"
             )
-            if target is not None:
+            if target == "__live__":
+                btn.clicked.connect(self.investigate_live_requested)
+            elif target is not None:
                 btn.clicked.connect(lambda _c=False, t=target: self.navigate_to.emit(t))
             else:
                 btn.clicked.connect(self.start_monitoring_requested)

@@ -164,7 +164,10 @@ hiddenimports: list = [
     "ui.pages.diagnosis_page",
     "ui.pages.lab_mode_page",
     "ui.pages.protocol_viz_page",
+    "ui.pages.log_hub_page",
+    "ui.pages.discover_page",
     "ui.widgets.protocol_canvas",
+    "ui.widgets.explainer_panel",
     "modules.protocol_animator",
     # ── workers/ — all QThread workers ────────────────────────────────────────
     "workers.availability_worker",

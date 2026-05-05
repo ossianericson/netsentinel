@@ -343,6 +343,7 @@ class LoggerWorker(QThread):
     entry_received = pyqtSignal(object)   # LogEntry
     status         = pyqtSignal(str)
     error          = pyqtSignal(str)
+    rotated        = pyqtSignal(str, int) # new filename, segment number
 
     def __init__(
         self,
@@ -352,6 +353,7 @@ class LoggerWorker(QThread):
         enable_dns: bool = False,
         enable_http: bool = False,
         enable_arp: bool = False,
+        rotation_hours: int = 12,
         parent=None,
     ):
         super().__init__(parent)
@@ -361,6 +363,7 @@ class LoggerWorker(QThread):
         self.enable_dns = enable_dns
         self.enable_http = enable_http
         self.enable_arp = enable_arp
+        self.rotation_hours = rotation_hours
         self._logger = None
 
     def run(self):
@@ -373,6 +376,7 @@ class LoggerWorker(QThread):
                 enable_dns=self.enable_dns,
                 enable_http=self.enable_http,
                 enable_arp=self.enable_arp,
+                rotation_hours=self.rotation_hours,
             )
             options = []
             if self.enable_jitter: options.append("Jitter")
@@ -384,7 +388,10 @@ class LoggerWorker(QThread):
                 f"Logger started — pinging every {self.interval_s}s{extras}"
                 f" → {self._logger.log_file.name}"
             )
-            self._logger.start(on_entry=lambda e: self.entry_received.emit(e))
+            self._logger.start(
+                on_entry=lambda e: self.entry_received.emit(e),
+                on_rotate=lambda p, n: self.rotated.emit(p.name, n),
+            )
             self._logger._stop_event.wait()
         except Exception as exc:
             self.error.emit(f"Logger error: {exc}")

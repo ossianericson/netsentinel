@@ -22,7 +22,7 @@
 ; ============================================================================
 
 #define MyAppName        "NetSentinel"
-#define MyAppVersion     "1.6.10"
+#define MyAppVersion     "1.7.0"
 #define MyAppPublisher   "NetSentinel Project"
 #define MyAppURL         "https://github.com/ossianericson/netsentinel"
 #define MyAppExeName     "NetSentinel.exe"

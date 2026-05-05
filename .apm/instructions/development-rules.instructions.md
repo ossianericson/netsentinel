@@ -16,7 +16,7 @@ python -m pytest tests/ -q
 ```
 All tests must pass. Fix any failures before proceeding.
 
-### Step 2 — Verify the app starts
+### Step 2 — Verify the app starts (HARD GATE)
 ```powershell
 python tools/debug_launch.py
 ```
@@ -24,6 +24,10 @@ Read `netsentinel_debug.log` and confirm:
 - `Dashboard() instantiated OK` is present
 - `window.show() called OK` is present
 - No `UNHANDLED EXCEPTION` block in the log
+
+**Do NOT proceed to Step 3 until this passes.** PyQt6 TypeError crashes (wrong
+kwarg on addLayout, bad signal signature, missing import) only surface here —
+not in the test suite. A clean test run does not prove the app starts.
 
 ### Step 3 — UI sign-off
 Tell the user: "Tests pass, app launched cleanly — please verify the window looks correct and say 'looks good' to proceed."
@@ -56,7 +60,7 @@ label.setStyleSheet(f"color: {RED};")
 ```
 
 ### RULE 2: No QTabWidget for primary navigation
-The application uses `QListWidget` (sidebar) + `QStackedWidget` (content). Do not add new `QTabWidget` instances to the main navigation flow.
+The application uses a permanent 48 px activity rail + 280 px animated flyout (`_FlyoutPanel`) + `QStackedWidget` (`_stack`). Do not add new `QTabWidget` instances to the main navigation flow.
 
 ### RULE 3: Table row height is 24px
 All tables must keep `verticalHeader().setDefaultSectionSize(24)`. Information density is a design value.
@@ -70,12 +74,16 @@ Any new page must wrap content in at least one card widget (white background, `1
 ### RULE 6: Status indicators must be coloured circles, not just text
 Status columns use coloured `●` labels. Never use text-only status.
 
-### RULE 9: New pages register in the correct sidebar section
-- Regular monitoring → "Standard" section
-- Advanced/optional → "Advanced" section
-- Offensive/elevated-privilege → "Security Audit" section
+### RULE 9: New pages register in the correct rail section
+- Discovery / inventory → "Discover" section
+- Real-time monitoring → "Monitor" section
+- Reports / export → "Reports" section
+- Protocol analysis / deep-dive tools → "Analysis" section
+- Scheduling / automation → "Automation" section
+- Active probes / elevated-privilege → "Security Audit" section (`audit_item=True`; `admin_required=True` if root/admin needed)
+- Student-facing educational tools → "Education" section
 
-Use `self._nav_add_page(icon, label, widget)` after the correct `self._nav_add_section()` call.
+Use `self._nav_add_rail_item(label, widget)` (or with `admin_required`/`audit_item` kwargs) inside `_build_pro_nav()` after the correct `_nav_begin_section()` call. Do not call `_nav_add_page()` — that method is for the legacy flat nav only.
 
 ### RULE 10: matplotlib charts follow the light theme
 ```python
@@ -132,7 +140,7 @@ For every shipped feature or fix:
 - **21-C**: Update in-app Help "What's New" to match changelog
 - **21-D**: Update BACKLOG.md (remove completed items, add date)
 - **21-E**: Add test file `tests/test_<module>.py` for every new module
-- **21-F**: Register new pages in sidebar + README
+- **21-F**: Register new pages in `_build_pro_nav()` + README
 - **21-G**: Add new modules to architecture.instructions.md layout table
 - **21-H**: Commit message format: `feat: <description>  vX.Y.Z`
 
@@ -142,7 +150,7 @@ For every shipped feature or fix:
 - [ ] In-app Help "What's New" matches changelog
 - [ ] BACKLOG.md: completed items removed, date updated
 - [ ] All new modules have tests; full suite passes
-- [ ] New pages registered in sidebar and listed in README
+- [ ] New pages registered in `_build_pro_nav()` and listed in README
 
 ### RULE 22-A: Secrets in OS keychain
 API keys, passwords, SMTP credentials, SNMP community strings, and tokens must be stored via `keyring`. Never write secrets to `QSettings`, `NetSentinel.ini`, or any file.
@@ -202,15 +210,34 @@ The banner uses `winget install Ookla.Speedtest.CLI` in a background thread.
 **Never bundle `speedtest.exe` inside the installer** — Ookla's EULA prohibits redistribution.
 Use the WinGet `PackageDependency` in the installer manifest instead.
 
-### RULE 25: Sidebar icon standard
-All icons in `_nav_add_page()` must be geometric Unicode symbols — not photo-emoji.
+### RULE-UI1: Verify PyQt6 API signatures — never assume kwarg names match PyQt5
+PyQt6 method signatures differ from PyQt5 and documentation examples. Incorrect
+kwargs pass syntax checks but raise TypeError at runtime.
 
-✓ Acceptable: `⬡ ▲ ⚡ ⚙ ⊞ ⊙ ⊕ ◉ ◈ ⇄ ◎ ✓ ✚ ℹ ≡ ≣ ↗ ⊳ ⊲ ⌂ ⤳ ⏱`
-✗ Forbidden: `🏠 📊 🔍 📡 🖥 🗺 💊 📋 🌪 🤖 👁 📟 📥 📜`
+Critical difference to memorise:
+```python
+# WRONG — TypeError at runtime ("alignment" is not a valid kwarg for addLayout)
+evl.addLayout(form_row, alignment=Qt.AlignmentFlag.AlignCenter)
 
-Rationale: geometric symbols render consistently at 12px in the collapsed 48px rail; emoji rendering varies by OS and looks chaotic at small sizes.
+# CORRECT — wrap in a QHBoxLayout with stretches instead
+center = QHBoxLayout()
+center.addStretch()
+center.addLayout(form_row)
+center.addStretch()
+evl.addLayout(center)
+```
 
-Section header icons (in `_nav_add_section()`) may use emoji since they are never shown in collapsed mode.
+Rule: after **any** UI change — including single-line layout tweaks — run
+`python tools/debug_launch.py` and verify `window.show() called OK` before
+declaring the work done. This is COMMIT GATE Step 2 and is a hard gate.
+
+### RULE 25: Rail section icon standard
+Rail section icons must be **Lucide SVG names** from the `_LUCIDE` dict in `dashboard.py` — not Unicode symbols or photo-emoji.
+
+✓ Correct: `_nav_begin_section("Monitor", "monitor")`
+✗ Wrong:   `_nav_begin_section("Monitor", "📊")` or `_nav_begin_section("Monitor", "◉")`
+
+If no existing Lucide name fits, add a new SVG entry to `_LUCIDE` before using it. Available names are listed in `architecture.instructions.md` under "Rail icon standard". Lucide icons render as clean SVG at any size and colour; Unicode and emoji do not.
 
 ---
 
@@ -219,12 +246,15 @@ Section header icons (in `_nav_add_section()`) may use emoji since they are neve
 1. Create `modules/<name>.py` — pure Python, no PyQt imports
 2. Create `workers/<name>_worker.py` — QThread, emits `result_ready(object)` and `error(str)`
 3. Create `ui/pages/<name>_page.py` — receives `store: MetricStore` as constructor parameter
-4. Register in `dashboard._build_tabs()` via `_nav_add_page(icon, label, widget)`
+4. Register in `dashboard._build_pro_nav()` via `_nav_add_rail_item(label, widget)` inside the correct section block
 5. Add result cache `self._<name>_result = None` in Dashboard `__init__`
 6. Wire `result_ready` signal to a `_on_<name>_result()` slot
 7. All colours must come from `ui/styles.py`
 8. Add `tests/test_<name>.py` with at least one passing test
 9. Update architecture.instructions.md layout table
+10. If the worker exposes `set_targets()`: follow RULE-FW1 — add inline target
+    management UI on the page, persist via QSettings, emit `targets_changed`
+    pyqtSignal, and wire startup loading + signal connection in app.py
 
 ## Naming Conventions
 
@@ -234,4 +264,4 @@ Section header icons (in `_nav_add_section()`) may use emoji since they are neve
 | Status label | `self._<module>_status` |
 | Worker reference | `self._<module>_worker` |
 | Result cache | `self._<module>_result` |
-| Nav row index | `self._nav_<module>_row` |
+| Nav label (rail) | string passed to `_nav_add_rail_item(label, ...)` |

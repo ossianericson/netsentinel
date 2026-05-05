@@ -205,6 +205,8 @@ class NetworkLogger:
         enable_dns     — measure system DNS resolution latency each cycle
         enable_http    — HTTP GET /generate_204 each cycle (captive portal check)
         enable_arp     — snapshot ARP table each cycle; alert on new/changed entries
+        rotation_hours — start a new CSV file after this many hours (0 = no rotation,
+                         default 12).  Best practice for unattended overnight runs.
 
     Each option adds overhead — choose only what you need for long unattended runs.
     """
@@ -219,6 +221,7 @@ class NetworkLogger:
         enable_dns: bool = False,
         enable_http: bool = False,
         enable_arp: bool = False,
+        rotation_hours: int = 12,
     ):
         self.interval_s = interval_s
         self.targets = targets or list(DEFAULT_TARGETS)
@@ -228,19 +231,19 @@ class NetworkLogger:
         self.enable_dns = enable_dns
         self.enable_http = enable_http
         self.enable_arp = enable_arp
+        self.rotation_hours = rotation_hours
 
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._entries: List[LogEntry] = []
         self._lock = threading.Lock()
         self._on_entry: Optional[Callable[[LogEntry], None]] = None
+        self._on_rotate: Optional[Callable[[Path, int], None]] = None
         self._arp_baseline: Dict[str, str] = {}
+        self._file_start_time: float = 0.0
+        self._segment: int = 1
 
-    def start(self, on_entry: Optional[Callable[[LogEntry], None]] = None):
-        """Start the logging loop in a background thread."""
-        self._on_entry = on_entry
-        self._stop_event.clear()
-        # Build CSV header dynamically based on enabled options
+    def _build_headers(self) -> List[str]:
         headers = ["timestamp", "host", "rtt_ms", "status"]
         if self.enable_jitter:
             headers.append("jitter_ms")
@@ -250,8 +253,38 @@ class NetworkLogger:
             headers += ["http_status", "http_ms"]
         if self.enable_arp:
             headers.append("arp_event")
+        return headers
+
+    def _maybe_rotate(self) -> None:
+        if not self.rotation_hours or not self._file_start_time:
+            return
+        if time.time() - self._file_start_time < self.rotation_hours * 3600:
+            return
+        new_path = _log_path_for_session()
+        with open(new_path, "w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(self._build_headers())
+        self.log_path = new_path
+        self._file_start_time = time.time()
+        self._segment += 1
+        if self._on_rotate:
+            try:
+                self._on_rotate(new_path, self._segment)
+            except Exception:
+                pass
+
+    def start(
+        self,
+        on_entry: Optional[Callable[[LogEntry], None]] = None,
+        on_rotate: Optional[Callable[[Path, int], None]] = None,
+    ):
+        """Start the logging loop in a background thread."""
+        self._on_entry = on_entry
+        self._on_rotate = on_rotate
+        self._stop_event.clear()
+        self._segment = 1
+        self._file_start_time = time.time()
         with open(self.log_path, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(headers)
+            csv.writer(f).writerow(self._build_headers())
         # Seed ARP baseline before first cycle
         if self.enable_arp:
             self._arp_baseline = _get_arp_snapshot()
@@ -274,6 +307,7 @@ class NetworkLogger:
 
     def _loop(self):
         while not self._stop_event.is_set():
+            self._maybe_rotate()
             cycle_start = time.monotonic()
 
             # ── Per-cycle once: DNS, HTTP, ARP (not per-host) ────────────────

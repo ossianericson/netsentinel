@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
@@ -38,6 +38,149 @@ _PROTOCOLS = [
     ("DHCP", "DHCP Lease (DORA)",       "Layer 7 — Dynamic Host Configuration Protocol"),
     ("STP",  "STP Root Election",       "Layer 2 — Spanning Tree Protocol"),
 ]
+
+# "Why this protocol matters" content shown below the step description.
+# Tuple: (why_it_exists, what_goes_wrong, netsentinel_scan_label)
+_PROTOCOL_CONTEXT: dict[str, tuple[str, str, str]] = {
+    "ARP": (
+        "ARP (Address Resolution Protocol) is how every device on your local network discovers "
+        "hardware addresses. Before any packet can be delivered, the sender broadcasts 'who has IP x?' "
+        "and the owner replies with its MAC address. Without ARP, local communication is impossible.",
+        "ARP has no authentication — any device can claim any IP address. ARP spoofing exploits this "
+        "to intercept traffic destined for another device (a man-in-the-middle attack). "
+        "NetSentinel's Rogue Device scanner reads the ARP table to detect unexpected IP-to-MAC bindings.",
+        "Devices",
+    ),
+    "DNS": (
+        "DNS (Domain Name System) translates human-readable names like 'google.com' into IP addresses. "
+        "Every connection your computer makes starts with a DNS lookup — even if you never see it. "
+        "Your DNS resolver is typically provided by your ISP or configured manually (e.g. 8.8.8.8).",
+        "Slow or failing DNS makes the entire internet feel broken even if your physical connection is fine. "
+        "DNS can also be hijacked to redirect you to malicious sites (DNS spoofing). "
+        "NetSentinel measures DNS latency on each ping cycle and flags resolver failures.",
+        "DNS & Stability",
+    ),
+    "TCP": (
+        "TCP (Transmission Control Protocol) is the reliable delivery layer used by HTTP, SSH, email, "
+        "and most internet applications. Before any data flows, both sides complete a three-way handshake "
+        "(SYN → SYN-ACK → ACK) to establish a connection and agree on sequence numbers.",
+        "A port scan works by sending SYN packets and observing which ports reply with SYN-ACK (open) "
+        "versus RST (closed) or no reply (filtered). Unexpected open ports on your devices indicate "
+        "services you didn't intend to expose. NetSentinel's Port Scanner maps all open TCP ports.",
+        "Devices",
+    ),
+    "DHCP": (
+        "DHCP (Dynamic Host Configuration Protocol) automatically assigns IP addresses when devices "
+        "join a network. The four-step exchange — Discover, Offer, Request, Acknowledge (DORA) — "
+        "happens in seconds and is invisible to the user.",
+        "A rogue DHCP server can give devices a fake default gateway or DNS server, "
+        "silently redirecting all their traffic. This is one of the most dangerous local network attacks. "
+        "NetSentinel's DHCP Lease scanner detects unauthorized DHCP servers on your subnet.",
+        "DHCP Leases",
+    ),
+    "STP": (
+        "STP (Spanning Tree Protocol) prevents Ethernet broadcast storms by blocking redundant links "
+        "between switches. Switches exchange BPDU frames to elect a 'root bridge' — the switch "
+        "with the lowest Bridge ID — and then block all paths except the shortest tree to the root.",
+        "A rogue bridge can win the root election unexpectedly, forcing all traffic through itself "
+        "and causing 30–50 second outages every time STP reconverges. Mesh WiFi nodes connected "
+        "via Ethernet are a common source. NetSentinel's Rogue Bridge scanner captures BPDU frames "
+        "and flags any switch that has claimed the root role unexpectedly.",
+        "Rogue Bridge (STP)",
+    ),
+}
+
+
+class _ContextPanel(QFrame):
+    """Collapsible 'Why this protocol matters' panel shown below the step description."""
+
+    navigate_to: "pyqtSignal"  # declared as class attr so mypy sees it
+
+    def __init__(self, parent=None):
+        from PyQt6.QtCore import pyqtSignal as _ps
+        # pyqtSignal must be on the class, not the instance — use a thin wrapper
+        super().__init__(parent)
+        self.setObjectName("ctxPanel")
+        self.setStyleSheet(
+            f"QFrame#ctxPanel {{ background:transparent; border:none; }}"
+        )
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Toggle bar
+        self._toggle = QPushButton("  ▸  Why this protocol matters")
+        self._toggle.setCheckable(True)
+        self._toggle.setStyleSheet(
+            f"QPushButton {{ background:transparent; border:none;"
+            f" border-top:1px solid {BORDER}; color:{TEXT_MUTED}; font-size:11px;"
+            f" font-weight:600; text-align:left; padding:6px 12px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:checked {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._toggle.toggled.connect(self._on_toggle)
+        root.addWidget(self._toggle)
+
+        # Expanded body
+        self._body = QFrame()
+        self._body.setVisible(False)
+        self._body.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0; }}"
+        )
+        body_lay = QVBoxLayout(self._body)
+        body_lay.setContentsMargins(16, 12, 16, 12)
+        body_lay.setSpacing(8)
+
+        self._why_lbl = QLabel()
+        self._why_lbl.setWordWrap(True)
+        self._why_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        body_lay.addWidget(self._why_lbl)
+
+        self._wrong_lbl = QLabel()
+        self._wrong_lbl.setWordWrap(True)
+        self._wrong_lbl.setStyleSheet(
+            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        body_lay.addWidget(self._wrong_lbl)
+
+        self._nav_btn = QPushButton()
+        self._nav_btn.setFixedHeight(28)
+        self._nav_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
+            f" color:{ACCENT}; border-radius:4px; font-size:11px; font-weight:600;"
+            f" padding:0 12px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:#FFFFFF; }}"
+        )
+        self._nav_btn.setVisible(False)
+        body_lay.addWidget(self._nav_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        root.addWidget(self._body)
+        self._nav_target = ""
+
+    def set_protocol(self, key: str, on_navigate) -> None:
+        why, wrong, nav_label = _PROTOCOL_CONTEXT.get(key, ("", "", ""))
+        self._why_lbl.setText(why)
+        self._wrong_lbl.setText(wrong)
+        self._nav_target = nav_label
+        if nav_label:
+            self._nav_btn.setText(f"▶  Open {nav_label} scan")
+            self._nav_btn.setVisible(True)
+            try:
+                self._nav_btn.clicked.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            self._nav_btn.clicked.connect(lambda: on_navigate(nav_label))
+        else:
+            self._nav_btn.setVisible(False)
+
+    def _on_toggle(self, checked: bool) -> None:
+        self._toggle.setText(
+            "  ▾  Why this protocol matters" if checked else "  ▸  Why this protocol matters"
+        )
+        self._body.setVisible(checked)
 
 
 def _card_frame() -> QFrame:
@@ -68,6 +211,8 @@ class ProtocolVizPage(QWidget):
     Call set_context() after each scan to refresh the underlying data.
     """
 
+    navigate_to = pyqtSignal(str)  # emitted when context panel nav button is clicked
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("contentArea")
@@ -96,6 +241,15 @@ class ProtocolVizPage(QWidget):
         self._m2_result   = m2_result
         # Refresh the currently displayed protocol
         self._select_protocol(self._active_key)
+
+    def load_from_event(self, entry) -> None:
+        """Pre-select a protocol based on a log entry's event type and switch to it."""
+        if getattr(entry, "arp_event", "") and entry.arp_event:
+            self._select_protocol("ARP")
+        elif getattr(entry, "dns_ms", -1) >= 0:
+            self._select_protocol("DNS")
+        else:
+            self._select_protocol("ARP")
 
     # ── UI construction ────────────────────────────────────────────────────────
 
@@ -243,6 +397,10 @@ class ProtocolVizPage(QWidget):
         desc_lay.addWidget(self._step_explanation)
         bl.addWidget(desc_card)
 
+        # "Why this matters" collapsible panel
+        self._context_panel = _ContextPanel()
+        bl.addWidget(self._context_panel)
+
         bl.addStretch()
         scroll.setWidget(body)
         outer.addWidget(scroll, 1)
@@ -275,6 +433,8 @@ class ProtocolVizPage(QWidget):
     def _select_protocol(self, key: str) -> None:
         self._active_key = key
         self._style_proto_btns()
+        if hasattr(self, "_context_panel"):
+            self._context_panel.set_protocol(key, self._on_context_navigate)
 
         scene = self._build_scene(key)
 
@@ -315,6 +475,9 @@ class ProtocolVizPage(QWidget):
         return build_arp_scene(self._net_info, self._devices)
 
     # ── Playback controls ──────────────────────────────────────────────────────
+
+    def _on_context_navigate(self, label: str) -> None:
+        self.navigate_to.emit(label)
 
     def _toggle_play(self) -> None:
         if self._canvas.is_playing():

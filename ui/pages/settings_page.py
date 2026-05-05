@@ -473,6 +473,19 @@ class SettingsPage(QWidget):
         self._lbl_api_warning.setVisible(self._chk_api_external.isChecked())
         bl.addWidget(self._lbl_api_warning)
 
+        port_val = int(qs.value("rest_api/port", 8765))
+        self._lbl_api_other_devices = QLabel(
+            f"To access from a phone or another computer on your network:\n"
+            f"1. Enable external access above.\n"
+            f"2. Find this machine's local IP (run  ipconfig  in a terminal — look for IPv4 Address).\n"
+            f"3. On the other device, open:  http://[this-machine-IP]:{port_val}/dashboard"
+        )
+        self._lbl_api_other_devices.setWordWrap(True)
+        self._lbl_api_other_devices.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        bl.addWidget(self._lbl_api_other_devices)
+
         # API key row
         key_row = QHBoxLayout()
         key_row.setSpacing(8)
@@ -505,21 +518,29 @@ class SettingsPage(QWidget):
         key_row.addWidget(self._btn_regen_key)
         bl.addLayout(key_row)
 
-        # Status label
+        # Status label — uses rich text so the URL is a clickable link when enabled
         self._lbl_api_status = QLabel("")
+        self._lbl_api_status.setOpenExternalLinks(True)
         self._lbl_api_status.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
         bl.addWidget(self._lbl_api_status)
-        self._update_api_status_label()
 
-        # Endpoint reference
-        ref_lbl = QLabel(
-            "Endpoints:  GET /health   /devices   /alerts   /uptime/<ip>   /speed-history\n"
-            "Auth header:  X-API-Key: <key>  or  ?api_key=<key>"
+        # Endpoint reference — rebuilt and shown only when API is enabled
+        self._endpoint_ref = QLabel()
+        self._endpoint_ref.setOpenExternalLinks(True)
+        self._endpoint_ref.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.LinksAccessibleByMouse
+            | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
         )
-        ref_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; font-family:Consolas; border:none;"
+        self._endpoint_ref.setWordWrap(True)
+        self._endpoint_ref.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; font-family:Consolas,monospace;"
+            f" border:none; padding:4px 0 0 0;"
         )
-        bl.addWidget(ref_lbl)
+        self._endpoint_ref.setVisible(False)
+        bl.addWidget(self._endpoint_ref)
+
+        self._update_api_status_label()
 
         return card
 
@@ -570,15 +591,44 @@ class SettingsPage(QWidget):
         qs = QSettings("NetSentinel", "NetSentinel")
         enabled = qs.value("rest_api/enabled", False, type=bool)
         port    = int(qs.value("rest_api/port", 8765))
-        external = qs.value("rest_api/external", False, type=bool)
+        base    = f"http://localhost:{port}"
         if enabled:
-            host = "0.0.0.0" if external else "127.0.0.1"
+            dash_url = f"{base}/dashboard"
             self._lbl_api_status.setText(
-                f"API running on http://{host}:{port}/  — "
-                "changes take effect after restarting NetSentinel"
+                f'API running — <a href="{dash_url}" style="color:{ACCENT};">'
+                f"{base}/dashboard</a>"
+                "  — changes take effect after restarting NetSentinel"
             )
+            _ENDPOINTS = [
+                ("/health",        "Health check"),
+                ("/dashboard",     "Browser dashboard"),
+                ("/devices",       "Discovered devices"),
+                ("/alerts",        "Recent alerts"),
+                ("/uptime/&lt;ip&gt;", "Uptime % for a device"),
+                ("/speed-history", "Speed test history"),
+                ("/grade",         "Network grade and score"),
+            ]
+            rows = []
+            for path, desc in _ENDPOINTS:
+                raw_path = path.replace("&lt;ip&gt;", "<ip>")
+                if "<" not in raw_path:
+                    full = f"{base}{raw_path}"
+                    link = (
+                        f'<a href="{full}" style="color:{ACCENT}; font-family:Consolas;">'
+                        f"GET {path}</a>"
+                    )
+                else:
+                    link = f'<span style="font-family:Consolas;">GET {path}</span>'
+                rows.append(f'{link}  <span style="color:{TEXT_MUTED};">— {desc}</span>')
+            auth_line = (
+                f'<span style="color:{TEXT_MUTED};">Auth:  '
+                f"X-API-Key: &lt;key&gt;  or  ?api_key=&lt;key&gt;</span>"
+            )
+            self._endpoint_ref.setText("<br>".join(rows) + "<br>" + auth_line)
+            self._endpoint_ref.setVisible(True)
         else:
             self._lbl_api_status.setText("API disabled — enable above and restart to activate.")
+            self._endpoint_ref.setVisible(False)
 
     # ── Plugin Marketplace ────────────────────────────────────────────────────
 

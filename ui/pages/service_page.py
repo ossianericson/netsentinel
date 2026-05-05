@@ -8,11 +8,12 @@ ServiceWorker emits check_done.
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFormLayout,
@@ -20,6 +21,10 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -28,6 +33,7 @@ from PyQt6.QtWidgets import (
 from ui.expanding_table import ExpandingTable
 
 from modules.metric_store import MetricStore, ServiceCheckPoint
+from modules.service_monitor import ServiceTarget
 from ui.styles import (
     ACCENT,
     AMBER,
@@ -45,6 +51,8 @@ from ui.styles import (
     TH_TEXT,
 )
 
+_QS_KEY = "service_monitor/targets"
+
 
 def _ts_label(ts: int) -> str:
     try:
@@ -57,15 +65,56 @@ def _ts_label(ts: int) -> str:
 class ServicePage(QWidget):
     """Displays TCP service/port heartbeat status for all monitored services."""
 
+    services_changed = pyqtSignal(list)   # list[ServiceTarget]
+
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store = store
         self._rows: list[ServiceCheckPoint] = []
+        self._configured: list[dict] = self._load_targets()
         self._setup_ui()
+        if self._configured:
+            self._content_stack.setCurrentIndex(1)
         self._refresh()
         timer = QTimer(self)
         timer.timeout.connect(self._refresh)
-        timer.start(60_000)   # auto-refresh every minute
+        timer.start(60_000)
+
+    # ── Persistence ───────────────────────────────────────────────────────────
+
+    def _load_targets(self) -> list[dict]:
+        raw = QSettings("NetSentinel", "NetSentinel").value(_QS_KEY, "[]")
+        try:
+            return list(json.loads(raw))
+        except Exception:
+            return []
+
+    def _save_targets(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue(_QS_KEY, json.dumps(self._configured))
+
+    def _emit_targets(self) -> None:
+        targets = [ServiceTarget(t["host"], t["port"], t.get("label", "")) for t in self._configured]
+        self.services_changed.emit(targets)
+
+    def _add_service(self, host: str, port: int, label: str) -> None:
+        host = host.strip()
+        if not host:
+            return
+        for t in self._configured:
+            if t["host"] == host and t["port"] == port:
+                return
+        self._configured.append({"host": host, "port": port, "label": label.strip() or f"{host}:{port}"})
+        self._save_targets()
+        self._emit_targets()
+        self._content_stack.setCurrentIndex(1)
+
+    def _remove_service(self, host: str, port: int) -> None:
+        self._configured = [t for t in self._configured if not (t["host"] == host and t["port"] == port)]
+        self._save_targets()
+        self._emit_targets()
+        if not self._configured:
+            self._content_stack.setCurrentIndex(0)
+        self._refresh()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -75,18 +124,74 @@ class ServicePage(QWidget):
         layout.setSpacing(8)
 
         title = QLabel("Service Heartbeat Monitor")
-        title.setStyleSheet(
-            f"font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};"
-        )
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
         layout.addWidget(title)
 
-        subtitle = QLabel(
-            "TCP port reachability checks — configured services are probed every minute."
-        )
+        subtitle = QLabel("TCP port reachability checks — configured services are probed every minute.")
         subtitle.setStyleSheet(f"font-size: 11px; color: {TEXT_SECONDARY};")
         layout.addWidget(subtitle)
 
-        # KPI row
+        self._content_stack = QStackedWidget()
+
+        # ── Page 0: empty state ───────────────────────────────────────────────
+        empty = QWidget()
+        evl = QVBoxLayout(empty)
+        evl.addStretch()
+
+        em_desc = QLabel(
+            "No services configured.\n"
+            "Add a hostname or IP and port below to start monitoring TCP reachability."
+        )
+        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        em_desc.setWordWrap(True)
+        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addSpacing(16)
+
+        # Inline add form for empty state
+        e0_host  = QLineEdit()
+        e0_host.setPlaceholderText("Host / IP  (e.g. 192.168.1.1)")
+        e0_host.setFixedWidth(200)
+        e0_host.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
+        e0_port  = QSpinBox()
+        e0_port.setRange(1, 65535)
+        e0_port.setValue(443)
+        e0_port.setFixedWidth(75)
+        e0_port.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 4px;")
+        e0_label = QLineEdit()
+        e0_label.setPlaceholderText("Label  (optional)")
+        e0_label.setFixedWidth(140)
+        e0_label.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:3px 6px;")
+        e0_add   = QPushButton("Add Service")
+        e0_add.setObjectName("btnScan")
+        e0_add.setFixedHeight(30)
+
+        def _add_from_empty():
+            self._add_service(e0_host.text(), e0_port.value(), e0_label.text())
+            e0_host.clear()
+            e0_label.clear()
+
+        e0_add.clicked.connect(_add_from_empty)
+        e0_host.returnPressed.connect(_add_from_empty)
+
+        form_row = QHBoxLayout()
+        form_row.setSpacing(6)
+        for w in (e0_host, e0_port, e0_label, e0_add):
+            form_row.addWidget(w)
+        center = QHBoxLayout()
+        center.addStretch()
+        center.addLayout(form_row)
+        center.addStretch()
+        evl.addLayout(center)
+        evl.addStretch()
+        self._content_stack.addWidget(empty)
+
+        # ── Page 1: content ───────────────────────────────────────────────────
+        content = QWidget()
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(8)
+
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
         self._kpi_up    = self._make_kpi("SERVICES UP",    "—", GREEN)
@@ -96,9 +201,8 @@ class ServicePage(QWidget):
         for w in (self._kpi_up, self._kpi_down, self._kpi_total, self._kpi_avg):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
-        layout.addLayout(kpi_row)
+        cl.addLayout(kpi_row)
 
-        # Card
         card = QFrame()
         card.setStyleSheet(
             f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
@@ -107,27 +211,58 @@ class ServicePage(QWidget):
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
-        # Card title bar
+        # Title bar with inline add form
         title_bar = QFrame()
-        title_bar.setFixedHeight(32)
-        title_bar.setStyleSheet(
-            f"background: {BG_CARD}; border-bottom: 1px solid #ECECEC;"
-        )
+        title_bar.setStyleSheet(f"background: {BG_CARD}; border-bottom: 1px solid #ECECEC;")
         tb_layout = QHBoxLayout(title_bar)
-        tb_layout.setContentsMargins(10, 0, 10, 0)
-        lbl = QLabel("Service Status")
-        lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};"
-        )
-        tb_layout.addWidget(lbl)
+        tb_layout.setContentsMargins(10, 6, 10, 6)
+        tb_layout.setSpacing(6)
+
+        bar_lbl = QLabel("Service Status")
+        bar_lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
+        tb_layout.addWidget(bar_lbl)
         tb_layout.addStretch()
+
+        self._txt_host = QLineEdit()
+        self._txt_host.setPlaceholderText("Host / IP")
+        self._txt_host.setFixedWidth(160)
+        self._txt_host.setFixedHeight(24)
+        self._txt_host.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
+        self._spin_port = QSpinBox()
+        self._spin_port.setRange(1, 65535)
+        self._spin_port.setValue(443)
+        self._spin_port.setFixedWidth(70)
+        self._spin_port.setFixedHeight(24)
+        self._spin_port.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 3px;")
+        self._txt_label = QLineEdit()
+        self._txt_label.setPlaceholderText("Label")
+        self._txt_label.setFixedWidth(120)
+        self._txt_label.setFixedHeight(24)
+        self._txt_label.setStyleSheet(f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;")
+        btn_add = QPushButton("+ Add")
+        btn_add.setFixedHeight(24)
+        btn_add.setStyleSheet(
+            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            f" background:transparent; padding:0 10px;"
+        )
+
+        def _add_from_bar():
+            self._add_service(self._txt_host.text(), self._spin_port.value(), self._txt_label.text())
+            self._txt_host.clear()
+            self._txt_label.clear()
+
+        btn_add.clicked.connect(_add_from_bar)
+        self._txt_host.returnPressed.connect(_add_from_bar)
+
+        for w in (self._txt_host, self._spin_port, self._txt_label, btn_add):
+            tb_layout.addWidget(w)
+
         card_layout.addWidget(title_bar)
 
-        # Table
         self._table = ExpandingTable(
             0, 6,
             detail_builder=lambda r: self._build_service_detail(r),
-            detail_height=110,
+            detail_height=120,
         )
         self._table.setHorizontalHeaderLabels(
             ["SERVICE", "HOST", "PORT", "STATUS", "RTT (ms)", "LAST CHECK"]
@@ -167,7 +302,10 @@ class ServicePage(QWidget):
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
         card_layout.addWidget(self._table)
-        layout.addWidget(card, stretch=1)
+        cl.addWidget(card, stretch=1)
+        self._content_stack.addWidget(content)
+
+        layout.addWidget(self._content_stack, stretch=1)
 
     # ── KPI helpers ───────────────────────────────────────────────────────────
 
@@ -182,13 +320,9 @@ class ServicePage(QWidget):
         lay.setContentsMargins(8, 6, 8, 6)
         lay.setSpacing(2)
         lbl = QLabel(label)
-        lbl.setStyleSheet(
-            f"font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};"
-        )
+        lbl.setStyleSheet(f"font-size: 9px; font-weight: bold; color: {TEXT_SECONDARY};")
         val = QLabel(value)
-        val.setStyleSheet(
-            f"font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};"
-        )
+        val.setStyleSheet(f"font-size: 22px; font-weight: bold; color: {TEXT_PRIMARY};")
         val.setObjectName(f"kpi_val_{label}")
         lay.addWidget(lbl)
         lay.addWidget(val)
@@ -220,14 +354,14 @@ class ServicePage(QWidget):
         self._table.setRowCount(0)
 
         if not rows:
-            self._table.setRowCount(1)
-            placeholder = QTableWidgetItem(
-                "No service data yet — add targets via Settings or configure ServiceWorker targets"
-            )
-            placeholder.setForeground(QColor(TEXT_SECONDARY))
-            placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._table.setItem(0, 0, placeholder)
-            self._table.setSpan(0, 0, 1, 6)
+            if self._configured:
+                # Targets exist but no check data yet — show waiting hint
+                self._table.setRowCount(1)
+                placeholder = QTableWidgetItem("Waiting for first check cycle…")
+                placeholder.setForeground(QColor(TEXT_SECONDARY))
+                placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self._table.setItem(0, 0, placeholder)
+                self._table.setSpan(0, 0, 1, 6)
             for kpi, lbl, v in [
                 (self._kpi_up,    "SERVICES UP",    "0"),
                 (self._kpi_down,  "SERVICES DOWN",  "0"),
@@ -263,17 +397,14 @@ class ServicePage(QWidget):
 
             dot = QLabel(status_text)
             dot.setStyleSheet(
-                f"color: {status_color}; font-size: 11px; "
-                f"font-weight: bold; padding-left: 4px;"
+                f"color: {status_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
             )
             dot.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
             self._table.setCellWidget(row_idx, 3, dot)
 
             rtt_item = QTableWidgetItem(rtt_str)
             rtt_item.setFlags(rtt_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            rtt_item.setTextAlignment(
-                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-            )
+            rtt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             if r.rtt_ms is not None:
                 rtt_item.setData(Qt.ItemDataRole.UserRole, r.rtt_ms)
             self._table.setItem(row_idx, 4, rtt_item)
@@ -327,9 +458,9 @@ class ServicePage(QWidget):
         g1.setContentsMargins(0, 0, 0, 0)
         g1.setSpacing(3)
         g1.setHorizontalSpacing(12)
-        g1.addRow(_hdr("Service"),    _val(r.label or f"{r.host}:{r.port}"))
-        g1.addRow(_hdr("Host"),       _val(r.host))
-        g1.addRow(_hdr("Port"),       _val(str(r.port)))
+        g1.addRow(_hdr("Service"), _val(r.label or f"{r.host}:{r.port}"))
+        g1.addRow(_hdr("Host"),    _val(r.host))
+        g1.addRow(_hdr("Port"),    _val(str(r.port)))
 
         rtt_str = f"{r.rtt_ms:.1f} ms" if r.rtt_ms is not None else "—"
         col2 = QWidget()
@@ -348,9 +479,7 @@ class ServicePage(QWidget):
         if self._store:
             history = self._store.query_service_history(r.host, r.port, hours=1.0)[-5:]
             if history:
-                dots = "  ".join(
-                    ("●" if p.up else "○") for p in reversed(history)
-                )
+                dots = "  ".join(("●" if p.up else "○") for p in reversed(history))
                 col3 = QWidget()
                 col3.setStyleSheet("QWidget { background:transparent; border:none; }")
                 g3 = QFormLayout(col3)
@@ -367,4 +496,17 @@ class ServicePage(QWidget):
         lay.addWidget(col1)
         lay.addWidget(col2)
         lay.addStretch()
+
+        # Remove button — captures host/port from current row
+        _host = r.host
+        _port = r.port
+        btn_rm = QPushButton("Remove Service")
+        btn_rm.setFixedHeight(24)
+        btn_rm.setStyleSheet(
+            f"font-size:10px; color:{RED}; border:1px solid {RED};"
+            f" background:transparent; padding:0 8px;"
+        )
+        btn_rm.clicked.connect(lambda: self._remove_service(_host, _port))
+        lay.addWidget(btn_rm, alignment=Qt.AlignmentFlag.AlignVCenter)
+
         return outer

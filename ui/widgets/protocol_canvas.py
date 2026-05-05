@@ -21,7 +21,7 @@ from PyQt6.QtCore import (
     QPointF, QRectF, Qt, QTimer, pyqtSignal,
 )
 from PyQt6.QtGui import (
-    QBrush, QColor, QFont, QPainter, QPainterPath, QPen,
+    QBrush, QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen,
 )
 from PyQt6.QtWidgets import QWidget
 
@@ -194,6 +194,7 @@ class ProtocolCanvas(QWidget):
         self._draw_arrows(p)
         self._draw_packet(p)
         self._draw_nodes(p)
+        self._draw_labels(p)   # always on top — drawn after nodes
         p.end()
 
     def _draw_arrows(self, p: QPainter) -> None:
@@ -221,7 +222,6 @@ class ProtocolCanvas(QWidget):
 
             if is_current:
                 self._draw_arrowhead(p, src_s, dst_s, c)
-                self._draw_packet_label(p, src, dst, step)
 
     def _draw_packet(self, p: QPainter) -> None:
         if self._phase != "anim" or not self._scene.steps:
@@ -308,6 +308,17 @@ class ProtocolCanvas(QWidget):
         p.setBrush(QBrush(color))
         p.drawPath(path)
 
+    def _draw_labels(self, p: QPainter) -> None:
+        """Draw the packet label for the current step — called last so it's always on top."""
+        if not self._scene or not self._scene.steps:
+            return
+        if self._step >= len(self._scene.steps):
+            return
+        step = self._scene.steps[self._step]
+        src  = self._node_center(step.from_node)
+        dst  = self._node_center(step.to_node)
+        self._draw_packet_label(p, src, dst, step)
+
     def _draw_packet_label(self, p: QPainter, src: QPointF, dst: QPointF,
                            step: AnimStep) -> None:
         mx = (src.x() + dst.x()) / 2
@@ -320,17 +331,32 @@ class ProtocolCanvas(QWidget):
         px_n, py_n = -dy / length, dx / length
         if py_n > 0:   # flip so offset is always above
             px_n, py_n = -px_n, -py_n
-        ox = mx + px_n * 18
-        oy = my + py_n * 18
+        ox = mx + px_n * 28
+        oy = my + py_n * 28
+
+        # Measure actual text so the pill fits snugly rather than using a fixed width
+        w1 = QFontMetrics(_FONT_PKT).horizontalAdvance(step.packet_label)
+        w2 = QFontMetrics(_FONT_DETAIL).horizontalAdvance(step.frame_detail)
+        pad = 14   # horizontal padding each side
+        hw  = max(w1, w2) / 2 + pad   # half-width of pill
+
+        lbl_rect = QRectF(ox - hw, oy - 12, hw * 2, 14)
+        det_rect = QRectF(ox - hw, oy + 3,  hw * 2, 13)
+
+        # Single pill covering both rows — arrow line cannot cut between them
+        bg = QColor("#0D1117")
+        bg.setAlpha(210)
+        pill = QRectF(ox - hw, oy - 15, hw * 2, 34)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(bg))
+        p.drawRoundedRect(pill, 5, 5)
 
         p.setPen(QPen(QColor("#E6EDF3")))
         p.setFont(_FONT_PKT)
-        lbl_rect = QRectF(ox - 90, oy - 10, 180, 18)
         p.drawText(lbl_rect, Qt.AlignmentFlag.AlignCenter, step.packet_label)
 
         p.setPen(QPen(QColor("#8B949E")))
         p.setFont(_FONT_DETAIL)
-        det_rect = QRectF(ox - 110, oy + 8, 220, 14)
         p.drawText(det_rect, Qt.AlignmentFlag.AlignCenter, step.frame_detail)
 
     def _clip_to_node(self, src: QPointF, dst: QPointF) -> tuple[QPointF, QPointF]:

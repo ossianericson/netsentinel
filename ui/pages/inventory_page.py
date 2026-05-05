@@ -15,10 +15,10 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QTableWidgetItem,
+    QScrollArea, QSizePolicy, QStackedWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -80,6 +80,8 @@ class InventoryPage(QWidget):
         Injected from app.py. Shows a placeholder if None.
     """
 
+    scan_requested = pyqtSignal()
+
     REFRESH_MS = 15_000   # refresh every 15 s
 
     def __init__(self, store: "Optional[MetricStore]" = None, parent=None):
@@ -105,20 +107,45 @@ class InventoryPage(QWidget):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(8)
 
-        # ── Title row ─────────────────────────────────────────────────────────
-        title_row = QHBoxLayout()
-        title_col = QVBoxLayout()
-        title_col.setSpacing(0)
+        # Title — always visible
         t = QLabel("Inventory Change History")
         t.setStyleSheet(f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};")
         s = QLabel("Device join, leave, and state-change events — recorded by the background monitor")
         s.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
-        title_col.addWidget(t)
-        title_col.addWidget(s)
-        title_row.addLayout(title_col)
-        title_row.addStretch()
+        root.addWidget(t)
+        root.addWidget(s)
 
-        # Zoom buttons
+        self._content_stack = QStackedWidget()
+
+        # ── Page 0: empty state ───────────────────────────────────────────────
+        empty = QWidget()
+        evl = QVBoxLayout(empty)
+        evl.addStretch()
+        em_desc = QLabel(
+            "No device events recorded yet.\n"
+            "Run a scan to start tracking devices joining, leaving, or going down."
+        )
+        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        em_desc.setWordWrap(True)
+        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        em_btn = QPushButton("Run Scan")
+        em_btn.setObjectName("btnScan")
+        em_btn.setFixedWidth(160)
+        em_btn.clicked.connect(self.scan_requested)
+        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addSpacing(12)
+        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addStretch()
+        self._content_stack.addWidget(empty)
+
+        # ── Page 1: content ───────────────────────────────────────────────────
+        content = QWidget()
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(8)
+
+        ctrl_row = QHBoxLayout()
+        ctrl_row.addStretch()
         self._zoom_btns: dict[str, QPushButton] = {}
         for lbl in _WINDOWS:
             btn = QPushButton(lbl)
@@ -127,9 +154,7 @@ class InventoryPage(QWidget):
             btn.setStyleSheet(self._zoom_style(False))
             btn.clicked.connect(lambda _c, l=lbl: self._set_window(l))
             self._zoom_btns[lbl] = btn
-            title_row.addWidget(btn)
-
-        # Refresh button
+            ctrl_row.addWidget(btn)
         rb = QPushButton("↻ Refresh")
         rb.setFixedHeight(26)
         rb.setStyleSheet(
@@ -138,24 +163,22 @@ class InventoryPage(QWidget):
             f"QPushButton:hover {{ background:#EEF4FF; }}"
         )
         rb.clicked.connect(self._refresh)
-        title_row.addWidget(rb)
-        root.addLayout(title_row)
+        ctrl_row.addWidget(rb)
+        cl.addLayout(ctrl_row)
 
-        # ── KPI row ───────────────────────────────────────────────────────────
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_total    = self._make_kpi("Total Events",    "—", ACCENT)
-        self._kpi_joined   = self._make_kpi("Joined",          "—", GREEN)
-        self._kpi_left     = self._make_kpi("Left",            "—", AMBER)
-        self._kpi_down     = self._make_kpi("Down Events",     "—", RED)
-        self._kpi_devices  = self._make_kpi("Devices Known",   "—", ACCENT)
+        self._kpi_total   = self._make_kpi("Total Events",  "—", ACCENT)
+        self._kpi_joined  = self._make_kpi("Joined",        "—", GREEN)
+        self._kpi_left    = self._make_kpi("Left",          "—", AMBER)
+        self._kpi_down    = self._make_kpi("Down Events",   "—", RED)
+        self._kpi_devices = self._make_kpi("Devices Known", "—", ACCENT)
         for w in (self._kpi_total, self._kpi_joined, self._kpi_left,
                   self._kpi_down, self._kpi_devices):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
-        root.addLayout(kpi_row)
+        cl.addLayout(kpi_row)
 
-        # ── Filter row ────────────────────────────────────────────────────────
         filter_row = QHBoxLayout()
         filter_row.setSpacing(12)
         filter_lbl = QLabel("Filter:")
@@ -166,16 +189,13 @@ class InventoryPage(QWidget):
             color, label = _EVENT_STYLE[et]
             cb = QCheckBox(label)
             cb.setChecked(True)
-            cb.setStyleSheet(
-                f"QCheckBox {{ font-size:11px; color:{color}; font-weight:bold; }}"
-            )
+            cb.setStyleSheet(f"QCheckBox {{ font-size:11px; color:{color}; font-weight:bold; }}")
             cb.toggled.connect(lambda checked, t=et: self._toggle_type(t, checked))
             self._type_checks[et] = cb
             filter_row.addWidget(cb)
         filter_row.addStretch()
-        root.addLayout(filter_row)
+        cl.addLayout(filter_row)
 
-        # ── Event table ───────────────────────────────────────────────────────
         card = QFrame()
         card.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
@@ -183,7 +203,6 @@ class InventoryPage(QWidget):
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
-
         cols = ["Time", "Event", "IP / Host", "MAC", "Vendor", "Detail"]
         self._table = ExpandingTable(
             0, len(cols),
@@ -215,27 +234,18 @@ class InventoryPage(QWidget):
             }}
             """
         )
-        # Column widths
         hdr = self._table.horizontalHeader()
-        hdr.resizeSection(0, 140)   # Time
-        hdr.resizeSection(1, 90)    # Event
-        hdr.resizeSection(2, 130)   # IP/Host
-        hdr.resizeSection(3, 135)   # MAC
-        hdr.resizeSection(4, 130)   # Vendor
+        hdr.resizeSection(0, 140)
+        hdr.resizeSection(1, 90)
+        hdr.resizeSection(2, 130)
+        hdr.resizeSection(3, 135)
+        hdr.resizeSection(4, 130)
         hdr.setStretchLastSection(True)
-
         card_lay.addWidget(self._table)
-        root.addWidget(card, 1)
+        cl.addWidget(card, 1)
+        self._content_stack.addWidget(content)
 
-        # ── Empty state ───────────────────────────────────────────────────────
-        self._empty_lbl = QLabel(
-            "No events recorded yet — run a scan or wait for the background monitor to collect data."
-        )
-        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet(f"color:#9BA8B4; font-size:11px; padding:20px;")
-        self._empty_lbl.setVisible(False)
-        root.addWidget(self._empty_lbl)
-
+        root.addWidget(self._content_stack, 1)
         self._set_window("24h")
 
     # ── Window / filter controls ──────────────────────────────────────────────
@@ -336,12 +346,10 @@ class InventoryPage(QWidget):
         self._rows = []
 
         if not events:
-            self._empty_lbl.setVisible(True)
-            self._table.setVisible(False)
             return
 
-        self._empty_lbl.setVisible(False)
-        self._table.setVisible(True)
+        if self._content_stack.currentIndex() == 0:
+            self._content_stack.setCurrentIndex(1)
 
         known_devices = self._store.get_known_devices()
         for evt in events:

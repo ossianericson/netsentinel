@@ -8,6 +8,10 @@
 
 The free, open-source network troubleshooting tool that replaces five separate utilities. Runs 100% locally.
 
+<p align="center">
+  <img src="assets/screenshots/hero.png" alt="NetSentinel dashboard overview" width="860"/>
+</p>
+
 ---
 
 ## Install
@@ -155,6 +159,11 @@ NetSentinel runs real scans against a live network, which means every result map
 
 **Built-in reference material:**
 - **Protocol Visualizer** — animated step-by-step diagrams of ARP resolution, DNS lookup, TCP handshake, DHCP lease, and STP election using real scan data from your own network (not placeholder addresses)
+
+<p align="center">
+  <img src="assets/screenshots/protocol-visualizer.gif" alt="Protocol Visualizer — animated packet trace" width="720"/>
+</p>
+
 - **Lab / Scenario Mode** — four guided exercises (Find the Rogue Device, Diagnose Slow DNS, Identify the Broadcast Storm Source, Map Your Subnet) with progressive hints, solution reveal, and exportable HTML result reports
 - IP and subnet calculator with reference panels explaining CIDR notation, subnetting rules, and address classes
 - 24-term networking glossary (ARP, BPDU, CGNAT, CVE, mDNS, STP, TLS, and more) — accessible via the help button from any page without leaving current context
@@ -214,11 +223,17 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.6.10
+### v1.7.0
 
-- Empty-state with inline CTA on four pages — Network Grade shows "Scan & Grade" button, ISP Report runs diagnostics automatically when clicked cold, Network Doc shows "Scan & Document", Availability History shows "Start Monitoring"; each page uses a `QStackedWidget` so the user gets the action they need from wherever they are instead of a dead-end "run a scan first" message
-- Complete dashboard wiring audit — all overview tiles (Fleet Devices, Fleet Services) now animate live from AvailabilityWorker and ServiceWorker cycles; SNMP Trap and Syslog pages now receive live data from their workers; Threat Intelligence page now feeds discovered indicators to the Geolocation Map automatically
-- Two new APM rules — RULE-DW2 (always-on worker signals must be wired in `app.py`, not inside Dashboard) and RULE-UX5 (empty-state with inline CTA pattern for all data-dependent pages)
+- Protocol Visualizer — animated step-through of 9 real protocols (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); each step shows the packet name, frame detail, and a labelled dot travelling between nodes; play/pause/step controls; tabbed with a protocol context panel
+- Log Hub — live network logger output in a filterable table; streams real events as they happen; interesting events (DNS failures, slow gateway, consecutive connection failures) automatically generate a Lab Mode exercise surfaced as a home screen card
+- Feature Guide — 44-feature catalogue grouped by category accessible from Education nav and the home screen; filter bar with synonym tags (search "heatmap", "arp", "stp"); badges for features requiring Npcap or admin rights; Open buttons navigate directly to the feature
+- Contextual page tips — a persistent tip bar below the breadcrumb row shows "ⓘ Tips for {page} ▾" on every page that has content; clicking expands a panel with what the page does and hidden interactions; auto-expands on first visit to complex pages (Logs, Lab Mode, Protocol Visualizer, Automation Hooks, and others); pages with no tips show "ⓘ Open Feature Guide →" which navigates there directly
+- Smart home screen suggestions — the home screen detects unvisited high-value pages and surfaces them as discovery cards; visit tracking persists across sessions; live challenge cards appear when the network logger detects something interesting
+- Status bar tooltips — all four pulse indicators (connection, devices, scan time, logger state) now show a tooltip describing what they measure and naming the page they link to
+- REST API remote access guidance — Settings page now shows 3-step instructions for accessing the REST API from other devices on the LAN, including the `ipconfig` tip to find the host IP
+- Empty-state with inline CTA on four pages — Network Grade, ISP Report, Network Doc, Availability History each show an action button instead of a dead-end "run a scan first" message
+- Complete dashboard wiring audit — all overview tiles animate live from background workers; SNMP Trap, Syslog, and Threat Intelligence pages receive live data automatically
 
 ### v1.6.4
 

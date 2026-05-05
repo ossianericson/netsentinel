@@ -16,7 +16,7 @@ python -m pytest tests/ -q
 ```
 All tests must pass. Fix any failures before proceeding.
 
-### Step 2 — Verify the app starts
+### Step 2 — Verify the app starts (HARD GATE)
 ```powershell
 python tools/debug_launch.py
 ```
@@ -24,6 +24,10 @@ Read `netsentinel_debug.log` and confirm:
 - `Dashboard() instantiated OK` is present
 - `window.show() called OK` is present
 - No `UNHANDLED EXCEPTION` block in the log
+
+**Do NOT proceed to Step 3 until this passes.** PyQt6 TypeError crashes (wrong
+kwarg on addLayout, bad signal signature, missing import) only surface here —
+not in the test suite. A clean test run does not prove the app starts.
 
 ### Step 3 — UI sign-off
 Tell the user: "Tests pass, app launched cleanly — please verify the window looks correct and say 'looks good' to proceed."
@@ -206,6 +210,27 @@ The banner uses `winget install Ookla.Speedtest.CLI` in a background thread.
 **Never bundle `speedtest.exe` inside the installer** — Ookla's EULA prohibits redistribution.
 Use the WinGet `PackageDependency` in the installer manifest instead.
 
+### RULE-UI1: Verify PyQt6 API signatures — never assume kwarg names match PyQt5
+PyQt6 method signatures differ from PyQt5 and documentation examples. Incorrect
+kwargs pass syntax checks but raise TypeError at runtime.
+
+Critical difference to memorise:
+```python
+# WRONG — TypeError at runtime ("alignment" is not a valid kwarg for addLayout)
+evl.addLayout(form_row, alignment=Qt.AlignmentFlag.AlignCenter)
+
+# CORRECT — wrap in a QHBoxLayout with stretches instead
+center = QHBoxLayout()
+center.addStretch()
+center.addLayout(form_row)
+center.addStretch()
+evl.addLayout(center)
+```
+
+Rule: after **any** UI change — including single-line layout tweaks — run
+`python tools/debug_launch.py` and verify `window.show() called OK` before
+declaring the work done. This is COMMIT GATE Step 2 and is a hard gate.
+
 ### RULE 25: Sidebar icon standard
 All icons in `_nav_add_page()` must be geometric Unicode symbols — not photo-emoji.
 
@@ -229,6 +254,9 @@ Section header icons (in `_nav_add_section()`) may use emoji since they are neve
 7. All colours must come from `ui/styles.py`
 8. Add `tests/test_<name>.py` with at least one passing test
 9. Update architecture.instructions.md layout table
+10. If the worker exposes `set_targets()`: follow RULE-FW1 — add inline target
+    management UI on the page, persist via QSettings, emit `targets_changed`
+    pyqtSignal, and wire startup loading + signal connection in app.py
 
 ## Naming Conventions
 

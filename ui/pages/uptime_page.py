@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFormLayout,
@@ -19,6 +19,8 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QPushButton,
+    QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -61,6 +63,8 @@ def _uptime_color(pct: float) -> str:
 class UptimePage(QWidget):
     """Displays per-device uptime percentages for 24h / 7d / 30d windows."""
 
+    scan_requested = pyqtSignal()
+
     _WINDOWS = [
         ("24h",  24.0),
         ("7d",   168.0),
@@ -84,32 +88,55 @@ class UptimePage(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
 
-        # Page title
         title = QLabel("Uptime & SLA")
-        title.setStyleSheet(
-            f"font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};"
-        )
+        title.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {TEXT_PRIMARY};")
         layout.addWidget(title)
-
         subtitle = QLabel(
             "Per-device availability percentages derived from background monitoring samples."
         )
         subtitle.setStyleSheet(f"font-size: 11px; color: {TEXT_SECONDARY};")
         layout.addWidget(subtitle)
 
-        # KPI row
+        self._content_stack = QStackedWidget()
+
+        # ── Page 0: empty state ───────────────────────────────────────────────
+        empty = QWidget()
+        evl = QVBoxLayout(empty)
+        evl.addStretch()
+        em_desc = QLabel(
+            "No availability data yet.\n"
+            "Start monitoring and NetSentinel will build per-device uptime percentages automatically."
+        )
+        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        em_desc.setWordWrap(True)
+        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        em_btn = QPushButton("Start Monitoring")
+        em_btn.setObjectName("btnScan")
+        em_btn.setFixedWidth(180)
+        em_btn.clicked.connect(self.scan_requested)
+        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addSpacing(12)
+        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        evl.addStretch()
+        self._content_stack.addWidget(empty)
+
+        # ── Page 1: content ───────────────────────────────────────────────────
+        content = QWidget()
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(0, 0, 0, 0)
+        cl.setSpacing(8)
+
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_devices   = self._make_kpi("DEVICES MONITORED", "—", ACCENT)
-        self._kpi_fleet     = self._make_kpi("FLEET AVG (24H)",   "—", GREEN)
-        self._kpi_best      = self._make_kpi("BEST DEVICE (24H)", "—", GREEN)
-        self._kpi_worst     = self._make_kpi("WORST DEVICE",      "—", AMBER)
+        self._kpi_devices = self._make_kpi("DEVICES MONITORED", "—", ACCENT)
+        self._kpi_fleet   = self._make_kpi("FLEET AVG (24H)",   "—", GREEN)
+        self._kpi_best    = self._make_kpi("BEST DEVICE (24H)", "—", GREEN)
+        self._kpi_worst   = self._make_kpi("WORST DEVICE",      "—", AMBER)
         for w in (self._kpi_devices, self._kpi_fleet, self._kpi_best, self._kpi_worst):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
-        layout.addLayout(kpi_row)
+        cl.addLayout(kpi_row)
 
-        # Card
         card = QFrame()
         card.setStyleSheet(
             f"QFrame {{ background: {BG_CARD}; border: 1px solid {BORDER}; border-radius: {CARD_RADIUS}; }}"
@@ -118,18 +145,13 @@ class UptimePage(QWidget):
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
-        # Card title bar
         title_bar = QFrame()
         title_bar.setFixedHeight(32)
-        title_bar.setStyleSheet(
-            f"background: {BG_CARD}; border-bottom: 1px solid #ECECEC;"
-        )
+        title_bar.setStyleSheet(f"background: {BG_CARD}; border-bottom: 1px solid #ECECEC;")
         tb_layout = QHBoxLayout(title_bar)
         tb_layout.setContentsMargins(10, 0, 10, 0)
         lbl = QLabel("Device Uptime Summary")
-        lbl.setStyleSheet(
-            f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};"
-        )
+        lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
         tb_layout.addWidget(lbl)
         tb_layout.addStretch()
         hint = QLabel("Green ≥99% · Amber ≥95% · Red <95%")
@@ -137,7 +159,6 @@ class UptimePage(QWidget):
         tb_layout.addWidget(hint)
         card_layout.addWidget(title_bar)
 
-        # Table — IP / Hostname / 24h / 7d / 30d / Status
         self._table = ExpandingTable(
             0, 6,
             detail_builder=lambda r: self._build_uptime_detail(r),
@@ -181,7 +202,10 @@ class UptimePage(QWidget):
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
         card_layout.addWidget(self._table)
-        layout.addWidget(card, stretch=1)
+        cl.addWidget(card, stretch=1)
+        self._content_stack.addWidget(content)
+
+        layout.addWidget(self._content_stack, stretch=1)
 
     # ── KPI helpers ───────────────────────────────────────────────────────────
 
@@ -229,27 +253,12 @@ class UptimePage(QWidget):
 
     def _populate(self, rows: list) -> None:
         self._rows = list(rows)
+        if not rows:
+            return
+        self._content_stack.setCurrentIndex(1)
         self._table.setSortingEnabled(False)
         self._table.clear_detail()
         self._table.setRowCount(0)
-
-        if not rows:
-            self._table.setRowCount(1)
-            placeholder = QTableWidgetItem(
-                "No uptime data yet — background monitoring builds this table automatically"
-            )
-            placeholder.setForeground(QColor(TEXT_SECONDARY))
-            placeholder.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self._table.setItem(0, 0, placeholder)
-            self._table.setSpan(0, 0, 1, 6)
-            for kpi, lbl, val in [
-                (self._kpi_devices, "DEVICES MONITORED", "0"),
-                (self._kpi_fleet,   "FLEET AVG (24H)",   "—"),
-                (self._kpi_best,    "BEST DEVICE (24H)", "—"),
-                (self._kpi_worst,   "WORST DEVICE",      "—"),
-            ]:
-                self._set_kpi(kpi, lbl, val)
-            return
 
         pct_24h_list = [r.get("24.0", 100.0) for r in rows]
         fleet_avg   = round(sum(pct_24h_list) / len(pct_24h_list), 1)

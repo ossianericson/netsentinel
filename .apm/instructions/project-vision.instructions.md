@@ -20,11 +20,11 @@ Both goals are served by the same core property: zero prior knowledge required. 
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-**Current version: 1.6.0**
+**Current version: 1.6.10**
 
 ---
 
-## Implemented Features (shipped as of v1.6.0)
+## Implemented Features (as of v1.6.10)
 
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection
@@ -32,7 +32,7 @@ NetSentinel is a **professional-grade network security scanner and monitor** for
 - **WiFi network enumeration** — rogue SSIDs, co-channel interference
 - **DNS & connectivity monitoring** — latency graphing, outage detection, DNS leak testing
 - **Active security audit** — SYN/UDP port scanning, OS fingerprinting, CVE lookup, credential testing (requires admin)
-- **Background network logging** — continuous ping/RTT/jitter/DNS logging with analysis
+- **Background network logging** — continuous ping/RTT/jitter/DNS logging with file rotation
 - **Network topology visualisation** — live matplotlib graph showing device relationships
 - **IoT behaviour baselining** — detect devices going outside their normal behaviour
 - **Internet speed test** — Ookla CLI (1 Gbps+) → speedtest-cli (8 threads) → pure-Python (16 TCP streams)
@@ -43,72 +43,77 @@ NetSentinel is a **professional-grade network security scanner and monitor** for
 - **Threat Intelligence** — ThreatIntelDB, AbuseIPDB v2 lookup (consent-gated)
 - **DHCP Lease Inventory** — rogue DHCP server detection
 - **DNS Zone Mapping** — AXFR + mDNS
-- **CVE lifecycle tracker** — per-device CVE tracking with metric_store schema v7
+- **CVE lifecycle tracker** — per-device CVE tracking with metric_store schema v8
 - **Alert pipeline** — AlertEngine + NotificationRouter with Toast/Webhook/Email/Pushover/Ntfy/Telegram channels
 - **Maintenance windows** — alert suppression per device or fleet-wide
 - **Predictive trend alerting** — OLS regression over RTT/loss/jitter with ETA-to-threshold
 
 ### Navigation & UI
-- **Progressive sidebar navigation** — Home / Standard / Pro modes; toggled by pill; persists via QSettings
+- **VSCode-style activity rail navigation** — permanent 48 px icon rail + 280 px animated flyout; full feature set always visible; last-open section restored via QSettings; mode switcher removed
+- **Rail icon labels** — 9 px section name drawn below each rail icon (58 px button height); sections legible without hovering
+- **Persistent search button** — magnifier at the top of the rail, always visible; opens Ctrl+K on click
+- **Breadcrumb strip** — `"Section  ›  Page"` label above the content area; updated on every navigation
+- **Pinned section** — right-click any flyout item to pin it; a "Pinned" rail section appears immediately at the top of the rail; persists via QSettings
 - **Command palette (Ctrl+K)** — fuzzy-match any page or action; arrow keys + Enter; Esc to dismiss
-- **Pinnable sidebar pages** — right-click to pin to Favourites section; persists via QSettings
 - **Sidebar search (Ctrl+F)** — focuses sidebar search from anywhere in the app
 - **Geometric Unicode sidebar icons** — RULE 25 compliance; no photo-emoji
 - **Three colour themes** — Arctic Clean, Midnight Pro, Obsidian Neon; all values in `ui/styles.py`
 - **Configurable Overview tile dashboard** — drag to reorder, layout persists
 
+### Home Page
+- **"Since you were last here" banner** — new devices and outages since last session
+- **"What to do next" suggestions strip** — up to four colour-coded action cards after each scan
+- **Weekly digest tray notification** — 7-day summary on startup if 7+ days elapsed
+- **Dismissible browser dashboard strip** — shown when REST API is enabled; links to `/dashboard`
+- **Dismissible Quick Tips card** — Ctrl+K, right-click pin, right-click device rows, REST API hint
+
+### Diagnosis & Root Cause
+- **One-click "What's Wrong?" diagnosis** — `DiagnosisPage`; symptom tiles → sequenced scan → plain-English findings; accessible from Home page button and Ctrl+K
+- **Root Cause Correlator** — `modules/root_cause_correlator.py`; prioritised findings and global verdict
+- **Health Check** — on-demand ping, DNS speed test, traceroute, HTTP check, DNS leak test
+
 ### Data & Reporting
 - **PDF report export** — `save_pdf_report()`
 - **Config baseline snapshots and diff viewer** — structured diff: added/removed/changed devices
-- **REST API** — read-only Flask, 127.0.0.1 default, OS-keychain API key
+- **REST API** — read-only Flask, 127.0.0.1 default, OS-keychain API key; `/dashboard` HTML endpoint
+- **Browser dashboard** — self-contained dark HTML page at `/dashboard`; auto-refreshes every 30 s
 - **Wi-Fi signal-strength heatmap** — floor plan import, per-BSSID IDW interpolation, PNG export
 - **Geolocation map** — offline MaxMind GeoLite2-City, no API key, no external calls
 - **Network documentation generator** — one-click HTML/Markdown network snapshot
+- **Shareable diagnostic card** — PNG/HTML export: grade circle, ISP, top 3 findings, attribution
 - **MQTT / Home Assistant publisher** — Discovery payloads, configurable broker, OS keychain credentials
 
-### UX Polish (v1.6.0)
-- **Inline row expansion** — CVE Tracker and Active Connections; GitHub PR style; click to toggle
-- **Animated counter tiles** — ease-out count-up on Overview refresh; 3 px health bar per tile
-- **Alert badge on Security Audit** — live unacknowledged CVE count, updates every 30 s
-- **Empty-state overlays** — centred icon + placeholder on all major tables
-- **Alert rules default to disabled** on fresh installs — no alert fires without explicit opt-in
+### Education
+- **Interactive protocol visualizer** — animated ARP/DNS/TCP/DHCP/STP diagrams using real scan data (`ui/pages/protocol_viz_page.py`, `modules/protocol_animator.py`)
+- **Lab / scenario mode** — four exercises with hints, solution reveals, exportable HTML results (`ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`)
 
 ### Security & Plumbing
 - **AppData path hardening** — `get_app_data_dir()` prevents PermissionError in `C:\Program Files\`
 - **OS keychain for all secrets** — SMTP, SNMP, API keys via `keyring`; never QSettings
 - **Winget E_ABORT fix** — three-layer defence for Ookla CLI install edge cases
-- **Plugin system** — drop Python scripts into `plugins/`; exposed via Pro mode sidebar
+- **Plugin system** — drop Python scripts into `plugins/`; exposed via Security Audit sidebar
 
 ---
 
-## Roadmap (from BACKLOG.md)
+## Roadmap (open items from BACKLOG.md)
 
 ### Priority 1 — De-facto Home Standard
-Items that require no configuration and produce output a non-technical person can act on immediately:
 
-1. **One-click "What's Wrong" diagnosis** — single button runs all detection modules; 3-sentence plain-English verdict with remediation. New: `modules/root_cause.py`, `modules/root_cause_correlator.py` (drive existing logic).
-2. **Shareable diagnostic card export** — PNG/HTML: network grade, ISP, top 3 findings, attribution. New: `modules/diagnostic_card.py`.
-3. **ISP comparison telemetry** (opt-in only) — contextualises speed/latency against median for user's ISP+country. New: `modules/isp_telemetry.py`; requires a backend endpoint.
+1. **Anonymous opt-in ISP comparison** — opt-in only; submits ISP name, country, anonymised speed/latency/uptime once per day; shows comparison against ISP+country median. Requires a backend endpoint. New: `modules/isp_telemetry.py`. Effort: L.
 
 ### Priority 2 — Educational Standard
-Items that produce output mappable to textbook concepts and submittable as lab evidence:
 
-1. **Interactive protocol visualizer** — animated ARP/DNS/TCP/DHCP/STP diagrams using real scan data. New: `ui/pages/protocol_viz_page.py`, `modules/protocol_animator.py`.
-2. **Lab / scenario mode** — pre-built exercises ("Find the rogue device", "Diagnose slow DNS") with hints, solution reveals, exportable results. New: `ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`.
-3. **"What just happened?" event feed** — plain-English explanation of every network event as it fires.
-4. **Classroom export** — signed scan report (JSON + HTML) with machine fingerprint; instructor aggregation view. New: `modules/classroom_export.py`, `ui/pages/classroom_page.py`.
+1. **"What just happened?" contextual explanations** — collapsible plain-English panel at the bottom of each detection page after every scan result. New: `ui/widgets/explainer_panel.py`. Effort: M.
+2. **CompTIA Network+ / CCNA curriculum alignment** — compact exam-objective badge per page; exportable study-session checklist. New: `data/curriculum_map.json`, `ui/widgets/objective_badge.py`. Effort: S.
+3. **Classroom export** — signed JSON+HTML scan report with machine fingerprint; instructor aggregation view. New: `modules/classroom_export.py`, `ui/pages/classroom_page.py`. Effort: M.
 
 ### Priority 3 — Polish and Retention
-Low-effort improvements to reduce friction for existing users:
 
-- Card border radius 8 px (one QSS line in `ui/styles.py`)
-- Sidebar left accent bar (3 px coloured strip on active row)
-- "Abyss" WCAG AA high-contrast theme (fourth theme)
-- Skeleton loading rows while scan workers run
-- Collapsible inline row detail in Devices, Services, Availability History tables
-- Breadcrumb strip above QStackedWidget showing current section → page
-- Keyboard shortcut reference card in Help panel
-- Per-page documentation link opening the relevant wiki section
+- **Skeleton loading rows** — placeholder rows while scan workers run; swap to real data on result
+- **"Abyss" WCAG AA high-contrast theme** — fourth theme; true black, no low-opacity elements
+- **Keyboard shortcut reference card** — in Help panel
+- **Per-page documentation link** — `?` link on each page header → relevant wiki section
+- **Passive 802.11 monitor mode capture** — raw 802.11 frame capture via Npcap; Pro-tier, falls back silently
 
 ---
 
