@@ -465,7 +465,7 @@ class _RailButton(QPushButton):
         # First word of section name, max 9 chars — shown below the icon
         self._short_label = (tooltip.split()[0]) if tooltip else ""
         self.setCheckable(True)
-        self.setFixedSize(48, 58)
+        self.setFixedSize(56, 58)
         self.setToolTip(tooltip)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._refresh_icon()
@@ -501,7 +501,7 @@ class _RailButton(QPushButton):
         # Short label below the icon
         font = QFont("Segoe UI", 7)
         p.setFont(font)
-        lbl_color = self._COLOR_ACTIVE if self.isChecked() else self._LABEL_COLOR
+        lbl_color = self._COLOR_ACTIVE if self.isChecked() else SIDEBAR_ITEM_FG
         p.setPen(QColor(lbl_color))
         fm = QFontMetrics(font)
         text = fm.elidedText(self._short_label, Qt.TextElideMode.ElideRight, self.width() - 4)
@@ -2542,7 +2542,7 @@ class Dashboard(QMainWindow):
 
         # 48px icon rail
         self._nav_rail = QWidget()
-        self._nav_rail.setFixedWidth(48)
+        self._nav_rail.setFixedWidth(56)
         self._nav_rail.setStyleSheet(
             f"background: {SIDEBAR_BG}; border-right: 1px solid {NAV_DIVIDER};"
         )
@@ -2565,7 +2565,7 @@ class Dashboard(QMainWindow):
 
         # Persistent search button — always visible at top of rail, opens Ctrl+K palette
         _rail_search_btn = QPushButton()
-        _rail_search_btn.setFixedSize(48, 36)
+        _rail_search_btn.setFixedSize(56, 36)
         _rail_search_btn.setToolTip("Search all pages  (Ctrl+K)")
         _rail_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _rail_search_btn.setIcon(_make_nav_icon("search", 18, "#6B7A8D"))
@@ -3362,26 +3362,15 @@ class Dashboard(QMainWindow):
     def _build_palette_items(self) -> list:
         seen: set = set()
         pages = []
-        if self._nav_mode != "home":
-            # Rail mode: enumerate all sections and entries
-            for sec in self._nav_sections:
-                for entry in sec["entries"]:
-                    if entry.label and entry.label not in seen:
-                        seen.add(entry.label)
-                        pages.append({"icon": "◎", "label": entry.label, "kind": "page"})
-        else:
-            for row in range(self._nav.count()):
-                if row in self._nav_header_rows or row in self._nav_action_rows:
-                    continue
-                label = self._nav_item_labels.get(row, "")
-                icon  = self._nav_item_icons.get(row, "◎")
-                if label and label not in seen:
-                    seen.add(label)
-                    pages.append({"icon": icon, "label": label, "kind": "page"})
+        for sec in self._nav_sections:
+            for entry in sec["entries"]:
+                if entry.label and entry.label not in seen:
+                    seen.add(entry.label)
+                    pages.append({"icon": "◎", "label": entry.label, "kind": "page"})
         actions = [
-            {"icon": "⟳", "label": "Run Full Scan",  "kind": "action"},
-            {"icon": "⚙", "label": "Open Settings",  "kind": "action"},
-            {"icon": "◄", "label": "Toggle Sidebar", "kind": "action"},
+            {"icon": "⟳", "label": "Run Full Scan",    "kind": "action"},
+            {"icon": "⚙", "label": "Open Settings",    "kind": "action"},
+            {"icon": "◄", "label": "Toggle Sidebar",   "kind": "action"},
             {"icon": "◈", "label": "Diagnose Network", "kind": "action"},
         ]
         return pages + actions

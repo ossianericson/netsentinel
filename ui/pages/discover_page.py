@@ -363,14 +363,15 @@ _FEATURES: list[dict] = [
     {
         "group": "Hidden features",
         "icon": "⌨",
-        "name": "Command Palette  (Ctrl+K)",
+        "name": "Quick Search  (Ctrl+K)",
         "desc": (
-            "Press Ctrl+K anywhere in the app to instantly search and navigate to any page "
-            "by name. Faster than the sidebar for power users who know what they want."
+            "Press Ctrl+K or click the search icon in the nav rail to jump straight to "
+            "Feature Guide with the search field focused — find any feature by name, "
+            "description, or keyword instantly."
         ),
-        "page": None,
+        "page": "Feature Guide",
         "requires": None,
-        "tags": ["command", "palette", "ctrl+k", "search", "keyboard", "shortcut", "navigate"],
+        "tags": ["search", "ctrl+k", "keyboard", "shortcut", "navigate", "find", "feature guide"],
     },
     {
         "group": "Hidden features",
@@ -741,6 +742,10 @@ class FeatureGuidePage(QWidget):
             lay.addWidget(btn)
 
         return card
+
+    def focus_search(self) -> None:
+        self._search.clear()
+        self._search.setFocus()
 
     def _apply_filter(self, text: str) -> None:
         q = text.strip().lower()

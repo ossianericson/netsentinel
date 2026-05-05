@@ -1,4 +1,4 @@
-"""Command palette — Ctrl+K fuzzy launcher for pages and actions."""
+﻿"""Command palette — Ctrl+K fuzzy launcher for pages and actions."""
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (

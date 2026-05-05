@@ -235,6 +235,7 @@ def ping_sweep_subnet(local_ip: str, progress_cb=None) -> List[str]:
 
 # ── Network info ──────────────────────────────────────────────────────────────
 
+
 def get_network_info() -> dict:
     """
     Collect local IP(s), subnet mask, default gateway and DNS servers.
@@ -258,47 +259,72 @@ def get_network_info() -> dict:
 
     if system == "Windows":
         try:
-            raw = subprocess.check_output(["ipconfig", "/all"], text=True, timeout=10, **extra)
-            current_adapter = "Unknown"
-            last_was_dns = False
-            for line in raw.splitlines():
-                stripped = line.strip()
-                if line and not line[0].isspace() and ":" in line and len(line) < 80:
-                    current_adapter = line.split(":")[0].strip()
-                    last_was_dns = False
-                elif "IPv4 Address" in stripped:
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", stripped)
-                    if m:
+            import winreg as _wr
+            import psutil as _ps
+            import socket as _sock
+
+            # Local IPs and masks via psutil (no subprocess needed)
+            for iface, addr_list in _ps.net_if_addrs().items():
+                for addr in addr_list:
+                    if addr.family == _sock.AF_INET and not addr.address.startswith("127."):
                         info["local_ips"].append(
-                            {"ip": m.group(1), "mask": "", "adapter": current_adapter}
+                            {"ip": addr.address, "mask": addr.netmask or "", "adapter": iface}
                         )
-                    last_was_dns = False
-                elif "Subnet Mask" in stripped:
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", stripped)
-                    if m and info["local_ips"]:
-                        info["local_ips"][-1]["mask"] = m.group(1)
-                    last_was_dns = False
-                elif "Default Gateway" in stripped:
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", stripped)
-                    if m and not info["gateway"]:
-                        info["gateway"] = m.group(1)
-                    last_was_dns = False
-                elif "DNS Servers" in stripped:
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", stripped)
-                    if m:
-                        info["dns_servers"].append(m.group(1))
-                    last_was_dns = True
-                elif last_was_dns and re.match(r"^\s{20,}\d+\.\d+\.\d+\.\d+", line):
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", stripped)
-                    if m:
-                        info["dns_servers"].append(m.group(1))
-                elif "DNS Suffix" in stripped and not info["domain"]:
-                    m = re.search(r":\s*(\S+)", stripped)
-                    if m and m.group(1) not in (":", ""):
-                        info["domain"] = m.group(1)
-                    last_was_dns = False
-                elif stripped:
-                    last_was_dns = False
+
+            _PARAMS = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"
+            _IFACES = _PARAMS + r"\Interfaces"
+
+            def _rval(key, name, default=""):
+                try:
+                    return _wr.QueryValueEx(key, name)[0] or default
+                except OSError:
+                    return default
+
+            # Top-level domain suffix
+            try:
+                with _wr.OpenKey(_wr.HKEY_LOCAL_MACHINE, _PARAMS) as k:
+                    info["domain"] = _rval(k, "Domain") or _rval(k, "DhcpDomain")
+            except OSError:
+                pass
+
+            # Gateway, DNS, per-interface domain via registry
+            try:
+                with _wr.OpenKey(_wr.HKEY_LOCAL_MACHINE, _IFACES) as k:
+                    idx = 0
+                    while True:
+                        try:
+                            guid = _wr.EnumKey(k, idx)
+                            idx += 1
+                        except OSError:
+                            break
+                        try:
+                            with _wr.OpenKey(k, guid) as ik:
+                                dhcp_ip = _rval(ik, "DhcpIPAddress")
+                                static_ip = _rval(ik, "IPAddress")
+                                has_ip = (
+                                    (dhcp_ip and dhcp_ip not in ("0.0.0.0", ""))
+                                    or (static_ip and static_ip not in ("0.0.0.0", ""))
+                                )
+                                if not has_ip:
+                                    continue
+                                if not info["gateway"]:
+                                    for gk in ("DefaultGateway", "DhcpDefaultGateway"):
+                                        gw = _rval(ik, gk)
+                                        if gw and re.match(r"\d+\.\d+\.\d+", gw):
+                                            info["gateway"] = gw.split()[0]
+                                            break
+                                for dk in ("NameServer", "DhcpNameServer"):
+                                    raw_dns = _rval(ik, dk)
+                                    if raw_dns:
+                                        for s in re.split(r"[,\s]+", raw_dns):
+                                            if re.match(r"\d+\.\d+\.\d+\.\d+$", s):
+                                                info["dns_servers"].append(s)
+                                if not info["domain"]:
+                                    info["domain"] = _rval(ik, "Domain") or _rval(ik, "DhcpDomain")
+                        except OSError:
+                            pass
+            except OSError:
+                pass
         except Exception:
             pass
 
@@ -368,17 +394,22 @@ def get_network_info() -> dict:
     if info["gateway"]:
         try:
             if platform.system() == "Windows":
-                arp_out = subprocess.check_output(
-                    ["arp", "-a", info["gateway"]], text=True, timeout=5, **extra
-                )
-                m = re.search(r"([0-9a-f]{2}[:-]){5}[0-9a-f]{2}", arp_out, re.IGNORECASE)
+                import ctypes, struct
+                _ip_bytes = socket.inet_aton(info["gateway"])
+                _ip_dword = struct.unpack("I", _ip_bytes)[0]
+                _mac_buf = (ctypes.c_ubyte * 6)()
+                _mac_len = ctypes.c_ulong(6)
+                if ctypes.windll.iphlpapi.SendARP(
+                    _ip_dword, 0, ctypes.byref(_mac_buf), ctypes.byref(_mac_len)
+                ) == 0:
+                    info["gateway_mac"] = ":".join(f"{b:02x}" for b in _mac_buf)
             else:
                 arp_out = subprocess.check_output(
                     ["arp", "-n", info["gateway"]], text=True, timeout=5
                 )
                 m = re.search(r"([0-9a-f]{2}:){5}[0-9a-f]{2}", arp_out, re.IGNORECASE)
-            if m:
-                info["gateway_mac"] = m.group(0).lower()
+                if m:
+                    info["gateway_mac"] = m.group(0).lower()
         except Exception:
             pass
 
@@ -414,28 +445,48 @@ def get_dhcp_info() -> dict:
 
     if system == "Windows":
         try:
-            raw = subprocess.check_output(["ipconfig", "/all"], text=True, timeout=10, **extra)
-            in_section = False
-            for line in raw.splitlines():
-                stripped = line.strip()
-                if "DHCP Enabled" in stripped:
-                    in_section = "Yes" in stripped
-                    if in_section:
-                        result["dhcp_enabled"] = True
-                if not in_section:
-                    continue
-                if "DHCP Server" in stripped:
-                    m = re.search(r":\s*(\S+)", stripped)
-                    if m:
-                        result["dhcp_server"] = m.group(1)
-                elif "Lease Obtained" in stripped:
-                    m = re.search(r":\s*(.+)", stripped)
-                    if m:
-                        result["lease_obtained"] = m.group(1).strip()
-                elif "Lease Expires" in stripped:
-                    m = re.search(r":\s*(.+)", stripped)
-                    if m:
-                        result["lease_expires"] = m.group(1).strip()
+            import winreg as _wr
+            _IFACES = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
+
+            def _rval(key, name, default=None):
+                try:
+                    return _wr.QueryValueEx(key, name)[0]
+                except OSError:
+                    return default
+
+            with _wr.OpenKey(_wr.HKEY_LOCAL_MACHINE, _IFACES) as k:
+                idx = 0
+                while True:
+                    try:
+                        guid = _wr.EnumKey(k, idx)
+                        idx += 1
+                    except OSError:
+                        break
+                    try:
+                        with _wr.OpenKey(k, guid) as ik:
+                            if not _rval(ik, "EnableDHCP", 0):
+                                continue
+                            result["dhcp_enabled"] = True
+                            srv = _rval(ik, "DhcpServer", "")
+                            if srv and srv != "255.255.255.255":
+                                result["dhcp_server"] = srv
+                            for ts_key, res_key in (
+                                ("LeaseObtainedTime", "lease_obtained"),
+                                ("LeaseTerminatesTime", "lease_expires"),
+                            ):
+                                ts = _rval(ik, ts_key)
+                                if ts:
+                                    try:
+                                        dt = datetime.datetime.fromtimestamp(ts)
+                                        result[res_key] = dt.strftime(
+                                            "%A, %B %d, %Y %I:%M:%S %p"
+                                        )
+                                    except Exception:
+                                        pass
+                            if result["dhcp_enabled"]:
+                                break
+                    except OSError:
+                        pass
         except Exception:
             pass
         # Compute duration
@@ -522,104 +573,41 @@ def get_interface_details() -> List[dict]:
     adapters: List[dict] = []
 
     if system == "Windows":
-        # ── Parse ipconfig /all for sections ────────────────────────────────
+        # ── Adapter info via psutil (no subprocess) ──────────────────────────
         try:
-            raw = subprocess.check_output(["ipconfig", "/all"], text=True, timeout=10, **extra)
-            current: dict = {}
+            import psutil as _ps
+            import socket as _sock
 
-            def _flush() -> None:
-                if current.get("name") and current["type"] != "Loopback":
-                    adapters.append(dict(current))
+            if_addrs = _ps.net_if_addrs()
+            if_stats = _ps.net_if_stats()
 
-            for line in raw.splitlines():
-                # Section header: "Ethernet adapter Ethernet:" / "Wireless LAN adapter Wi-Fi:"
-                if line and not line[0].isspace() and "adapter" in line.lower():
-                    _flush()
-                    name = line.split(":")[0].strip()
-                    t = "Wi-Fi" if any(
-                        k in line.lower() for k in ("wi-fi", "wireless", "wlan")
-                    ) else "Loopback" if "loopback" in line.lower() else "Ethernet"
-                    current = {
-                        "name": name, "type": t, "mac": "",
-                        "ipv4": "", "speed_mbps": 0,
-                        "signal_pct": -1, "connected": False,
-                    }
-                stripped = line.strip()
-                if "Physical Address" in stripped:
-                    m = re.search(
-                        r"([\dA-Fa-f]{2}[-:][\dA-Fa-f]{2}[-:][\dA-Fa-f]{2}"
-                        r"[-:][\dA-Fa-f]{2}[-:][\dA-Fa-f]{2}[-:][\dA-Fa-f]{2})",
-                        stripped,
-                    )
-                    if m:
-                        current["mac"] = m.group(1).replace("-", ":").lower()
-                elif "IPv4 Address" in stripped:
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+)", stripped)
-                    if m:
-                        current["ipv4"] = m.group(1)
-                        current["connected"] = True
-                elif "Media State" in stripped and "disconnected" in stripped.lower():
-                    current["connected"] = False
-            _flush()
-        except Exception:
-            pass
-
-        # ── WiFi signal + link speed from netsh wlan ────────────────────────
-        try:
-            raw = subprocess.check_output(
-                ["netsh", "wlan", "show", "interfaces"],
-                text=True, timeout=8, **extra,
-            )
-            signal_pct = -1
-            tx_rate = 0
-            ssid = ""
-            for line in raw.splitlines():
-                s = line.strip()
-                if s.startswith("Signal") and ":" in s:
-                    m = re.search(r":\s*(\d+)%", s)
-                    if m:
-                        signal_pct = int(m.group(1))
-                elif "Transmit rate" in s and ":" in s:
-                    m = re.search(r":\s*([\d.]+)", s)
-                    if m:
-                        tx_rate = int(float(m.group(1)))
-                elif s.startswith("SSID") and "BSSID" not in s and ":" in s:
-                    ssid = s.split(":", 1)[1].strip()
-            for a in adapters:
-                if a["type"] == "Wi-Fi" and a["connected"]:
-                    a["signal_pct"] = signal_pct
-                    if tx_rate:
-                        a["speed_mbps"] = tx_rate
-                    if ssid:
-                        a["ssid"] = ssid
-        except Exception:
-            pass
-
-        # ── Ethernet link speed via PowerShell Get-NetAdapter ───────────────
-        try:
-            raw = subprocess.check_output(
-                [
-                    "powershell", "-NonInteractive", "-NoProfile", "-Command",
-                    "Get-NetAdapter | Where-Object {$_.Status -eq 'Up'} | "
-                    "Select-Object Name,LinkSpeed | ConvertTo-Csv -NoTypeInformation",
-                ],
-                text=True, timeout=8, **extra,
-            )
-            for line in raw.splitlines()[1:]:
-                parts = [p.strip('"') for p in line.split(",")]
-                if len(parts) == 2:
-                    name, speed_str = parts
-                    # speed_str like "1 Gbps" / "100 Mbps" / "54 Mbps"
-                    m = re.search(r"([\d.]+)\s*(Gbps|Mbps|Kbps)", speed_str, re.I)
-                    if m:
-                        val = float(m.group(1))
-                        unit = m.group(2).lower()
-                        mbps = int(val * 1000 if unit == "gbps" else (val / 1000 if unit == "kbps" else val))
-                        for a in adapters:
-                            # match by partial name
-                            if name.lower() in a["name"].lower() or a["name"].lower() in name.lower():
-                                if a["speed_mbps"] == 0:
-                                    a["speed_mbps"] = mbps
+            for iface, addr_list in if_addrs.items():
+                if "loopback" in iface.lower():
+                    continue
+                mac = ""
+                ipv4 = ""
+                connected = False
+                t = (
+                    "Wi-Fi"
+                    if any(k in iface.lower() for k in ("wi-fi", "wireless", "wlan", "wifi"))
+                    else "Ethernet"
+                )
+                for addr in addr_list:
+                    if addr.family == _ps.AF_LINK:
+                        mac = (addr.address or "").replace("-", ":").lower()
+                    elif addr.family == _sock.AF_INET and not addr.address.startswith("127."):
+                        ipv4 = addr.address
+                        connected = True
+                speed_mbps = 0
+                if iface in if_stats:
+                    st = if_stats[iface]
+                    speed_mbps = st.speed
+                    if not connected and st.isup:
+                        connected = True
+                adapters.append({
+                    "name": iface, "type": t, "mac": mac, "ipv4": ipv4,
+                    "speed_mbps": speed_mbps, "signal_pct": -1, "connected": connected,
+                })
         except Exception:
             pass
 

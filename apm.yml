@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.7.0
+version: 1.7.1
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -903,3 +903,208 @@ rules:
       COMMIT GATE Step 2 exists precisely to catch these errors. Skipping it
       means a TypeError that only manifests at startup will reach the user.
 
+  # ── Debugging & Troubleshooting ───────────────────────────────────────────
+  - id: RULE-DBG1
+    title: "Git Diff First — read the diff before writing any diagnostic plan"
+    severity: blocking
+    description: >
+      When any crash or error occurs, the absolute first step is:
+        git diff HEAD
+        git status
+      Read and understand every changed file before forming a hypothesis.
+      A crash log entry that references code present in the diff is almost
+      certainly caused by that change — start the diagnosis there, not with
+      pre-existing code.
+
+      This rule exists because stale crash logs can make a session-introduced
+      bug look pre-existing. If the faulthandler stack trace names a line that
+      was modified or added in the current diff, the change is the prime suspect
+      until proven otherwise. Trust the diff over the narrative.
+
+      Do not skip this step even when "it was working before". If it was working
+      before and it is broken now, the diff is where the answer is.
+
+  - id: RULE-DBG2
+    title: "Plan Before Fix — state the hypothesis before changing any code"
+    severity: blocking
+    description: >
+      Every fix attempt must be preceded by a written hypothesis that links
+      a specific recent change to the observed symptom. The hypothesis must
+      answer: what changed, why it could cause this crash, and what the fix
+      is expected to do. Fix attempts without a stated hypothesis are blocked.
+
+      Format before each attempt:
+        Hypothesis: [specific change] causes [symptom] because [mechanism].
+        Fix: [what we will change].
+        Expected outcome: [crash gone / different crash / test passes].
+
+      This rule prevents the "try something and see" loop that wastes session
+      time and obscures which fix actually worked. If the expected outcome does
+      not match the actual outcome, the hypothesis was wrong — write a new one
+      before the next attempt, do not continue patching.
+
+  - id: RULE-DBG3
+    title: "Two-Attempt Isolation Rule — stop patching after two failed fixes"
+    severity: blocking
+    description: >
+      If the same crash pattern persists after two distinct fix attempts,
+      stop changing code immediately. Shift to binary isolation:
+
+        1. Revert all session changes to a clean baseline (git stash or
+           git checkout the changed files).
+        2. Re-confirm the baseline is crash-free.
+        3. Re-apply changes one file at a time, testing after each, until the
+           crash reappears. The last applied file contains the culprit.
+        4. Within that file, binary-search the changes until the exact block
+           is identified.
+
+      Only after the culprit is isolated to a specific block of code may
+      targeted fix attempts resume. This rule exists because two failed
+      patch attempts mean the hypothesis model is wrong — continuing to patch
+      without isolation makes the problem worse and erases information.
+
+  - id: RULE-DBG4
+    title: "Anti-Loop Memory — log every attempt and never repeat a failed fix"
+    severity: blocking
+    description: >
+      Before each fix attempt, review all previous attempts in the current
+      debugging session. If the proposed fix is materially the same as one
+      already tried (same mechanism, same code path, same approach), it is
+      blocked — do not try it again.
+
+      Log format after each failed attempt (inline in the session, not in a
+      file):
+        Attempt N: [what was changed] → [outcome] → [why it did not work].
+
+      This rule prevents the anti-pattern of cycling through the same
+      three approaches repeatedly. If every distinct hypothesis has been
+      exhausted, escalate to RULE-DBG3 isolation rather than recycling.
+
+      Applies to: subprocess timeout removal, capture_output substitution,
+      temp-file PIPE workarounds — any approach tried once and confirmed
+      failed must not be tried again in the same session.
+
+  # ── Windows Platform Rules ─────────────────────────────────────────────────
+  - id: RULE-WIN1
+    title: "No subprocess with PIPE on Windows startup paths — use psutil/winreg/ctypes"
+    severity: blocking
+    description: >
+      subprocess.check_output(), subprocess.run(capture_output=True), and any
+      other subprocess call that uses PIPE for stdout or stderr must NEVER appear
+      in code paths that execute at app startup while Qt is initializing and
+      multiple QThread workers are starting.
+
+      Root cause (Python 3.11, Windows): subprocess internally spawns a
+      _readerthread to drain PIPE handles. When multiple subprocess calls run
+      concurrently across threads in a Qt + multi-worker process, a race
+      condition in _readerthread/_wait corrupts a Win32 HANDLE, causing a
+      fatal access violation (STATUS_ACCESS_VIOLATION, 0xC0000005) in the
+      main thread. The crash appears in faulthandler as:
+        subprocess.py _wait / _readerthread
+        modules/utils.py  get_network_info / get_dhcp_info / get_interface_details
+
+      Workaround approaches that DO NOT fix the problem (already confirmed):
+        - Removing timeout= from check_output
+        - Switching to subprocess.run(capture_output=True)
+        - Using a temp-file redirect instead of PIPE (still calls _wait internally)
+
+      Required alternatives for Windows network info gathering:
+        Local IPs / masks / speed → psutil.net_if_addrs() + psutil.net_if_stats()
+        Gateway / DNS / DHCP      → winreg HKLM\SYSTEM\CurrentControlSet\
+                                    Services\Tcpip\Parameters\Interfaces\{GUID}
+        Gateway MAC               → ctypes.windll.iphlpapi.SendARP()
+        Adapter type / MAC        → psutil.AF_LINK address family in net_if_addrs()
+
+      The fix is already implemented in modules/utils.py (May 2026).
+      Never reintroduce subprocess calls in get_network_info(), get_dhcp_info(),
+      or get_interface_details() for the Windows branch.
+
+  - id: RULE-WIN2
+    title: "nativeEvent HTMAXBUTTON requires full NC message interception on frameless windows"
+    severity: blocking
+    description: >
+      Returning HTMAXBUTTON (9) from nativeEvent(WM_NCHITTEST) on a Qt
+      frameless window (Qt.WindowType.FramelessWindowHint) causes Windows to
+      immediately send WM_NCMOUSEMOVE, WM_NCLBUTTONDOWN, and WM_NCLBUTTONUP
+      all tagged with wParam=HTMAXBUTTON. Qt's frameless window handler does
+      not expect these non-client messages and crashes with an access violation
+      trying to access DWM maximize-button resources that do not exist on a
+      frameless window.
+
+      The crash appears as: STATUS_ACCESS_VIOLATION in the main thread at
+      window.show() with no Python frame for nativeEvent (the crash occurs
+      in Qt's C++ message handler after nativeEvent returns, not inside it).
+
+      Symptom pattern that confirms this bug:
+        - App crashes reliably at or shortly after window.show()
+        - Removing the nativeEvent override stops the crash immediately
+        - No subprocess or network code in the faulthandler stack for the
+          main thread — only app.py main / window.show()
+
+      Required implementation if snap layouts are needed on a frameless window:
+        1. Intercept WM_NCHITTEST and return HTMAXBUTTON only when
+           self.isVisible() is True (not during window.show() initialization).
+        2. Also intercept WM_NCMOUSEMOVE, WM_NCLBUTTONDOWN, WM_NCLBUTTONUP:
+           if wParam == HTMAXBUTTON: return True, 0  (consume the message).
+           Without step 2, Qt still crashes on the follow-up NC messages.
+        3. For WM_SYSCOMMAND SC_MAXIMIZE/SC_RESTORE: call _toggle_maximize()
+           and return True, 0.
+
+      Current status (May 2026): nativeEvent removed entirely from Dashboard
+      pending a correct implementation that handles all three NC message types.
+      Do not re-add a partial implementation that only covers WM_NCHITTEST.
+
+  # ── QSettings State Hygiene ───────────────────────────────────────────────
+  - id: RULE-QS1
+    title: "Never gate data access on QSettings-persisted mode — use always-populated sources"
+    severity: blocking
+    description: >
+      QSettings values (themes, nav mode, sidebar state, etc.) are absent on a
+      fresh install and restored from disk on subsequent runs. Code that branches
+      on a QSettings-restored value to decide WHICH data source to read will behave
+      differently on a fresh install versus an established local dev environment —
+      silently, with no error, because both paths are syntactically valid.
+
+      Anti-pattern that caused the command-palette search regression (May 2026):
+        _build_palette_items() branched on _nav_mode (restored from QSettings):
+          if _nav_mode != "home":  → reads _nav_sections (state-dependent, may be empty)
+          else:                   → reads _nav_item_labels (always populated)
+        Fresh winget install: no QSettings → default is "home" → correct branch → works.
+        Local dev: QSettings restores "standard" mode → wrong branch → empty pages list.
+
+      Rule: whenever two data sources represent the same logical data, prefer the
+      one that is populated unconditionally at startup — not the one whose population
+      depends on mode, lazy init, or user action. Specifically in NetSentinel:
+        _nav_item_labels  — populated by every _nav_add_page() call, always present
+        _nav_sections     — populated by _nav_finalize_rail(), mode-dependent
+        Use _nav_item_labels as the authoritative source for nav-label enumeration.
+
+      How to detect violations during code review:
+        Any method that reads from a data structure AND first branches on a
+        QSettings-restored field (mode, theme, tab, state) should be treated as
+        suspect. Ask: "what happens on first launch with no QSettings?"
+
+  - id: RULE-QS2
+    title: "Works in winget release but fails locally = QSettings state divergence — clear settings to reproduce"
+    severity: required
+    description: >
+      When a feature works in the winget-installed release but fails when running
+      from a local build, the almost certain cause is QSettings state divergence:
+        - The winget release is a fresh install with no prior QSettings → uses defaults.
+        - The local build has accumulated QSettings from prior sessions → restores saved state.
+        - The bug only manifests when a non-default saved state is present.
+
+      Standard diagnostic steps:
+        1. Identify which QSettings key controls the differing behaviour
+           (theme, nav mode, pinned pages, column widths, window geometry, etc.).
+        2. Clear NetSentinel QSettings to reproduce the clean-install state locally:
+             PowerShell: Remove-Item "HKCU:\Software\NetSentinel" -Recurse -Force
+             Or run with a fresh Windows user profile / portable test.
+        3. If the bug disappears after clearing QSettings, a QSettings-gated
+           code path is the culprit — apply RULE-QS1 to fix it.
+        4. If the bug persists after clearing QSettings, the cause is elsewhere
+           (environment, PATH, missing dependency) — continue investigation.
+
+      Never conclude "works in release, broken locally = local environment issue"
+      without first ruling out QSettings divergence. It is the most common cause
+      of this symptom in NetSentinel and requires only a registry clear to confirm.

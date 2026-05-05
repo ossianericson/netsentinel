@@ -127,8 +127,8 @@ hiddenimports: list = [
     "modules.utils",
     "modules.wifi_scanner",
     # ── ui/ — shell and all page modules ──────────────────────────────────────
-    "ui.command_palette",
     "ui.dashboard",
+    "ui.command_palette",
     "ui.empty_state",
     "ui.expanding_table",
     "ui.first_run_dialog",
