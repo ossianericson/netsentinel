@@ -172,8 +172,9 @@ class LabModePage(QWidget):
         self._scenario:         Optional[LabScenario] = None
         self._step_idx:         int                   = 0
         self._step_findings:    List[dict]             = []  # findings per completed step
-        self._hints_used:       int                   = 0
-        self._solution_visible: bool                  = False
+        self._hints_used:           int  = 0
+        self._hint_used_this_step:  bool = False
+        self._solution_visible:     bool = False
 
         self._setup_ui()
         self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
@@ -352,6 +353,21 @@ class LabModePage(QWidget):
         sum_lay.addWidget(self._summary_lbl)
         self._summary_card.hide()
         outer.addWidget(self._summary_card)
+
+        # findings panel — scrollable list of rows shown after scan
+        self._findings_scroll = QScrollArea()
+        self._findings_scroll.setWidgetResizable(True)
+        self._findings_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._findings_scroll.setMaximumHeight(220)
+        self._findings_scroll.setStyleSheet("background:transparent;")
+        self._findings_body = QWidget()
+        self._findings_body.setStyleSheet("background:transparent;")
+        self._findings_vbox = QVBoxLayout(self._findings_body)
+        self._findings_vbox.setContentsMargins(0, 0, 0, 0)
+        self._findings_vbox.setSpacing(3)
+        self._findings_scroll.setWidget(self._findings_body)
+        self._findings_scroll.hide()
+        outer.addWidget(self._findings_scroll)
 
         outer.addStretch()
 
@@ -538,6 +554,7 @@ class LabModePage(QWidget):
 
         # reset panel state
         self._summary_card.hide()
+        self._findings_scroll.hide()
         self._hint_card.hide()
         self._hint_btn.setChecked(False)
         self._hint_btn.setText("Show Hint")
@@ -549,12 +566,16 @@ class LabModePage(QWidget):
         is_last = self._step_idx == total - 1
         self._next_btn.setText("Finish Exercise" if is_last else "Next Step →")
 
+        self._hint_used_this_step = False
+
         if step.scan_type is None:
-            # review step — no scan required, solution reveals immediately
+            # review step — carry forward findings from the previous scan step
             self._run_btn.setEnabled(False)
             self._run_btn.setText("No scan required")
             self._solution_btn.setEnabled(True)
-            self._next_btn.setEnabled(False)
+            self._next_btn.setEnabled(True)
+            if self._step_findings:
+                self._populate_findings(self._step_findings[-1])
         else:
             self._run_btn.setEnabled(True)
             self._run_btn.setText("Run Check")
@@ -597,16 +618,109 @@ class LabModePage(QWidget):
         self._summary_lbl.setText(result.get("summary", "Done."))
         self._summary_card.show()
 
-        # store findings for this step
-        self._step_findings.append(result.get("findings", []))
+        findings = result.get("findings", [])
+        self._step_findings.append(findings)
+        self._populate_findings(findings)
 
         self._solution_btn.setEnabled(True)
+        self._next_btn.setEnabled(True)
+
+    def _populate_findings(self, findings: list) -> None:
+        # clear previous rows
+        while self._findings_vbox.count():
+            item = self._findings_vbox.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not findings:
+            self._findings_scroll.hide()
+            return
+
+        first = findings[0]
+        is_device_list = "ip" in first or "mac" in first
+
+        if is_device_list:
+            # header row
+            hdr = QLabel("  IP Address        MAC               Vendor                  Hostname        Risk")
+            hdr.setStyleSheet(
+                f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+                f" background:transparent; font-family:monospace;"
+            )
+            self._findings_vbox.addWidget(hdr)
+
+            for dev in findings:
+                risk  = dev.get("risk", "")
+                color = {
+                    "HIGH":    RED,
+                    "UNKNOWN": AMBER,
+                }.get(risk, GREEN)
+
+                row = QFrame()
+                row.setStyleSheet(
+                    f"QFrame {{ background:{BG_CARD}; border:1px solid {color}30;"
+                    f" border-left:3px solid {color}; border-radius:4px; }}"
+                )
+                rl = QHBoxLayout(row)
+                rl.setContentsMargins(8, 4, 8, 4)
+                rl.setSpacing(0)
+
+                def _cell(text: str, width: int) -> QLabel:
+                    lbl = QLabel(text)
+                    lbl.setFixedWidth(width)
+                    lbl.setStyleSheet(
+                        f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+                        f" font-family:monospace;"
+                    )
+                    return lbl
+
+                rl.addWidget(_cell(dev.get("ip", "—"), 130))
+                rl.addWidget(_cell(dev.get("mac", "—"), 145))
+                rl.addWidget(_cell((dev.get("vendor") or "Unknown")[:22], 180))
+                rl.addWidget(_cell((dev.get("hostname") or "—")[:20], 160))
+                if risk:
+                    risk_lbl = QLabel(risk)
+                    risk_lbl.setStyleSheet(
+                        f"font-size:10px; font-weight:bold; color:{color};"
+                        f" background:transparent;"
+                    )
+                    rl.addWidget(risk_lbl)
+                rl.addStretch()
+                self._findings_vbox.addWidget(row)
+        else:
+            # key-value summary (dns / storm scans)
+            for item in findings:
+                for key, val in item.items():
+                    row = QFrame()
+                    row.setStyleSheet(
+                        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+                        f" border-radius:4px; }}"
+                    )
+                    rl = QHBoxLayout(row)
+                    rl.setContentsMargins(8, 4, 8, 4)
+                    key_lbl = QLabel(str(key).replace("_", " ").title() + ":")
+                    key_lbl.setFixedWidth(160)
+                    key_lbl.setStyleSheet(
+                        f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+                    )
+                    val_lbl = QLabel(str(val))
+                    val_lbl.setWordWrap(True)
+                    val_lbl.setStyleSheet(
+                        f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+                    )
+                    rl.addWidget(key_lbl)
+                    rl.addWidget(val_lbl)
+                    rl.addStretch()
+                    self._findings_vbox.addWidget(row)
+
+        self._findings_vbox.addStretch()
+        self._findings_scroll.show()
 
     def _toggle_hint(self, checked: bool) -> None:
         self._hint_card.setVisible(checked)
         self._hint_btn.setText("Hide Hint" if checked else "Show Hint")
-        if checked:
+        if checked and not self._hint_used_this_step:
             self._hints_used += 1
+            self._hint_used_this_step = True
 
     def _reveal_solution(self) -> None:
         self._solution_card.show()
