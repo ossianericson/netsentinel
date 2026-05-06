@@ -347,7 +347,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.7.1")
+    app.setApplicationVersion("1.7.2")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────
@@ -453,6 +453,9 @@ def main():
         _host     = "0.0.0.0" if _external else "127.0.0.1"
         rest_api_worker = RestApiWorker(store=store)
         rest_api_worker.set_bind(_host, _port)
+        rest_api_worker.error.connect(
+            lambda msg: print(f"[REST API] ERROR: {msg}", flush=True)
+        )
         from modules.rest_api import get_or_create_api_key as _ensure_key
         _ensure_key()  # generate and persist key on first enable
         rest_api_worker.start()

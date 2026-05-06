@@ -1,10 +1,23 @@
 ﻿name: netsentinel
-version: 1.7.1
+version: 1.7.2
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
 
 changelog:
+  - version: 1.7.2
+    date: 2026-05-06
+    summary: REST API promoted to sidebar page, nav mode consolidation, WERKZEUG_RUN_MAIN crash fix
+    changes:
+      - "ui/pages/rest_api_page.py (NEW): standalone REST API config page — enable toggle, port, external access, API key, live HTTP status probe, hot-start worker button; replaces settings card"
+      - "ui/dashboard.py: REST API page registered in _build_pro_nav() Automation section; receives store= for hot-start; _build_home_nav() and _build_standard_nav() dead methods removed"
+      - "ui/pages/settings_page.py: REST API card and all its handler methods removed (moved to rest_api_page.py)"
+      - "ui/pages/discover_page.py: REST API feature guide link updated from 'Settings' to 'REST API'"
+      - "modules/rest_api.py: removed os.environ['WERKZEUG_RUN_MAIN'] = 'true' — caused WERKZEUG_SERVER_FD KeyError crash, silently preventing the Flask server from ever binding"
+      - "app.py: rest_api_worker.error signal now connected to print() so startup failures surface in the log"
+      - "tests/test_nav_completeness.py: rewritten — checks no duplicate labels in _build_pro_nav(), and actively fails if _build_home_nav/_build_standard_nav are recreated"
+      - "apm.yml: RULE-NAV1 updated (one nav builder: _build_pro_nav only); RULE-NAV2 repurposed to block multi-mode nav recreation; RULE-FW2 updated to reference rest_api_page"
+
   - version: 1.7.0
     date: 2026-05-05
     summary: VSCode for Networking (Protocol Visualizer, Lab Mode live injection, Log Hub), Feature Guide, discoverability (page help, status tooltips, visit tracking, home suggestions)
@@ -553,59 +566,47 @@ rules:
 
   # ── Navigation Wiring ─────────────────────────────────────────────────────
   - id: RULE-NAV1
-    title: "Every registered page must be reachable from at least one mode nav builder"
+    title: "Every registered page must be reachable from _build_pro_nav()"
     severity: blocking
     description: >
-      Pages are registered in _build_tabs() via _nav_add_page() — this adds them to
-      the QStackedWidget and the legacy full-nav (which is wiped on every startup when
-      _rebuild_nav_for_mode() runs).  For a page to actually be reachable by users it
-      must also appear via _nav_ref() in at least one of:
-        _build_home_nav()      — 5-item minimal nav (new users)
-        _build_standard_nav()  — full home/intermediate nav
-        _build_pro_nav()       — all capabilities
+      There is one nav builder: _build_pro_nav(). _build_home_nav() and
+      _build_standard_nav() have been removed — do not recreate them.
 
-      The automated test tests/test_nav_completeness.py enforces this.  It fails at CI
-      time if a page is registered but not wired into any mode builder, catching the
-      "invisible feature" class of bug before it reaches users.
+      Pages are registered in _build_tabs() via _nav_add_page() (adds them to the
+      QStackedWidget). For a page to be reachable in the sidebar it must also have a
+      _nav_add_rail_item() call in _build_pro_nav().
+
+      The automated test tests/test_nav_completeness.py enforces this. It fails at CI
+      time if a page is registered but not wired into _build_pro_nav().
 
       What to do when adding a new page:
-        1. Add _nav_add_page("icon", "Label", self._new_page) in _build_tabs().
-        2. Add _nav_ref("icon", "Label", self._new_page) in _build_standard_nav()
-           and/or _build_pro_nav() under the appropriate section header.
-           (Home mode is deliberately minimal — only add to _build_home_nav() for
-           truly essential everyday features.)
+        1. Instantiate the page widget in _init_pages() / the pages block of __init__.
+        2. Add _nav_add_rail_item("Label", self._new_page) in _build_pro_nav()
+           under the appropriate section header. That is the only registration needed —
+           _nav_add_rail_item adds the widget to the stack and to _nav_label_to_widget.
         3. Run: python -m pytest tests/test_nav_completeness.py -v
-           All 3 nav tests must pass before merging.
+           Both nav tests must pass before merging.
 
-      If a page is intentionally absent from all mode navs (e.g. accessed only via
-      a dedicated button elsewhere), add its widget attribute to the
-      _INTENTIONALLY_UNLISTED set in test_nav_completeness.py with a comment.
+      Do NOT add _nav_add_page() calls for new pages — _build_tabs() / _nav_add_page()
+      is legacy dead code for the old flat nav. _nav_add_rail_item() handles everything.
 
-      Section placement guide:
-        Standard nav sections:
-          Quick Access  — daily-use core tools (5-7 items max)
-          Discover      — network inventory and topology
-          Monitor       — live data and history streams
-          Reports & Export — grading, ISP reports, network docs
-          Education     — learning tools (Protocol Visualizer, Lab Mode)
-        Pro nav adds:
-          Standard      — full mirror of Standard nav items
-          Network Analysis — deep packet / protocol analysis tools
-          Automation    — scheduled scans, hooks, MQTT
-          ⚠ Security Audit — RED-labelled; elevated-privilege scan tools
-          Education     — same as Standard
+      _build_pro_nav() section guide:
+        Getting Started  — daily-use core tools
+        Discover         — network inventory and topology
+        Monitor          — live data and history streams
+        Reports          — grading, ISP reports, docs, notifications
+        Analysis         — deep packet / protocol tools, advanced diagnostics
+        Automation       — scheduled scans, hooks, MQTT, REST API, integrations
+        Security Audit   — RED-labelled; elevated-privilege scan tools
+        Education        — learning tools (Protocol Visualizer, Lab Mode, Feature Guide)
 
   - id: RULE-NAV2
-    title: "Home mode nav must stay minimal — 12 items maximum"
-    severity: required
+    title: "There is one nav mode — do not add new nav builders"
+    severity: blocking
     description: >
-      _build_home_nav() is the first-run experience for non-technical users.
-      It must contain at most 12 _nav_ref() entries (the test enforces this).
-      Before adding anything to home mode, ask: would a user who has never
-      touched a network tool need this on day one?  If not, put it in Standard.
-
-      The test tests/test_nav_completeness.py::test_home_nav_stays_minimal
-      fails if the count exceeds 12 — this prevents scope creep in home mode.
+      The app has a single nav mode backed by _build_pro_nav(). Do not create
+      _build_home_nav(), _build_standard_nav(), or any other mode-specific nav
+      builder. All pages go into _build_pro_nav() only.
 
   # ── Discoverability ───────────────────────────────────────────────────────
   - id: RULE-D1
@@ -847,17 +848,17 @@ rules:
         SvcWorker    → ServicePage.services_changed → svc_worker.set_targets()
 
   - id: RULE-FW2
-    title: "Every REST API route must appear in settings_page endpoint reference in the same session"
+    title: "Every REST API route must appear in rest_api_page endpoint reference in the same session"
     severity: blocking
     description: >
       The REST API runs on localhost and is invisible to users unless they know
       to look for it. The _ENDPOINTS list in
-      settings_page._update_api_status_label() is the canonical user-visible
+      rest_api_page.RestApiPage._update_endpoint_ref() is the canonical user-visible
       reference for all available routes.
 
       When adding a new route to modules/rest_api.py:
         1. Add the route path and a plain-English description to _ENDPOINTS in
-           settings_page._update_api_status_label() in the same session.
+           rest_api_page.RestApiPage._update_endpoint_ref() in the same session.
         2. The endpoint reference is shown as clickable HTML links when the REST
            API is enabled — the new route must appear there and be clickable for
            non-parameterised paths.

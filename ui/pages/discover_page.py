@@ -458,9 +458,9 @@ _FEATURES: list[dict] = [
             "Read-only HTTP API (default port 8765) exposing 7 endpoints: /devices, /alerts, "
             "/uptime, /grade, /speed-history, /dashboard, /health. "
             "Use it with Grafana, Home Assistant, custom scripts, or any HTTP client. "
-            "Enable in Settings → REST API — the full clickable endpoint list appears there once enabled."
+            "Enable and configure in Tools → REST API."
         ),
-        "page": "Settings",
+        "page": "REST API",
         "requires": None,
         "tags": ["api", "rest", "http", "grafana", "home assistant", "json", "endpoint", "script", "dashboard"],
     },

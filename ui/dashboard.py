@@ -2203,6 +2203,9 @@ class Dashboard(QMainWindow):
         self._discover_page = FeatureGuidePage(parent=None)
         self._discover_page.navigate_to.connect(self._nav_rail_go_to)
 
+        from ui.pages.rest_api_page import RestApiPage
+        self._rest_api_page = RestApiPage(store=self._store, parent=None)
+
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
         self._topology_tab_widget = self._build_topology_tab()
@@ -2297,6 +2300,7 @@ class Dashboard(QMainWindow):
         self._stack.addWidget(self._lab_mode_page)
         self._stack.addWidget(self._protocol_viz_page)
         self._stack.addWidget(self._discover_page)
+        self._stack.addWidget(self._rest_api_page)
         self._nav_row_to_page:   dict = {}
         self._nav_separators:    set  = set()
         # Extended nav data model
@@ -3162,64 +3166,6 @@ class Dashboard(QMainWindow):
                 for btn in self._nav_rail_buttons.values():
                     btn.setChecked(False)
 
-    def _build_home_nav(self) -> None:
-        """5-item minimal nav for Home mode (new users)."""
-        self._nav_ref("\u2b21", "Home",            self._home_page)
-        self._nav_ref("\u26f6", "Overview",         self._overview_page)
-        self._nav_ref("\u26a1", "Speed Test",       self._speed_test_page)
-        self._nav_ref("\u25ce", "DNS & Stability",  self._m5_tab)
-        self._nav_ref("\u2295", "Devices",          self._m1_tab)
-        self._nav_ref("\u2263", "Network Logger",   self._log_tab)
-        self._nav_ref("\u25b2", "Reports",          self._benchmark_tab_widget)
-        self._nav_add_section_label("Education")
-        self._nav_ref("\u29c6", "Protocol Visualizer", self._protocol_viz_page)
-        self._nav_ref("\u2b21", "Lab Mode",            self._lab_mode_page)
-        self._nav_ref("\u25c9", "Feature Guide",       self._discover_page)
-        self._nav_add_spacer()
-        self._nav_add_action("\u2261", "Show all features",
-                             lambda: self._set_mode("standard"))
-        self._nav_add_action("\u2699", "Settings", self._open_settings_dialog)
-
-    def _build_standard_nav(self) -> None:
-        """Standard mode \u2014 activity rail + flyout panels."""
-        self._nav_begin_section("Getting Started", "grid")
-        self._nav_add_rail_item("Home",               self._home_page)
-        self._nav_add_rail_item("Overview",            self._overview_page)
-        self._nav_add_rail_item("Speed Test",          self._speed_test_page)
-        self._nav_add_rail_item("DNS & Stability",     self._m5_tab)
-        self._nav_add_rail_item("Diagnose",            self._diagnosis_page)
-
-        self._nav_begin_section("Discover", "network")
-        self._nav_add_rail_item("Devices",             self._m1_tab)
-        self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
-        self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
-        self._nav_add_rail_item("Network Map",         self._topology_tab_widget)
-        self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
-        self._nav_add_rail_item("Home Automation",     self._ha_page)
-
-        self._nav_begin_section("Monitor", "monitor")
-        self._nav_add_rail_item("Logs",                self._log_hub_page)
-        self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
-        self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
-        self._nav_add_rail_item("Active Connections",  self._connections_page)
-        self._nav_add_rail_item("Availability History", self._history_page)
-        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
-        self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
-        self._nav_add_rail_item("Network Logger",      self._log_tab)
-        self._nav_add_rail_item("Service Heartbeat",   self._service_page)
-
-        self._nav_begin_section("Reports", "bar-chart")
-        self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)
-        self._nav_add_rail_item("ISP Report",          self._reports_page)
-        self._nav_add_rail_item("Network Doc",         self._network_doc_page)
-        self._nav_add_rail_item("IP Calculator",       self._ip_calc_page)
-        self._nav_add_rail_item("Notifications",       self._notifications_page)
-
-        self._nav_begin_section("Education", "book-open")
-        self._nav_add_rail_item("Protocol Visualizer", self._protocol_viz_page)
-        self._nav_add_rail_item("Lab Mode",            self._lab_mode_page)
-        self._nav_add_rail_item("Feature Guide",       self._discover_page)
-
     def _build_pro_nav(self) -> None:
         """Full nav \u2014 activity rail + flyout. No mode switcher; this is the only nav."""
         self._nav_begin_section("Getting Started", "grid")
@@ -3274,6 +3220,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Scheduled Scans",     self._sched_tab_widget)
         self._nav_add_rail_item("Custom Triggers",     self._trigger_page)
         self._nav_add_rail_item("MQTT / Home Assistant", self._mqtt_page)
+        self._nav_add_rail_item("REST API",            self._rest_api_page)
         self._nav_add_rail_item("Config Snapshots",    self._baseline_page)
         self._nav_add_rail_item("Maintenance Windows", self._maintenance_page)
 

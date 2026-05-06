@@ -1,28 +1,12 @@
 """
 test_nav_completeness.py
 
-RULE-NAV1 compliance test.
+RULE-NAV1/NAV2 compliance tests.
 
-Every page registered in _build_tabs() via _nav_add_page() must be reachable
-via _nav_ref() (Home mode) or _nav_add_rail_item() (Standard/Pro mode) in at
-least one of the three mode nav builders:
-  _build_home_nav / _build_standard_nav / _build_pro_nav
-
-How this works
---------------
-1. Extract the body of _build_tabs() and find every _nav_add_page("icon", "label", WIDGET).
-2. Normalise WIDGET: local variables used in _build_tabs (m1→self._m1_tab, etc.)
-   are resolved to their self._ attribute names using the known mapping below.
-3. Extract the bodies of the three mode nav builders and find every
-   _nav_ref(..., WIDGET) call (Home mode) or _nav_add_rail_item(..., WIDGET) call
-   (Standard/Pro mode).
-4. Assert that every widget from step 1 appears in at least one of those sets.
-
-If this test fails it means a page was registered in _build_tabs() (so it exists
-in the QStackedWidget) but is not reachable from the sidebar in any user-facing
-mode.  Fix: add it to _build_standard_nav() / _build_pro_nav() using
-_nav_add_rail_item(label, WIDGET), or to _build_home_nav() using _nav_ref().
-If a page is intentionally nav-unlisted, add it to _INTENTIONALLY_UNLISTED below.
+There is one nav builder: _build_pro_nav(). New pages are registered there via
+_nav_add_rail_item() — that is the only registration needed. _build_tabs() /
+_nav_add_page() is legacy dead code for the old flat nav and must not be used
+for new pages.
 """
 from __future__ import annotations
 
@@ -32,28 +16,6 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 SRC  = (ROOT / "ui" / "dashboard.py").read_text(encoding="utf-8")
 
-# ── Local variable → self attribute mapping for _build_tabs() ─────────────────
-# These local vars are created early in _build_tabs() and assigned to
-# self._ attributes later in the same method.  _nav_add_page() calls in
-# _build_tabs() use the local names; mode builders use the self._ names.
-_LOCAL_TO_SELF = {
-    "m1":  "self._m1_tab",
-    "m2":  "self._m2_tab",
-    "m3":  "self._m3_tab",
-    "m4":  "self._m4_tab",
-    "m5":  "self._m5_tab",
-    "net": "self._net_tab",
-    "dia": "self._dia_tab",
-    "log": "self._log_tab",
-}
-
-# Pages that are intentionally absent from mode nav builders because they are
-# only accessible via dedicated buttons/links (never the sidebar directly).
-# Keep this set as small as possible — every entry is a discoverability gap.
-_INTENTIONALLY_UNLISTED: set[str] = set()
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _method_body(method_name: str) -> str:
     """Return the full source of a method (up to the next same-indent def)."""
@@ -63,105 +25,34 @@ def _method_body(method_name: str) -> str:
     return m.group(1)
 
 
-def _extract_widgets(body: str, call_name: str, arg_index: int = -1) -> set[str]:
+def test_no_duplicate_labels_in_pro_nav():
     """
-    Extract a positional argument from every call_name(...) call.
-
-    arg_index: which argument holds the widget.
-      -1  → last argument  (used by _nav_add_page, _nav_ref: icon, label, widget)
-       1  → second argument (used by _nav_add_rail_item: label, widget, **kwargs)
-
-    Handles both self._attr forms and local variable names (resolved via
-    _LOCAL_TO_SELF).  Skips non-self-attribute arguments.
+    RULE-NAV1: _build_pro_nav() must not register the same label twice.
+    Two entries for the same label would show a duplicate sidebar item.
     """
-    found: set[str] = set()
-    pattern = rf"{re.escape(call_name)}\(([^)]+)\)"
-    for m in re.finditer(pattern, body):
-        args_str = m.group(1)
-        parts = [p.strip() for p in args_str.split(",")]
-        # Strip keyword args (anything containing "=") when using last-arg mode
-        positional = [p for p in parts if "=" not in p or p.startswith("self._")]
-        if arg_index == -1:
-            target = positional[-1] if positional else ""
-        else:
-            target = positional[arg_index] if len(positional) > arg_index else ""
-        target = target.strip("() ")
-        resolved = _LOCAL_TO_SELF.get(target, target)
-        if resolved.startswith("self._"):
-            found.add(resolved)
-    return found
-
-
-# ── Tests ─────────────────────────────────────────────────────────────────────
-
-def test_all_nav_pages_accessible_in_mode_builders():
-    """
-    RULE-NAV1: every page registered in _build_tabs() must be reachable via
-    _nav_ref() (Home mode) or _nav_add_rail_item() (Standard/Pro mode) in at
-    least one of the three mode nav builders.
-    """
-    build_tabs   = _method_body("_build_tabs")
-    registered   = _extract_widgets(build_tabs, "_nav_add_page")
-
-    home_nav     = _method_body("_build_home_nav")
-    standard_nav = _method_body("_build_standard_nav")
-    pro_nav      = _method_body("_build_pro_nav")
-
-    accessible = (
-        # Home mode uses _nav_ref(icon, label, widget) — widget is last arg
-        _extract_widgets(home_nav,     "_nav_ref",            arg_index=-1) |
-        # Standard / Pro mode uses _nav_add_rail_item(label, widget, **kwargs) — widget is arg[1]
-        _extract_widgets(standard_nav, "_nav_add_rail_item",  arg_index=1)  |
-        _extract_widgets(pro_nav,      "_nav_add_rail_item",  arg_index=1)
-    )
-
-    missing = registered - accessible - _INTENTIONALLY_UNLISTED
-
-    assert not missing, (
-        f"\nRULE-NAV1 violation — {len(missing)} page(s) are registered in "
-        f"_build_tabs() but not reachable from any mode nav builder:\n\n"
-        + "\n".join(f"  {w}" for w in sorted(missing))
-        + "\n\nFor each missing page, add it to _build_standard_nav() / "
-        "_build_pro_nav() using _nav_add_rail_item(label, WIDGET), or to "
-        "_build_home_nav() using _nav_ref(icon, label, WIDGET).\n"
-        "If a page is intentionally nav-unlisted, add it to "
-        "_INTENTIONALLY_UNLISTED in this test file with a comment explaining why."
+    body   = _method_body("_build_pro_nav")
+    labels = re.findall(r'_nav_add_rail_item\(\s*"([^"]+)"', body)
+    seen:  set[str]  = set()
+    dupes: list[str] = []
+    for lbl in labels:
+        if lbl in seen:
+            dupes.append(lbl)
+        seen.add(lbl)
+    assert not dupes, (
+        f"_build_pro_nav() contains duplicate nav labels: {dupes}\n"
+        "Each page must appear only once."
     )
 
 
-def test_no_duplicate_labels_in_mode_builders():
+def test_build_home_and_standard_nav_do_not_exist():
     """
-    Each of the three mode builders should not register the same label twice
-    within itself — that would create two sidebar entries for the same page.
+    RULE-NAV2: _build_home_nav() and _build_standard_nav() must not exist.
+    There is one nav mode. Recreating these methods causes the multi-mode bug
+    where items added to one builder are invisible in the actual running app.
     """
-    for builder in ("_build_home_nav", "_build_standard_nav", "_build_pro_nav"):
-        body = _method_body(builder)
-        # Home mode uses _nav_ref; Standard/Pro use _nav_add_rail_item
-        labels = (
-            re.findall(r'_nav_ref\([^,]+,\s*"([^"]+)"', body) +
-            re.findall(r'_nav_add_rail_item\(\s*"([^"]+)"', body)
+    for dead_method in ("_build_home_nav", "_build_standard_nav"):
+        assert f"def {dead_method}" not in SRC, (
+            f"{dead_method}() was recreated in ui/dashboard.py.\n"
+            "There is only one nav builder: _build_pro_nav(). "
+            "Delete the dead method and add any pages to _build_pro_nav() instead."
         )
-        seen: set[str] = set()
-        dupes: list[str] = []
-        for lbl in labels:
-            if lbl in seen:
-                dupes.append(lbl)
-            seen.add(lbl)
-        assert not dupes, (
-            f"{builder}() contains duplicate nav labels: {dupes}\n"
-            "Each page should appear only once in a mode nav builder."
-        )
-
-
-def test_home_nav_stays_minimal():
-    """
-    Home mode is intentionally a simplified nav for new users.
-    If it grows beyond 12 nav entries the simplification promise is broken.
-    """
-    body  = _method_body("_build_home_nav")
-    count = len(re.findall(r"_nav_ref\(", body))
-    assert count <= 12, (
-        f"_build_home_nav() has {count} _nav_ref entries — expected ≤ 12.\n"
-        "Home mode is meant to be a minimal nav for new users.  Move additional "
-        "pages to _build_standard_nav() instead."
-    )

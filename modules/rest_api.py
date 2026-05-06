@@ -144,7 +144,7 @@ def create_app(store: MetricStore) -> "Flask":
         return jsonify({
             "status":     "ok",
             "uptime_s":   round(time.time() - _start_ts, 1),
-            "version":    "1.7.1",
+            "version":    "1.7.2",
         })
 
     @app.route("/devices")
@@ -232,12 +232,9 @@ def run_server(
     from a daemon thread.  The server logs to stderr (suppressed by the worker).
     """
     import logging
-    import os
 
-    # Suppress Flask startup banner and werkzeug request logging
-    log = logging.getLogger("werkzeug")
-    log.setLevel(logging.ERROR)
-    os.environ["WERKZEUG_RUN_MAIN"] = "true"
+    # Suppress werkzeug request logging (startup banner is suppressed by use_reloader=False)
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     app = create_app(store)
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
