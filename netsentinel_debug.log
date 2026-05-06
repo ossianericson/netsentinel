@@ -4,7 +4,25 @@ CWD: C:\Code\netsentinel
 
 QApplication created OK
 Dashboard class imported OK
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f10d7900, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f10d7900, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f10d7900, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f11b3660, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f11b3660, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f11b3660, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f08e65b0, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f08e65b0, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f08e65b0, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f13a7a50, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f13a7a50, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f13a7a50, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f11b3660, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f08e65b0, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f10d7900, name = "explainerPanel")
+[Qt WARN ] <qt> — Could not parse stylesheet of object ExplainerPanel(0x1b3f13a7a50, name = "explainerPanel")
 Dashboard() instantiated OK
 window.show() called OK
 
 --- entering event loop ---
+[Qt WARN ] <qt> — QThreadStorage: entry 1 destroyed before end of thread 0x1c2667eea60
+[Qt WARN ] <qt> — QThreadStorage: entry 0 destroyed before end of thread 0x1c2667eea60
