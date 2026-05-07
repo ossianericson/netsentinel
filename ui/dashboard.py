@@ -4867,6 +4867,10 @@ class Dashboard(QMainWindow):
                 self._logger_outage_count = len(summary.outages)
                 self._home_page.set_monitoring_status(True, elapsed_str, self._logger_outage_count)
 
+                # Keep chart summary current so View Chart works on live data
+                self._log_chart_summary = summary
+                self._btn_log_chart.setEnabled(True)
+
                 # Rebuild outage table
                 self._log_outage_table.setRowCount(0)
                 for o in summary.outages:
@@ -4890,11 +4894,12 @@ class Dashboard(QMainWindow):
         )
 
     def _open_log_file(self):
-        """Open the log CSV in the default text editor / Excel."""
+        """Open the folder containing the current log CSV in Explorer."""
         if self._logger_worker and self._logger_worker.log_file:
             path = self._logger_worker.log_file
             if path.exists():
-                webbrowser.open(path.as_uri())
+                import os
+                os.startfile(str(path.parent))
 
     # ── Retention helpers ─────────────────────────────────────────────────────
 
@@ -5362,9 +5367,36 @@ class Dashboard(QMainWindow):
             return
         try:
             from modules.log_chart import render_chart
+            from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QScrollArea, QApplication
+            from PyQt6.QtGui import QPixmap
             self._btn_log_chart.setEnabled(False)
             self._log_status_lbl.setText("Rendering chart…")
-            saved = render_chart(self._log_chart_summary, show=True)
+            saved = render_chart(self._log_chart_summary)
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("")
+            dlg.setStyleSheet(f"QDialog{{background:{BG_DARK};}}")
+            lay = QVBoxLayout(dlg)
+            lay.setContentsMargins(8, 8, 8, 8)
+
+            px = QPixmap(str(saved))
+            screen = QApplication.primaryScreen().availableGeometry()
+            max_w = int(screen.width() * 0.88)
+            max_h = int(screen.height() * 0.82)
+            px = px.scaled(max_w, max_h, Qt.AspectRatioMode.KeepAspectRatio,
+                           Qt.TransformationMode.SmoothTransformation)
+            img_lbl = QLabel()
+            img_lbl.setPixmap(px)
+            img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(img_lbl)
+            scroll.setStyleSheet(f"QScrollArea{{border:none;background:{BG_DARK};}}")
+            lay.addWidget(scroll)
+
+            dlg.resize(px.width() + 24, px.height() + 24)
+            dlg.exec()
             self._log_status_lbl.setText(f"Chart saved: {saved}")
         except Exception as exc:
             self._log_status_lbl.setText(f"Chart error: {exc}")
@@ -6343,10 +6375,10 @@ class Dashboard(QMainWindow):
                 self.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
             except Exception:
                 pass
-        # Explicit maximize — restoreGeometry before show() doesn't reliably
-        # restore the maximized state on frameless Windows.
+        # Record maximized intent without showing — app.py calls showMaximized()
+        # after wiring so the window never appears in a non-maximized state first.
         if was_maximized:
-            self.showMaximized()
+            self.setWindowState(Qt.WindowState.WindowMaximized)
         # Sidebar nav state
         if s.value("nav/collapsed", "False") == "True" and not self._nav_collapsed:
             self._toggle_sidebar()

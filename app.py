@@ -347,7 +347,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.7.3")
+    app.setApplicationVersion("1.7.4")
     app.setOrganizationName("netsentinel")
 
     # ── Single instance guard ─────────────────────────────────────────────────
@@ -551,7 +551,13 @@ def main():
     window._inventory_page.scan_requested.connect(window._start_full_scan)
 
     # ── Show window after all wiring is complete (prevents startup flash) ─────
-    window.show()
+    # Use showMaximized() when the saved state was maximized — calling it here
+    # (rather than inside __init__) means the window is never visible at a
+    # non-maximized size, eliminating the brief small-window flash on startup.
+    if window.windowState() & Qt.WindowState.WindowMaximized:
+        window.showMaximized()
+    else:
+        window.show()
 
     # Second-instance → raise this window to the front
     def _on_second_instance() -> None:

@@ -9,7 +9,7 @@
 The free, open-source network troubleshooting tool that replaces five separate utilities. Runs 100% locally.
 
 <p align="center">
-  <img src="assets/screenshots/hero.png" alt="NetSentinel dashboard overview" width="860"/>
+  <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
 ---
@@ -229,7 +229,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.7.3
+### v1.7.4
+
+- Fixed "View Chart" in Network Logger not opening — matplotlib's interactive backend could not be switched after pyplot was already imported, so `plt.show()` silently did nothing; chart now always renders to PNG and opens in the system default image viewer
+- Fixed brief small window flash on startup — the window was being shown inside `__init__` during settings restore, causing a visible non-maximized frame before the maximize animation; the window now stays hidden until all wiring is complete and is shown maximized in one step
+
+### v1.7.1
 
 - Protocol Visualizer — animated step-through of 9 real protocols (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); each step shows the packet name, frame detail, and a labelled dot travelling between nodes; play/pause/step controls; tabbed with a protocol context panel
 - Log Hub — live network logger output in a filterable table; streams real events as they happen; interesting events (DNS failures, slow gateway, consecutive connection failures) automatically generate a Lab Mode exercise surfaced as a home screen card

@@ -50,5 +50,3 @@ NetSentinel.ini
 # Generated output
 repomix-output.txt
 
-# Claude Code memory
-.claude/

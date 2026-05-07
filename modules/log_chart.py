@@ -47,8 +47,6 @@ def render_chart(
         Path of the saved PNG file.
     """
     try:
-        import matplotlib
-        matplotlib.use("Agg")   # non-interactive backend; reset to TkAgg etc. if show=True
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
         import matplotlib.patches as mpatches
@@ -129,10 +127,6 @@ def render_chart(
         host_uptime[h] = (ok / n * 100) if n else 100.0
 
     # ── Figure layout ─────────────────────────────────────────────────────────
-    if show:
-        matplotlib.use("TkAgg" if _backend_available("TkAgg") else "Qt5Agg")
-        import matplotlib.pyplot as plt  # re-import after backend change
-
     from modules.colours import (
         EXPORT_BG        as DARK_BG,
         EXPORT_CARD      as CARD_BG,
@@ -159,7 +153,7 @@ def render_chart(
             spine.set_edgecolor(GRID_CLR)
 
     # ── Top subplot: RTT lines ────────────────────────────────────────────────
-    ax_rtt.set_title("Network Logger — RTT Chart", color=TEXT_CLR, fontsize=13, pad=12)
+    ax_rtt.set_title("", color=TEXT_CLR)
     ax_rtt.set_ylabel("RTT (ms)", color=TEXT_CLR, fontsize=10)
     ax_rtt.grid(True, color=GRID_CLR, linewidth=0.5, alpha=0.7)
 

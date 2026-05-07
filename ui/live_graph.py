@@ -5,12 +5,6 @@ Used by Module 5 (DNS / ping correlator) to show real-time latency.
 
 from typing import Dict, List, Optional
 
-import matplotlib
-matplotlib.use("QtAgg")  # must be set before importing pyplot
-
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
@@ -33,6 +27,11 @@ class LiveGraphWidget(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        import matplotlib
+        matplotlib.use("QtAgg")
+        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+        from matplotlib.figure import Figure
+
         self._series: Dict[str, List] = {}   # target -> list of (t, rtt_ms or None)
         self._fig = Figure(figsize=(8, 3), dpi=96, facecolor=CHART_BG)
         self._ax = self._fig.add_subplot(111)
