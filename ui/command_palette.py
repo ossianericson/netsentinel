@@ -1,11 +1,11 @@
-﻿"""Command palette — Ctrl+K fuzzy launcher for pages and actions."""
+"""Command palette — Ctrl+K fuzzy launcher for pages and actions."""
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QEvent, pyqtSignal
 from PyQt6.QtWidgets import (
-    QDialog, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget,
+    QApplication, QDialog, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BORDER, SIDEBAR_HOVER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE
+from ui.styles import ACCENT, BG_CARD, BG_HOVER, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE
 
 
 class CommandPalette(QDialog):
@@ -50,6 +50,7 @@ class CommandPalette(QDialog):
             f"}}"
         )
         self._search.textChanged.connect(self._filter)
+        self._search.installEventFilter(self)
         wl.addWidget(self._search)
 
         self._list = QListWidget()
@@ -60,15 +61,15 @@ class CommandPalette(QDialog):
             f"  border-bottom-left-radius:8px; border-bottom-right-radius:8px;"
             f"}}"
             f"QListWidget::item {{"
-            f"  padding:9px 14px; color:{TEXT_PRIMARY}; font-size:12px; border:none;"
+            f"  padding:9px 14px; color:{TEXT_PRIMARY}; background:{BG_CARD}; font-size:12px; border:none;"
             f"}}"
             f"QListWidget::item:selected {{"
             f"  background:{ACCENT}; color:{WHITE}; border-radius:0;"
             f"}}"
-            f"QListWidget::item:hover:!selected {{ background:{SIDEBAR_HOVER}; }}"
+            f"QListWidget::item:hover:!selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._list.itemActivated.connect(self._activate)
+        self._list.itemClicked.connect(self._activate)
         wl.addWidget(self._list)
 
         outer.addWidget(wrap)
@@ -105,6 +106,30 @@ class CommandPalette(QDialog):
             self.action_requested.emit(data["label"])
         self.accept()
 
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonPress:
+            # Close if the click landed outside our own geometry
+            if not self.geometry().contains(event.globalPosition().toPoint()):
+                self.reject()
+                return False
+        if obj is self._search and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key == Qt.Key.Key_Escape:
+                self.reject()
+                return True
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                cur = self._list.currentItem()
+                if cur:
+                    self._activate(cur)
+                return True
+            if key == Qt.Key.Key_Down:
+                self._list.setCurrentRow(min(self._list.currentRow() + 1, self._list.count() - 1))
+                return True
+            if key == Qt.Key.Key_Up:
+                self._list.setCurrentRow(max(self._list.currentRow() - 1, 0))
+                return True
+        return False
+
     def keyPressEvent(self, event):
         key = event.key()
         if key == Qt.Key.Key_Escape:
@@ -131,3 +156,8 @@ class CommandPalette(QDialog):
             self.move(x, y)
         self.activateWindow()
         self._search.setFocus()
+        QApplication.instance().installEventFilter(self)
+
+    def hideEvent(self, event):
+        QApplication.instance().removeEventFilter(self)
+        super().hideEvent(event)

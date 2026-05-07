@@ -59,6 +59,11 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest tests/ -v --tb=short
 
+      - name: Exclude dist from Windows Defender
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "$pwd\dist"
+
       - name: Build Windows executable
         run: |
           pyinstaller NetSentinel.spec

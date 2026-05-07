@@ -347,8 +347,18 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.7.4")
+    app.setApplicationVersion("1.7.5")
     app.setOrganizationName("netsentinel")
+
+    # Apply QMenu rules at application level so top-level (parentless) menus
+    # are styled — widget-level stylesheets do not reach separate top-level windows.
+    from ui.styles import BG_CARD, TEXT_PRIMARY, BORDER, BG_HOVER
+    app.setStyleSheet(
+        f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+        f" border:1px solid {BORDER}; padding:4px; font-size:12px; }}"
+        f"QMenu::item {{ padding:4px 16px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
+        f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+    )
 
     # ── Single instance guard ─────────────────────────────────────────────────
     # If another instance is running, signal it to restore its window and exit.
@@ -551,13 +561,7 @@ def main():
     window._inventory_page.scan_requested.connect(window._start_full_scan)
 
     # ── Show window after all wiring is complete (prevents startup flash) ─────
-    # Use showMaximized() when the saved state was maximized — calling it here
-    # (rather than inside __init__) means the window is never visible at a
-    # non-maximized size, eliminating the brief small-window flash on startup.
-    if window.windowState() & Qt.WindowState.WindowMaximized:
-        window.showMaximized()
-    else:
-        window.show()
+    window.show()
 
     # Second-instance → raise this window to the front
     def _on_second_instance() -> None:

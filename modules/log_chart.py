@@ -10,13 +10,14 @@ Layout:
   Bottom subplot — Per-target uptime % bar chart.
 
 Usage:
-    from modules.log_chart import render_chart
+    from modules.log_chart import build_figure, render_chart
     from modules.network_logger import load_log_file
 
     summary = load_log_file(Path("netlog_20260426_120000.csv"))
-    out_path = render_chart(summary)                   # saves PNG next to CSV
-    render_chart(summary, show=True)                   # interactive window
-    render_chart(summary, output_path=Path("out.png")) # explicit path
+    fig = build_figure(summary)           # returns matplotlib Figure (no pyplot)
+    render_chart(summary)                 # saves PNG next to CSV
+    render_chart(summary, show=True)      # saves + opens with system viewer
+    render_chart(summary, output_path=Path("out.png"))
 """
 
 from __future__ import annotations
@@ -25,29 +26,16 @@ import datetime as _dt
 from pathlib import Path
 from typing import Optional, List
 
-# matplotlib is imported lazily so this module can be imported without a display
-# (the actual render will fail gracefully if matplotlib is missing).
 
-
-def render_chart(
-    summary,
-    output_path: Optional[Path] = None,
-    show: bool = False,
-) -> Path:
+def build_figure(summary) -> "Figure":
     """
-    Render a log summary to a PNG chart (and optionally display it).
+    Build and return a matplotlib Figure from a log summary.
 
-    Args:
-        summary:     A LogSummary returned by load_log_file() or get_summary().
-        output_path: Explicit PNG output path.  If None, saves to the same
-                     directory as the log file with .png extension.
-        show:        If True, also calls plt.show() for an interactive window.
-
-    Returns:
-        Path of the saved PNG file.
+    Uses matplotlib.figure.Figure directly — no pyplot state machine is touched,
+    so no stray "Figure 1" window can appear and no backend switching is needed.
     """
     try:
-        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
         import matplotlib.dates as mdates
         import matplotlib.patches as mpatches
     except ImportError as exc:
@@ -55,9 +43,8 @@ def render_chart(
             "matplotlib is required for chart rendering: pip install matplotlib"
         ) from exc
 
-    entries   = summary.entries
-    outages   = summary.outages
-    log_path  = Path(summary.log_path) if summary.log_path else Path("netlog.csv")
+    entries  = summary.entries
+    outages  = summary.outages
 
     if not entries:
         raise ValueError("No log entries to chart — load a non-empty log file first.")
@@ -87,15 +74,13 @@ def render_chart(
         host_series[e.host]["rtt"].append(rtt)
         host_series[e.host]["dns"].append(dns)
 
-    # Check whether we have any DNS data worth plotting
     has_dns = any(
         any(not _is_nan(v) for v in host_series[h]["dns"])
         for h in hosts
     )
 
     # ── Outage / slow time-window boundaries ──────────────────────────────────
-    # Build per-host fail/slow spans from entries
-    fail_spans: List[tuple] = []   # (start_dt, end_dt)
+    fail_spans: List[tuple] = []
     slow_spans: List[tuple] = []
 
     for h in hosts:
@@ -103,7 +88,6 @@ def render_chart(
         if not ts_list:
             continue
         host_entries = [e for e in entries if e.host == h]
-        # Estimate the interval between consecutive entries for duration calc
         if len(ts_list) > 1:
             gaps = [(ts_list[i+1] - ts_list[i]).total_seconds()
                     for i in range(len(ts_list) - 1)]
@@ -138,11 +122,13 @@ def render_chart(
         CHART_DARK_LINES  as COLORS,
     )
 
-    fig, (ax_rtt, ax_bar) = plt.subplots(
-        2, 1,
+    fig = Figure(
         figsize=(14, 8),
-        gridspec_kw={"height_ratios": [3, 1]},
         facecolor=DARK_BG,
+    )
+    ax_rtt, ax_bar = fig.subplots(
+        2, 1,
+        gridspec_kw={"height_ratios": [3, 1]},
     )
     fig.subplots_adjust(hspace=0.35, left=0.08, right=0.95, top=0.92, bottom=0.08)
 
@@ -168,20 +154,17 @@ def render_chart(
                             label=h, alpha=0.9)
         legend_handles.append(line)
 
-    # Shade outages (red) and slow periods (amber)
     for start, end in fail_spans:
         ax_rtt.axvspan(start, end, alpha=0.25, color=RED_CLR, linewidth=0)
     for start, end in slow_spans:
         ax_rtt.axvspan(start, end, alpha=0.18, color=AMBER_CLR, linewidth=0)
 
-    # Legend patches for shading
     legend_handles.append(mpatches.Patch(color=RED_CLR,   alpha=0.5, label="Outage (FAIL)"))
     legend_handles.append(mpatches.Patch(color=AMBER_CLR, alpha=0.5, label="Slow"))
     ax_rtt.legend(handles=legend_handles, loc="upper right",
                   facecolor=CARD_BG, edgecolor=GRID_CLR,
                   labelcolor=TEXT_CLR, fontsize=8)
 
-    # Optional DNS latency on second y-axis
     if has_dns:
         ax_dns = ax_rtt.twinx()
         ax_dns.set_facecolor(CARD_BG)
@@ -189,7 +172,6 @@ def render_chart(
         ax_dns.set_ylabel("DNS latency (ms)", color=TEXT_CLR, fontsize=9)
         for spine in ax_dns.spines.values():
             spine.set_edgecolor(GRID_CLR)
-        # Aggregate DNS across all hosts (usually one value per cycle)
         all_ts_dns: list = []
         all_dns: list    = []
         for h in hosts:
@@ -205,7 +187,6 @@ def render_chart(
             ax_dns.legend(loc="upper left", facecolor=CARD_BG,
                           edgecolor=GRID_CLR, labelcolor=TEXT_CLR, fontsize=8)
 
-    # X-axis date formatting — auto-scale
     ax_rtt.xaxis.set_major_formatter(mdates.AutoDateFormatter(mdates.AutoDateLocator()))
     fig.autofmt_xdate(rotation=25, ha="right")
 
@@ -229,7 +210,7 @@ def render_chart(
                     ha="center", va="bottom", color=TEXT_CLR, fontsize=8)
     ax_bar.tick_params(axis="x", labelrotation=15, labelsize=8)
 
-    # ── Stats annotation on figure ────────────────────────────────────────────
+    # ── Stats annotation ──────────────────────────────────────────────────────
     stats_parts = [
         f"Total pings: {summary.total_pings}",
         f"Outages: {len(outages)}",
@@ -241,18 +222,49 @@ def render_chart(
     fig.text(0.5, 0.96, stats_text, ha="center", va="top",
              color=TEXT_CLR, fontsize=9, alpha=0.8)
 
-    # ── Save ──────────────────────────────────────────────────────────────────
+    return fig
+
+
+def render_chart(
+    summary,
+    output_path: Optional[Path] = None,
+    show: bool = False,
+) -> Path:
+    """
+    Render a log summary to a PNG file.
+
+    Args:
+        summary:     A LogSummary returned by load_log_file() or get_summary().
+        output_path: Explicit PNG output path. If None, saves next to the log file
+                     (or netlog.png in the current directory if log_path is unavailable).
+        show:        If True, open the saved PNG with the system default viewer.
+
+    Returns:
+        Path of the saved PNG file.
+    """
+    try:
+        from matplotlib.backends.backend_agg import FigureCanvasAgg
+    except ImportError as exc:
+        raise RuntimeError(
+            "matplotlib is required for chart rendering: pip install matplotlib"
+        ) from exc
+
+    fig = build_figure(summary)
+
+    log_path = Path(summary.log_path) if summary.log_path else Path("netlog.csv")
     if output_path is None:
         output_path = log_path.with_suffix(".png")
-
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    from modules.colours import EXPORT_BG as DARK_BG
+    FigureCanvasAgg(fig)  # attaches Agg backend so fig.savefig() can render
     fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor=DARK_BG)
 
     if show:
-        plt.show()
+        import webbrowser
+        webbrowser.open(output_path.as_uri())
 
-    plt.close(fig)
     return output_path
 
 
@@ -264,12 +276,3 @@ def _is_nan(v) -> bool:
         return math.isnan(v)
     except (TypeError, ValueError):
         return True
-
-
-def _backend_available(backend: str) -> bool:
-    try:
-        import matplotlib
-        matplotlib.use(backend)
-        return True
-    except Exception:
-        return False

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3)",
+      "Bash(xargs grep *)",
+      "WebSearch",
+      "Bash(python -m pytest tests/test_version_consistency.py -v --tb=short)",
+      "Bash(python app.py --smoke)",
+      "Bash(start pythonw *)",
+      "Bash(python app.py)",
+      "Bash(python -c \"import ui.dashboard; print\\('OK'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(jobs)",
+      "PowerShell(Start-Process python -ArgumentList \"app.py\" -WorkingDirectory \"c:\\\\Code\\\\netsentinel\")",
+      "Bash(python -W all app.py)",
+      "Bash(echo \"EXIT: $?\")",
+      "PowerShell($dir = [Environment]::GetFolderPath\\(\"LocalApplicationData\"\\) + \"\\\\NetSentinel\"; Get-Content \"$dir\\\\netsentinel_crash.log\" -Tail 40 2>&1; ls $dir 2>&1)",
+      "PowerShell(Start-Process -FilePath \"python\" -ArgumentList \"app.py\" -WorkingDirectory \"c:\\\\Code\\\\netsentinel\" -WindowStyle Hidden)"
+    ]
+  }
+}

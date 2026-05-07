@@ -30,7 +30,7 @@ from __future__ import annotations
 import datetime
 from typing import Callable, Dict, List, Optional
 
-from PyQt6.QtCore    import QMimeData, QPoint, QSettings, QSize, Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore    import QMimeData, QPoint, QSettings, QSize, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QCursor, QDrag, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QFileDialog, QMenu,
@@ -102,11 +102,13 @@ class _BaseTile(QFrame):
         self,
         store: Optional[MetricStore] = None,
         swap_cb: Optional[Callable[[str, str], None]] = None,
+        remove_cb: Optional[Callable[[str], None]] = None,
         parent=None,
     ):
         super().__init__(parent)
-        self._store    = store
-        self._swap_cb  = swap_cb or (lambda a, b: None)
+        self._store     = store
+        self._swap_cb   = swap_cb or (lambda a, b: None)
+        self._remove_cb = remove_cb or (lambda _: None)
         self._edit_mode  = False
         self._drag_start: Optional[QPoint] = None
 
@@ -155,6 +157,20 @@ class _BaseTile(QFrame):
         self._drag_handle.hide()
         tb.addWidget(self._drag_handle)
 
+        self._remove_btn = QPushButton("×")
+        self._remove_btn.setFixedSize(22, 22)
+        self._remove_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" color:{RED}; font-size:13px; font-weight:bold; padding:0;"
+            f" border-radius:3px; }}"
+            f"QPushButton:hover {{ background:#fff0f0; border-color:{RED}; }}"
+        )
+        self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._remove_btn.setToolTip("Remove from overview")
+        self._remove_btn.hide()
+        self._remove_btn.clicked.connect(lambda: self._remove_cb(self.TILE_ID))
+        tb.addWidget(self._remove_btn)
+
         outer.addWidget(title_bar)
 
         # Body
@@ -180,6 +196,7 @@ class _BaseTile(QFrame):
     def set_edit_mode(self, enabled: bool) -> None:
         self._edit_mode = enabled
         self._drag_handle.setVisible(enabled)
+        self._remove_btn.setVisible(enabled)
         self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor if enabled
                                else Qt.CursorShape.ArrowCursor))
 
@@ -273,43 +290,6 @@ class DeviceCountTile(_BaseTile):
         self._set_health(colour)
 
 
-class FleetUptimeTile(_BaseTile):
-    TILE_ID    = "fleet_uptime"
-    TILE_LABEL = "Fleet Uptime (24 h)"
-
-    def _build_body(self) -> None:
-        self._pct_lbl = QLabel("–", parent=self)
-        self._pct_lbl.setStyleSheet(
-            f"font-size:38px; font-weight:bold; color:{GREEN}; border:none;"
-        )
-        self._sub_lbl = QLabel("No data yet")
-        self._sub_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-        )
-        self._body_layout.addWidget(self._pct_lbl)
-        self._body_layout.addWidget(self._sub_lbl)
-        self._body_layout.addStretch()
-
-    def refresh(self, store: Optional[MetricStore] = None) -> None:
-        s = store or self._store
-        if s is None:
-            return
-        try:
-            rows = s.query_uptime_table()
-            if not rows:
-                return
-            avgs = [r.get("24.0", 100.0) for r in rows]
-            avg  = sum(avgs) / len(avgs)
-            colour = GREEN if avg >= 95 else AMBER if avg >= 80 else RED
-            self._pct_lbl.setText(f"{avg:.1f}%")
-            self._pct_lbl.setStyleSheet(
-                f"font-size:38px; font-weight:bold; color:{colour}; border:none;"
-            )
-            n = len(rows)
-            self._sub_lbl.setText(f"across {n} monitored host{'s' if n != 1 else ''}")
-            self._set_health(colour)
-        except Exception:
-            pass
 
 
 class ServiceStatusTile(_BaseTile):
@@ -765,24 +745,124 @@ class LiveBandwidthTile(_BaseTile):
         pass  # live data — no store needed
 
 
+# ── DNS poller ────────────────────────────────────────────────────────────────
+
+class _DnsPoller(QThread):
+    """Probes system DNS resolver every interval_s seconds; emits latency in ms or -1 on failure."""
+    result = pyqtSignal(float)
+
+    def __init__(self, interval_s: int = 15, parent=None):
+        super().__init__(parent)
+        self._stop = False
+        self._interval = interval_s
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        import socket
+        import time
+        while not self._stop:
+            try:
+                t0 = time.monotonic()
+                socket.getaddrinfo("google.com", 80)
+                self.result.emit((time.monotonic() - t0) * 1000.0)
+            except Exception:
+                self.result.emit(-1.0)
+            for _ in range(self._interval):
+                if self._stop:
+                    return
+                time.sleep(1)
+
+
+class DnsStabilityTile(_BaseTile):
+    TILE_ID    = "dns_stability"
+    TILE_LABEL = "DNS Stability"
+    MIN_HEIGHT = 140
+
+    def _build_body(self) -> None:
+        self._lat_lbl = QLabel("—")
+        self._lat_lbl.setStyleSheet(
+            f"font-size:32px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;"
+        )
+        self._status_lbl = QLabel("Measuring…")
+        self._status_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+        )
+        self._body_layout.addWidget(self._lat_lbl)
+        self._body_layout.addWidget(self._status_lbl)
+        self._body_layout.addStretch()
+        self._readings: list = []
+        self._fail_count: int = 0
+        self._worker = None
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._worker is None:
+            self._worker = _DnsPoller(interval_s=15, parent=self)
+            self._worker.result.connect(self._on_result)
+            self._worker.start()
+
+    def hideEvent(self, event) -> None:
+        w = self._worker
+        if w is not None:
+            w.stop()
+            w.quit()
+            w.wait(2000)
+            self._worker = None
+        super().hideEvent(event)
+
+    def _on_result(self, ms: float) -> None:
+        if ms < 0:
+            self._fail_count += 1
+            self._lat_lbl.setText("FAIL")
+            self._lat_lbl.setStyleSheet(
+                f"font-size:32px; font-weight:bold; color:{RED}; border:none;"
+            )
+            self._set_health(RED)
+        else:
+            self._readings.append(ms)
+            self._readings = self._readings[-5:]
+            self._fail_count = 0
+            colour = GREEN if ms < 50 else AMBER if ms < 200 else RED
+            self._lat_lbl.setText(f"{ms:.0f} ms")
+            self._lat_lbl.setStyleSheet(
+                f"font-size:32px; font-weight:bold; color:{colour}; border:none;"
+            )
+            self._set_health(colour)
+        avg = (sum(self._readings) / len(self._readings)) if self._readings else 0
+        if self._fail_count:
+            self._status_lbl.setText(f"{self._fail_count} failure(s) — resolver unreachable")
+            self._status_lbl.setStyleSheet(
+                f"font-size:11px; color:{RED}; border:none;"
+            )
+        elif self._readings:
+            self._status_lbl.setText(f"Avg {avg:.0f} ms over last {len(self._readings)} probe(s)")
+            self._status_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+            )
+
+    def refresh(self, store=None) -> None:
+        pass  # live data — no store needed
+
+
 # ── Tile registry & defaults ──────────────────────────────────────────────────
 
 _TILE_CLASSES: Dict[str, type] = {
     cls.TILE_ID: cls for cls in [
-        DeviceCountTile, FleetUptimeTile, ServiceStatusTile, TlsStatusTile,
+        DeviceCountTile, ServiceStatusTile, TlsStatusTile,
         RttSummaryTile, NetworkGradeTile, AlertFeedTile, EventFeedTile,
-        HaDevicesTile, LiveBandwidthTile,
+        HaDevicesTile, LiveBandwidthTile, DnsStabilityTile,
     ]
 }
 
+# Tiles shown for every new user — universally meaningful with no setup required.
+# Fleet uptime, service heartbeat, TLS, and HA are opt-in via Edit Layout.
 _DEFAULT_ORDER: List[str] = [
     "device_count",
-    "fleet_uptime",
     "live_bandwidth",
-    "ha_devices",
-    "service_status",
+    "dns_stability",
     "rtt_summary",
-    "tls_status",
     "network_grade",
     "alert_feed",
     "event_feed",
@@ -810,6 +890,7 @@ class OverviewPage(QWidget):
         super().__init__(parent)
         self._store      = store
         self._edit_mode  = False
+        self._hidden: set = self._load_hidden()
         self._tile_order = self._load_order()
         self._tiles: Dict[str, _BaseTile] = {}
         self._filler: Optional[QWidget]   = None
@@ -888,6 +969,23 @@ class OverviewPage(QWidget):
         hdr.addWidget(self._edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
         root.addLayout(hdr)
 
+        # Add-tile strip — only visible in edit mode when tiles are hidden
+        self._add_strip = QWidget()
+        self._add_strip.setStyleSheet(
+            f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}"
+        )
+        self._add_strip_layout = QHBoxLayout(self._add_strip)
+        self._add_strip_layout.setContentsMargins(10, 6, 10, 6)
+        self._add_strip_layout.setSpacing(8)
+        _add_lbl = QLabel("Add tile:")
+        _add_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+        )
+        self._add_strip_layout.addWidget(_add_lbl)
+        self._add_strip_layout.addStretch()
+        self._add_strip.hide()
+        root.addWidget(self._add_strip)
+
         # Scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -911,13 +1009,13 @@ class OverviewPage(QWidget):
     # ── Tile management ───────────────────────────────────────────────────────
 
     def _build_tiles(self) -> None:
-        for tile_id in _DEFAULT_ORDER:
-            cls = _TILE_CLASSES.get(tile_id)
-            if cls and tile_id not in self._tiles:
+        for tile_id, cls in _TILE_CLASSES.items():
+            if tile_id not in self._tiles:
                 # RULE 17: parent=grid_container; RULE 18: named local var
                 self._tiles[tile_id] = cls(
                     store=self._store,
                     swap_cb=self.swap_tiles,
+                    remove_cb=self._remove_tile,
                     parent=self._grid_container,
                 )
         self._reflow()
@@ -935,13 +1033,9 @@ class OverviewPage(QWidget):
             else:
                 w.hide()
 
-        for idx, tile_id in enumerate(self._tile_order):
-            tile = self._tiles.get(tile_id)
-            if tile is None:
-                continue
-            row = idx // _COLS
-            col = idx % _COLS
-            self._grid_layout.addWidget(tile, row, col)
+        visible = [self._tiles[tid] for tid in self._tile_order if tid in self._tiles]
+        for idx, tile in enumerate(visible):
+            self._grid_layout.addWidget(tile, idx // _COLS, idx % _COLS)
             tile.show()
 
         # Filler row to absorb vertical stretch
@@ -974,7 +1068,10 @@ class OverviewPage(QWidget):
         self._edit_btn.setText("Save Layout" if checked else "Edit Layout")
         for tile in self._tiles.values():
             tile.set_edit_mode(checked)
-        if not checked:
+        if checked:
+            self._refresh_add_strip()
+        else:
+            self._add_strip.hide()
             self._save_order()
 
     # ── Data slots ────────────────────────────────────────────────────────────
@@ -1070,21 +1167,81 @@ class OverviewPage(QWidget):
         if saved:
             order = [s for s in str(saved).split(",") if s in _TILE_CLASSES]
             for tid in _DEFAULT_ORDER:
-                if tid not in order:
+                if tid not in order and tid not in self._hidden:
                     order.append(tid)
             return order
-        return list(_DEFAULT_ORDER)
+        return [tid for tid in _DEFAULT_ORDER if tid not in self._hidden]
 
     def _save_order(self) -> None:
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue(_SETTINGS_KEY, ",".join(self._tile_order))
+        qs.setValue("overview/hidden_tiles", ",".join(sorted(self._hidden)))
+
+    def _load_hidden(self) -> set:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        saved = qs.value("overview/hidden_tiles", None)
+        if saved:
+            return {s for s in str(saved).split(",") if s in _TILE_CLASSES}
+        return set()
+
+    def _remove_tile(self, tile_id: str) -> None:
+        if tile_id not in _TILE_CLASSES:
+            return
+        self._hidden.add(tile_id)
+        if tile_id in self._tile_order:
+            self._tile_order.remove(tile_id)
+        self._save_order()
+        self._reflow()
+        self._refresh_add_strip()
+
+    def _add_tile(self, tile_id: str) -> None:
+        if tile_id not in _TILE_CLASSES:
+            return
+        self._hidden.discard(tile_id)
+        if tile_id not in self._tile_order:
+            self._tile_order.append(tile_id)
+        self._save_order()
+        self._reflow()
+        self._refresh_add_strip()
+
+    def _refresh_add_strip(self) -> None:
+        # Clear tile buttons between label (index 0) and stretch (last item)
+        while self._add_strip_layout.count() > 2:
+            item = self._add_strip_layout.takeAt(1)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+
+        if not self._hidden or not self._edit_mode:
+            self._add_strip.hide()
+            return
+
+        for tile_id in _DEFAULT_ORDER:
+            if tile_id not in self._hidden:
+                continue
+            cls = _TILE_CLASSES.get(tile_id)
+            if cls is None:
+                continue
+            btn = QPushButton(f"＋  {cls.TILE_LABEL}")
+            btn.setFixedHeight(24)
+            btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
+                f" color:{ACCENT}; border-radius:4px; font-size:10px; padding:0 8px; }}"
+                f"QPushButton:hover {{ background:{ACCENT}; color:#fff; }}"
+            )
+            btn.clicked.connect(lambda _checked, tid=tile_id: self._add_tile(tid))
+            self._add_strip_layout.insertWidget(
+                self._add_strip_layout.count() - 1, btn
+            )
+
+        self._add_strip.show()
 
     def _refresh_store_tiles(self) -> None:
         try:
             self.objectName()   # raises RuntimeError if C++ object already deleted
         except RuntimeError:
             return
-        for tid in ("fleet_uptime", "tls_status", "event_feed"):
+        for tid in ("tls_status", "event_feed"):
             t = self._tiles.get(tid)
             if t:
                 t.refresh(self._store)

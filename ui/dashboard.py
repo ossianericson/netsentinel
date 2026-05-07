@@ -1158,6 +1158,36 @@ _AUTO_HELP_PAGES: frozenset[str] = frozenset({
 })
 
 
+def _make_chart_window(fig) -> "QMainWindow":
+    from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout
+    from PyQt6.QtCore import Qt as _Qt
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+
+    win = QMainWindow()
+    win.setWindowTitle("Network Logger — RTT Chart")
+    win.setAttribute(_Qt.WidgetAttribute.WA_DeleteOnClose)
+    win.resize(1400, 820)
+
+    container = QWidget()
+    lay = QVBoxLayout(container)
+    lay.setContentsMargins(0, 0, 0, 0)
+    lay.setSpacing(0)
+
+    canvas = FigureCanvasQTAgg(fig)
+
+    try:
+        from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+    except ImportError:
+        from matplotlib.backends.backend_qt import NavigationToolbar2QT
+
+    toolbar = NavigationToolbar2QT(canvas, win)
+    win.addToolBar(toolbar)
+    lay.addWidget(canvas)
+    win.setCentralWidget(container)
+    canvas.draw()
+    return win
+
+
 # ─── Main Window ─────────────────────────────────────────────────────────────
 
 class Dashboard(QMainWindow):
@@ -1458,13 +1488,14 @@ class Dashboard(QMainWindow):
         _icon = QLabel()
         _icon.setFixedSize(24, 24)
         _icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _icon.setStyleSheet("background:transparent;")
+        _icon.setStyleSheet(f"background:{NAV_BAR};")
         if not _pix.isNull():
             _icon.setPixmap(
                 _pix.scaled(24, 24,
                             Qt.AspectRatioMode.KeepAspectRatio,
                             Qt.TransformationMode.SmoothTransformation)
             )
+            _icon.repaint()
         else:
             _icon.setText("N")
             _icon.setStyleSheet(
@@ -3295,7 +3326,7 @@ class Dashboard(QMainWindow):
         label = self._nav_item_labels.get(row, "")
         if not label:
             return
-        menu = QMenu(self._nav)
+        menu = QMenu()
         if label in self._nav_pinned_labels:
             act = menu.addAction("★  Remove from Favourites")
         else:
@@ -3325,7 +3356,7 @@ class Dashboard(QMainWindow):
     def _open_command_palette(self) -> None:
         items = self._build_palette_items()
         pal = CommandPalette(items, parent=self)
-        pal.page_requested.connect(self._nav_go_to)
+        pal.page_requested.connect(self._nav_rail_go_to)
         pal.action_requested.connect(self._on_palette_action)
         pal.exec()
 
@@ -4866,8 +4897,6 @@ class Dashboard(QMainWindow):
                 elapsed_str = (f"{h} h {m} m" if h else f"{m} m") if elapsed_s >= 60 else ""
                 self._logger_outage_count = len(summary.outages)
                 self._home_page.set_monitoring_status(True, elapsed_str, self._logger_outage_count)
-
-                # Keep chart summary current so View Chart works on live data
                 self._log_chart_summary = summary
                 self._btn_log_chart.setEnabled(True)
 
@@ -4894,12 +4923,11 @@ class Dashboard(QMainWindow):
         )
 
     def _open_log_file(self):
-        """Open the folder containing the current log CSV in Explorer."""
+        """Open the log CSV in the default text editor / Excel."""
         if self._logger_worker and self._logger_worker.log_file:
             path = self._logger_worker.log_file
             if path.exists():
-                import os
-                os.startfile(str(path.parent))
+                webbrowser.open(path.as_uri())
 
     # ── Retention helpers ─────────────────────────────────────────────────────
 
@@ -5366,38 +5394,20 @@ class Dashboard(QMainWindow):
         if not self._log_chart_summary:
             return
         try:
-            from modules.log_chart import render_chart
-            from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QScrollArea, QApplication
-            from PyQt6.QtGui import QPixmap
+            if getattr(self, "_chart_window", None) and self._chart_window.isVisible():
+                self._chart_window.raise_()
+                self._chart_window.activateWindow()
+                return
+        except RuntimeError:
+            pass
+        try:
+            from modules.log_chart import build_figure
             self._btn_log_chart.setEnabled(False)
             self._log_status_lbl.setText("Rendering chart…")
-            saved = render_chart(self._log_chart_summary)
-
-            dlg = QDialog(self)
-            dlg.setWindowTitle("")
-            dlg.setStyleSheet(f"QDialog{{background:{BG_DARK};}}")
-            lay = QVBoxLayout(dlg)
-            lay.setContentsMargins(8, 8, 8, 8)
-
-            px = QPixmap(str(saved))
-            screen = QApplication.primaryScreen().availableGeometry()
-            max_w = int(screen.width() * 0.88)
-            max_h = int(screen.height() * 0.82)
-            px = px.scaled(max_w, max_h, Qt.AspectRatioMode.KeepAspectRatio,
-                           Qt.TransformationMode.SmoothTransformation)
-            img_lbl = QLabel()
-            img_lbl.setPixmap(px)
-            img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setWidget(img_lbl)
-            scroll.setStyleSheet(f"QScrollArea{{border:none;background:{BG_DARK};}}")
-            lay.addWidget(scroll)
-
-            dlg.resize(px.width() + 24, px.height() + 24)
-            dlg.exec()
-            self._log_status_lbl.setText(f"Chart saved: {saved}")
+            fig = build_figure(self._log_chart_summary)
+            self._chart_window = _make_chart_window(fig)
+            self._chart_window.show()
+            self._log_status_lbl.setText("Chart opened.")
         except Exception as exc:
             self._log_status_lbl.setText(f"Chart error: {exc}")
         finally:
@@ -6375,10 +6385,10 @@ class Dashboard(QMainWindow):
                 self.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
             except Exception:
                 pass
-        # Record maximized intent without showing — app.py calls showMaximized()
-        # after wiring so the window never appears in a non-maximized state first.
+        # Explicit maximize — restoreGeometry before show() doesn't reliably
+        # restore the maximized state on frameless Windows.
         if was_maximized:
-            self.setWindowState(Qt.WindowState.WindowMaximized)
+            self.showMaximized()
         # Sidebar nav state
         if s.value("nav/collapsed", "False") == "True" and not self._nav_collapsed:
             self._toggle_sidebar()

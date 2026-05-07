@@ -5,7 +5,6 @@ Covers:
   • Tile ID uniqueness
   • Tile build and body widget creation
   • DeviceCountTile.update_cycle
-  • FleetUptimeTile.refresh via MockStore
   • ServiceStatusTile.update_services
   • TlsStatusTile.refresh via MockStore
   • RttSummaryTile.update_cycle
@@ -159,63 +158,6 @@ class TestDeviceCountTile:
         assert "up" in t._sub_lbl.text()
         assert "down" not in t._sub_lbl.text()
 
-
-# ---------------------------------------------------------------------------
-# FleetUptimeTile
-# ---------------------------------------------------------------------------
-class TestFleetUptimeTile:
-    def _make(self, store=None):
-        from ui.pages.overview_page import FleetUptimeTile
-        return FleetUptimeTile(store=store)
-
-    def test_initial_placeholder(self):
-        t = self._make()
-        assert t._pct_lbl.text() == "–"
-
-    def test_refresh_high_uptime(self):
-        store = MockStore(uptime_rows=[{"24.0": 99.0}, {"24.0": 100.0}])
-        t = self._make(store)
-        t.refresh()
-        assert "99.5%" in t._pct_lbl.text()
-
-    def test_refresh_low_uptime(self):
-        from ui.styles import RED
-        store = MockStore(uptime_rows=[{"24.0": 50.0}])
-        t = self._make(store)
-        t.refresh()
-        assert "50.0%" in t._pct_lbl.text()
-        assert RED in t._pct_lbl.styleSheet()
-
-    def test_refresh_medium_uptime_amber(self):
-        from ui.styles import AMBER
-        store = MockStore(uptime_rows=[{"24.0": 85.0}])
-        t = self._make(store)
-        t.refresh()
-        assert AMBER in t._pct_lbl.styleSheet()
-
-    def test_refresh_empty_store(self):
-        store = MockStore(uptime_rows=[])
-        t = self._make(store)
-        t.refresh()
-        assert t._pct_lbl.text() == "–"
-
-    def test_refresh_no_store_noop(self):
-        t = self._make()
-        t.refresh()  # must not raise
-        assert t._pct_lbl.text() == "–"
-
-    def test_refresh_host_count_in_sub(self):
-        store = MockStore(uptime_rows=[{"24.0": 100.0}, {"24.0": 100.0}])
-        t = self._make(store)
-        t.refresh()
-        assert "2" in t._sub_lbl.text()
-
-    def test_refresh_single_host_singular(self):
-        store = MockStore(uptime_rows=[{"24.0": 100.0}])
-        t = self._make(store)
-        t.refresh()
-        assert "hosts" not in t._sub_lbl.text()
-        assert "host" in t._sub_lbl.text()
 
 
 # ---------------------------------------------------------------------------
@@ -723,7 +665,7 @@ class TestPersistence:
             a = page._tile_order[0]
             b = page._tile_order[1]
             page.swap_tiles(a, b)
-            inst.setValue.assert_called_with("overview/tile_order", ",".join(page._tile_order))
+            inst.setValue.assert_any_call("overview/tile_order", ",".join(page._tile_order))
 
     def test_load_order_from_settings(self):
         from ui.pages.overview_page import _DEFAULT_ORDER

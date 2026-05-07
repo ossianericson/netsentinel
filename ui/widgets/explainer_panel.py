@@ -80,7 +80,7 @@ class ExplainerPanel(QFrame):
         self.setObjectName("explainerPanel")
         self.setStyleSheet(
             f"QFrame#explainerPanel {{ background:{BG_DARK}; border-top:1px solid {BORDER};"
-            " border-radius:0px; }}"
+            " border-radius:0px; }"
         )
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
@@ -139,7 +139,8 @@ class ExplainerPanel(QFrame):
         root.addWidget(self._body)
 
         # Hide the whole panel if no content is configured for this page
-        self.setVisible(bool(content))
+        if not content:
+            self.hide()
 
     def _on_toggle(self, checked: bool) -> None:
         self._toggle_btn.setText(

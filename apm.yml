@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.7.4
+version: 1.7.5
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -984,6 +984,40 @@ rules:
       Applies to: subprocess timeout removal, capture_output substitution,
       temp-file PIPE workarounds — any approach tried once and confirmed
       failed must not be tried again in the same session.
+
+  - id: RULE-DBG5
+    title: "FOUC / ghost window diagnosis — inject a global Show event filter before guessing layout causes"
+    severity: blocking
+    description: >
+      When a FOUC (Flash of Unstyled Content), 0x0 phantom window, or premature
+      render is reported at startup, do NOT start modifying layout constraints,
+      margins, or parent assignments until the culprit widget is identified.
+
+      Immediately after `app = QApplication(sys.argv)` in app.py, inject a
+      temporary global event filter that logs every Show event:
+
+        from PyQt6.QtCore import QObject, QEvent
+        class _ShowTracker(QObject):
+            def eventFilter(self, obj, event):
+                if event.type() == QEvent.Type.Show:
+                    print(f"SHOW: {obj.metaObject().className()} name={obj.objectName()}")
+                return False
+        _tracker = _ShowTracker()
+        app.installEventFilter(_tracker)
+
+      Run the app and read the terminal. The widget that prints before the main
+      window is fully wired is the culprit. Use its objectName() to locate it
+      in the codebase. Common root causes:
+        - setVisible(True) or show() called in __init__ of a child widget
+        - Parent set to None on a widget added to a layout (causes a top-level window)
+        - restoreGeometry() called before show() triggering a ShowWindow internally
+
+      Remove the filter once the culprit is found — it must never ship in production.
+
+      This technique was the only reliable method to locate a 0x0 ghost window that
+      caused hours of failed layout-constraint attempts (May 2026). The confirmed
+      culprit was ExplainerPanel.__init__ calling self.setVisible(bool(content)),
+      which forced an early render whenever the page_id had content.
 
   # ── Windows Platform Rules ─────────────────────────────────────────────────
   - id: RULE-WIN1
