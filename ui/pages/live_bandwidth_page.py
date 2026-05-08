@@ -184,7 +184,7 @@ class LiveBandwidthPage(QWidget):
         self._fig.subplots_adjust(left=0.06, right=0.99, top=0.93, bottom=0.15)
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")
-        self._canvas.setMinimumHeight(220)
+        self._canvas.setMinimumHeight(80)
         chart_lay.addWidget(self._canvas)
         root.addWidget(chart_frame, 2)
 

@@ -92,6 +92,15 @@ def test_build_sh_version(canonical):
     )
 
 
+def test_claude_md_version(canonical):
+    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    m = re.search(r'Current version:\s*\*\*v([^*]+)\*\*', text)
+    assert m, "Could not find 'Current version:' in CLAUDE.md"
+    assert m.group(1) == canonical, (
+        f"CLAUDE.md Current version={m.group(1)!r} does not match app.py {canonical!r}"
+    )
+
+
 def test_appxmanifest_msix_version_format(canonical):
     """
     MSIX version MUST be exactly 4 parts: X.Y.Z.W format.

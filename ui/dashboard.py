@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QSizePolicy,
     QStackedWidget,
     QStatusBar,
     QTableWidget,
@@ -1200,7 +1201,7 @@ class Dashboard(QMainWindow):
         self._notif_router = notif_router   # NotificationRouter | None
         self._maint_manager = maint_manager # MaintenanceWindowManager | None
         self.setWindowTitle("NetSentinel  —  Network Security Scanner & Monitor")
-        self.setMinimumSize(1100, 720)
+        self.setMinimumSize(900, 600)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setStyleSheet(MAIN_STYLE)
         self._maximize_btn = None   # set by _build_header; updated in changeEvent
@@ -2325,6 +2326,8 @@ class Dashboard(QMainWindow):
         self._nav.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._nav.customContextMenuRequested.connect(self._nav_context_menu)
         self._stack = QStackedWidget()
+        self._stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._stack.setMinimumSize(0, 0)
         # Pre-register HomePage so _nav_ref() can find it via indexOf()
         self._stack.addWidget(self._home_page)
         self._stack.addWidget(self._diagnosis_page)
@@ -3901,7 +3904,7 @@ class Dashboard(QMainWindow):
         self._m5_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m5_status)
         self._graph = LiveGraphWidget()
-        self._graph.setMinimumHeight(220)
+        self._graph.setMinimumHeight(80)
         lay.addWidget(self._graph, 2)
         card, card_body = _make_card("Detected Outages")
         self._m5_outage_table = _table([
@@ -6380,15 +6383,17 @@ class Dashboard(QMainWindow):
         # Window geometry
         geom_b64 = s.value("window/geometry", "")
         was_maximized = s.value("window/maximized", "False") == "True"
+        # Fresh-install fallback — prevents starting maximized with no saved geometry.
+        self.resize(1280, 800)
         if geom_b64:
             try:
                 self.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
             except Exception:
                 pass
-        # Explicit maximize — restoreGeometry before show() doesn't reliably
-        # restore the maximized state on frameless Windows.
-        if was_maximized:
-            self.showMaximized()
+            # Explicit maximize — restoreGeometry before show() doesn't reliably
+            # restore the maximized state on frameless Windows.
+            if was_maximized:
+                self.showMaximized()
         # Sidebar nav state
         if s.value("nav/collapsed", "False") == "True" and not self._nav_collapsed:
             self._toggle_sidebar()

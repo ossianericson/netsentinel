@@ -106,6 +106,16 @@ def bump(ver: str) -> None:
          rf'\g<1>{ver}',
          count=1)
 
+    # CLAUDE.md  ── "Current version" marker and version history chain
+    _sub(ROOT / "CLAUDE.md",
+         rf'(Current version:\s*\*\*v){_VER}(\*\*)',
+         rf'\g<1>{ver}\g<2>')
+    # Appends new version to end of the history line: "... → vX.Y.Z" → "... → vX.Y.Z → vNEW"
+    _sub(ROOT / "CLAUDE.md",
+         rf'(Version history \(condensed\):.*→ v)({_VER})$',
+         rf'\g<1>\g<2> → v{ver}',
+         re.MULTILINE)
+
     # ── verify ────────────────────────────────────────────────────────────────
     print("\nRunning version consistency tests…")
     result = subprocess.run(

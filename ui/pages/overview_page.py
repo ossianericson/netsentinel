@@ -47,6 +47,8 @@ from ui.styles import (
 _MIME_TYPE    = "application/x-netsentinel-tile"
 _COLS         = 3
 _SETTINGS_KEY = "overview/tile_order"
+_TILE_HEIGHT  = 175   # uniform fixed height for every tile
+_LAYOUT_VER   = 2     # bump when _DEFAULT_ORDER changes; triggers a one-time reset
 
 
 # ── Animated count label ──────────────────────────────────────────────────────
@@ -96,6 +98,7 @@ class _BaseTile(QFrame):
 
     TILE_ID    = "base"
     TILE_LABEL = "Tile"
+    TILE_ICON  = "◈"
     MIN_HEIGHT = 140
 
     def __init__(
@@ -113,7 +116,7 @@ class _BaseTile(QFrame):
         self._drag_start: Optional[QPoint] = None
 
         self.setObjectName("overviewTile")
-        self.setMinimumHeight(self.MIN_HEIGHT)
+        self.setFixedHeight(_TILE_HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setAcceptDrops(True)
         self._setup_frame()
@@ -139,6 +142,14 @@ class _BaseTile(QFrame):
         tb = QHBoxLayout(title_bar)
         tb.setContentsMargins(10, 0, 8, 0)
         tb.setSpacing(4)
+
+        _icon_lbl = QLabel(self.TILE_ICON)
+        _icon_lbl.setFixedSize(20, 20)
+        _icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _icon_lbl.setStyleSheet(
+            f"color:{ACCENT}; font-size:13px; border:none; background:transparent;"
+        )
+        tb.addWidget(_icon_lbl)
 
         self._title_lbl = QLabel(self.TILE_LABEL)
         self._title_lbl.setStyleSheet(
@@ -263,6 +274,7 @@ class _BaseTile(QFrame):
 class DeviceCountTile(_BaseTile):
     TILE_ID    = "device_count"
     TILE_LABEL = "Devices on Network"
+    TILE_ICON  = "⬡"
 
     def _build_body(self) -> None:
         self._count_lbl = _AnimatedNumberLabel("–", parent=self)
@@ -295,6 +307,7 @@ class DeviceCountTile(_BaseTile):
 class ServiceStatusTile(_BaseTile):
     TILE_ID    = "service_status"
     TILE_LABEL = "Service Heartbeat"
+    TILE_ICON  = "◆"
 
     def _build_body(self) -> None:
         row = QHBoxLayout()
@@ -342,6 +355,7 @@ class ServiceStatusTile(_BaseTile):
 class TlsStatusTile(_BaseTile):
     TILE_ID    = "tls_status"
     TILE_LABEL = "TLS Certificates"
+    TILE_ICON  = "◍"
 
     def _build_body(self) -> None:
         grid = QGridLayout()
@@ -395,6 +409,7 @@ class TlsStatusTile(_BaseTile):
 class RttSummaryTile(_BaseTile):
     TILE_ID    = "rtt_summary"
     TILE_LABEL = "Network Latency"
+    TILE_ICON  = "◷"
 
     def _build_body(self) -> None:
         row = QHBoxLayout()
@@ -451,6 +466,8 @@ class RttSummaryTile(_BaseTile):
 class NetworkGradeTile(_BaseTile):
     TILE_ID    = "network_grade"
     TILE_LABEL = "Network Grade"
+    TILE_ICON  = "◈"
+    MIN_HEIGHT = 160
     _GRADE_COLOUR = {
         "A": GREEN, "B": GREEN, "C": AMBER, "D": RED, "F": RED,
     }
@@ -484,69 +501,107 @@ class NetworkGradeTile(_BaseTile):
         self._sub_lbl.setText(f"Score: {score:.0f} / 100" if score else "")
 
 
+class _AlertRow(QFrame):
+    """Single clickable alert row in the AlertFeedTile."""
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._active = False
+        self.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout(self)
+        row.setSpacing(6)
+        row.setContentsMargins(4, 1, 4, 1)
+        self.bar = QLabel("▌")
+        self.bar.setFixedWidth(10)
+        self.bar.setStyleSheet(f"font-size:14px; color:{TEXT_SECONDARY}; border:none;")
+        self.msg = QLabel("–")
+        self.msg.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+        row.addWidget(self.bar)
+        row.addWidget(self.msg, 1)
+
+    def set_active(self, active: bool) -> None:
+        self._active = active
+        self.setCursor(
+            Qt.CursorShape.PointingHandCursor if active else Qt.CursorShape.ArrowCursor
+        )
+
+    def mousePressEvent(self, e) -> None:
+        if self._active and e.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(e)
+
+    def enterEvent(self, e) -> None:
+        if self._active:
+            self.setStyleSheet("background: rgba(255,255,255,0.06); border-radius:3px;")
+        super().enterEvent(e)
+
+    def leaveEvent(self, e) -> None:
+        self.setStyleSheet("")
+        super().leaveEvent(e)
+
+
 class AlertFeedTile(_BaseTile):
     TILE_ID    = "alert_feed"
     TILE_LABEL = "Recent Alerts"
+    TILE_ICON  = "◬"
     MIN_HEIGHT = 165
     _SEV_COLOUR = {"CRITICAL": RED, "WARNING": AMBER, "INFO": ACCENT}
 
+    #: Emitted when the user clicks an active alert row. (rule_type, host)
+    alert_clicked = pyqtSignal(str, str)
+
     def _build_body(self) -> None:
-        self._row_widgets: list[tuple[QLabel, QLabel]] = []
-        for _ in range(5):
-            dot = QLabel("●")
-            dot.setFixedWidth(14)
-            dot.setStyleSheet(
-                f"font-size:9px; color:{TEXT_SECONDARY}; border:none;"
-            )
-            msg = QLabel("–")
-            msg.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-            )
-            row = QHBoxLayout()
-            row.setSpacing(4)
-            row.setContentsMargins(0, 0, 0, 0)
-            row.addWidget(dot)
-            row.addWidget(msg, 1)
-            self._body_layout.addLayout(row)
-            self._row_widgets.append((dot, msg))
+        self._rows: list[_AlertRow] = []
+        for i in range(5):
+            row = _AlertRow(self)
+            row.clicked.connect(lambda checked=False, idx=i: self._on_row_click(idx))
+            self._body_layout.addWidget(row)
+            self._rows.append(row)
         self._body_layout.addStretch()
         self._alerts: list[dict] = []
+
+    def _on_row_click(self, idx: int) -> None:
+        if idx < len(self._alerts):
+            a = self._alerts[idx]
+            self.alert_clicked.emit(a.get("rule_type", ""), a.get("host", ""))
 
     def push_alert(self, alert) -> None:
         if isinstance(alert, dict):
             d = alert
         else:
             d = {
-                "severity": alert.severity,
-                "message":  alert.message,
-                "ts":       alert.ts,
+                "severity":  alert.severity,
+                "message":   alert.message,
+                "ts":        alert.ts,
+                "rule_type": getattr(alert, "rule_type", ""),
+                "host":      getattr(alert, "host", ""),
             }
         self._alerts.insert(0, d)
         self._alerts = self._alerts[:5]
         self._redraw()
 
     def _redraw(self) -> None:
-        for i, (dot, msg) in enumerate(self._row_widgets):
+        for i, row in enumerate(self._rows):
             if i < len(self._alerts):
                 a      = self._alerts[i]
                 colour = self._SEV_COLOUR.get(a.get("severity", "INFO"), TEXT_SECONDARY)
                 text   = a.get("message", "")
-                dot.setStyleSheet(f"font-size:9px; color:{colour}; border:none;")
-                msg.setText(text[:58] + "…" if len(text) > 58 else text)
-                msg.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+                row.bar.setStyleSheet(f"font-size:14px; color:{colour}; border:none;")
+                row.msg.setText(text[:55] + "…" if len(text) > 55 else text)
+                row.msg.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+                row.set_active(True)
             else:
-                dot.setStyleSheet(
-                    f"font-size:9px; color:{TEXT_SECONDARY}; border:none;"
-                )
-                msg.setText("–")
-                msg.setStyleSheet(
-                    f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-                )
+                row.bar.setStyleSheet(f"font-size:14px; color:{TEXT_SECONDARY}; border:none;")
+                row.msg.setText("–")
+                row.msg.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+                row.set_active(False)
 
 
 class EventFeedTile(_BaseTile):
     TILE_ID    = "event_feed"
     TILE_LABEL = "Device Events"
+    TILE_ICON  = "◉"
     MIN_HEIGHT = 165
 
     def _build_body(self) -> None:
@@ -595,6 +650,7 @@ class HaDevicesTile(_BaseTile):
 
     TILE_ID    = "ha_devices"
     TILE_LABEL = "Home Automation"
+    TILE_ICON  = "⌂"
     MIN_HEIGHT = 160
 
     def _build_body(self) -> None:
@@ -653,6 +709,7 @@ class LiveBandwidthTile(_BaseTile):
 
     TILE_ID    = "live_bandwidth"
     TILE_LABEL = "Live Bandwidth"
+    TILE_ICON  = "⇅"
     MIN_HEIGHT = 120
 
     def _build_body(self) -> None:
@@ -778,6 +835,7 @@ class _DnsPoller(QThread):
 class DnsStabilityTile(_BaseTile):
     TILE_ID    = "dns_stability"
     TILE_LABEL = "DNS Stability"
+    TILE_ICON  = "◎"
     MIN_HEIGHT = 140
 
     def _build_body(self) -> None:
@@ -856,8 +914,7 @@ _TILE_CLASSES: Dict[str, type] = {
     ]
 }
 
-# Tiles shown for every new user — universally meaningful with no setup required.
-# Fleet uptime, service heartbeat, TLS, and HA are opt-in via Edit Layout.
+# All tiles shown by default — each has a graceful empty state when data is absent.
 _DEFAULT_ORDER: List[str] = [
     "device_count",
     "live_bandwidth",
@@ -866,6 +923,8 @@ _DEFAULT_ORDER: List[str] = [
     "network_grade",
     "alert_feed",
     "event_feed",
+    "service_status",
+    "ha_devices",
 ]
 
 
@@ -951,8 +1010,7 @@ class OverviewPage(QWidget):
         )
         self._share_btn = QPushButton("Share Card ▾")
         self._share_btn.setStyleSheet(_btn_qss)
-        self._share_btn.setToolTip("Export a compact network health card as PNG or HTML")
-        self._share_btn.setEnabled(False)
+        self._share_btn.setToolTip("Export network health card as PNG or HTML")
         self._share_btn.clicked.connect(self._show_share_menu)
         hdr.addWidget(self._share_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
@@ -968,6 +1026,25 @@ class OverviewPage(QWidget):
         self._edit_btn.toggled.connect(self._on_edit_toggled)
         hdr.addWidget(self._edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
         root.addLayout(hdr)
+
+        # Hero summary strip — always visible, 4 stat pills
+        hero = QHBoxLayout()
+        hero.setSpacing(8)
+        _pill_qss = (
+            f"QLabel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:4px 14px;"
+            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
+        )
+        self._hero_devices = QLabel("⬡  Devices: —")
+        self._hero_grade   = QLabel("◈  Grade: —")
+        self._hero_alerts  = QLabel("◬  Alerts: 0")
+        self._hero_svc     = QLabel("◆  Services: —")
+        for _pill in (self._hero_devices, self._hero_grade,
+                      self._hero_alerts, self._hero_svc):
+            _pill.setStyleSheet(_pill_qss)
+            hero.addWidget(_pill)
+        hero.addStretch()
+        root.addLayout(hero)
 
         # Add-tile strip — only visible in edit mode when tiles are hidden
         self._add_strip = QWidget()
@@ -1012,13 +1089,25 @@ class OverviewPage(QWidget):
         for tile_id, cls in _TILE_CLASSES.items():
             if tile_id not in self._tiles:
                 # RULE 17: parent=grid_container; RULE 18: named local var
-                self._tiles[tile_id] = cls(
+                tile = cls(
                     store=self._store,
                     swap_cb=self.swap_tiles,
                     remove_cb=self._remove_tile,
                     parent=self._grid_container,
                 )
+                self._tiles[tile_id] = tile
+        alert_tile = self._tiles.get("alert_feed")
+        if alert_tile is not None:
+            alert_tile.alert_clicked.connect(self._on_alert_navigate)
         self._reflow()
+
+    def _on_alert_navigate(self, rule_type: str, host: str) -> None:
+        if rule_type == "SERVICE_DOWN":
+            self.navigate_to.emit("Service Heartbeat")
+        elif rule_type == "CERT_EXPIRY":
+            self.navigate_to.emit("TLS & exposure")
+        else:
+            self.navigate_to.emit("Devices on Network")
 
     def _reflow(self) -> None:
         """Remove all grid items (hide tiles, delete filler), then re-add in order."""
@@ -1030,8 +1119,12 @@ class OverviewPage(QWidget):
             if w is self._filler:
                 self._filler = None
                 w.deleteLater()
-            else:
-                w.hide()
+
+        # Hide every tile unconditionally — catches tiles that were never added to the
+        # layout (e.g. tiles removed from _DEFAULT_ORDER but still in _TILE_CLASSES).
+        # Without this, parented-but-unlayout'd widgets render at (0,0) of the container.
+        for tile in self._tiles.values():
+            tile.hide()
 
         visible = [self._tiles[tid] for tid in self._tile_order if tid in self._tiles]
         for idx, tile in enumerate(visible):
@@ -1086,6 +1179,17 @@ class OverviewPage(QWidget):
         t = self._tiles.get("rtt_summary")
         if t:
             t.update_cycle(rtts)
+        total = len(states)
+        down  = sum(1 for s in states.values() if s == "DOWN")
+        pill_colour = RED if down else (AMBER if total == 0 else GREEN)
+        self._hero_devices.setStyleSheet(
+            f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+            f" border-radius:4px; padding:4px 14px;"
+            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
+        )
+        self._hero_devices.setText(
+            f"⬡  Devices: {total}" + (f"  ({down} ↓)" if down else "")
+        )
 
     @pyqtSlot(list)
     def on_cert_done(self, _results: list) -> None:
@@ -1098,16 +1202,42 @@ class OverviewPage(QWidget):
         t = self._tiles.get("service_status")
         if t:
             t.update_services(results)
+        if results:
+            up  = sum(1 for r in results if (r.get("status") if isinstance(r, dict) else getattr(r, "status", "")) == "UP")
+            dn  = len(results) - up
+            pill_colour = RED if dn else GREEN
+            self._hero_svc.setStyleSheet(
+                f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+                f" border-radius:4px; padding:4px 14px;"
+                f" font-size:11px; color:{TEXT_PRIMARY}; }}"
+            )
+            self._hero_svc.setText(
+                f"◆  Services: {up} up" + (f" / {dn} ↓" if dn else "")
+            )
 
     def on_alert(self, alert) -> None:
         t = self._tiles.get("alert_feed")
         if t:
             t.push_alert(alert)
+        # Update hero pill alert count
+        count_text = self._hero_alerts.text()
+        try:
+            n = int(count_text.split(":")[-1].strip().split()[0])
+        except (ValueError, IndexError):
+            n = 0
+        n += 1
+        sev = alert.get("severity", "INFO") if isinstance(alert, dict) else getattr(alert, "severity", "INFO")
+        pill_colour = RED if sev == "CRITICAL" else AMBER if sev == "WARNING" else ACCENT
+        self._hero_alerts.setStyleSheet(
+            f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+            f" border-radius:4px; padding:4px 14px;"
+            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
+        )
+        self._hero_alerts.setText(f"◬  Alerts: {n}")
 
     def set_card_data(self, card_data) -> None:
         """Receive a CardData instance from the dashboard after each benchmark."""
         self._card_data = card_data
-        self._share_btn.setEnabled(True)
 
     def _show_share_menu(self) -> None:
         menu = QMenu(self)
@@ -1117,8 +1247,9 @@ class OverviewPage(QWidget):
         menu.exec(self._share_btn.mapToGlobal(self._share_btn.rect().bottomLeft()))
 
     def _render_pixmap(self):
-        from modules.diagnostic_card import render_card_widget
-        widget = render_card_widget(self._card_data)
+        from modules.diagnostic_card import render_card_widget, build_card_data
+        card = self._card_data or build_card_data(None, None, self._store)
+        widget = render_card_widget(card)
         widget.show()          # must be visible for grab() to paint correctly
         widget.hide()
         return widget.grab()
@@ -1158,11 +1289,31 @@ class OverviewPage(QWidget):
         t = self._tiles.get("network_grade")
         if t:
             t.update_grade(grade, score)
+        letter = grade[:1].upper() if grade else "–"
+        _grade_colours = {"A": GREEN, "B": GREEN, "C": AMBER, "D": RED, "F": RED}
+        pill_colour = _grade_colours.get(letter, BORDER)
+        self._hero_grade.setStyleSheet(
+            f"QLabel {{ background:{BG_CARD}; border:1px solid {pill_colour};"
+            f" border-radius:4px; padding:4px 14px;"
+            f" font-size:11px; color:{TEXT_PRIMARY}; }}"
+        )
+        self._hero_grade.setText(f"◈  Grade: {letter}")
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def _load_order(self) -> List[str]:
-        qs    = QSettings("NetSentinel", "NetSentinel")
+        qs = QSettings("NetSentinel", "NetSentinel")
+        # One-time migration: reset to current _DEFAULT_ORDER when layout version changes.
+        try:
+            stored_ver = int(qs.value("overview/layout_version", "1") or "1")
+        except (ValueError, TypeError):
+            stored_ver = 1
+        if stored_ver < _LAYOUT_VER:
+            qs.setValue("overview/layout_version", str(_LAYOUT_VER))
+            qs.remove(_SETTINGS_KEY)
+            qs.remove("overview/hidden_tiles")
+            self._hidden = set()
+            return list(_DEFAULT_ORDER)
         saved = qs.value(_SETTINGS_KEY, None)
         if saved:
             order = [s for s in str(saved).split(",") if s in _TILE_CLASSES]

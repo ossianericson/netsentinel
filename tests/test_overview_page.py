@@ -363,20 +363,17 @@ class TestAlertFeedTile:
 
     def test_initial_placeholders(self):
         t = self._make()
-        _, msg = t._row_widgets[0]
-        assert msg.text() == "–"
+        assert t._rows[0].msg.text() == "–"
 
     def test_push_one_alert(self):
         t = self._make()
         t.push_alert(self._alert(msg="Port open"))
-        _, msg = t._row_widgets[0]
-        assert "Port open" in msg.text()
+        assert "Port open" in t._rows[0].msg.text()
 
     def test_push_alert_dict(self):
         t = self._make()
         t.push_alert({"severity": "CRITICAL", "message": "Host down", "ts": 1})
-        _, msg = t._row_widgets[0]
-        assert "Host down" in msg.text()
+        assert "Host down" in t._rows[0].msg.text()
 
     def test_push_alert_dataclass(self):
         alert = MagicMock()
@@ -385,8 +382,7 @@ class TestAlertFeedTile:
         alert.ts       = 100
         t = self._make()
         t.push_alert(alert)
-        _, msg = t._row_widgets[0]
-        assert "High latency" in msg.text()
+        assert "High latency" in t._rows[0].msg.text()
 
     def test_max_five_alerts_kept(self):
         t = self._make()
@@ -398,35 +394,49 @@ class TestAlertFeedTile:
         t = self._make()
         t.push_alert(self._alert(msg="first"))
         t.push_alert(self._alert(msg="second"))
-        _, msg = t._row_widgets[0]
-        assert "second" in msg.text()
+        assert "second" in t._rows[0].msg.text()
 
     def test_long_message_truncated(self):
         t = self._make()
         long_msg = "X" * 100
         t.push_alert(self._alert(msg=long_msg))
-        _, msg = t._row_widgets[0]
-        assert len(msg.text()) < 65
+        assert len(t._rows[0].msg.text()) < 65
 
     def test_critical_severity_red_dot(self):
         from ui.styles import RED
         t = self._make()
         t.push_alert(self._alert(sev="CRITICAL"))
-        dot, _ = t._row_widgets[0]
-        assert RED in dot.styleSheet()
+        assert RED in t._rows[0].bar.styleSheet()
 
     def test_warning_severity_amber_dot(self):
         from ui.styles import AMBER
         t = self._make()
         t.push_alert(self._alert(sev="WARNING"))
-        dot, _ = t._row_widgets[0]
-        assert AMBER in dot.styleSheet()
+        assert AMBER in t._rows[0].bar.styleSheet()
 
     def test_empty_slots_remain_placeholder(self):
         t = self._make()
         t.push_alert(self._alert())  # only 1 alert
-        _, msg = t._row_widgets[4]
-        assert msg.text() == "–"
+        assert t._rows[4].msg.text() == "–"
+
+    def test_alert_clicked_signal_emits_rule_type_and_host(self):
+        t = self._make()
+        t.push_alert({"severity": "WARNING", "message": "Host down",
+                      "ts": 0, "rule_type": "HOST_DOWN", "host": "10.0.0.1"})
+        received = []
+        t.alert_clicked.connect(lambda rt, h: received.append((rt, h)))
+        t._rows[0].clicked.emit()
+        assert received == [("HOST_DOWN", "10.0.0.1")]
+
+    def test_alert_row_not_active_when_empty(self):
+        t = self._make()
+        assert not t._rows[0]._active
+
+    def test_alert_row_active_after_push(self):
+        t = self._make()
+        t.push_alert(self._alert())
+        assert t._rows[0]._active
+        assert not t._rows[1]._active
 
 
 # ---------------------------------------------------------------------------
@@ -636,8 +646,7 @@ class TestDataSlots:
     def test_on_alert_updates_alert_feed(self):
         page = self._page()
         page.on_alert({"severity": "WARNING", "message": "Something bad", "ts": 0})
-        _, msg = page._tiles["alert_feed"]._row_widgets[0]
-        assert "Something bad" in msg.text()
+        assert "Something bad" in page._tiles["alert_feed"]._rows[0].msg.text()
 
     def test_on_grade_updates_network_grade(self):
         page = self._page()
@@ -656,22 +665,42 @@ class TestDataSlots:
 # ---------------------------------------------------------------------------
 # OverviewPage — QSettings persistence
 # ---------------------------------------------------------------------------
+def _qs_mock(tile_order_csv=None, hidden_csv=None, layout_ver=None):
+    """Return a QSettings mock with per-key value dispatch."""
+    from ui.pages.overview_page import _LAYOUT_VER
+    ver = str(layout_ver if layout_ver is not None else _LAYOUT_VER)
+
+    def _value(key, default=None):
+        if key == "overview/layout_version":
+            return ver
+        if key == "overview/hidden_tiles":
+            return hidden_csv
+        if key == "overview/tile_order":
+            return tile_order_csv
+        return default
+
+    mock = MagicMock()
+    mock.value.side_effect = _value
+    return mock
+
+
 class TestPersistence:
     def test_save_order_called_on_swap(self):
         with patch("ui.pages.overview_page.QSettings") as MockQS:
-            inst = MockQS.return_value
-            inst.value.return_value = None
+            MockQS.return_value = _qs_mock()
             page = _make_overview()
             a = page._tile_order[0]
             b = page._tile_order[1]
             page.swap_tiles(a, b)
-            inst.setValue.assert_any_call("overview/tile_order", ",".join(page._tile_order))
+            MockQS.return_value.setValue.assert_any_call(
+                "overview/tile_order", ",".join(page._tile_order)
+            )
 
     def test_load_order_from_settings(self):
         from ui.pages.overview_page import _DEFAULT_ORDER
-        saved_order = ",".join(reversed(_DEFAULT_ORDER))
+        saved = ",".join(reversed(_DEFAULT_ORDER))
         with patch("ui.pages.overview_page.QSettings") as MockQS:
-            MockQS.return_value.value.return_value = saved_order
+            MockQS.return_value = _qs_mock(tile_order_csv=saved)
             page = _make_overview()
         assert page._tile_order == list(reversed(_DEFAULT_ORDER))
 
@@ -679,15 +708,185 @@ class TestPersistence:
         from ui.pages.overview_page import _DEFAULT_ORDER
         bad = "device_count,nonexistent_tile," + ",".join(_DEFAULT_ORDER[1:])
         with patch("ui.pages.overview_page.QSettings") as MockQS:
-            MockQS.return_value.value.return_value = bad
+            MockQS.return_value = _qs_mock(tile_order_csv=bad)
             page = _make_overview()
         assert "nonexistent_tile" not in page._tile_order
 
     def test_load_order_appends_new_tiles_not_in_saved(self):
-        # Simulate saved order missing event_feed
         from ui.pages.overview_page import _DEFAULT_ORDER
         partial = ",".join(t for t in _DEFAULT_ORDER if t != "event_feed")
         with patch("ui.pages.overview_page.QSettings") as MockQS:
-            MockQS.return_value.value.return_value = partial
+            MockQS.return_value = _qs_mock(tile_order_csv=partial)
             page = _make_overview()
         assert "event_feed" in page._tile_order
+
+
+# ---------------------------------------------------------------------------
+# Layout migration
+# ---------------------------------------------------------------------------
+class TestLayoutMigration:
+    def test_old_version_resets_to_default_order(self):
+        from ui.pages.overview_page import _DEFAULT_ORDER
+        stale = ",".join(reversed(_DEFAULT_ORDER))
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock(tile_order_csv=stale, layout_ver=1)
+            page = _make_overview()
+        assert page._tile_order == list(_DEFAULT_ORDER)
+
+    def test_current_version_preserves_saved_order(self):
+        from ui.pages.overview_page import _DEFAULT_ORDER
+        saved = ",".join(reversed(_DEFAULT_ORDER))
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock(tile_order_csv=saved)
+            page = _make_overview()
+        assert page._tile_order == list(reversed(_DEFAULT_ORDER))
+
+    def test_corrupt_version_value_treated_as_old(self):
+        """Non-numeric layout_version falls back to 1 and triggers migration."""
+        from ui.pages.overview_page import _DEFAULT_ORDER
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock(layout_ver="corrupt_string")
+            page = _make_overview()
+        assert page._tile_order == list(_DEFAULT_ORDER)
+
+
+# ---------------------------------------------------------------------------
+# Tile icons
+# ---------------------------------------------------------------------------
+class TestTileIcons:
+    def test_all_tile_classes_have_tile_icon(self):
+        from ui.pages.overview_page import _TILE_CLASSES
+        for tid, cls in _TILE_CLASSES.items():
+            assert hasattr(cls, "TILE_ICON"), f"{cls.__name__} missing TILE_ICON"
+            assert isinstance(cls.TILE_ICON, str) and cls.TILE_ICON, \
+                f"{cls.__name__}.TILE_ICON is empty"
+
+
+# ---------------------------------------------------------------------------
+# Uniform tile height
+# ---------------------------------------------------------------------------
+class TestTileHeight:
+    def test_all_tiles_same_fixed_height(self):
+        from ui.pages.overview_page import _TILE_CLASSES, _TILE_HEIGHT
+        for tid, cls in _TILE_CLASSES.items():
+            t = cls()
+            assert t.minimumHeight() == _TILE_HEIGHT, \
+                f"{cls.__name__} minimumHeight {t.minimumHeight()} != {_TILE_HEIGHT}"
+            assert t.maximumHeight() == _TILE_HEIGHT, \
+                f"{cls.__name__} maximumHeight {t.maximumHeight()} != {_TILE_HEIGHT}"
+
+
+# ---------------------------------------------------------------------------
+# _reflow ghost-widget fix
+# ---------------------------------------------------------------------------
+class TestReflowGhostFix:
+    def test_tiles_not_in_order_are_hidden(self):
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock()
+            page = _make_overview()
+        for tid, tile in page._tiles.items():
+            if tid in page._tile_order:
+                assert not tile.isHidden(), f"{tid} should not be hidden"
+            else:
+                assert tile.isHidden(), f"{tid} should be hidden"
+
+    def test_removed_tile_hidden_after_reflow(self):
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock()
+            page = _make_overview()
+        first = page._tile_order[0]
+        page._remove_tile(first)
+        assert not page._tiles[first].isVisible()
+
+
+# ---------------------------------------------------------------------------
+# Hero strip
+# ---------------------------------------------------------------------------
+class TestHeroStrip:
+    def _page(self):
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock()
+            return _make_overview()
+
+    def test_hero_devices_updates_on_cycle_done(self):
+        page = self._page()
+        page.on_cycle_done({"states": {"a": "UP", "b": "UP", "c": "DOWN"}, "rtts": {}})
+        assert "3" in page._hero_devices.text()
+
+    def test_hero_devices_shows_down_count(self):
+        page = self._page()
+        page.on_cycle_done({"states": {"a": "DOWN"}, "rtts": {}})
+        assert "↓" in page._hero_devices.text()
+
+    def test_hero_grade_updates_on_grade(self):
+        page = self._page()
+        page.on_grade("B", 80.0)
+        assert "B" in page._hero_grade.text()
+
+    def test_hero_alerts_increments_on_alert(self):
+        page = self._page()
+        page.on_alert({"severity": "WARNING", "message": "test", "ts": 0})
+        assert "1" in page._hero_alerts.text()
+        page.on_alert({"severity": "INFO", "message": "test2", "ts": 1})
+        assert "2" in page._hero_alerts.text()
+
+    def test_hero_svc_updates_on_svc_done(self):
+        page = self._page()
+        page.on_svc_done([{"status": "UP"}, {"status": "DOWN"}])
+        assert "1 up" in page._hero_svc.text()
+
+
+# ---------------------------------------------------------------------------
+# Alert navigation
+# ---------------------------------------------------------------------------
+class TestAlertNavigation:
+    def _page(self):
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock()
+            return _make_overview()
+
+    def test_device_alert_navigates_to_devices_page(self):
+        page = self._page()
+        received = []
+        page.navigate_to.connect(received.append)
+        page._on_alert_navigate("HOST_DOWN", "10.0.0.1")
+        assert received == ["Devices on Network"]
+
+    def test_service_alert_navigates_to_service_heartbeat(self):
+        page = self._page()
+        received = []
+        page.navigate_to.connect(received.append)
+        page._on_alert_navigate("SERVICE_DOWN", "")
+        assert received == ["Service Heartbeat"]
+
+    def test_cert_alert_navigates_to_tls_page(self):
+        page = self._page()
+        received = []
+        page.navigate_to.connect(received.append)
+        page._on_alert_navigate("CERT_EXPIRY", "")
+        assert received == ["TLS & exposure"]
+
+    def test_unknown_rule_type_navigates_to_devices_page(self):
+        page = self._page()
+        received = []
+        page.navigate_to.connect(received.append)
+        page._on_alert_navigate("", "")
+        assert received == ["Devices on Network"]
+
+
+# ---------------------------------------------------------------------------
+# Share Card button
+# ---------------------------------------------------------------------------
+class TestShareCard:
+    def test_share_btn_enabled_by_default(self):
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock()
+            page = _make_overview()
+        assert page._share_btn.isEnabled()
+
+    def test_share_btn_still_enabled_after_set_card_data(self):
+        with patch("ui.pages.overview_page.QSettings") as MockQS:
+            MockQS.return_value = _qs_mock()
+            page = _make_overview()
+        page.set_card_data(MagicMock())
+        assert page._share_btn.isEnabled()

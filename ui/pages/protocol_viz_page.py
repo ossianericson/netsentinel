@@ -337,7 +337,7 @@ class ProtocolVizPage(QWidget):
 
         # The animation canvas
         self._canvas = ProtocolCanvas()
-        self._canvas.setMinimumHeight(280)
+        self._canvas.setMinimumHeight(120)
         self._canvas.step_changed.connect(self._on_step_changed)
         self._canvas.finished.connect(self._on_anim_finished)
         canvas_lay.addWidget(self._canvas, 1)
