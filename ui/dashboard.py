@@ -2347,38 +2347,24 @@ class Dashboard(QMainWindow):
         self._nav_collapsed:     bool = False
 
         # ── PINNED — top 7 most-used pages; always visible, no subgroups ──────────
-        # Pages registered here are added to the stack once; STANDARD aliases them.
         self._nav_add_section("Pinned", icon="📌")
-        _pin_overview_row = self._nav_add_page("⬡", "Overview",             self._overview_page)
-        _pin_dns_row      = self._nav_add_page("◎", "DNS & Outages",        m5)
-        _pin_bw_row       = self._nav_add_page("▲", "Live Bandwidth",       self._live_bandwidth_page)
-        _pin_speed_row    = self._nav_add_page("⚡", "Speed Test",           self._speed_test_page)
-        _pin_devices_row  = self._nav_add_page("⊞", "Devices on Network",   m1)
-        _pin_avail_row    = self._nav_add_page("⏷", "Availability History", self._history_page)
-        _pin_conns_row    = self._nav_add_page("⇄", "Active Connections",   self._connections_page)
+        self._nav_add_page("⬡", "Overview",             self._overview_page)
+        self._nav_add_page("◎", "DNS & Outages",        m5)
+        self._nav_add_page("▲", "Live Bandwidth",       self._live_bandwidth_page)
+        self._nav_add_page("⚡", "Speed Test",           self._speed_test_page)
+        self._nav_add_page("⊞", "Devices on Network",   m1)
+        self._nav_add_page("⏷", "Availability History", self._history_page)
+        self._nav_add_page("⇄", "Active Connections",   self._connections_page)
 
-        # Helper: stack index for an already-pinned nav row
-        def _pidx(row: int) -> int:
-            return self._nav_row_to_page[row]
-
-        # ── STANDARD — full organised structure; pinned pages referenced as aliases ──
+        # ── STANDARD — full organised structure ───────────────────────────────────
         self._nav_add_section("Standard", icon="◼", collapsed_by_default=False)
-        self._nav_add_alias("🏠", "Overview", _pidx(_pin_overview_row))
 
         # Discover — expanded by default so the user immediately sees what's there
         self._nav_add_subgroup("Discover", icon="🖥", collapsed_by_default=False)
-        self._nav_add_alias("🖥", "Devices on Network",   _pidx(_pin_devices_row))
         self._nav_add_page ("〇", "WiFi Networks",        m4)
         self._nav_add_page ("ℹ",  "Network Info",         net)
         self._nav_add_page ("≡", "DHCP Lease Inventory", self._dhcp_lease_page)
         self._nav_add_page ("⊹", "DNS Zone Map",         self._dns_zone_page)
-        self._nav_current_subgroup = -1
-
-        # Live Monitor — expanded by default; shows the live-data pages immediately
-        self._nav_add_subgroup("Live Monitor", icon="📶", collapsed_by_default=False)
-        self._nav_add_alias("🔗", "Active Connections",   _pidx(_pin_conns_row))
-        self._nav_add_alias("📶", "Live Bandwidth",       _pidx(_pin_bw_row))
-        self._nav_add_alias("📡", "DNS & Outages",        _pidx(_pin_dns_row))
         self._nav_current_subgroup = -1
 
         # Threat Detection — collapsed; expand when you need security analysis
@@ -2390,7 +2376,6 @@ class Dashboard(QMainWindow):
 
         # Health & History — collapsed; historical data on demand
         self._nav_add_subgroup("Health & History", icon="◉")
-        self._nav_add_alias("🗓", "Availability History", _pidx(_pin_avail_row))
         self._nav_add_page ("∆", "Inventory Changes",    self._inventory_page)
         self._nav_add_page ("✓", "Uptime & SLA",         self._uptime_page)
         self._nav_add_page ("◉", "Service Heartbeat",    self._service_page)
@@ -2417,7 +2402,6 @@ class Dashboard(QMainWindow):
 
         # Tools — collapsed; utilities
         self._nav_add_subgroup("Tools", icon="⚡")
-        self._nav_add_alias("⚡", "Speed Test",          _pidx(_pin_speed_row))
         self._nav_add_page ("⌂", "Home Automation",     self._ha_page)
         _tools_heatmap_row = self._nav_add_page("◈", "WiFi Heatmap",       self._wifi_heatmap_page)
         _tools_geomap_row  = self._nav_add_page("⊕", "Geolocation Map",    self._geo_map_page)
@@ -3604,9 +3588,9 @@ class Dashboard(QMainWindow):
             rem = ""
             if self._m1_result:
                 for d in self._m1_result.get("devices", []):
-                    d_ip = getattr(d, "ip", d.get("ip","")) if not isinstance(d, dict) else d.get("ip","")
+                    d_ip = d.get("ip", "") if isinstance(d, dict) else getattr(d, "ip", "")
                     if d_ip == ip:
-                        rem = getattr(d, "remediation", d.get("remediation","")) if not isinstance(d, dict) else d.get("remediation","")
+                        rem = d.get("remediation", "") if isinstance(d, dict) else getattr(d, "remediation", "")
                         break
             self._show_how_to_fix(ip, rem or "No specific remediation available for this device.")
         elif chosen == act_copy_ip:
@@ -4715,6 +4699,10 @@ class Dashboard(QMainWindow):
         if not host:
             return
         from workers.scan_worker import PortScanWorker
+        if hasattr(self, "_ps_host"):
+            self._ps_host.setText(host)
+        if self._adv_tab_index_adv >= 0:
+            self._nav.setCurrentRow(self._adv_tab_index_adv)
         self._ps_table.setRowCount(0)
         mode = self._ps_mode.currentText().lower() if hasattr(self, "_ps_mode") else "normal"
         if hasattr(self, "_ps_status"):

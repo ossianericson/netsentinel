@@ -229,7 +229,7 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.7.6
+### v1.7.7
 
 - Protocol Visualizer — animated step-through of 9 real protocols (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); each step shows the packet name, frame detail, and a labelled dot travelling between nodes; play/pause/step controls; tabbed with a protocol context panel
 - Log Hub — live network logger output in a filterable table; streams real events as they happen; interesting events (DNS failures, slow gateway, consecutive connection failures) automatically generate a Lab Mode exercise surfaced as a home screen card
