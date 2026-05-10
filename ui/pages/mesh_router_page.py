@@ -344,6 +344,15 @@ class MeshRouterPage(QWidget):
 
     def _prepopulate_gateway(self) -> None:
         """Auto-fill gateway IP; then try to load a saved password for that host."""
+        from PyQt6.QtCore import QSettings
+        # Last-used mesh host is the most reliable key — stored on every successful scan.
+        # This is independent of gateway detection, which can fail at startup.
+        saved_host = QSettings("NetSentinel", "NetSentinel").value("mesh/last_host", "")
+        if saved_host:
+            self._ip_edit.setText(saved_host)
+            self._try_load_keyring(saved_host)
+            return
+        # Fall back: detect the default gateway (best-effort)
         try:
             from modules.rogue_device import _get_default_gateway
             gw = _get_default_gateway()
@@ -453,6 +462,11 @@ class MeshRouterPage(QWidget):
                     "Password saved securely in OS Credential Manager."
                 )
                 self._keyring_info_lbl.setVisible(True)
+        # Always persist the host address so startup can find the right keyring entry
+        # even when gateway auto-detection returns None or a different IP.
+        if host:
+            from PyQt6.QtCore import QSettings
+            QSettings("NetSentinel", "NetSentinel").setValue("mesh/last_host", host)
 
         self.scan_done.emit(data)
 

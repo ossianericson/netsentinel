@@ -130,7 +130,8 @@ All analysis runs 100% locally. Nothing leaves your machine unless you explicitl
 | IoT behaviour baseline | Learns normal traffic per IoT device; alerts on port scans, new destinations, and traffic rate spikes |
 | DHCP lease inventory | Lists all active DHCP leases; flags any rogue DHCP server on the segment |
 | Geolocation map | Plots internet-facing IPs on an offline world map using MaxMind GeoLite2-City — no API key, no external calls |
-| Topology diagram | Visual map of device relationships on your network |
+| Topology diagram | Visual topology diagram: flat star by default; upgrades to a three-tier mesh tree (Gateway → Satellites → Clients grouped by satellite) when Deco credentials are configured — devices invisible to the mesh attach directly to the gateway so nothing is dropped |
+| Mesh router integration | Pulls live data from your mesh gateway — Deco-assigned device names replace rDNS guesses in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download rates from the router's own counters. Runs silently after each scan when credentials are saved. TP-Link Deco fully supported; architecture supports Eero, Google Nest, Asus ZenWiFi, Netgear Orbi |
 | Automation hooks | Webhook and script triggers on network events — device down, high RTT, new device discovered |
 | REST API | Read-only local HTTP API at `http://127.0.0.1:8765` — query devices, alerts, and uptime from Home Assistant or scripts |
 | "What's Wrong?" diagnosis | One-click root-cause analysis across slow / dropping / can't-connect symptoms — sequences network, storm, rogue device, and STP checks then surfaces a prioritised plain-English finding |
@@ -229,8 +230,9 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.8.0
+### v1.9.0
 
+- Mesh router integration — live client data pulled directly from TP-Link Deco via its local API (no cloud, no account); Deco-assigned device names replace reverse-DNS hostnames in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download KB/s shown as a tooltip; credentials saved to OS keychain and the scan re-runs silently on every subsequent app start; Network Map upgrades to a three-tier mesh tree (Gateway → Satellites → Clients) when mesh data is present; WiFi Networks page gains real band-usage KPI chips (2.4 GHz / 5 GHz / 6 GHz / Wired client counts from the router) and a "Connected?" column; architecture supports adding Eero, Google Nest, Asus ZenWiFi, and Netgear Orbi via the same `MeshWorker` provider key
 - Protocol Visualizer — animated step-through of 9 real protocols (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); each step shows the packet name, frame detail, and a labelled dot travelling between nodes; play/pause/step controls; tabbed with a protocol context panel
 - Log Hub — live network logger output in a filterable table; streams real events as they happen; interesting events (DNS failures, slow gateway, consecutive connection failures) automatically generate a Lab Mode exercise surfaced as a home screen card
 - Feature Guide — 44-feature catalogue grouped by category accessible from Education nav and the home screen; filter bar with synonym tags (search "heatmap", "arp", "stp"); badges for features requiring Npcap or admin rights; Open buttons navigate directly to the feature

@@ -130,14 +130,22 @@ _FEATURES: list[dict] = [
         "icon": "⬡",
         "name": "Mesh & Router",
         "desc": (
-            "Live client list from your gateway and mesh nodes — shows which node each "
-            "device is connected to, the wireless band (2.4G / 5G / 6G / Wired), and "
-            "real-time upload / download rates. Results enrich the Devices on Network table. "
-            "TP-Link Deco supported; Eero, Google Nest, Asus ZenWiFi planned."
+            "Pulls live client data directly from your gateway and mesh nodes. "
+            "When connected, Deco-assigned device names replace the rDNS hostnames in the "
+            "Devices on Network table — these names are far more recognisable than reverse-DNS "
+            "guesses. Two extra columns (Node and Band) automatically appear showing which mesh "
+            "satellite each device is connected to and its wireless band (2.4G / 5G / 6G / Wired). "
+            "Hover the Band cell for real-time upload / download KB/s from the router's own counters. "
+            "Save your credentials once and the scan runs silently on every subsequent app start. "
+            "TP-Link Deco is fully supported. The worker architecture accepts additional providers "
+            "(Eero, Google Nest, Asus ZenWiFi, Netgear Orbi) via a single provider key."
         ),
         "page": "Mesh & Router",
         "requires": None,
-        "tags": ["mesh", "router", "deco", "tp-link", "gateway", "band", "node", "wifi", "client"],
+        "tags": [
+            "mesh", "router", "deco", "tp-link", "gateway", "band", "node", "wifi", "client",
+            "hostname", "name", "eero", "google nest", "asus", "orbi", "enrichment", "autorun",
+        ],
     },
     # ── Diagnostics ────────────────────────────────────────────────────────────
     {
@@ -219,23 +227,37 @@ _FEATURES: list[dict] = [
         "name": "WiFi Networks",
         "desc": (
             "Scans visible SSIDs and flags hidden networks, rogue APs, WPS-enabled networks, "
-            "and co-channel interference."
+            "and co-channel interference. A 'Connected?' column marks the SSID your machine is "
+            "currently on so you can find your network instantly in a crowded list. "
+            "When Deco credentials are saved, four band-usage chips appear above the table showing "
+            "real client counts per band (2.4 GHz / 5 GHz / 6 GHz / Wired) pulled directly from "
+            "the router — more accurate than anything a passive scan can infer."
         ),
         "page": "WiFi Networks",
         "requires": None,
-        "tags": ["wifi", "wi-fi", "ssid", "wireless", "network", "rogue", "ap", "wps", "channel", "interference", "hidden"],
+        "tags": [
+            "wifi", "wi-fi", "ssid", "wireless", "network", "rogue", "ap", "wps",
+            "channel", "interference", "hidden", "band", "connected", "deco", "clients",
+        ],
     },
     {
         "group": "Diagnostics",
         "icon": "⊞",
         "name": "Network Map",
         "desc": (
-            "Interactive topology diagram showing device relationships — routers, switches, "
-            "and endpoints — populated automatically after a full scan."
+            "Visual topology diagram populated automatically after every scan. "
+            "Without mesh data: flat star with Internet → Gateway → all devices, colour-coded by risk level. "
+            "With Deco credentials saved: upgrades to a three-tier mesh tree — "
+            "Internet → Gateway/Master → Satellite nodes → Client devices grouped under their satellite. "
+            "Devices not seen by the mesh (wired PCs on unmanaged switches, etc.) attach directly to the "
+            "gateway with a dashed edge so nothing is lost."
         ),
         "page": "Network Map",
         "requires": None,
-        "tags": ["topology", "map", "diagram", "network", "router", "switch", "visual", "layout"],
+        "tags": [
+            "topology", "map", "diagram", "network", "router", "switch", "visual", "layout",
+            "mesh", "satellite", "deco", "tier", "tree", "hierarchy",
+        ],
     },
     {
         "group": "Diagnostics",

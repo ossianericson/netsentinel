@@ -42,6 +42,7 @@ from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
     ACCENT, ACCENT_LITE, ACCENT_DARK, ADMIN_WARN_FG, ADMIN_WARN_HOVER,
     AMBER, AMBER_BG, AUDIT_RED, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER, BLUE, BORDER, BORDER_MED,
+    CHART_PURPLE,
     BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GRADE_A_BG, GRADE_B_FG, GRADE_B_BG, GRADE_C_BG,
     GRADE_D_BG, GRADE_F_FG, GRADE_F_BG, GREEN, GREEN_BG,
     MAIN_STYLE, NAV_BAR, NAV_DIVIDER, PRO_BANNER_BORDER, PRO_WARN_BG,
@@ -1229,6 +1230,10 @@ class Dashboard(QMainWindow):
 
         # Mesh enrichment — populated when MeshRouterPage scan completes
         self._mesh_enrichment: dict = {}   # normalised MAC → MeshClient
+
+        # M1 satellite grouping state
+        self._m1_sat_expanded: dict = {}   # node_name → bool (default False = collapsed)
+        self._m1_grouping_active: bool = False
 
         # Active workers
         self._workers = []
@@ -3530,15 +3535,39 @@ class Dashboard(QMainWindow):
         self._m1_status = QLabel("Not yet scanned.")
         self._m1_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
 
+        self._m1_group_btn = QPushButton("▼▼  Collapse All")
+        self._m1_group_btn.setFixedHeight(22)
+        self._m1_group_btn.setStyleSheet(
+            f"QPushButton{{background:{BG_DARK};color:{TEXT_MUTED};border:1px solid {BORDER};"
+            f"border-radius:3px;padding:0 8px;font-size:10px;}}"
+            f"QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
+        )
+        self._m1_group_btn.setVisible(False)
+        self._m1_group_btn.clicked.connect(self._m1_toggle_all_groups)
+
+        _status_row = QHBoxLayout()
+        _status_row.setContentsMargins(0, 0, 0, 0)
+        _status_row.addWidget(self._m1_status, 1)
+        _status_row.addWidget(self._m1_group_btn)
+
         self._m1_table = _table([
-            "IP Address", "Hostname", "MAC Address", "Vendor", "Risk", "Device Type", "Verdict"
+            "IP Address", "Hostname", "MAC Address", "Vendor", "Risk", "Device Type",
+            "Node", "Band", "Verdict",
         ])
         self._m1_table.setColumnWidth(0, 120)
         self._m1_table.setColumnWidth(1, 160)
         self._m1_table.setColumnWidth(2, 145)
         self._m1_table.setColumnWidth(3, 180)
         self._m1_table.setColumnWidth(4, 70)
-        self._m1_table.setColumnWidth(5, 145)
+        self._m1_table.setColumnWidth(5, 130)
+        self._m1_table.setColumnWidth(6, 155)
+        self._m1_table.setColumnWidth(7, 55)
+        # Node (6) and Band (7) are hidden until a Deco scan populates them
+        self._m1_table.setColumnHidden(6, True)
+        self._m1_table.setColumnHidden(7, True)
+        self._m1_table.setStyleSheet(
+            f"QTableWidget::item:hover {{ background-color: {BG_HOVER}; }}"
+        )
 
         # Right-click context menu
         self._m1_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -3562,7 +3591,7 @@ class Dashboard(QMainWindow):
         self._m1_stack.setCurrentIndex(0)
         m1_body.addWidget(self._m1_stack)
 
-        lay.addWidget(self._m1_status)
+        lay.addLayout(_status_row)
         lay.addWidget(m1_card, 1)
 
         from ui.widgets.explainer_panel import ExplainerPanel
@@ -3577,7 +3606,10 @@ class Dashboard(QMainWindow):
               else self._m1_table.rowAt(pos.y())
         if row < 0:
             return
-        ip  = (self._m1_table.item(row, 0) or QTableWidgetItem()).text()
+        first = self._m1_table.item(row, 0)
+        if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+            return
+        ip  = (first or QTableWidgetItem()).text()
         mac = (self._m1_table.item(row, 2) or QTableWidgetItem()).text()
         menu = QMenu(self)
         menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
@@ -3846,13 +3878,20 @@ class Dashboard(QMainWindow):
         self._m4_status = QLabel("Not yet scanned.")
         self._m4_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
         lay.addWidget(self._m4_status)
+
+        # Deco band-usage KPI chips — hidden until mesh data arrives
+        self._m4_deco_bar = self._build_m4_deco_bar()
+        self._m4_deco_bar.setVisible(False)
+        lay.addWidget(self._m4_deco_bar)
+
         card, card_body = _make_card("Detected Networks")
         self._m4_table = _table([
             "SSID", "BSSID", "Channel", "Band", "Signal (dBm)",
-            "Hidden?", "Rogue SSID?", "Co-Channel?"
+            "Hidden?", "Rogue SSID?", "Co-Channel?", "Connected?",
         ])
         self._m4_table.setColumnWidth(0, 180)
         self._m4_table.setColumnWidth(1, 150)
+        self._m4_table.setColumnWidth(8, 95)
         card_body.addWidget(self._m4_table)
         lay.addWidget(card, 1)
 
@@ -3860,6 +3899,69 @@ class Dashboard(QMainWindow):
         self._m4_stack.addWidget(empty)
         self._m4_stack.addWidget(content)
         return self._m4_stack
+
+    def _build_m4_deco_bar(self) -> QWidget:
+        """KPI chips showing Deco band usage — revealed when mesh data is present."""
+        bar = QWidget()
+        bar.setFixedHeight(62)
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 2, 0, 4)
+        row.setSpacing(8)
+
+        def _chip(dot_color: str, label: str):
+            tile = QFrame()
+            tile.setObjectName("card")
+            tile.setStyleSheet(
+                f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
+                f"border-left:3px solid {dot_color};border-radius:0px;}}"
+            )
+            vl = QVBoxLayout(tile)
+            vl.setContentsMargins(8, 4, 8, 4)
+            vl.setSpacing(1)
+            hdr = QHBoxLayout()
+            hdr.setSpacing(4)
+            dot = QLabel("●")
+            dot.setStyleSheet(f"color:{dot_color};font-size:9px;background:transparent;border:none;")
+            lbl = QLabel(label.upper())
+            lbl.setStyleSheet(
+                f"color:{TEXT_MUTED};font-size:9px;font-weight:bold;"
+                "letter-spacing:0.5px;background:transparent;border:none;"
+            )
+            hdr.addWidget(dot); hdr.addWidget(lbl); hdr.addStretch()
+            vl.addLayout(hdr)
+            val = QLabel("—")
+            val.setStyleSheet(f"color:{TEXT_MUTED};font-size:18px;font-weight:bold;"
+                              "background:transparent;border:none;")
+            vl.addWidget(val)
+            return tile, val
+
+        header = QLabel("Deco band usage")
+        header.setStyleSheet(f"color:{TEXT_MUTED};font-size:10px;padding:0;background:transparent;")
+        row.addWidget(header)
+
+        t1, self._m4_chip_24   = _chip(GREEN,        "2.4 GHz clients")
+        t2, self._m4_chip_5    = _chip(ACCENT,        "5 GHz clients")
+        t3, self._m4_chip_6    = _chip(CHART_PURPLE,  "6 GHz clients")
+        t4, self._m4_chip_wired = _chip(TEXT_SECONDARY, "Wired clients")
+        for t in (t1, t2, t3, t4):
+            row.addWidget(t, 1)
+        row.addStretch()
+        return bar
+
+    def _update_m4_deco_chips(self) -> None:
+        """Refresh Deco band-usage chips from current mesh enrichment data."""
+        if not getattr(self, "_mesh_enrichment", None):
+            return
+        counts: dict = {"2.4G": 0, "5G": 0, "6G": 0, "Wired": 0}
+        for mc in self._mesh_enrichment.values():
+            band = getattr(mc, "band", "")
+            if band in counts:
+                counts[band] += 1
+        self._m4_chip_24.setText(str(counts["2.4G"]))
+        self._m4_chip_5.setText(str(counts["5G"]))
+        self._m4_chip_6.setText(str(counts["6G"]))
+        self._m4_chip_wired.setText(str(counts["Wired"]))
+        self._m4_deco_bar.setVisible(True)
 
     # ── Module 5 ──────────────────────────────────────────────────────────────
 
@@ -8062,6 +8164,8 @@ class Dashboard(QMainWindow):
         # Reset UI
         self._m1_result = self._m2_result = self._m3_result = None
         self._m4_result = self._m5_result = None
+        self._m1_grouping_active = False
+        self._m1_group_btn.setVisible(False)
         self._m1_table.setRowCount(0)
         self._m2_table.setRowCount(0)
         self._m3_table.setRowCount(0)
@@ -8199,12 +8303,13 @@ class Dashboard(QMainWindow):
             if not dtype:
                 dtype = d.connection_type if not isinstance(d, dict) else d.get("connection_type", "Unknown Device")
             verdict = d.verdict  if not isinstance(d, dict) else d.get("verdict", "")
-            _add_row(self._m1_table, [ip, host or "—", mac, vendor, level, dtype, verdict], level)
+            _add_row(self._m1_table, [ip, host or "—", mac, vendor, level, dtype, "", "", verdict], level)
 
-        self._m1_status.setText(
+        self._m1_scan_summary = (
             f"✓  {data.get('total_count', 0)} devices scanned — "
             f"{data.get('high_risk_count', 0)} HIGH RISK"
         )
+        self._m1_status.setText(self._m1_scan_summary)
         # Mirror into Network Info tab
         self._net_devices_table.setRowCount(0)
         for d in data.get("devices", []):
@@ -8373,7 +8478,11 @@ class Dashboard(QMainWindow):
         try:
             gw_ip  = self._net_info.get("gateway") if self._net_info else None
             gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
-            self._topology_widget.render(data.get("devices", []), gw_ip, gw_mac)
+            self._topology_widget.render(
+                data.get("devices", []), gw_ip, gw_mac,
+                mesh_units=getattr(self, "_mesh_units", None),
+                mesh_enrichment=getattr(self, "_mesh_enrichment", None),
+            )
         except AttributeError:
             pass  # topology widget not yet initialised
         except Exception as _topo_exc:
@@ -8389,6 +8498,12 @@ class Dashboard(QMainWindow):
             self._scan_from_home = False
             self._nav_rail_go_to("Overview")
 
+        # Re-apply cached mesh enrichment immediately so names/nodes are visible
+        # without waiting for the async worker.  The worker will update with fresh
+        # data once it finishes (overwriting this with current Deco state).
+        if getattr(self, "_mesh_enrichment", None):
+            self._apply_mesh_enrichment()
+
         # Mesh enrichment — show button when a gateway is found; auto-run if
         # the user has already entered their mesh password this session.
         self._check_mesh_autodetect(data)
@@ -8396,32 +8511,62 @@ class Dashboard(QMainWindow):
     # ── Mesh enrichment ────────────────────────────────────────────────────────
 
     def _check_mesh_autodetect(self, m1_data: dict) -> None:
-        """Pre-fill the gateway IP on the Mesh & Router page from the scan result."""
+        """Pre-fill gateway IP on Mesh & Router page; auto-run if keyring has saved creds."""
         gateway_ip = m1_data.get("gateway_ip")
-        if gateway_ip and hasattr(self, "_mesh_router_page"):
+        if not gateway_ip:
+            return
+        if hasattr(self, "_mesh_router_page"):
             self._mesh_router_page.set_gateway_ip(gateway_ip)
+        self._check_mesh_autorun(gateway_ip)
+
+    def _check_mesh_autorun(self, gateway_ip: str) -> None:
+        """Re-fetch mesh data on every scan if keyring has credentials for gateway_ip."""
+        # Skip if a previous fetch is still in flight
+        existing = getattr(self, "_mesh_auto_worker", None)
+        if existing and existing.isRunning():
+            return
+        try:
+            import keyring as _kr
+            pw = _kr.get_password("NetSentinel/mesh", gateway_ip)
+        except Exception:
+            return
+        if not pw:
+            return
+        from workers.mesh_worker import MeshWorker
+        worker = MeshWorker(host=gateway_ip, password=pw)
+        worker.result.connect(self._on_mesh_result)
+        worker.status.connect(lambda msg: self._m1_status.setText(
+            f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
+        ))
+        # Keep a reference so the thread isn't garbage-collected mid-run
+        self._mesh_auto_worker = worker
+        worker.start()
 
     @pyqtSlot(dict)
     def _on_mesh_result(self, data: dict) -> None:
         """Receive scan result from MeshRouterPage and enrich the Devices table."""
         from modules.deco_client import _norm_mac
         clients = data.get("clients", [])
+        self._mesh_units      = data.get("units", [])
         self._mesh_enrichment = {c.mac: c for c in clients}
         self._apply_mesh_enrichment()
+        provider = data.get("provider", "mesh").title()
+        matched  = sum(1 for c in clients if c.mac in self._mesh_enrichment)
+        summary  = getattr(self, "_m1_scan_summary", "")
+        self._m1_status.setText(
+            f"{summary}  ·  {provider}: {matched} device{'s' if matched != 1 else ''} enriched"
+        )
 
     def _apply_mesh_enrichment(self) -> None:
-        """
-        Merge MeshClient data into the M1 table and DeviceInfo objects.
-
-        Updates the Device Type column (col 5) to show the mesh node + band
-        when available.  Existing DeviceInfo objects in _m1_result are also
-        updated so exports and other consumers see the enriched data.
-        """
+        """Merge MeshClient data into the M1 table rows and DeviceInfo objects."""
         if not self._mesh_enrichment or not self._m1_result:
             return
 
         from PyQt6.QtGui import QColor
         from modules.deco_client import _norm_mac
+
+        _mac_re = __import__("re").compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", __import__("re").I)
+        any_matched = False
 
         for row in range(self._m1_table.rowCount()):
             mac_item = self._m1_table.item(row, 2)
@@ -8431,25 +8576,35 @@ class Dashboard(QMainWindow):
             if not mc:
                 continue
 
-            # Build enriched display text for the Device Type column
-            mesh_tag = f"{mc.unit_name} · {mc.band}"
-            existing = (self._m1_table.item(row, 5) or QTableWidgetItem()).text()
-            if existing and existing not in ("Unknown Device", "Unknown", ""):
-                display = f"{existing}  ({mesh_tag})"
-            else:
-                display = mesh_tag
+            any_matched = True
 
-            item = QTableWidgetItem(display)
-            item.setForeground(QColor(TEXT_PRIMARY))
-            item.setToolTip(
-                f"Mesh node:  {mc.unit_name}\n"
-                f"Band:       {mc.band}\n"
-                f"Upload:     {mc.upload_kbps} KB/s\n"
-                f"Download:   {mc.download_kbps} KB/s"
+            # Override hostname (col 1) with Deco-assigned name when it looks like a real name
+            if mc.name and not _mac_re.match(mc.name):
+                name_item = QTableWidgetItem(mc.name)
+                name_item.setForeground(QColor(TEXT_PRIMARY))
+                name_item.setToolTip("Name assigned in Deco app")
+                self._m1_table.setItem(row, 1, name_item)
+
+            # Node column (col 6)
+            node_item = QTableWidgetItem(mc.unit_name)
+            node_item.setForeground(QColor(TEXT_PRIMARY))
+            self._m1_table.setItem(row, 6, node_item)
+
+            # Band column (col 7) with speed tooltip
+            band_item = QTableWidgetItem(mc.band)
+            band_item.setForeground(QColor(TEXT_PRIMARY))
+            band_item.setToolTip(
+                f"Upload:   {mc.upload_kbps} KB/s\n"
+                f"Download: {mc.download_kbps} KB/s"
             )
-            self._m1_table.setItem(row, 5, item)
+            self._m1_table.setItem(row, 7, band_item)
 
-        # Mirror enrichment onto the DeviceInfo objects so exports include it
+        # Reveal Node and Band columns once any Deco data is present
+        if any_matched:
+            self._m1_table.setColumnHidden(6, False)
+            self._m1_table.setColumnHidden(7, False)
+
+        # Mirror enrichment onto DeviceInfo objects so exports include it
         for d in self._m1_result.get("devices", []):
             mac = _norm_mac(d.mac if not isinstance(d, dict) else d.get("mac", ""))
             mc = self._mesh_enrichment.get(mac)
@@ -8465,14 +8620,208 @@ class Dashboard(QMainWindow):
                     d.mesh_up_kbps   = mc.upload_kbps
                     d.mesh_down_kbps = mc.download_kbps
 
+        # Re-render topology with mesh structure now that enrichment is complete
+        try:
+            gw_ip  = self._net_info.get("gateway")     if self._net_info else None
+            gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+            self._topology_widget.render(
+                self._m1_result.get("devices", []), gw_ip, gw_mac,
+                mesh_units=getattr(self, "_mesh_units", None),
+                mesh_enrichment=self._mesh_enrichment,
+            )
+        except Exception:
+            pass
+
+        # Update the Deco band-usage chips on the WiFi Networks page
+        self._update_m4_deco_chips()
+
+        # Regroup M1 table into collapsible satellite sections
+        if any_matched:
+            self._regroup_m1_by_satellite()
+
+    def _regroup_m1_by_satellite(self) -> None:
+        """Rebuild M1 table with collapsible satellite section header rows."""
+        from PyQt6.QtGui import QColor, QFont
+
+        # Collect device row data — skip any existing header rows
+        rows_data = []
+        for row in range(self._m1_table.rowCount()):
+            first = self._m1_table.item(row, 0)
+            if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                continue
+            cells = []
+            for col in range(self._m1_table.columnCount()):
+                item = self._m1_table.item(row, col)
+                cells.append({
+                    "text":    item.text() if item else "",
+                    "tooltip": item.toolTip() if item else "",
+                })
+            node_item = self._m1_table.item(row, 6)
+            node = (node_item.text().strip() if node_item else "") or "__unassigned__"
+            risk_item = self._m1_table.item(row, 4)
+            risk = risk_item.text().strip() if risk_item else "CLEAN"
+            rows_data.append({"cells": cells, "node": node, "risk": risk})
+
+        if not rows_data:
+            return
+
+        # Group by node
+        groups: dict = {}
+        for rd in rows_data:
+            groups.setdefault(rd["node"], []).append(rd)
+
+        sorted_nodes = sorted(k for k in groups if k != "__unassigned__")
+        if "__unassigned__" in groups:
+            sorted_nodes.append("__unassigned__")
+
+        # Rebuild table
+        self._m1_table.setRowCount(0)
+        n_cols = self._m1_table.columnCount()
+
+        for node_name in sorted_nodes:
+            device_rows = groups[node_name]
+            display_name = "Unassigned / Direct" if node_name == "__unassigned__" else node_name
+            expanded = self._m1_sat_expanded.get(node_name, True)
+            arrow = "▼" if expanded else "▶"
+            nc = len(device_rows)
+
+            # Header row
+            hdr_row = self._m1_table.rowCount()
+            self._m1_table.insertRow(hdr_row)
+            hdr_text = f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}"
+            hdr_item = QTableWidgetItem(hdr_text)
+            hdr_item.setData(Qt.ItemDataRole.UserRole, "__sat_header__")
+            hdr_item.setData(Qt.ItemDataRole.UserRole + 1, node_name)
+            hdr_item.setForeground(QColor(TEXT_PRIMARY))
+            hdr_item.setBackground(QColor(BG_DARK))
+            f = QFont()
+            f.setBold(True)
+            f.setItalic(True)
+            hdr_item.setFont(f)
+            hdr_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self._m1_table.setItem(hdr_row, 0, hdr_item)
+            self._m1_table.setSpan(hdr_row, 0, 1, n_cols)
+            self._m1_table.setRowHeight(hdr_row, 26)
+
+            # Device rows
+            for rd in device_rows:
+                dev_row = self._m1_table.rowCount()
+                self._m1_table.insertRow(dev_row)
+                risk_color = _color_for_level(rd["risk"])
+                high_risk = rd["risk"] in ("HIGH", "STORM")
+                for col, cell in enumerate(rd["cells"]):
+                    item = QTableWidgetItem(cell["text"])
+                    if col == 4:
+                        item.setForeground(QColor(risk_color))
+                    elif high_risk:
+                        item.setForeground(QColor(risk_color))
+                    else:
+                        item.setForeground(QColor(TEXT_PRIMARY))
+                    if cell["tooltip"]:
+                        item.setToolTip(cell["tooltip"])
+                    self._m1_table.setItem(dev_row, col, item)
+                if not expanded:
+                    self._m1_table.setRowHidden(dev_row, True)
+
+        self._m1_grouping_active = True
+        self._m1_group_btn.setVisible(True)
+        # Connect click handler once
+        if not getattr(self, "_m1_group_click_connected", False):
+            self._m1_table.cellClicked.connect(self._m1_toggle_sat_section)
+            self._m1_group_click_connected = True
+
+    def _m1_toggle_sat_section(self, row: int, col: int) -> None:
+        """Toggle a satellite section open/closed when its header row is clicked."""
+        first = self._m1_table.item(row, 0)
+        if not first or first.data(Qt.ItemDataRole.UserRole) != "__sat_header__":
+            return
+        node_name = first.data(Qt.ItemDataRole.UserRole + 1)
+        expanded = not self._m1_sat_expanded.get(node_name, False)
+        self._m1_sat_expanded[node_name] = expanded
+
+        # Count device rows in this section (rows until next header or end)
+        nc = 0
+        next_row = row + 1
+        while next_row < self._m1_table.rowCount():
+            r_first = self._m1_table.item(next_row, 0)
+            if r_first and r_first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                break
+            nc += 1
+            next_row += 1
+
+        display_name = "Unassigned / Direct" if node_name == "__unassigned__" else node_name
+        arrow = "▼" if expanded else "▶"
+        first.setText(f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}")
+
+        for dev_row in range(row + 1, next_row):
+            self._m1_table.setRowHidden(dev_row, not expanded)
+
+        # Update button label
+        self._m1_update_group_btn()
+
+    def _m1_set_all_expanded(self, expanded: bool) -> None:
+        """Show or hide all satellite sections without rebuilding the table."""
+        for row in range(self._m1_table.rowCount()):
+            first = self._m1_table.item(row, 0)
+            if not first or first.data(Qt.ItemDataRole.UserRole) != "__sat_header__":
+                continue
+            node_name = first.data(Qt.ItemDataRole.UserRole + 1)
+            self._m1_sat_expanded[node_name] = expanded
+
+            # Count and show/hide following device rows
+            nc = 0
+            next_row = row + 1
+            while next_row < self._m1_table.rowCount():
+                r_first = self._m1_table.item(next_row, 0)
+                if r_first and r_first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                    break
+                nc += 1
+                next_row += 1
+
+            display_name = "Unassigned / Direct" if node_name == "__unassigned__" else node_name
+            arrow = "▼" if expanded else "▶"
+            first.setText(f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}")
+            for dev_row in range(row + 1, next_row):
+                self._m1_table.setRowHidden(dev_row, not expanded)
+
+    def _m1_toggle_all_groups(self) -> None:
+        """Expand all if any are collapsed; collapse all if all are expanded."""
+        all_expanded = bool(self._m1_sat_expanded) and all(
+            self._m1_sat_expanded.get(n, False) for n in self._m1_sat_expanded
+        )
+        self._m1_set_all_expanded(not all_expanded)
+        self._m1_update_group_btn()
+
+    def _m1_update_group_btn(self) -> None:
+        """Sync the expand/collapse button label with current state."""
+        all_expanded = bool(self._m1_sat_expanded) and all(
+            self._m1_sat_expanded.get(n, False) for n in self._m1_sat_expanded
+        )
+        self._m1_group_btn.setText("▼▼  Collapse All" if all_expanded else "▶▶  Expand All")
+
     @pyqtSlot(str)
     def _filter_m1_by_nl(self, text: str):
         """Filter Device Fingerprinter rows using the NL query engine."""
         text = text.strip()
-        # Clear filter — show all rows
+        # Clear filter — restore each section's individual collapsed/expanded state
         if not text:
-            for row in range(self._m1_table.rowCount()):
-                self._m1_table.setRowHidden(row, False)
+            if self._m1_grouping_active:
+                for row in range(self._m1_table.rowCount()):
+                    first = self._m1_table.item(row, 0)
+                    if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                        self._m1_table.setRowHidden(row, False)
+                        node_name = first.data(Qt.ItemDataRole.UserRole + 1)
+                        exp = self._m1_sat_expanded.get(node_name, False)
+                        next_row = row + 1
+                        while next_row < self._m1_table.rowCount():
+                            r = self._m1_table.item(next_row, 0)
+                            if r and r.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                                break
+                            self._m1_table.setRowHidden(next_row, not exp)
+                            next_row += 1
+            else:
+                for row in range(self._m1_table.rowCount()):
+                    self._m1_table.setRowHidden(row, False)
             if self._m1_result:
                 self._m1_status.setText(
                     f"✓  {self._m1_result.get('total_count', 0)} devices scanned — "
@@ -8493,7 +8842,11 @@ class Dashboard(QMainWindow):
                 for m in result.matches
             }
             for row in range(self._m1_table.rowCount()):
-                ip_item = self._m1_table.item(row, 0)
+                first = self._m1_table.item(row, 0)
+                if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                    self._m1_table.setRowHidden(row, False)  # always keep headers visible
+                    continue
+                ip_item = first
                 ip = ip_item.text() if ip_item else ""
                 self._m1_table.setRowHidden(row, ip not in matched_ips)
             self._m1_status.setText(
@@ -8581,16 +8934,18 @@ class Dashboard(QMainWindow):
         self._m4_stack.setCurrentIndex(1)
         self._m4_result = wifi
         networks = wifi.networks if not isinstance(wifi, dict) else wifi.get("networks", [])
+        my_ssid  = (wifi.my_ssid if not isinstance(wifi, dict) else wifi.get("my_ssid", "")) or ""
         self._m4_table.setRowCount(0)
         for n in networks:
-            ssid  = n.ssid if not isinstance(n, dict) else n.get("ssid", "")
-            bssid = n.bssid if not isinstance(n, dict) else n.get("bssid", "")
-            ch    = n.channel if not isinstance(n, dict) else n.get("channel", 0)
-            band  = n.band if not isinstance(n, dict) else n.get("band", "?")
-            sig   = n.signal_dbm if not isinstance(n, dict) else n.get("signal_dbm", 0)
-            hidden = n.is_hidden if not isinstance(n, dict) else n.get("is_hidden", False)
-            rogue  = n.is_rogue_ssid if not isinstance(n, dict) else n.get("is_rogue_ssid", False)
+            ssid     = n.ssid     if not isinstance(n, dict) else n.get("ssid", "")
+            bssid    = n.bssid    if not isinstance(n, dict) else n.get("bssid", "")
+            ch       = n.channel  if not isinstance(n, dict) else n.get("channel", 0)
+            band     = n.band     if not isinstance(n, dict) else n.get("band", "?")
+            sig      = n.signal_dbm       if not isinstance(n, dict) else n.get("signal_dbm", 0)
+            hidden   = n.is_hidden        if not isinstance(n, dict) else n.get("is_hidden", False)
+            rogue    = n.is_rogue_ssid    if not isinstance(n, dict) else n.get("is_rogue_ssid", False)
             conflict = n.co_channel_conflict if not isinstance(n, dict) else n.get("co_channel_conflict", False)
+            connected = bool(my_ssid and ssid and ssid == my_ssid)
             level = "HIGH" if rogue else ("MEDIUM" if conflict else ("LOW" if hidden else "CLEAN"))
             _add_row(
                 self._m4_table,
@@ -8599,14 +8954,16 @@ class Dashboard(QMainWindow):
                     "Yes" if hidden else "No",
                     "⚠ Yes" if rogue else "No",
                     "⚠ Yes" if conflict else "No",
+                    "✓ Yes" if connected else "",
                 ],
                 level,
             )
 
-        rogue_c = wifi.rogue_count if not isinstance(wifi, dict) else wifi.get("rogue_count", 0)
+        rogue_c  = wifi.rogue_count  if not isinstance(wifi, dict) else wifi.get("rogue_count", 0)
         hidden_c = wifi.hidden_count if not isinstance(wifi, dict) else wifi.get("hidden_count", 0)
         self._m4_status.setText(
             f"✓  {len(networks)} networks — {rogue_c} suspicious SSIDs, {hidden_c} hidden"
+            + (f"  ·  connected: {my_ssid}" if my_ssid else "")
         )
         self._update_overall_verdict()
 

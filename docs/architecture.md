@@ -292,7 +292,85 @@ Dashboard (Pro mode)
 
 ---
 
-## 8. Key Architectural Rules
+## 8. Mesh Router Enrichment Pattern
+
+The Mesh & Router feature is a **cross-page enrichment** rather than a self-contained scan — it augments the result set produced by Module 1 (Rogue Device / Device Fingerprinter) with richer data from the router's own API.
+
+### Data flow
+
+```
+ARP scan (Module1Worker)
+  → Dashboard._on_m1_result()
+      → stores scan result + detects gateway_ip
+      → renders topology (flat star, or mesh tree if enrichment already present)
+      → _check_mesh_autodetect()
+          → pre-fills gateway IP on Mesh & Router page
+          → _check_mesh_autorun()  [if keyring has saved creds for that IP]
+              → skips if a worker is already running (isRunning() guard)
+              → otherwise starts MeshWorker silently on every scan
+
+MeshRouterPage  (user-triggered OR silent auto-run after every ARP scan)
+  → MeshWorker(host, password).start()
+      → modules/deco_client.DecoMeshClient
+          → 3-step LuCI auth (keys → auth → login)
+          → admin/device?form=device_list          → MeshUnit list
+          → admin/client?form=client_list per node → MeshClient list
+      → emits result dict {provider, host, units, clients}
+  → Dashboard._on_mesh_result()
+      → stores _mesh_units (list[MeshUnit]) and _mesh_enrichment (MAC → MeshClient)
+      → _apply_mesh_enrichment()
+          → overrides col 1 (Hostname) with Deco-assigned name
+          → populates col 6 (Node) + col 7 (Band) with speed tooltip
+          → reveals hidden Node/Band columns in M1 table
+          → mirrors enrichment onto DeviceInfo objects for exports
+          → re-renders topology as 3-tier mesh tree
+          → _update_m4_deco_chips() → reveals band-usage KPI bar on WiFi Networks page
+```
+
+### Key files
+
+| File | Role |
+|---|---|
+| `modules/deco_client.py` | Pure-Python Deco API client; returns `MeshUnit` / `MeshClient` dataclasses |
+| `workers/mesh_worker.py` | `QThread` wrapping `DecoMeshClient`; emits `result`, `error`, `status` |
+| `ui/pages/mesh_router_page.py` | Config card (gateway IP + password + keyring), nodes table, clients table; emits `scan_done` |
+| `ui/topology_widget.py` | `TopologyWidget.render()` — flat star without mesh data; 3-tier mesh tree when `mesh_units` + `mesh_enrichment` are passed |
+| `ui/dashboard.py` | `_on_mesh_result` / `_apply_mesh_enrichment` / `_check_mesh_autorun` / `_update_m4_deco_chips` |
+
+### TP-Link Deco auth notes
+
+The Deco XE75 (and other Deco models) uses a 3-step LuCI-style login with AES-CBC + RSA-PKCS1v15 encryption. The critical detail: the login POST must use a form-encoded body (`data=`) with `Content-Type: application/json` explicitly overridden. Sending an actual JSON body (which `requests` does when you use `json=`) returns 403; the default form Content-Type returns "no such callback". The `tplinkrouterc6u` library (PyPI) handles this correctly.
+
+Per-node client assignment requires one API call per node with `{"device_mac": "MAC-UPPERCASE-HYPHEN"}`. The default query returns all clients but without node assignment. All names in API responses are base64-encoded.
+
+### Adding support for a new router vendor
+
+1. Add a new client class to `modules/deco_client.py` (or a new `modules/<vendor>_client.py`) that returns the same `MeshUnit` / `MeshClient` dataclasses.
+2. In `workers/mesh_worker.py`, add a branch in `_run_deco()` keyed on `self._provider`:
+
+```python
+if self._provider == "deco":
+    client = DecoMeshClient(self._host, self._password)
+elif self._provider == "eero":
+    from modules.eero_client import EeroClient
+    client = EeroClient(self._host, self._password)
+# ...
+client.login()
+units   = client.get_mesh_units()
+clients = client.get_all_clients(units=units)
+self.result.emit({"provider": self._provider, "host": ..., "units": units, "clients": clients})
+```
+
+3. Add a provider selector to `MeshRouterPage` (dropdown in the config card).
+4. No changes needed in `dashboard.py` — `_apply_mesh_enrichment` consumes `MeshUnit` / `MeshClient` regardless of provider.
+
+### Silent auto-run behaviour
+
+After every ARP scan the dashboard calls `_check_mesh_autorun(gateway_ip)`. If `keyring.get_password("NetSentinel/mesh", gateway_ip)` returns a password, a `MeshWorker` is started silently — re-fetching on every scan so the mesh data stays fresh. The only guard is an `isRunning()` check: if a previous fetch is still in flight the new one is skipped. There is no session-lifetime lock. The enrichment result fires through the same `_on_mesh_result` slot whether triggered manually or automatically. A reference to the worker is kept in `self._mesh_auto_worker` to prevent it being garbage-collected mid-run.
+
+---
+
+## 9. Key Architectural Rules
 
 These rules are enforced in `apm.yml` and some are CI-blocking.
 
