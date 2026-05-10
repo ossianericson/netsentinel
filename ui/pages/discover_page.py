@@ -28,12 +28,14 @@ _FEATURES: list[dict] = [
         "icon": "◈",
         "name": "Overview",
         "desc": (
-            "Live dashboard tiles showing device count, service status, cert health, "
-            "fleet uptime, and bandwidth — all updated automatically from background workers."
+            "Main cockpit: launch a Quick Network Assessment (M1–M5 bundle) from the "
+            "full-width Scan Network bar, then watch tiles update live. Each result tile "
+            "shows a last-scanned timestamp and a ↺ re-run button. A collapsible Security "
+            "Scan panel below the grid lets you select and open individual security tools."
         ),
         "page": "Overview",
         "requires": None,
-        "tags": ["dashboard", "tiles", "live", "status", "summary", "overview"],
+        "tags": ["dashboard", "tiles", "live", "status", "summary", "overview", "scan", "launch"],
     },
     {
         "group": "Monitoring",

@@ -2291,6 +2291,8 @@ class Dashboard(QMainWindow):
             self._home_page.investigate_live_requested.connect(self._on_investigate_live)
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
+        self._overview_page.scan_requested.connect(self._start_full_scan)
+        self._overview_page.security_scan_requested.connect(self._run_security_scans)
         self._diagnosis_page.navigate_to.connect(self._on_overview_navigate)
 
         # Populate home page suggestions on first build (deferred so _home_page exists)
@@ -4701,8 +4703,7 @@ class Dashboard(QMainWindow):
         from workers.scan_worker import PortScanWorker
         if hasattr(self, "_ps_host"):
             self._ps_host.setText(host)
-        if self._adv_tab_index_adv >= 0:
-            self._nav.setCurrentRow(self._adv_tab_index_adv)
+        self._nav_rail_go_to("Tools & Wake-on-LAN")
         self._ps_table.setRowCount(0)
         mode = self._ps_mode.currentText().lower() if hasattr(self, "_ps_mode") else "normal"
         if hasattr(self, "_ps_status"):
@@ -4728,8 +4729,6 @@ class Dashboard(QMainWindow):
                 self._ps_table.setItem(row, col, item)
         if hasattr(self, "_ps_status"):
             self._ps_status.setText(data.plain_verdict)
-        if self._adv_tab_index_adv >= 0:
-            self._nav.setCurrentRow(self._adv_tab_index_adv)
         # ── Update NetworkDocPage with accumulated port data ──────────────────
         try:
             if data.open_ports:
@@ -6252,6 +6251,8 @@ class Dashboard(QMainWindow):
         self._btn_scan.setEnabled(not scanning)
         if hasattr(self, "_home_page"):
             self._home_page._btn_scan.setEnabled(not scanning)
+        if hasattr(self, "_overview_page"):
+            self._overview_page.set_scanning(scanning)
         self._progress.setVisible(scanning)
         # Update KPI scan-status tile
         if scanning:
@@ -8030,6 +8031,16 @@ class Dashboard(QMainWindow):
         self._help_dlg.activateWindow()
 
     # ── Scan orchestration ───────────────────────────────────────────────────
+
+    @pyqtSlot(list)
+    def _run_security_scans(self, tool_labels: list) -> None:
+        """Navigate to the first selected security tool page (Phase 1)."""
+        if not tool_labels:
+            return
+        if self._active_count > 0:
+            self._set_status("Main scan in progress — please wait before running security tools.")
+            return
+        self._nav_rail_go_to(tool_labels[0])
 
     @pyqtSlot()
     def _start_full_scan(self):

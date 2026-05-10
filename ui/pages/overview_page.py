@@ -33,14 +33,15 @@ from typing import Callable, Dict, List, Optional
 from PyQt6.QtCore    import QMimeData, QPoint, QSettings, QSize, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QCursor, QDrag, QPainter, QPixmap
 from PyQt6.QtWidgets import (
-    QApplication, QFileDialog, QMenu,
+    QApplication, QCheckBox, QFileDialog, QMenu,
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER,
+    ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER,
+    BG_CARD, BG_DARK, BG_HOVER, BORDER,
     GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 
@@ -106,14 +107,18 @@ class _BaseTile(QFrame):
         store: Optional[MetricStore] = None,
         swap_cb: Optional[Callable[[str, str], None]] = None,
         remove_cb: Optional[Callable[[str], None]] = None,
+        rerun_cb: Optional[Callable] = None,
         parent=None,
     ):
         super().__init__(parent)
         self._store     = store
         self._swap_cb   = swap_cb or (lambda a, b: None)
         self._remove_cb = remove_cb or (lambda _: None)
+        self._rerun_cb  = rerun_cb
         self._edit_mode  = False
         self._drag_start: Optional[QPoint] = None
+        self._scanned_at: Optional[float]  = None
+        self._ts_timer:   Optional[QTimer] = None
 
         self.setObjectName("overviewTile")
         self.setFixedHeight(_TILE_HEIGHT)
@@ -157,6 +162,28 @@ class _BaseTile(QFrame):
             f" border:none; background:transparent;"
         )
         tb.addWidget(self._title_lbl, 1)
+
+        self._ts_lbl = QLabel("")
+        self._ts_lbl.setStyleSheet(
+            f"font-size:9px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+        )
+        self._ts_lbl.hide()
+        tb.addWidget(self._ts_lbl)
+
+        self._rerun_btn = QPushButton("↺")
+        self._rerun_btn.setFixedSize(20, 20)
+        self._rerun_btn.setToolTip("Re-run scan")
+        self._rerun_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._rerun_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; border:1px solid {BORDER};"
+            f" color:{ACCENT}; font-size:12px; font-weight:bold; padding:0;"
+            f" border-radius:3px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; border-color:{ACCENT}; }}"
+        )
+        self._rerun_btn.hide()
+        if self._rerun_cb:
+            self._rerun_btn.clicked.connect(self._rerun_cb)
+        tb.addWidget(self._rerun_btn)
 
         self._drag_handle = QLabel("⠿")
         self._drag_handle.setFixedSize(18, 18)
@@ -208,6 +235,9 @@ class _BaseTile(QFrame):
         self._edit_mode = enabled
         self._drag_handle.setVisible(enabled)
         self._remove_btn.setVisible(enabled)
+        if self._scanned_at is not None:
+            self._ts_lbl.setVisible(not enabled)
+            self._rerun_btn.setVisible(not enabled and bool(self._rerun_cb))
         self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor if enabled
                                else Qt.CursorShape.ArrowCursor))
 
@@ -264,6 +294,34 @@ class _BaseTile(QFrame):
             f"QFrame#overviewTile {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
             f"QFrame#overviewTile:hover {{ border-color:{ACCENT}; }}"
         )
+
+    def mark_scanned(self) -> None:
+        """Record current time as last-scan timestamp and show the ts/rerun controls."""
+        import time as _t
+        self._scanned_at = _t.time()
+        self._update_ts_display()
+        if not self._edit_mode:
+            self._ts_lbl.show()
+            if self._rerun_cb:
+                self._rerun_btn.show()
+        if self._ts_timer is None:
+            self._ts_timer = QTimer(self)
+            self._ts_timer.setInterval(60_000)
+            self._ts_timer.timeout.connect(self._update_ts_display)
+            self._ts_timer.start()
+
+    def _update_ts_display(self) -> None:
+        if self._scanned_at is None:
+            return
+        import time as _t
+        delta = int(_t.time() - self._scanned_at)
+        if delta < 60:
+            text = "Just now"
+        elif delta < 3600:
+            text = f"{delta // 60} min ago"
+        else:
+            text = f"{delta // 3600} h ago"
+        self._ts_lbl.setText(text)
 
     def _set_health(self, color: str) -> None:
         self._health_bar.setStyleSheet(f"background:{color}; border:none;")
@@ -904,6 +962,135 @@ class DnsStabilityTile(_BaseTile):
         pass  # live data — no store needed
 
 
+# ── Security scan panel ───────────────────────────────────────────────────────
+
+class _SecurityScanPanel(QWidget):
+    """Collapsible panel below the tile grid for launching security tools."""
+
+    run_clicked = pyqtSignal(list)   # emits list of selected nav-label strings
+
+    # (nav_label, display_name, checked_by_default, is_active_probe)
+    _TOOLS = [
+        ("Threat Intelligence",  "Threat Intelligence",  True,  False),
+        ("TLS & exposure",       "TLS & Certificates",   True,  False),
+        ("Device Risk Score",    "Device Risk Score",    True,  False),
+        ("Known CVEs",           "Known CVEs",           True,  False),
+        ("Port Scan (SYN)",      "Port Scan (SYN) ⚠",   False, True),
+        ("Exposed to Internet",  "Exposed to Internet ⚠",False, True),
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._checkboxes: Dict[str, QCheckBox] = {}
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 6, 0, 0)
+        outer.setSpacing(0)
+
+        # Header — acts as collapse/expand toggle
+        self._toggle_btn = QPushButton("▸  🔐  Security Scan")
+        self._toggle_btn.setFixedHeight(30)
+        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:4px; text-align:left;"
+            f" padding:0 12px; font-size:11px; font-weight:bold; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+        )
+        self._toggle_btn.clicked.connect(self._toggle)
+        outer.addWidget(self._toggle_btn)
+
+        # Body (hidden when collapsed)
+        self._body = QFrame()
+        self._body.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-top:none; border-bottom-left-radius:4px;"
+            f" border-bottom-right-radius:4px; }}"
+        )
+        body_lay = QVBoxLayout(self._body)
+        body_lay.setContentsMargins(12, 10, 12, 12)
+        body_lay.setSpacing(8)
+
+        # Warning strip
+        warn_frame = QFrame()
+        warn_frame.setStyleSheet(
+            f"QFrame {{ background:transparent; border:1px solid {AMBER}; border-radius:3px; }}"
+        )
+        warn_inner = QHBoxLayout(warn_frame)
+        warn_inner.setContentsMargins(8, 5, 8, 5)
+        warn_lbl = QLabel(
+            "⚠  These tools actively probe devices on your network. "
+            "Only use on networks you own or have permission to test."
+        )
+        warn_lbl.setWordWrap(True)
+        warn_lbl.setStyleSheet(
+            f"font-size:10px; color:{AMBER}; border:none; background:transparent;"
+        )
+        warn_inner.addWidget(warn_lbl)
+        body_lay.addWidget(warn_frame)
+
+        # Tool checkboxes — 2 column grid
+        chk_grid = QGridLayout()
+        chk_grid.setSpacing(4)
+        chk_grid.setContentsMargins(0, 0, 0, 0)
+        for i, (nav_lbl, display, checked, is_active) in enumerate(self._TOOLS):
+            chk = QCheckBox(display)
+            chk.setChecked(checked)
+            colour = AMBER if is_active else TEXT_PRIMARY
+            chk.setStyleSheet(
+                f"QCheckBox {{ font-size:11px; color:{colour}; background:transparent; spacing:5px; }}"
+                f"QCheckBox::indicator {{ width:13px; height:13px; }}"
+            )
+            chk.stateChanged.connect(self._on_check_changed)
+            self._checkboxes[nav_lbl] = chk
+            chk_grid.addWidget(chk, i // 2, i % 2)
+        body_lay.addLayout(chk_grid)
+
+        # Run row
+        run_row = QHBoxLayout()
+        run_row.setSpacing(8)
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        self._run_btn = QPushButton("Run Selected")
+        self._run_btn.setFixedHeight(28)
+        self._run_btn.setMinimumWidth(110)
+        self._run_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._run_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" font-size:11px; font-weight:bold; padding:0 14px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
+            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:#fff; }}"
+        )
+        self._run_btn.clicked.connect(self._on_run)
+        run_row.addWidget(self._status_lbl, 1)
+        run_row.addWidget(self._run_btn)
+        body_lay.addLayout(run_row)
+
+        self._body.hide()
+        outer.addWidget(self._body)
+
+    def _toggle(self) -> None:
+        expanded = not self._body.isVisible()
+        self._body.setVisible(expanded)
+        self._toggle_btn.setText(
+            "▾  🔐  Security Scan" if expanded else "▸  🔐  Security Scan"
+        )
+
+    def _on_check_changed(self) -> None:
+        any_checked = any(c.isChecked() for c in self._checkboxes.values())
+        self._run_btn.setEnabled(any_checked)
+
+    def _on_run(self) -> None:
+        selected = [lbl for lbl, chk in self._checkboxes.items() if chk.isChecked()]
+        if selected:
+            self._status_lbl.setText(f"Opening {selected[0]}…")
+            self.run_clicked.emit(selected)
+
+
 # ── Tile registry & defaults ──────────────────────────────────────────────────
 
 _TILE_CLASSES: Dict[str, type] = {
@@ -944,11 +1131,16 @@ class OverviewPage(QWidget):
 
     #: Emitted when the user clicks "What's Wrong?"; carries the target page label.
     navigate_to = pyqtSignal(str)
+    #: Emitted when the user requests a Quick Network Assessment (M1–M5 bundle).
+    scan_requested = pyqtSignal()
+    #: Emitted when the user requests security tool runs; carries list of nav labels.
+    security_scan_requested = pyqtSignal(list)
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store      = store
         self._edit_mode  = False
+        self._scanning   = False
         self._hidden: set = self._load_hidden()
         self._tile_order = self._load_order()
         self._tiles: Dict[str, _BaseTile] = {}
@@ -1063,6 +1255,46 @@ class OverviewPage(QWidget):
         self._add_strip.hide()
         root.addWidget(self._add_strip)
 
+        # ── CTA bar — full-width Quick Network Assessment launcher ────────────
+        _cta = QFrame()
+        _cta.setObjectName("ctaBar")
+        _cta.setStyleSheet(
+            f"QFrame#ctaBar {{ background:{BG_CARD}; border:1px solid {ACCENT};"
+            f" border-radius:6px; }}"
+        )
+        _cta_lay = QHBoxLayout(_cta)
+        _cta_lay.setContentsMargins(16, 10, 12, 10)
+        _cta_lay.setSpacing(12)
+
+        _cta_text = QVBoxLayout()
+        _cta_text.setSpacing(2)
+        _cta_head = QLabel("Quick Network Assessment")
+        _cta_head.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" border:none; background:transparent;"
+        )
+        self._scan_sub = QLabel("Discover devices  ·  check stability  ·  detect threats")
+        self._scan_sub.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+        )
+        _cta_text.addWidget(_cta_head)
+        _cta_text.addWidget(self._scan_sub)
+
+        self._scan_btn = QPushButton("▶  Scan Network")
+        self._scan_btn.setFixedHeight(34)
+        self._scan_btn.setMinimumWidth(145)
+        self._scan_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._scan_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" font-size:12px; font-weight:bold; padding:0 18px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
+            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:#fff; }}"
+        )
+        self._scan_btn.clicked.connect(self._on_scan_clicked)
+        _cta_lay.addLayout(_cta_text, 1)
+        _cta_lay.addWidget(self._scan_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        root.addWidget(_cta)
+
         # Scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1083,16 +1315,26 @@ class OverviewPage(QWidget):
         scroll.setWidget(self._grid_container)
         root.addWidget(scroll, 1)
 
+        # ── Security scan panel — collapsed by default ────────────────────────
+        self._security_panel = _SecurityScanPanel(self)
+        self._security_panel.run_clicked.connect(
+            lambda labels: self.security_scan_requested.emit(labels)
+        )
+        root.addWidget(self._security_panel)
+
     # ── Tile management ───────────────────────────────────────────────────────
 
     def _build_tiles(self) -> None:
+        _rerun_ids = {"device_count", "rtt_summary", "service_status", "tls_status", "network_grade"}
         for tile_id, cls in _TILE_CLASSES.items():
             if tile_id not in self._tiles:
                 # RULE 17: parent=grid_container; RULE 18: named local var
+                _rcb = (lambda: self.scan_requested.emit()) if tile_id in _rerun_ids else None
                 tile = cls(
                     store=self._store,
                     swap_cb=self.swap_tiles,
                     remove_cb=self._remove_tile,
+                    rerun_cb=_rcb,
                     parent=self._grid_container,
                 )
                 self._tiles[tile_id] = tile
@@ -1100,6 +1342,20 @@ class OverviewPage(QWidget):
         if alert_tile is not None:
             alert_tile.alert_clicked.connect(self._on_alert_navigate)
         self._reflow()
+
+    def _on_scan_clicked(self) -> None:
+        if not self._scanning:
+            self.scan_requested.emit()
+
+    def set_scanning(self, running: bool) -> None:
+        self._scanning = running
+        self._scan_btn.setEnabled(not running)
+        if running:
+            self._scan_btn.setText("Scanning…")
+            self._scan_sub.setText("Scan in progress — tiles will update as each module completes.")
+        else:
+            self._scan_btn.setText("▶  Scan Network")
+            self._scan_sub.setText("Discover devices  ·  check stability  ·  detect threats")
 
     def _on_alert_navigate(self, rule_type: str, host: str) -> None:
         if rule_type == "SERVICE_DOWN":
@@ -1176,9 +1432,11 @@ class OverviewPage(QWidget):
         t = self._tiles.get("device_count")
         if t:
             t.update_cycle(states)
+            t.mark_scanned()
         t = self._tiles.get("rtt_summary")
         if t:
             t.update_cycle(rtts)
+            t.mark_scanned()
         total = len(states)
         down  = sum(1 for s in states.values() if s == "DOWN")
         pill_colour = RED if down else (AMBER if total == 0 else GREEN)
@@ -1196,12 +1454,14 @@ class OverviewPage(QWidget):
         t = self._tiles.get("tls_status")
         if t:
             t.refresh(self._store)
+            t.mark_scanned()
 
     @pyqtSlot(list)
     def on_svc_done(self, results: list) -> None:
         t = self._tiles.get("service_status")
         if t:
             t.update_services(results)
+            t.mark_scanned()
         if results:
             up  = sum(1 for r in results if (r.get("status") if isinstance(r, dict) else getattr(r, "status", "")) == "UP")
             dn  = len(results) - up
@@ -1289,6 +1549,7 @@ class OverviewPage(QWidget):
         t = self._tiles.get("network_grade")
         if t:
             t.update_grade(grade, score)
+            t.mark_scanned()
         letter = grade[:1].upper() if grade else "–"
         _grade_colours = {"A": GREEN, "B": GREEN, "C": AMBER, "D": RED, "F": RED}
         pill_colour = _grade_colours.get(letter, BORDER)
