@@ -9,9 +9,12 @@ pytest~=8.0
 speedtest-cli~=2.1
 psutil~=7.0
 keyring~=25.0          # OS credential store (RULE 22-A); Windows Credential Manager / macOS Keychain / libsecret
+requests~=2.32         # HTTP client used by deco_client and other outbound modules
 flask~=3.0             # Local REST API server (disabled by default, binds 127.0.0.1)
 cryptography~=44.0     # Required by scapy (krack module); without this scapy warns and some features are disabled
 maxminddb~=3.1         # Pure-Python MaxMind .mmdb reader for GeoLite2 IP geolocation (geo_locator)
+tplinkrouterc6u~=5.19  # TP-Link Deco mesh API client (DecoMeshClient in modules/deco_client.py)
+pycryptodome~=3.23     # Required by tplinkrouterc6u for AES/RSA crypto
 
 # Optional — Windows service only (svc.py).
 # Not needed for the GUI or CLI. Install separately as Administrator:

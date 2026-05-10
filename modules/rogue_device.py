@@ -42,6 +42,11 @@ class DeviceInfo:
     verdict: str = ""
     forum_ref: str = ""
     remediation: str = ""
+    # Mesh enrichment — populated by MeshWorker after the main ARP scan
+    mesh_unit:      str   = ""   # e.g. "Floor2 Vardagsrum"
+    mesh_band:      str   = ""   # "2.4G" | "5G" | "6G" | "Wired"
+    mesh_up_kbps:   float = 0.0
+    mesh_down_kbps: float = 0.0
 
 
 def _resolve_hostname(ip: str) -> str:

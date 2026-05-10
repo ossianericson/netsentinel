@@ -125,6 +125,20 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["uptime", "history", "availability", "device", "rtt", "chart", "down", "degraded"],
     },
+    {
+        "group": "Monitoring",
+        "icon": "⬡",
+        "name": "Mesh & Router",
+        "desc": (
+            "Live client list from your gateway and mesh nodes — shows which node each "
+            "device is connected to, the wireless band (2.4G / 5G / 6G / Wired), and "
+            "real-time upload / download rates. Results enrich the Devices on Network table. "
+            "TP-Link Deco supported; Eero, Google Nest, Asus ZenWiFi planned."
+        ),
+        "page": "Mesh & Router",
+        "requires": None,
+        "tags": ["mesh", "router", "deco", "tp-link", "gateway", "band", "node", "wifi", "client"],
+    },
     # ── Diagnostics ────────────────────────────────────────────────────────────
     {
         "group": "Diagnostics",

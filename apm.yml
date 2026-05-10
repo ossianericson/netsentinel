@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.7.9
+version: 1.8.0
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -637,13 +637,17 @@ rules:
       significant capability added to NetSentinel must appear as a feature dict
       in this list so users can discover it.
 
-      Required fields:
-        name:     str  — short display name (≤ 40 chars)
+      Required fields (all six are mandatory — missing any one crashes on startup):
         group:    str  — one of: "Monitoring", "Diagnostics", "Security",
                          "Learning", "Hidden Features", "Advanced"
-        desc:     str  — one sentence describing what the feature does
+        icon:     str  — single unicode glyph shown in the feature card (e.g. "⬡", "◎")
+        name:     str  — short display name (≤ 40 chars)
+        desc:     str  — one or two sentences describing what the feature does
         page:     str  — nav label string to navigate to (or None for hidden features)
-        requires: list — zero or more of: "Npcap", "Admin", "Speedtest CLI"
+        requires: str|None — one of: "Npcap", "Admin", "Speedtest CLI", or None
+
+      Omitting "group" or "icon" raises KeyError in _render_features() and
+      prevents the app from starting.
 
       For features that require user configuration before they produce data
       (e.g. target lists, API keys, enable toggles): the desc must explicitly

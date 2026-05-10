@@ -1227,6 +1227,9 @@ class Dashboard(QMainWindow):
         self._m4_result = None
         self._m5_result = None
 
+        # Mesh enrichment — populated when MeshRouterPage scan completes
+        self._mesh_enrichment: dict = {}   # normalised MAC → MeshClient
+
         # Active workers
         self._workers = []
         self._active_count = 0
@@ -2235,6 +2238,10 @@ class Dashboard(QMainWindow):
         self._discover_page = FeatureGuidePage(parent=None)
         self._discover_page.navigate_to.connect(self._nav_rail_go_to)
 
+        from ui.pages.mesh_router_page import MeshRouterPage
+        self._mesh_router_page = MeshRouterPage(parent=None)
+        self._mesh_router_page.scan_done.connect(self._on_mesh_result)
+
         from ui.pages.rest_api_page import RestApiPage
         self._rest_api_page = RestApiPage(store=self._store, parent=None)
 
@@ -2367,6 +2374,7 @@ class Dashboard(QMainWindow):
         self._nav_add_page ("ℹ",  "Network Info",         net)
         self._nav_add_page ("≡", "DHCP Lease Inventory", self._dhcp_lease_page)
         self._nav_add_page ("⊹", "DNS Zone Map",         self._dns_zone_page)
+        self._nav_add_page ("⊛", "Mesh & Router",        self._mesh_router_page)
         self._nav_current_subgroup = -1
 
         # Threat Detection — collapsed; expand when you need security analysis
@@ -3202,6 +3210,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Network Map",         self._topology_tab_widget)
         self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
         self._nav_add_rail_item("Home Automation",     self._ha_page)
+        self._nav_add_rail_item("Mesh & Router",       self._mesh_router_page)
 
         self._nav_begin_section("Monitor", "monitor")
         self._nav_add_rail_item("Logs",                self._log_hub_page)
@@ -8379,6 +8388,82 @@ class Dashboard(QMainWindow):
         if getattr(self, "_scan_from_home", False) and len(devices) > 0:
             self._scan_from_home = False
             self._nav_rail_go_to("Overview")
+
+        # Mesh enrichment — show button when a gateway is found; auto-run if
+        # the user has already entered their mesh password this session.
+        self._check_mesh_autodetect(data)
+
+    # ── Mesh enrichment ────────────────────────────────────────────────────────
+
+    def _check_mesh_autodetect(self, m1_data: dict) -> None:
+        """Pre-fill the gateway IP on the Mesh & Router page from the scan result."""
+        gateway_ip = m1_data.get("gateway_ip")
+        if gateway_ip and hasattr(self, "_mesh_router_page"):
+            self._mesh_router_page.set_gateway_ip(gateway_ip)
+
+    @pyqtSlot(dict)
+    def _on_mesh_result(self, data: dict) -> None:
+        """Receive scan result from MeshRouterPage and enrich the Devices table."""
+        from modules.deco_client import _norm_mac
+        clients = data.get("clients", [])
+        self._mesh_enrichment = {c.mac: c for c in clients}
+        self._apply_mesh_enrichment()
+
+    def _apply_mesh_enrichment(self) -> None:
+        """
+        Merge MeshClient data into the M1 table and DeviceInfo objects.
+
+        Updates the Device Type column (col 5) to show the mesh node + band
+        when available.  Existing DeviceInfo objects in _m1_result are also
+        updated so exports and other consumers see the enriched data.
+        """
+        if not self._mesh_enrichment or not self._m1_result:
+            return
+
+        from PyQt6.QtGui import QColor
+        from modules.deco_client import _norm_mac
+
+        for row in range(self._m1_table.rowCount()):
+            mac_item = self._m1_table.item(row, 2)
+            if not mac_item:
+                continue
+            mc = self._mesh_enrichment.get(_norm_mac(mac_item.text()))
+            if not mc:
+                continue
+
+            # Build enriched display text for the Device Type column
+            mesh_tag = f"{mc.unit_name} · {mc.band}"
+            existing = (self._m1_table.item(row, 5) or QTableWidgetItem()).text()
+            if existing and existing not in ("Unknown Device", "Unknown", ""):
+                display = f"{existing}  ({mesh_tag})"
+            else:
+                display = mesh_tag
+
+            item = QTableWidgetItem(display)
+            item.setForeground(QColor(TEXT_PRIMARY))
+            item.setToolTip(
+                f"Mesh node:  {mc.unit_name}\n"
+                f"Band:       {mc.band}\n"
+                f"Upload:     {mc.upload_kbps} KB/s\n"
+                f"Download:   {mc.download_kbps} KB/s"
+            )
+            self._m1_table.setItem(row, 5, item)
+
+        # Mirror enrichment onto the DeviceInfo objects so exports include it
+        for d in self._m1_result.get("devices", []):
+            mac = _norm_mac(d.mac if not isinstance(d, dict) else d.get("mac", ""))
+            mc = self._mesh_enrichment.get(mac)
+            if mc:
+                if isinstance(d, dict):
+                    d["mesh_unit"]      = mc.unit_name
+                    d["mesh_band"]      = mc.band
+                    d["mesh_up_kbps"]   = mc.upload_kbps
+                    d["mesh_down_kbps"] = mc.download_kbps
+                else:
+                    d.mesh_unit      = mc.unit_name
+                    d.mesh_band      = mc.band
+                    d.mesh_up_kbps   = mc.upload_kbps
+                    d.mesh_down_kbps = mc.download_kbps
 
     @pyqtSlot(str)
     def _filter_m1_by_nl(self, text: str):
