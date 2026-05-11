@@ -1,0 +1,1 @@
+"%USERPROFILE%\.local\bin\claude.exe" project purge

@@ -230,7 +230,7 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.9.0
+### v1.9.1
 
 - Mesh router integration — live client data pulled directly from TP-Link Deco via its local API (no cloud, no account); Deco-assigned device names replace reverse-DNS hostnames in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download KB/s shown as a tooltip; credentials saved to OS keychain and the scan re-runs silently on every subsequent app start; Network Map upgrades to a three-tier mesh tree (Gateway → Satellites → Clients) when mesh data is present; WiFi Networks page gains real band-usage KPI chips (2.4 GHz / 5 GHz / 6 GHz / Wired client counts from the router) and a "Connected?" column; architecture supports adding Eero, Google Nest, Asus ZenWiFi, and Netgear Orbi via the same `MeshWorker` provider key
 - Protocol Visualizer — animated step-through of 9 real protocols (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); each step shows the packet name, frame detail, and a labelled dot travelling between nodes; play/pause/step controls; tabbed with a protocol context panel

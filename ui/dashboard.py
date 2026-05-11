@@ -1417,6 +1417,8 @@ class Dashboard(QMainWindow):
         self._start_update_check()
         # Restore full settings (mode, scan hosts, etc.) after UI is built
         self._restore_settings()
+        # Auto-start modem polling if credentials were saved from a prior session
+        self._check_modem_autorun()
 
     def _build_mode_bar(self) -> QWidget:
         """Mode-switcher pill — now built inline inside the sidebar in _build_tabs().
@@ -2174,9 +2176,11 @@ class Dashboard(QMainWindow):
         self._syslog_page = SyslogPage(parent=None)
 
         from ui.pages.log_hub_page import LogHubPage
-        self._log_hub_page = LogHubPage(parent=None)
+        self._log_hub_page = LogHubPage(store=self._store, parent=None)
         self._log_hub_page.animate_requested.connect(self._on_animate_log_entry)
         self._log_hub_page.live_challenge_detected.connect(self._on_live_challenge)
+        self._last_modem_log_ts: float = 0.0
+        self._last_mesh_log_ts:  float = 0.0
 
         from ui.pages.overview_page import OverviewPage
         self._overview_page = OverviewPage(store=self._store, parent=None)
@@ -2246,6 +2250,11 @@ class Dashboard(QMainWindow):
         from ui.pages.mesh_router_page import MeshRouterPage
         self._mesh_router_page = MeshRouterPage(parent=None)
         self._mesh_router_page.scan_done.connect(self._on_mesh_result)
+
+        from ui.pages.modem_page import ModemPage
+        self._modem_page = ModemPage(parent=None)
+        self._modem_page.connect_requested.connect(self._on_modem_connect)
+        self._modem_page.disconnect_requested.connect(self._on_modem_disconnect)
 
         from ui.pages.rest_api_page import RestApiPage
         self._rest_api_page = RestApiPage(store=self._store, parent=None)
@@ -3216,6 +3225,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
         self._nav_add_rail_item("Home Automation",     self._ha_page)
         self._nav_add_rail_item("Mesh & Router",       self._mesh_router_page)
+        self._nav_add_rail_item("Modem",               self._modem_page)
 
         self._nav_begin_section("Monitor", "monitor")
         self._nav_add_rail_item("Logs",                self._log_hub_page)
@@ -3240,8 +3250,6 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
         self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
         self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
-        self._nav_add_rail_item("SNMP Trap Receiver",  self._snmp_trap_page)
-        self._nav_add_rail_item("Syslog Viewer",       self._syslog_page)
         self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
         self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
         self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
@@ -8482,6 +8490,7 @@ class Dashboard(QMainWindow):
                 data.get("devices", []), gw_ip, gw_mac,
                 mesh_units=getattr(self, "_mesh_units", None),
                 mesh_enrichment=getattr(self, "_mesh_enrichment", None),
+                modem_data=getattr(self, "_last_modem_data", None),
             )
         except AttributeError:
             pass  # topology widget not yet initialised
@@ -8556,6 +8565,35 @@ class Dashboard(QMainWindow):
         self._m1_status.setText(
             f"{summary}  ·  {provider}: {matched} device{'s' if matched != 1 else ''} enriched"
         )
+        # Monitor logging — live entry + throttled DB write
+        if hasattr(self, "_log_hub_page"):
+            from PyQt6.QtCore import QSettings
+            import time as _time
+            s = QSettings()
+            if s.value("logging/mesh_enabled", False, type=bool):
+                self._log_hub_page.add_mesh_entry(data)
+                interval_s = s.value("logging/mesh_interval_min", 5, type=int) * 60
+                now = _time.time()
+                if self._store and now - self._last_mesh_log_ts >= interval_s:
+                    units        = self._mesh_units
+                    unit_count   = len(units)
+                    online_count = sum(1 for u in units if getattr(u, "online", True))
+                    worst_name, worst_rssi = None, None
+                    for u in units:
+                        rssi = getattr(u, "rssi", None) or getattr(u, "signal_level", None)
+                        if rssi is not None and (worst_rssi is None or rssi < worst_rssi):
+                            worst_rssi = rssi
+                            worst_name = getattr(u, "name", "") or getattr(u, "device_id", "")
+                    try:
+                        self._store.record_mesh_snapshot(
+                            unit_count=unit_count,
+                            online_count=online_count,
+                            worst_unit=worst_name,
+                            worst_rssi=worst_rssi,
+                        )
+                        self._last_mesh_log_ts = now
+                    except Exception:
+                        pass
 
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient data into the M1 table rows and DeviceInfo objects."""
@@ -8628,6 +8666,7 @@ class Dashboard(QMainWindow):
                 self._m1_result.get("devices", []), gw_ip, gw_mac,
                 mesh_units=getattr(self, "_mesh_units", None),
                 mesh_enrichment=self._mesh_enrichment,
+                modem_data=getattr(self, "_last_modem_data", None),
             )
         except Exception:
             pass
@@ -8798,6 +8837,118 @@ class Dashboard(QMainWindow):
             self._m1_sat_expanded.get(n, False) for n in self._m1_sat_expanded
         )
         self._m1_group_btn.setText("▼▼  Collapse All" if all_expanded else "▶▶  Expand All")
+
+    # ── Modem (ZTE MC889 / generic WAN modem) ───────────────────────────────
+
+    def _check_modem_autorun(self) -> None:
+        """Start ZTE polling on launch if host + password were saved in a prior session."""
+        from PyQt6.QtCore import QSettings
+        settings = QSettings()
+        host = settings.value("modem/last_host", "").strip()
+        if not host:
+            return
+        try:
+            import keyring as _kr
+            pw = _kr.get_password("NetSentinel/modem", host)
+        except Exception:
+            return
+        if not pw:
+            return
+        self._on_modem_connect(host, pw)
+
+    @pyqtSlot(str, str)
+    def _on_modem_connect(self, host: str, password: str) -> None:
+        """Start (or restart) the ZTE polling worker."""
+        self._on_modem_disconnect()
+        from workers.zte_worker import ZteWorker
+        worker = ZteWorker(host=host, password=password, interval_s=30)
+        worker.result.connect(self._on_modem_signal)
+        worker.error.connect(self._on_modem_error)
+        worker.status.connect(self._on_modem_status)
+        self._zte_worker = worker
+        worker.start()
+        # Give the speed test page the modem credentials for signal enrichment
+        if hasattr(self, "_speed_test_page"):
+            self._speed_test_page.set_modem_credentials(host, password)
+
+    @pyqtSlot()
+    def _on_modem_disconnect(self) -> None:
+        """Stop the ZTE polling worker and clear cached modem data."""
+        worker = getattr(self, "_zte_worker", None)
+        if worker:
+            worker.stop()
+            worker.wait(3000)
+            self._zte_worker = None
+        self._last_modem_data = None
+        if hasattr(self, "_speed_test_page"):
+            self._speed_test_page.clear_modem_credentials()
+
+    @pyqtSlot(dict)
+    def _on_modem_signal(self, data: dict) -> None:
+        """Cache signal data, route to Modem page, Overview tile, topology, and Monitor."""
+        self._last_modem_data = data
+        if hasattr(self, "_modem_page"):
+            self._modem_page.on_modem_signal(data)
+        if hasattr(self, "_overview_page"):
+            self._overview_page.on_modem_signal(data)
+        # Update topology if a scan result is already loaded
+        if getattr(self, "_m1_result", None) and hasattr(self, "_topology_widget"):
+            try:
+                gw_ip  = self._net_info.get("gateway")     if self._net_info else None
+                gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+                self._topology_widget.render(
+                    self._m1_result.get("devices", []), gw_ip, gw_mac,
+                    mesh_units=getattr(self, "_mesh_units", None),
+                    mesh_enrichment=getattr(self, "_mesh_enrichment", None),
+                    modem_data=data,
+                )
+            except Exception:
+                pass
+        # Monitor logging — live entry + throttled DB write
+        if hasattr(self, "_log_hub_page"):
+            from PyQt6.QtCore import QSettings
+            import time as _time
+            s = QSettings()
+            if s.value("logging/modem_enabled", False, type=bool):
+                self._log_hub_page.add_modem_entry(data)
+                interval_s = s.value("logging/modem_interval_min", 5, type=int) * 60
+                now = _time.time()
+                if self._store and now - self._last_modem_log_ts >= interval_s:
+                    try:
+                        self._store.record_modem_signal(
+                            network_type=data.get("network_type"),
+                            signal_bars=data.get("signal_bars"),
+                            cell_id=data.get("cell_id"),
+                            enb_id=data.get("enb_id"),
+                            mcc=data.get("mcc"),
+                            mnc=data.get("mnc"),
+                            wan_ip=data.get("wan_ip"),
+                            nr5g_band=data.get("nr5g_band"),
+                            nr5g_rsrp=data.get("nr5g_rsrp_dbm"),
+                            nr5g_sinr=data.get("nr5g_sinr_db"),
+                            nr5g_rsrq=data.get("nr5g_rsrq_db"),
+                            nr5g_pci=data.get("nr5g_pci"),
+                            nr5g_arfcn=data.get("nr5g_arfcn"),
+                            lte_band=data.get("lte_band"),
+                            lte_rsrp=data.get("lte_rsrp_dbm"),
+                            lte_snr=data.get("lte_snr_db"),
+                            lte_rsrq=data.get("lte_rsrq_db"),
+                            lte_pci=data.get("lte_pci"),
+                            lte_earfcn=data.get("lte_earfcn"),
+                        )
+                        self._last_modem_log_ts = now
+                    except Exception:
+                        pass
+
+    @pyqtSlot(str)
+    def _on_modem_error(self, msg: str) -> None:
+        if hasattr(self, "_modem_page"):
+            self._modem_page.on_modem_error(msg)
+
+    @pyqtSlot(str)
+    def _on_modem_status(self, msg: str) -> None:
+        if hasattr(self, "_modem_page"):
+            self._modem_page.on_modem_status(msg)
 
     @pyqtSlot(str)
     def _filter_m1_by_nl(self, text: str):

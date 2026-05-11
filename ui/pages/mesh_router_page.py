@@ -182,6 +182,26 @@ class MeshRouterPage(QWidget):
         root.addWidget(title)
         root.addWidget(sub)
 
+        compat = QFrame()
+        compat.setStyleSheet(
+            f"QFrame {{ background:#1A2A3A; border:1px solid #2A4A6A;"
+            f" border-left:3px solid {ACCENT}; border-radius:0px; }}"
+        )
+        compat_lay = QHBoxLayout(compat)
+        compat_lay.setContentsMargins(12, 6, 12, 6)
+        compat_lbl = QLabel(
+            "ℹ  Tested with <b>TP-Link Deco XE75</b>. Other mesh systems (Eero, Orbi, UniFi) "
+            "can be added by implementing the same worker interface — "
+            "see <code>workers/mesh_worker.py</code>."
+        )
+        compat_lbl.setTextFormat(Qt.TextFormat.RichText)
+        compat_lbl.setWordWrap(True)
+        compat_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;"
+        )
+        compat_lay.addWidget(compat_lbl)
+        root.addWidget(compat)
+
         # ── config card (two rows) ────────────────────────────────────────────
         cfg_card = QFrame()
         cfg_card.setStyleSheet(

@@ -70,6 +70,9 @@ class SpeedTestResult:
     timestamp: str = field(
         default_factory=lambda: datetime.datetime.now().isoformat(timespec="seconds")
     )
+    # ZTE modem signal snapshot captured immediately before the test ran.
+    # None when no ZTE client is configured or the snapshot fetch failed.
+    zte_signal: Optional[dict] = None
 
 
 # ── Gauge helper ──────────────────────────────────────────────────────────────

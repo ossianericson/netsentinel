@@ -44,9 +44,9 @@ python -m pytest tests/test_version_consistency.py -v   # verify
 
 Never pass flags like `--current` to bump_version.py — it has no flags; the first positional arg is the new version string.
 
-Current version: **v1.9.0**
+Current version: **v1.9.1**
 
-Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10 → v1.7.0 → v1.7.1 → v1.7.2 → v1.7.3 → v1.7.4 → v1.7.5 → v1.7.6 → v1.7.7 → v1.7.8 → v1.7.9 → v1.8.0 → v1.9.0
+Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10 → v1.7.0 → v1.7.1 → v1.7.2 → v1.7.3 → v1.7.4 → v1.7.5 → v1.7.6 → v1.7.7 → v1.7.8 → v1.7.9 → v1.8.0 → v1.9.0 → v1.9.1
 Note: tags v1.55 and v1.56 were published as two-part (missing dot); treat as v1.5.5/v1.5.6.
 
 ## Releasing
@@ -132,8 +132,16 @@ Belt-and-suspenders: items 2 and 3 both prevent the Ookla task from running duri
 | `NetSentinelSvc.spec` | PyInstaller spec for Windows service |
 | `installer.iss` | Inno Setup installer script |
 | `tests/test_version_consistency.py` | Ensures all version strings stay in sync + validates MSIX 4-part format |
-| `ui/pages/discover_page.py` | Feature Guide — 24-entry `_FEATURES` list; add an entry here for every new page (RULE-D2) |
-| `ui/pages/log_hub_page.py` | Log Hub — live logger output table; emits `live_challenge_detected` to wire Lab Mode live injection |
+| `ui/pages/discover_page.py` | Feature Guide — `_FEATURES` list; add an entry here for every new page (RULE-D2) |
+| `ui/pages/log_hub_page.py` | Monitor — unified log viewer (Network RTT, 5G Modem, Mesh, Syslog, SNMP); source toggle bar with per-source intervals; emits `live_challenge_detected` + `animate_requested` |
+| `ui/pages/speed_test_page.py` | Speed Test — history rows store full modem signal dict as UserRole; clicking a row restores the signal panel from DB |
+| `ui/pages/modem_page.py` | Modem — ZTE MC889 signal page; has compatibility notice strip |
+| `ui/pages/mesh_router_page.py` | Mesh Router — TP-Link Deco XE75 page; has compatibility notice strip |
+| `modules/metric_store.py` | MetricStore — `modem_signal_log` + `mesh_signal_log` tables added v1.9.1; `SpeedTestPoint` has 19 signal fields |
 | `ui/pages/protocol_viz_page.py` | Protocol Visualizer — animated protocol diagram; uses `ProtocolSceneData` from `modules/protocol_animator.py` |
 | `ui/widgets/protocol_canvas.py` | QPainter animation engine for protocol diagrams |
 | `ui/widgets/explainer_panel.py` | Reusable inline explanation widget used by Lab Mode and Protocol Visualizer |
+
+## v1.9.1 — what was built
+
+Speed Test now saves the full modem signal snapshot (20 fields: cell ID, eNB, MCC/MNC, WAN IP, all 5G NR and LTE radio detail) to the database alongside each test result. Clicking any row in the history table restores the signal panel from that snapshot. The Log Hub was redesigned from a three-tab widget into a unified monitor: one chronological table with a source toggle bar. Modem and Mesh are new sources with user-configurable log intervals (1–60 min stored in QSettings); enabling them persists time-series snapshots to two new DB tables (`modem_signal_log`, `mesh_signal_log`). The previously separate "Syslog Viewer" and "SNMP Trap Receiver" nav entries were removed — both feeds flow into the unified monitor table. `MetricStore.SpeedTestPoint` now has 19 optional signal fields; `record_speed_test` and `query_speed_test_history` updated accordingly. All 1515 tests pass.

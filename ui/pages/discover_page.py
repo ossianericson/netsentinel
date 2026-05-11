@@ -30,8 +30,9 @@ _FEATURES: list[dict] = [
         "desc": (
             "Main cockpit: launch a Quick Network Assessment (M1–M5 bundle) from the "
             "full-width Scan Network bar, then watch tiles update live. Each result tile "
-            "shows a last-scanned timestamp and a ↺ re-run button. A collapsible Security "
-            "Scan panel below the grid lets you select and open individual security tools."
+            "shows a last-scanned timestamp and a ↺ re-run button. The Security Scan panel "
+            "below the tile grid is open by default — pick individual security tools and "
+            "run them directly from here. Collapse it with the header toggle when not needed."
         ),
         "page": "Overview",
         "requires": None,
@@ -49,6 +50,21 @@ _FEATURES: list[dict] = [
         "page": "Network Logger",
         "requires": None,
         "tags": ["ping", "log", "csv", "stability", "latency", "outage", "uptime", "jitter", "arp"],
+    },
+    {
+        "group": "Monitoring",
+        "icon": "◎",
+        "name": "Monitor — Unified Log View",
+        "desc": (
+            "All log sources in one chronological table. Toggle sources on/off with "
+            "the chip bar at the top: Network RTT, 5G Modem signal, Mesh status, "
+            "Syslog, and SNMP traps. Enable Modem or Mesh logging to persist signal "
+            "history to the database — set the interval (1–60 min) per source. "
+            "Search across all sources in real time."
+        ),
+        "page": "Logs",
+        "requires": None,
+        "tags": ["monitor", "log", "unified", "modem", "mesh", "syslog", "snmp", "signal", "history", "interval"],
     },
     {
         "group": "Monitoring",
@@ -147,6 +163,30 @@ _FEATURES: list[dict] = [
             "hostname", "name", "eero", "google nest", "asus", "orbi", "enrichment", "autorun",
         ],
     },
+    {
+        "group": "Monitoring",
+        "icon": "⊕",
+        "name": "Modem",
+        "desc": (
+            "Live 5G NR and LTE signal metrics polled directly from your WAN modem's local API. "
+            "Displays RSRP, SINR, RSRQ, band, PCI, and ARFCN for both the 5G NR and LTE "
+            "carriers, plus cell ID, eNB/gNB ID, public IP, and signal bars. "
+            "Signal quality is colour-coded (Excellent / Good / Fair / Poor). "
+            "A compact signal tile also appears on the Overview dashboard. "
+            "Signal metrics are captured automatically at the start of every speed test so "
+            "throughput results are permanently tied to the exact cell and signal conditions. "
+            "Save credentials once and monitoring resumes silently on every app start. "
+            "ZTE MC889 is fully supported; the worker architecture accepts additional modem models "
+            "via a single provider key."
+        ),
+        "page": "Modem",
+        "requires": None,
+        "tags": [
+            "modem", "5g", "lte", "signal", "rsrp", "sinr", "rsrq", "band", "cell",
+            "zte", "mc889", "wan", "endc", "nr5g", "arfcn", "earfcn", "pci", "enb",
+            "speedtest", "enrichment", "autorun",
+        ],
+    },
     # ── Diagnostics ────────────────────────────────────────────────────────────
     {
         "group": "Diagnostics",
@@ -203,11 +243,15 @@ _FEATURES: list[dict] = [
         "name": "Speed Test",
         "desc": (
             "Measures download and upload speed using Ookla CLI when available, "
-            "with a pure-Python fallback requiring no extra dependencies. History is charted."
+            "with a pure-Python fallback requiring no extra dependencies. "
+            "When a modem is connected, the signal snapshot (band, RSRP, SINR) captured "
+            "at the moment the test ran is shown below the gauge and saved alongside the "
+            "result — so every historical entry shows the exact cell conditions it ran under."
         ),
         "page": "Speed Test",
         "requires": None,
-        "tags": ["speed", "bandwidth", "download", "upload", "ookla", "mbps", "test", "internet"],
+        "tags": ["speed", "bandwidth", "download", "upload", "ookla", "mbps", "test", "internet",
+                 "signal", "rsrp", "band", "modem", "5g", "lte", "enrichment"],
     },
     {
         "group": "Diagnostics",
@@ -249,14 +293,15 @@ _FEATURES: list[dict] = [
             "Without mesh data: flat star with Internet → Gateway → all devices, colour-coded by risk level. "
             "With Deco credentials saved: upgrades to a three-tier mesh tree — "
             "Internet → Gateway/Master → Satellite nodes → Client devices grouped under their satellite. "
-            "Devices not seen by the mesh (wired PCs on unmanaged switches, etc.) attach directly to the "
-            "gateway with a dashed edge so nothing is lost."
+            "When a modem is connected, a 5G Modem node appears between Internet and Gateway showing "
+            "the active band and signal bars, updating every 30 seconds. "
+            "Devices not seen by the mesh attach directly to the gateway with a dashed edge."
         ),
         "page": "Network Map",
         "requires": None,
         "tags": [
             "topology", "map", "diagram", "network", "router", "switch", "visual", "layout",
-            "mesh", "satellite", "deco", "tier", "tree", "hierarchy",
+            "mesh", "satellite", "deco", "tier", "tree", "hierarchy", "modem", "5g", "band",
         ],
     },
     {
@@ -453,7 +498,7 @@ _FEATURES: list[dict] = [
         "icon": "▶",
         "name": "ARP event → Protocol animation",
         "desc": (
-            "In Logs → Network Log, any row with an ARP event shows a clickable "
+            "In Monitor, any Network RTT row with an ARP event shows a clickable "
             "'▶ ARP' button. Clicking jumps to the Protocol Visualizer pre-loaded "
             "with that exact event — real addresses, real timing."
         ),
@@ -508,9 +553,10 @@ _FEATURES: list[dict] = [
         "name": "Syslog Receiver",
         "desc": (
             "Listens on UDP 514 for syslog messages from routers, switches, and servers. "
-            "View in Logs → Syslog tab. Configure your router to forward syslog to this machine's IP."
+            "Enable the Syslog source toggle in Monitor to view them. "
+            "Configure your router to forward syslog to this machine's IP."
         ),
-        "page": "Syslog Viewer",
+        "page": "Logs",
         "requires": None,
         "tags": ["syslog", "udp", "router", "switch", "log", "514", "message"],
     },
@@ -520,9 +566,9 @@ _FEATURES: list[dict] = [
         "name": "SNMP Trap Receiver",
         "desc": (
             "Receives SNMP traps on UDP 162 from managed switches and routers. "
-            "View in Logs → SNMP Traps tab."
+            "Enable the SNMP source toggle in Monitor to view them."
         ),
-        "page": "SNMP Trap Receiver",
+        "page": "Logs",
         "requires": None,
         "tags": ["snmp", "trap", "udp", "162", "managed", "switch", "router", "oid"],
     },

@@ -78,6 +78,20 @@ _GAUGE_MAJOR = {0, 10, 100, 1000}   # ticks that get a text label
 
 _COLOR_DOWNLOAD = ACCENT             # brand blue
 _COLOR_UPLOAD   = GREEN              # green
+
+
+def _rsrp_color(rsrp) -> str:
+    if rsrp is None:
+        return TEXT_MUTED
+    try:
+        v = float(rsrp)
+    except (TypeError, ValueError):
+        return TEXT_MUTED
+    if v >= -80:
+        return GREEN
+    if v >= -100:
+        return AMBER
+    return RED
 _COLOR_IDLE     = TEXT_MUTED         # muted grey
 _COLOR_TRACK    = PROGRESS_TRACK     # light grey track
 
@@ -375,6 +389,8 @@ class SpeedTestPage(QWidget):
         self._test_worker   = None
         self._last_fetch_ts: float = 0.0   # epoch; 0 = never
         self._history: List[dict] = []
+        self._zte_host:     Optional[str] = None
+        self._zte_password: Optional[str] = None
         self._anim_timer = QTimer(self)
         self._anim_timer.setInterval(80)
         self._anim_timer.timeout.connect(self._anim_tick)
@@ -528,10 +544,10 @@ class SpeedTestPage(QWidget):
         # ── History table ─────────────────────────────────────────────────────
         hist_card, hist_body = _card("Test History")
 
-        self._hist_table = QTableWidget(0, 7)
+        self._hist_table = QTableWidget(0, 9)
         self._hist_table.setHorizontalHeaderLabels([
             "Date / Time", "Server", "Location", "Ping (ms)",
-            "↓ Download", "↑ Upload", "Status",
+            "↓ Download", "↑ Upload", "Band", "RSRP", "Status",
         ])
         self._hist_table.horizontalHeader().setStretchLastSection(True)
         self._hist_table.horizontalHeader().setSectionResizeMode(
@@ -547,7 +563,9 @@ class SpeedTestPage(QWidget):
         self._hist_table.setColumnWidth(3, 75)
         self._hist_table.setColumnWidth(4, 105)
         self._hist_table.setColumnWidth(5, 105)
-        self._hist_table.setColumnWidth(6, 100)
+        self._hist_table.setColumnWidth(6, 90)
+        self._hist_table.setColumnWidth(7, 90)
+        self._hist_table.setColumnWidth(8, 80)
         self._hist_table.setStyleSheet(
             f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
             f"QHeaderView::section {{"
@@ -560,8 +578,224 @@ class SpeedTestPage(QWidget):
             f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
         )
 
+        self._hist_table.itemSelectionChanged.connect(self._on_history_row_selected)
         hist_body.addWidget(self._hist_table)
+
+        # ── Modem signal snapshot panel (hidden until a test with modem data) ──
+        self._signal_panel = self._build_signal_panel()
+        self._signal_panel.setVisible(False)
+        root.addWidget(self._signal_panel)
+
         root.addWidget(hist_card, 2)
+
+    # ── Modem credentials (set by dashboard when modem connects/disconnects) ──
+
+    def set_modem_credentials(self, host: str, password: str) -> None:
+        self._zte_host     = host
+        self._zte_password = password
+
+    def clear_modem_credentials(self) -> None:
+        self._zte_host     = None
+        self._zte_password = None
+
+    # ── Signal snapshot panel ─────────────────────────────────────────────────
+
+    def _build_signal_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("sigPanel")
+        panel.setStyleSheet(
+            f"QFrame#sigPanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-left:3px solid {ACCENT}; }}"
+        )
+        root = QVBoxLayout(panel)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _lbl_style   = f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;"
+        _val_style   = f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold; border:none; background:transparent;"
+        _hdr_style   = f"border:none; border-bottom:1px solid {BORDER}; background:{BG_CARD};"
+
+        # ── header strip ─────────────────────────────────────────────────────
+        hdr = QFrame()
+        hdr.setStyleSheet(f"QFrame {{ {_hdr_style} }}")
+        hdr_lay = QHBoxLayout(hdr)
+        hdr_lay.setContentsMargins(12, 6, 12, 6)
+        hdr_lay.setSpacing(8)
+
+        title = QLabel("📡  Modem signal at test time")
+        title.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold; border:none; background:transparent;"
+        )
+        self._sig_ts = QLabel("")
+        self._sig_ts.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;")
+        self._sig_network_type = QLabel("")
+        self._sig_network_type.setStyleSheet(f"color:{ACCENT}; font-size:11px; font-weight:bold; border:none; background:transparent;")
+        self._sig_bars = QLabel("")
+        self._sig_bars.setStyleSheet(f"color:{GREEN}; font-size:11px; border:none; background:transparent;")
+
+        hdr_lay.addWidget(title)
+        hdr_lay.addWidget(self._sig_ts)
+        hdr_lay.addStretch()
+        hdr_lay.addWidget(self._sig_network_type)
+        hdr_lay.addWidget(self._sig_bars)
+        root.addWidget(hdr)
+
+        # ── connection strip (operator / cell / IP) ───────────────────────────
+        conn = QFrame()
+        conn.setStyleSheet(f"QFrame {{ {_hdr_style} }}")
+        conn_lay = QHBoxLayout(conn)
+        conn_lay.setContentsMargins(12, 5, 12, 5)
+        conn_lay.setSpacing(0)
+
+        def _conn_pair(label: str, attr: str) -> None:
+            lbl = QLabel(f"{label}: ")
+            lbl.setStyleSheet(_lbl_style)
+            val = QLabel("—")
+            val.setStyleSheet(_val_style)
+            setattr(self, attr, val)
+            conn_lay.addWidget(lbl)
+            conn_lay.addWidget(val)
+            sep = QFrame()
+            sep.setFrameShape(QFrame.Shape.VLine)
+            sep.setStyleSheet(f"border:none; border-left:1px solid {BORDER}; margin:0 16px;")
+            conn_lay.addWidget(sep)
+
+        _conn_pair("Operator", "_sig_operator")
+        _conn_pair("Cell ID",  "_sig_cell")
+        _conn_pair("Public IP","_sig_ip")
+        conn_lay.addStretch()
+        root.addWidget(conn)
+
+        # ── two-column signal body ─────────────────────────────────────────────
+        body = QFrame()
+        body.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; }}")
+        body_lay = QHBoxLayout(body)
+        body_lay.setContentsMargins(0, 0, 0, 0)
+        body_lay.setSpacing(0)
+
+        def _col_row(label: str, attr: str, parent_lay: QVBoxLayout) -> None:
+            h = QHBoxLayout()
+            h.setSpacing(6)
+            h.setContentsMargins(0, 1, 0, 1)
+            lbl_w = QLabel(f"{label}:")
+            lbl_w.setFixedWidth(58)
+            lbl_w.setStyleSheet(_lbl_style)
+            val_w = QLabel("—")
+            val_w.setStyleSheet(_val_style)
+            setattr(self, attr, val_w)
+            h.addWidget(lbl_w)
+            h.addWidget(val_w, 1)
+            parent_lay.addLayout(h)
+
+        def _signal_col(title: str, title_color: str, border_right: bool) -> QVBoxLayout:
+            col = QFrame()
+            border = f"border-right:1px solid {BORDER};" if border_right else ""
+            col.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; {border} }}")
+            lay = QVBoxLayout(col)
+            lay.setContentsMargins(12, 8, 12, 8)
+            lay.setSpacing(2)
+            t = QLabel(title)
+            t.setStyleSheet(
+                f"color:{title_color}; font-size:11px; font-weight:bold;"
+                f" border:none; border-bottom:1px solid {BORDER}; background:transparent;"
+                f" padding-bottom:4px; margin-bottom:2px;"
+            )
+            lay.addWidget(t)
+            body_lay.addWidget(col, 1)
+            return lay
+
+        nr_lay  = _signal_col("5G NR",        ACCENT, border_right=True)
+        lte_lay = _signal_col("LTE Primary",   AMBER,  border_right=False)
+
+        _col_row("Band",  "_sig_5g_band",  nr_lay)
+        _col_row("RSRP",  "_sig_5g_rsrp",  nr_lay)
+        _col_row("SINR",  "_sig_5g_sinr",  nr_lay)
+        _col_row("RSRQ",  "_sig_5g_rsrq",  nr_lay)
+        _col_row("PCI",   "_sig_5g_pci",   nr_lay)
+        _col_row("ARFCN", "_sig_5g_arfcn", nr_lay)
+        nr_lay.addStretch()
+
+        _col_row("Band",   "_sig_lte_band",   lte_lay)
+        _col_row("RSRP",   "_sig_lte_rsrp",   lte_lay)
+        _col_row("SNR",    "_sig_lte_snr",    lte_lay)
+        _col_row("RSRQ",   "_sig_lte_rsrq",   lte_lay)
+        _col_row("PCI",    "_sig_lte_pci",    lte_lay)
+        _col_row("EARFCN", "_sig_lte_earfcn", lte_lay)
+        lte_lay.addStretch()
+
+        root.addWidget(body)
+        return panel
+
+    def _update_signal_panel(self, sig: dict) -> None:
+        import datetime as _dt
+
+        def _s(v) -> str:
+            return str(v) if v is not None else "—"
+
+        def _fmt_dbm(v) -> str:
+            return f"{float(v):.1f} dBm" if v is not None else "—"
+
+        def _fmt_db(v) -> str:
+            return f"{float(v):.1f} dB" if v is not None else "—"
+
+        def _quality(rsrp) -> str:
+            if rsrp is None:
+                return ""
+            v = float(rsrp)
+            if v >= -80:  return "  — Excellent"
+            if v >= -90:  return "  — Good"
+            if v >= -100: return "  — Fair"
+            return "  — Poor"
+
+        # Header
+        ts = sig.get("ts")
+        if ts:
+            self._sig_ts.setText(f"  ·  {_dt.datetime.fromtimestamp(ts).strftime('%H:%M:%S')}")
+        nt   = sig.get("network_type")
+        bars = sig.get("signal_bars")
+        self._sig_network_type.setText(f"  {nt}" if nt else "")
+        if bars is not None:
+            self._sig_bars.setText(f"  {'●' * bars}{'○' * (5 - bars)}  {bars}/5")
+        else:
+            self._sig_bars.setText("")
+
+        # Connection strip
+        mcc, mnc = sig.get("mcc"), sig.get("mnc")
+        self._sig_operator.setText(f"{mcc}-{mnc}" if mcc and mnc else "—")
+        cell = sig.get("cell_id")
+        enb  = sig.get("enb_id")
+        self._sig_cell.setText(
+            f"{cell}  (eNB: {enb})" if cell and enb else _s(cell)
+        )
+        self._sig_ip.setText(_s(sig.get("wan_ip")))
+
+        # 5G NR
+        nr_rsrp = sig.get("nr5g_rsrp_dbm")
+        self._sig_5g_band.setText(_s(sig.get("nr5g_band")))
+        self._sig_5g_rsrp.setText(_fmt_dbm(nr_rsrp) + _quality(nr_rsrp))
+        self._sig_5g_rsrp.setStyleSheet(
+            f"color:{_rsrp_color(nr_rsrp)}; font-size:11px; font-weight:bold;"
+            f" border:none; background:transparent;"
+        )
+        self._sig_5g_sinr.setText(_fmt_db(sig.get("nr5g_sinr_db")))
+        self._sig_5g_rsrq.setText(_fmt_db(sig.get("nr5g_rsrq_db")))
+        self._sig_5g_pci.setText(_s(sig.get("nr5g_pci")))
+        self._sig_5g_arfcn.setText(_s(sig.get("nr5g_arfcn")))
+
+        # LTE Primary
+        lte_rsrp = sig.get("lte_rsrp_dbm")
+        self._sig_lte_band.setText(_s(sig.get("lte_band")))
+        self._sig_lte_rsrp.setText(_fmt_dbm(lte_rsrp) + _quality(lte_rsrp))
+        self._sig_lte_rsrp.setStyleSheet(
+            f"color:{_rsrp_color(lte_rsrp)}; font-size:11px; font-weight:bold;"
+            f" border:none; background:transparent;"
+        )
+        self._sig_lte_snr.setText(_fmt_db(sig.get("lte_snr_db")))
+        self._sig_lte_rsrq.setText(_fmt_db(sig.get("lte_rsrq_db")))
+        self._sig_lte_pci.setText(_s(sig.get("lte_pci")))
+        self._sig_lte_earfcn.setText(_s(sig.get("lte_earfcn")))
+
+        self._signal_panel.setVisible(True)
 
     # ── Server fetching ───────────────────────────────────────────────────────
 
@@ -696,6 +930,8 @@ class SpeedTestPage(QWidget):
 
         self._test_worker = SpeedTestWorker(
             server_id=self._selected_server_id,
+            zte_host=self._zte_host,
+            zte_password=self._zte_password,
             parent=self,
         )
         self._test_worker.phase_changed.connect(self._on_phase_changed)
@@ -763,6 +999,11 @@ class SpeedTestPage(QWidget):
             f"↓ {result.download_mbps:.1f}  ↑ {result.upload_mbps:.1f}  Mbps"
         )
 
+        # Show modem signal snapshot panel if present
+        sig = getattr(result, "zte_signal", None)
+        if sig:
+            self._update_signal_panel(sig)
+
         # Persist to database
         if self._store:
             try:
@@ -773,6 +1014,25 @@ class SpeedTestPage(QWidget):
                     server_name=result.server_name,
                     server_city=result.server_city,
                     server_country=result.server_country,
+                    network_type=sig.get("network_type")   if sig else None,
+                    signal_bars=sig.get("signal_bars")     if sig else None,
+                    nr5g_rsrp=sig.get("nr5g_rsrp_dbm")    if sig else None,
+                    nr5g_sinr=sig.get("nr5g_sinr_db")     if sig else None,
+                    nr5g_band=sig.get("nr5g_band")         if sig else None,
+                    lte_rsrp=sig.get("lte_rsrp_dbm")      if sig else None,
+                    lte_band=sig.get("lte_band")           if sig else None,
+                    cell_id=sig.get("cell_id")             if sig else None,
+                    enb_id=sig.get("enb_id")               if sig else None,
+                    mcc=sig.get("mcc")                     if sig else None,
+                    mnc=sig.get("mnc")                     if sig else None,
+                    wan_ip=sig.get("wan_ip")               if sig else None,
+                    nr5g_rsrq=sig.get("nr5g_rsrq_db")     if sig else None,
+                    nr5g_pci=sig.get("nr5g_pci")           if sig else None,
+                    nr5g_arfcn=sig.get("nr5g_arfcn")       if sig else None,
+                    lte_snr=sig.get("lte_snr_db")          if sig else None,
+                    lte_rsrq=sig.get("lte_rsrq_db")        if sig else None,
+                    lte_pci=sig.get("lte_pci")             if sig else None,
+                    lte_earfcn=sig.get("lte_earfcn")       if sig else None,
                 )
             except Exception:
                 pass  # never let a DB write break the UI
@@ -804,12 +1064,18 @@ class SpeedTestPage(QWidget):
     # ── History ───────────────────────────────────────────────────────────────
 
     def _add_history_row(self, result, error: str = "") -> None:
-        row = self._hist_table.rowCount()
         self._hist_table.insertRow(0)  # newest at top
+        sig = None
 
         if result:
             backend = getattr(result, "backend", "") or "OK"
             backend_color = GREEN if backend == "Ookla CLI" else AMBER
+            sig = getattr(result, "zte_signal", None)
+            band = (sig.get("nr5g_band") or sig.get("lte_band") or "—") if sig else "—"
+            rsrp = (sig.get("nr5g_rsrp_dbm") if sig and sig.get("nr5g_rsrp_dbm") is not None
+                    else (sig.get("lte_rsrp_dbm") if sig else None))
+            rsrp_str = f"{rsrp:.1f}" if rsrp is not None else "—"
+            rsrp_color = _rsrp_color(rsrp)
             cells = [
                 result.timestamp.replace("T", "  "),
                 result.server_name,
@@ -817,25 +1083,58 @@ class SpeedTestPage(QWidget):
                 f"{result.ping_ms:.0f}",
                 f"{result.download_mbps:.1f} Mbps",
                 f"{result.upload_mbps:.1f} Mbps",
+                band,
+                rsrp_str,
                 backend,
             ]
             colors = [None, None, None, None,
                       GREEN if result.download_mbps >= 25 else AMBER,
                       GREEN if result.upload_mbps >= 5  else AMBER,
-                      backend_color]
+                      None, rsrp_color, backend_color]
         else:
-            cells = ["—", "—", "—", "—", "—", "—", "Error"]
-            colors = [None]*6 + [RED]
+            cells = ["—", "—", "—", "—", "—", "—", "—", "—", "Error"]
+            colors = [None]*8 + [RED]
 
         for col, (val, col_color) in enumerate(zip(cells, colors)):
             item = QTableWidgetItem(str(val))
             if col_color:
                 item.setForeground(QColor(col_color))
+            if col == 0:
+                item.setData(Qt.ItemDataRole.UserRole, sig)
             self._hist_table.setItem(0, col, item)
 
         self._hist_table.scrollToTop()
 
     # ── Status helper ─────────────────────────────────────────────────────────
+    @staticmethod
+    def _point_to_sig_dict(p) -> Optional[dict]:
+        """Reconstruct a signal dict from a SpeedTestPoint for _update_signal_panel."""
+        if not any([p.network_type, p.signal_bars is not None,
+                    p.nr5g_rsrp is not None, p.lte_rsrp is not None]):
+            return None
+        return {
+            "ts":            p.ts,
+            "network_type":  p.network_type,
+            "signal_bars":   p.signal_bars,
+            "mcc":           getattr(p, "mcc", None),
+            "mnc":           getattr(p, "mnc", None),
+            "cell_id":       getattr(p, "cell_id", None),
+            "enb_id":        getattr(p, "enb_id", None),
+            "wan_ip":        getattr(p, "wan_ip", None),
+            "nr5g_band":     p.nr5g_band,
+            "nr5g_rsrp_dbm": p.nr5g_rsrp,
+            "nr5g_sinr_db":  p.nr5g_sinr,
+            "nr5g_rsrq_db":  getattr(p, "nr5g_rsrq", None),
+            "nr5g_pci":      getattr(p, "nr5g_pci", None),
+            "nr5g_arfcn":    getattr(p, "nr5g_arfcn", None),
+            "lte_band":      p.lte_band,
+            "lte_rsrp_dbm":  p.lte_rsrp,
+            "lte_snr_db":    getattr(p, "lte_snr", None),
+            "lte_rsrq_db":   getattr(p, "lte_rsrq", None),
+            "lte_pci":       getattr(p, "lte_pci", None),
+            "lte_earfcn":    getattr(p, "lte_earfcn", None),
+        }
+
     def _load_history_from_db(self) -> None:
         """Populate history table from MetricStore on page load."""
         if not self._store:
@@ -847,6 +1146,12 @@ class SpeedTestPage(QWidget):
                 ts_str = _dt.datetime.fromtimestamp(p.ts).strftime("%Y-%m-%d  %H:%M:%S")
                 row = self._hist_table.rowCount()
                 self._hist_table.insertRow(row)
+                band = getattr(p, "nr5g_band", None) or getattr(p, "lte_band", None) or "—"
+                rsrp = (getattr(p, "nr5g_rsrp", None)
+                        if getattr(p, "nr5g_rsrp", None) is not None
+                        else getattr(p, "lte_rsrp", None))
+                rsrp_str = f"{rsrp:.1f}" if rsrp is not None else "—"
+                sig = self._point_to_sig_dict(p)
                 cells = [
                     ts_str,
                     p.server_name or "",
@@ -854,18 +1159,37 @@ class SpeedTestPage(QWidget):
                     f"{p.ping_ms:.0f}",
                     f"{p.download_mbps:.1f} Mbps",
                     f"{p.upload_mbps:.1f} Mbps",
+                    band,
+                    rsrp_str,
                     "OK",
                 ]
                 clrs = [None, None, None, None,
                         GREEN if p.download_mbps >= 25 else AMBER,
                         GREEN if p.upload_mbps >= 5  else AMBER,
-                        GREEN]
+                        None, _rsrp_color(rsrp), GREEN]
                 for col, (val, col_color) in enumerate(zip(cells, clrs)):
                     item = QTableWidgetItem(str(val))
                     if col_color:
                         item.setForeground(QColor(col_color))
+                    if col == 0:
+                        item.setData(Qt.ItemDataRole.UserRole, sig)
                     self._hist_table.setItem(row, col, item)
         except Exception:
             pass  # DB not available yet is fine
+
+    @pyqtSlot()
+    def _on_history_row_selected(self) -> None:
+        row = self._hist_table.currentRow()
+        if row < 0:
+            return
+        item = self._hist_table.item(row, 0)
+        if item is None:
+            return
+        sig = item.data(Qt.ItemDataRole.UserRole)
+        if sig:
+            self._update_signal_panel(sig)
+        else:
+            self._signal_panel.setVisible(False)
+
     def _set_status(self, text: str) -> None:
         self._status_lbl.setText(text)

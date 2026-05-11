@@ -45,6 +45,7 @@ RISK_NODE_COLOR: Dict[str, str] = {
 GATEWAY_COLOR  = ACCENT
 INTERNET_COLOR = ACCENT
 MESH_SAT_COLOR = CHART_PURPLE   # satellite nodes — distinct from all risk colours
+MODEM_COLOR    = GREEN           # WAN modem node
 
 
 class TopologyWidget(QWidget):
@@ -78,6 +79,7 @@ class TopologyWidget(QWidget):
         gateway_mac: Optional[str] = None,
         mesh_units: Optional[List[Any]] = None,
         mesh_enrichment: Optional[Dict[str, Any]] = None,
+        modem_data: Optional[Dict[str, Any]] = None,
     ) -> None:
         ax = self._ax
         ax.cla()
@@ -91,9 +93,10 @@ class TopologyWidget(QWidget):
             return
 
         if mesh_units and mesh_enrichment:
-            self._render_mesh(ax, devices, gateway_ip, mesh_units, mesh_enrichment)
+            self._render_mesh(ax, devices, gateway_ip, mesh_units, mesh_enrichment,
+                              modem_data=modem_data)
         else:
-            self._render_flat(ax, devices, gateway_ip, gateway_mac)
+            self._render_flat(ax, devices, gateway_ip, gateway_mac, modem_data=modem_data)
 
         # Extend y-axis below 0 so labels placed at (y - 0.07) near the bottom
         # are never clipped by the axes patch boundary.
@@ -108,7 +111,7 @@ class TopologyWidget(QWidget):
 
     # ── flat star layout ──────────────────────────────────────────────────────
 
-    def _render_flat(self, ax, devices, gateway_ip, gateway_mac) -> None:
+    def _render_flat(self, ax, devices, gateway_ip, gateway_mac, modem_data=None) -> None:
         nodes: List[dict] = [
             {"id": "internet", "label": "☁  Internet", "color": INTERNET_COLOR, "size": 1200},
             {"id": "gateway",  "label": f"Gateway\n{gateway_ip or '?'}", "color": GATEWAY_COLOR, "size": 1000},
@@ -126,18 +129,36 @@ class TopologyWidget(QWidget):
             })
 
         n = len(nodes) - 2
-        positions: Dict[str, tuple] = {"internet": (0.5, 0.92), "gateway": (0.5, 0.60)}
+        # Modem node inserts between Internet and Gateway — compress their y positions
+        has_modem = bool(modem_data)
+        y_internet = 0.92
+        y_modem    = 0.76
+        y_gateway  = 0.58 if has_modem else 0.60
+        positions: Dict[str, tuple] = {
+            "internet": (0.5, y_internet),
+            "gateway":  (0.5, y_gateway),
+        }
+        if has_modem:
+            positions["__modem__"] = (0.5, y_modem)
+
         for i, node in enumerate(nodes[2:]):
             angle  = math.pi + (i / max(n, 1)) * 2 * math.pi
             radius = 0.32 * (1 + 0.3 * (n > 8))
             positions[node["id"]] = (
                 0.5  + radius * math.cos(angle),
-                0.28 + radius * 0.6 * math.sin(angle),
+                0.26 + radius * 0.6 * math.sin(angle),
             )
 
         gx, gy = positions["gateway"]
         ix, iy = positions["internet"]
-        ax.plot([ix, gx], [iy, gy], color=BORDER, linewidth=1.5, zorder=1)
+
+        if has_modem:
+            mx, my = positions["__modem__"]
+            ax.plot([ix, mx], [iy, my], color=BORDER, linewidth=1.5, zorder=1)
+            ax.plot([mx, gx], [my, gy], color=BORDER, linewidth=1.5, zorder=1)
+        else:
+            ax.plot([ix, gx], [iy, gy], color=BORDER, linewidth=1.5, zorder=1)
+
         for node in nodes[2:]:
             nx, ny = positions[node["id"]]
             ax.plot([gx, nx], [gy, ny], color=BORDER, linewidth=1.0, zorder=1)
@@ -145,12 +166,17 @@ class TopologyWidget(QWidget):
         for node in nodes:
             _scatter(ax, positions[node["id"]], node["color"], node["size"], node["label"])
 
-        self._legend(ax, mesh=False)
+        if has_modem:
+            _scatter(ax, positions["__modem__"], MODEM_COLOR, 900,
+                     _modem_label(modem_data))
+
+        self._legend(ax, mesh=False, modem=has_modem)
         ax.set_title("Network Topology", color=CHART_TITLE, fontsize=11, fontweight="bold", pad=4)
 
     # ── mesh 3-tier layout ────────────────────────────────────────────────────
 
-    def _render_mesh(self, ax, devices, gateway_ip, mesh_units, mesh_enrichment) -> None:
+    def _render_mesh(self, ax, devices, gateway_ip, mesh_units, mesh_enrichment,
+                     modem_data=None) -> None:
         try:
             from modules.deco_client import _norm_mac
         except ImportError:
@@ -174,11 +200,13 @@ class TopologyWidget(QWidget):
         # ── Y tiers — three clearly separated rows ────────────────────────────
         # Unassigned devices get their own tier between gateway and satellites
         # so their dashed edges never cross through satellite positions.
+        has_modem   = bool(modem_data)
         Y_INTERNET  = 0.91
-        Y_GATEWAY   = 0.73
-        Y_UNASSIGNED = 0.61   # direct-to-gateway devices — above satellite row
-        Y_SATELLITE  = 0.46   # mesh satellite nodes
-        Y_CLIENT     = 0.18   # leaf client devices
+        Y_MODEM     = 0.80    # WAN modem — between internet and gateway (only when present)
+        Y_GATEWAY   = 0.68 if has_modem else 0.73
+        Y_UNASSIGNED = 0.56   # direct-to-gateway devices — above satellite row
+        Y_SATELLITE  = 0.42   # mesh satellite nodes
+        Y_CLIENT     = 0.16   # leaf client devices
 
         # ── X positions for satellites ────────────────────────────────────────
         # Use 0.13–0.87 margins so labels at the edges don't clip.
@@ -191,6 +219,8 @@ class TopologyWidget(QWidget):
             "__internet__": (0.5, Y_INTERNET),
             "__gateway__":  (0.5, Y_GATEWAY),
         }
+        if has_modem:
+            pos["__modem__"] = (0.5, Y_MODEM)
 
         for i, unit in enumerate(satellites):
             if n_sats == 1:
@@ -227,7 +257,12 @@ class TopologyWidget(QWidget):
         # ── Draw all edges first (zorder=1) so nodes paint over them ─────────
         gx, gy = pos["__gateway__"]
         ix, iy = pos["__internet__"]
-        ax.plot([ix, gx], [iy, gy], color=BORDER, linewidth=2.0, zorder=1)
+        if has_modem:
+            mx, my = pos["__modem__"]
+            ax.plot([ix, mx], [iy, my], color=BORDER, linewidth=2.0, zorder=1)
+            ax.plot([mx, gx], [my, gy], color=BORDER, linewidth=2.0, zorder=1)
+        else:
+            ax.plot([ix, gx], [iy, gy], color=BORDER, linewidth=2.0, zorder=1)
 
         for unit in satellites:
             sx, sy = pos[unit.mac]
@@ -247,6 +282,8 @@ class TopologyWidget(QWidget):
 
         # ── Draw nodes and labels (zorder=3/4) ───────────────────────────────
         _scatter(ax, pos["__internet__"], INTERNET_COLOR, 1200, "☁  Internet")
+        if has_modem:
+            _scatter(ax, pos["__modem__"], MODEM_COLOR, 900, _modem_label(modem_data))
 
         gw_name  = master.name if master else "Gateway"
         gw_label = f"{gw_name}\n{gateway_ip or ''}"
@@ -264,18 +301,18 @@ class TopologyWidget(QWidget):
         for d in unassigned:
             _draw_device(ax, d, pos)
 
-        self._legend(ax, mesh=True)
+        self._legend(ax, mesh=True, modem=has_modem)
         ax.set_title("Network Topology — Mesh", color=CHART_TITLE,
                      fontsize=11, fontweight="bold", pad=4)
 
     # ── shared legend ─────────────────────────────────────────────────────────
 
-    def _legend(self, ax, mesh: bool = False) -> None:
+    def _legend(self, ax, mesh: bool = False, modem: bool = False) -> None:
         items = [
-            (RED,          "HIGH risk"),
-            (AMBER,        "MEDIUM risk"),
-            (BLUE,         "LOW / known"),
-            (GREEN,        "Clean"),
+            (RED,           "HIGH risk"),
+            (AMBER,         "MEDIUM risk"),
+            (BLUE,          "LOW / known"),
+            (GREEN,         "Clean / Modem"),
             (GATEWAY_COLOR, "Gateway"),
         ]
         if mesh:
@@ -305,6 +342,16 @@ def _scatter(ax, pos: tuple, color: str, size: int, label: str) -> None:
     ax.text(x, y - 0.07, label, ha="center", va="top", fontsize=7,
             color=TEXT_PRIMARY, zorder=4,
             bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.9))
+
+
+def _modem_label(data: dict) -> str:
+    """Build a two-line label for the WAN modem topology node."""
+    nt   = data.get("network_type") or ""
+    band = data.get("nr5g_band") or data.get("lte_band") or ""
+    bars = data.get("signal_bars")
+    bar_str = ("●" * bars + "○" * (5 - bars)) if bars is not None else ""
+    line2 = "  ·  ".join(filter(None, [nt, band, bar_str]))
+    return f"5G Modem\n{line2}" if line2 else "5G Modem"
 
 
 def _draw_device(ax, d: Any, pos: Dict[str, tuple]) -> None:

@@ -12,6 +12,8 @@ from modules.metric_store import (
     DeviceStatePoint,
     DeviceEvent,
     KnownDevice,
+    ModemSignalPoint,
+    MeshSignalPoint,
 )
 
 
@@ -38,7 +40,7 @@ def mem_store():
 class TestConstruction:
     def test_opens_in_memory(self, mem_store):
         counts = mem_store.get_row_counts()
-        assert set(counts.keys()) == {"rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected"}
+        assert set(counts.keys()) == {"rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log"}
 
     def test_row_counts_start_at_zero(self, store):
         for v in store.get_row_counts().values():
@@ -380,3 +382,136 @@ class TestDbSize:
     def test_file_db_returns_nonzero_after_write(self, store):
         store.record_rtt("8.8.8.8", 1.0)
         assert store.get_db_size_bytes() > 0
+
+
+# ── modem_signal_log ──────────────────────────────────────────────────────────
+
+class TestModemSignalLog:
+    def test_record_and_query(self, store):
+        now = int(time.time())
+        store.record_modem_signal(
+            ts=now,
+            network_type="5G NR NSA",
+            signal_bars=5,
+            cell_id="535aa34",
+            enb_id="341418",
+            mcc="240",
+            mnc="08",
+            wan_ip="100.73.105.237",
+            nr5g_band="n78",
+            nr5g_rsrp=-76.0,
+            nr5g_sinr=-1.5,
+            nr5g_rsrq=-9.0,
+            nr5g_pci=277,
+            nr5g_arfcn=642048,
+            lte_band="LTE BAND 3",
+            lte_rsrp=-76.0,
+            lte_snr=2.8,
+            lte_rsrq=-11.0,
+            lte_pci=178,
+            lte_earfcn=1750,
+        )
+        points = store.query_modem_signal_log(hours=1)
+        assert len(points) == 1
+        p = points[0]
+        assert isinstance(p, ModemSignalPoint)
+        assert p.ts == now
+        assert p.network_type == "5G NR NSA"
+        assert p.signal_bars == 5
+        assert p.cell_id == "535aa34"
+        assert p.enb_id == "341418"
+        assert p.mcc == "240"
+        assert p.mnc == "08"
+        assert p.wan_ip == "100.73.105.237"
+        assert p.nr5g_band == "n78"
+        assert p.nr5g_rsrp == pytest.approx(-76.0)
+        assert p.nr5g_sinr == pytest.approx(-1.5)
+        assert p.nr5g_rsrq == pytest.approx(-9.0)
+        assert p.nr5g_pci == 277
+        assert p.nr5g_arfcn == 642048
+        assert p.lte_band == "LTE BAND 3"
+        assert p.lte_rsrp == pytest.approx(-76.0)
+        assert p.lte_snr == pytest.approx(2.8)
+        assert p.lte_rsrq == pytest.approx(-11.0)
+        assert p.lte_pci == 178
+        assert p.lte_earfcn == 1750
+
+    def test_empty_returns_empty_list(self, store):
+        assert store.query_modem_signal_log(hours=1) == []
+
+    def test_minimal_record_nulls_ok(self, store):
+        store.record_modem_signal()
+        points = store.query_modem_signal_log(hours=1)
+        assert len(points) == 1
+        assert points[0].network_type is None
+        assert points[0].nr5g_rsrp is None
+
+    def test_outside_window_excluded(self, store):
+        old_ts = int(time.time()) - 7200
+        store.record_modem_signal(ts=old_ts, network_type="LTE")
+        assert store.query_modem_signal_log(hours=1) == []
+
+    def test_multiple_rows_newest_first(self, store):
+        now = int(time.time())
+        store.record_modem_signal(ts=now - 60, network_type="LTE")
+        store.record_modem_signal(ts=now, network_type="5G NR NSA")
+        points = store.query_modem_signal_log(hours=1)
+        assert points[0].network_type == "5G NR NSA"
+        assert points[1].network_type == "LTE"
+
+    def test_prune_removes_old_modem_log(self, store):
+        old_ts = int(time.time()) - 35 * 86400
+        store.record_modem_signal(ts=old_ts)
+        store.prune_old_data(retain_days=30)
+        assert store.query_modem_signal_log(hours=24 * 365) == []
+
+
+# ── mesh_signal_log ───────────────────────────────────────────────────────────
+
+class TestMeshSignalLog:
+    def test_record_and_query(self, store):
+        now = int(time.time())
+        store.record_mesh_snapshot(
+            unit_count=3,
+            online_count=3,
+            worst_unit="Deco-Living",
+            worst_rssi=-65.0,
+            ts=now,
+        )
+        points = store.query_mesh_signal_log(hours=1)
+        assert len(points) == 1
+        p = points[0]
+        assert isinstance(p, MeshSignalPoint)
+        assert p.ts == now
+        assert p.unit_count == 3
+        assert p.online_count == 3
+        assert p.worst_unit == "Deco-Living"
+        assert p.worst_rssi == pytest.approx(-65.0)
+
+    def test_empty_returns_empty_list(self, store):
+        assert store.query_mesh_signal_log(hours=1) == []
+
+    def test_nulls_allowed(self, store):
+        store.record_mesh_snapshot(unit_count=2, online_count=1)
+        points = store.query_mesh_signal_log(hours=1)
+        assert points[0].worst_unit is None
+        assert points[0].worst_rssi is None
+
+    def test_outside_window_excluded(self, store):
+        old_ts = int(time.time()) - 7200
+        store.record_mesh_snapshot(unit_count=1, online_count=1, ts=old_ts)
+        assert store.query_mesh_signal_log(hours=1) == []
+
+    def test_multiple_rows_newest_first(self, store):
+        now = int(time.time())
+        store.record_mesh_snapshot(unit_count=2, online_count=2, ts=now - 60)
+        store.record_mesh_snapshot(unit_count=3, online_count=3, ts=now)
+        points = store.query_mesh_signal_log(hours=1)
+        assert points[0].unit_count == 3
+        assert points[1].unit_count == 2
+
+    def test_prune_removes_old_mesh_log(self, store):
+        old_ts = int(time.time()) - 35 * 86400
+        store.record_mesh_snapshot(unit_count=1, online_count=1, ts=old_ts)
+        store.prune_old_data(retain_days=30)
+        assert store.query_mesh_signal_log(hours=24 * 365) == []

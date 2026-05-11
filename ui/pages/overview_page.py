@@ -962,6 +962,127 @@ class DnsStabilityTile(_BaseTile):
         pass  # live data — no store needed
 
 
+# ── Modem Signal tile ─────────────────────────────────────────────────────────
+
+class ModemSignalTile(_BaseTile):
+    """
+    Shows live 5G/LTE signal quality from the configured WAN modem.
+
+    Data is pushed by the dashboard via on_modem_signal(); this tile
+    never polls directly so it needs no credentials of its own.
+    Shows a placeholder until the first sample arrives.
+    """
+
+    TILE_ID    = "modem_signal"
+    TILE_LABEL = "Modem Signal"
+    TILE_ICON  = "⊕"
+    MIN_HEIGHT = 140
+
+    def _build_body(self) -> None:
+        # Top row: network type badge + RSRP value
+        top = QHBoxLayout()
+        top.setSpacing(10)
+
+        self._type_lbl = QLabel("—")
+        self._type_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            f" background:{BG_HOVER}; border:1px solid {BORDER};"
+            f" border-radius:3px; padding:1px 8px; border:none;"
+        )
+
+        self._rsrp_lbl = QLabel("—")
+        self._rsrp_lbl.setStyleSheet(
+            f"font-size:28px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;"
+        )
+
+        self._qual_lbl = QLabel("")
+        self._qual_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+        )
+
+        top.addWidget(self._type_lbl)
+        top.addWidget(self._rsrp_lbl)
+        top.addStretch()
+
+        # Bottom row: band + bars
+        bot = QHBoxLayout()
+        bot.setSpacing(16)
+
+        self._band_lbl = QLabel("—")
+        self._band_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+        )
+        self._bars_lbl = QLabel("")
+        self._bars_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+        )
+        bot.addWidget(self._band_lbl)
+        bot.addWidget(self._bars_lbl)
+        bot.addStretch()
+
+        self._body_layout.addLayout(top)
+        self._body_layout.addWidget(self._qual_lbl)
+        self._body_layout.addLayout(bot)
+        self._body_layout.addStretch()
+
+        # Placeholder hint
+        self._hint_lbl = QLabel("Connect a modem in the Modem tab →")
+        self._hint_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; border:none; font-style:italic;"
+        )
+        self._body_layout.addWidget(self._hint_lbl)
+
+    @pyqtSlot(dict)
+    def on_modem_signal(self, data: dict) -> None:
+        """Receive a ZteSignalData dict from the dashboard."""
+        self._hint_lbl.hide()
+
+        nr_rsrp  = data.get("nr5g_rsrp_dbm")
+        lte_rsrp = data.get("lte_rsrp_dbm")
+        # Prefer 5G RSRP; fall back to LTE
+        rsrp = nr_rsrp if nr_rsrp is not None else lte_rsrp
+
+        net_type = data.get("network_type") or "—"
+        self._type_lbl.setText(net_type)
+
+        if rsrp is not None:
+            self._rsrp_lbl.setText(f"{rsrp:.0f}")
+            from modules.zte_client import ZteMC889Client
+            quality = ZteMC889Client.signal_quality_label(rsrp)
+            colour = _rsrp_colour(rsrp)
+            self._rsrp_lbl.setStyleSheet(
+                f"font-size:28px; font-weight:bold; color:{colour}; border:none;"
+            )
+            self._qual_lbl.setText(f"dBm  ·  {quality}")
+            self._set_health(colour)
+        else:
+            self._rsrp_lbl.setText("—")
+            self._qual_lbl.setText("")
+
+        nr_band  = data.get("nr5g_band") or ""
+        lte_band = data.get("lte_band")  or ""
+        bands = "  +  ".join(b for b in [nr_band, lte_band] if b)
+        self._band_lbl.setText(bands or "—")
+
+        bars = data.get("signal_bars")
+        self._bars_lbl.setText(f"{bars}/5 bars" if bars is not None else "")
+
+        self.mark_scanned()
+
+    def refresh(self, store=None) -> None:
+        pass  # pushed data only
+
+
+def _rsrp_colour(rsrp: float) -> str:
+    if rsrp >= -80:
+        return GREEN
+    if rsrp >= -90:
+        return AMBER
+    if rsrp >= -100:
+        return AMBER
+    return RED
+
+
 # ── Security scan panel ───────────────────────────────────────────────────────
 
 class _SecurityScanPanel(QWidget):
@@ -990,19 +1111,20 @@ class _SecurityScanPanel(QWidget):
         outer.setSpacing(0)
 
         # Header — acts as collapse/expand toggle
-        self._toggle_btn = QPushButton("▸  🔐  Security Scan")
-        self._toggle_btn.setFixedHeight(30)
+        self._toggle_btn = QPushButton("▾  🔐  Security Scan")
+        self._toggle_btn.setFixedHeight(36)
         self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle_btn.setStyleSheet(
-            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; text-align:left;"
-            f" padding:0 12px; font-size:11px; font-weight:bold; }}"
+            f"QPushButton {{ background:{BG_CARD}; color:{RED};"
+            f" border:1px solid {BORDER}; border-left:3px solid {RED};"
+            f" border-radius:0px; text-align:left;"
+            f" padding:0 12px; font-size:12px; font-weight:bold; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
         self._toggle_btn.clicked.connect(self._toggle)
         outer.addWidget(self._toggle_btn)
 
-        # Body (hidden when collapsed)
+        # Body (expanded by default)
         self._body = QFrame()
         self._body.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
@@ -1070,7 +1192,6 @@ class _SecurityScanPanel(QWidget):
         run_row.addWidget(self._run_btn)
         body_lay.addLayout(run_row)
 
-        self._body.hide()
         outer.addWidget(self._body)
 
     def _toggle(self) -> None:
@@ -1078,6 +1199,13 @@ class _SecurityScanPanel(QWidget):
         self._body.setVisible(expanded)
         self._toggle_btn.setText(
             "▾  🔐  Security Scan" if expanded else "▸  🔐  Security Scan"
+        )
+        self._toggle_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{RED};"
+            f" border:1px solid {BORDER}; border-left:3px solid {RED};"
+            f" border-radius:0px; text-align:left;"
+            f" padding:0 12px; font-size:12px; font-weight:bold; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
 
     def _on_check_changed(self) -> None:
@@ -1098,6 +1226,7 @@ _TILE_CLASSES: Dict[str, type] = {
         DeviceCountTile, ServiceStatusTile, TlsStatusTile,
         RttSummaryTile, NetworkGradeTile, AlertFeedTile, EventFeedTile,
         HaDevicesTile, LiveBandwidthTile, DnsStabilityTile,
+        ModemSignalTile,
     ]
 }
 
@@ -1105,6 +1234,7 @@ _TILE_CLASSES: Dict[str, type] = {
 _DEFAULT_ORDER: List[str] = [
     "device_count",
     "live_bandwidth",
+    "modem_signal",
     "dns_stability",
     "rtt_summary",
     "network_grade",
@@ -1494,6 +1624,13 @@ class OverviewPage(QWidget):
             f" font-size:11px; color:{TEXT_PRIMARY}; }}"
         )
         self._hero_alerts.setText(f"◬  Alerts: {n}")
+
+    @pyqtSlot(dict)
+    def on_modem_signal(self, data: dict) -> None:
+        """Route modem signal data to ModemSignalTile."""
+        t = self._tiles.get("modem_signal")
+        if t:
+            t.on_modem_signal(data)
 
     def set_card_data(self, card_data) -> None:
         """Receive a CardData instance from the dashboard after each benchmark."""

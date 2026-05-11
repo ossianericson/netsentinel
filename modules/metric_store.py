@@ -199,6 +199,43 @@ CREATE TABLE IF NOT EXISTS cve_lifecycle (
 CREATE INDEX IF NOT EXISTS idx_cvl_state ON cve_lifecycle(state);
 CREATE INDEX IF NOT EXISTS idx_cvl_cve   ON cve_lifecycle(cve_id);
 
+-- 5G modem periodic signal snapshots for long-term monitoring
+CREATE TABLE IF NOT EXISTS modem_signal_log (
+    id           INTEGER PRIMARY KEY,
+    ts           INTEGER NOT NULL,
+    network_type TEXT,
+    signal_bars  INTEGER,
+    cell_id      TEXT,
+    enb_id       TEXT,
+    mcc          TEXT,
+    mnc          TEXT,
+    wan_ip       TEXT,
+    nr5g_band    TEXT,
+    nr5g_rsrp    REAL,
+    nr5g_sinr    REAL,
+    nr5g_rsrq    REAL,
+    nr5g_pci     INTEGER,
+    nr5g_arfcn   INTEGER,
+    lte_band     TEXT,
+    lte_rsrp     REAL,
+    lte_snr      REAL,
+    lte_rsrq     REAL,
+    lte_pci      INTEGER,
+    lte_earfcn   INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_msl_ts ON modem_signal_log(ts);
+
+-- Mesh system periodic status snapshots for long-term monitoring
+CREATE TABLE IF NOT EXISTS mesh_signal_log (
+    id           INTEGER PRIMARY KEY,
+    ts           INTEGER NOT NULL,
+    unit_count   INTEGER,
+    online_count INTEGER,
+    worst_unit   TEXT,
+    worst_rssi   REAL
+);
+CREATE INDEX IF NOT EXISTS idx_mesh_ts ON mesh_signal_log(ts);
+
 -- Alert acknowledgement + escalation tracking (schema v7)
 CREATE TABLE IF NOT EXISTS alert_fired (
     id          INTEGER PRIMARY KEY,
@@ -236,6 +273,27 @@ class SpeedTestPoint:
     server_name:    Optional[str]
     server_city:    Optional[str]
     server_country: Optional[str]
+    # Modem signal snapshot captured immediately before the test ran (may be None)
+    network_type:   Optional[str] = None
+    signal_bars:    Optional[int] = None
+    nr5g_rsrp:      Optional[float] = None
+    nr5g_sinr:      Optional[float] = None
+    nr5g_band:      Optional[str] = None
+    lte_rsrp:       Optional[float] = None
+    lte_band:       Optional[str] = None
+    # Extended cell / operator / per-radio detail (added v1.9.1+)
+    cell_id:        Optional[str] = None
+    enb_id:         Optional[str] = None
+    mcc:            Optional[str] = None
+    mnc:            Optional[str] = None
+    wan_ip:         Optional[str] = None
+    nr5g_rsrq:      Optional[float] = None
+    nr5g_pci:       Optional[int] = None
+    nr5g_arfcn:     Optional[int] = None
+    lte_snr:        Optional[float] = None
+    lte_rsrq:       Optional[float] = None
+    lte_pci:        Optional[int] = None
+    lte_earfcn:     Optional[int] = None
 
 
 @dataclass
@@ -318,6 +376,39 @@ class HaDetectedPoint:
     ha_type: str       # home_assistant | hue_bridge | mqtt_broker | sonos …
     confidence: str    # high | medium | low
     detail: Optional[str]
+
+
+@dataclass
+class ModemSignalPoint:
+    ts:           int
+    network_type: Optional[str]
+    signal_bars:  Optional[int]
+    cell_id:      Optional[str]
+    enb_id:       Optional[str]
+    mcc:          Optional[str]
+    mnc:          Optional[str]
+    wan_ip:       Optional[str]
+    nr5g_band:    Optional[str]
+    nr5g_rsrp:    Optional[float]
+    nr5g_sinr:    Optional[float]
+    nr5g_rsrq:    Optional[float]
+    nr5g_pci:     Optional[int]
+    nr5g_arfcn:   Optional[int]
+    lte_band:     Optional[str]
+    lte_rsrp:     Optional[float]
+    lte_snr:      Optional[float]
+    lte_rsrq:     Optional[float]
+    lte_pci:      Optional[int]
+    lte_earfcn:   Optional[int]
+
+
+@dataclass
+class MeshSignalPoint:
+    ts:           int
+    unit_count:   int
+    online_count: int
+    worst_unit:   Optional[str]
+    worst_rssi:   Optional[float]
 
 
 # ── MetricStore ───────────────────────────────────────────────────────────────
@@ -427,6 +518,27 @@ class MetricStore:
                 "ALTER TABLE known_device ADD COLUMN category TEXT NOT NULL DEFAULT 'unknown'",
                 "ALTER TABLE known_device ADD COLUMN notes TEXT",
                 "ALTER TABLE known_device ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0",
+                # Modem signal enrichment columns added in v1.9.1
+                "ALTER TABLE speed_test ADD COLUMN network_type TEXT",
+                "ALTER TABLE speed_test ADD COLUMN signal_bars INTEGER",
+                "ALTER TABLE speed_test ADD COLUMN nr5g_rsrp REAL",
+                "ALTER TABLE speed_test ADD COLUMN nr5g_sinr REAL",
+                "ALTER TABLE speed_test ADD COLUMN nr5g_band TEXT",
+                "ALTER TABLE speed_test ADD COLUMN lte_rsrp REAL",
+                "ALTER TABLE speed_test ADD COLUMN lte_band TEXT",
+                # Extended cell / operator / per-radio detail columns
+                "ALTER TABLE speed_test ADD COLUMN cell_id TEXT",
+                "ALTER TABLE speed_test ADD COLUMN enb_id TEXT",
+                "ALTER TABLE speed_test ADD COLUMN mcc TEXT",
+                "ALTER TABLE speed_test ADD COLUMN mnc TEXT",
+                "ALTER TABLE speed_test ADD COLUMN wan_ip TEXT",
+                "ALTER TABLE speed_test ADD COLUMN nr5g_rsrq REAL",
+                "ALTER TABLE speed_test ADD COLUMN nr5g_pci INTEGER",
+                "ALTER TABLE speed_test ADD COLUMN nr5g_arfcn INTEGER",
+                "ALTER TABLE speed_test ADD COLUMN lte_snr REAL",
+                "ALTER TABLE speed_test ADD COLUMN lte_rsrq REAL",
+                "ALTER TABLE speed_test ADD COLUMN lte_pci INTEGER",
+                "ALTER TABLE speed_test ADD COLUMN lte_earfcn INTEGER",
             ]:
                 try:
                     conn.execute(col_def)
@@ -1026,14 +1138,39 @@ class MetricStore:
         server_city: Optional[str] = None,
         server_country: Optional[str] = None,
         ts: Optional[int] = None,
+        network_type: Optional[str] = None,
+        signal_bars: Optional[int] = None,
+        nr5g_rsrp: Optional[float] = None,
+        nr5g_sinr: Optional[float] = None,
+        nr5g_band: Optional[str] = None,
+        lte_rsrp: Optional[float] = None,
+        lte_band: Optional[str] = None,
+        cell_id: Optional[str] = None,
+        enb_id: Optional[str] = None,
+        mcc: Optional[str] = None,
+        mnc: Optional[str] = None,
+        wan_ip: Optional[str] = None,
+        nr5g_rsrq: Optional[float] = None,
+        nr5g_pci: Optional[int] = None,
+        nr5g_arfcn: Optional[int] = None,
+        lte_snr: Optional[float] = None,
+        lte_rsrq: Optional[float] = None,
+        lte_pci: Optional[int] = None,
+        lte_earfcn: Optional[int] = None,
     ) -> None:
         """Persist a completed speed test result to the database."""
         now = ts or int(time.time())
         self._execute_write(
             "INSERT INTO speed_test "
-            "(ts, download_mbps, upload_mbps, ping_ms, server_name, server_city, server_country) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?)",
-            (now, download_mbps, upload_mbps, ping_ms, server_name, server_city, server_country),
+            "(ts, download_mbps, upload_mbps, ping_ms, server_name, server_city, server_country,"
+            " network_type, signal_bars, nr5g_rsrp, nr5g_sinr, nr5g_band, lte_rsrp, lte_band,"
+            " cell_id, enb_id, mcc, mnc, wan_ip,"
+            " nr5g_rsrq, nr5g_pci, nr5g_arfcn, lte_snr, lte_rsrq, lte_pci, lte_earfcn) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (now, download_mbps, upload_mbps, ping_ms, server_name, server_city, server_country,
+             network_type, signal_bars, nr5g_rsrp, nr5g_sinr, nr5g_band, lte_rsrp, lte_band,
+             cell_id, enb_id, mcc, mnc, wan_ip,
+             nr5g_rsrq, nr5g_pci, nr5g_arfcn, lte_snr, lte_rsrq, lte_pci, lte_earfcn),
         )
 
     def query_speed_test_history(
@@ -1045,7 +1182,10 @@ class MetricStore:
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
             "SELECT ts, download_mbps, upload_mbps, ping_ms, "
-            "server_name, server_city, server_country "
+            "server_name, server_city, server_country,"
+            " network_type, signal_bars, nr5g_rsrp, nr5g_sinr, nr5g_band, lte_rsrp, lte_band,"
+            " cell_id, enb_id, mcc, mnc, wan_ip,"
+            " nr5g_rsrq, nr5g_pci, nr5g_arfcn, lte_snr, lte_rsrq, lte_pci, lte_earfcn "
             "FROM speed_test WHERE ts >= ? "
             "ORDER BY ts DESC LIMIT ?",
             (since, limit),
@@ -1059,6 +1199,25 @@ class MetricStore:
                 server_name=r["server_name"],
                 server_city=r["server_city"],
                 server_country=r["server_country"],
+                network_type=r["network_type"],
+                signal_bars=r["signal_bars"],
+                nr5g_rsrp=r["nr5g_rsrp"],
+                nr5g_sinr=r["nr5g_sinr"],
+                nr5g_band=r["nr5g_band"],
+                lte_rsrp=r["lte_rsrp"],
+                lte_band=r["lte_band"],
+                cell_id=r["cell_id"],
+                enb_id=r["enb_id"],
+                mcc=r["mcc"],
+                mnc=r["mnc"],
+                wan_ip=r["wan_ip"],
+                nr5g_rsrq=r["nr5g_rsrq"],
+                nr5g_pci=r["nr5g_pci"],
+                nr5g_arfcn=r["nr5g_arfcn"],
+                lte_snr=r["lte_snr"],
+                lte_rsrq=r["lte_rsrq"],
+                lte_pci=r["lte_pci"],
+                lte_earfcn=r["lte_earfcn"],
             )
             for r in rows
         ]
@@ -1205,6 +1364,109 @@ class MetricStore:
         )
         return [dict(r) for r in rows]
 
+    # ── Write / Read: modem signal log ───────────────────────────────────────
+
+    def record_modem_signal(
+        self,
+        ts: Optional[int] = None,
+        network_type: Optional[str] = None,
+        signal_bars: Optional[int] = None,
+        cell_id: Optional[str] = None,
+        enb_id: Optional[str] = None,
+        mcc: Optional[str] = None,
+        mnc: Optional[str] = None,
+        wan_ip: Optional[str] = None,
+        nr5g_band: Optional[str] = None,
+        nr5g_rsrp: Optional[float] = None,
+        nr5g_sinr: Optional[float] = None,
+        nr5g_rsrq: Optional[float] = None,
+        nr5g_pci: Optional[int] = None,
+        nr5g_arfcn: Optional[int] = None,
+        lte_band: Optional[str] = None,
+        lte_rsrp: Optional[float] = None,
+        lte_snr: Optional[float] = None,
+        lte_rsrq: Optional[float] = None,
+        lte_pci: Optional[int] = None,
+        lte_earfcn: Optional[int] = None,
+    ) -> None:
+        """Persist a modem signal snapshot to the long-term monitoring log."""
+        now = ts or int(time.time())
+        self._execute_write(
+            "INSERT INTO modem_signal_log "
+            "(ts, network_type, signal_bars, cell_id, enb_id, mcc, mnc, wan_ip,"
+            " nr5g_band, nr5g_rsrp, nr5g_sinr, nr5g_rsrq, nr5g_pci, nr5g_arfcn,"
+            " lte_band, lte_rsrp, lte_snr, lte_rsrq, lte_pci, lte_earfcn) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (now, network_type, signal_bars, cell_id, enb_id, mcc, mnc, wan_ip,
+             nr5g_band, nr5g_rsrp, nr5g_sinr, nr5g_rsrq, nr5g_pci, nr5g_arfcn,
+             lte_band, lte_rsrp, lte_snr, lte_rsrq, lte_pci, lte_earfcn),
+        )
+
+    def query_modem_signal_log(
+        self,
+        hours: float = 168.0,
+        limit: int = 500,
+    ) -> "List[ModemSignalPoint]":
+        """Return modem signal log entries within the last `hours`, newest first."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT ts, network_type, signal_bars, cell_id, enb_id, mcc, mnc, wan_ip,"
+            " nr5g_band, nr5g_rsrp, nr5g_sinr, nr5g_rsrq, nr5g_pci, nr5g_arfcn,"
+            " lte_band, lte_rsrp, lte_snr, lte_rsrq, lte_pci, lte_earfcn "
+            "FROM modem_signal_log WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+            (since, limit),
+        )
+        return [
+            ModemSignalPoint(
+                ts=r["ts"], network_type=r["network_type"], signal_bars=r["signal_bars"],
+                cell_id=r["cell_id"], enb_id=r["enb_id"], mcc=r["mcc"], mnc=r["mnc"],
+                wan_ip=r["wan_ip"], nr5g_band=r["nr5g_band"], nr5g_rsrp=r["nr5g_rsrp"],
+                nr5g_sinr=r["nr5g_sinr"], nr5g_rsrq=r["nr5g_rsrq"], nr5g_pci=r["nr5g_pci"],
+                nr5g_arfcn=r["nr5g_arfcn"], lte_band=r["lte_band"], lte_rsrp=r["lte_rsrp"],
+                lte_snr=r["lte_snr"], lte_rsrq=r["lte_rsrq"], lte_pci=r["lte_pci"],
+                lte_earfcn=r["lte_earfcn"],
+            )
+            for r in rows
+        ]
+
+    # ── Write / Read: mesh signal log ─────────────────────────────────────────
+
+    def record_mesh_snapshot(
+        self,
+        unit_count: int,
+        online_count: int,
+        worst_unit: Optional[str] = None,
+        worst_rssi: Optional[float] = None,
+        ts: Optional[int] = None,
+    ) -> None:
+        """Persist a mesh system status snapshot to the long-term monitoring log."""
+        now = ts or int(time.time())
+        self._execute_write(
+            "INSERT INTO mesh_signal_log (ts, unit_count, online_count, worst_unit, worst_rssi) "
+            "VALUES(?, ?, ?, ?, ?)",
+            (now, unit_count, online_count, worst_unit, worst_rssi),
+        )
+
+    def query_mesh_signal_log(
+        self,
+        hours: float = 168.0,
+        limit: int = 500,
+    ) -> "List[MeshSignalPoint]":
+        """Return mesh signal log entries within the last `hours`, newest first."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT ts, unit_count, online_count, worst_unit, worst_rssi "
+            "FROM mesh_signal_log WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+            (since, limit),
+        )
+        return [
+            MeshSignalPoint(
+                ts=r["ts"], unit_count=r["unit_count"], online_count=r["online_count"],
+                worst_unit=r["worst_unit"], worst_rssi=r["worst_rssi"],
+            )
+            for r in rows
+        ]
+
     # ── Maintenance ───────────────────────────────────────────────────────────
 
     def prune_old_data(self, retain_days: Optional[int] = None) -> int:
@@ -1215,7 +1477,7 @@ class MetricStore:
         days   = retain_days if retain_days is not None else self._retain_days
         cutoff = int(time.time()) - days * 86400
         deleted = 0
-        for tbl in ("rtt_sample", "device_state", "device_event", "cert_check", "service_check", "speed_test", "ha_detected"):
+        for tbl in ("rtt_sample", "device_state", "device_event", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log"):
             self._execute_write(f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,))
             deleted += 1  # rowcount not tracked per-table in unified path
         return deleted
@@ -1230,7 +1492,7 @@ class MetricStore:
     def get_row_counts(self) -> Dict[str, int]:
         """Return row counts for each data table."""
         result = {}
-        for tbl in ("rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected"):
+        for tbl in ("rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log"):
             rows = self._execute_read(f"SELECT COUNT(*) AS n FROM {tbl}", ())
             result[tbl] = rows[0]["n"] if rows else 0
         return result
