@@ -83,7 +83,9 @@ def _get_arp_table() -> List[tuple]:
                 if m:
                     ip = m.group(1)
                     mac = m.group(2).replace("-", ":").lower()
-                    if mac != "ff:ff:ff:ff:ff:ff":
+                    if (mac != "ff:ff:ff:ff:ff:ff"
+                            and not ip.startswith("224.")
+                            and not ip.endswith(".255")):
                         pairs.append((ip, mac))
         else:
             try:
@@ -97,7 +99,9 @@ def _get_arp_table() -> List[tuple]:
                 if m:
                     ip = m.group(1)
                     mac = m.group(2).lower()
-                    if mac != "ff:ff:ff:ff:ff:ff":
+                    if (mac != "ff:ff:ff:ff:ff:ff"
+                            and not ip.startswith("224.")
+                            and not ip.endswith(".255")):
                         pairs.append((ip, mac))
     except Exception:
         pass

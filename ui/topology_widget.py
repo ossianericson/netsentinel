@@ -218,6 +218,20 @@ class TopologyWidget(QWidget):
             else:
                 unassigned.append(d)
 
+        # Inject mesh-only clients (Deco API knows them but ARP scan missed them,
+        # e.g. phones that did not respond to ARP on a satellite node)
+        covered_macs = {_norm_mac(_attr(d, "mac", "") or "") for d in devices}
+        for mc in mesh_enrichment.values():
+            mc_mac = _norm_mac(mc.mac)
+            if mc_mac in covered_macs or mc_mac in infra_macs:
+                continue
+            by_unit[mc.unit_name].append({
+                "mac":        mc.mac,
+                "ip":         mc.ip or "",
+                "hostname":   mc.name,
+                "risk_level": "CLEAN",
+            })
+
         # ── Y tiers — three clearly separated rows ────────────────────────────
         # Unassigned devices get their own tier between gateway and satellites
         # so their dashed edges never cross through satellite positions.

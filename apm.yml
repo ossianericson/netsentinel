@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.9.2
+version: 1.9.3
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -875,6 +875,49 @@ rules:
 
       Current endpoints (May 2026): /health, /dashboard, /devices, /alerts,
       /uptime/<ip>, /speed-history, /grade.
+
+  - id: RULE-DW4
+    title: "Post-scan enrichment must sync DeviceInfo objects and refresh all dependent views"
+    severity: blocking
+    description: >
+      The M1 table (Devices page) is the single authoritative display source for device
+      names after scan. When any post-scan enrichment step — mesh names from Deco API,
+      mDNS, DHCP, NetBIOS — updates a hostname cell in the M1 table, it MUST also push
+      that hostname back onto the DeviceInfo object in _m1_result["devices"] AND refresh
+      every view that independently consumes device data.
+
+      Root cause of the original bug (v1.9.3): _apply_mesh_enrichment wrote mc.name
+      into M1 table col 1 but left DeviceInfo.hostname unchanged. Topology widget,
+      Network Info tab, and AvailabilityWorker targets all read DeviceInfo objects
+      directly — so they showed the pre-enrichment (rDNS) name while Devices showed
+      the Deco-assigned name.
+
+      Required pattern — all four steps must be present in _apply_mesh_enrichment:
+        1. Build _mac_to_host by reading cols 1 (Hostname) and 2 (MAC) from the M1 table
+           after all table updates are complete.
+        2. Update DeviceInfo.hostname (or dict["hostname"]) in-place for every device in
+           _m1_result["devices"] whose MAC appears in _mac_to_host.
+        3. Rebuild _net_devices_table from the updated _m1_result["devices"] list.
+        4. Call _avail_worker.set_targets() with fresh TargetConfig objects (label=hostname)
+           if the worker exists, so Uptime page labels reflect enriched names.
+        5. Re-render topology widget last — it reads the now-correct DeviceInfo objects.
+
+      Why in-place on DeviceInfo objects:
+        _m1_result["devices"] and _last_scan_devices are the same Python list reference.
+        Updating .hostname in-place propagates automatically to all subsequent reads from
+        both references — exports, reports, NetworkDocPage, protocol viz — with no extra refresh.
+
+      What is intentionally NOT covered (fire-and-forget at scan time, not fixable):
+        _bl_table (baseline diff): built from plain dicts at scan time; resets on next scan.
+        MQTT device join/leave events: point-in-time signals, cannot be retroactively enriched.
+
+      Checklist when adding a new view that shows device hostnames:
+        □ Does it read from _m1_result["devices"] or _last_scan_devices?
+          → In-place hostname sync covers it automatically after _apply_mesh_enrichment runs.
+        □ Does it snapshot hostnames at a fixed point in time (e.g. label in a long-running worker)?
+          → Add a refresh call inside _apply_mesh_enrichment under step 4 pattern.
+        □ Does it display hostnames before enrichment could possibly have run?
+          → Acceptable; document as "pre-enrichment display, refreshes after mesh scan".
 
   - id: RULE-UI1
     title: "Verify PyQt6 API signatures before use — run debug_launch.py after every UI change"

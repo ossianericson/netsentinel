@@ -158,7 +158,14 @@ def _smoke_test() -> None:
         "ui.pages.automation_page",
         "ui.pages.settings_page",
         "ui.pages.trend_page",
+        "ui.pages.mesh_router_page",
+        "ui.pages.modem_page",
         "ui.skeleton",
+        "modules.colours",
+        "modules.deco_client",
+        "modules.wifi_heatmap",
+        "workers.mesh_worker",
+        "workers.zte_worker",
     ]
     for _mod in _checks:
         try:
@@ -347,7 +354,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.2")
+    app.setApplicationVersion("1.9.3")
     app.setOrganizationName("netsentinel")
 
     # Apply QMenu rules at application level so top-level (parentless) menus

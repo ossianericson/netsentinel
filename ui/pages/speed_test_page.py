@@ -92,6 +92,33 @@ def _rsrp_color(rsrp) -> str:
     if v >= -100:
         return AMBER
     return RED
+
+
+def _sinr_label(v: float) -> str:
+    if v < 0:   return "Very Poor"
+    if v < 5:   return "Poor"
+    if v < 13:  return "Fair"
+    if v < 20:  return "Good"
+    return "Excellent"
+
+
+def _sinr_color(v: float) -> str:
+    if v < 5:   return RED
+    if v < 13:  return AMBER
+    return GREEN
+
+
+def _fmt_sinr(v) -> tuple:
+    """Return (display_string, color) for a SINR/SNR value in dB."""
+    if v is None:
+        return "—", TEXT_MUTED
+    try:
+        fv = float(v)
+        return f"{fv:.1f} dB ({_sinr_label(fv)})", _sinr_color(fv)
+    except (TypeError, ValueError):
+        return "—", TEXT_MUTED
+
+
 _COLOR_IDLE     = TEXT_MUTED         # muted grey
 _COLOR_TRACK    = PROGRESS_TRACK     # light grey track
 
@@ -544,10 +571,11 @@ class SpeedTestPage(QWidget):
         # ── History table ─────────────────────────────────────────────────────
         hist_card, hist_body = _card("Test History")
 
-        self._hist_table = QTableWidget(0, 9)
+        self._hist_table = QTableWidget(0, 11)
         self._hist_table.setHorizontalHeaderLabels([
             "Date / Time", "Server", "Location", "Ping (ms)",
-            "↓ Download", "↑ Upload", "Band", "RSRP", "Status",
+            "↓ Download", "↑ Upload", "Band", "RSRP",
+            "4G PCC SINR", "5G PCC SINR", "Status",
         ])
         self._hist_table.horizontalHeader().setStretchLastSection(True)
         self._hist_table.horizontalHeader().setSectionResizeMode(
@@ -565,7 +593,9 @@ class SpeedTestPage(QWidget):
         self._hist_table.setColumnWidth(5, 105)
         self._hist_table.setColumnWidth(6, 90)
         self._hist_table.setColumnWidth(7, 90)
-        self._hist_table.setColumnWidth(8, 80)
+        self._hist_table.setColumnWidth(8, 140)
+        self._hist_table.setColumnWidth(9, 140)
+        self._hist_table.setColumnWidth(10, 80)
         self._hist_table.setStyleSheet(
             f"QTableWidget {{ border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
             f"QHeaderView::section {{"
@@ -1076,6 +1106,8 @@ class SpeedTestPage(QWidget):
                     else (sig.get("lte_rsrp_dbm") if sig else None))
             rsrp_str = f"{rsrp:.1f}" if rsrp is not None else "—"
             rsrp_color = _rsrp_color(rsrp)
+            lte_sinr_str, lte_sinr_color = _fmt_sinr(sig.get("lte_snr_db")  if sig else None)
+            nr5_sinr_str, nr5_sinr_color = _fmt_sinr(sig.get("nr5g_sinr_db") if sig else None)
             cells = [
                 result.timestamp.replace("T", "  "),
                 result.server_name,
@@ -1085,15 +1117,17 @@ class SpeedTestPage(QWidget):
                 f"{result.upload_mbps:.1f} Mbps",
                 band,
                 rsrp_str,
+                lte_sinr_str,
+                nr5_sinr_str,
                 backend,
             ]
             colors = [None, None, None, None,
                       GREEN if result.download_mbps >= 25 else AMBER,
                       GREEN if result.upload_mbps >= 5  else AMBER,
-                      None, rsrp_color, backend_color]
+                      None, rsrp_color, lte_sinr_color, nr5_sinr_color, backend_color]
         else:
-            cells = ["—", "—", "—", "—", "—", "—", "—", "—", "Error"]
-            colors = [None]*8 + [RED]
+            cells = ["—", "—", "—", "—", "—", "—", "—", "—", "—", "—", "Error"]
+            colors = [None]*10 + [RED]
 
         for col, (val, col_color) in enumerate(zip(cells, colors)):
             item = QTableWidgetItem(str(val))
@@ -1151,6 +1185,8 @@ class SpeedTestPage(QWidget):
                         if getattr(p, "nr5g_rsrp", None) is not None
                         else getattr(p, "lte_rsrp", None))
                 rsrp_str = f"{rsrp:.1f}" if rsrp is not None else "—"
+                lte_sinr_str, lte_sinr_color = _fmt_sinr(getattr(p, "lte_snr",   None))
+                nr5_sinr_str, nr5_sinr_color = _fmt_sinr(getattr(p, "nr5g_sinr", None))
                 sig = self._point_to_sig_dict(p)
                 cells = [
                     ts_str,
@@ -1161,12 +1197,14 @@ class SpeedTestPage(QWidget):
                     f"{p.upload_mbps:.1f} Mbps",
                     band,
                     rsrp_str,
+                    lte_sinr_str,
+                    nr5_sinr_str,
                     "OK",
                 ]
                 clrs = [None, None, None, None,
                         GREEN if p.download_mbps >= 25 else AMBER,
                         GREEN if p.upload_mbps >= 5  else AMBER,
-                        None, _rsrp_color(rsrp), GREEN]
+                        None, _rsrp_color(rsrp), lte_sinr_color, nr5_sinr_color, GREEN]
                 for col, (val, col_color) in enumerate(zip(cells, clrs)):
                     item = QTableWidgetItem(str(val))
                     if col_color:

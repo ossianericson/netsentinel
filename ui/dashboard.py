@@ -2315,6 +2315,7 @@ class Dashboard(QMainWindow):
             self._home_page._btn_isp.clicked.connect(self._open_isp_from_home)
             self._home_page._btn_diagnose.clicked.connect(self._open_diagnosis)
             self._speed_test_page.test_completed.connect(self._home_page.on_speed_result)
+            self._speed_test_page.test_completed.connect(self._on_speed_test_modem_forward)
             self._home_page.navigate_to.connect(self._on_overview_navigate)
             self._home_page.start_monitoring_requested.connect(self._toggle_logger)
             self._home_page.investigate_live_requested.connect(self._on_investigate_live)
@@ -3100,6 +3101,12 @@ class Dashboard(QMainWindow):
             if label not in _visited2:
                 self._tip_bar.setChecked(True)
         self._track_page_visit(label)
+
+        # When the user navigates to the Modem page, immediately push the last
+        # known modem signal so the page shows current data rather than whatever
+        # was last received up to 30 s ago from ZteWorker's polling interval.
+        if label == "Modem" and getattr(self, "_last_modem_data", None) and hasattr(self, "_modem_page"):
+            self._modem_page.on_modem_signal(self._last_modem_data)
 
     def _update_help_panel(self, label: str) -> None:
         """Refresh tip bar text and collapse the help panel when the page changes."""
@@ -8699,6 +8706,11 @@ class Dashboard(QMainWindow):
         # the user has already entered their mesh password this session.
         self._check_mesh_autodetect(data)
 
+        # Push cached modem signal to the Modem page so it shows fresh data
+        # immediately after a network scan, without waiting for the next 30 s poll.
+        if getattr(self, "_last_modem_data", None) and hasattr(self, "_modem_page"):
+            self._modem_page.on_modem_signal(self._last_modem_data)
+
     # ── Mesh enrichment ────────────────────────────────────────────────────────
 
     def _check_mesh_autodetect(self, m1_data: dict) -> None:
@@ -8725,7 +8737,9 @@ class Dashboard(QMainWindow):
             return
         from workers.mesh_worker import MeshWorker
         worker = MeshWorker(host=gateway_ip, password=pw)
-        worker.result.connect(self._on_mesh_result)
+        # Route through the page's own handler so its UI gets populated;
+        # scan_done from there fires _on_mesh_result for enrichment.
+        worker.result.connect(self._mesh_router_page._on_result)
         worker.status.connect(lambda msg: self._m1_status.setText(
             f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
         ))
@@ -8840,6 +8854,57 @@ class Dashboard(QMainWindow):
                     d.mesh_up_kbps   = mc.upload_kbps
                     d.mesh_down_kbps = mc.download_kbps
 
+        # Sync every enriched hostname from the table back onto the DeviceInfo
+        # objects so the topology render sees the same names as the Devices table.
+        # This captures all enrichment sources (mesh, mDNS, DHCP, NetBIOS).
+        _mac_to_host: dict = {}
+        for _r in range(self._m1_table.rowCount()):
+            _h = self._m1_table.item(_r, 1)
+            _m = self._m1_table.item(_r, 2)
+            if _h and _m and _m.text():
+                txt = _h.text().strip()
+                if txt and txt != "—":
+                    _mac_to_host[_norm_mac(_m.text())] = txt
+        for _d in self._m1_result.get("devices", []):
+            _dmac = _norm_mac(_d.mac if not isinstance(_d, dict) else _d.get("mac", ""))
+            if _dmac in _mac_to_host:
+                if isinstance(_d, dict):
+                    _d["hostname"] = _mac_to_host[_dmac]
+                else:
+                    _d.hostname = _mac_to_host[_dmac]
+
+        # Refresh the Network Info tab device table with enriched hostnames
+        try:
+            self._net_devices_table.setRowCount(0)
+            for _d in self._m1_result.get("devices", []):
+                _level  = _d.risk_level if not isinstance(_d, dict) else _d.get("risk_level", "UNKNOWN")
+                _ip     = _d.ip         if not isinstance(_d, dict) else _d.get("ip", "?")
+                _host   = _d.hostname   if not isinstance(_d, dict) else _d.get("hostname", "")
+                _mac    = _d.mac        if not isinstance(_d, dict) else _d.get("mac", "?")
+                _vendor = _d.vendor     if not isinstance(_d, dict) else _d.get("vendor", "Unknown")
+                _add_row(self._net_devices_table, [_ip, _host or "—", _mac, _vendor, _level], _level)
+        except Exception:
+            pass
+
+        # Refresh AvailabilityWorker targets so Uptime page labels use enriched names
+        try:
+            if hasattr(self, "_avail_worker") and self._m1_result:
+                from modules.availability_monitor import TargetConfig
+                _targets = []
+                for _d in self._m1_result.get("devices", []):
+                    _ip  = _d.ip       if not isinstance(_d, dict) else _d.get("ip", "")
+                    _mac = _d.mac      if not isinstance(_d, dict) else _d.get("mac", "")
+                    _hn  = _d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")
+                    if _ip:
+                        _targets.append(TargetConfig(
+                            host=_ip, mac=_mac or None,
+                            hostname=_hn or None, label=_hn or _ip,
+                        ))
+                if _targets:
+                    self._avail_worker.set_targets(_targets)
+        except Exception:
+            pass
+
         # Re-render topology with mesh structure now that enrichment is complete
         try:
             gw_ip  = self._net_info.get("gateway")     if self._net_info else None
@@ -8856,8 +8921,35 @@ class Dashboard(QMainWindow):
         # Update the Deco band-usage chips on the WiFi Networks page
         self._update_m4_deco_chips()
 
+        # Synthesize M1 rows for mesh clients that ARP scan did not see
+        # (e.g. phones connected to a satellite that did not respond to ARP)
+        _existing_macs: set = set()
+        for _r in range(self._m1_table.rowCount()):
+            _mi = self._m1_table.item(_r, 2)
+            if _mi:
+                _existing_macs.add(_norm_mac(_mi.text()))
+        _synth_added = False
+        for _mc in self._mesh_enrichment.values():
+            if _norm_mac(_mc.mac) in _existing_macs:
+                continue
+            _add_row(
+                self._m1_table,
+                [_mc.ip or "—", _mc.name or "—", _mc.mac, "", "CLEAN",
+                 "Wireless Client", _mc.unit_name, _mc.band,
+                 "Mesh-only — not visible to ARP scan"],
+                "CLEAN",
+            )
+            _synth_item = self._m1_table.item(self._m1_table.rowCount() - 1, 0)
+            if _synth_item:
+                _synth_item.setData(Qt.ItemDataRole.UserRole + 10, "__mesh_synth__")
+            _existing_macs.add(_norm_mac(_mc.mac))
+            _synth_added = True
+        if _synth_added:
+            self._m1_table.setColumnHidden(6, False)
+            self._m1_table.setColumnHidden(7, False)
+
         # Regroup M1 table into collapsible satellite sections
-        if any_matched:
+        if any_matched or _synth_added:
             self._regroup_m1_by_satellite()
 
     def _regroup_m1_by_satellite(self) -> None:
@@ -9075,7 +9167,9 @@ class Dashboard(QMainWindow):
             return
         from workers.mesh_worker import MeshWorker
         worker = MeshWorker(host=gateway_ip, password=pw)
-        worker.result.connect(self._on_mesh_result)
+        # Route through the page's own handler so its UI (nodes/clients tables,
+        # status label) gets populated; scan_done from there fires _on_mesh_result.
+        worker.result.connect(self._mesh_router_page._on_result)
         worker.status.connect(lambda msg: self._m1_status.setText(
             f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
         ))
@@ -9083,6 +9177,18 @@ class Dashboard(QMainWindow):
         worker.start()
 
     @pyqtSlot(str, str)
+    @pyqtSlot(object)
+    def _on_speed_test_modem_forward(self, result) -> None:
+        """Forward speed-test modem snapshot to the Modem page immediately.
+
+        The speed test worker captures a fresh ZTE signal dict during the test.
+        ZteWorker only polls every 30 s, so the modem page would otherwise show
+        stale data for up to 29 s after the test completes.
+        """
+        sig = getattr(result, "zte_signal", None)
+        if sig and hasattr(self, "_modem_page"):
+            self._modem_page.on_modem_signal(sig)
+
     def _on_modem_connect(self, host: str, password: str) -> None:
         """Start (or restart) the ZTE polling worker."""
         self._on_modem_disconnect()
@@ -9319,15 +9425,19 @@ class Dashboard(QMainWindow):
 
         # Collapse multi-BSSID SSIDs (mesh nodes each broadcast the same SSID)
         # into one row per named SSID showing the strongest signal.  Hidden
-        # networks (empty SSID) have unique BSSIDs and are kept as separate rows.
+        # networks (empty SSID) are grouped by (channel, band) — mesh nodes
+        # each broadcast several hidden backhaul SSIDs per band, so without
+        # grouping a 5-node mesh produces 10–15 identical [HIDDEN] rows.
         ssid_groups: dict = {}
-        hidden_list: list = []
+        hidden_groups: dict = {}   # (channel, band) → list
         for n in networks:
             ssid = _g(n, "ssid", "")
             if ssid:
                 ssid_groups.setdefault(ssid, []).append(n)
             else:
-                hidden_list.append(n)
+                ch   = _g(n, "channel", 0)
+                band = _g(n, "band", "?")
+                hidden_groups.setdefault((ch, band), []).append(n)
 
         display_rows: list = []
         for ssid, group in ssid_groups.items():
@@ -9338,10 +9448,13 @@ class Dashboard(QMainWindow):
             bssid    = _g(best, "bssid", "")
             bssid_d  = f"{bssid} (×{len(group)})" if len(group) > 1 else bssid
             display_rows.append((best, ssid, bssid_d, rogue, conflict, hidden))
-        for n in hidden_list:
-            rogue    = _g(n, "is_rogue_ssid",      False)
-            conflict = _g(n, "co_channel_conflict", False)
-            display_rows.append((n, "", _g(n, "bssid", ""), rogue, conflict, True))
+        for (_ch, _band), group in hidden_groups.items():
+            best     = max(group, key=lambda x: _g(x, "signal_dbm", -100))
+            rogue    = any(_g(x, "is_rogue_ssid",      False) for x in group)
+            conflict = any(_g(x, "co_channel_conflict", False) for x in group)
+            bssid    = _g(best, "bssid", "")
+            bssid_d  = f"{bssid} (×{len(group)})" if len(group) > 1 else bssid
+            display_rows.append((best, "", bssid_d, rogue, conflict, True))
 
         for n, ssid_d, bssid_d, rogue, conflict, hidden in display_rows:
             ch        = _g(n, "channel",    0)
