@@ -1199,6 +1199,7 @@ class Dashboard(QMainWindow):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setStyleSheet(MAIN_STYLE)
         self._maximize_btn = None   # set by _build_header; updated in changeEvent
+        self._pre_maximize_geo: "QRect | None" = None  # saved before showMaximized()
 
         # Window icon
         from pathlib import Path as _Path
@@ -1397,7 +1398,7 @@ class Dashboard(QMainWindow):
         self._status_bar.addPermanentWidget(self._pulse_logger_lbl)
 
         self.setStatusBar(self._status_bar)
-        self._set_status("Ready. Click RUN FULL SCAN to begin.")
+        self._set_status("Ready.")
 
         # 10-second pulse timer — keeps status-bar indicators current
         self._pulse_timer = QTimer()
@@ -1410,6 +1411,8 @@ class Dashboard(QMainWindow):
         self._start_update_check()
         # Restore full settings (mode, scan hosts, etc.) after UI is built
         self._restore_settings()
+        # Install resize grips for all 8 edges/corners (frameless window)
+        self._install_edge_grips()
         # Auto-start modem polling if credentials were saved from a prior session
         self._check_modem_autorun()
 
@@ -1629,6 +1632,14 @@ class Dashboard(QMainWindow):
         lay.addSpacing(4)
         lay.addWidget(_btn_settings)
 
+        # ── Scan button — persistent trigger visible from every page ─────────
+        self._header_scan_btn = QToolButton()
+        self._header_scan_btn.setText("▶  Scan")
+        self._header_scan_btn.setToolTip("Run full network scan (ARP + WiFi + DNS + port discovery)")
+        self._header_scan_btn.setStyleSheet(_icon_btn_qss)
+        self._header_scan_btn.clicked.connect(self._start_full_scan)
+        lay.addWidget(self._header_scan_btn)
+
         # ── Full Report button ────────────────────────────────────────────────
         self._btn_full_report = QToolButton()
         self._btn_full_report.setText("▣  Report")
@@ -1723,21 +1734,105 @@ class Dashboard(QMainWindow):
     # ── Frameless window — helpers ───────────────────────────────────────────
 
     def _toggle_maximize(self):
-        if self.isMaximized():
+        from PyQt6.QtCore import Qt
+        if self.windowState() & Qt.WindowState.WindowMaximized:
             self.showNormal()
+            if self._pre_maximize_geo is not None:
+                self.setGeometry(self._pre_maximize_geo)
+                self._pre_maximize_geo = None
         else:
+            self._pre_maximize_geo = self.geometry()
             self.showMaximized()
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if getattr(self, "_maximize_btn", None) is not None:
-            from PyQt6.QtCore import QEvent
+            from PyQt6.QtCore import QEvent, Qt
             if event.type() == QEvent.Type.WindowStateChange:
-                # ChromeRestore / ChromeMaximize in Segoe MDL2 Assets
-                self._maximize_btn.setText("" if self.isMaximized() else "")
-                self._maximize_btn.setToolTip(
-                    "Restore" if self.isMaximized() else "Maximise"
-                )
+                is_max = bool(self.windowState() & Qt.WindowState.WindowMaximized)
+                self._maximize_btn.setText("" if is_max else "")
+                self._maximize_btn.setToolTip("Restore" if is_max else "Maximise")
+                if not is_max:
+                    self._pre_maximize_geo = None
+                if hasattr(self, "_edge_grips"):
+                    self._place_edge_grips()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "_edge_grips"):
+            self._place_edge_grips()
+
+    def _install_edge_grips(self):
+        """Create 8 transparent resize-grip strips around the window border."""
+        from PyQt6.QtCore import Qt, QRect, QPoint
+        from PyQt6.QtWidgets import QWidget
+        _CURSORS = {
+            "nw": Qt.CursorShape.SizeFDiagCursor,
+            "n":  Qt.CursorShape.SizeVerCursor,
+            "ne": Qt.CursorShape.SizeBDiagCursor,
+            "w":  Qt.CursorShape.SizeHorCursor,
+            "e":  Qt.CursorShape.SizeHorCursor,
+            "sw": Qt.CursorShape.SizeBDiagCursor,
+            "s":  Qt.CursorShape.SizeVerCursor,
+            "se": Qt.CursorShape.SizeFDiagCursor,
+        }
+        win = self
+
+        class _Grip(QWidget):
+            def __init__(self, edge, parent):
+                super().__init__(parent)
+                self._edge = edge
+                self._drag_start = None
+                self._start_geo  = None
+                self.setCursor(_CURSORS[edge])
+                self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+                self.setStyleSheet("background: transparent;")
+
+            def mousePressEvent(self, e):
+                if e.button() == Qt.MouseButton.LeftButton:
+                    self._drag_start = e.globalPosition().toPoint()
+                    self._start_geo  = win.geometry()
+
+            def mouseMoveEvent(self, e):
+                if self._drag_start is None:
+                    return
+                if not (e.buttons() & Qt.MouseButton.LeftButton):
+                    return
+                d   = e.globalPosition().toPoint() - self._drag_start
+                geo = QRect(self._start_geo)
+                if "n" in self._edge: geo.setTop(geo.top()    + d.y())
+                if "s" in self._edge: geo.setBottom(geo.bottom() + d.y())
+                if "w" in self._edge: geo.setLeft(geo.left()   + d.x())
+                if "e" in self._edge: geo.setRight(geo.right()  + d.x())
+                if geo.width() >= win.minimumWidth() and geo.height() >= win.minimumHeight():
+                    win.setGeometry(geo)
+
+            def mouseReleaseEvent(self, e):
+                self._drag_start = None
+
+        self._edge_grips = {k: _Grip(k, self) for k in _CURSORS}
+        self._place_edge_grips()
+
+    def _place_edge_grips(self):
+        from PyQt6.QtCore import Qt
+        m = 6
+        w, h = self.width(), self.height()
+        is_max = bool(self.windowState() & Qt.WindowState.WindowMaximized)
+        rects = {
+            "nw": (0,     0,     m,     m),
+            "n":  (m,     0,     w-2*m, m),
+            "ne": (w-m,   0,     m,     m),
+            "w":  (0,     m,     m,     h-2*m),
+            "e":  (w-m,   m,     m,     h-2*m),
+            "sw": (0,     h-m,   m,     m),
+            "s":  (m,     h-m,   w-2*m, m),
+            "se": (w-m,   h-m,   m,     m),
+        }
+        for name, grip in self._edge_grips.items():
+            x, y, gw, gh = rects[name]
+            grip.setGeometry(x, y, gw, gh)
+            grip.setVisible(not is_max)
+            grip.raise_()
 
     def _build_update_bar(self) -> QWidget:
         """Thin update-available bar — hidden until a newer release is detected."""
@@ -1981,33 +2076,16 @@ class Dashboard(QMainWindow):
     def _nav_set_page(self, nav_row: int):
         if nav_row not in self._nav_row_to_page:
             return
-        # Abort any in-flight animation cleanly before switching
         if self._fade_anim is not None and self._fade_anim.state() == QPropertyAnimation.State.Running:
             self._fade_anim.stop()
             w = self._stack.currentWidget()
             if w:
                 w.setGraphicsEffect(None)
-
+            self._fade_anim = None
         self._stack.setCurrentIndex(self._nav_row_to_page[nav_row])
         label = self._nav_item_labels.get(nav_row, "")
         if label:
             self.setWindowTitle(f"NetSentinel — {label}")
-
-        widget = self._stack.currentWidget()
-        if widget is None:
-            return
-        from PyQt6.QtWidgets import QGraphicsOpacityEffect
-        effect = QGraphicsOpacityEffect(widget)
-        effect.setOpacity(0.0)
-        widget.setGraphicsEffect(effect)
-        anim = QPropertyAnimation(effect, b"opacity", widget)
-        anim.setDuration(120)
-        anim.setStartValue(0.0)
-        anim.setEndValue(1.0)
-        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        anim.finished.connect(lambda: widget.setGraphicsEffect(None))
-        self._fade_anim = anim
-        anim.start()
 
     def _nav_refresh_item_text(self, row: int):
         """Rewrite displayed text for a nav row based on collapsed/expanded mode."""
@@ -6551,6 +6629,8 @@ class Dashboard(QMainWindow):
 
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
+        if hasattr(self, "_header_scan_btn"):
+            self._header_scan_btn.setEnabled(not scanning)
         if hasattr(self, "_home_page"):
             self._home_page._btn_scan.setEnabled(not scanning)
         if hasattr(self, "_overview_page"):

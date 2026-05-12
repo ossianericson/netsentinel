@@ -37,6 +37,7 @@ from ui.styles import (
     GREEN,
     PRO_WARN_BG,
     RED,
+    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     UPDATE_BAR_BG,
@@ -337,29 +338,44 @@ class HomePage(QWidget):
         )
         self._hero_sub.setWordWrap(True)
 
+        # Primary + secondary action row
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
         self._btn_scan = QPushButton("\u25b6  Scan Network")
         self._btn_scan.setObjectName("btnScanHero")
-        self._btn_diagnose = QPushButton("\u25c6  Diagnose Network")
+        self._btn_diagnose = QPushButton("\u25c6  Diagnose")
+        self._btn_diagnose.setToolTip(
+            "Run after scanning \u2014 sequences root-cause checks and surfaces a plain-English verdict"
+        )
         self._btn_diagnose.setStyleSheet(
             f"QPushButton {{ min-height: 34px; font-size: 12px; font-weight: 600;"
             f" background: transparent; color: {ACCENT};"
             f" border: 1px solid {ACCENT}; border-radius: 4px; padding: 0 12px; }}"
             f"QPushButton:hover {{ background: {ACCENT}; color: #ffffff; }}"
         )
-        self._btn_isp = QPushButton("\ud83d\udcca  View ISP Report")
-        self._btn_isp.setStyleSheet(
-            "QPushButton { min-height: 34px; font-size: 12px; font-weight: 600; }"
-        )
         btn_row.addWidget(self._btn_scan)
         btn_row.addWidget(self._btn_diagnose)
-        btn_row.addWidget(self._btn_isp)
         btn_row.addStretch()
+
+        # Tertiary follow-up action \u2014 visually separated, link-style
+        isp_row = QHBoxLayout()
+        isp_row.setSpacing(0)
+        self._btn_isp = QPushButton("\ud83d\udcca  View ISP Report")
+        self._btn_isp.setToolTip("Open a formatted report comparing your speeds against ISP claims")
+        self._btn_isp.setStyleSheet(
+            f"QPushButton {{ min-height: 22px; font-size: 11px; font-weight: 500;"
+            f" background: transparent; color: {TEXT_MUTED};"
+            f" border: none; padding: 0; text-decoration: underline; }}"
+            f"QPushButton:hover {{ color: {ACCENT}; }}"
+        )
+        isp_row.addWidget(self._btn_isp)
+        isp_row.addStretch()
 
         right.addWidget(self._hero_title)
         right.addWidget(self._hero_sub)
+        right.addSpacing(4)
         right.addLayout(btn_row)
+        right.addLayout(isp_row)
         hero_lay.addLayout(right, 1)
         lay.addWidget(hero)
 
