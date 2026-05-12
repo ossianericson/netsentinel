@@ -481,11 +481,15 @@ class LogHubPage(QWidget):
         lte_rsrp = getattr(p, "lte_rsrp", None)
         rsrp    = nr_rsrp if nr_rsrp is not None else lte_rsrp
         rsrp_str = f"{rsrp:.1f} dBm" if rsrp is not None else ""
+        sinr_raw = getattr(p, "nr5g_sinr", None)
+        if sinr_raw is None:
+            sinr_raw = getattr(p, "lte_snr", None)
+        sinr_str = f"{sinr_raw:.1f} dB" if sinr_raw is not None else ""
         bars    = getattr(p, "signal_bars", None)
         bars_str = f"{bars}/5" if bars is not None else ""
         mcc, mnc = getattr(p, "mcc", None), getattr(p, "mnc", None)
         host    = f"{mcc}-{mnc}" if mcc and mnc else "ZTE MC889"
-        detail  = "  ·  ".join(filter(None, [nt, band, rsrp_str, bars_str]))
+        detail  = "  ·  ".join(filter(None, [nt, band, rsrp_str, sinr_str, bars_str]))
         return self._make_entry("modem", ts, host, "Signal", detail, nt or "")
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -524,9 +528,13 @@ class LogHubPage(QWidget):
                     if data.get("nr5g_rsrp_dbm") is not None
                     else data.get("lte_rsrp_dbm"))
         rsrp_str = f"{rsrp_raw:.1f} dBm" if rsrp_raw is not None else ""
+        sinr_raw = data.get("nr5g_sinr_db")
+        if sinr_raw is None:
+            sinr_raw = data.get("lte_snr_db")
+        sinr_str = f"{sinr_raw:.1f} dB" if sinr_raw is not None else ""
         bars = data.get("signal_bars")
         bars_str = f"{bars}/5" if bars is not None else ""
-        detail = "  ·  ".join(filter(None, [nt, band, rsrp_str, bars_str]))
+        detail = "  ·  ".join(filter(None, [nt, band, rsrp_str, sinr_str, bars_str]))
         self._add_live(self._make_entry("modem", ts, host, "Signal", detail, nt or ""))
 
     def add_mesh_entry(self, data: dict) -> None:
