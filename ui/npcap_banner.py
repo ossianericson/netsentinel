@@ -23,7 +23,7 @@ from PyQt6.QtCore    import QUrl, Qt
 from PyQt6.QtGui     import QDesktopServices
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy
 
-from modules.utils   import is_npcap_available
+from modules.utils   import is_npcap_available, is_store_app
 from ui.styles       import (
     ADMIN_WARN_BG, ADMIN_WARN_BORDER, ADMIN_WARN_FG, ADMIN_WARN_HOVER,
 )
@@ -36,6 +36,11 @@ _INSTALL_HINT: dict[str, str] = {
     "Darwin":  "libpcap is required.  Install via: brew install libpcap",
     "Linux":   "libpcap-dev is required.  Install via: sudo apt install libpcap-dev",
 }
+# Store variant: makes clear the user must install outside the Store sandbox
+_INSTALL_HINT_STORE = (
+    "Npcap must be installed manually — "
+    "Windows Store apps cannot install system drivers."
+)
 _DOWNLOAD_LABEL: dict[str, str] = {
     "Windows": "Download Npcap →",
     "Darwin":  "View download →",
@@ -73,13 +78,17 @@ class NpcapMissingBanner(QFrame):
         )
 
         sys_name = platform.system()
-        msg_text = _INSTALL_HINT.get(sys_name, "Packet capture library is required.")
+        if sys_name == "Windows" and is_store_app():
+            msg_text = _INSTALL_HINT_STORE
+            dl_label = "Get Npcap at npcap.com →"
+        else:
+            msg_text = _INSTALL_HINT.get(sys_name, "Packet capture library is required.")
+            dl_label = _DOWNLOAD_LABEL.get(sys_name, "View download →")
         msg = QLabel(msg_text)
         msg.setStyleSheet(
             f"font-size:11px; color:{ADMIN_WARN_FG}; background:transparent; border:none;"
         )
 
-        dl_label = _DOWNLOAD_LABEL.get(sys_name, "View download →")
         btn = QPushButton(dl_label)
         btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)

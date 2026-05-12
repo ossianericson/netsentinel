@@ -44,9 +44,9 @@ python -m pytest tests/test_version_consistency.py -v   # verify
 
 Never pass flags like `--current` to bump_version.py — it has no flags; the first positional arg is the new version string.
 
-Current version: **v1.9.4**
+Current version: **v1.9.5**
 
-Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10 → v1.7.0 → v1.7.1 → v1.7.2 → v1.7.3 → v1.7.4 → v1.7.5 → v1.7.6 → v1.7.7 → v1.7.8 → v1.7.9 → v1.8.0 → v1.9.0 → v1.9.1 → v1.9.2 → v1.9.3 → v1.9.4
+Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10 → v1.7.0 → v1.7.1 → v1.7.2 → v1.7.3 → v1.7.4 → v1.7.5 → v1.7.6 → v1.7.7 → v1.7.8 → v1.7.9 → v1.8.0 → v1.9.0 → v1.9.1 → v1.9.2 → v1.9.3 → v1.9.4 → v1.9.5
 Note: tags v1.55 and v1.56 were published as two-part (missing dot); treat as v1.5.5/v1.5.6.
 
 ## Releasing
@@ -61,6 +61,21 @@ git push
 git tag vX.Y
 git push origin vX.Y
 ```
+
+### Pre-Store-submission checklist (MSIX build)
+
+Before submitting to the Windows Store, manually verify on a sideloaded MSIX build:
+
+1. **Npcap banner (Store context)** — confirm `is_store_app()` returns `True`, the banner reads
+   "Npcap must be installed manually — Windows Store apps cannot install system drivers."
+   and the button opens `npcap.com` in the browser (not a local installer).
+2. **UAC elevation** — open a feature that requires admin (SYN scanner, firewall block,
+   Wake-on-LAN). Confirm the UAC prompt fires and the re-launch-as-admin path completes
+   successfully inside the MSIX sandbox. The Store AppContainer allows `ShellExecuteEx runas`
+   but this must be verified empirically — it cannot be checked in code review.
+3. **Npcap-dependent features post-manual-install** — install Npcap manually outside the Store,
+   restart the app, confirm all six capture features (Bandwidth, Broadcast Storm, Protocol
+   Visualizer, ARP Spoof Watch, Geolocation, SNMP Traps) become functional.
 
 ## CI / GitHub Actions
 

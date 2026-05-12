@@ -27,6 +27,33 @@ def is_admin() -> bool:
         return False
 
 
+def is_store_app(_cache: list = []) -> bool:  # noqa: B006
+    """Return True when running inside a Windows Store MSIX package (AppContainer).
+
+    Uses GetPackageFamilyName(): returns ERROR_INSUFFICIENT_BUFFER (122) when
+    the process is packaged, APPMODEL_ERROR_NO_PACKAGE (15700) when it is not.
+    Cached after first call — the result never changes within a process lifetime.
+    Always returns False on non-Windows platforms.
+    """
+    if _cache:
+        return _cache[0]
+    result = False
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+            buf_len = ctypes.c_uint32(0)
+            ret = ctypes.windll.kernel32.GetPackageFamilyName(
+                ctypes.windll.kernel32.GetCurrentProcess(),
+                ctypes.byref(buf_len),
+                None,
+            )
+            result = (ret == 122)  # ERROR_INSUFFICIENT_BUFFER → we are packaged
+        except Exception:
+            result = False
+    _cache.append(result)
+    return result
+
+
 # ── Npcap / libpcap detection ─────────────────────────────────────────────────
 
 def is_npcap_available() -> bool:

@@ -354,7 +354,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.4")
+    app.setApplicationVersion("1.9.5")
     app.setOrganizationName("netsentinel")
 
     # Apply QMenu rules at application level so top-level (parentless) menus
