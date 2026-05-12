@@ -129,8 +129,10 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
     # Parse network blocks
     blocks = re.split(r"SSID \d+ :", raw)[1:]
     for block in blocks:
-        ssid_m = re.match(r"\s*(.*?)\n", block)
-        ssid = ssid_m.group(1).strip() if ssid_m else ""
+        # Take only the first line for the SSID — strip CR so that CRLF output
+        # from netsh on Windows doesn't let \s* consume the blank line and
+        # capture the next field (e.g. "Network type : Infrastructure") as SSID.
+        ssid = block.split("\n")[0].strip("\r").strip()
 
         bssids = re.findall(
             r"BSSID \d+\s+:\s+([\da-fA-F:]{17})", block

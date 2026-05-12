@@ -85,6 +85,10 @@ class TopologyWidget(QWidget):
         ax.cla()
         self._style_axes()
 
+        # Strip noise IPs before layout: multicast (224–239.x.x.x), broadcast,
+        # and unresolved addresses add clutter without meaning on the map.
+        devices = [d for d in devices if not _is_noise_ip(_attr(d, "ip", ""))]
+
         if not devices:
             ax.text(0.5, 0.5, "No devices to display.\nRun a scan first.",
                     ha="center", va="center", color=TEXT_MUTED,
@@ -186,10 +190,27 @@ class TopologyWidget(QWidget):
         master     = next((u for u in mesh_units if getattr(u, "role", "") == "master"), None)
         satellites = [u for u in mesh_units if getattr(u, "role", "") != "master"]
 
+        # Build the set of MACs that are already drawn as dedicated infrastructure
+        # nodes (gateway + all satellites).  Any ARP-scan device sharing one of
+        # these MACs would appear twice on the map — suppress them from the
+        # client/unassigned pools.
+        infra_macs: set[str] = set()
+        for unit in mesh_units:
+            m = _norm_mac(getattr(unit, "mac", "") or "")
+            if m:
+                infra_macs.add(m)
+        # Also exclude any device whose IP is the gateway IP (router reachable
+        # via ARP but already represented by the __gateway__ node).
+        infra_ips: set[str] = {gateway_ip} if gateway_ip else set()
+
         # Group ARP-scan devices by which mesh satellite they connect to
         by_unit: Dict[str, list] = defaultdict(list)
         unassigned: list = []
         for d in devices:
+            if _norm_mac(_attr(d, "mac", "") or "") in infra_macs:
+                continue
+            if (_attr(d, "ip", "") or "") in infra_ips:
+                continue
             mac = _norm_mac(_attr(d, "mac", ""))
             mc  = mesh_enrichment.get(mac)
             if mc:
@@ -327,6 +348,23 @@ class TopologyWidget(QWidget):
 
 def _attr(d: Any, key: str, default: Any = "") -> Any:
     return d.get(key, default) if isinstance(d, dict) else getattr(d, key, default)
+
+
+def _is_noise_ip(ip: str) -> bool:
+    """Return True for IPs that add clutter but carry no topology meaning.
+
+    Filtered classes:
+      - Multicast:  224.0.0.0/4  (224–239.x.x.x) — mDNS, SSDP, IGMP probes
+      - Broadcast:  255.255.255.255
+      - Unresolved: 0.0.0.0 / empty / '?'
+    """
+    if not ip or ip in ("?", "0.0.0.0", "255.255.255.255"):
+        return True
+    try:
+        first = int(ip.split(".")[0])
+    except (ValueError, IndexError):
+        return False
+    return 224 <= first <= 239
 
 
 def _dev_id(d: Any) -> str:

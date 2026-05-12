@@ -30,7 +30,7 @@ from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
-    QSizePolicy, QSpinBox, QTableWidget, QTableWidgetItem,
+    QSizePolicy, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -193,8 +193,7 @@ class LogHubPage(QWidget):
         self._entries:            list[dict] = []
         self._consecutive_fails:  int        = 0
         self._last_live_challenge: float     = 0.0
-        self._toggle_btns:   dict[str, QPushButton] = {}
-        self._interval_boxes: dict[str, QSpinBox]   = {}
+        self._toggle_btns: dict[str, QPushButton] = {}
         self._src_bold_font = QFont()
         self._src_bold_font.setBold(True)
         self._src_bold_font.setPointSize(8)
@@ -264,12 +263,14 @@ class LogHubPage(QWidget):
         lay.setContentsMargins(12, 7, 12, 7)
         lay.setSpacing(6)
 
-        lbl = QLabel("Sources:")
+        lbl = QLabel("Show:")
         lbl.setStyleSheet(
             f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
         )
         lay.addWidget(lbl)
 
+        # Toggles are pure in-memory visibility filters — they do not persist to
+        # QSettings.  Initial state reflects what is enabled in the Network Logger.
         s = QSettings()
         for key, (label, color) in _SOURCES.items():
             default_on = key in ("net", "syslog", "snmp")
@@ -284,26 +285,11 @@ class LogHubPage(QWidget):
             self._toggle_btns[key] = btn
             lay.addWidget(btn)
 
-            if key in ("modem", "mesh"):
-                spin = QSpinBox()
-                spin.setRange(1, 60)
-                spin.setSuffix(" min")
-                spin.setFixedWidth(78)
-                spin.setFixedHeight(26)
-                spin.setValue(s.value(f"logging/{key}_interval_min", 5, type=int))
-                spin.setEnabled(enabled)
-                spin.setToolTip(f"How often to save {label} data to the database")
-                spin.setStyleSheet(
-                    f"QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
-                    f" border-radius:4px; padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY}; }}"
-                    f"QSpinBox:disabled {{ color:{TEXT_MUTED}; }}"
-                )
-                spin.valueChanged.connect(
-                    lambda val, k=key: QSettings().setValue(f"logging/{k}_interval_min", val)
-                )
-                self._interval_boxes[key] = spin
-                lay.addWidget(spin)
-
+        cfg_lbl = QLabel("· Configure in Network Logger")
+        cfg_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+        )
+        lay.addWidget(cfg_lbl)
         lay.addStretch()
 
         self._search_box = QLineEdit()
@@ -341,9 +327,6 @@ class LogHubPage(QWidget):
         btn = self._toggle_btns[key]
         btn.setText(f"{'●' if checked else '○'}  {label}")
         self._style_toggle(btn, checked, color)
-        if key in self._interval_boxes:
-            self._interval_boxes[key].setEnabled(checked)
-        QSettings().setValue(f"logging/{key}_enabled", checked)
         self._apply_filter()
 
     def _is_source_enabled(self, key: str) -> bool:

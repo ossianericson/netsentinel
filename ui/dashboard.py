@@ -793,15 +793,6 @@ _PAGE_HELP: dict[str, dict] = {
         ],
     },
     # ── Monitor ────────────────────────────────────────────────────────────────
-    "Logs": {
-        "what": "Unified log viewer: Network Logger CSV, Syslog messages, and SNMP traps in three tabs.",
-        "hidden": [
-            "Any row with an ARP event shows a '▶ ARP' button — click it to jump to the Protocol Visualizer pre-loaded with that event.",
-            "Use the 'Syslog' and 'SNMP Traps' tabs to see messages from routers and switches.",
-            "Click '↺ Reload' to load the latest CSV entries from disk.",
-            "Filter the Network Log by hostname using the filter box — useful on busy networks.",
-        ],
-    },
     "Live Bandwidth": {
         "what": "Rolling 60-second upload/download chart per network interface — updates every second.",
         "hidden": [
@@ -846,11 +837,13 @@ _PAGE_HELP: dict[str, dict] = {
         ],
     },
     "Network Logger": {
-        "what": "Background CSV logger recording every ping, DNS latency, and ARP change — evidence-grade output for ISP disputes.",
+        "what": "'Log Sources' tab: configure what gets recorded (ping, DNS, modem, mesh, ARP, Syslog, SNMP) and start/stop logging. 'Activity Log' tab: unified chronological viewer for all sources.",
         "hidden": [
             "The logger runs even when the app window is minimised — check the status bar dot to confirm it is active.",
             "CSV files are saved to the logs/ folder in the app data directory — you can open them in Excel for custom analysis.",
-            "Enable 'Start automatically' in Settings so logging begins the moment the app opens, even before you interact with it.",
+            "Enable 'Auto-start on launch' so logging begins the moment the app opens without any manual step.",
+            "Any row with an ARP event shows a '▶ ARP' button — click it to jump to the Protocol Visualizer pre-loaded with that event.",
+            "Filter the Activity Log by hostname using the filter box — useful on busy networks.",
         ],
     },
     "Service Heartbeat": {
@@ -1153,7 +1146,7 @@ _PAGE_HELP: dict[str, dict] = {
 
 # Pages that auto-expand the tip bar on first visit (they have non-obvious interactions)
 _AUTO_HELP_PAGES: frozenset[str] = frozenset({
-    "Logs", "Lab Mode", "Protocol Visualizer",
+    "Network Logger", "Lab Mode", "Protocol Visualizer",
     "Automation Hooks", "MQTT / Home Assistant", "TLS & Exposure",
     "Service Heartbeat", "SNMP Trap Receiver", "Syslog Viewer",
     "IoT Behaviour", "Scheduled Scans",
@@ -1395,7 +1388,7 @@ class Dashboard(QMainWindow):
         self._pulse_scan_lbl.clicked.connect(
             lambda: self._nav_rail_go_to("Overview"))
         self._pulse_logger_lbl.clicked.connect(
-            lambda: self._nav_rail_go_to("Logs"))
+            lambda: self._nav_rail_go_to("Network Logger"))
 
         self._status_bar.addPermanentWidget(_pulse_sep)
         self._status_bar.addPermanentWidget(self._pulse_online_lbl)
@@ -2296,6 +2289,21 @@ class Dashboard(QMainWindow):
         self._dia_tab = dia
         self._log_tab = log
 
+        # Unified logging container — "Log Sources" (config) first, "Activity Log" (viewer) second.
+        # Created here before the nav runs so each widget has exactly one parent (the container)
+        # and is never registered separately in the stack.
+        from PyQt6.QtWidgets import QTabWidget as _LogTW
+        self._logging_container = _LogTW()
+        self._logging_container.setStyleSheet(
+            f"QTabWidget::pane {{ border:1px solid {BORDER}; background:{BG_DARK}; }}"
+            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f"  padding:6px 18px; border:1px solid {BORDER}; border-bottom:none; margin-right:2px; }}"
+            f"QTabBar::tab:selected {{ background:{ACCENT}; color:{BG_DARK}; font-weight:bold; }}"
+            f"QTabBar::tab:hover {{ background:{BG_HOVER}; }}"
+        )
+        self._logging_container.addTab(self._log_tab,       "Log Sources")
+        self._logging_container.addTab(self._log_hub_page,  "Activity Log")
+
         # HomePage (pre-instantiated here; registered in stack below)
         from ui.pages.home_page import HomePage
         self._home_page = HomePage(store=self._store, parent=None)
@@ -2409,7 +2417,7 @@ class Dashboard(QMainWindow):
         # Diagnostics — collapsed; deeper investigation tools
         self._nav_add_subgroup("Diagnostics", icon="💊")
         self._nav_add_page("✚", "Health Check",         dia)
-        self._nav_add_page("≣", "Network Logger",        log)
+        self._nav_add_page("≣", "Network Logger",        self._logging_container)
         self._nav_add_page("⊕", "Root Cause Analysis",  self._correlator_tab_widget)
         self._nav_add_page("↗", "Trend Forecasts",      self._trend_page)
         self._nav_add_page("⬡", "IPv6 Devices",         self._ipv6_tab_widget)
@@ -3148,7 +3156,7 @@ class Dashboard(QMainWindow):
         ("ISP Report",          "Generate a professional report to send to your ISP when things go wrong"),
         ("Connectivity Tests",  "Run ping, DNS, HTTP, and MTR in one click — plain-English verdict"),
         ("Feature Guide",       "See everything this app can do — including features most users never find"),
-        ("Logs",                "View a continuous log of your connection stability, ARP events, and outages"),
+        ("Network Logger",      "Configure log sources and view the live activity log — all in one place"),
     ]
 
     def _track_page_visit(self, label: str) -> None:
@@ -3219,24 +3227,23 @@ class Dashboard(QMainWindow):
 
         self._nav_begin_section("Discover", "network")
         self._nav_add_rail_item("Devices",             self._m1_tab)
-        self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
-        self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
         self._nav_add_rail_item("Network Map",         self._topology_tab_widget)
-        self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
-        self._nav_add_rail_item("Home Automation",     self._ha_page)
         self._nav_add_rail_item("Mesh & Router",       self._mesh_router_page)
         self._nav_add_rail_item("Modem",               self._modem_page)
+        self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
+        self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
+        self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
+        self._nav_add_rail_item("Home Automation",     self._ha_page)
 
         self._nav_begin_section("Monitor", "monitor")
-        self._nav_add_rail_item("Logs",                self._log_hub_page)
+        self._nav_add_rail_item("Network Logger",      self._logging_container)
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
-        self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
         self._nav_add_rail_item("Active Connections",  self._connections_page)
         self._nav_add_rail_item("Availability History", self._history_page)
+        self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
+        self._nav_add_rail_item("Service Heartbeat",   self._service_page)
         self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
         self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
-        self._nav_add_rail_item("Network Logger",      self._log_tab)
-        self._nav_add_rail_item("Service Heartbeat",   self._service_page)
 
         self._nav_begin_section("Reports", "bar-chart")
         self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)
@@ -4411,50 +4418,205 @@ class Dashboard(QMainWindow):
     # ── Logger tab ────────────────────────────────────────────────────────────
 
     def _build_logger_tab(self) -> QWidget:
+        from PyQt6.QtWidgets import QTextEdit
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(8)
 
-        # ── Top controls ──────────────────────────────────────────────────────
-        top = QHBoxLayout()
-        title = QLabel("📋  Background Network Logger")
-        title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
-        top.addWidget(title)
-        top.addStretch()
-
-        # Interval spinner
-        int_lbl = QLabel("Interval (s):")
-        int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
-        self._log_interval = QSpinBox()
-        self._log_interval.setRange(5, 3600)
-        self._log_interval.setValue(60)
-        self._log_interval.setFixedWidth(70)
-        self._log_interval.setToolTip("How often to ping each host (seconds)")
-
-        # File rotation combo
-        rot_lbl = QLabel("Rotate file:")
-        rot_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
-        self._log_rotation = QComboBox()
-        self._log_rotation.addItems(["Off", "1 hour", "6 hours", "12 hours", "24 hours"])
-        self._log_rotation.setFixedWidth(90)
-        self._log_rotation.setToolTip(
-            "Start a new CSV file after this interval — keeps files to a manageable size\n"
-            "and makes it easy to share a single day's log.  12 h is best practice."
-        )
-        _rot_vals = [0, 1, 6, 12, 24]
-        self._log_rotation_vals = _rot_vals
         _qs = QSettings("NetSentinel", "NetSentinel")
-        _saved_rot = _qs.value("logger/rotation_hours", 12, type=int)
-        self._log_rotation.setCurrentIndex(
-            _rot_vals.index(_saved_rot) if _saved_rot in _rot_vals else 3
+
+        # ── Page header ───────────────────────────────────────────────────────
+        title = QLabel("📋  Network Logger")
+        title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            "background:transparent; border:none;"
         )
-        self._log_rotation.currentIndexChanged.connect(
-            lambda i, v=_rot_vals: QSettings("NetSentinel", "NetSentinel").setValue(
-                "logger/rotation_hours", v[i]
+        lay.addWidget(title)
+
+        # ── Log Sources card ──────────────────────────────────────────────────
+        src_card, src_body = _make_card("Log Sources")
+
+        def _section_lbl(text: str) -> QLabel:
+            lbl = QLabel(text.upper())
+            lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+                "letter-spacing:0.8px; background:transparent; border:none;"
+            )
+            return lbl
+
+        def _chk(text: str, tooltip: str = "") -> QCheckBox:
+            c = QCheckBox(text)
+            c.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+            if tooltip:
+                c.setToolTip(tooltip)
+            return c
+
+        def _spin(lo: int, hi: int, val: int, suffix: str, w: int = 72) -> QSpinBox:
+            s = QSpinBox()
+            s.setRange(lo, hi)
+            s.setValue(val)
+            s.setSuffix(suffix)
+            s.setFixedWidth(w)
+            s.setStyleSheet(
+                f"QSpinBox {{ background:{BG_CARD}; border:1px solid {BORDER};"
+                f" border-radius:4px; padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+                f"QSpinBox:disabled {{ color:{TEXT_MUTED}; }}"
+            )
+            return s
+
+        # ── Active Pollers ────────────────────────────────────────────────────
+        src_body.addWidget(_section_lbl("Active Pollers"))
+
+        # Ping RTT row
+        ping_row = QHBoxLayout()
+        ping_row.setSpacing(6)
+        ping_lbl = QLabel("Ping RTT")
+        ping_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
+        int_lbl = QLabel("Interval:")
+        int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        self._log_interval = _spin(5, 3600, _qs.value("logger/interval_s", 60, type=int), " s", 72)
+        self._log_interval.setToolTip("How often to ping each host")
+        self._log_interval.valueChanged.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/interval_s", v)
+        )
+        ping_row.addWidget(ping_lbl)
+        ping_row.addSpacing(8)
+        ping_row.addWidget(int_lbl)
+        ping_row.addWidget(self._log_interval)
+        ping_row.addStretch()
+        src_body.addLayout(ping_row)
+
+        # Ping optional sub-measurements
+        opt_row = QHBoxLayout()
+        opt_row.setSpacing(12)
+        opt_row.setContentsMargins(0, 0, 0, 0)
+        self._log_chk_jitter = _chk("Jitter  (3× ping)", "Measure RTT variance — adds 2 extra pings per cycle")
+        self._log_chk_dns    = _chk("DNS latency",       "Time a DNS lookup each cycle")
+        self._log_chk_http   = _chk("HTTP check",        "Check HTTP reachability each cycle")
+        self._log_chk_jitter.setChecked(_qs.value("logger/chk_jitter", False, type=bool))
+        self._log_chk_dns   .setChecked(_qs.value("logger/chk_dns",    False, type=bool))
+        self._log_chk_http  .setChecked(_qs.value("logger/chk_http",   False, type=bool))
+        self._log_chk_jitter.toggled.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/chk_jitter", v))
+        self._log_chk_dns.toggled.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/chk_dns", v))
+        self._log_chk_http.toggled.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/chk_http", v))
+        opt_row.addSpacing(16)
+        for c in (self._log_chk_jitter, self._log_chk_dns, self._log_chk_http):
+            opt_row.addWidget(c)
+        opt_row.addStretch()
+        src_body.addLayout(opt_row)
+
+        src_body.addSpacing(4)
+
+        # 5G Modem row
+        modem_row = QHBoxLayout()
+        modem_row.setSpacing(6)
+        self._log_chk_modem = _chk(
+            "5G Modem signal",
+            "Log modem signal metrics (RSRP, SINR, band…) to the database at the set interval.\n"
+            "Requires modem credentials saved on the Modem page."
+        )
+        self._log_chk_modem.setChecked(_qs.value("logging/modem_enabled", False, type=bool))
+        modem_int_lbl = QLabel("Log every:")
+        modem_int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        self._log_modem_interval = _spin(
+            1, 60, _qs.value("logging/modem_interval_min", 5, type=int), " min"
+        )
+        self._log_modem_interval.setEnabled(self._log_chk_modem.isChecked())
+        self._log_modem_interval.setToolTip("How often to write modem signal data to the database")
+        self._log_chk_modem.toggled.connect(
+            lambda v: (
+                QSettings("NetSentinel", "NetSentinel").setValue("logging/modem_enabled", v),
+                self._log_modem_interval.setEnabled(v),
             )
         )
+        self._log_modem_interval.valueChanged.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logging/modem_interval_min", v)
+        )
+        modem_row.addWidget(self._log_chk_modem)
+        modem_row.addSpacing(8)
+        modem_row.addWidget(modem_int_lbl)
+        modem_row.addWidget(self._log_modem_interval)
+        modem_row.addStretch()
+        src_body.addLayout(modem_row)
+
+        # Mesh row
+        mesh_row = QHBoxLayout()
+        mesh_row.setSpacing(6)
+        self._log_chk_mesh = _chk(
+            "Mesh router status",
+            "Log mesh node status (online count, worst RSSI…) to the database at the set interval.\n"
+            "Requires Deco credentials saved on the Mesh Router page."
+        )
+        self._log_chk_mesh.setChecked(_qs.value("logging/mesh_enabled", False, type=bool))
+        mesh_int_lbl = QLabel("Log every:")
+        mesh_int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        self._log_mesh_interval = _spin(
+            1, 60, _qs.value("logging/mesh_interval_min", 5, type=int), " min"
+        )
+        self._log_mesh_interval.setEnabled(self._log_chk_mesh.isChecked())
+        self._log_mesh_interval.setToolTip("How often to write mesh status data to the database")
+        self._log_chk_mesh.toggled.connect(
+            lambda v: (
+                QSettings("NetSentinel", "NetSentinel").setValue("logging/mesh_enabled", v),
+                self._log_mesh_interval.setEnabled(v),
+            )
+        )
+        self._log_mesh_interval.valueChanged.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logging/mesh_interval_min", v)
+        )
+        mesh_row.addWidget(self._log_chk_mesh)
+        mesh_row.addSpacing(8)
+        mesh_row.addWidget(mesh_int_lbl)
+        mesh_row.addWidget(self._log_mesh_interval)
+        mesh_row.addStretch()
+        src_body.addLayout(mesh_row)
+
+        src_body.addSpacing(6)
+
+        # ── Passive Listeners ─────────────────────────────────────────────────
+        src_body.addWidget(_section_lbl("Passive Listeners"))
+
+        passive_row = QHBoxLayout()
+        passive_row.setSpacing(16)
+        self._log_chk_arp = _chk(
+            "ARP watch",
+            "Flag new or changed ARP entries — new devices, MAC changes, possible spoofing."
+        )
+        self._log_chk_arp.setChecked(_qs.value("logger/chk_arp", False, type=bool))
+        self._log_chk_arp.toggled.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/chk_arp", v)
+        )
+        self._log_chk_syslog = _chk(
+            "Syslog receiver",
+            "Listen for syslog messages (UDP 514) from routers and other devices."
+        )
+        self._log_chk_syslog.setChecked(_qs.value("logging/syslog_enabled", True, type=bool))
+        self._log_chk_syslog.toggled.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logging/syslog_enabled", v)
+        )
+        self._log_chk_snmp = _chk(
+            "SNMP trap receiver",
+            "Listen for SNMPv1/v2c traps (UDP 162) from managed devices."
+        )
+        self._log_chk_snmp.setChecked(_qs.value("logging/snmp_enabled", True, type=bool))
+        self._log_chk_snmp.toggled.connect(
+            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logging/snmp_enabled", v)
+        )
+        for c in (self._log_chk_arp, self._log_chk_syslog, self._log_chk_snmp):
+            passive_row.addWidget(c)
+        passive_row.addStretch()
+        src_body.addLayout(passive_row)
+
+        lay.addWidget(src_card)
+
+        # ── Logger controls row ───────────────────────────────────────────────
+        ctrl_row = QHBoxLayout()
+        ctrl_row.setSpacing(6)
 
         self._btn_log_start = QPushButton("▶  Start Logger")
         self._btn_log_start.setObjectName("btnDiag")
@@ -4466,7 +4628,7 @@ class Dashboard(QMainWindow):
         self._btn_log_open.setEnabled(False)
         self._btn_log_open.clicked.connect(self._open_log_file)
 
-        self._btn_log_analyse = QPushButton("⊕  Load & Analyse Log")
+        self._btn_log_analyse = QPushButton("⊕  Load & Analyse")
         self._btn_log_analyse.setFixedHeight(34)
         self._btn_log_analyse.clicked.connect(self._load_log_file)
 
@@ -4476,49 +4638,48 @@ class Dashboard(QMainWindow):
         self._btn_log_chart.setToolTip("Render loaded log as RTT chart (opens interactive window)")
         self._btn_log_chart.clicked.connect(self._view_log_chart)
 
-        top.addWidget(int_lbl)
-        top.addWidget(self._log_interval)
-        top.addSpacing(8)
-        top.addWidget(rot_lbl)
-        top.addWidget(self._log_rotation)
-        top.addSpacing(10)
-        top.addWidget(self._btn_log_start)
-        top.addWidget(self._btn_log_open)
-        top.addWidget(self._btn_log_analyse)
-        top.addWidget(self._btn_log_chart)
-        lay.addLayout(top)
+        rot_lbl = QLabel("Rotate file:")
+        rot_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+        self._log_rotation = QComboBox()
+        self._log_rotation.addItems(["Off", "1 hour", "6 hours", "12 hours", "24 hours"])
+        self._log_rotation.setFixedWidth(90)
+        self._log_rotation.setToolTip(
+            "Start a new CSV file after this interval — keeps files to a manageable size.\n"
+            "12 h is best practice."
+        )
+        _rot_vals = [0, 1, 6, 12, 24]
+        self._log_rotation_vals = _rot_vals
+        _saved_rot = _qs.value("logger/rotation_hours", 12, type=int)
+        self._log_rotation.setCurrentIndex(
+            _rot_vals.index(_saved_rot) if _saved_rot in _rot_vals else 3
+        )
+        self._log_rotation.currentIndexChanged.connect(
+            lambda i, v=_rot_vals: QSettings("NetSentinel", "NetSentinel").setValue(
+                "logger/rotation_hours", v[i]
+            )
+        )
 
-        # ── Optional measurement checkboxes ────────────────────────────────────
-        opt_row = QHBoxLayout()
-        opt_lbl = QLabel("Optional measurements each cycle:")
-        opt_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
-        opt_row.addWidget(opt_lbl)
-        self._log_chk_jitter = QCheckBox("Jitter  (3× ping)")
-        self._log_chk_dns    = QCheckBox("DNS latency")
-        self._log_chk_http   = QCheckBox("HTTP check")
-        self._log_chk_arp    = QCheckBox("ARP watch")
-        for chk in (self._log_chk_jitter, self._log_chk_dns,
-                    self._log_chk_http, self._log_chk_arp):
-            chk.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
-            opt_row.addWidget(chk)
-        opt_row.addStretch()
-        lay.addLayout(opt_row)
-
-        # ── Auto-start option ─────────────────────────────────────────────────
-        auto_row = QHBoxLayout()
-        self._log_chk_autostart = QCheckBox("Start automatically when NetSentinel opens")
+        self._log_chk_autostart = QCheckBox("Auto-start on launch")
         self._log_chk_autostart.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
         self._log_chk_autostart.setToolTip(
             "Logger will start immediately each time the app launches — no manual step required."
         )
-        qs_auto = QSettings("NetSentinel", "NetSentinel")
-        self._log_chk_autostart.setChecked(qs_auto.value("logger/auto_start", False, type=bool))
+        self._log_chk_autostart.setChecked(_qs.value("logger/auto_start", False, type=bool))
         self._log_chk_autostart.toggled.connect(
             lambda v: QSettings("NetSentinel", "NetSentinel").setValue("logger/auto_start", v)
         )
-        auto_row.addWidget(self._log_chk_autostart)
-        auto_row.addStretch()
-        lay.addLayout(auto_row)
+
+        ctrl_row.addWidget(self._btn_log_start)
+        ctrl_row.addWidget(self._btn_log_open)
+        ctrl_row.addWidget(self._btn_log_analyse)
+        ctrl_row.addWidget(self._btn_log_chart)
+        ctrl_row.addSpacing(12)
+        ctrl_row.addWidget(rot_lbl)
+        ctrl_row.addWidget(self._log_rotation)
+        ctrl_row.addSpacing(12)
+        ctrl_row.addWidget(self._log_chk_autostart)
+        ctrl_row.addStretch()
+        lay.addLayout(ctrl_row)
 
         # ── Status + summary stats ────────────────────────────────────────────
         self._log_status_lbl = QLabel(
@@ -4568,7 +4729,9 @@ class Dashboard(QMainWindow):
         live_lbl = QLabel("  Live log (most recent pings):")
         live_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
         lay.addWidget(live_lbl)
-        self._log_live_table = _table(["Timestamp", "Host", "RTT (ms)", "Jitter", "DNS (ms)", "HTTP", "ARP Event", "Status"])
+        self._log_live_table = _table([
+            "Timestamp", "Host", "RTT (ms)", "Jitter", "DNS (ms)", "HTTP", "ARP Event", "Status"
+        ])
         self._log_live_table.setColumnWidth(0, 155)
         self._log_live_table.setColumnWidth(1, 120)
         self._log_live_table.setColumnWidth(2, 70)
@@ -4926,6 +5089,19 @@ class Dashboard(QMainWindow):
             self._log_live_table.setRowCount(0)
             self._log_outage_table.setRowCount(0)
             self._home_page.set_monitoring_status(True, "", 0)
+            # One-time prompt: only the very first time logging is started in this installation
+            _qs2 = QSettings("NetSentinel", "NetSentinel")
+            if not _qs2.value("logger/first_start_prompted", False, type=bool):
+                _qs2.setValue("logger/first_start_prompted", True)
+                from PyQt6.QtWidgets import QMessageBox
+                _ans = QMessageBox.question(
+                    self, "Logging started",
+                    "Logger is now running.\n\nSwitch to Activity Log to view entries?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if _ans == QMessageBox.StandardButton.Yes and hasattr(self, "_logging_container"):
+                    self._logging_container.setCurrentIndex(1)
+                    self._nav_rail_go_to("Network Logger")
 
     @pyqtSlot(object)
     def _on_log_entry(self, entry):
@@ -8291,6 +8467,12 @@ class Dashboard(QMainWindow):
         for w in self._workers:
             w.start()
 
+        # Trigger immediate modem and Deco refresh alongside the scan.
+        # The mesh M1-fallback (_check_mesh_autorun) stays active for first runs
+        # where _net_info hasn't resolved the gateway yet.
+        self._trigger_modem_refresh()
+        self._trigger_mesh_refresh()
+
     # ── Module result handlers ────────────────────────────────────────────────
 
     @pyqtSlot(dict)
@@ -8856,6 +9038,50 @@ class Dashboard(QMainWindow):
             return
         self._on_modem_connect(host, pw)
 
+    def _trigger_modem_refresh(self) -> None:
+        """Restart ZTE worker for an immediate fresh poll at scan time."""
+        from PyQt6.QtCore import QSettings
+        host = QSettings().value("modem/last_host", "").strip()
+        if not host:
+            return
+        try:
+            import keyring as _kr
+            pw = _kr.get_password("NetSentinel/modem", host)
+        except Exception:
+            return
+        if not pw:
+            return
+        self._on_modem_connect(host, pw)
+
+    def _trigger_mesh_refresh(self) -> None:
+        """Start a fresh Deco scan at scan time using the cached gateway IP.
+
+        Falls back to the M1-result path (_check_mesh_autorun) when _net_info
+        hasn't resolved the gateway yet (first run, cold start).
+        """
+        gateway_ip = (self._net_info or {}).get("gateway", "").strip()
+        if not gateway_ip:
+            return
+        # Don't interrupt a fetch that's already in flight
+        existing = getattr(self, "_mesh_auto_worker", None)
+        if existing and existing.isRunning():
+            return
+        try:
+            import keyring as _kr
+            pw = _kr.get_password("NetSentinel/mesh", gateway_ip)
+        except Exception:
+            return
+        if not pw:
+            return
+        from workers.mesh_worker import MeshWorker
+        worker = MeshWorker(host=gateway_ip, password=pw)
+        worker.result.connect(self._on_mesh_result)
+        worker.status.connect(lambda msg: self._m1_status.setText(
+            f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
+        ))
+        self._mesh_auto_worker = worker
+        worker.start()
+
     @pyqtSlot(str, str)
     def _on_modem_connect(self, host: str, password: str) -> None:
         """Start (or restart) the ZTE polling worker."""
@@ -9087,21 +9313,46 @@ class Dashboard(QMainWindow):
         networks = wifi.networks if not isinstance(wifi, dict) else wifi.get("networks", [])
         my_ssid  = (wifi.my_ssid if not isinstance(wifi, dict) else wifi.get("my_ssid", "")) or ""
         self._m4_table.setRowCount(0)
+
+        def _g(obj, attr, default):
+            return getattr(obj, attr, default) if not isinstance(obj, dict) else obj.get(attr, default)
+
+        # Collapse multi-BSSID SSIDs (mesh nodes each broadcast the same SSID)
+        # into one row per named SSID showing the strongest signal.  Hidden
+        # networks (empty SSID) have unique BSSIDs and are kept as separate rows.
+        ssid_groups: dict = {}
+        hidden_list: list = []
         for n in networks:
-            ssid     = n.ssid     if not isinstance(n, dict) else n.get("ssid", "")
-            bssid    = n.bssid    if not isinstance(n, dict) else n.get("bssid", "")
-            ch       = n.channel  if not isinstance(n, dict) else n.get("channel", 0)
-            band     = n.band     if not isinstance(n, dict) else n.get("band", "?")
-            sig      = n.signal_dbm       if not isinstance(n, dict) else n.get("signal_dbm", 0)
-            hidden   = n.is_hidden        if not isinstance(n, dict) else n.get("is_hidden", False)
-            rogue    = n.is_rogue_ssid    if not isinstance(n, dict) else n.get("is_rogue_ssid", False)
-            conflict = n.co_channel_conflict if not isinstance(n, dict) else n.get("co_channel_conflict", False)
-            connected = bool(my_ssid and ssid and ssid == my_ssid)
+            ssid = _g(n, "ssid", "")
+            if ssid:
+                ssid_groups.setdefault(ssid, []).append(n)
+            else:
+                hidden_list.append(n)
+
+        display_rows: list = []
+        for ssid, group in ssid_groups.items():
+            best     = max(group, key=lambda x: _g(x, "signal_dbm", -100))
+            rogue    = any(_g(x, "is_rogue_ssid",       False) for x in group)
+            conflict = any(_g(x, "co_channel_conflict",  False) for x in group)
+            hidden   = any(_g(x, "is_hidden",            False) for x in group)
+            bssid    = _g(best, "bssid", "")
+            bssid_d  = f"{bssid} (×{len(group)})" if len(group) > 1 else bssid
+            display_rows.append((best, ssid, bssid_d, rogue, conflict, hidden))
+        for n in hidden_list:
+            rogue    = _g(n, "is_rogue_ssid",      False)
+            conflict = _g(n, "co_channel_conflict", False)
+            display_rows.append((n, "", _g(n, "bssid", ""), rogue, conflict, True))
+
+        for n, ssid_d, bssid_d, rogue, conflict, hidden in display_rows:
+            ch        = _g(n, "channel",    0)
+            band      = _g(n, "band",       "?")
+            sig       = _g(n, "signal_dbm", 0)
+            connected = bool(my_ssid and ssid_d and ssid_d == my_ssid)
             level = "HIGH" if rogue else ("MEDIUM" if conflict else ("LOW" if hidden else "CLEAN"))
             _add_row(
                 self._m4_table,
                 [
-                    ssid or "[HIDDEN]", bssid, str(ch), band, str(sig),
+                    ssid_d or "[HIDDEN]", bssid_d, str(ch), band, str(sig),
                     "Yes" if hidden else "No",
                     "⚠ Yes" if rogue else "No",
                     "⚠ Yes" if conflict else "No",
