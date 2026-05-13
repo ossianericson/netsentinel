@@ -1263,6 +1263,10 @@ class OverviewPage(QWidget):
     navigate_to = pyqtSignal(str)
     #: Emitted when the user requests a Quick Network Assessment (M1–M5 bundle).
     scan_requested = pyqtSignal()
+    #: Emitted when the user clicks "▣ Report" — run all modules + open HTML report.
+    report_requested = pyqtSignal()
+    #: Emitted when the user clicks "⬇ Export…" — export last scan results.
+    export_requested = pyqtSignal()
     #: Emitted when the user requests security tool runs; carries list of nav labels.
     security_scan_requested = pyqtSignal(list)
 
@@ -1347,6 +1351,34 @@ class OverviewPage(QWidget):
         )
         self._edit_btn.toggled.connect(self._on_edit_toggled)
         hdr.addWidget(self._edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
+
+        self._report_btn = QPushButton("▣  Report")
+        self._report_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+        )
+        self._report_btn.setToolTip(
+            "Run all modules + diagnostics and auto-open the full HTML report"
+        )
+        self._report_btn.clicked.connect(self.report_requested.emit)
+        hdr.addWidget(self._report_btn, alignment=Qt.AlignmentFlag.AlignBottom)
+
+        self._export_btn = QPushButton("⬇  Export…")
+        self._export_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+        )
+        self._export_btn.setToolTip("Export last scan results as HTML, JSON, or CSV")
+        self._export_btn.setEnabled(False)
+        self._export_btn.clicked.connect(self.export_requested.emit)
+        hdr.addWidget(self._export_btn, alignment=Qt.AlignmentFlag.AlignBottom)
+
         root.addLayout(hdr)
 
         # Hero summary strip — always visible, 4 stat pills
@@ -1486,6 +1518,15 @@ class OverviewPage(QWidget):
         else:
             self._scan_btn.setText("▶  Scan Network")
             self._scan_sub.setText("Discover devices  ·  check stability  ·  detect threats")
+
+    def set_report_running(self, running: bool) -> None:
+        """Disable/re-enable the Report button while a full report is in progress."""
+        self._report_btn.setEnabled(not running)
+        self._report_btn.setText("▣  Running…" if running else "▣  Report")
+
+    def set_export_enabled(self, enabled: bool) -> None:
+        """Enable the Export button once scan results are available."""
+        self._export_btn.setEnabled(enabled)
 
     def _on_alert_navigate(self, rule_type: str, host: str) -> None:
         if rule_type == "SERVICE_DOWN":

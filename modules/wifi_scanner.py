@@ -271,6 +271,16 @@ def scan() -> WifiScanResult:
 
     rogue_pat = re.compile("|".join(ROGUE_SSID_PATTERNS), re.IGNORECASE)
 
+    # OUIs (xx:xx:xx) of every BSSID that broadcasts my primary SSID — these are
+    # all radios on the same mesh hardware.  Hidden backhaul SSIDs share the same
+    # OUI, so they are own infrastructure, not external co-channel interference.
+    own_ouis: set = set()
+    if my_ssid:
+        own_ouis = {
+            n.bssid[:8] for n in nets
+            if n.ssid == my_ssid and len(n.bssid) >= 8
+        }
+
     for net in nets:
         # Rogue SSID detection
         if rogue_pat.search(net.ssid):
@@ -282,7 +292,11 @@ def scan() -> WifiScanResult:
 
         # Co-channel interference (only flag if close in signal)
         if my_channel and net.channel == my_channel and net.ssid != my_ssid:
-            if net.signal_dbm >= -70:
+            net_oui = net.bssid[:8] if len(net.bssid) >= 8 else ""
+            if net_oui and net_oui in own_ouis:
+                # Same mesh hardware (hidden backhaul or secondary band) — not a conflict
+                pass
+            elif net.signal_dbm >= -70:
                 net.co_channel_conflict = True
                 if not net.verdict:
                     net.verdict = (

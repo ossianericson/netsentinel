@@ -162,6 +162,9 @@ class SettingsPage(QWidget):
     Contains the theme picker, display preferences, and shortcuts reference.
     """
 
+    #: Emitted when the user clicks "Reload OUI database" in the Maintenance card.
+    reload_oui_requested = pyqtSignal()
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("contentArea")
@@ -190,6 +193,7 @@ class SettingsPage(QWidget):
         bl.addWidget(self._build_tray_card())
         bl.addWidget(self._build_plugin_marketplace_card())
         bl.addWidget(self._build_shortcuts_card())
+        bl.addWidget(self._build_maintenance_card())
         bl.addStretch()
 
         scroll.setWidget(body)
@@ -659,5 +663,31 @@ class SettingsPage(QWidget):
             row_l.addWidget(k)
             row_l.addWidget(d, 1)
             bl.addWidget(row_w)
+
+        return card
+
+    # ── Maintenance ───────────────────────────────────────────────────────────
+
+    def _build_maintenance_card(self) -> QFrame:
+        card, bl = _card("Maintenance")
+
+        desc = QLabel(
+            "Reload the OUI vendor database without restarting the application. "
+            "Use this after updating offenders.json or installing a new vendor list."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        bl.addWidget(desc)
+
+        btn = QPushButton("Reload OUI Database")
+        btn.setFixedWidth(180)
+        btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; }}"
+        )
+        btn.clicked.connect(self.reload_oui_requested.emit)
+        bl.addWidget(btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         return card

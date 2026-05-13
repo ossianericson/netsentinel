@@ -1474,7 +1474,7 @@ class Dashboard(QMainWindow):
 
     def _build_header(self) -> QWidget:
         """Slim top bar: brand | stretch | verdict | actions."""
-        from PyQt6.QtWidgets import QMenu, QWidgetAction, QToolButton
+        from PyQt6.QtWidgets import QMenu, QToolButton
 
         w = self._DragHeader(self)
         w.setObjectName("appBar")
@@ -1548,33 +1548,6 @@ class Dashboard(QMainWindow):
         self._btn_export.clicked.connect(self._export_report)
 
         # ── Settings dropdown (⚙) ─────────────────────────────────────────────
-        _spin_qss = (
-            f"QSpinBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:2px; font-size:11px; padding:0 2px; }}"
-            f"QSpinBox::up-button, QSpinBox::down-button {{ width:14px; }}"
-        )
-        self._stp_duration = QSpinBox()
-        self._stp_duration.setRange(10, 120); self._stp_duration.setValue(30)
-        self._stp_duration.setFixedWidth(64); self._stp_duration.setStyleSheet(_spin_qss)
-        self._stp_duration.setToolTip("STP/BPDU listen duration (seconds)")
-
-        self._storm_duration = QSpinBox()
-        self._storm_duration.setRange(5, 60); self._storm_duration.setValue(10)
-        self._storm_duration.setFixedWidth(64); self._storm_duration.setStyleSheet(_spin_qss)
-
-        _chk_qss = (
-            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; padding:3px 8px; }}"
-            f"QCheckBox::indicator {{ width:12px; height:12px; border:1px solid {BORDER_MED};"
-            f" border-radius:2px; background:{BG_CARD}; }}"
-            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
-        )
-        self._chk_stp   = QCheckBox("STP detection")
-        self._chk_storm = QCheckBox("Storm analysis")
-        self._chk_wifi  = QCheckBox("WiFi scan")
-        self._chk_dns   = QCheckBox("DNS check")
-        for _c in (self._chk_stp, self._chk_storm, self._chk_wifi, self._chk_dns):
-            _c.setChecked(True); _c.setStyleSheet(_chk_qss)
-
         _menu_s = QMenu()
         _menu_s.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
@@ -1582,32 +1555,10 @@ class Dashboard(QMainWindow):
             f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
         )
 
-        def _spin_row(label: str, spin: QSpinBox) -> QWidgetAction:
-            _w = QWidget(); _l = QHBoxLayout(_w)
-            _l.setContentsMargins(8, 3, 8, 3); _l.setSpacing(8)
-            _lbl = QLabel(label)
-            _lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; min-width:120px;")
-            _l.addWidget(_lbl); _l.addWidget(spin)
-            _wa = QWidgetAction(_menu_s); _wa.setDefaultWidget(_w)
-            return _wa
-
-        _menu_s.addAction(_spin_row("STP listen (s):", self._stp_duration))
-        _menu_s.addAction(_spin_row("Storm listen (s):", self._storm_duration))
-        _menu_s.addSeparator()
-        for _c in (self._chk_stp, self._chk_storm, self._chk_wifi, self._chk_dns):
-            _cwa = QWidgetAction(_menu_s); _cwa.setDefaultWidget(_c)
-            _menu_s.addAction(_cwa)
-        _menu_s.addSeparator()
-        self._act_export = _menu_s.addAction("⬇  Export Report…")
-        self._act_export.triggered.connect(self._export_report)
-        self._act_export.setEnabled(False)
-        _menu_s.addSeparator()
-        _act_oui = _menu_s.addAction("Reload OUI database")
-        _act_oui.triggered.connect(self._reload_oui_db)
         _act_about = _menu_s.addAction("About NetSentinel")
         _act_about.triggered.connect(self._show_about)
         _menu_s.addSeparator()
-        _act_app_settings = _menu_s.addAction("⚙  App Settings (Theme & Display)…")
+        _act_app_settings = _menu_s.addAction("⚙  App Settings…")
         _act_app_settings.triggered.connect(self._open_settings_dialog)
         _menu_s.addSeparator()
         _act_quit = _menu_s.addAction("✕  Quit NetSentinel")
@@ -1639,24 +1590,6 @@ class Dashboard(QMainWindow):
         self._header_scan_btn.setStyleSheet(_icon_btn_qss)
         self._header_scan_btn.clicked.connect(self._start_full_scan)
         lay.addWidget(self._header_scan_btn)
-
-        # ── Full Report button ────────────────────────────────────────────────
-        self._btn_full_report = QToolButton()
-        self._btn_full_report.setText("▣  Report")
-        self._btn_full_report.setToolTip(
-            "Run all modules + diagnostics and auto-open the full HTML report"
-        )
-        self._btn_full_report.setStyleSheet(_icon_btn_qss)
-        self._btn_full_report.clicked.connect(self._run_full_report)
-        lay.addWidget(self._btn_full_report)
-
-        # ── Help button — matches mockup: "? Help" with visible border ────────
-        _btn_help = QToolButton()
-        _btn_help.setText("?  Help")
-        _btn_help.setToolTip("Help & Reference")
-        _btn_help.setStyleSheet(_icon_btn_qss)
-        _btn_help.clicked.connect(self._open_help_dialog)
-        lay.addWidget(_btn_help)
 
         # ── Window controls ───────────────────────────────────────────────────
         # Segoe MDL2 Assets: the exact font Windows uses for its own title bar
@@ -2264,6 +2197,7 @@ class Dashboard(QMainWindow):
 
         from ui.pages.settings_page import SettingsPage
         self._settings_page = SettingsPage(parent=None)
+        self._settings_page.reload_oui_requested.connect(self._reload_oui_db)
 
         from ui.pages.speed_test_page import SpeedTestPage
         self._speed_test_page = SpeedTestPage(store=self._store, parent=None)
@@ -2403,6 +2337,8 @@ class Dashboard(QMainWindow):
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
         self._overview_page.scan_requested.connect(self._start_full_scan)
+        self._overview_page.report_requested.connect(self._run_full_report)
+        self._overview_page.export_requested.connect(self._export_report)
         self._overview_page.security_scan_requested.connect(self._run_security_scans)
         self._diagnosis_page.navigate_to.connect(self._on_overview_navigate)
 
@@ -2581,6 +2517,7 @@ class Dashboard(QMainWindow):
         self._nav_add_page("⬡", "Lab Mode",             self._lab_mode_page)
         self._nav_add_page("◈", "Protocol Visualizer",  self._protocol_viz_page)
         self._nav_add_page("◉", "Feature Guide",        self._discover_page)
+        self._nav_add_page("?", "Help & Reference",     self._help_tab_widget)
         self._nav_separators.add(self._nav_edu_sep)
 
         # Apply initial collapse for ALL groups that start collapsed (both level-0
@@ -3383,6 +3320,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Protocol Visualizer", self._protocol_viz_page)
         self._nav_add_rail_item("Lab Mode",            self._lab_mode_page)
         self._nav_add_rail_item("Feature Guide",       self._discover_page)
+        self._nav_add_rail_item("Help & Reference",    self._help_tab_widget)
 
     #── Favourites / pinnable pages ───────────────────────────────────────────
 
@@ -6655,12 +6593,10 @@ class Dashboard(QMainWindow):
                 self._m4_result, self._m5_result
             ])
             self._btn_export.setEnabled(_has_results)
-            if hasattr(self, "_act_export"):
-                self._act_export.setEnabled(_has_results)
-            # Re-enable report button if scan ended without triggering auto-report
-            if hasattr(self, "_btn_full_report") and not self._auto_report_pending:
-                self._btn_full_report.setEnabled(True)
-                self._btn_full_report.setText("▣  Report")
+            if hasattr(self, "_overview_page"):
+                self._overview_page.set_export_enabled(_has_results)
+                if not self._auto_report_pending:
+                    self._overview_page.set_report_running(False)
 
     # ── Shared copy-to-clipboard for tables ──────────────────────────────────
 
@@ -8422,20 +8358,8 @@ class Dashboard(QMainWindow):
         self._settings_dlg.activateWindow()
 
     def _open_help_dialog(self):
-        """Open Help & Reference as a persistent non-modal dialog."""
-        if not hasattr(self, "_help_dlg") or self._help_dlg is None:
-            from PyQt6.QtWidgets import QDialog, QVBoxLayout
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Help & Reference")
-            dlg.resize(820, 660)
-            dlg.setStyleSheet(f"QDialog{{background:{BG_DARK};}}")
-            lay = QVBoxLayout(dlg)
-            lay.setContentsMargins(0, 0, 0, 0)
-            lay.addWidget(self._help_tab_widget)
-            self._help_dlg = dlg
-        self._help_dlg.show()
-        self._help_dlg.raise_()
-        self._help_dlg.activateWindow()
+        """Navigate to Help & Reference in the Education sidebar section."""
+        self._nav_rail_go_to("Help & Reference")
 
     # ── Scan orchestration ───────────────────────────────────────────────────
 
@@ -8529,9 +8453,12 @@ class Dashboard(QMainWindow):
         self._workers.append(w1)
         self._active_count += 1
 
+        _scan_qs = QSettings("NetSentinel", "NetSentinel")
+
         # Module 2 — needs admin + Scapy
-        if self._chk_stp.isChecked():
-            w2 = Module2Worker(gateway_mac, duration=self._stp_duration.value())
+        if _scan_qs.value("scan/stp_enabled", True, type=bool):
+            _stp_dur = _scan_qs.value("scan/stp_duration_s", 10, type=int)
+            w2 = Module2Worker(gateway_mac, duration=_stp_dur)
             w2.bpdu_found.connect(self._on_bpdu_found)
             w2.result.connect(self._on_m2_result)
             w2.status.connect(lambda m: (self._set_status(m), self._m2_status.setText(m)))
@@ -8541,9 +8468,10 @@ class Dashboard(QMainWindow):
             self._active_count += 1
 
         # Module 3
-        if self._chk_storm.isChecked():
+        if _scan_qs.value("scan/storm_enabled", True, type=bool):
+            _storm_dur = _scan_qs.value("scan/storm_duration_s", 10, type=int)
             w3 = Module3Worker(
-                duration=self._storm_duration.value(),
+                duration=_storm_dur,
                 known_rogue_macs=rogue_macs,
             )
             w3.result.connect(self._on_m3_result)
@@ -8554,7 +8482,7 @@ class Dashboard(QMainWindow):
             self._active_count += 1
 
         # Module 4
-        if self._chk_wifi.isChecked():
+        if _scan_qs.value("scan/wifi_enabled", True, type=bool):
             w4 = Module4Worker()
             w4.result.connect(self._on_m4_result)
             w4.status.connect(lambda m: (self._set_status(m), self._m4_status.setText(m)))
@@ -8564,7 +8492,7 @@ class Dashboard(QMainWindow):
             self._active_count += 1
 
         # Module 5
-        if self._chk_dns.isChecked():
+        if _scan_qs.value("scan/dns_enabled", True, type=bool):
             w5 = Module5Worker(gateway_ip=gateway_ip)
             w5.ping_point.connect(self._on_ping_point)
             w5.dns_point.connect(self._on_dns_point)
@@ -9528,6 +9456,25 @@ class Dashboard(QMainWindow):
         def _g(obj, attr, default):
             return getattr(obj, attr, default) if not isinstance(obj, dict) else obj.get(attr, default)
 
+        # Belt-and-suspenders: if Deco API data is already cached, clear co-channel
+        # conflict flags for any network whose BSSID OUI matches a mesh unit's MAC OUI.
+        # This handles the case where wifi_scanner.py's own-SSID heuristic doesn't
+        # cover the backhaul (e.g., different hardware generation or guest-SSID only).
+        mesh_units = getattr(self, "_mesh_units", None)
+        if mesh_units and networks:
+            _mesh_ouis = {
+                u.mac[:8] for u in mesh_units
+                if hasattr(u, "mac") and len(u.mac) >= 8
+            }
+            for _n in networks:
+                if _g(_n, "co_channel_conflict", False):
+                    _bssid = _g(_n, "bssid", "")
+                    if _bssid and len(_bssid) >= 8 and _bssid[:8] in _mesh_ouis:
+                        if not isinstance(_n, dict):
+                            _n.co_channel_conflict = False
+                        else:
+                            _n["co_channel_conflict"] = False
+
         # Collapse multi-BSSID SSIDs (mesh nodes each broadcast the same SSID)
         # into one row per named SSID showing the strongest signal.  Hidden
         # networks (empty SSID) are grouped by (channel, band) — mesh nodes
@@ -9757,12 +9704,12 @@ class Dashboard(QMainWindow):
         self._auto_report_scan_done = False
         # Diagnostics: start them now; mark done immediately if they were already run
         self._auto_report_diag_done = False
-        self._chk_stp.setChecked(True)
-        self._chk_storm.setChecked(True)
-        self._chk_wifi.setChecked(True)
-        self._chk_dns.setChecked(True)
-        self._btn_full_report.setEnabled(False)
-        self._btn_full_report.setText("▣  Running…")
+        # Force all scan modules on for the full report run
+        _rqs = QSettings("NetSentinel", "NetSentinel")
+        for _k in ("stp", "storm", "wifi", "dns"):
+            _rqs.setValue(f"scan/{_k}_enabled", True)
+        if hasattr(self, "_overview_page"):
+            self._overview_page.set_report_running(True)
 
         # Start diagnostics in the background (runs in parallel with the scan)
         if self._diag_worker and self._diag_worker.isRunning():
@@ -9782,8 +9729,8 @@ class Dashboard(QMainWindow):
         self._auto_report_pending   = False
         self._auto_report_scan_done = False
         self._auto_report_diag_done = False
-        self._btn_full_report.setEnabled(True)
-        self._btn_full_report.setText("▣  Report")
+        if hasattr(self, "_overview_page"):
+            self._overview_page.set_report_running(False)
         try:
             import datetime as _dt
             from modules.utils import get_app_data_dir
@@ -9813,8 +9760,8 @@ class Dashboard(QMainWindow):
             self._set_status(f"Report ready — {_out.name}")
         except Exception as _exc:
             self._set_status(f"Auto-report failed: {_exc}")
-            self._btn_full_report.setEnabled(True)
-            self._btn_full_report.setText("▣  Report")
+            if hasattr(self, "_overview_page"):
+                self._overview_page.set_report_running(False)
 
     @pyqtSlot()
     def _export_report(self):
@@ -9926,8 +9873,17 @@ class Dashboard(QMainWindow):
                 self._btn_diag.setEnabled(True),
             )
         )
-        self._diag_worker.finished.connect(lambda: self._btn_diag.setEnabled(True))
+        self._diag_worker.finished.connect(self._on_diag_worker_finished)
         self._diag_worker.start()
+
+    @pyqtSlot()
+    def _on_diag_worker_finished(self):
+        self._btn_diag.setEnabled(True)
+        # If a diagnostics error prevented _on_diag_result from firing, we still
+        # need to unblock the auto-report so it doesn't wait forever.
+        if self._auto_report_pending and not self._auto_report_diag_done:
+            self._auto_report_diag_done = True
+            self._maybe_auto_report()
 
     @pyqtSlot(object)
     def _on_diag_result(self, result):

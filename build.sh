@@ -2,7 +2,7 @@
 set -e
 
 echo "================================================"
-echo " NetSentinel v1.9.6 — macOS / Linux Build"
+echo " NetSentinel v1.9.7 — macOS / Linux Build"
 echo "================================================"
 echo ""
 echo "Usage:"

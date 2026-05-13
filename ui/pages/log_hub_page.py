@@ -29,9 +29,9 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
-    QSizePolicy, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QScrollArea, QSizePolicy, QSpinBox, QTableWidget, QTableWidgetItem,
+    QToolButton, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -222,6 +222,7 @@ class LogHubPage(QWidget):
         inner_lay.setContentsMargins(16, 10, 16, 12)
         inner_lay.setSpacing(8)
 
+        inner_lay.addWidget(self._build_scan_config_panel())
         inner_lay.addWidget(self._build_source_bar())
 
         card = QFrame()
@@ -252,6 +253,139 @@ class LogHubPage(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setStyleSheet(f"QScrollArea {{ background:{BG_DARK}; border:none; }}")
         root.addWidget(scroll, 1)
+
+    def _build_scan_config_panel(self) -> QWidget:
+        """Collapsible 'Scan Configuration' accordion — module toggles and durations."""
+        _qs = QSettings("NetSentinel", "NetSentinel")
+
+        outer = QWidget()
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0, 0, 0, 0)
+        outer_lay.setSpacing(0)
+
+        # ── Toggle header ──────────────────────────────────────────────────────
+        header = QFrame()
+        header.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        hdr_lay = QHBoxLayout(header)
+        hdr_lay.setContentsMargins(12, 6, 12, 6)
+        hdr_lay.setSpacing(8)
+
+        toggle_btn = QToolButton()
+        toggle_btn.setText("▶  Scan Configuration")
+        toggle_btn.setCheckable(True)
+        toggle_btn.setChecked(False)
+        toggle_btn.setStyleSheet(
+            f"QToolButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+            f" font-weight:bold; border:none; padding:0; }}"
+            f"QToolButton:checked {{ color:{ACCENT}; }}"
+            f"QToolButton::menu-indicator {{ image:none; }}"
+        )
+        hdr_lay.addWidget(toggle_btn)
+        hdr_lay.addStretch()
+
+        sub = QLabel("Controls which modules run when you click Scan")
+        sub.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+        )
+        hdr_lay.addWidget(sub)
+        outer_lay.addWidget(header)
+
+        # ── Body (hidden by default) ───────────────────────────────────────────
+        body = QFrame()
+        body.setVisible(False)
+        body.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-top:none; border-radius:0 0 {CARD_RADIUS} {CARD_RADIUS}; }}"
+        )
+        body_lay = QVBoxLayout(body)
+        body_lay.setContentsMargins(16, 10, 16, 12)
+        body_lay.setSpacing(8)
+
+        _chk_qss = (
+            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; padding:3px 0; }}"
+            f"QCheckBox::indicator {{ width:12px; height:12px; border:1px solid {BORDER};"
+            f" border-radius:2px; background:{BG_DARK}; }}"
+            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
+        )
+        _spin_qss = (
+            f"QSpinBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:1px 4px;"
+            f" font-size:11px; }}"
+        )
+
+        def _chk_row(label: str, key: str) -> QCheckBox:
+            chk = QCheckBox(label)
+            chk.setChecked(_qs.value(f"scan/{key}_enabled", True, type=bool))
+            chk.setStyleSheet(_chk_qss)
+            chk.toggled.connect(
+                lambda v, k=key: QSettings("NetSentinel", "NetSentinel").setValue(
+                    f"scan/{k}_enabled", v
+                )
+            )
+            return chk
+
+        def _spin_row(label: str, key: str, default: int) -> QWidget:
+            row = QWidget()
+            row.setStyleSheet("background:transparent;")
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 0, 0, 0)
+            rl.setSpacing(8)
+            lbl = QLabel(label)
+            lbl.setStyleSheet(
+                f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent;"
+            )
+            spin = QSpinBox()
+            spin.setRange(5, 120)
+            spin.setValue(_qs.value(f"scan/{key}_duration_s", default, type=int))
+            spin.setFixedWidth(64)
+            spin.setStyleSheet(_spin_qss)
+            spin.valueChanged.connect(
+                lambda v, k=key: QSettings("NetSentinel", "NetSentinel").setValue(
+                    f"scan/{k}_duration_s", v
+                )
+            )
+            rl.addWidget(lbl)
+            rl.addWidget(spin)
+            rl.addStretch()
+            return row
+
+        # Two-column grid: left = checkboxes, right = duration spinners
+        grid = QWidget()
+        grid.setStyleSheet("background:transparent;")
+        gl = QHBoxLayout(grid)
+        gl.setContentsMargins(0, 0, 0, 0)
+        gl.setSpacing(24)
+
+        chk_col = QVBoxLayout()
+        chk_col.setSpacing(4)
+        chk_col.addWidget(_chk_row("STP detection",  "stp"))
+        chk_col.addWidget(_chk_row("Storm analysis", "storm"))
+        chk_col.addWidget(_chk_row("WiFi scan",      "wifi"))
+        chk_col.addWidget(_chk_row("DNS check",      "dns"))
+        gl.addLayout(chk_col)
+
+        spin_col = QVBoxLayout()
+        spin_col.setSpacing(4)
+        spin_col.addWidget(_spin_row("STP listen (s):",   "stp",   10))
+        spin_col.addWidget(_spin_row("Storm listen (s):", "storm", 10))
+        spin_col.addStretch()
+        gl.addLayout(spin_col)
+        gl.addStretch()
+
+        body_lay.addWidget(grid)
+        outer_lay.addWidget(body)
+
+        def _on_toggle(checked: bool) -> None:
+            toggle_btn.setText(
+                f"{'▼' if checked else '▶'}  Scan Configuration"
+            )
+            body.setVisible(checked)
+
+        toggle_btn.toggled.connect(_on_toggle)
+        return outer
 
     def _build_source_bar(self) -> QWidget:
         bar = QFrame()
