@@ -1275,6 +1275,7 @@ class OverviewPage(QWidget):
         self._store      = store
         self._edit_mode  = False
         self._scanning   = False
+        self._has_results = False
         self._hidden: set = self._load_hidden()
         self._tile_order = self._load_order()
         self._tiles: Dict[str, _BaseTile] = {}
@@ -1516,8 +1517,13 @@ class OverviewPage(QWidget):
             self._scan_btn.setText("Scanning…")
             self._scan_sub.setText("Scan in progress — tiles will update as each module completes.")
         else:
-            self._scan_btn.setText("▶  Scan Network")
+            self._scan_btn.setText("▶  Rescan" if self._has_results else "▶  Scan Network")
             self._scan_sub.setText("Discover devices  ·  check stability  ·  detect threats")
+
+    def set_has_results(self, has_data: bool) -> None:
+        self._has_results = has_data
+        if not self._scanning:
+            self._scan_btn.setText("▶  Rescan" if has_data else "▶  Scan Network")
 
     def set_report_running(self, running: bool) -> None:
         """Disable/re-enable the Report button while a full report is in progress."""
@@ -1835,3 +1841,9 @@ class OverviewPage(QWidget):
             t = self._tiles.get(tid)
             if t:
                 t.refresh(self._store)
+        if self._store:
+            try:
+                devices = self._store.get_known_devices()
+                self.set_has_results(len(devices) > 0)
+            except Exception:
+                pass

@@ -6573,7 +6573,7 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_header_scan_btn"):
             self._header_scan_btn.setEnabled(not scanning)
         if hasattr(self, "_home_page"):
-            self._home_page._btn_scan.setEnabled(not scanning)
+            self._home_page.set_scanning(scanning)
         if hasattr(self, "_overview_page"):
             self._overview_page.set_scanning(scanning)
         self._progress.setVisible(scanning)
@@ -8521,6 +8521,10 @@ class Dashboard(QMainWindow):
         self._last_scan_time = _t.time()
         self._m1_result = data
         devices = data.get("devices", [])
+        if hasattr(self, "_overview_page") and devices:
+            self._overview_page.set_has_results(True)
+        if hasattr(self, "_home_page") and devices:
+            self._home_page._device_count = max(self._home_page._device_count, len(devices))
         self._m1_table.setRowCount(0)
         for d in devices:
             level   = d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")

@@ -329,8 +329,7 @@ class HomePage(QWidget):
             " background:transparent; border:none;"
         )
         self._hero_sub = QLabel(
-            "Scan your network to discover every device and check connectivity."
-            " Something not working? Diagnose to get a plain-English verdict."
+            "Discover devices · check stability · detect threats"
         )
         self._hero_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY};"
@@ -774,11 +773,19 @@ class HomePage(QWidget):
         self._tips_card.setVisible(False)
 
     def _update_scan_button_label(self) -> None:
-        label = (
-            "▶  Discover My Network" if self._device_count == 0
-            else "▶  Rescan"
-        )
+        label = "▶  Scan Network" if self._device_count == 0 else "▶  Rescan"
         self._btn_scan.setText(label)
+
+    def set_scanning(self, running: bool) -> None:
+        self._btn_scan.setEnabled(not running)
+        if running:
+            self._btn_scan.setText("Scanning…")
+            self._hero_sub.setText(
+                "Scan in progress — tiles will update as each module completes."
+            )
+        else:
+            self._update_scan_button_label()
+            self._hero_sub.setText("Discover devices · check stability · detect threats")
 
     # ── Startup preload ───────────────────────────────────────────────────────
 
