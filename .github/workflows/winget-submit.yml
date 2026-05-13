@@ -105,7 +105,7 @@ jobs:
             "PackageName: NetSentinel",
             "PackageUrl: https://github.com/ossianericson/netsentinel",
             "License: MIT",
-            "LicenseUrl: https://raw.githubusercontent.com/ossianericson/netsentinel/master/LICENSE",
+            "LicenseUrl: https://raw.githubusercontent.com/ossianericson/netsentinel/main/LICENSE",
             "ShortDescription: Network security scanner — rogue device detector, STP monitor, and connectivity analyser",
             "Description: |-",
             "  NetSentinel is a one-stop network diagnostic and security tool for Windows.",

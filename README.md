@@ -3,13 +3,14 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](#install)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
+[![Tests](https://img.shields.io/badge/tests-1550%2B-brightgreen?style=flat-square)](tests/)
 
 # NetSentinel
 
 The free, open-source network troubleshooting tool that replaces five separate utilities. Runs 100% locally.
 
 <p align="center">
-  <img src="assets/screenshots/hero.png" alt="NetSentinel dashboard overview" width="860"/>
+  <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
 ---
@@ -184,6 +185,18 @@ If you use NetSentinel in a course or lab and need curriculum-specific features,
 
 ---
 
+## Quality
+
+The project ships with **1 550+ automated tests** covering detection logic, metric storage, version consistency, and UI wiring. Run the full suite with:
+
+```bash
+python -m pytest tests/ -v --tb=short
+```
+
+All tests are offline — no real network traffic, no live devices required.
+
+---
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) for module layout, data flow, and design decisions.
@@ -230,7 +243,7 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.9.5
+### v1.9.6
 
 - Mesh router integration — live client data pulled directly from TP-Link Deco via its local API (no cloud, no account); Deco-assigned device names replace reverse-DNS hostnames in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download KB/s shown as a tooltip; credentials saved to OS keychain and the scan re-runs silently on every subsequent app start; Network Map upgrades to a three-tier mesh tree (Gateway → Satellites → Clients) when mesh data is present; WiFi Networks page gains real band-usage KPI chips (2.4 GHz / 5 GHz / 6 GHz / Wired client counts from the router) and a "Connected?" column; architecture supports adding Eero, Google Nest, Asus ZenWiFi, and Netgear Orbi via the same `MeshWorker` provider key
 - Protocol Visualizer — animated step-through of 9 real protocols (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); each step shows the packet name, frame detail, and a labelled dot travelling between nodes; play/pause/step controls; tabbed with a protocol context panel

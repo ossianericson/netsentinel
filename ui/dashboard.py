@@ -1736,10 +1736,13 @@ class Dashboard(QMainWindow):
     def _toggle_maximize(self):
         from PyQt6.QtCore import Qt
         if self.windowState() & Qt.WindowState.WindowMaximized:
+            # Capture and clear _pre_maximize_geo BEFORE showNormal() so the
+            # changeEvent handler (which also clears it) cannot race us.
+            pre_geo = self._pre_maximize_geo
+            self._pre_maximize_geo = None
             self.showNormal()
-            if self._pre_maximize_geo is not None:
-                self.setGeometry(self._pre_maximize_geo)
-                self._pre_maximize_geo = None
+            if pre_geo is not None:
+                self.setGeometry(pre_geo)
         else:
             self._pre_maximize_geo = self.geometry()
             self.showMaximized()
@@ -6727,6 +6730,13 @@ class Dashboard(QMainWindow):
         # is unreliable for frameless windows before show() is called)
         s.setValue("window/geometry", self.saveGeometry().toBase64().data().decode())
         s.setValue("window/maximized", str(self.isMaximized()))
+        # Persist the pre-maximize size so the next startup restores correctly.
+        if self.isMaximized() and self._pre_maximize_geo is not None:
+            r = self._pre_maximize_geo
+            s.setValue("window/normal_x", r.x())
+            s.setValue("window/normal_y", r.y())
+            s.setValue("window/normal_width", r.width())
+            s.setValue("window/normal_height", r.height())
         # Sidebar nav state
         s.setValue("nav/collapsed", str(self._nav_collapsed))
         s.setValue("nav/mode", self._nav_mode)
@@ -6756,15 +6766,30 @@ class Dashboard(QMainWindow):
         was_maximized = s.value("window/maximized", "False") == "True"
         # Fresh-install fallback — prevents starting maximized with no saved geometry.
         self.resize(1280, 800)
-        if geom_b64:
+        if was_maximized:
+            # Do NOT call restoreGeometry() here — when saved while maximized the
+            # geometry bytes represent the full-screen rect, which would become
+            # Qt's internal "restore geometry."  showNormal() would then restore
+            # to a full-screen-sized-but-not-maximised window (the reported bug).
+            # Instead, set a sensible normal size first so showNormal() snaps back
+            # to something reasonable, then enter the maximised state.
+            nx = s.value("window/normal_x")
+            ny = s.value("window/normal_y")
+            nw = s.value("window/normal_width", "1280")
+            nh = s.value("window/normal_height", "800")
+            try:
+                if nx is not None and ny is not None:
+                    self.setGeometry(int(nx), int(ny), int(nw), int(nh))
+                else:
+                    self.resize(int(nw), int(nh))
+            except (ValueError, TypeError):
+                self.resize(1280, 800)
+            self.showMaximized()
+        elif geom_b64:
             try:
                 self.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
             except Exception:
                 pass
-            # Explicit maximize — restoreGeometry before show() doesn't reliably
-            # restore the maximized state on frameless Windows.
-            if was_maximized:
-                self.showMaximized()
         # Sidebar nav state
         if s.value("nav/collapsed", "False") == "True" and not self._nav_collapsed:
             self._toggle_sidebar()
