@@ -1,3 +1,6 @@
+# Claude Code session memory (local AI assistant state — not project code)
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
