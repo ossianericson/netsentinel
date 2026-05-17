@@ -313,6 +313,7 @@ jobs:
           INSTALLER="artifacts/windows-installer/NetSentinel-Setup-${VER}.exe"
           if [ -f "$INSTALLER" ]; then
             cosign sign-blob \
+              --yes \
               --bundle "NetSentinel-Setup-${VER}.exe.bundle" \
               "$INSTALLER"
             echo "Signed: $INSTALLER"
