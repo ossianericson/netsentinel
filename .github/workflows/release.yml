@@ -377,7 +377,6 @@ jobs:
 
       - name: Submit to VirusTotal
         id: vt
-        continue-on-error: true
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
         run: |
