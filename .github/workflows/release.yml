@@ -72,7 +72,7 @@ jobs:
           pyinstaller NetSentinelSvc.spec
 
       - name: Post-build smoke test
-        run: dist\NetSentinel.exe --smoke
+        run: .\dist\NetSentinel.exe --smoke
 
       - name: Install Inno Setup
         run: choco install innosetup --yes --no-progress
