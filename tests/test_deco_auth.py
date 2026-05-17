@@ -2,7 +2,7 @@
 Quick CLI test for the TP-Link Deco auth flow.
 
 Run from the project root:
-    .venv311\Scripts\python.exe test_deco_auth.py
+    .venv311/Scripts/python.exe test_deco_auth.py
 
 Steps are printed individually so you can see exactly where a failure occurs
 before the UI integration is trusted.
