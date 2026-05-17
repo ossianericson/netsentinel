@@ -23,6 +23,8 @@ No IPs are sent to external services.
 from __future__ import annotations
 
 import ipaddress
+import json
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -31,11 +33,55 @@ matplotlib.use("QtAgg")
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from matplotlib.patches import FancyArrowPatch
+from matplotlib.patches import FancyArrowPatch, Polygon as MplPolygon
+from matplotlib.collections import PatchCollection
+
+
+def _geojson_path() -> Path:
+    base = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).parent.parent.parent
+    return base / "ui" / "assets" / "world_110m.geojson"
+
+
+_PATCHES_CACHE: list = []   # parsed once, reused across redraws and zoom
+
+
+def _load_country_patches(color: str, alpha: float) -> list:
+    """Return a list of MplPolygon patches for all country outlines (cached after first parse)."""
+    global _PATCHES_CACHE
+    if _PATCHES_CACHE:
+        return _PATCHES_CACHE
+    geo = _geojson_path()
+    if not geo.exists():
+        return []
+    try:
+        with open(geo, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:
+        return []
+
+    patches = []
+    for feature in data.get("features", []):
+        geom = feature.get("geometry") or {}
+        gtype = geom.get("type", "")
+        coords = geom.get("coordinates", [])
+        if gtype == "Polygon":
+            rings = [coords[0]]
+        elif gtype == "MultiPolygon":
+            rings = [poly[0] for poly in coords]
+        else:
+            continue
+        for ring in rings:
+            if len(ring) < 3:
+                continue
+            arr = np.array(ring, dtype=float)
+            patches.append(MplPolygon(arr[:, :2], closed=True))
+    _PATCHES_CACHE = patches
+    return patches
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -52,7 +98,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from modules.geo_locator import GeoLocator, GeoResult, db_path, download_db_permalink, get_locator
+from modules.geo_locator import (
+    GEOLITE_MIRROR_URL,
+    GeoLocator,
+    GeoResult,
+    db_path,
+    download_db_permalink,
+    get_locator,
+)
 from ui.styles import (
     ACCENT,
     AMBER,
@@ -217,6 +270,12 @@ class GeoMapPage(QWidget):
         self._dl_worker: Optional[_DownloadWorker] = None
         self._selected_ip: Optional[str] = None
 
+        # Zoom state (longitude/latitude bounds of current view)
+        self._xlim: list = [-180.0, 180.0]
+        self._ylim: list = [-90.0, 90.0]
+        # Home coordinates for threat arc lines (set via set_home_ip)
+        self._home_ll: Optional[Tuple[float, float]] = None
+
         self._build_ui()
         self._refresh_db_status()
 
@@ -232,8 +291,9 @@ class GeoMapPage(QWidget):
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{TEXT_PRIMARY};")
         sub = QLabel(
-            "Plot public IPs from threat intel, exposure scans, or manual entry "
-            "on a world map using the local GeoLite2-City database."
+            "Plot public IPs from threat intel, exposure scans, or manual entry on a world map. "
+            "The IP Lookup Database (GeoLite2) resolves IPs to coordinates — "
+            "download it once to enable dot placement. The map outline is always available."
         )
         sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
         sub.setWordWrap(True)
@@ -243,7 +303,7 @@ class GeoMapPage(QWidget):
         # DB status + import row
         top_row = QHBoxLayout()
         top_row.setSpacing(6)
-        self._db_card, self._db_layout = _card("GeoLite2 Database")
+        self._db_card, self._db_layout = _card("IP Lookup Database (GeoLite2)")
         self._import_card, self._import_layout = _card("Add IPs")
         top_row.addWidget(self._db_card, 1)
         top_row.addWidget(self._import_card, 2)
@@ -281,17 +341,33 @@ class GeoMapPage(QWidget):
         self._db_layout.addLayout(row)
         self._db_layout.addWidget(self._db_path_lbl)
 
-        # Permalink download
+        # Quick download (P3TERX mirror — no account required)
+        quick_row = QHBoxLayout()
+        quick_row.setSpacing(6)
+        quick_lbl = QLabel("No database?")
+        quick_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
+        self._btn_quick_dl = _btn("↓  Quick Download  (no account needed)", accent=True)
+        self._btn_quick_dl.setToolTip(
+            "Downloads GeoLite2-City.mmdb from the P3TERX mirror on GitHub.\n"
+            "Source: github.com/P3TERX/GeoLite.mmdb  (~67 MB)"
+        )
+        self._btn_quick_dl.clicked.connect(self._on_quick_download)
+        quick_row.addWidget(quick_lbl)
+        quick_row.addWidget(self._btn_quick_dl)
+        quick_row.addStretch()
+        self._db_layout.addLayout(quick_row)
+
+        # Custom URL download (MaxMind permalink or any trusted URL)
         dl_row = QHBoxLayout()
         dl_row.setSpacing(4)
         self._permalink_edit = QLineEdit()
         self._permalink_edit.setPlaceholderText(
-            "Paste MaxMind permalink URL to download GeoLite2-City.mmdb…")
+            "Or paste a custom MaxMind permalink URL…")
         self._permalink_edit.setFixedHeight(24)
         self._permalink_edit.setStyleSheet(
             f"border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
             f"font-size:10px; background:{BG_CARD};")
-        self._btn_dl = _btn("↓  Download DB", accent=True)
+        self._btn_dl = _btn("↓  Download")
         self._btn_dl.clicked.connect(self._on_download_db)
         self._dl_status = QLabel("")
         self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
@@ -312,14 +388,18 @@ class GeoMapPage(QWidget):
             f"font-size:10px; background:{BG_CARD};")
         self._manual_edit.returnPressed.connect(self._on_add_manual)
 
-        btn_add   = _btn("✚  Add", accent=True)
-        btn_clear = _btn("✕  Clear All")
+        btn_add    = _btn("✚  Add", accent=True)
+        btn_ti     = _btn("🧠  Threat Intel IPs")
+        btn_ti.setToolTip("Import top-confidence IP indicators from the local threat intel cache")
+        btn_clear  = _btn("✕  Clear All")
         btn_add.clicked.connect(self._on_add_manual)
+        btn_ti.clicked.connect(self._load_threat_intel_ips)
         btn_clear.clicked.connect(self._on_clear_all)
 
         row.addWidget(QLabel("Manual:"))
         row.addWidget(self._manual_edit, 1)
         row.addWidget(btn_add)
+        row.addWidget(btn_ti)
         row.addWidget(btn_clear)
         self._import_layout.addLayout(row)
 
@@ -330,6 +410,14 @@ class GeoMapPage(QWidget):
             lbl.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
             legend_row.addWidget(lbl)
             legend_row.addSpacing(8)
+        self._chk_arcs = QCheckBox("Show lines from home to threat IPs")
+        self._chk_arcs.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+        self._chk_arcs.setToolTip(
+            "Draws arcs from your network's public IP to each Threat Intel dot.\n"
+            "Set home location via right-click 'Show on Geo Map' on a local device."
+        )
+        self._chk_arcs.stateChanged.connect(self._redraw_map)
+        legend_row.addWidget(self._chk_arcs)
         legend_row.addStretch()
         self._import_layout.addLayout(legend_row)
 
@@ -347,7 +435,9 @@ class GeoMapPage(QWidget):
         lay.addWidget(self._canvas)
 
         self._canvas.mpl_connect("button_press_event", self._on_map_click)
+        self._canvas.mpl_connect("scroll_event", self._on_scroll)
         self._draw_base_map()
+        self._canvas.draw()
         return panel
 
     def _build_detail_panel(self) -> QWidget:
@@ -391,13 +481,13 @@ class GeoMapPage(QWidget):
     # ── Map rendering ─────────────────────────────────────────────────────────
 
     def _draw_base_map(self) -> None:
-        """Draw a minimal world outline using matplotlib path data."""
+        """Clear axes and redraw world outline using stored zoom limits."""
         ax = self._ax
         ax.cla()
         ax.set_facecolor(CHART_PLOT_BG)
-        ax.set_xlim(-180, 180)
-        ax.set_ylim(-90, 90)
-        ax.set_aspect("equal")
+        ax.set_xlim(self._xlim)
+        ax.set_ylim(self._ylim)
+        ax.set_aspect("equal", adjustable="datalim")
         ax.axis("off")
 
         # Grid lines
@@ -406,52 +496,99 @@ class GeoMapPage(QWidget):
         for lat in range(-90, 91, 30):
             ax.axhline(lat, color=CHART_GRID, linewidth=0.4, zorder=0)
 
-        # Try to draw country borders from Natural Earth data bundled with matplotlib
         try:
             self._draw_country_borders()
         except Exception:
-            # Graceful fallback — plain grid only
             ax.text(0, 0,
                     "Install Cartopy or Natural Earth shapefiles for country borders.",
                     ha="center", va="center", color=TEXT_MUTED,
                     fontsize=8, transform=ax.transData)
 
         self._fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
-        self._canvas.draw()
 
     def _draw_country_borders(self) -> None:
-        """Draw world country borders using matplotlib's bundled basemap-style data."""
-        # Use mpl_toolkits.basemap if available, else skip borders gracefully
-        # matplotlib alone doesn't bundle shapefile data so we skip without error
-        pass
-
-    def _redraw_map(self) -> None:
-        """Redraw base map then overlay all data points."""
-        self._draw_base_map()
-        if not self._points:
-            self._canvas.draw()
-            return
-
-        for ip, (result, category, _links) in self._points.items():
-            if result.is_bogon or (result.latitude == 0.0 and result.longitude == 0.0):
-                continue
-            color = _MARKER_COLOR.get(category, ACCENT)
-            size  = 80 if ip == self._selected_ip else 40
-            edge  = TEXT_PRIMARY if ip == self._selected_ip else "none"
-            self._ax.scatter(
-                result.longitude, result.latitude,
-                s=size, c=color, zorder=3,
-                edgecolors=edge, linewidths=1.2,
-                alpha=0.85,
+        patches = _load_country_patches(CHART_GRID, alpha=1.0)
+        if not patches:
+            self._ax.text(
+                0, 0,
+                "Map data not found. The file ui/assets/world_110m.geojson is missing.",
+                ha="center", va="center", color=TEXT_MUTED,
+                fontsize=8, transform=self._ax.transData,
             )
+            return
+        col = PatchCollection(
+            patches,
+            facecolor="#1e2d3d",   # dark ocean-contrast land fill
+            edgecolor="#3a4f63",   # subtle border
+            linewidth=0.4,
+            zorder=1,
+        )
+        self._ax.add_collection(col)
 
-        self._fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+    def _redraw_map(self, *_args) -> None:
+        """Redraw base map then overlay clustered data points and optional arcs."""
+        self._draw_base_map()
+
+        if self._points:
+            plottable = [
+                (ip, result, cat)
+                for ip, (result, cat, _) in self._points.items()
+                if not result.is_bogon
+                and not (result.latitude == 0.0 and result.longitude == 0.0)
+            ]
+
+            # Threat arc lines (drawn below dots so dots appear on top)
+            show_arcs = hasattr(self, "_chk_arcs") and self._chk_arcs.isChecked()
+            if show_arcs and self._home_ll is not None:
+                home_lat, home_lon = self._home_ll
+                for _ip, result, cat in plottable:
+                    if cat != _CAT_THREAT:
+                        continue
+                    arrow = FancyArrowPatch(
+                        (home_lon, home_lat),
+                        (result.longitude, result.latitude),
+                        connectionstyle="arc3,rad=0.15",
+                        arrowstyle="-",
+                        color=RED,
+                        linewidth=0.5,
+                        alpha=0.18,
+                        zorder=2,
+                        transform=self._ax.transData,
+                    )
+                    self._ax.add_patch(arrow)
+
+            # Screen-space clustered dots
+            for cluster in self._cluster_points(plottable):
+                color = _MARKER_COLOR.get(cluster["cat"], ACCENT)
+                lon, lat = cluster["lon"], cluster["lat"]
+                selected = cluster["selected"]
+                count = cluster["count"]
+                size = 90 if selected else (45 + min(count - 1, 15) * 4 if count > 1 else 40)
+                edge = TEXT_PRIMARY if selected else "none"
+                self._ax.scatter(
+                    lon, lat, s=size, c=color, zorder=3,
+                    edgecolors=edge, linewidths=1.2, alpha=0.85,
+                )
+                if count >= 3:
+                    self._ax.text(
+                        lon, lat, str(count),
+                        ha="center", va="center",
+                        fontsize=6, color="#ffffff", fontweight="bold", zorder=4,
+                    )
+
         self._canvas.draw()
 
     # ── Canvas click ──────────────────────────────────────────────────────────
 
     def _on_map_click(self, event) -> None:
-        if event.inaxes != self._ax or event.button != 1:
+        if event.inaxes != self._ax:
+            return
+        if event.dblclick:
+            self._xlim = [-180.0, 180.0]
+            self._ylim = [-90.0, 90.0]
+            self._redraw_map()
+            return
+        if event.button != 1:
             return
         lon, lat = event.xdata, event.ydata
         if lon is None or lat is None:
@@ -514,6 +651,12 @@ class GeoMapPage(QWidget):
         """Add a list of IPs to the map, resolving them in a background thread."""
         self._queue_lookup(ips, category, labels or {})
 
+    def navigate_to_ip(self, ip: str, category: str = _CAT_MANUAL,
+                       label: str = "") -> None:
+        """Add a single IP and select it — called by right-click 'Show on Map'."""
+        self.add_ips([ip], category, {ip: [label]} if label else {})
+        self._selected_ip = ip
+
     def _queue_lookup(self, ips: List[str], category: str,
                       link_map: Dict[str, object]) -> None:
         """Filter to public IPs and start lookup worker."""
@@ -541,6 +684,78 @@ class GeoMapPage(QWidget):
         self._refresh_table()
         self._redraw_map()
 
+    # ── Scroll zoom ───────────────────────────────────────────────────────────
+
+    def _on_scroll(self, event) -> None:
+        if event.inaxes != self._ax or event.xdata is None:
+            return
+        factor = 0.70 if event.button == "up" else 1.43   # zoom in / out ~30%
+        cx, cy = event.xdata, event.ydata
+        xl, xr = self._xlim
+        yb, yt = self._ylim
+        self._xlim = [cx + (xl - cx) * factor, cx + (xr - cx) * factor]
+        self._ylim = [cy + (yb - cy) * factor, cy + (yt - cy) * factor]
+        self._xlim[0] = max(-180.0, self._xlim[0])
+        self._xlim[1] = min(180.0, self._xlim[1])
+        self._ylim[0] = max(-90.0, self._ylim[0])
+        self._ylim[1] = min(90.0, self._ylim[1])
+        self._redraw_map()
+
+    # ── Clustering ────────────────────────────────────────────────────────────
+
+    def _cluster_points(self, plottable: list) -> list:
+        """Group nearby screen-space dots; returns list of cluster dicts."""
+        if not plottable:
+            return []
+
+        coords = np.array([[r.longitude, r.latitude] for _, r, _ in plottable])
+        try:
+            display = self._ax.transData.transform(coords)
+        except Exception:
+            display = coords   # fallback: use data coords as proxy
+
+        RADIUS_PX = 18
+        used = [False] * len(plottable)
+        clusters = []
+
+        for i in range(len(plottable)):
+            if used[i]:
+                continue
+            group = [i]
+            for j in range(i + 1, len(plottable)):
+                if used[j]:
+                    continue
+                dx = display[i, 0] - display[j, 0]
+                dy = display[i, 1] - display[j, 1]
+                if dx * dx + dy * dy < RADIUS_PX * RADIUS_PX:
+                    group.append(j)
+            for idx in group:
+                used[idx] = True
+
+            cats = [plottable[k][2] for k in group]
+            dominant = max(set(cats), key=cats.count)
+            center_lon = sum(plottable[k][1].longitude for k in group) / len(group)
+            center_lat = sum(plottable[k][1].latitude for k in group) / len(group)
+            selected = any(plottable[k][0] == self._selected_ip for k in group)
+
+            clusters.append({
+                "lon": center_lon, "lat": center_lat,
+                "cat": dominant, "count": len(group), "selected": selected,
+            })
+
+        return clusters
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def set_home_ip(self, ip: str) -> None:
+        """Cache the home location (WAN IP) used to draw threat arc lines."""
+        try:
+            result = self._locator.lookup(ip)
+            if result and not result.is_bogon and result.latitude != 0.0:
+                self._home_ll = (result.latitude, result.longitude)
+        except Exception:
+            pass
+
     # ── Button handlers ───────────────────────────────────────────────────────
 
     def _on_add_manual(self) -> None:
@@ -565,19 +780,32 @@ class GeoMapPage(QWidget):
     def _on_reload_db(self) -> None:
         self._locator.reload()
         self._refresh_db_status()
-        # Re-resolve all existing points
-        if self._points:
-            all_ips = list(self._points.keys())
-            cats   = {ip: self._points[ip][1] for ip in all_ips}
-            links  = {ip: self._points[ip][2] for ip in all_ips}
-            self._points.clear()
-            for ip in all_ips:
-                self._queue_lookup([ip], cats[ip], {ip: links[ip]})
+        self._after_db_loaded()
+
+    def _on_quick_download(self) -> None:
+        self._btn_quick_dl.setEnabled(False)
+        self._dl_status.setText("Downloading from GitHub mirror (~67 MB)…")
+        self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
+        self._dl_worker = _DownloadWorker(GEOLITE_MIRROR_URL)
+        self._dl_worker.progress.connect(self._on_dl_progress)
+        self._dl_worker.done.connect(self._on_quick_dl_done)
+        self._dl_worker.error.connect(self._on_quick_dl_error)
+        self._dl_worker.start()
+
+    @pyqtSlot(str)
+    def _on_quick_dl_done(self, path: str) -> None:
+        self._btn_quick_dl.setEnabled(True)
+        self._on_dl_done(path)
+
+    @pyqtSlot(str)
+    def _on_quick_dl_error(self, msg: str) -> None:
+        self._btn_quick_dl.setEnabled(True)
+        self._on_dl_error(msg)
 
     def _on_download_db(self) -> None:
         url = self._permalink_edit.text().strip()
         if not url:
-            self._dl_status.setText("Paste a MaxMind permalink URL first.")
+            self._dl_status.setText("Paste a permalink URL first.")
             self._dl_status.setStyleSheet(f"font-size:9px; color:{AMBER};")
             return
         self._btn_dl.setEnabled(False)
@@ -606,6 +834,7 @@ class GeoMapPage(QWidget):
         self._dl_status.setStyleSheet(f"font-size:9px; color:{GREEN};")
         self._locator.reload()
         self._refresh_db_status()
+        self._after_db_loaded()
 
     @pyqtSlot(str)
     def _on_dl_error(self, msg: str) -> None:
@@ -637,6 +866,46 @@ class GeoMapPage(QWidget):
                 item.setTextAlignment(
                     Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._ip_table.setItem(row, col, item)
+
+    def _after_db_loaded(self) -> None:
+        """Called whenever the GeoLite2 DB becomes available (download or reload).
+
+        1. Re-resolves any existing zero-coordinate points in one batch.
+        2. If the map is still empty, auto-imports IPs from the threat intel cache.
+        """
+        if not self._locator.is_available:
+            return
+
+        # Batch re-resolve: collect all unresolved IPs, clear them, queue once per category
+        by_cat: Dict[str, Dict[str, list]] = {}
+        for ip, (result, cat, links) in list(self._points.items()):
+            if not result.is_bogon and result.latitude == 0 and result.longitude == 0:
+                by_cat.setdefault(cat, {})[ip] = links
+        for ip in [ip for cat_map in by_cat.values() for ip in cat_map]:
+            self._points.pop(ip, None)
+        for cat, link_map in by_cat.items():
+            self._queue_lookup(list(link_map.keys()), cat, link_map)
+
+        # Auto-populate from threat intel if map is still empty
+        if not self._points:
+            self._load_threat_intel_ips()
+
+    def _load_threat_intel_ips(self) -> None:
+        """Import top-confidence IP indicators from the local threat intel cache."""
+        try:
+            from modules.threat_intel import load_from_cache
+            entries = [e for e in load_from_cache() if getattr(e, "itype", "") == "ip"]
+            entries.sort(key=lambda e: getattr(e, "confidence", 0), reverse=True)
+            entries = entries[:500]
+            if entries:
+                link_map = {e.indicator: [getattr(e, "source", "")] for e in entries}
+                self._queue_lookup([e.indicator for e in entries], _CAT_THREAT, link_map)
+                self._dl_status.setText(
+                    f"Auto-loaded {len(entries)} threat intel IPs from local cache."
+                )
+                self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
+        except Exception:
+            pass
 
     def _on_table_selection(self) -> None:
         rows = self._ip_table.selectedItems()

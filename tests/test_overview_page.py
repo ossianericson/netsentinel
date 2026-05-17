@@ -94,6 +94,9 @@ class MockStore:
     def query_device_events(self, hours=24.0, ip=None, event_types=None):
         return self._event_rows
 
+    def get_recent_alerts(self, hours=24.0, limit=200):
+        return []
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -447,9 +450,10 @@ class TestEventFeedTile:
         from ui.pages.overview_page import EventFeedTile
         return EventFeedTile(store=store)
 
-    def test_initial_placeholders(self):
+    def test_initial_no_store_shows_empty(self):
         t = self._make()
-        assert t._rows[0].text() == "–"
+        # No store — _event_labels is empty until refresh is called
+        assert hasattr(t, "_event_labels")
 
     def test_refresh_appeared(self):
         from ui.styles import GREEN
@@ -457,8 +461,9 @@ class TestEventFeedTile:
         store  = MockStore(event_rows=events)
         t      = self._make(store)
         t.refresh()
-        assert "10.0.0.1" in t._rows[0].text()
-        assert GREEN in t._rows[0].styleSheet()
+        assert len(t._event_labels) >= 1
+        assert "10.0.0.1" in t._event_labels[0].text()
+        assert GREEN in t._event_labels[0].styleSheet()
 
     def test_refresh_disappeared(self):
         from ui.styles import RED
@@ -466,14 +471,14 @@ class TestEventFeedTile:
         store  = MockStore(event_rows=events)
         t      = self._make(store)
         t.refresh()
-        assert RED in t._rows[0].styleSheet()
+        assert RED in t._event_labels[0].styleSheet()
 
-    def test_refresh_fewer_than_5_events(self):
+    def test_refresh_single_event_no_extra_rows(self):
         events = [FakeEvent(ts=1700000000, ip="10.0.0.1", mac=None, event_type="APPEARED")]
         store  = MockStore(event_rows=events)
         t      = self._make(store)
         t.refresh()
-        assert t._rows[1].text() == "–"
+        assert len(t._event_labels) == 1
 
     def test_refresh_no_store_noop(self):
         t = self._make()
@@ -486,7 +491,7 @@ class TestEventFeedTile:
         store  = MockStore(event_rows=events)
         t      = self._make(store)
         t.refresh()
-        assert "14:30" in t._rows[0].text()
+        assert "14:30" in t._event_labels[0].text()
 
 
 # ---------------------------------------------------------------------------

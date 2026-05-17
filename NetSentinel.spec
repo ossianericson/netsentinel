@@ -27,6 +27,7 @@ _debug_build = os.environ.get("NETSENTINEL_DEBUG", "0") == "1"
 datas = [
     ("offenders.json", "."),
     ("assets/icons", "assets/icons"),
+    ("ui/assets", "ui/assets"),
 ]
 
 # ── Collect whole packages (data + binaries + submodule tree) ─────────────────

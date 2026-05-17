@@ -17,9 +17,9 @@ from typing import Optional
 
 from PyQt6.QtCore    import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
-    QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
+    QMenu, QPushButton, QSizePolicy, QStackedWidget, QTableWidget,
+    QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -150,7 +150,10 @@ class MeshRouterPage(QWidget):
     cross-enrich the Devices on Network table with node/band information.
     """
 
-    scan_done = pyqtSignal(dict)
+    scan_done    = pyqtSignal(dict)
+    geo_map_ip   = pyqtSignal(str)   # show IP on Geolocation Map
+    port_scan_ip = pyqtSignal(str)   # pre-fill and open Port Scanner
+    check_abuse_ip = pyqtSignal(str) # pre-fill and open Threat Intelligence
 
     # Class-level flag so the keyring warning shows once per app session
     _keyring_warned: bool = False
@@ -335,6 +338,8 @@ class MeshRouterPage(QWidget):
         self._nodes_table.setColumnWidth(0, 200)
         self._nodes_table.setColumnWidth(1, 160)
         self._nodes_table.setColumnWidth(2, 140)
+        self._nodes_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._nodes_table.customContextMenuRequested.connect(self._nodes_context_menu)
         self._nodes_empty = _empty("Run a scan to discover mesh nodes.")
         self._nodes_stack = QStackedWidget()
         self._nodes_stack.addWidget(self._nodes_empty)
@@ -355,6 +360,8 @@ class MeshRouterPage(QWidget):
         self._clients_table.setColumnWidth(3, 180)
         self._clients_table.setColumnWidth(4, 60)
         self._clients_table.setColumnWidth(5, 70)
+        self._clients_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._clients_table.customContextMenuRequested.connect(self._clients_context_menu)
         self._clients_empty = _empty("Run a scan to see connected clients.")
         self._clients_stack = QStackedWidget()
         self._clients_stack.addWidget(self._clients_empty)
@@ -503,6 +510,52 @@ class MeshRouterPage(QWidget):
             f"color:{colour}; font-size:11px; background:transparent; border:none;"
         )
         self._status_lbl.setText(msg)
+
+    # ── context menus ─────────────────────────────────────────────────────────
+
+    def _nodes_context_menu(self, pos) -> None:
+        row = self._nodes_table.rowAt(pos.y())
+        if row < 0:
+            return
+        ip  = (self._nodes_table.item(row, 2) or QTableWidgetItem()).text()
+        mac = (self._nodes_table.item(row, 1) or QTableWidgetItem()).text()
+        menu = QMenu(self)
+        act_geo  = menu.addAction("🗺  Show on Geo Map →")
+        act_copy_ip  = menu.addAction(f"Copy IP  ({ip})")
+        act_copy_mac = menu.addAction(f"Copy MAC  ({mac})")
+        chosen = menu.exec(self._nodes_table.viewport().mapToGlobal(pos))
+        if chosen == act_geo and ip:
+            self.geo_map_ip.emit(ip)
+        elif chosen == act_copy_ip:
+            QApplication.clipboard().setText(ip)
+        elif chosen == act_copy_mac:
+            QApplication.clipboard().setText(mac)
+
+    def _clients_context_menu(self, pos) -> None:
+        row = self._clients_table.rowAt(pos.y())
+        if row < 0:
+            return
+        ip   = (self._clients_table.item(row, 2) or QTableWidgetItem()).text()
+        mac  = (self._clients_table.item(row, 1) or QTableWidgetItem()).text()
+        name = (self._clients_table.item(row, 0) or QTableWidgetItem()).text()
+        menu = QMenu(self)
+        act_port     = menu.addAction("🔍  Port Scan →")
+        act_geo      = menu.addAction("🗺  Show on Geo Map →")
+        act_abuse    = menu.addAction("🛡  Check IP (AbuseIPDB) →")
+        menu.addSeparator()
+        act_copy_ip  = menu.addAction(f"Copy IP  ({ip})")
+        act_copy_mac = menu.addAction(f"Copy MAC  ({mac})")
+        chosen = menu.exec(self._clients_table.viewport().mapToGlobal(pos))
+        if chosen == act_port and ip:
+            self.port_scan_ip.emit(ip)
+        elif chosen == act_geo and ip:
+            self.geo_map_ip.emit(ip)
+        elif chosen == act_abuse and ip:
+            self.check_abuse_ip.emit(ip)
+        elif chosen == act_copy_ip:
+            QApplication.clipboard().setText(ip)
+        elif chosen == act_copy_mac:
+            QApplication.clipboard().setText(mac)
 
     def set_gateway_ip(self, ip: str) -> None:
         """Called by the dashboard to pre-fill the IP from the M1 scan result."""

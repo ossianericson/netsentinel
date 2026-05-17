@@ -657,50 +657,120 @@ class AlertFeedTile(_BaseTile):
 
 
 class EventFeedTile(_BaseTile):
+    """Live event feed: merges device-state events and fired alerts, newest first."""
+
     TILE_ID    = "event_feed"
-    TILE_LABEL = "Device Events"
+    TILE_LABEL = "Live Event Feed"
     TILE_ICON  = "◉"
     MIN_HEIGHT = 165
 
+    viewall_clicked = pyqtSignal()   # user clicked "View all → Log Hub"
+
+    # Severity / event-type → colour
+    _TYPE_COLOUR = {
+        "APPEARED":    GREEN,
+        "DISAPPEARED": RED,
+        "CRITICAL":    RED,
+        "WARNING":     AMBER,
+        "INFO":        ACCENT,
+    }
+
     def _build_body(self) -> None:
-        self._rows: list[QLabel] = []
-        for _ in range(5):
-            lbl = QLabel("–")
-            lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-            )
-            self._body_layout.addWidget(lbl)
-            self._rows.append(lbl)
-        self._body_layout.addStretch()
+        # Scrollable inner container for up to 20 rows
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet(
+            "QScrollArea { background: transparent; border: none; }"
+            "QScrollBar:vertical { width: 4px; background: transparent; }"
+            "QScrollBar::handle:vertical { background: rgba(255,255,255,0.15); border-radius:2px; }"
+        )
+        inner = QWidget()
+        inner.setStyleSheet("background: transparent;")
+        self._inner_lay = QVBoxLayout(inner)
+        self._inner_lay.setContentsMargins(0, 0, 0, 0)
+        self._inner_lay.setSpacing(2)
+        self._inner_lay.addStretch()
+        self._scroll.setWidget(inner)
+        self._body_layout.setContentsMargins(8, 6, 8, 6)
+        self._body_layout.addWidget(self._scroll, 1)
+
+        self._event_labels: list[QLabel] = []
+
+        # "View all" footer — styled as link button
+        self._viewall_btn = QPushButton("View all →  Log Hub")
+        self._viewall_btn.setFlat(True)
+        self._viewall_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._viewall_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
+            f" background:transparent; text-align:left; padding:0; }}"
+            f"QPushButton:hover {{ text-decoration:underline; }}"
+        )
+        self._viewall_btn.clicked.connect(self.viewall_clicked)
+        self._body_layout.addWidget(self._viewall_btn)
 
     def refresh(self, store: Optional[MetricStore] = None) -> None:
         s = store or self._store
         if s is None:
             return
+
+        unified: list[tuple[int, str, str]] = []  # (ts, colour, text)
+
+        # Device-state events
         try:
-            events = s.query_device_events(24.0)
-            for i, lbl in enumerate(self._rows):
-                if i < len(events):
-                    e       = events[i]
-                    ip      = e.ip if hasattr(e, "ip") else e.get("ip", "")
-                    etype   = e.event_type if hasattr(e, "event_type") else e.get("event_type", "")
-                    ts      = e.ts if hasattr(e, "ts") else e.get("ts", 0)
-                    t_str   = (datetime.datetime.fromtimestamp(ts).strftime("%H:%M")
-                               if ts else "")
-                    colour  = (GREEN if etype == "APPEARED"
-                               else RED if etype == "DISAPPEARED"
-                               else ACCENT)
-                    lbl.setStyleSheet(
-                        f"font-size:11px; color:{colour}; border:none;"
-                    )
-                    lbl.setText(f"{t_str}  {ip}  {etype.lower()}")
-                else:
-                    lbl.setText("–")
-                    lbl.setStyleSheet(
-                        f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
-                    )
+            for e in s.query_device_events(48.0):
+                ip    = e.ip if hasattr(e, "ip") else e.get("ip", "")
+                etype = e.event_type if hasattr(e, "event_type") else e.get("event_type", "")
+                ts    = int(e.ts if hasattr(e, "ts") else e.get("ts", 0))
+                colour = self._TYPE_COLOUR.get(etype, ACCENT)
+                label  = etype.replace("_", " ").lower()
+                unified.append((ts, colour, f"[device]  {ip}  {label}"))
         except Exception:
             pass
+
+        # Fired alerts
+        try:
+            for a in s.get_recent_alerts(48.0, limit=40):
+                ts     = int(a.get("ts", 0))
+                sev    = (a.get("severity") or "INFO").upper()
+                rtype  = a.get("rule_type") or a.get("rule_name") or "alert"
+                host   = a.get("host") or ""
+                colour = self._TYPE_COLOUR.get(sev, ACCENT)
+                msg    = f"{sev.lower()}  {rtype}"
+                if host:
+                    msg += f"  ({host})"
+                unified.append((ts, colour, f"[alert]  {msg}"))
+        except Exception:
+            pass
+
+        # Sort newest-first, cap at 20
+        unified.sort(key=lambda x: x[0], reverse=True)
+        unified = unified[:20]
+
+        # Rebuild rows
+        for lbl in self._event_labels:
+            self._inner_lay.removeWidget(lbl)
+            lbl.deleteLater()
+        self._event_labels.clear()
+
+        if not unified:
+            lbl = QLabel("No events in the last 48 hours.")
+            lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+            self._inner_lay.insertWidget(0, lbl)
+            self._event_labels.append(lbl)
+            return
+
+        for idx, (ts, colour, text) in enumerate(unified):
+            t_str = (datetime.datetime.fromtimestamp(ts).strftime("%b %d %H:%M")
+                     if ts else "")
+            row_lbl = QLabel(f"{t_str}  {text}" if t_str else text)
+            row_lbl.setStyleSheet(
+                f"font-size:10px; color:{colour}; border:none; padding:1px 0;"
+            )
+            row_lbl.setWordWrap(False)
+            self._inner_lay.insertWidget(idx, row_lbl)
+            self._event_labels.append(row_lbl)
 
 
 class HaDevicesTile(_BaseTile):
@@ -1504,6 +1574,11 @@ class OverviewPage(QWidget):
         alert_tile = self._tiles.get("alert_feed")
         if alert_tile is not None:
             alert_tile.alert_clicked.connect(self._on_alert_navigate)
+        event_tile = self._tiles.get("event_feed")
+        if event_tile is not None:
+            event_tile.viewall_clicked.connect(
+                lambda: self.navigate_to.emit("Monitor")
+            )
         self._reflow()
 
     def _on_scan_clicked(self) -> None:
