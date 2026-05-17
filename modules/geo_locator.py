@@ -234,17 +234,21 @@ def download_db_permalink(
     ValueError  — if the URL is not an HTTPS MaxMind URL
     OSError     — if the download or extraction fails
     """
-    # Security: only allow HTTPS URLs pointing to maxmind.com
+    # Security: only allow HTTPS URLs from trusted hosts
     if not permalink_url.startswith("https://"):
         raise ValueError("GeoIP download URL must use HTTPS.")
     from urllib.parse import urlparse
     host = urlparse(permalink_url).netloc.lower()
-    if not (host == "maxmind.com"
-            or host == "download.maxmind.com"
-            or host.endswith(".maxmind.com")):
+    _trusted = (
+        host == "maxmind.com"
+        or host == "download.maxmind.com"
+        or host.endswith(".maxmind.com")
+        or host == "raw.githubusercontent.com"    # P3TERX/GeoLite.mmdb mirror
+    )
+    if not _trusted:
         raise ValueError(
             f"Untrusted download host '{host}'. "
-            "Only maxmind.com download links are accepted."
+            "Accepted: maxmind.com and raw.githubusercontent.com."
         )
 
     if dest is None:
@@ -303,6 +307,12 @@ def _extract_mmdb_from_tarball(tar_path: Path, dest: Path) -> Path:
                 return dest
     raise OSError("No .mmdb file found in the downloaded archive.")
 
+
+# Public mirror maintained by P3TERX — updated automatically from MaxMind nightly.
+# No MaxMind account required.  Source: https://github.com/P3TERX/GeoLite.mmdb
+GEOLITE_MIRROR_URL = (
+    "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+)
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 

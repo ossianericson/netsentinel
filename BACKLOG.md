@@ -2,91 +2,131 @@
 
 ## Vision
 
-NetSentinel has two parallel strategic goals: become the first tool recommended when anyone says "my network is broken" — the de-facto standard for home network troubleshooting — and become the natural starting point for anyone learning how networks actually work. Both goals are served by the same core property: the tool must show you what is happening on your real network, in plain English, without requiring you to already know what you are looking for. Everything on this backlog either lowers the barrier to non-technical users or makes the tool usable in structured learning contexts.
+NetSentinel exists to answer one question: "what is happening on my network right now?" It does this in three ways that no other free tool combines.
+
+First, it replaces five separate CLI utilities with a single interface that speaks plain English — the de-facto tool anyone reaches for when their network is broken. Second, it works with whatever hardware you own, not just supported brands — an open plugin protocol lets any Python script become a first-class integration, and an AI assistant can write that script in ten minutes. Third, it shows you *why* something is happening, not just that it is — every detection event comes with an explanation of the underlying protocol and what you should do about it.
+
+Everything on this backlog serves one of those three goals. If an item does not clearly serve one, it does not belong here.
 
 ---
 
-## Priority 1 — De-facto Home Standard
+## Priority 0 — Hardware Plugin Data Flow  ← build this next
 
-Items in this track lower the barrier for non-technical users. Each item should be self-contained, require no configuration, and produce output that a non-technical person can act on immediately.
+The plugin import, validation, and test sandbox shipped in v1.9.8. This sprint completes the feature: data from a plugin flows into the rest of the app exactly like the built-in Deco and ZTE integrations. Until this is done the plugin system is a tutorial, not a feature.
 
----
-
-### 4. Anonymous opt-in ISP comparison
-
-**Description:** Opt-in only, zero PII. On opt-in, submits: ISP name, country code, anonymised speed, latency, and uptime percentage once per day. Shows the user how their connection compares to the median for their ISP and country. Requires explicit opt-in toggle with a clear sentence describing what is sent.
-
-**Why it matters:** Contextualises results. "Your latency is 42 ms" is not actionable. "Your latency is 42 ms — 38% worse than the median for your ISP in your country" is. It also creates a daily re-engagement hook and produces community data that benefits all users.
-
-**Effort:** L
-
-**Files likely affected:**
-- `modules/isp_telemetry.py` — new module, submission and query logic; must be opt-in only with no fallback to passive collection
-- `ui/pages/speed_test_page.py` — opt-in toggle and comparison panel
-- Requires a backend endpoint — document the API contract here before implementation
+**Validation plan before merging:** disable Deco credentials and ZTE modem login, then use only the in-app Integrate Hardware guide + an AI assistant to recreate both scripts from scratch. If the workflow produces working plugins that populate the Devices table and topology, the protocol is proven for any hardware.
 
 ---
 
-## Priority 2 — Educational Standard
+### P0-A. PluginWorker — run plugin in background thread, emit structured result
 
-Items in this track make NetSentinel usable in structured learning contexts. Each item should produce output that maps directly to a textbook concept or exam objective and can be submitted as evidence of work.
+**What:** A `PluginWorker(QThread)` that runs `subprocess.run([sys.executable, script_path, "--netsentinel"])` and parses stdout as JSON. The `--netsentinel` flag is detected by a shim injected at the bottom of the template — it calls `get_info()`, `get_status()`, and `get_clients()` and prints a single JSON object. This keeps the plugin's own `if __name__ == "__main__"` block intact for standalone testing.
 
----
+**Output contract (stdout JSON):**
+```json
+{
+  "info":    { "name": "...", "type": "...", "ip": "...", "firmware": "..." },
+  "status":  { "wan_ip": "...", "uptime_sec": 3600, "download_mbps": 94.2, ... },
+  "clients": [ { "ip": "...", "mac": "...", "hostname": "..." }, ... ]
+}
+```
 
-### 2. "What just happened?" contextual explanations
-
-**Description:** After every scan, every BPDU detection, every CVE match, every alert — a collapsible panel at the bottom of the relevant page shows a plain-English explanation of the protocol involved and why the specific result matters. Collapsed by default to avoid obstructing experienced users.
-
-**Why it matters:** Passive learning with zero extra effort from the user. A student who opens the Rogue Bridge tab and sees a rogue bridge detected also sees an explanation of what STP is, what a root bridge election does, and why this causes periodic drops — without navigating away from the result.
-
-**Effort:** M
-
-**Files likely affected:**
-- `ui/widgets/explainer_panel.py` — new reusable widget, collapsible with a toggle chevron
-- All detection page files — add the explainer panel to each relevant result area
-
----
-
-### 3. CompTIA Network+ / CCNA curriculum alignment
-
-**Description:** Each feature page shows which exam objective(s) it covers as a compact badge below the page title. An exportable "study session" report lists every feature used during the session alongside the corresponding exam objectives — formatted as a checklist a student can attach to homework or submit to an instructor.
-
-**Why it matters:** Formal adoption by instructors requires curriculum mapping. Without it, a teacher cannot justify replacing a textbook lab with a live scan. With it, the tool becomes a natural fit for any course that covers CompTIA Network+ Domain 2 (Network Implementations) or CCNA Exam Topics 1.x–3.x.
+**Signals:** `result(dict)`, `error(str)`
 
 **Effort:** S
 
-**Files likely affected:**
-- `data/curriculum_map.json` — new file, objective ID → feature mapping
-- All `ui/pages/` files — read the map and render objective badges near page titles
-- `ui/widgets/objective_badge.py` — new widget, renders a compact labelled badge
+**Files:**
+- `workers/plugin_worker.py` — new worker, mirrors structure of `workers/mesh_worker.py`
+- `ui/pages/hardware_integration_page.py` — replace `_TestWorker` with `PluginWorker`; the existing Test button already shows output, now the result dict is also emitted upward
 
 ---
 
-### 4. Classroom export
+### P0-B. Plugin clients → Devices table
 
-**Description:** Students export a signed scan report (JSON + rendered HTML) containing a timestamp, a machine fingerprint (non-identifying hash), scan results, and a list of features used. Instructors have a separate aggregation view: import multiple student reports and get a comparison table showing what each student found.
+**What:** After a plugin worker result arrives, convert `clients` list into a dict keyed by normalised MAC, cache it as `self._plugin_enrichment` in dashboard.py, and pass it into `_apply_mesh_enrichment`. Client rows enriched by a plugin get a subtle source badge (e.g. "via GL.iNet") in the hostname column — same mechanic as the existing Deco name replacement, just a different label.
 
-**Why it matters:** Makes the tool usable as a lab submission format. Without a way for instructors to collect and compare student results, individual exports are useful only to the student who ran them. With classroom export, a teacher can set "run a full scan and submit your report" as a graded lab.
+**Effort:** S
+
+**Files:**
+- `ui/dashboard.py` — `_on_plugin_result(data: dict)` handler; extend `_apply_mesh_enrichment` to handle both `_mesh_enrichment` and `_plugin_enrichment`
+- `ui/pages/hardware_integration_page.py` — emit `plugin_result = pyqtSignal(dict)` from the page; wire to `_on_plugin_result` in dashboard
+
+---
+
+### P0-C. Plugin status → Overview hardware tile
+
+**What:** `get_status()` returns `wan_ip`, `uptime_sec`, `download_mbps`, `upload_mbps`. Show these in a tile on the Overview page labelled with `HARDWARE_NAME` — same visual pattern as the modem signal tile. Grey/hidden when no plugin is active. Updates each time the worker runs.
+
+**Effort:** S
+
+**Files:**
+- `ui/pages/overview_page.py` — add `update_plugin_status(data: dict)` method; tile is hidden by default and shown only when data arrives
+- `ui/dashboard.py` — call `update_plugin_status` from `_on_plugin_result`
+
+---
+
+### P0-D. Topology diagram — plugin clients grouped under hardware node
+
+**What:** When plugin clients are present, the topology renders a new node between the gateway and the client row labelled with `HARDWARE_NAME` (e.g. "GL.iNet AX1800"). Plugin clients attach to this node. Uses the existing three-tier mesh layout — the plugin node is treated as a single-satellite mesh unit with `role="plugin"`.
 
 **Effort:** M
 
-**Files likely affected:**
-- `modules/classroom_export.py` — new module, report signing and aggregation
-- `ui/pages/classroom_page.py` — new page, student export view and teacher aggregation view
+**Files:**
+- `ui/topology_widget.py` — extend `_render_mesh` to accept plugin clients as a synthetic satellite node when `mesh_units` is empty but `plugin_enrichment` is present
+- `ui/dashboard.py` — pass `plugin_enrichment` into topology `render()` call
 
 ---
 
-## Priority 3 — Polish and Retention
+### P0-E. Periodic refresh + auto-run on import
 
-Items ordered by visual impact. Each is self-contained and can be implemented independently.
+**What:** When a plugin is active, re-run `PluginWorker` every 5 minutes (configurable). Also run immediately on app start if a plugin is registered. This makes plugin data live, not just test-on-demand.
 
-### Tier 2 — Structural polish
+**Effort:** S
 
-- **Skeleton loading rows while scan workers are running** — prevents layout jump when data arrives; use a `QStandardItemModel` with placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results.
+**Files:**
+- `ui/dashboard.py` — `QTimer` started after first successful plugin run; same pattern as mesh auto-worker at line 8926
 
-### Tier 4 — Nice-to-have
+---
 
-- **"Abyss" WCAG AA high-contrast theme** — fourth theme; true black background, high-contrast text, no low-opacity elements. Required for users with visual impairments.
-- **Keyboard shortcut reference card in Help panel** — currently the shortcut list only appears in Settings.
-- **Per-page documentation link** — small `?` link on each page header opening the relevant wiki section.
-- **Passive 802.11 monitor mode capture** — optional advanced capture path that puts a supported NIC into monitor mode (via Npcap on Windows) and reads raw 802.11 management/probe/beacon frames, bypassing normal Ethernet capture. Primarily useful on networks with AP client isolation. Silently falls back to standard capture if unsupported. Pro-tier feature — too advanced and too NIC-dependent to be a home-user default.
+## Priority 1 — Clear explanations for every detection event
+
+**"What just happened?"** — After every scan result, every BPDU detection, every CVE match, every alert, a collapsible panel at the bottom of the relevant page explains in plain English what the protocol is, why this result matters, and what to do about it. Collapsed by default so it does not obstruct experienced users.
+
+This is not an educational feature — it is a usability feature. "BPDU detected" means nothing to 95% of users. "A device on your network is claiming to be the root bridge — this causes periodic 30-second disconnections" is actionable. Every confused home user benefits from this, not just students.
+
+`ui/widgets/explainer_panel.py` already exists. This is wiring it to detection results on each page.
+
+**Effort:** M — one page at a time, shippable incrementally.
+
+---
+
+## Priority 2 — ISP comparison (requires backend)
+
+Anonymous opt-in only, zero PII. Submits: ISP name, country code, anonymised speed, latency, and uptime percentage once per day. Shows the user how their connection compares to the median for their ISP and country.
+
+**Why it matters:** "Your latency is 42 ms" is not actionable. "Your latency is 42 ms — 38% worse than the median for your ISP in your country" is. Creates a re-engagement hook and produces data that benefits all users.
+
+**Honest flag:** This is the only item on the backlog that requires server infrastructure. That makes it a different category of work — ongoing costs, API maintenance, privacy policy update. Do not start this until the plugin data flow is complete and there is a clear plan for the backend. Effort is L and that L is mostly the backend, not the UI.
+
+**Files:**
+- `modules/isp_telemetry.py` — new module, opt-in only, no passive collection fallback
+- `ui/pages/speed_test_page.py` — opt-in toggle and comparison panel
+- Backend endpoint — document the API contract before any code is written
+
+---
+
+## Priority 3 — Polish
+
+Self-contained items, no dependencies between them.
+
+- **Skeleton loading rows while scan workers run** — prevents layout jump when data arrives; placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results.
+- **"Abyss" WCAG AA high-contrast theme** — true black background, high-contrast text, no low-opacity elements. Accessibility requirement for some users.
+- **Keyboard shortcut reference card in Help panel** — the shortcut list currently only appears in Settings.
+- **Per-page documentation link** — small `?` on each page header linking to the relevant wiki section.
+- **Passive 802.11 monitor mode capture** — puts a supported NIC into monitor mode via Npcap, reads raw 802.11 management/probe/beacon frames. Useful on networks with AP client isolation. Silently falls back to standard capture if unsupported. Power-user feature, not a default.
+
+---
+
+## Parking lot — revisit only if there is clear demand
+
+- **CompTIA Network+ / CCNA curriculum alignment** — badges on each page showing which exam objective it covers; exportable study-session report. S effort but creates institutional positioning that may conflict with the hardware plugin angle. Only worth doing if educators ask for it directly.

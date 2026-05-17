@@ -166,6 +166,7 @@ def _smoke_test() -> None:
         "modules.wifi_heatmap",
         "workers.mesh_worker",
         "workers.zte_worker",
+        "ui.pages.hardware_integration_page",
     ]
     for _mod in _checks:
         try:
@@ -334,9 +335,9 @@ def main():
     sys.excepthook = _excepthook
     # ─────────────────────────────────────────────────────────────────────────
 
-    from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtGui import QIcon
-    from PyQt6.QtCore import Qt, QSettings, qInstallMessageHandler
+    from PyQt6.QtWidgets import QApplication, QSplashScreen
+    from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
+    from PyQt6.QtCore import Qt, QSettings, qInstallMessageHandler, QRect
 
     # Suppress noisy Qt warnings that come from matplotlib's QtAgg backend
     # measuring fonts with pixel-size QFont objects (pointSize() returns -1).
@@ -354,7 +355,29 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.7")
+    app.setApplicationVersion("1.9.9")
+
+    # ── Splash screen ─────────────────────────────────────────────────────────
+    _px = QPixmap(460, 260)
+    _px.fill(QColor("#0D1117"))
+    _sp = QPainter(_px)
+    _sp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    _sp.setPen(QColor("#E6EDF3"))
+    _f = QFont("Segoe UI", 26, QFont.Weight.Bold)
+    _sp.setFont(_f)
+    _sp.drawText(QRect(0, 70, 460, 50), Qt.AlignmentFlag.AlignCenter, "NetSentinel")
+    _sp.setPen(QColor("#8B949E"))
+    _sp.setFont(QFont("Segoe UI", 11))
+    _sp.drawText(QRect(0, 130, 460, 30), Qt.AlignmentFlag.AlignCenter,
+                 "Network Security Scanner")
+    _sp.setPen(QColor("#484F58"))
+    _sp.setFont(QFont("Segoe UI", 9))
+    _sp.drawText(QRect(0, 220, 460, 28), Qt.AlignmentFlag.AlignCenter, "Starting…")
+    _sp.end()
+    _splash = QSplashScreen(_px, Qt.WindowType.WindowStaysOnTopHint)
+    _splash.show()
+    app.processEvents()
+    # ─────────────────────────────────────────────────────────────────────────
     app.setOrganizationName("netsentinel")
 
     # Apply QMenu rules at application level so top-level (parentless) menus
@@ -569,6 +592,7 @@ def main():
 
     # ── Show window after all wiring is complete (prevents startup flash) ─────
     window.show()
+    _splash.finish(window)
 
     # Second-instance → raise this window to the front
     def _on_second_instance() -> None:

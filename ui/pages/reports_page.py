@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 from modules.metric_store      import MetricStore
 from modules.report_scheduler  import ReportConfig, ReportScheduler
 from ui.styles                 import (
-    ACCENT, BG_CARD, BG_DARK, BORDER, CARD_RADIUS, GREEN, RED, TEXT_PRIMARY,
+    ACCENT, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, GREEN, RED, TABLE_SEL, TEXT_PRIMARY,
     TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
@@ -218,8 +218,8 @@ class ReportsPage(QWidget):
             f"QListWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
             f" background:{BG_CARD}; }}"
             f"QListWidget::item {{ padding:4px 8px; border-bottom:1px solid #EAEAEA; }}"
-            f"QListWidget::item:hover {{ background:#EEF4FF; }}"
-            f"QListWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+            f"QListWidget::item:hover {{ background:{BG_HOVER}; }}"
+            f"QListWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         )
         self._report_list.setFixedHeight(220)
         self._report_list.itemDoubleClicked.connect(self._open_report)

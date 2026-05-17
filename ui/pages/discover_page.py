@@ -393,13 +393,27 @@ _FEATURES: list[dict] = [
     },
     {
         "group": "Security",
+        "icon": "⊙",
+        "name": "Security Overview",
+        "desc": (
+            "Dashboard for the Security Audit section — KPI tiles for threat indicators, "
+            "malicious IPs, and blocked domains; top-15 high-confidence findings table; "
+            "one-click launch of Scan Network or security tools from one place."
+        ),
+        "page": "Security Overview",
+        "requires": None,
+        "tags": ["security", "overview", "dashboard", "threat", "kpi", "audit", "summary"],
+    },
+    {
+        "group": "Security",
         "icon": "◆",
         "name": "Threat Intelligence",
         "desc": (
             "Checks internet-facing IPs from your scan against AbuseIPDB and threat feeds — "
-            "flags known malicious hosts and overlays results on the Geolocation Map."
+            "flags known malicious hosts and overlays results on the Geolocation Map. "
+            "Right-click any row to show the IP on the Geo Map, copy the indicator, or export."
         ),
-        "page": "Threat Intel",
+        "page": "Threat Intelligence",
         "requires": None,
         "tags": ["threat", "intel", "ip", "abuseipdb", "malicious", "blacklist", "reputation", "geo"],
     },
@@ -442,6 +456,25 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["lab", "exercise", "guided", "learn", "scenario", "tutorial", "practice", "rogue", "dns"],
     },
+    # ── Extend ─────────────────────────────────────────────────────────────────
+    {
+        "group": "Extend",
+        "icon": "⬡",
+        "name": "Integrate Any Hardware",
+        "desc": (
+            "Write a small Python script that talks to your router, modem, or AP and "
+            "import it into NetSentinel. A built-in template and four-step guide walk you "
+            "through finding your device's local API, testing the script standalone, "
+            "and importing it. Scripts that work are shared back and become first-class "
+            "built-in integrations for all users."
+        ),
+        "page": "Integrate Hardware",
+        "requires": None,
+        "tags": [
+            "hardware", "router", "modem", "ap", "plugin", "script", "python",
+            "integrate", "extend", "custom", "api", "community", "contribute",
+        ],
+    },
     # ── Hidden features ────────────────────────────────────────────────────────
     {
         "group": "Hidden features",
@@ -473,12 +506,12 @@ _FEATURES: list[dict] = [
         "icon": "↗",
         "name": "Device right-click actions",
         "desc": (
-            "Right-click any row in the Devices table to access: How to Fix (plain-English "
-            "remediation), block from network, view availability history, and more."
+            "Right-click any row in the Devices table to access: Port Scan that device, "
+            "Show on Geo Map, Check IP (AbuseIPDB), Wake-on-LAN, How to Fix, and Copy IP / MAC."
         ),
         "page": "Devices",
         "requires": None,
-        "tags": ["right-click", "context menu", "device", "fix", "block", "remediation"],
+        "tags": ["right-click", "context menu", "device", "port scan", "geo map", "abuseipdb", "fix", "wol"],
     },
     {
         "group": "Hidden features",

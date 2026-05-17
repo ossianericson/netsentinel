@@ -44,6 +44,7 @@ from ui.styles import (
     BORDER,
     GREEN,
     RED,
+    TABLE_SEL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TH_BG,
@@ -70,7 +71,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
         f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
         f" font-weight:bold; padding:4px 8px; border:none; }}"
         f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
     )
     return t
 
@@ -132,7 +133,7 @@ def _btn(text: str, primary: bool = True) -> QPushButton:
         b.setStyleSheet(
             f"QPushButton {{ background:#fff; color:{ACCENT}; font-size:12px;"
             f" border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:#EEF4FF; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:disabled {{ background:#F4F4F4; color:#9BA8B4; border-color:#B0C4D8; }}"
         )
     return b

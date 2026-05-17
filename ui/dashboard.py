@@ -1238,6 +1238,7 @@ class Dashboard(QMainWindow):
 
         # Cached results
         self._net_info: dict = {}
+        self._wan_ip:   str  = ""   # public WAN IP, fetched once per session after scan
         self._diag_result = None
         self._last_scan_devices: list = []    # for NetworkDocPage port_data accumulation
         self._port_data_cache:   dict = {}    # {ip: [port_dict, ...]} across scan types
@@ -2219,6 +2220,13 @@ class Dashboard(QMainWindow):
 
         from ui.pages.threat_intel_page import ThreatIntelPage
         self._threat_intel_page = ThreatIntelPage(parent=None)
+        self._threat_intel_page.show_on_map.connect(self._show_ip_on_geo_map)
+
+        from ui.pages.security_overview_page import SecurityOverviewPage
+        self._security_overview_page = SecurityOverviewPage(parent=None)
+        self._security_overview_page.navigate_to.connect(self._nav_rail_go_to)
+        self._security_overview_page.scan_requested.connect(self._start_full_scan)
+        self._security_overview_page.security_scan_requested.connect(self._run_security_scans)
 
         from ui.pages.cve_page import CvePage
         self._cve_page = CvePage(self._store, parent=None)
@@ -2255,9 +2263,19 @@ class Dashboard(QMainWindow):
         self._discover_page = FeatureGuidePage(parent=None)
         self._discover_page.navigate_to.connect(self._nav_rail_go_to)
 
+        from ui.pages.hardware_integration_page import HardwareIntegrationPage
+        self._hardware_integration_page = HardwareIntegrationPage(parent=None)
+
         from ui.pages.mesh_router_page import MeshRouterPage
         self._mesh_router_page = MeshRouterPage(parent=None)
         self._mesh_router_page.scan_done.connect(self._on_mesh_result)
+        self._mesh_router_page.geo_map_ip.connect(self._show_ip_on_geo_map)
+        self._mesh_router_page.port_scan_ip.connect(
+            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (SYN)"))
+        )
+        self._mesh_router_page.check_abuse_ip.connect(
+            lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intelligence"))
+        )
 
         from ui.pages.modem_page import ModemPage
         self._modem_page = ModemPage(parent=None)
@@ -2383,6 +2401,7 @@ class Dashboard(QMainWindow):
         self._stack.addWidget(self._lab_mode_page)
         self._stack.addWidget(self._protocol_viz_page)
         self._stack.addWidget(self._discover_page)
+        self._stack.addWidget(self._hardware_integration_page)
         self._stack.addWidget(self._rest_api_page)
         self._nav_row_to_page:   dict = {}
         self._nav_separators:    set  = set()
@@ -2483,7 +2502,7 @@ class Dashboard(QMainWindow):
                                     _arp_row, _adv_dhcp_row, _adv_bw_row, _adv_sched_row,
                                     _snmp_row, _snmp_trap_row, _syslog_row,
                                     _adv_auto_row, _adv_doc_row, _adv_mqtt_row,
-                                    _tools_heatmap_row, _tools_geomap_row]
+                                    _tools_heatmap_row]
         self._adv_tab_index_adv = _adv_tools_row
         self._adv_tab_index_mtr = _mtr_row
         self._nav_separators.add(self._nav_adv_sep)
@@ -2492,7 +2511,8 @@ class Dashboard(QMainWindow):
         self._nav_recon_sep = self._nav.count()
         self._nav_add_section("Security Audit", icon="🔐", collapsed_by_default=True)
         self._nav_recon_rows = [
-            self._nav_add_page("🧠", "Threat Intelligence",   self._threat_intel_page),
+            self._nav_add_page("⊙", "Security Overview",      self._security_overview_page),
+            self._nav_add_page("🧠", "Threat Intelligence",    self._threat_intel_page),
             self._nav_add_page("✚", "TLS & exposure",         self._cert_page),
             self._nav_add_page("�🔎", "Port Scan (SYN)",       self._recon_syn_tab_widget),
             self._nav_add_page("🔎", "Port Scan (UDP)",        self._recon_udp_tab_widget),
@@ -2520,6 +2540,12 @@ class Dashboard(QMainWindow):
         self._nav_add_page("?", "Help & Reference",     self._help_tab_widget)
         self._nav_separators.add(self._nav_edu_sep)
 
+        # ── EXTEND (collapsed by default) ───────────────────────────────────
+        self._nav_extend_sep = self._nav.count()
+        self._nav_add_section("Extend", icon="⬡", collapsed_by_default=True)
+        self._nav_add_page("⊕", "Integrate Hardware", self._hardware_integration_page)
+        self._nav_separators.add(self._nav_extend_sep)
+
         # Apply initial collapse for ALL groups that start collapsed (both level-0
         # sections and level-1 sub-groups).  Process level-0 first so parent
         # hide state is established before children are evaluated.
@@ -2545,36 +2571,7 @@ class Dashboard(QMainWindow):
         _fp_lay.setContentsMargins(0, 0, 0, 0)
         _fp_lay.setSpacing(0)
 
-        # Mode segmented control — 3-button selector: [Home] [Standard] [Pro]
-        self._mode_seg = QWidget()
-        self._mode_seg.setFixedHeight(34)
-        self._mode_seg.setStyleSheet("QWidget { background: transparent; }")
-        _seg_lay = QHBoxLayout(self._mode_seg)
-        _seg_lay.setContentsMargins(8, 5, 8, 5)
-        _seg_lay.setSpacing(0)
-        self._mode_seg_btns: dict = {}
-        _seg_items = [
-            ("home",     "Home",     ACCENT,     "4px 0px 0px 4px"),
-            ("standard", "Standard", "#2E7D32",  "0px"),
-            ("pro",      "Pro",      "#C62828",   "0px 4px 4px 0px"),
-        ]
-        for _sk, _sl, _sa, _sr in _seg_items:
-            _sb = QPushButton(_sl)
-            _sb.setCheckable(True)
-            _sb.setFixedHeight(24)
-            _sb.setCursor(Qt.CursorShape.PointingHandCursor)
-            _sb.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            _sb.setStyleSheet(
-                f"QPushButton {{ background:{SIDEBAR_SECTION_BG}; color:{SIDEBAR_SECTION_FG};"
-                f" border:1px solid {NAV_DIVIDER}; border-radius:{_sr};"
-                f" font-size:10px; font-weight:600; padding:0 4px; }}"
-                f"QPushButton:hover {{ background:{SIDEBAR_HOVER}; color:{WHITE}; }}"
-                f"QPushButton:checked {{ background:{_sa}; color:{WHITE}; border-color:{_sa}; }}"
-                f"QPushButton:checked:hover {{ background:{_sa}; color:{WHITE}; }}"
-            )
-            _sb.clicked.connect(lambda _c, m=_sk: self._set_mode(m))
-            _seg_lay.addWidget(_sb, 1)
-            self._mode_seg_btns[_sk] = _sb
+        self._mode_seg_btns: dict = {}   # kept for compat — buttons no longer rendered
 
         # Search / filter (flat panel only — hidden by default)
         self._nav_search = QLineEdit()
@@ -2601,7 +2598,6 @@ class Dashboard(QMainWindow):
         )
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
 
-        _fp_lay.addWidget(self._mode_seg)
         _fp_lay.addWidget(self._nav_search)
         _fp_lay.addWidget(self._nav, 1)
         _fp_lay.addWidget(self._sidebar_toggle_btn)
@@ -3267,7 +3263,6 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Availability History", self._history_page)
         self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
         self._nav_add_rail_item("Service Heartbeat",   self._service_page)
-        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
         self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
 
         self._nav_begin_section("Reports", "bar-chart")
@@ -3283,6 +3278,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
         self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
         self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
+        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
         self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
         self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
         self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
@@ -3299,6 +3295,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Maintenance Windows", self._maintenance_page)
 
         self._nav_begin_section("Security Audit", "shield")
+        self._nav_add_rail_item("Security Overview",    self._security_overview_page,     audit_item=True)
         self._nav_add_rail_item("Port Scan (TCP)",      self._recon_syn_tab_widget,       admin_required=True, audit_item=True)
         self._nav_add_rail_item("Port Scan (UDP)",      self._recon_udp_tab_widget,       admin_required=True, audit_item=True)
         self._nav_add_rail_item("CVE Lookup",           self._recon_cve_tab_widget,       audit_item=True)
@@ -3654,10 +3651,12 @@ class Dashboard(QMainWindow):
         mac = (self._m1_table.item(row, 2) or QTableWidgetItem()).text()
         menu = QMenu(self)
         menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
-        act_scan = menu.addAction(f"🔍  Port scan  {ip}")
-        act_wol  = menu.addAction(f"⚡  Wake-on-LAN  →  {mac}")
+        act_scan     = menu.addAction(f"🔍  Port Scan  {ip}")
+        act_geo      = menu.addAction(f"🗺  Show on Geo Map →")
+        act_abuseipdb = menu.addAction(f"🛡  Check IP (AbuseIPDB) →")
+        act_wol      = menu.addAction(f"⚡  Wake-on-LAN  →  {mac}")
         menu.addSeparator()
-        act_fix  = menu.addAction("🔧  How to Fix")
+        act_fix      = menu.addAction("🔧  How to Fix")
         menu.addSeparator()
         act_copy_ip  = menu.addAction("📋  Copy IP")
         act_copy_mac = menu.addAction("📋  Copy MAC")
@@ -3665,6 +3664,11 @@ class Dashboard(QMainWindow):
         chosen = menu.exec(self._m1_table.viewport().mapToGlobal(pos))
         if chosen == act_scan:
             self._run_port_scan(ip)
+        elif chosen == act_geo:
+            self._show_ip_on_geo_map(ip)
+        elif chosen == act_abuseipdb:
+            self._threat_intel_page.check_ip(ip)
+            self._nav_rail_go_to("Threat Intelligence")
         elif chosen == act_wol:
             self._send_wol(mac)
         elif chosen == act_fix:
@@ -3690,6 +3694,39 @@ class Dashboard(QMainWindow):
                 item = self._m1_table.item(row, col)
                 parts.append(item.text() if item else "")
             QApplication.clipboard().setText("\t".join(parts))
+
+    def _net_devices_context_menu(self, pos) -> None:
+        """Context menu for the Network Info tab's device table."""
+        from PyQt6.QtWidgets import QMenu
+        row = self._net_devices_table.rowAt(pos.y())
+        if row < 0:
+            return
+        ip  = (self._net_devices_table.item(row, 0) or QTableWidgetItem()).text()
+        mac = (self._net_devices_table.item(row, 2) or QTableWidgetItem()).text()
+        if not ip:
+            return
+        menu = QMenu(self)
+        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
+        act_scan  = menu.addAction(f"🔍  Port Scan  {ip}")
+        act_geo   = menu.addAction(f"🗺  Show on Geo Map →")
+        act_abuse = menu.addAction(f"🛡  Check IP (AbuseIPDB) →")
+        menu.addSeparator()
+        act_copy_ip  = menu.addAction("📋  Copy IP")
+        act_copy_mac = menu.addAction("📋  Copy MAC")
+        chosen = menu.exec(self._net_devices_table.viewport().mapToGlobal(pos))
+        if chosen == act_scan:
+            self._run_port_scan(ip)
+        elif chosen == act_geo:
+            self._show_ip_on_geo_map(ip)
+        elif chosen == act_abuse:
+            self._threat_intel_page.check_ip(ip)
+            self._nav_rail_go_to("Threat Intelligence")
+        elif chosen == act_copy_ip:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(ip)
+        elif chosen == act_copy_mac:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(mac)
 
     # ── Module 2 ──────────────────────────────────────────────────────────────
 
@@ -3927,12 +3964,14 @@ class Dashboard(QMainWindow):
 
         card, card_body = _make_card("Detected Networks")
         self._m4_table = _table([
-            "SSID", "BSSID", "Channel", "Band", "Signal (dBm)",
-            "Hidden?", "Rogue SSID?", "Co-Channel?", "Connected?",
+            "SSID", "BSSID", "Nodes", "Channel", "Band", "Signal (dBm)",
+            "Rogue SSID?", "Co-Channel?", "Connected?",
         ])
         self._m4_table.setColumnWidth(0, 180)
         self._m4_table.setColumnWidth(1, 150)
-        self._m4_table.setColumnWidth(8, 95)
+        self._m4_table.setColumnWidth(2, 55)   # Nodes
+        self._m4_table.setColumnWidth(5, 105)  # Signal range
+        self._m4_table.setColumnWidth(8, 95)   # Connected
         card_body.addWidget(self._m4_table)
         lay.addWidget(card, 1)
 
@@ -4220,6 +4259,8 @@ class Dashboard(QMainWindow):
         self._net_devices_table.setColumnWidth(1, 180)
         self._net_devices_table.setColumnWidth(2, 145)
         self._net_devices_table.setColumnWidth(3, 200)
+        self._net_devices_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._net_devices_table.customContextMenuRequested.connect(self._net_devices_context_menu)
         lay.addWidget(self._net_devices_table, 1)
         return w
 
@@ -7209,6 +7250,8 @@ class Dashboard(QMainWindow):
         self._recon_syn_table.setColumnWidth(1, 90)
         self._recon_syn_table.setColumnWidth(2, 70)
         self._recon_syn_table.setColumnWidth(3, 220)
+        self._recon_syn_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._recon_syn_table.customContextMenuRequested.connect(self._syn_table_context_menu)
         lay.addWidget(warn)
         lay.addWidget(self._syn_status)
         lay.addLayout(ctrl)
@@ -7244,6 +7287,39 @@ class Dashboard(QMainWindow):
     def _stop_syn_scan(self):
         if self._syn_worker:
             self._syn_worker.stop()
+
+    def _syn_table_context_menu(self, pos) -> None:
+        from PyQt6.QtWidgets import QMenu
+        row = self._recon_syn_table.rowAt(pos.y())
+        host = self._syn_host.text().strip()
+        if row < 0 or not host:
+            return
+        port_item = self._recon_syn_table.item(row, 0)
+        svc_item  = self._recon_syn_table.item(row, 3)
+        port = (port_item.text() if port_item else "")
+        svc  = (svc_item.text()  if svc_item  else "")
+        menu = QMenu(self)
+        menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
+        act_geo   = menu.addAction(f"🗺  Show {host} on Geo Map →")
+        act_abuse = menu.addAction(f"🛡  Check {host} (AbuseIPDB) →")
+        menu.addSeparator()
+        act_copy_host = menu.addAction(f"📋  Copy host  ({host})")
+        if port:
+            act_copy_port = menu.addAction(f"📋  Copy  {host}:{port}  ({svc})")
+        else:
+            act_copy_port = None
+        chosen = menu.exec(self._recon_syn_table.viewport().mapToGlobal(pos))
+        if chosen == act_geo:
+            self._show_ip_on_geo_map(host)
+        elif chosen == act_abuse:
+            self._threat_intel_page.check_ip(host)
+            self._nav_rail_go_to("Threat Intelligence")
+        elif chosen == act_copy_host:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(host)
+        elif act_copy_port and chosen == act_copy_port:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(f"{host}:{port}")
 
     @pyqtSlot(object)
     def _on_syn_result(self, result):
@@ -8523,6 +8599,8 @@ class Dashboard(QMainWindow):
         devices = data.get("devices", [])
         if hasattr(self, "_overview_page") and devices:
             self._overview_page.set_has_results(True)
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.notify_scan_complete()
         if hasattr(self, "_home_page") and devices:
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
         self._m1_table.setRowCount(0)
@@ -8747,6 +8825,78 @@ class Dashboard(QMainWindow):
         # immediately after a network scan, without waiting for the next 30 s poll.
         if getattr(self, "_last_modem_data", None) and hasattr(self, "_modem_page"):
             self._modem_page.on_modem_signal(self._last_modem_data)
+
+        # Fetch WAN IP in background so geo map can resolve LAN devices later
+        if not self._wan_ip:
+            self._fetch_wan_ip()
+
+    def _fetch_wan_ip(self) -> None:
+        """Fetch the public WAN IP once per session in a background thread."""
+        import threading
+
+        def _do():
+            try:
+                from modules.internet_exposure import _get_wan_ip
+                ip, _ = _get_wan_ip()
+                if ip:
+                    self._wan_ip = ip
+                    from PyQt6.QtCore import QTimer
+                    QTimer.singleShot(0, lambda: self._geo_map_page.set_home_ip(ip))
+            except Exception:
+                pass
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def _show_ip_on_geo_map(self, ip: str) -> None:
+        """Navigate to Geolocation Map and pin the given IP (from right-click).
+
+        For private/LAN addresses the public WAN IP is used instead, since every
+        device on the same network shares the same internet-facing location.
+        """
+        import ipaddress
+        try:
+            addr = ipaddress.ip_address(ip)
+            is_private = addr.is_private or addr.is_loopback or addr.is_link_local
+        except ValueError:
+            is_private = False
+
+        self._nav_rail_go_to("Geolocation Map")
+
+        if is_private:
+            if self._wan_ip:
+                self._geo_map_page.navigate_to_ip(
+                    self._wan_ip, label=f"Your Network  (local: {ip})"
+                )
+            else:
+                # WAN IP not yet known — show placeholder then fetch and update
+                self._geo_map_page._detail_ip.setText(ip)
+                self._geo_map_page._detail_body.setText(
+                    "Resolving your public WAN IP…\n"
+                    "This takes a few seconds on first use."
+                )
+                self._geo_map_page._detail_links.setText("")
+                import threading
+                def _do_and_update():
+                    try:
+                        from modules.internet_exposure import _get_wan_ip
+                        wan, _ = _get_wan_ip()
+                        if wan:
+                            self._wan_ip = wan
+                            from PyQt6.QtCore import QTimer
+                            QTimer.singleShot(0, lambda: (
+                                self._geo_map_page.set_home_ip(wan),
+                                self._geo_map_page.navigate_to_ip(
+                                    wan, label=f"Your Network  (local: {ip})"
+                                ),
+                            ))
+                    except Exception:
+                        pass
+                threading.Thread(target=_do_and_update, daemon=True).start()
+        else:
+            try:
+                self._geo_map_page.navigate_to_ip(ip, label="Threat Intel")
+            except Exception:
+                pass
 
     # ── Mesh enrichment ────────────────────────────────────────────────────────
 
@@ -9460,32 +9610,60 @@ class Dashboard(QMainWindow):
         def _g(obj, attr, default):
             return getattr(obj, attr, default) if not isinstance(obj, dict) else obj.get(attr, default)
 
-        # Belt-and-suspenders: if Deco API data is already cached, clear co-channel
-        # conflict flags for any network whose BSSID OUI matches a mesh unit's MAC OUI.
-        # This handles the case where wifi_scanner.py's own-SSID heuristic doesn't
-        # cover the backhaul (e.g., different hardware generation or guest-SSID only).
+        # Clear co-channel flags for BSSIDs whose OUI matches a known mesh unit
         mesh_units = getattr(self, "_mesh_units", None)
-        if mesh_units and networks:
-            _mesh_ouis = {
+        mesh_ouis: set = set()
+        if mesh_units:
+            mesh_ouis = {
                 u.mac[:8] for u in mesh_units
                 if hasattr(u, "mac") and len(u.mac) >= 8
             }
             for _n in networks:
                 if _g(_n, "co_channel_conflict", False):
                     _bssid = _g(_n, "bssid", "")
-                    if _bssid and len(_bssid) >= 8 and _bssid[:8] in _mesh_ouis:
+                    if _bssid and len(_bssid) >= 8 and _bssid[:8] in mesh_ouis:
                         if not isinstance(_n, dict):
                             _n.co_channel_conflict = False
                         else:
                             _n["co_channel_conflict"] = False
 
-        # Collapse multi-BSSID SSIDs (mesh nodes each broadcast the same SSID)
-        # into one row per named SSID showing the strongest signal.  Hidden
-        # networks (empty SSID) are grouped by (channel, band) — mesh nodes
-        # each broadcast several hidden backhaul SSIDs per band, so without
-        # grouping a 5-node mesh produces 10–15 identical [HIDDEN] rows.
+        # Build OUI set from ALL named SSIDs so we can identify backhaul hidden SSIDs
+        # even when Deco API data isn't available.
+        named_ouis: set = set()
+        for n in networks:
+            ssid  = _g(n, "ssid", "")
+            bssid = _g(n, "bssid", "")
+            if ssid and bssid and len(bssid) >= 8:
+                named_ouis.add(bssid[:8])
+        # Also include Deco-API OUIs
+        named_ouis |= mesh_ouis
+
+        # Deco node-name lookup: mac[:17].lower() → node name
+        deco_names: dict = {}
+        if mesh_units:
+            for u in mesh_units:
+                if hasattr(u, "mac") and hasattr(u, "name"):
+                    deco_names[u.mac[:17].lower()] = u.name
+
+        def _is_backhaul(bssid: str) -> bool:
+            """True when a hidden SSID's OUI matches the mesh system's named OUI."""
+            if len(bssid) < 8:
+                return False
+            oui = bssid[:8]
+            # Locally-administered variants of named OUIs are common for backhaul.
+            # Check exact match and also the canonical (globally-administered) form.
+            canon = bssid[0]
+            try:
+                first = int(bssid[0:2], 16)
+                canon_first = first & 0xFD  # clear locally-administered bit
+                canon_oui = f"{canon_first:02x}{bssid[2:8]}"
+            except ValueError:
+                canon_oui = oui
+            return oui in named_ouis or canon_oui in named_ouis
+
+        # Group named SSIDs; group hidden SSIDs by (channel, band)
         ssid_groups: dict = {}
-        hidden_groups: dict = {}   # (channel, band) → list
+        hidden_groups: dict = {}
         for n in networks:
             ssid = _g(n, "ssid", "")
             if ssid:
@@ -9496,39 +9674,105 @@ class Dashboard(QMainWindow):
                 hidden_groups.setdefault((ch, band), []).append(n)
 
         display_rows: list = []
+
         for ssid, group in ssid_groups.items():
             best     = max(group, key=lambda x: _g(x, "signal_dbm", -100))
-            rogue    = any(_g(x, "is_rogue_ssid",       False) for x in group)
-            conflict = any(_g(x, "co_channel_conflict",  False) for x in group)
-            hidden   = any(_g(x, "is_hidden",            False) for x in group)
-            bssid    = _g(best, "bssid", "")
-            bssid_d  = f"{bssid} (×{len(group)})" if len(group) > 1 else bssid
-            display_rows.append((best, ssid, bssid_d, rogue, conflict, hidden))
-        for (_ch, _band), group in hidden_groups.items():
-            best     = max(group, key=lambda x: _g(x, "signal_dbm", -100))
+            worst    = min(group, key=lambda x: _g(x, "signal_dbm", -100))
             rogue    = any(_g(x, "is_rogue_ssid",      False) for x in group)
             conflict = any(_g(x, "co_channel_conflict", False) for x in group)
             bssid    = _g(best, "bssid", "")
-            bssid_d  = f"{bssid} (×{len(group)})" if len(group) > 1 else bssid
-            display_rows.append((best, "", bssid_d, rogue, conflict, True))
+            # Build per-node tooltip: prefer Deco names, fall back to raw BSSIDs
+            node_tips = []
+            for x in sorted(group, key=lambda x: _g(x, "signal_dbm", -100), reverse=True):
+                b = _g(x, "bssid", "")
+                name = deco_names.get(b[:17].lower(), "")
+                sig  = _g(x, "signal_dbm", 0)
+                node_tips.append(f"{name or b}  {sig} dBm")
+            display_rows.append((
+                best, ssid, bssid, len(group), node_tips,
+                rogue, conflict, False,
+                _g(best, "signal_dbm", 0), _g(worst, "signal_dbm", 0),
+            ))
 
-        for n, ssid_d, bssid_d, rogue, conflict, hidden in display_rows:
-            ch        = _g(n, "channel",    0)
-            band      = _g(n, "band",       "?")
-            sig       = _g(n, "signal_dbm", 0)
-            connected = bool(my_ssid and ssid_d and ssid_d == my_ssid)
-            level = "HIGH" if rogue else ("MEDIUM" if conflict else ("LOW" if hidden else "CLEAN"))
-            _add_row(
-                self._m4_table,
-                [
-                    ssid_d or "[HIDDEN]", bssid_d, str(ch), band, str(sig),
-                    "Yes" if hidden else "No",
-                    "⚠ Yes" if rogue else "No",
-                    "⚠ Yes" if conflict else "No",
-                    "✓ Yes" if connected else "",
-                ],
-                level,
-            )
+        for (_ch, _band), group in hidden_groups.items():
+            best     = max(group, key=lambda x: _g(x, "signal_dbm", -100))
+            worst    = min(group, key=lambda x: _g(x, "signal_dbm", -100))
+            rogue    = any(_g(x, "is_rogue_ssid",      False) for x in group)
+            conflict = any(_g(x, "co_channel_conflict", False) for x in group)
+            bssid    = _g(best, "bssid", "")
+            backhaul = _is_backhaul(bssid)
+            node_tips = [_g(x, "bssid", "") for x in group]
+            display_rows.append((
+                best, None, bssid, len(group), node_tips,
+                rogue, conflict, backhaul,
+                _g(best, "signal_dbm", 0), _g(worst, "signal_dbm", 0),
+            ))
+
+        from PyQt6.QtWidgets import QTableWidgetItem
+        for n, ssid, bssid, node_count, node_tips, rogue, conflict, backhaul, sig_best, sig_worst in display_rows:
+            ch   = _g(n, "channel", 0)
+            band = _g(n, "band", "?")
+            connected = bool(my_ssid and ssid and ssid == my_ssid)
+
+            # SSID display
+            if ssid:
+                ssid_d = ssid
+            elif backhaul:
+                ssid_d = "Mesh Backhaul"
+            else:
+                ssid_d = "[HIDDEN]"
+
+            # Signal: show range when nodes differ by more than 2 dBm
+            if node_count > 1 and abs(sig_best - sig_worst) > 2:
+                sig_d = f"{sig_best} / {sig_worst} dBm"
+            else:
+                sig_d = f"{sig_best} dBm"
+
+            # Nodes column tooltip
+            node_tip = "\n".join(node_tips) if node_tips else ""
+
+            level = "HIGH" if rogue else ("MEDIUM" if conflict else "CLEAN")
+
+            row_idx = self._m4_table.rowCount()
+            self._m4_table.insertRow(row_idx)
+
+            ssid_item = QTableWidgetItem(ssid_d)
+            if backhaul:
+                from PyQt6.QtGui import QColor
+                ssid_item.setForeground(QColor(TEXT_MUTED))
+                ssid_item.setToolTip(
+                    "Hidden SSID used for inter-node mesh communication.\n"
+                    "Not a user network — safe to ignore."
+                )
+
+            bssid_item = QTableWidgetItem(bssid)
+
+            nodes_item = QTableWidgetItem(str(node_count) if node_count > 1 else "")
+            if node_count > 1:
+                nodes_item.setToolTip(node_tip)
+                from PyQt6.QtGui import QColor
+                nodes_item.setForeground(QColor(ACCENT))
+
+            sig_item  = QTableWidgetItem(sig_d)
+            rogue_item = QTableWidgetItem("⚠ Yes" if rogue else "No")
+            conf_item  = QTableWidgetItem("⚠ Yes" if conflict else "No")
+            conn_item  = QTableWidgetItem("✓ Yes" if connected else "")
+
+            from PyQt6.QtGui import QColor as _QC
+            if rogue:
+                rogue_item.setForeground(_QC(RED))
+            if conflict:
+                conf_item.setForeground(_QC(AMBER))
+            if connected:
+                conn_item.setForeground(_QC(GREEN))
+
+            for col, item in enumerate([
+                ssid_item, bssid_item, nodes_item,
+                QTableWidgetItem(str(ch)), QTableWidgetItem(band),
+                sig_item, rogue_item, conf_item, conn_item,
+            ]):
+                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self._m4_table.setItem(row_idx, col, item)
 
         rogue_c  = wifi.rogue_count  if not isinstance(wifi, dict) else wifi.get("rogue_count", 0)
         hidden_c = wifi.hidden_count if not isinstance(wifi, dict) else wifi.get("hidden_count", 0)

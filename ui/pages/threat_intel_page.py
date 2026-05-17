@@ -23,12 +23,14 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QTableWidget,
@@ -105,7 +107,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
         f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
         f" font-weight:bold; padding:4px 8px; border:none; }}"
         f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+        f"QTableWidget::item:selected {{ background:{ACCENT}; color:#fff; }}"
     )
     return t
 
@@ -171,7 +173,7 @@ def _secondary_btn(text: str) -> QPushButton:
     b.setStyleSheet(
         f"QPushButton {{ background:#fff; color:{ACCENT}; font-size:12px;"
         f" border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
-        f"QPushButton:hover {{ background:#EEF4FF; }}"
+        f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         f"QPushButton:disabled {{ background:#F4F4F4; color:#9BA8B4; border-color:#B0C4D8; }}"
     )
     return b
@@ -183,6 +185,7 @@ class ThreatIntelPage(QWidget):
     """Threat Intelligence Feed — IP/domain blocklist with AbuseIPDB lookup."""
 
     entries_updated = pyqtSignal(list)  # emitted after each feed load with list[ThreatEntry]
+    show_on_map     = pyqtSignal(str)   # emitted when user picks "Show on Geolocation Map"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -253,6 +256,8 @@ class ThreatIntelPage(QWidget):
         self._table = _make_table(
             ["Indicator", "Type", "Categories", "Source", "Confidence", "Last Seen"]
         )
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_table_context_menu)
         bl_lay.addWidget(self._table)
         self._empty_lbl = QLabel(
             "No threat data loaded. Click 'Update Feeds' to download the latest blocklists."
@@ -357,6 +362,64 @@ class ThreatIntelPage(QWidget):
             qs.value("threat/abuseipdb_enabled", False, type=bool)
         )
         self._api_key_field.setText(_load_secret(_KR_ABUSE_API))
+
+    # ── Context menu ─────────────────────────────────────────────────────────
+
+    def _on_table_context_menu(self, pos) -> None:
+        row = self._table.rowAt(pos.y())
+        if row < 0:
+            return
+        indicator_item = self._table.item(row, 0)
+        itype_item     = self._table.item(row, 1)
+        if indicator_item is None:
+            return
+        indicator = indicator_item.text()
+        itype     = itype_item.text() if itype_item else ""
+
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f" font-size:11px; }}"
+            f"QMenu::item:selected {{ background:{ACCENT}; color:#fff; }}"
+            f"QMenu::separator {{ height:1px; background:{BORDER}; margin:2px 0; }}"
+        )
+
+        if itype == "ip":
+            act_map = menu.addAction("🌍  Show on Geolocation Map")
+            act_map.triggered.connect(lambda: self.show_on_map.emit(indicator))
+            menu.addSeparator()
+
+        act_copy = menu.addAction("📋  Copy Indicator")
+        act_copy.triggered.connect(lambda: QApplication.clipboard().setText(indicator))
+
+        if itype == "ip":
+            act_check = menu.addAction("🔎  Check IP (AbuseIPDB)")
+            act_check.triggered.connect(lambda: self._check_ip_from_menu(indicator))
+
+        menu.addSeparator()
+        act_export = menu.addAction("↓  Export Row")
+        act_export.triggered.connect(lambda: self._export_row(row))
+
+        menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _check_ip_from_menu(self, ip: str) -> None:
+        self._lookup_field.setText(ip)
+        self._run_lookup()
+
+    def _export_row(self, row: int) -> None:
+        cols = self._table.columnCount()
+        headers = [self._table.horizontalHeaderItem(c).text() for c in range(cols)]
+        values  = [(self._table.item(row, c) or QTableWidgetItem("")).text()
+                   for c in range(cols)]
+        text = "\t".join(headers) + "\n" + "\t".join(values)
+        QApplication.clipboard().setText(text)
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def check_ip(self, ip: str) -> None:
+        """Pre-fill and trigger an AbuseIPDB lookup (called from other pages)."""
+        self._lookup_field.setText(ip)
+        self._run_lookup()
 
     # ── Feed operations ───────────────────────────────────────────────────────
 

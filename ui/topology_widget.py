@@ -391,9 +391,14 @@ def _scatter(ax, pos: tuple, color: str, size: int, label: str) -> None:
     x, y = pos
     ax.scatter(x, y, s=size, c=color, zorder=3, alpha=0.9,
                edgecolors=BG_CARD, linewidths=1.5)
-    ax.text(x, y - 0.07, label, ha="center", va="top", fontsize=7,
-            color=TEXT_PRIMARY, zorder=4,
-            bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.9))
+    # Offset in display points so the gap is pixel-constant at any widget size.
+    # Marker radius in points = sqrt(area/π); add 4pt (~5px) gap below the edge.
+    marker_r = math.sqrt(size / math.pi)
+    ax.annotate(label, xy=(x, y), xytext=(0, -(marker_r + 4)),
+                textcoords="offset points",
+                ha="center", va="top", fontsize=7,
+                color=TEXT_PRIMARY, zorder=4, clip_on=False,
+                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.9))
 
 
 def _modem_label(data: dict) -> str:

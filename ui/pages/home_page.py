@@ -32,6 +32,7 @@ from ui.styles import (
     AMBER,
     BG_CARD,
     BG_DARK,
+    BG_HOVER,
     BORDER,
     CARD_RADIUS,
     GREEN,
@@ -44,6 +45,7 @@ from ui.styles import (
     UPDATE_BAR_BORDER,
     UPDATE_BAR_FG,
 )
+import ui.styles as _styles
 
 try:
     from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
@@ -209,6 +211,86 @@ class HomePage(QWidget):
             _t.timeout.connect(self._preload_from_store)
             _t.start(0)
 
+    # ── Theme nudge banner ────────────────────────────────────────────────────
+
+    def _build_theme_banner(self) -> "QFrame | None":
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if qs.value("ui/theme_nudge_dismissed", False, type=bool):
+            return None
+
+        active = _styles.get_active_theme_name()
+
+        banner = QFrame()
+        banner.setStyleSheet(
+            f"QFrame {{ background:{UPDATE_BAR_BG}; border-bottom:1px solid {UPDATE_BAR_BORDER}; }}"
+        )
+        row = QHBoxLayout(banner)
+        row.setContentsMargins(14, 6, 10, 6)
+        row.setSpacing(8)
+
+        lbl = QLabel("Choose a theme:")
+        lbl.setStyleSheet(
+            f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+        )
+        row.addWidget(lbl)
+
+        _THEMES = [
+            ("Arctic Clean",  "☀  Light"),
+            ("Midnight Pro",  "🌙  Dark"),
+            ("Obsidian Neon", "✦  Neon"),
+        ]
+
+        def _dismiss(save_theme: str | None = None) -> None:
+            if save_theme:
+                _styles.set_active_theme_name(save_theme)
+                lbl.setText(f"Theme '{save_theme}' saved — restart NetSentinel to apply.")
+                for b in _btn_refs:
+                    b.setEnabled(False)
+                close_btn.setVisible(False)
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(2500, banner.hide)
+            else:
+                banner.hide()
+            QSettings("NetSentinel", "NetSentinel").setValue("ui/theme_nudge_dismissed", True)
+
+        _btn_refs: list[QPushButton] = []
+        for theme_name, theme_label in _THEMES:
+            btn = QPushButton(theme_label)
+            btn.setFixedHeight(24)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if theme_name == active:
+                btn.setStyleSheet(
+                    f"QPushButton {{ background:{ACCENT}; color:#ffffff;"
+                    f" border:none; border-radius:3px; font-size:11px; padding:0 10px; }}"
+                )
+            else:
+                btn.setStyleSheet(
+                    f"QPushButton {{ background:transparent; color:{UPDATE_BAR_FG};"
+                    f" border:1px solid {UPDATE_BAR_BORDER}; border-radius:3px;"
+                    f" font-size:11px; padding:0 10px; }}"
+                    f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+                )
+                _name = theme_name
+                btn.clicked.connect(lambda _checked, n=_name: _dismiss(n))
+            _btn_refs.append(btn)
+            row.addWidget(btn)
+
+        row.addStretch()
+
+        close_btn = QPushButton("×")
+        close_btn.setFixedSize(22, 22)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setToolTip("Dismiss")
+        close_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:15px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        close_btn.clicked.connect(lambda: _dismiss(None))
+        row.addWidget(close_btn)
+
+        return banner
+
     # ── UI build ──────────────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
@@ -217,6 +299,12 @@ class HomePage(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
+
+        # ── Theme nudge banner (one-time, dismissed via QSettings) ───────────
+        _banner = self._build_theme_banner()
+        if _banner is not None:
+            outer.addWidget(_banner)
+        # ─────────────────────────────────────────────────────────────────────
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)

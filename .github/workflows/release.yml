@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # Sigstore OIDC for keyless cosign signing
 
 jobs:
   # ── Windows ────────────────────────────────────────────────────────────────
@@ -262,15 +263,65 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    permissions:
+      contents: write
+      id-token: write   # Sigstore OIDC for keyless cosign signing
     steps:
       - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts/
 
+      - name: Resolve version
+        id: ver
+        run: |
+          VER="${{ github.ref_name }}"
+          VER="${VER#v}"
+          echo "VERSION=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Generate SHA256SUMS.txt
+        run: |
+          VER="${{ steps.ver.outputs.VERSION }}"
+          cd artifacts
+          # Collect all release files into a flat list and hash them
+          find . -type f \( \
+            -name "NetSentinel-Setup-*.exe" \
+            -o -name "NetSentinel-*.msix" \
+            -o -name "NetSentinel-svc.exe" \
+            -o -name "NetSentinel-macOS.zip" \
+            -o -name "NetSentinel-cli-macOS" \
+            -o -name "NetSentinel" \
+            -o -name "NetSentinel-cli-linux" \
+          \) | while read -r f; do
+            sha256sum "$f" | awk -v base="$(basename "$f")" '{print $1 "  " base}'
+          done | sort > ../SHA256SUMS.txt
+          echo "Generated SHA256SUMS.txt:"
+          cat ../SHA256SUMS.txt
+
+      - name: Sign Windows installer with cosign
+        run: |
+          VER="${{ steps.ver.outputs.VERSION }}"
+          INSTALLER="artifacts/windows-installer/NetSentinel-Setup-${VER}.exe"
+          if [ -f "$INSTALLER" ]; then
+            cosign sign-blob \
+              --bundle "NetSentinel-Setup-${VER}.exe.bundle" \
+              "$INSTALLER"
+            echo "Signed: $INSTALLER"
+          else
+            echo "Installer not found — skipping cosign"
+          fi
+
       - name: Create GitHub Release
+        id: gh_release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
@@ -321,6 +372,36 @@ jobs:
             artifacts/macos-cli/NetSentinel-cli-macOS
             artifacts/linux-binary/NetSentinel
             artifacts/linux-cli/NetSentinel-cli-linux
+            SHA256SUMS.txt
+            NetSentinel-Setup-*.exe.bundle
+
+      - name: Submit to VirusTotal
+        id: vt
+        continue-on-error: true
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: |
+          VER="${{ steps.ver.outputs.VERSION }}"
+          DL_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/NetSentinel-Setup-${VER}.exe"
+          python scripts/vt_scan.py "$DL_URL"
+
+      - name: Prepend security section to release body
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER="${{ steps.ver.outputs.VERSION }}"
+          RELEASE_ID="${{ steps.gh_release.outputs.id }}"
+          SHA256_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SHA256SUMS.txt"
+          BUNDLE="NetSentinel-Setup-${VER}.exe.bundle"
+          VT_PERMALINK="${{ steps.vt.outputs.VT_PERMALINK }}"
+
+          ARGS="$RELEASE_ID $VER $SHA256_URL --bundle-name $BUNDLE"
+          if [ -n "$VT_PERMALINK" ]; then
+            ARGS="$ARGS --vt-permalink $VT_PERMALINK"
+          fi
+
+          python scripts/update_release_body.py $ARGS
 
   # ── Winget submission ──────────────────────────────────────────────────────
   # Only runs after the GitHub Release job succeeds (needs: [release]).

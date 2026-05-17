@@ -7,7 +7,7 @@
 
 # NetSentinel
 
-The free, open-source network troubleshooting tool that replaces five separate utilities. Runs 100% locally.
+The free, open-source network monitor that works with **any** router, modem, or access point — not just the brands it was built for. Runs 100% locally.
 
 <p align="center">
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
@@ -100,6 +100,62 @@ All analysis runs 100% locally. Nothing leaves your machine unless you explicitl
 
 ---
 
+## Works with any hardware — open plugin protocol
+
+Most network monitoring tools are locked to their own ecosystem. Ubiquiti works with UniFi. Synology works with Synology. If your hardware is not on the supported list, you are out of luck.
+
+NetSentinel takes a different approach: **an open plugin protocol that any Python script can implement.**
+
+The full interface is four functions and two variables:
+
+```python
+HARDWARE_NAME = "My Router XYZ"   # displayed in the app
+HARDWARE_TYPE = "router"           # router | modem | ap | switch | other
+
+def get_info()    -> dict   # static metadata: model, firmware, IP
+def get_status()  -> dict   # live data: WAN IP, uptime, signal, speed
+def get_clients() -> list   # connected devices: ip, mac, hostname (optional)
+```
+
+That is the entire contract. Any `.py` file that satisfies it becomes a first-class NetSentinel integration.
+
+### How users create integrations
+
+The **Integrate Hardware** page (Extend section in the nav) walks through the process in four steps:
+
+1. **Find your hardware's API** — GitHub search strings, Home Assistant integration library, and a five-step browser dev-tools workflow (F12 → Network tab → Copy as cURL) to capture the exact API calls your router admin panel makes
+2. **Write the script** — a ready-to-run Python template you fill in, or hand to an AI
+3. **Test and import** — NetSentinel validates the plugin via AST (no code executed during validation), then runs it in a sandboxed subprocess so a buggy script cannot crash the app; output appears inline
+4. **Share** — submit a working script as a GitHub Issue; reviewed and merged as a built-in integration for all users
+
+### The AI angle
+
+An AI assistant (Claude, ChatGPT, Gemini) can write a working plugin for most hardware in about 10 minutes if you give it the right input. The page includes three copy-ready AI prompts:
+
+- **Prompt A** — general: "write a script for my Brand Model at 192.168.1.1, I need WAN IP, uptime, clients, and speed"
+- **Prompt B** — from cURL: paste the captured request from your browser dev tools and ask the AI to convert it to a full plugin (this produces the best results)
+- **Prompt C** — debug: paste a broken script and error message and ask the AI to fix it
+
+### Current status and roadmap
+
+| Capability | Status |
+|---|---|
+| Plugin import with AST validation | ✅ Live in v1.9.8 |
+| Sandboxed subprocess test with inline output | ✅ Live in v1.9.8 |
+| In-app guidance, template, and AI prompts | ✅ Live in v1.9.8 |
+| Plugin clients → Devices table (with source badge) | 🔜 Next milestone |
+| Plugin status → Overview hardware tile | 🔜 Next milestone |
+| Plugin device names → Topology diagram | 🔜 Next milestone |
+| Community plugin library (built-in integrations) | 🔜 Depends on submissions |
+
+The test-and-validate workflow is live now. Data flowing from a plugin into the rest of the app is the next development sprint.
+
+### Validation approach
+
+The two reference integrations built into NetSentinel (TP-Link Deco mesh, ZTE MC889 5G modem) are being rebuilt using only the in-app plugin guide and an AI assistant — no internal documentation. If the workflow produces working scripts for those devices, it works for anything. Results and scripts will be published as the first entries in the community plugin library.
+
+---
+
 ## Quick start
 
 1. Install NetSentinel — see [Install](#install) above
@@ -133,6 +189,7 @@ All analysis runs 100% locally. Nothing leaves your machine unless you explicitl
 | Geolocation map | Plots internet-facing IPs on an offline world map using MaxMind GeoLite2-City — no API key, no external calls |
 | Topology diagram | Visual topology diagram: flat star by default; upgrades to a three-tier mesh tree (Gateway → Satellites → Clients grouped by satellite) when Deco credentials are configured — devices invisible to the mesh attach directly to the gateway so nothing is dropped |
 | Mesh router integration | Pulls live data from your mesh gateway — Deco-assigned device names replace rDNS guesses in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download rates from the router's own counters. Runs silently after each scan when credentials are saved. TP-Link Deco fully supported; architecture supports Eero, Google Nest, Asus ZenWiFi, Netgear Orbi |
+| **Hardware plugin protocol** | **Import any router, modem, or AP via a 4-function Python script. In-app guide covers finding the API, writing the script with AI assistance, testing in a sandboxed subprocess, and submitting to the community library. Plugin data flowing into Devices and Overview is the next milestone — see [Works with any hardware](#works-with-any-hardware--open-plugin-protocol) above.** |
 | Automation hooks | Webhook and script triggers on network events — device down, high RTT, new device discovered |
 | REST API | Read-only local HTTP API at `http://127.0.0.1:8765` — query devices, alerts, and uptime from Home Assistant or scripts |
 | "What's Wrong?" diagnosis | One-click root-cause analysis across slow / dropping / can't-connect symptoms — sequences network, storm, rogue device, and STP checks then surfaces a prioritised plain-English finding |
@@ -209,7 +266,27 @@ The short version: [app.py](app.py) is the GUI entry point; [cli.py](cli.py) is 
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, coding conventions, and PR process.
 
-To add a rogue device signature without writing code, edit [`offenders.json`](offenders.json) and submit a pull request:
+### Hardware plugins (no coding required beyond Python)
+
+If you own a router, modem, or AP that is not yet supported, the highest-value contribution is a working plugin script. Use the **Integrate Hardware** page in the app — the four-step guide and AI prompts get most people to a working script in under 30 minutes.
+
+To submit: open a GitHub Issue titled `[Hardware Plugin] Brand Model XYZ`, attach the `.py` file, describe what `get_status()` returns, and list any `pip install` dependencies. Reviewed scripts are merged as built-in integrations.
+
+**Template for the issue:**
+
+```
+Hardware: Brand Model XYZ
+Firmware tested: vX.Y.Z
+Access method: HTTP REST / HTML scrape / SNMP / SSH
+pip dependencies: requests, beautifulsoup4   (or none)
+get_status() returns: wan_ip, uptime_sec, connected_clients, download_mbps, upload_mbps
+
+[attach your .py file]
+```
+
+### Rogue device signatures (edit a JSON file, no Python needed)
+
+To flag a device that misbehaves on home networks, edit [`offenders.json`](offenders.json) and submit a pull request:
 
 ```json
 {
@@ -243,8 +320,9 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.9.7
+### v1.9.9
 
+- **Hardware plugin protocol** — open integration standard for any router, modem, or AP; import a `.py` file that implements `get_info()`, `get_status()`, and optionally `get_clients()` and it becomes a testable integration; validation uses AST only (no untrusted code executed at import time); Test button runs the script in a sandboxed subprocess so a buggy plugin cannot crash the app; **Integrate Hardware** page (new Extend nav section) walks through finding your device's local API, writing the script with AI assistance (three copy-ready AI prompts included), testing locally, and submitting to the community library; plugin data flowing into the Devices table and Overview tiles is the next development milestone
 - Mesh router integration — live client data pulled directly from TP-Link Deco via its local API (no cloud, no account); Deco-assigned device names replace reverse-DNS hostnames in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download KB/s shown as a tooltip; credentials saved to OS keychain and the scan re-runs silently on every subsequent app start; Network Map upgrades to a three-tier mesh tree (Gateway → Satellites → Clients) when mesh data is present; WiFi Networks page gains real band-usage KPI chips (2.4 GHz / 5 GHz / 6 GHz / Wired client counts from the router) and a "Connected?" column; architecture supports adding Eero, Google Nest, Asus ZenWiFi, and Netgear Orbi via the same `MeshWorker` provider key
 - Protocol Visualizer — animated step-through of 9 real protocols (DHCP, ARP, DNS, TCP, TLS, HTTP, ICMP, NTP, OSPF); each step shows the packet name, frame detail, and a labelled dot travelling between nodes; play/pause/step controls; tabbed with a protocol context panel
 - Log Hub — live network logger output in a filterable table; streams real events as they happen; interesting events (DNS failures, slow gateway, consecutive connection failures) automatically generate a Lab Mode exercise surfaced as a home screen card

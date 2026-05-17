@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 from modules.metric_store import MetricStore
 from ui.expanding_table import ExpandingTable
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, CRITICAL, GREEN, RED,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, CRITICAL, GREEN, RED, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
@@ -65,8 +65,8 @@ def _table(cols: list[str]) -> QTableWidget:
     t.setStyleSheet(
         f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:#EAEAEA;"
         f" alternate-background-color:#F7F9FC; background:{BG_CARD}; border:none; }}"
-        f"QTableWidget::item:hover {{ background:#EEF4FF; }}"
-        f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
+        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
         f" font-weight:bold; padding:4px 5px; border:none; }}"
     )
@@ -350,8 +350,8 @@ class CvePage(QWidget):
         self._table.setStyleSheet(
             f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:#EAEAEA;"
             f" alternate-background-color:#F7F9FC; background:{BG_CARD}; border:none; }}"
-            f"QTableWidget::item:hover {{ background:#EEF4FF; }}"
-            f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+            f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
+            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
             f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
             f" font-weight:bold; padding:4px 5px; border:none; }}"
         )
@@ -503,9 +503,9 @@ class CvePage(QWidget):
             return
         menu = QMenu(self)
         menu.setStyleSheet(
-            f"QMenu {{ background:white; border:1px solid {BORDER}; font-size:11px; }}"
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; font-size:11px; }}"
             f"QMenu::item {{ padding:4px 20px; }}"
-            f"QMenu::item:selected {{ background:#EEF4FF; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         act_state  = menu.addAction("Change State…")
         menu.addSeparator()

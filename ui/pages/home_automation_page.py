@@ -60,6 +60,7 @@ from ui.styles import (
     CHART_PLOT_BG,
     GREEN,
     RED,
+    TABLE_SEL,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -527,7 +528,7 @@ class HomeAutomationPage(QWidget):
             f"  font-weight:bold; padding:4px 5px; border:none;"
             f"  border-right:1px solid #254A6E;"
             f"}}"
-            f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
             f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
             f"QTableWidget::item {{ border-bottom:1px solid #EAEAEA; }}"
         )

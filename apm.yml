@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.9.7
+version: 1.9.9
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -850,6 +850,33 @@ rules:
       Workers known to require this treatment (May 2026):
         CertWorker   → CertPage.certs_changed → cert_worker.set_targets()
         SvcWorker    → ServicePage.services_changed → svc_worker.set_targets()
+
+  - id: RULE-UX6
+    title: "Every item:selected and QMenu::item:selected QSS rule must set both background AND color using theme tokens"
+    severity: blocking
+    description: >
+      Every QSS rule that sets a selected-state background MUST also explicitly
+      set color — and both values MUST use theme tokens, never hardcoded hex.
+
+      Forbidden pattern (causes white-on-white text on dark themes):
+        QTableWidget::item:selected { background: #CCE4F7; }
+        QMenu::item:selected { background: #EEF4FF; }
+
+      Required pattern:
+        QTableWidget::item:selected { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
+        QListWidget::item:selected  { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
+        QMenu::item:selected        { background: {BG_HOVER};  color: {TEXT_PRIMARY}; }
+
+      The root cause: Arctic Clean uses TABLE_SEL=#CCE4F7 (light blue) and dark
+      TEXT_PRIMARY — fine on light. Midnight Pro and Obsidian Neon have light
+      TEXT_PRIMARY. When a page hardcodes #CCE4F7 as the selection background,
+      dark-theme users get light text on a light background (unreadable).
+
+      This rule also applies to hover backgrounds: QPushButton:hover and
+      QTableWidget::item:hover must use {BG_HOVER}, not #EEF4FF.
+
+      Apply to: any new page, any widget stylesheet set via setStyleSheet().
+      Do NOT audit unchanged files as a standalone task.
 
   - id: RULE-FW2
     title: "Every REST API route must appear in rest_api_page endpoint reference in the same session"

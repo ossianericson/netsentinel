@@ -39,6 +39,7 @@ from ui.styles import (
     BORDER,
     GREEN,
     RED,
+    TABLE_SEL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TH_BG,
@@ -65,7 +66,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
         f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
         f" font-weight:bold; padding:4px 8px; border:none; }}"
         f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
     )
     return t
 

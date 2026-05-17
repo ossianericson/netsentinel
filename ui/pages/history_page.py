@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, BG_CARD, BG_DARK, BORDER, CARD_RADIUS, GREEN, AMBER, RED,
+    ACCENT, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, GREEN, AMBER, RED,
     CHART_GRID, CHART_PLOT_BG, CHART_PURPLE,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
 )
@@ -237,7 +237,7 @@ class HistoryPage(QWidget):
         refresh_btn.setStyleSheet(
             f"QPushButton {{ font-size:11px; color:{ACCENT};"
             f" background:{BG_CARD}; border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:#EEF4FF; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
         refresh_btn.clicked.connect(self._refresh)
         title_row.addWidget(refresh_btn)
@@ -344,7 +344,7 @@ class HistoryPage(QWidget):
         return (
             f"QPushButton {{ font-size:11px; background:{BG_CARD}; color:{ACCENT};"
             f" border:1px solid #B0C4D8; border-radius:3px; }}"
-            f"QPushButton:hover {{ background:#EEF4FF; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
 
     def _on_host_changed(self, host: str) -> None:

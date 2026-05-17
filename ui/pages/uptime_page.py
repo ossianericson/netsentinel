@@ -39,6 +39,7 @@ from ui.styles import (
     CARD_RADIUS,
     GREEN,
     RED,
+    TABLE_SEL,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -194,7 +195,7 @@ class UptimePage(QWidget):
             QTableWidget::item {{ padding: 4px 5px; }}
             QTableWidget::item:hover {{ background: {BG_HOVER}; }}
             QTableWidget::item:selected {{
-                background: #CCE4F7; color: {TEXT_PRIMARY};
+                background: {TABLE_SEL}; color: {TEXT_PRIMARY};
             }}
             """
         )

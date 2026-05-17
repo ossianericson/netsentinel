@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    GREEN, RED, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 from modules.automation_hooks import (
     AutomationEngine, AutomationRule, Trigger,
@@ -76,7 +76,7 @@ def _table_style() -> str:
         f"  font-weight:bold; padding:4px 5px; border:none;"
         f"  border-right:1px solid #254A6E;"
         f"}}"
-        f"QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}"
+        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
         f"QTableWidget::item {{ border-bottom:1px solid #EAEAEA; }}"
         f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"

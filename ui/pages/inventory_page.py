@@ -26,7 +26,7 @@ from ui.expanding_table import ExpandingTable
 
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    BORDER, CARD_RADIUS, GREEN, RED, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
 if TYPE_CHECKING:
@@ -160,7 +160,7 @@ class InventoryPage(QWidget):
         rb.setStyleSheet(
             f"QPushButton {{ font-size:11px; color:{ACCENT}; background:{BG_CARD};"
             f" border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:#EEF4FF; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
         rb.clicked.connect(self._refresh)
         ctrl_row.addWidget(rb)
@@ -224,7 +224,7 @@ class InventoryPage(QWidget):
                 border:none; outline:none;
             }}
             QTableWidget::item {{ padding:3px 5px; border-bottom:1px solid #EAEAEA; }}
-            QTableWidget::item:selected {{ background:#CCE4F7; color:{TEXT_PRIMARY}; }}
+            QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}
             QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}
             QHeaderView::section {{
                 background:{TH_BG}; color:{TH_TEXT};
@@ -275,7 +275,7 @@ class InventoryPage(QWidget):
         return (
             f"QPushButton {{ font-size:11px; background:{BG_CARD}; color:{ACCENT};"
             f" border:1px solid #B0C4D8; border-radius:3px; }}"
-            f"QPushButton:hover {{ background:#EEF4FF; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
 
     # ── KPI helper ────────────────────────────────────────────────────────────
