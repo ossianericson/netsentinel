@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+import base64
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -102,7 +103,7 @@ def main() -> None:
     stats = poll_analysis(analysis_id)
 
     # Build the permalink from the URL hash (VT's stable URL format)
-    url_id = urllib.parse.b64encode(
+    url_id = base64.b64encode(
         (download_url + "\n").encode()
     ).rstrip(b"=").decode()
     permalink = f"https://www.virustotal.com/gui/url/{url_id}"
