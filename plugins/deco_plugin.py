@@ -13,13 +13,17 @@ lookup or environment variable.  This script is for branch testing only.
 """
 
 import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ── Metadata (required) ───────────────────────────────────────────────────────
 HARDWARE_NAME = "TP-Link Deco XE75"
 HARDWARE_TYPE = "router"
 HARDWARE_IP   = "192.168.68.1"       # TODO: remove before merge — edit for your LAN
 USERNAME      = "admin"
-PASSWORD      = "changeme"           # TODO: remove before merge — set your Deco password
+PASSWORD      = "a8-/Ba8+ZZJ_b9z"           # TODO: remove before merge — set your Deco password
 
 
 # ── Required interface ────────────────────────────────────────────────────────

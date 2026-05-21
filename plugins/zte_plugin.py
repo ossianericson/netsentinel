@@ -13,12 +13,18 @@ lookup or environment variable.  This script is for branch testing only.
 """
 
 import json
+import sys
+from pathlib import Path
+
+# Ensure the repo root is on sys.path so 'modules.*' imports work whether the
+# script is run from the repo root, the plugins/ dir, or via PluginWorker.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ── Metadata (required) ───────────────────────────────────────────────────────
 HARDWARE_NAME = "ZTE MC889"
 HARDWARE_TYPE = "modem"
 HARDWARE_IP   = "192.168.254.1"      # TODO: remove before merge — edit for your LAN
-PASSWORD      = "changeme"           # TODO: remove before merge — set your modem password
+PASSWORD      = "passwordfix"           # TODO: remove before merge — set your modem password
 
 
 # ── Required interface ────────────────────────────────────────────────────────
