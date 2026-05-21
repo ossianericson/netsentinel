@@ -8,8 +8,9 @@ Test standalone first:
 
 Then import via Hardware Integration page in NetSentinel and press Test.
 
-BEFORE MERGING TO MAIN: remove hard-coded PASSWORD — replace with keyring
-lookup or environment variable.  This script is for branch testing only.
+Credentials are read from the OS keychain — no passwords in this file.
+Connect once via the Mesh Router page in NetSentinel and the password will
+be saved automatically.
 """
 
 import json
@@ -21,30 +22,59 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # ── Metadata (required) ───────────────────────────────────────────────────────
 HARDWARE_NAME = "TP-Link Deco XE75"
 HARDWARE_TYPE = "router"
-HARDWARE_IP   = "192.168.68.1"       # TODO: remove before merge — edit for your LAN
-USERNAME      = "admin"
-PASSWORD      = "a8-/Ba8+ZZJ_b9z"           # TODO: remove before merge — set your Deco password
+HARDWARE_IP   = "192.168.68.1"   # default; keyring lookup uses the saved host at runtime
+
+
+def _load_credentials() -> tuple[str, str]:
+    """Return (host, password) from the OS keychain.
+
+    Checks in order:
+      1. NetSentinel/mesh     — saved by the Mesh Router page
+      2. NetSentinel/hardware — saved by the Hardware Integration page password field
+    """
+    try:
+        import keyring
+        pw = (keyring.get_password("NetSentinel/mesh", HARDWARE_IP)
+              or keyring.get_password("NetSentinel/hardware", HARDWARE_IP))
+        if pw:
+            return HARDWARE_IP, pw
+    except Exception:
+        pass
+    raise RuntimeError(
+        f"No saved password found for Deco at {HARDWARE_IP}. "
+        "Enter the password in the Hardware Integration page and click Save."
+    )
+
+
+# ── Shared client — login once, reuse for both get_status and get_clients ─────
+
+def _get_client():
+    host, password = _load_credentials()
+    from modules.deco_client import DecoMeshClient
+    client = DecoMeshClient(host, password)
+    client.login()
+    return client
 
 
 # ── Required interface ────────────────────────────────────────────────────────
 
 def get_info() -> dict:
+    host, _ = _load_credentials()
     return {
         "name":         HARDWARE_NAME,
         "type":         HARDWARE_TYPE,
-        "ip":           HARDWARE_IP,
+        "ip":           host,
         "manufacturer": "TP-Link",
         "model":        "Deco XE75",
-        "firmware":     None,   # not exposed by the API without an extra call
+        "firmware":     None,
     }
 
 
 def get_status() -> dict:
-    from modules.deco_client import DecoMeshClient, MeshAuthError, MeshApiError
+    from modules.deco_client import MeshAuthError, MeshApiError
     try:
-        client = DecoMeshClient(HARDWARE_IP, PASSWORD)
-        client.login()
-        units = client.get_mesh_units()
+        client = _get_client()
+        units   = client.get_mesh_units()
         clients = client.get_all_clients(units=units)
         return {
             "wan_ip":            None,
@@ -70,12 +100,11 @@ def get_status() -> dict:
 # ── Optional interface ────────────────────────────────────────────────────────
 
 def get_clients() -> list:
-    from modules.deco_client import DecoMeshClient, MeshAuthError, MeshApiError
+    from modules.deco_client import MeshAuthError, MeshApiError
     try:
-        client = DecoMeshClient(HARDWARE_IP, PASSWORD)
-        client.login()
-        units = client.get_mesh_units()
-        raw = client.get_all_clients(units=units)
+        client = _get_client()
+        units  = client.get_mesh_units()
+        raw    = client.get_all_clients(units=units)
         return [
             {
                 "ip":       c.ip,
@@ -91,7 +120,7 @@ def get_clients() -> list:
 
 
 # ── Standalone test ───────────────────────────────────────────────────────────
-if __name__ == "__main__":
+if __name__ == "__main__" and "--netsentinel" not in sys.argv:
     print("=== Hardware Info ===")
     print(json.dumps(get_info(), indent=2, default=str))
     print("\n=== Live Status ===")
@@ -103,9 +132,58 @@ if __name__ == "__main__":
 import sys as _sys
 if "--netsentinel" in _sys.argv:
     import json as _json
+    from modules.deco_client import (
+        DecoMeshClient, MeshAuthError, MeshApiError, _norm_mac, _decode_name,
+    )
+    try:
+        _host, _pw = _load_credentials()
+        _client = DecoMeshClient(_host, _pw)
+        _client.login()
+        _units  = _client.get_mesh_units()
+
+        # Single bulk call — 1 request instead of N-per-node requests.
+        # Falls back to per-node only if the bulk call returns nothing.
+        try:
+            _raw  = _client._request("admin/client?form=client_list", {"operation": "read"})
+            _bulk = [c for c in _raw.get("client_list", []) if c.get("online", False)]
+        except Exception:
+            _bulk = []
+
+        if _bulk:
+            _client_list = [
+                {
+                    "ip":       c.get("ip", ""),
+                    "mac":      _norm_mac(c.get("mac", "")),
+                    "hostname": _decode_name(c.get("name") or "") or _norm_mac(c.get("mac", "")),
+                }
+                for c in _bulk
+            ]
+        else:
+            _client_list = [
+                {"ip": c.ip, "mac": c.mac, "hostname": c.name,
+                 "band": c.band, "unit": c.unit_name}
+                for c in _client.get_all_clients(units=_units)
+            ]
+
+        _status = {
+            "wan_ip": None, "uptime_sec": None, "download_mbps": None,
+            "upload_mbps": None, "signal_dbm": None,
+            "connected_clients": len(_client_list), "mesh_nodes": len(_units),
+            "extra": {"nodes": [{"name": u.name, "mac": u.mac, "role": u.role}
+                                 for u in _units]},
+        }
+        _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": _host,
+                 "manufacturer": "TP-Link", "model": "Deco XE75", "firmware": None}
+    except (MeshAuthError, MeshApiError, RuntimeError) as _exc:
+        _status = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
+                   "upload_mbps": None, "signal_dbm": None,
+                   "connected_clients": None, "extra": {"error": str(_exc)}}
+        _client_list = []
+        _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP,
+                 "manufacturer": "TP-Link", "model": "Deco XE75", "firmware": None}
     _sys.stdout.write(_json.dumps({
-        "info":    get_info(),
-        "status":  get_status(),
-        "clients": get_clients(),
+        "info":    _info,
+        "status":  _status,
+        "clients": _client_list,
     }, default=str) + "\n")
     _sys.exit(0)

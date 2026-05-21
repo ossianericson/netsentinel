@@ -40,7 +40,7 @@ class PluginWorker(QThread):
     result = pyqtSignal(dict)
     error  = pyqtSignal(str)
 
-    def __init__(self, script_path: str, timeout: int = 20,
+    def __init__(self, script_path: str, timeout: int = 60,
                  parent=None) -> None:
         super().__init__(parent)
         self._path    = script_path

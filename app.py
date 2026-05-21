@@ -353,6 +353,16 @@ def main():
     # Enable high-DPI
     os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 
+    # Tell Windows to use NetSentinel's icon in the taskbar instead of Python's.
+    # Must be called before QApplication is created.
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "netsentinel.netsentinel.1"
+        )
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
     app.setApplicationVersion("1.9.18")

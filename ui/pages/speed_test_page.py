@@ -407,6 +407,9 @@ class SpeedTestPage(QWidget):
     #: Emitted when a speed test completes successfully. Carries the SpeedTestResult.
     test_completed = pyqtSignal(object)
 
+    modem_pause_requested  = pyqtSignal()  # pause ZteWorker before capturing signal
+    modem_resume_requested = pyqtSignal()  # restart ZteWorker after test finishes
+
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._store = store  # MetricStore | None
@@ -958,10 +961,15 @@ class SpeedTestPage(QWidget):
         self._anim_current = 0.0
         self._set_status("Connecting to server…")
 
+        # Snapshot credentials before pause fires — _on_modem_disconnect clears them
+        _zte_host = self._zte_host
+        _zte_pw   = self._zte_password
+        self.modem_pause_requested.emit()
+
         self._test_worker = SpeedTestWorker(
             server_id=self._selected_server_id,
-            zte_host=self._zte_host,
-            zte_password=self._zte_password,
+            zte_host=_zte_host,
+            zte_password=_zte_pw,
             parent=self,
         )
         self._test_worker.phase_changed.connect(self._on_phase_changed)
@@ -1012,6 +1020,7 @@ class SpeedTestPage(QWidget):
 
     @pyqtSlot(object)
     def _on_result_ready(self, result: object) -> None:
+        self.modem_resume_requested.emit()
         self._anim_timer.stop()
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶   Run Speed Test")
@@ -1072,6 +1081,7 @@ class SpeedTestPage(QWidget):
 
     @pyqtSlot(str)
     def _on_test_error(self, msg: str) -> None:
+        self.modem_resume_requested.emit()
         self._anim_timer.stop()
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶   Run Speed Test")

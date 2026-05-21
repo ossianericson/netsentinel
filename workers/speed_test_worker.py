@@ -75,14 +75,18 @@ class SpeedTestWorker(QThread):
         # ── 1. Capture ZTE signal snapshot before the test stresses the link ──
         zte_snapshot: Optional[dict] = None
         if self._zte_host and self._zte_password:
-            try:
-                from modules.zte_client import ZteMC889Client
-                client = ZteMC889Client(self._zte_host)
-                client.login(self._zte_password)
-                signal = client.get_signal_data()
-                zte_snapshot = dataclasses.asdict(signal)
-            except Exception:
-                pass  # never block the speed test because of a modem fetch failure
+            import time as _t
+            for _attempt in range(3):
+                try:
+                    from modules.zte_client import ZteMC889Client
+                    client = ZteMC889Client(self._zte_host)
+                    client.login(self._zte_password)
+                    signal = client.get_signal_data()
+                    zte_snapshot = dataclasses.asdict(signal)
+                    break
+                except Exception:
+                    if _attempt < 2:
+                        _t.sleep(2.0)  # ZteWorker may still hold the session; retry
 
         # ── 2. Run the speed test ─────────────────────────────────────────────
         try:

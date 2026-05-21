@@ -1225,9 +1225,14 @@ class Dashboard(QMainWindow):
         # Mesh enrichment — populated when MeshRouterPage scan completes
         self._mesh_enrichment: dict = {}   # normalised MAC → MeshClient
 
-        # Plugin enrichment — populated when HardwareIntegrationPage Test succeeds
-        self._plugin_enrichment: dict = {}   # normalised MAC → client dict
-        self._plugin_hardware_name: str = "" # e.g. "TP-Link Deco XE75"
+        # Plugin enrichment — one entry per plugin path; merged in _apply_mesh_enrichment
+        # dict[path, dict[mac, client_dict]] — supports multiple router/AP plugins
+        self._plugin_enrichments: dict[str, dict] = {}
+        self._plugin_hardware_name: str = ""  # name of last-run plugin
+
+        # Last modem credentials — used to resume ZteWorker after plugin test
+        self._last_modem_host: str = ""
+        self._last_modem_pw:   str = ""
 
         # M1 satellite grouping state
         self._m1_sat_expanded: dict = {}   # node_name → bool (default False = collapsed)
@@ -2206,6 +2211,8 @@ class Dashboard(QMainWindow):
 
         from ui.pages.speed_test_page import SpeedTestPage
         self._speed_test_page = SpeedTestPage(store=self._store, parent=None)
+        self._speed_test_page.modem_pause_requested.connect(self._on_modem_disconnect)
+        self._speed_test_page.modem_resume_requested.connect(self._resume_modem_worker)
 
         from ui.pages.home_automation_page import HomeAutomationPage
         self._ha_page = HomeAutomationPage(store=self._store, parent=None)
@@ -2269,7 +2276,9 @@ class Dashboard(QMainWindow):
 
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
-        self._hardware_integration_page.plugin_result.connect(self._on_plugin_result)
+        self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
+        self._hardware_integration_page.modem_pause_requested.connect(self._on_modem_disconnect)
+        self._hardware_integration_page.modem_resume_requested.connect(self._resume_modem_worker)
 
         from ui.pages.mesh_router_page import MeshRouterPage
         self._mesh_router_page = MeshRouterPage(parent=None)
@@ -2548,7 +2557,7 @@ class Dashboard(QMainWindow):
         # ── EXTEND (collapsed by default) ───────────────────────────────────
         self._nav_extend_sep = self._nav.count()
         self._nav_add_section("Extend", icon="⬡", collapsed_by_default=True)
-        self._nav_add_page("⊕", "Integrate Hardware", self._hardware_integration_page)
+        self._nav_add_page("⊕", "Hardware", self._hardware_integration_page)
         self._nav_separators.add(self._nav_extend_sep)
 
         # Apply initial collapse for ALL groups that start collapsed (both level-0
@@ -3323,6 +3332,9 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Lab Mode",            self._lab_mode_page)
         self._nav_add_rail_item("Feature Guide",       self._discover_page)
         self._nav_add_rail_item("Help & Reference",    self._help_tab_widget)
+
+        self._nav_begin_section("Extend", "plug")
+        self._nav_add_rail_item("Hardware",  self._hardware_integration_page)
 
     #── Favourites / pinnable pages ───────────────────────────────────────────
 
@@ -8811,15 +8823,18 @@ class Dashboard(QMainWindow):
 
         self._compute_suggestions()
 
-        # Auto-navigate to Overview when the user kicked off a scan from the home page
-        if getattr(self, "_scan_from_home", False) and len(devices) > 0:
+        # Auto-navigate to Overview on the very first scan only (home page onboarding).
+        # After that the user knows the app — leave them where they are.
+        _qs = QSettings("NetSentinel", "NetSentinel")
+        _first_scan = not _qs.value("app/has_scanned_before", False, type=bool)
+        if getattr(self, "_scan_from_home", False) and len(devices) > 0 and _first_scan:
             self._scan_from_home = False
+            _qs.setValue("app/has_scanned_before", True)
             self._nav_rail_go_to("Overview")
 
-        # Re-apply cached mesh enrichment immediately so names/nodes are visible
-        # without waiting for the async worker.  The worker will update with fresh
-        # data once it finishes (overwriting this with current Deco state).
-        if getattr(self, "_mesh_enrichment", None):
+        # Re-apply cached mesh/plugin enrichment immediately so names/nodes are
+        # visible without waiting for the async worker.
+        if self._mesh_enrichment or any(self._plugin_enrichments.values()):
             self._apply_mesh_enrichment()
 
         # Mesh enrichment — show button when a gateway is found; auto-run if
@@ -8984,30 +8999,87 @@ class Dashboard(QMainWindow):
                         pass
 
     @pyqtSlot(dict)
-    def _on_plugin_result(self, data: dict) -> None:
-        """Receive a successful plugin Test result and enrich the Devices table."""
+    def _on_hardware_plugin_result(self, data: dict) -> None:
+        """Route a successful plugin Test result to the relevant existing page.
+
+        modem plugins  → Modem page + Overview tile (via _on_modem_signal)
+        router/ap/mesh → Devices table hostname enrichment (via _plugin_enrichments[path])
+        """
+        import time as _t
         from modules.deco_client import _norm_mac
+
+        info    = data.get("info", {})
+        status  = data.get("status", {})
         clients = data.get("clients", [])
-        self._plugin_hardware_name = data.get("info", {}).get("name", "plugin")
-        self._plugin_enrichment = {
+        hw_type = info.get("type", "")
+        hw_name = info.get("name", "plugin")
+        self._plugin_hardware_name = hw_name
+
+        # ── Modem plugins: route signal to Modem page + Overview tile ─────────
+        if hw_type == "modem":
+            extra = status.get("extra", {})
+            self._on_modem_signal({
+                "ts":               int(_t.time()),
+                "wan_ip":           status.get("wan_ip"),
+                "wan_status":       None,
+                "firmware_version": extra.get("firmware"),
+                "network_type":     extra.get("network_type"),
+                "signal_bars":      extra.get("signal_bars"),
+                "mcc":              extra.get("mcc"),
+                "mnc":              extra.get("mnc"),
+                "cell_id":          extra.get("cell_id"),
+                "enb_id":           extra.get("enb_id"),
+                "nr5g_rsrp_dbm":    extra.get("nr5g_rsrp_dbm"),
+                "nr5g_sinr_db":     extra.get("nr5g_sinr_db"),
+                "nr5g_rsrq_db":     extra.get("nr5g_rsrq_db"),
+                "nr5g_band":        extra.get("nr5g_band"),
+                "nr5g_pci":         extra.get("nr5g_pci"),
+                "nr5g_arfcn":       extra.get("nr5g_arfcn"),
+                "lte_rsrp_dbm":     extra.get("lte_rsrp_dbm"),
+                "lte_snr_db":       extra.get("lte_snr_db"),
+                "lte_rsrq_db":      extra.get("lte_rsrq_db"),
+                "lte_band":         extra.get("lte_band"),
+                "lte_pci":          extra.get("lte_pci"),
+                "lte_earfcn":       extra.get("lte_earfcn"),
+                "endc_info":        extra.get("endc_info"),
+            })
+            return  # modem plugins have no LAN clients to enrich
+
+        # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
+        path = data.get("_path", hw_name)
+        self._plugin_enrichments[path] = {
             _norm_mac(c.get("mac", "")): c
             for c in clients
             if c.get("mac")
         }
         self._apply_mesh_enrichment()
-        n = len(self._plugin_enrichment)
+        n = len(self._plugin_enrichments[path])
         if hasattr(self, "_m1_status"):
             summary = getattr(self, "_m1_scan_summary", "")
-            label = self._plugin_hardware_name
             self._m1_status.setText(
-                f"{summary}  ·  {label}: {n} device{'s' if n != 1 else ''} enriched"
+                f"{summary}  ·  {hw_name}: {n} device{'s' if n != 1 else ''} enriched"
             )
+
+        # Re-render topology so plugin-supplied hostnames/nodes appear on the map
+        if getattr(self, "_m1_result", None) and hasattr(self, "_topology_widget"):
+            try:
+                gw_ip  = self._net_info.get("gateway")     if self._net_info else None
+                gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+                self._topology_widget.render(
+                    self._m1_result.get("devices", []), gw_ip, gw_mac,
+                )
+            except Exception:
+                pass
 
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient and plugin client data into the M1 table rows."""
         if not self._m1_result:
             return
-        if not self._mesh_enrichment and not getattr(self, "_plugin_enrichment", None):
+        # Merge all per-plugin enrichment dicts into one flat MAC→client map
+        _all_plugin: dict = {}
+        for _pe in self._plugin_enrichments.values():
+            _all_plugin.update(_pe)
+        if not self._mesh_enrichment and not _all_plugin:
             return
 
         from PyQt6.QtGui import QColor
@@ -9052,15 +9124,19 @@ class Dashboard(QMainWindow):
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
 
-        # Plugin enrichment — update hostname column for any matching MAC
-        plugin_enrichment = getattr(self, "_plugin_enrichment", {})
+        # Plugin enrichment — update hostname column for any matching MAC or IP
+        plugin_enrichment = _all_plugin
         plugin_name = getattr(self, "_plugin_hardware_name", "plugin")
         if plugin_enrichment:
+            # Build IP index as fallback for MAC-randomized devices (iOS/Android)
+            plugin_by_ip = {c.get("ip"): c for c in plugin_enrichment.values() if c.get("ip")}
             for row in range(self._m1_table.rowCount()):
                 mac_item = self._m1_table.item(row, 2)
-                if not mac_item:
-                    continue
-                pc = plugin_enrichment.get(_norm_mac(mac_item.text()))
+                pc = plugin_enrichment.get(_norm_mac(mac_item.text())) if mac_item else None
+                if pc is None:
+                    ip_item = self._m1_table.item(row, 0)
+                    if ip_item:
+                        pc = plugin_by_ip.get(ip_item.text())
                 if not pc:
                     continue
                 hostname = pc.get("hostname", "")
@@ -9069,6 +9145,20 @@ class Dashboard(QMainWindow):
                     name_item.setForeground(QColor(TEXT_PRIMARY))
                     name_item.setToolTip(f"Name from {plugin_name}")
                     self._m1_table.setItem(row, 1, name_item)
+                unit = pc.get("unit", "")
+                if unit:
+                    node_item = QTableWidgetItem(unit)
+                    node_item.setForeground(QColor(TEXT_PRIMARY))
+                    node_item.setToolTip(f"Node from {plugin_name}")
+                    self._m1_table.setItem(row, 6, node_item)
+                    self._m1_table.setColumnHidden(6, False)
+                band = pc.get("band", "")
+                if band:
+                    band_item = QTableWidgetItem(band)
+                    band_item.setForeground(QColor(TEXT_PRIMARY))
+                    band_item.setToolTip(f"Band from {plugin_name}")
+                    self._m1_table.setItem(row, 7, band_item)
+                    self._m1_table.setColumnHidden(7, False)
 
         # Mirror enrichment onto DeviceInfo objects so exports include it
         for d in self._m1_result.get("devices", []):
@@ -9431,9 +9521,18 @@ class Dashboard(QMainWindow):
         worker.status.connect(self._on_modem_status)
         self._zte_worker = worker
         worker.start()
+        self._last_modem_host = host
+        self._last_modem_pw   = password
         # Give the speed test page the modem credentials for signal enrichment
         if hasattr(self, "_speed_test_page"):
             self._speed_test_page.set_modem_credentials(host, password)
+
+    def _resume_modem_worker(self) -> None:
+        """Restart ZteWorker after a plugin test, using cached or keyring credentials."""
+        if self._last_modem_host and self._last_modem_pw:
+            self._on_modem_connect(self._last_modem_host, self._last_modem_pw)
+        else:
+            self._trigger_modem_refresh()
 
     @pyqtSlot()
     def _on_modem_disconnect(self) -> None:
@@ -9441,7 +9540,9 @@ class Dashboard(QMainWindow):
         worker = getattr(self, "_zte_worker", None)
         if worker:
             worker.stop()
-            worker.wait(3000)
+            if not worker.wait(3000):
+                worker.terminate()
+                worker.wait(500)
             self._zte_worker = None
         self._last_modem_data = None
         if hasattr(self, "_speed_test_page"):

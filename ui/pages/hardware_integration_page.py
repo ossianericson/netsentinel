@@ -1,15 +1,11 @@
 """
-HardwareIntegrationPage — teach users to integrate any router / modem / AP
-into NetSentinel via a simple Python plugin file.
+HardwareIntegrationPage — Hardware Hub
 
-Layout
-──────
-  Title + subtitle
-  Scrollable body:
-    Step 1  — Find your hardware's local API
-    Step 2  — Write the Python integration script (template + Copy/Save)
-    Step 3  — Test locally then import (.py file → validate → list)
-    Step 4  — Share with the community (GitHub instructions)
+Primary view: live status cards for every imported hardware plugin.
+Each card auto-refreshes on a configurable interval, shows key metrics,
+and expands to a full signal/topology detail panel (v2.1).
+
+Secondary view: collapsible "How to write a plugin" guide (steps 1-4).
 
 Plugin interface contract
 ─────────────────────────
@@ -24,53 +20,64 @@ Plugin interface contract
 
 Scripts are stored as file paths in QSettings("NetSentinel","NetSentinel")
 under the key  hardware/custom_scripts.
-Testing runs the script in a child process so a buggy plugin cannot crash
-the app.
 """
 
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
+import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal
-
-from workers.plugin_worker import PluginWorker
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
+from workers.plugin_worker import PluginWorker
 from ui.styles import (
     ACCENT,
     ACCENT_DARK,
     ACCENT_LITE,
     AMBER,
+    BG_ALT_ROW,
     BG_CARD,
     BG_DARK,
+    BG_HOVER,
     BORDER,
     CARD_HDR_BORDER,
     CARD_RADIUS,
     GREEN,
     RED,
+    TABLE_ROW_BORDER,
+    TABLE_SEL,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    TH_BG,
+    TH_BORDER,
+    TH_TEXT,
 )
 
-_SETTINGS_KEY = "hardware/custom_scripts"
+_SETTINGS_KEY    = "hardware/custom_scripts"
+_SETTINGS_RESULT = "hardware/last_result/{}"  # .format(path_hash)
+_AUTO_REFRESH_S  = 300  # 5 minutes default
 
 _TEMPLATE = '''\
 """
@@ -93,9 +100,29 @@ import json
 # ── Metadata (required) ───────────────────────────────────────────────────────
 HARDWARE_NAME = "My Router XYZ"     # displayed in the app
 HARDWARE_TYPE = "router"            # router | modem | ap | switch | other
-HARDWARE_IP   = "192.168.1.1"       # your device's LAN address
+HARDWARE_IP   = "192.168.1.1"       # your device\'s LAN address
 USERNAME      = "admin"
-PASSWORD      = "admin"
+
+
+# ── Credentials (read from OS keychain — never hard-code passwords) ───────────
+
+def _load_password() -> str:
+    """Return the saved admin password from the OS keychain.
+
+    Save the password once using the Hardware Integration page in NetSentinel
+    (the password field shown below each imported script).
+    """
+    try:
+        import keyring
+        pw = keyring.get_password("NetSentinel/hardware", HARDWARE_IP)
+        if pw:
+            return pw
+    except Exception:
+        pass
+    raise RuntimeError(
+        f"No password saved for {HARDWARE_IP}. "
+        "Enter and save the password in the Hardware Integration page."
+    )
 
 
 # ── Required interface ────────────────────────────────────────────────────────
@@ -113,48 +140,26 @@ def get_info() -> dict:
 
 
 def get_status() -> dict:
-    """Live status — called periodically when the page is visible.
-
-    Connect to your device here using whatever method works:
-      - HTTP REST (most modern routers)      - Form-based login + scrape (older routers)
-      - SNMP (managed switches / APs)
-      - SSH / Paramiko
-
-    Return None for any field you cannot yet populate.
-    """
-    # ── Example: HTTP REST ────────────────────────────────────────────────────
-    # import requests
-    # session = requests.Session()
-    # session.post(f"http://{HARDWARE_IP}/login",
-    #              data={"username": USERNAME, "password": PASSWORD}, timeout=5)
-    # data = session.get(f"http://{HARDWARE_IP}/api/status", timeout=5).json()
-
+    """Live status — called periodically when the page is visible."""
     return {
-        "wan_ip":            None,   # str   — public WAN IP
-        "uptime_sec":        None,   # int   — device uptime in seconds
-        "download_mbps":     None,   # float — current download throughput
-        "upload_mbps":       None,   # float — current upload throughput
-        "signal_dbm":        None,   # float — RF signal level (modem / AP)
-        "connected_clients": [],     # populated by get_clients() or inline here
-        "extra":             {},     # any additional fields you want visible
+        "wan_ip":            None,
+        "uptime_sec":        None,
+        "download_mbps":     None,
+        "upload_mbps":       None,
+        "signal_dbm":        None,
+        "connected_clients": [],
+        "extra":             {},
     }
 
 
 # ── Optional interface ────────────────────────────────────────────────────────
 
 def get_clients() -> list:
-    """Currently connected devices — optional but recommended.
-
-    Each item should be a dict with at least:
-        ip, mac, hostname   (any value can be None if unknown)
-    """
-    return [
-        # {"ip": "192.168.1.10", "mac": "aa:bb:cc:dd:ee:ff", "hostname": "mylaptop"},
-    ]
+    return []
 
 
 # ── Standalone test ───────────────────────────────────────────────────────────
-if __name__ == "__main__":
+if __name__ == "__main__" and "--netsentinel" not in sys.argv:
     print("=== Hardware Info ===")
     print(json.dumps(get_info(), indent=2, default=str))
     print("\\n=== Live Status ===")
@@ -179,7 +184,7 @@ if "--netsentinel" in _sys.argv:
 
 def _btn(label: str, accent: bool = False) -> QPushButton:
     b = QPushButton(label)
-    b.setFixedHeight(28)
+    b.setFixedHeight(26)
     b.setFont(QFont("Segoe UI", 9))
     if accent:
         b.setStyleSheet(
@@ -192,13 +197,685 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
         b.setStyleSheet(
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{BORDER}; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
     return b
 
 
+def _path_hash(path: str) -> str:
+    return hashlib.md5(path.encode()).hexdigest()[:12]
+
+
+def _validate_script(path: str) -> tuple[bool, str, dict]:
+    try:
+        source = Path(path).read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source, filename=path)
+    except SyntaxError as exc:
+        return False, f"Syntax error: {exc}", {}
+    except Exception as exc:
+        return False, str(exc), {}
+
+    top_names: dict[str, object] = {}
+    func_names: set[str] = set()
+
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and isinstance(node.value, ast.Constant):
+                    top_names[target.id] = node.value.value
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            func_names.add(node.name)
+
+    missing = ({"HARDWARE_NAME", "HARDWARE_TYPE", "get_info", "get_status"}
+               - (set(top_names) | func_names))
+    if missing:
+        return False, f"Missing: {', '.join(sorted(missing))}", {}
+
+    return True, "OK", {
+        "name": str(top_names.get("HARDWARE_NAME", Path(path).stem)),
+        "type": str(top_names.get("HARDWARE_TYPE", "unknown")),
+        "ip":   str(top_names.get("HARDWARE_IP", "")),
+    }
+
+
+def _load_paths() -> list[str]:
+    s = QSettings("NetSentinel", "NetSentinel")
+    raw = s.value(_SETTINGS_KEY, [])
+    if isinstance(raw, str):
+        raw = [raw]
+    return [p for p in (raw or []) if p]
+
+
+def _save_paths(paths: list[str]) -> None:
+    QSettings("NetSentinel", "NetSentinel").setValue(_SETTINGS_KEY, paths)
+
+
+def _load_last_result(path: str) -> Optional[dict]:
+    s = QSettings("NetSentinel", "NetSentinel")
+    raw = s.value(_SETTINGS_RESULT.format(_path_hash(path)), None)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _save_last_result(path: str, data: dict) -> None:
+    s = QSettings("NetSentinel", "NetSentinel")
+    try:
+        s.setValue(_SETTINGS_RESULT.format(_path_hash(path)), json.dumps(data, default=str))
+    except Exception:
+        pass
+
+
+def _age_str(ts: float) -> str:
+    if ts <= 0:
+        return "never"
+    age = int(time.time() - ts)
+    if age < 60:
+        return "just now"
+    if age < 3600:
+        return f"{age // 60} min ago"
+    if age < 86400:
+        return f"{age // 3600} h ago"
+    return f"{age // 86400} d ago"
+
+
+def _rsrp_color(v) -> str:
+    if v is None:
+        return TEXT_MUTED
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return TEXT_MUTED
+    if f >= -80:
+        return GREEN
+    if f >= -100:
+        return AMBER
+    return RED
+
+
+def _sinr_color(v) -> str:
+    if v is None:
+        return TEXT_MUTED
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return TEXT_MUTED
+    if f >= 13:
+        return GREEN
+    if f >= 5:
+        return AMBER
+    return RED
+
+
+# ── Signal detail panel (modem) ───────────────────────────────────────────────
+
+class _ModemDetailPanel(QFrame):
+    """Two-column signal grid: 5G NR | LTE Primary."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:none;"
+            f" border-top:1px solid {BORDER}; }}"
+        )
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        self._nr_col  = self._make_col("5G NR",       ACCENT, border_right=True)
+        self._lte_col = self._make_col("LTE Primary",  AMBER,  border_right=False)
+        root.addWidget(self._nr_col[0], 1)
+        root.addWidget(self._lte_col[0], 1)
+
+        _ls = f"color:{TEXT_SECONDARY}; font-size:10px; border:none; background:transparent;"
+        _vs = f"color:{TEXT_PRIMARY}; font-size:10px; font-weight:bold; border:none; background:transparent;"
+
+        def _row(col_lay, label, attr):
+            h = QHBoxLayout()
+            h.setContentsMargins(0, 1, 0, 1)
+            h.setSpacing(6)
+            l = QLabel(f"{label}:")
+            l.setFixedWidth(52)
+            l.setStyleSheet(_ls)
+            v = QLabel("—")
+            v.setStyleSheet(_vs)
+            setattr(self, attr, v)
+            h.addWidget(l)
+            h.addWidget(v, 1)
+            col_lay.addLayout(h)
+
+        _row(self._nr_col[1],  "Band",  "_nr_band")
+        _row(self._nr_col[1],  "RSRP",  "_nr_rsrp")
+        _row(self._nr_col[1],  "SINR",  "_nr_sinr")
+        _row(self._nr_col[1],  "RSRQ",  "_nr_rsrq")
+        _row(self._nr_col[1],  "PCI",   "_nr_pci")
+        _row(self._nr_col[1],  "ARFCN", "_nr_arfcn")
+        self._nr_col[1].addStretch()
+
+        _row(self._lte_col[1], "Band",   "_lte_band")
+        _row(self._lte_col[1], "RSRP",   "_lte_rsrp")
+        _row(self._lte_col[1], "SNR",    "_lte_snr")
+        _row(self._lte_col[1], "RSRQ",   "_lte_rsrq")
+        _row(self._lte_col[1], "PCI",    "_lte_pci")
+        _row(self._lte_col[1], "EARFCN", "_lte_earfcn")
+        self._lte_col[1].addStretch()
+
+        # Connection strip
+        conn = QFrame()
+        conn.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:none; border-bottom:1px solid {BORDER}; }}"
+        )
+        cl = QHBoxLayout(conn)
+        cl.setContentsMargins(12, 4, 12, 4)
+        cl.setSpacing(0)
+
+        def _cpair(label, attr):
+            ll = QLabel(f"{label}: ")
+            ll.setStyleSheet(_ls)
+            vl = QLabel("—")
+            vl.setStyleSheet(_vs)
+            setattr(self, attr, vl)
+            sep = QFrame()
+            sep.setFrameShape(QFrame.Shape.VLine)
+            sep.setStyleSheet(f"border:none; border-left:1px solid {BORDER}; margin:0 12px;")
+            cl.addWidget(ll); cl.addWidget(vl); cl.addWidget(sep)
+
+        _cpair("Operator", "_conn_op")
+        _cpair("Cell ID",  "_conn_cell")
+        _cpair("WAN IP",   "_conn_ip")
+        cl.addStretch()
+
+        outer = QVBoxLayout()
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(conn)
+
+        body = QFrame()
+        body.setStyleSheet(f"QFrame {{ background:{BG_DARK}; border:none; }}")
+        body.setLayout(root)
+        outer.addWidget(body)
+
+        self.setLayout(outer)
+
+    def _make_col(self, title: str, color: str, border_right: bool):
+        col = QFrame()
+        border = f"border-right:1px solid {BORDER};" if border_right else ""
+        col.setStyleSheet(f"QFrame {{ background:{BG_DARK}; border:none; {border} }}")
+        lay = QVBoxLayout(col)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(2)
+        t = QLabel(title)
+        t.setStyleSheet(
+            f"color:{color}; font-size:10px; font-weight:bold; border:none;"
+            f" border-bottom:1px solid {BORDER}; background:transparent;"
+            f" padding-bottom:3px; margin-bottom:2px;"
+        )
+        lay.addWidget(t)
+        return col, lay
+
+    def update(self, extra: dict, status: dict | None = None) -> None:
+        # wan_ip lives at status top-level in most plugins, not inside extra
+        merged = {**(status or {}), **extra}
+        def _s(v): return str(v) if v is not None else "—"
+        def _dbm(v): return f"{float(v):.1f} dBm" if v is not None else "—"
+        def _db(v):  return f"{float(v):.1f} dB"  if v is not None else "—"
+
+        self._nr_band.setText(_s(merged.get("nr5g_band")))
+        nr_rsrp = merged.get("nr5g_rsrp_dbm")
+        self._nr_rsrp.setText(_dbm(nr_rsrp))
+        self._nr_rsrp.setStyleSheet(
+            f"color:{_rsrp_color(nr_rsrp)}; font-size:10px; font-weight:bold;"
+            f" border:none; background:transparent;"
+        )
+        nr_sinr = merged.get("nr5g_sinr_db")
+        self._nr_sinr.setText(_db(nr_sinr))
+        self._nr_sinr.setStyleSheet(
+            f"color:{_sinr_color(nr_sinr)}; font-size:10px; font-weight:bold;"
+            f" border:none; background:transparent;"
+        )
+        self._nr_rsrq.setText(_db(merged.get("nr5g_rsrq_db")))
+        self._nr_pci.setText(_s(merged.get("nr5g_pci")))
+        self._nr_arfcn.setText(_s(merged.get("nr5g_arfcn")))
+
+        lte_rsrp = merged.get("lte_rsrp_dbm")
+        self._lte_band.setText(_s(merged.get("lte_band")))
+        self._lte_rsrp.setText(_dbm(lte_rsrp))
+        self._lte_rsrp.setStyleSheet(
+            f"color:{_rsrp_color(lte_rsrp)}; font-size:10px; font-weight:bold;"
+            f" border:none; background:transparent;"
+        )
+        lte_snr = merged.get("lte_snr_db")
+        self._lte_snr.setText(_db(lte_snr))
+        self._lte_snr.setStyleSheet(
+            f"color:{_sinr_color(lte_snr)}; font-size:10px; font-weight:bold;"
+            f" border:none; background:transparent;"
+        )
+        self._lte_rsrq.setText(_db(merged.get("lte_rsrq_db")))
+        self._lte_pci.setText(_s(merged.get("lte_pci")))
+        self._lte_earfcn.setText(_s(merged.get("lte_earfcn")))
+
+        mcc, mnc = merged.get("mcc"), merged.get("mnc")
+        self._conn_op.setText(f"{mcc}-{mnc}" if mcc and mnc else "—")
+        cell = merged.get("cell_id")
+        enb  = merged.get("enb_id")
+        self._conn_cell.setText(
+            f"{cell} (eNB: {enb})" if cell and enb else _s(cell)
+        )
+        self._conn_ip.setText(_s(merged.get("wan_ip")))
+
+
+# ── Router/AP detail panel ────────────────────────────────────────────────────
+
+class _RouterDetailPanel(QFrame):
+    """Mesh nodes table + connected clients table for router/AP plugins."""
+
+    _TABLE_SS = (
+        f"QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; }}"
+        f"QHeaderView::section {{"
+        f"  background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
+        f"  font-weight:bold; padding:3px 5px; border:none;"
+        f"  border-right:1px solid {TH_BORDER};"
+        f"}}"
+        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+        f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
+        f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
+    )
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:none;"
+            f" border-top:1px solid {BORDER}; }}"
+        )
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 10)
+        lay.setSpacing(8)
+
+        # ── Mesh nodes ────────────────────────────────────────────────────────
+        nodes_hdr = QLabel("MESH NODES")
+        nodes_hdr.setStyleSheet(
+            f"color:{ACCENT}; font-size:9px; font-weight:bold; border:none;"
+            f" background:transparent; letter-spacing:0.5px;"
+        )
+        lay.addWidget(nodes_hdr)
+
+        self._node_table = QTableWidget(0, 3)
+        self._node_table.setHorizontalHeaderLabels(["Node", "Role", "MAC"])
+        self._node_table.horizontalHeader().setStretchLastSection(True)
+        self._node_table.setAlternatingRowColors(True)
+        self._node_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._node_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._node_table.verticalHeader().setVisible(False)
+        self._node_table.setShowGrid(True)
+        self._node_table.verticalHeader().setDefaultSectionSize(22)
+        self._node_table.setMaximumHeight(180)
+        self._node_table.setStyleSheet(self._TABLE_SS)
+        lay.addWidget(self._node_table)
+
+        # ── Connected clients ─────────────────────────────────────────────────
+        cli_hdr_row = QHBoxLayout()
+        cli_hdr_row.setContentsMargins(0, 4, 0, 0)
+        clients_hdr = QLabel("CONNECTED CLIENTS")
+        clients_hdr.setStyleSheet(
+            f"color:{AMBER}; font-size:9px; font-weight:bold; border:none;"
+            f" background:transparent; letter-spacing:0.5px;"
+        )
+        self._client_count_lbl = QLabel("")
+        self._client_count_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
+        )
+        cli_hdr_row.addWidget(clients_hdr)
+        cli_hdr_row.addWidget(self._client_count_lbl)
+        cli_hdr_row.addStretch()
+        lay.addLayout(cli_hdr_row)
+
+        self._client_table = QTableWidget(0, 4)
+        self._client_table.setHorizontalHeaderLabels(["Hostname", "IP", "Band", "Node"])
+        self._client_table.horizontalHeader().setSectionResizeMode(
+            0, self._client_table.horizontalHeader().ResizeMode.Stretch
+        )
+        self._client_table.setColumnWidth(1, 130)
+        self._client_table.setColumnWidth(2, 80)
+        self._client_table.setColumnWidth(3, 110)
+        self._client_table.setAlternatingRowColors(True)
+        self._client_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._client_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._client_table.verticalHeader().setVisible(False)
+        self._client_table.setShowGrid(True)
+        self._client_table.verticalHeader().setDefaultSectionSize(20)
+        self._client_table.setMaximumHeight(200)
+        self._client_table.setStyleSheet(self._TABLE_SS)
+        lay.addWidget(self._client_table)
+
+    def update(self, status: dict, clients: list) -> None:
+        nodes   = status.get("extra", {}).get("nodes", [])
+        n_nodes = status.get("mesh_nodes") or len(nodes)
+        n_cli   = status.get("connected_clients") or len(clients)
+
+        # Node table
+        self._node_table.setRowCount(0)
+        for node in nodes:
+            r = self._node_table.rowCount()
+            self._node_table.insertRow(r)
+            self._node_table.setItem(r, 0, QTableWidgetItem(node.get("name", "—")))
+            role_item = QTableWidgetItem(node.get("role", "—"))
+            if node.get("role") == "master":
+                role_item.setForeground(QColor(GREEN))
+            self._node_table.setItem(r, 1, role_item)
+            self._node_table.setItem(r, 2, QTableWidgetItem(node.get("mac", "—")))
+
+        # Client count label
+        parts = []
+        if n_nodes:
+            parts.append(f"{n_nodes} node{'s' if n_nodes != 1 else ''}")
+        self._client_count_lbl.setText(
+            f"({n_cli} device{'s' if n_cli != 1 else ''})" if n_cli is not None else ""
+        )
+
+        # Client table
+        self._client_table.setRowCount(0)
+        import re as _re
+        _mac_re = _re.compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", _re.I)
+        for c in clients:
+            r = self._client_table.rowCount()
+            self._client_table.insertRow(r)
+            hostname = c.get("hostname", "") or ""
+            # Don't show MAC as hostname — fall back to IP
+            display_name = hostname if hostname and not _mac_re.match(hostname) else c.get("ip", "—")
+            self._client_table.setItem(r, 0, QTableWidgetItem(display_name))
+            self._client_table.setItem(r, 1, QTableWidgetItem(c.get("ip", "—")))
+            band = c.get("band", "") or ""
+            band_item = QTableWidgetItem(band if band else "—")
+            if "5" in band:
+                band_item.setForeground(QColor(ACCENT))
+            self._client_table.setItem(r, 2, band_item)
+            self._client_table.setItem(r, 3, QTableWidgetItem(c.get("unit", "") or "—"))
+
+
+# ── Hub card ──────────────────────────────────────────────────────────────────
+
+class HubCard(QFrame):
+    """Live status card for one imported hardware plugin."""
+
+    refresh_clicked = pyqtSignal(str)   # path
+    remove_clicked  = pyqtSignal(str)   # path
+
+    def __init__(self, path: str, meta: dict, last_result: Optional[dict], parent=None):
+        super().__init__(parent)
+        self._path       = path
+        self._meta       = meta
+        self._last_ts    = last_result.get("_ts", 0.0) if last_result else 0.0
+        self._hw_type    = meta.get("type", "unknown")
+        self._detail_visible = False
+
+        self.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # ── Header row ────────────────────────────────────────────────────────
+        hdr = QFrame()
+        hdr.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        hdr_lay = QHBoxLayout(hdr)
+        hdr_lay.setContentsMargins(12, 8, 10, 8)
+        hdr_lay.setSpacing(8)
+
+        # Status dot — clickable to expand/collapse detail
+        self._dot = QLabel("●")
+        self._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
+        self._dot.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._dot.setToolTip("Click to expand / collapse detail")
+        self._dot.mousePressEvent = lambda _: self._toggle_detail()
+        hdr_lay.addWidget(self._dot)
+
+        # Name + type badge
+        name_col = QVBoxLayout()
+        name_col.setSpacing(1)
+        name_col.setContentsMargins(0, 0, 0, 0)
+        self._name_lbl = QLabel(f"<b>{meta.get('name', Path(path).stem)}</b>")
+        self._name_lbl.setTextFormat(Qt.TextFormat.RichText)
+        self._name_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:12px; border:none; background:transparent;"
+        )
+        hw_type = meta.get("type", "")
+        hw_ip   = meta.get("ip", "")
+        sub_txt = "  ·  ".join(filter(None, [hw_type, hw_ip]))
+        self._sub_lbl = QLabel(sub_txt)
+        self._sub_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
+        )
+        name_col.addWidget(self._name_lbl)
+        name_col.addWidget(self._sub_lbl)
+        hdr_lay.addLayout(name_col)
+
+        # Metrics summary (centre)
+        self._metrics_lbl = QLabel("Never run")
+        self._metrics_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; border:none; background:transparent;"
+        )
+        hdr_lay.addWidget(self._metrics_lbl, 1)
+
+        # Timestamp
+        self._ts_lbl = QLabel("")
+        self._ts_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
+        )
+        hdr_lay.addWidget(self._ts_lbl)
+
+        # Refresh button
+        self._btn_refresh = _btn("↻")
+        self._btn_refresh.setFixedWidth(28)
+        self._btn_refresh.setToolTip("Refresh now")
+        self._btn_refresh.clicked.connect(lambda: self.refresh_clicked.emit(self._path))
+        hdr_lay.addWidget(self._btn_refresh)
+
+        # Remove button
+        btn_remove = _btn("✕")
+        btn_remove.setFixedWidth(28)
+        btn_remove.setToolTip("Remove")
+        btn_remove.clicked.connect(lambda: self.remove_clicked.emit(self._path))
+        hdr_lay.addWidget(btn_remove)
+
+        outer.addWidget(hdr)
+
+        # ── Password row ──────────────────────────────────────────────────────
+        pw_row = QFrame()
+        pw_row.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f" border-top:1px solid {BORDER}; border-radius:0px; }}"
+        )
+        pw_lay = QHBoxLayout(pw_row)
+        pw_lay.setContentsMargins(40, 4, 10, 4)
+        pw_lay.setSpacing(6)
+
+        hw_ip_for_pw = meta.get("ip", "")
+        pw_lbl = QLabel(f"Password ({hw_ip_for_pw or 'IP unknown'}):")
+        pw_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px; border:none;")
+        pw_lay.addWidget(pw_lbl)
+
+        self._pw_edit = QLineEdit()
+        self._pw_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._pw_edit.setPlaceholderText("enter password…")
+        self._pw_edit.setFixedHeight(20)
+        self._pw_edit.setFont(QFont("Segoe UI", 9))
+        self._pw_edit.setStyleSheet(
+            f"QLineEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:0 6px; }}"
+        )
+        pw_lay.addWidget(self._pw_edit, 1)
+
+        self._pw_status = QLabel("")
+        self._pw_status.setStyleSheet(f"color:{GREEN}; font-size:9px; border:none;")
+        self._pw_status.setFixedWidth(60)
+        pw_lay.addWidget(self._pw_status)
+
+        btn_pw_save = _btn("Save")
+        btn_pw_save.setToolTip("Save password in OS keychain")
+        btn_pw_save.clicked.connect(
+            lambda: self._save_password(hw_ip_for_pw, self._pw_edit, self._pw_status)
+        )
+        pw_lay.addWidget(btn_pw_save)
+
+        btn_pw_forget = _btn("Forget")
+        btn_pw_forget.setToolTip("Remove saved password from OS keychain")
+        btn_pw_forget.clicked.connect(
+            lambda: self._forget_password(hw_ip_for_pw, self._pw_status)
+        )
+        pw_lay.addWidget(btn_pw_forget)
+        outer.addWidget(pw_row)
+
+        # ── Detail panel (v2.1) ───────────────────────────────────────────────
+        if self._hw_type == "modem":
+            self._detail = _ModemDetailPanel()
+        else:
+            self._detail = _RouterDetailPanel()
+        self._detail.setVisible(False)
+        outer.addWidget(self._detail)
+
+        # Apply persisted result immediately if available
+        if last_result:
+            self._apply_result(last_result)
+
+    # ── Public interface ──────────────────────────────────────────────────────
+
+    def update_result(self, data: dict, ts: float) -> None:
+        self._last_ts = ts
+        self._apply_result(data)
+
+    def set_error(self, msg: str) -> None:
+        self._dot.setStyleSheet(f"color:{RED}; font-size:13px; border:none;")
+        self._metrics_lbl.setText(f"Error: {msg[:80]}")
+        self._metrics_lbl.setStyleSheet(
+            f"color:{AMBER}; font-size:10px; border:none; background:transparent;"
+        )
+        self._btn_refresh.setEnabled(True)
+        self._btn_refresh.setText("↻")
+
+    def set_refreshing(self, active: bool) -> None:
+        self._btn_refresh.setEnabled(not active)
+        self._btn_refresh.setText("…" if active else "↻")
+
+    def tick_timestamp(self) -> None:
+        if self._last_ts > 0:
+            self._ts_lbl.setText(_age_str(self._last_ts))
+
+    # ── Private ───────────────────────────────────────────────────────────────
+
+    def _apply_result(self, data: dict) -> None:
+        info    = data.get("info", {})
+        status  = data.get("status", {})
+        clients = data.get("clients", [])
+        extra   = status.get("extra", {})
+        hw_type = info.get("type", self._hw_type)
+
+        self._dot.setStyleSheet(f"color:{GREEN}; font-size:13px; border:none;")
+        self._ts_lbl.setText(_age_str(self._last_ts))
+
+        # Build metrics summary
+        if hw_type == "modem":
+            parts = []
+            nt = extra.get("network_type")
+            if nt:
+                parts.append(nt)
+            band = extra.get("nr5g_band") or extra.get("lte_band")
+            if band:
+                parts.append(band)
+            rsrp = extra.get("nr5g_rsrp_dbm") or extra.get("lte_rsrp_dbm")
+            if rsrp is not None:
+                try:
+                    parts.append(f"RSRP {float(rsrp):.0f} dBm")
+                except (TypeError, ValueError):
+                    pass
+            sinr = extra.get("nr5g_sinr_db") or extra.get("lte_snr_db")
+            if sinr is not None:
+                try:
+                    parts.append(f"SINR {float(sinr):.1f} dB")
+                except (TypeError, ValueError):
+                    pass
+            summary = "  ·  ".join(parts) if parts else "Online"
+            self._metrics_lbl.setText(summary)
+            self._metrics_lbl.setStyleSheet(
+                f"color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;"
+            )
+            self._detail.update(extra, status)
+        else:
+            n_nodes  = status.get("mesh_nodes") or 0
+            n_cli    = status.get("connected_clients") or len(clients)
+            parts = []
+            if n_nodes:
+                parts.append(f"{n_nodes} node{'s' if n_nodes != 1 else ''}")
+            if n_cli is not None:
+                parts.append(f"{n_cli} client{'s' if n_cli != 1 else ''}")
+            summary = "  ·  ".join(parts) if parts else "Online"
+            self._metrics_lbl.setText(summary)
+            self._metrics_lbl.setStyleSheet(
+                f"color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;"
+            )
+            self._detail.update(status, clients)
+
+        self._btn_refresh.setEnabled(True)
+        self._btn_refresh.setText("↻")
+
+        # Auto-expand detail on first successful result
+        if not self._detail_visible:
+            self._toggle_detail()
+
+    def _toggle_detail(self) -> None:
+        self._detail_visible = not self._detail_visible
+        self._detail.setVisible(self._detail_visible)
+        self._dot.setToolTip(
+            "Click to collapse detail" if self._detail_visible else "Click to expand detail"
+        )
+
+    def _save_password(self, hw_ip: str, pw_edit: QLineEdit, status: QLabel) -> None:
+        pw = pw_edit.text().strip()
+        if not pw:
+            status.setText("Empty!")
+            status.setStyleSheet(f"color:{AMBER}; font-size:9px;")
+            return
+        if not hw_ip:
+            status.setText("No IP")
+            status.setStyleSheet(f"color:{AMBER}; font-size:9px;")
+            return
+        try:
+            import keyring
+            keyring.set_password("NetSentinel/hardware", hw_ip, pw)
+            pw_edit.clear()
+            status.setText("✓ Saved")
+            status.setStyleSheet(f"color:{GREEN}; font-size:9px;")
+            QTimer.singleShot(3000, lambda: status.setText(""))
+        except Exception as exc:
+            status.setText("Error")
+            status.setStyleSheet(f"color:{RED}; font-size:9px;")
+            status.setToolTip(str(exc))
+
+    def _forget_password(self, hw_ip: str, status: QLabel) -> None:
+        if not hw_ip:
+            return
+        try:
+            import keyring
+            from keyring.errors import PasswordDeleteError
+            keyring.delete_password("NetSentinel/hardware", hw_ip)
+            status.setText("Forgotten")
+            status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
+        except Exception:
+            status.setText("Not saved")
+            status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
+        QTimer.singleShot(3000, lambda: status.setText(""))
+
+
+# ── Step-guide helper widgets (guide section) ─────────────────────────────────
+
 def _step_card(number: int, title: str) -> tuple[QWidget, QVBoxLayout]:
-    """Numbered step card — returns (frame, inner_layout)."""
     frame = QFrame()
     frame.setStyleSheet(
         f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
@@ -221,11 +898,9 @@ def _step_card(number: int, title: str) -> tuple[QWidget, QVBoxLayout]:
     badge.setStyleSheet(
         f"background:{ACCENT}; color:#fff; border-radius:11px; border:none;"
     )
-
     title_lbl = QLabel(title)
     title_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
     title_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none; background:transparent;")
-
     hdr_lay.addWidget(badge)
     hdr_lay.addWidget(title_lbl)
     hdr_lay.addStretch()
@@ -262,12 +937,10 @@ def _copy_text(btn: QPushButton, text: str) -> None:
     QApplication.clipboard().setText(text)
     orig = btn.text()
     btn.setText("✓  Copied!")
-    from PyQt6.QtCore import QTimer
     QTimer.singleShot(2000, lambda: btn.setText(orig))
 
 
 def _code_chip(code: str) -> QWidget:
-    """Monospace inline snippet with a Copy button — used for search strings."""
     frame = QFrame()
     frame.setStyleSheet(
         f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:3px; }}"
@@ -289,7 +962,6 @@ def _code_chip(code: str) -> QWidget:
 
 
 def _prompt_block(label: str, text: str) -> QWidget:
-    """Labeled multi-line prompt block with a Copy button — used for AI prompts."""
     frame = QFrame()
     frame.setStyleSheet(
         f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:4px; }}"
@@ -297,7 +969,6 @@ def _prompt_block(label: str, text: str) -> QWidget:
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(10, 6, 10, 8)
     outer.setSpacing(4)
-
     hdr = QHBoxLayout()
     hdr.setContentsMargins(0, 0, 0, 0)
     lbl_w = QLabel(label)
@@ -310,7 +981,6 @@ def _prompt_block(label: str, text: str) -> QWidget:
     hdr.addStretch()
     hdr.addWidget(copy_btn)
     outer.addLayout(hdr)
-
     body = QLabel(text)
     body.setFont(QFont("Consolas", 8))
     body.setWordWrap(True)
@@ -322,533 +992,243 @@ def _prompt_block(label: str, text: str) -> QWidget:
     return frame
 
 
-def _validate_script(path: str) -> tuple[bool, str, dict]:
-    """AST-validate the script without executing it.
-
-    Returns (ok, message, metadata) where metadata has 'name' and 'type'
-    when ok is True.
-    """
-    try:
-        source = Path(path).read_text(encoding="utf-8", errors="replace")
-        tree = ast.parse(source, filename=path)
-    except SyntaxError as exc:
-        return False, f"Syntax error: {exc}", {}
-    except Exception as exc:
-        return False, str(exc), {}
-
-    top_names: dict[str, object] = {}
-    func_names: set[str] = set()
-
-    for node in ast.iter_child_nodes(tree):
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name):
-                    if isinstance(node.value, ast.Constant):
-                        top_names[target.id] = node.value.value
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            func_names.add(node.name)
-
-    required_vars  = {"HARDWARE_NAME", "HARDWARE_TYPE"}
-    required_funcs = {"get_info", "get_status"}
-    missing = (required_vars | required_funcs) - (set(top_names) | func_names)
-    if missing:
-        return False, f"Missing: {', '.join(sorted(missing))}", {}
-
-    return True, "OK", {
-        "name": str(top_names.get("HARDWARE_NAME", Path(path).stem)),
-        "type": str(top_names.get("HARDWARE_TYPE", "unknown")),
-    }
-
-
-def _load_paths() -> list[str]:
-    s = QSettings("NetSentinel", "NetSentinel")
-    raw = s.value(_SETTINGS_KEY, [])
-    if isinstance(raw, str):
-        raw = [raw]
-    return [p for p in (raw or []) if p]
-
-
-def _save_paths(paths: list[str]) -> None:
-    s = QSettings("NetSentinel", "NetSentinel")
-    s.setValue(_SETTINGS_KEY, paths)
-
-
 # ── Main page ─────────────────────────────────────────────────────────────────
 
 class HardwareIntegrationPage(QWidget):
-    """Teach, scaffold, and import custom hardware integration scripts."""
+    """Hardware Hub — live status dashboard for all imported hardware plugins."""
 
-    plugin_result = pyqtSignal(dict)   # emitted after a successful Test run
+    # data dict has "_path" embedded so dashboard knows which plugin
+    plugin_result          = pyqtSignal(dict)
+    modem_pause_requested  = pyqtSignal()
+    modem_resume_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._test_worker: Optional[PluginWorker] = None
-        self._build_ui()
+        self._workers: Dict[str, Optional[PluginWorker]] = {}
+        self._timers:  Dict[str, QTimer] = {}
+        self._cards:   Dict[str, HubCard] = {}
+        self._pending_modem_resume: set[str] = set()  # paths awaiting modem resume
 
-    # ── Construction ──────────────────────────────────────────────────────────
+        self._build_ui()
+        self._start_all_timers()
+
+        # Tick timer — updates "X min ago" labels every 30s
+        self._tick_timer = QTimer(self)
+        self._tick_timer.setInterval(30_000)
+        self._tick_timer.timeout.connect(self._tick_timestamps)
+        self._tick_timer.start()
+
+        # Run all plugins ~3 s after startup so _plugin_enrichments is populated
+        # before the user's first scan, and dashboard enrichment works immediately.
+        QTimer.singleShot(3000, self._run_all_on_startup)
+
+    # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 12, 16, 8)
-        root.setSpacing(6)
+        root.setSpacing(8)
 
-        # Title
-        title = QLabel("Integrate Any Hardware")
+        # Page header
+        hdr_row = QHBoxLayout()
+        title = QLabel("Hardware")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{TEXT_PRIMARY};")
+        hdr_row.addWidget(title)
+        hdr_row.addStretch()
+        self._btn_add = _btn("＋  Add Integration", accent=True)
+        self._btn_add.clicked.connect(self._on_browse)
+        hdr_row.addWidget(self._btn_add)
+        root.addLayout(hdr_row)
+
         sub = QLabel(
-            "NetSentinel works with any router, modem, or access point — "
-            "as long as you can write a small Python script that talks to it. "
-            "Follow the four steps below to write, test, and load your integration. "
-            "Shared scripts become part of the main product for everyone."
+            "Live status for all integrated hardware. "
+            "Each plugin auto-refreshes every 5 minutes. "
+            "Click ● to expand the signal / topology detail panel."
         )
         sub.setWordWrap(True)
         sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
-        root.addWidget(title)
         root.addWidget(sub)
 
-        # Scrollable body
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
-        scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Status label (import feedback)
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        root.addWidget(self._status_lbl)
 
-        body = QWidget()
-        body.setStyleSheet(f"background:{BG_DARK};")
-        body_lay = QVBoxLayout(body)
-        body_lay.setContentsMargins(0, 4, 0, 8)
-        body_lay.setSpacing(10)
+        # ── Hub cards scroll area ─────────────────────────────────────────────
+        self._hub_scroll = QScrollArea()
+        self._hub_scroll.setWidgetResizable(True)
+        self._hub_scroll.setStyleSheet("QScrollArea { border: none; }")
 
-        body_lay.addWidget(self._build_step1())
-        body_lay.addWidget(self._build_step2())
-        body_lay.addWidget(self._build_step3())
-        body_lay.addWidget(self._build_step4())
-        body_lay.addStretch()
+        self._hub_body = QWidget()
+        self._hub_body.setStyleSheet(f"background:{BG_DARK};")
+        self._hub_lay = QVBoxLayout(self._hub_body)
+        self._hub_lay.setContentsMargins(0, 4, 0, 4)
+        self._hub_lay.setSpacing(8)
 
-        scroll.setWidget(body)
-        root.addWidget(scroll, 1)
+        self._rebuild_hub()
 
-    def _build_step1(self) -> QWidget:
-        frame, lay = _step_card(1, "Find your hardware's local API")
+        self._hub_scroll.setWidget(self._hub_body)
+        root.addWidget(self._hub_scroll, 3)
 
-        lay.addWidget(_para(
-            "You do not need to be a programmer to do this — an AI can write almost "
-            "all the code for you. Your job is to find out HOW your specific hardware "
-            "exposes data, then hand that information to the AI. "
-            "Work through the three sub-steps below in order."
-        ))
+        # ── Collapsible guide ─────────────────────────────────────────────────
+        guide_toggle_row = QHBoxLayout()
+        self._guide_toggle = _btn("▶  How to write a plugin script")
+        self._guide_toggle.clicked.connect(self._toggle_guide)
+        guide_toggle_row.addWidget(self._guide_toggle)
+        guide_toggle_row.addStretch()
+        root.addLayout(guide_toggle_row)
 
-        # ── 1a: Search GitHub ──────────────────────────────────────────────────
-        lay.addWidget(_sub_header("1a  Search GitHub for an existing implementation"))
-        lay.addWidget(_para(
-            "Someone has often already written a Python script for your hardware. "
-            "Go to github.com and paste one of these search strings into the search box. "
-            "Replace 'Brand' and 'Model' with your own hardware name:"
-        ))
-        searches = [
-            '"Brand Model" python router',
-            '"Brand Model" python api',
-            '"Brand" router python script',
-            '"Brand" modem python library',
-        ]
-        for s in searches:
-            lay.addWidget(_code_chip(s))
+        self._guide_area = QScrollArea()
+        self._guide_area.setWidgetResizable(True)
+        self._guide_area.setStyleSheet("QScrollArea { border: none; }")
+        self._guide_area.setVisible(False)
 
-        lay.addWidget(_para(
-            "Also check these specific places — they cover hundreds of devices:"
-        ))
-        repos = [
-            ("Home Assistant integrations",
-             "github.com/home-assistant/core/tree/dev/homeassistant/components  "
-             "Search your brand name in the folder list. Each folder is a ready-made "
-             "Python integration you can learn from or copy."),
-            ("Home Assistant custom components (HACS)",
-             "github.com/hacs/integration  —  then search 'hacs [Brand]' on Google. "
-             "HACS has thousands of community-built integrations for consumer hardware."),
-            ("OpenWrt wiki",
-             "wiki.openwrt.org  —  if your router runs OpenWrt or a similar firmware, "
-             "the LuCI API is documented there. Search 'openwrt luci api python'."),
-            ("RouterSploit (read-only reference)",
-             "github.com/threat9/routersploit  —  contains login/auth code for many "
-             "router brands. Use as a reference for authentication patterns only."),
-        ]
-        for name, desc in repos:
-            row = QHBoxLayout()
-            row.setSpacing(8)
-            row.setContentsMargins(0, 0, 0, 0)
-            dot = QLabel("›")
-            dot.setStyleSheet(f"color:{GREEN}; font-size:13px; font-weight:bold;")
-            dot.setFixedWidth(12)
-            txt = QLabel(f"<b style='color:{TEXT_PRIMARY};'>{name}</b>  "
-                         f"<span style='color:{TEXT_SECONDARY};font-size:10px;'>{desc}</span>")
-            txt.setWordWrap(True)
-            txt.setTextFormat(Qt.TextFormat.RichText)
-            row.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
-            row.addWidget(txt)
-            lay.addLayout(row)
+        guide_body = QWidget()
+        guide_body.setStyleSheet(f"background:{BG_DARK};")
+        guide_lay = QVBoxLayout(guide_body)
+        guide_lay.setContentsMargins(0, 4, 0, 8)
+        guide_lay.setSpacing(10)
+        guide_lay.addWidget(self._build_step1())
+        guide_lay.addWidget(self._build_step2())
+        guide_lay.addWidget(self._build_step3_guide())
+        guide_lay.addWidget(self._build_step4())
+        guide_lay.addStretch()
 
-        # ── 1b: Ask AI ────────────────────────────────────────────────────────
-        lay.addWidget(_sub_header("1b  Ask an AI to write the script for you"))
-        lay.addWidget(_para(
-            "Claude, ChatGPT, and Gemini can write the full Python script if you give "
-            "them the right information. Copy one of the prompts below, fill in your "
-            "hardware details, and paste it into any AI chat:"
-        ))
+        self._guide_area.setWidget(guide_body)
+        root.addWidget(self._guide_area, 2)
 
-        lay.addWidget(_prompt_block(
-            "PROMPT A — General (start here if you know nothing else)",
-            "I want to write a Python script that reads live data from my [Brand] [Model] "
-            "router/modem. The admin panel is at http://192.168.1.1 "
-            "(adjust if yours is different). Login: username 'admin', password 'admin' "
-            "(replace with your real credentials).\n\n"
-            "Please:\n"
-            "1. Find out if this router has a local JSON REST API or requires HTML scraping\n"
-            "2. Write a Python script using the requests library that logs in and returns:\n"
-            "   - WAN IP address\n"
-            "   - Uptime (seconds or formatted string)\n"
-            "   - List of connected clients (name, IP, MAC address)\n"
-            "   - Download and upload speed if available\n"
-            "3. Add a main block at the bottom that prints all results as JSON\n"
-            "4. Tell me which packages to install with pip before running the script",
-        ))
-
-        lay.addWidget(_prompt_block(
-            "PROMPT B — From a cURL command (best results, use after step 1c below)",
-            "I captured this API call from my router admin panel using browser dev tools "
-            "(F12 -> Network tab -> right-click a request -> Copy as cURL). "
-            "Convert it to a Python function using the requests library.\n\n"
-            "[Paste your cURL command here]\n\n"
-            "Then wrap the result in the NetSentinel plugin format:\n"
-            "- HARDWARE_NAME = 'Brand Model'\n"
-            "- HARDWARE_TYPE = 'router'\n"
-            "- def get_info() -> dict  (static metadata)\n"
-            "- def get_status() -> dict  (live data)\n"
-            "- def get_clients() -> list  (connected devices)\n"
-            "- if __name__ == '__main__': print all results as JSON",
-        ))
-
-        lay.addWidget(_prompt_block(
-            "PROMPT C — Fix a broken script",
-            "I am writing a Python script to read data from my [Brand] [Model] router "
-            "but it is not working. Here is my script and the error:\n\n"
-            "[Paste your script]\n\n"
-            "Error message:\n"
-            "[Paste the exact error text]\n\n"
-            "Router admin panel: http://192.168.1.1\n"
-            "Login: username='admin', password='admin'\n\n"
-            "Please fix the script and explain what was wrong.",
-        ))
-
-        # ── 1c: Spy on your own router ────────────────────────────────────────
-        lay.addWidget(_sub_header("1c  Spy on your own router with browser dev tools"))
-        lay.addWidget(_para(
-            "If searches turn up nothing, you can discover the API yourself in about "
-            "5 minutes. This gives you the exact URL and data format to hand to an AI:"
-        ))
-        steps = [
-            ("Open your router admin panel", "Type your router IP into a browser address bar. "
-             "Usually 192.168.1.1, 192.168.0.1, or 10.0.0.1. Log in normally."),
-            ("Open dev tools and go to the Network tab",
-             "Press F12 (Windows/Linux) or Cmd+Option+I (Mac). Click the 'Network' tab. "
-             "Check the 'Fetch/XHR' filter if available — this shows only API calls, not images."),
-            ("Reload the page", "Press F5 while dev tools is open. You will see a list of "
-             "network requests appear. Click through them and look at the ones whose "
-             "Response tab shows JSON data — that is the API."),
-            ("Copy the request as cURL",
-             "Right-click any interesting request -> 'Copy' -> 'Copy as cURL'. "
-             "Paste it directly into Prompt B above and the AI will convert it to Python."),
-            ("Check the login request",
-             "Reload the page from the login screen to capture the login request too. "
-             "This is the POST request with your username and password — the AI needs it "
-             "to handle authentication in the script."),
-        ]
-        for i, (title, desc) in enumerate(steps, 1):
-            row = QHBoxLayout()
-            row.setSpacing(8)
-            row.setContentsMargins(0, 0, 0, 0)
-            num = QLabel(str(i))
-            num.setFixedSize(18, 18)
-            num.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            num.setFont(QFont("Segoe UI", 7, QFont.Weight.Bold))
-            num.setStyleSheet(
-                f"background:{BG_CARD}; color:{TEXT_SECONDARY};"
-                f" border:1px solid {BORDER}; border-radius:9px;"
-            )
-            txt = QLabel(f"<b style='color:{TEXT_PRIMARY};'>{title}</b>  "
-                         f"<span style='color:{TEXT_SECONDARY};font-size:10px;'>{desc}</span>")
-            txt.setWordWrap(True)
-            txt.setTextFormat(Qt.TextFormat.RichText)
-            row.addWidget(num, 0, Qt.AlignmentFlag.AlignTop)
-            row.addWidget(txt)
-            lay.addLayout(row)
-
-        return frame
-
-    def _build_step2(self) -> QWidget:
-        frame, lay = _step_card(2, "Get the script written (template + AI shortcut)")
-
-        lay.addWidget(_para(
-            "You can either fill in the template yourself or hand it to an AI and let "
-            "it do the work. Both paths end up with the same runnable .py file."
-        ))
-
-        lay.addWidget(_sub_header("Option A — Fill in the template yourself"))
-        lay.addWidget(_para(
-            "Save the template below as a .py file. Edit HARDWARE_IP, USERNAME, PASSWORD, "
-            "and the body of get_status() with the API calls you found in Step 1. "
-            "The if __name__ block at the bottom lets you test it standalone with: "
-            "python your_file.py"
-        ))
-
-        self._template_edit = QTextEdit()
-        self._template_edit.setReadOnly(True)
-        self._template_edit.setPlainText(_TEMPLATE)
-        self._template_edit.setFont(QFont("Consolas", 8))
-        self._template_edit.setFixedHeight(270)
-        self._template_edit.setStyleSheet(
-            f"QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px;"
-            f" font-family:Consolas,monospace; }}"
+    def _toggle_guide(self) -> None:
+        visible = not self._guide_area.isVisible()
+        self._guide_area.setVisible(visible)
+        self._guide_toggle.setText(
+            "▼  How to write a plugin script" if visible
+            else "▶  How to write a plugin script"
         )
-        lay.addWidget(self._template_edit)
 
-        btn_row = QHBoxLayout()
-        btn_copy = _btn("⎘  Copy template")
-        btn_save = _btn("💾  Save template as .py…")
-        btn_copy.clicked.connect(self._on_copy_template)
-        btn_save.clicked.connect(self._on_save_template)
-        btn_row.addWidget(btn_copy)
-        btn_row.addWidget(btn_save)
-        btn_row.addStretch()
-        lay.addLayout(btn_row)
+    # ── Hub management ────────────────────────────────────────────────────────
 
-        lay.addWidget(_sub_header("Option B — Let an AI fill it in for you (recommended)"))
-        lay.addWidget(_para(
-            "Copy the prompt below into any AI chat (Claude, ChatGPT, Gemini). "
-            "Replace the placeholders, paste the template when asked, and the AI will "
-            "return a completed script you can run immediately:"
-        ))
-        lay.addWidget(_prompt_block(
-            "PROMPT — Ask AI to complete the template",
-            "I want to integrate my [Brand] [Model] router/modem into a monitoring app. "
-            "I have a Python plugin template that needs the following filled in:\n\n"
-            "Hardware details:\n"
-            "- Admin panel URL: http://192.168.1.1  (replace with yours)\n"
-            "- Username: admin  (replace with yours)\n"
-            "- Password: admin  (replace with yours)\n\n"
-            "Here is the template — please complete get_info() and get_status() "
-            "using the real API or web scraping for my specific hardware. "
-            "Add any required pip install commands as a comment at the top.\n\n"
-            "[Paste the template here — use the Copy template button above]",
-        ))
-        return frame
-
-    def _build_step3(self) -> QWidget:
-        frame, lay = _step_card(3, "Test locally, then import into NetSentinel")
-        lay.addWidget(_para(
-            "Once your script prints correct data when run standalone, import it here. "
-            "NetSentinel validates the interface (HARDWARE_NAME, HARDWARE_TYPE, "
-            "get_info, get_status) without executing the script. Press Test to run it "
-            "in a safe sandbox and see the output."
-        ))
-
-        import_row = QHBoxLayout()
-        btn_browse = _btn("📂  Browse for script (.py)…", accent=True)
-        btn_browse.clicked.connect(self._on_browse)
-        import_row.addWidget(btn_browse)
-        import_row.addStretch()
-        lay.addLayout(import_row)
-
-        # Status label (shown briefly after import attempt)
-        self._import_status = QLabel("")
-        self._import_status.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
-        lay.addWidget(self._import_status)
-
-        # Container for the imported scripts list (rebuilt on each import/remove)
-        self._scripts_container = QWidget()
-        self._scripts_container.setStyleSheet("background:transparent;")
-        self._scripts_lay = QVBoxLayout(self._scripts_container)
-        self._scripts_lay.setContentsMargins(0, 0, 0, 0)
-        self._scripts_lay.setSpacing(6)
-        lay.addWidget(self._scripts_container)
-
-        self._refresh_scripts_list()
-        return frame
-
-    def _build_step4(self) -> QWidget:
-        frame, lay = _step_card(4, "Share your script with the community")
-        lay.addWidget(_para(
-            "A script that works for you almost certainly works for everyone with "
-            "the same hardware. Shared scripts are reviewed and merged into NetSentinel "
-            "as first-class integrations — your hardware then appears in the app for "
-            "all users automatically."
-        ))
-
-        how = [
-            ("Open a GitHub Issue",
-             "Go to github.com/ossianericson/netsentinel and open a new issue. "
-             "Use the title format: [Hardware Plugin] Brand Model XYZ. "
-             "Attach your .py file, describe what data get_status() returns, "
-             "and note any pip dependencies."),
-            ("What happens next",
-             "The script is reviewed, tested on the same hardware model (or by "
-             "community volunteers), and merged. It becomes part of the built-in "
-             "hardware library and shows up in the Hardware Integration page for "
-             "everyone — with your name as contributor."),
-            ("No GitHub account?",
-             "Email the script to the address in Help & Reference with subject "
-             "[Hardware Plugin]. Include your hardware model and firmware version."),
-        ]
-        for title, desc in how:
-            row = QHBoxLayout()
-            row.setSpacing(8)
-            row.setContentsMargins(0, 0, 0, 0)
-            dot = QLabel("›")
-            dot.setStyleSheet(f"color:{GREEN}; font-size:13px; font-weight:bold;")
-            dot.setFixedWidth(12)
-            txt = QLabel(f"<b style='color:{TEXT_PRIMARY};'>{title}</b>  "
-                         f"<span style='color:{TEXT_SECONDARY};font-size:10px;'>{desc}</span>")
-            txt.setWordWrap(True)
-            txt.setTextFormat(Qt.TextFormat.RichText)
-            row.addWidget(dot, 0, Qt.AlignmentFlag.AlignTop)
-            row.addWidget(txt)
-            lay.addLayout(row)
-
-        return frame
-
-    # ── Script list ───────────────────────────────────────────────────────────
-
-    def _refresh_scripts_list(self) -> None:
-        # Clear existing rows
-        while self._scripts_lay.count():
-            item = self._scripts_lay.takeAt(0)
+    def _rebuild_hub(self) -> None:
+        # Remove all existing card widgets
+        while self._hub_lay.count():
+            item = self._hub_lay.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        self._cards.clear()
 
         paths = _load_paths()
         if not paths:
-            empty = QLabel("No scripts imported yet.")
-            empty.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; padding:4px 0;")
-            self._scripts_lay.addWidget(empty)
+            empty = QLabel(
+                "No hardware imported yet.\n"
+                "Click  ＋ Add Integration  to import a plugin script."
+            )
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            empty.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:11px; padding:32px 0;"
+            )
+            self._hub_lay.addWidget(empty)
             return
 
         for path in paths:
-            self._scripts_lay.addWidget(self._make_script_row(path))
+            ok, _, meta = _validate_script(path)
+            if not ok:
+                meta = {"name": Path(path).stem, "type": "unknown", "ip": ""}
+            last_result = _load_last_result(path)
+            card = HubCard(path, meta, last_result, parent=self._hub_body)
+            card.refresh_clicked.connect(self._run_plugin)
+            card.remove_clicked.connect(self._remove_plugin)
+            self._hub_lay.addWidget(card)
+            self._cards[path] = card
 
-    def _make_script_row(self, path: str) -> QWidget:
-        ok, msg, meta = _validate_script(path)
-        exists = Path(path).exists()
+        self._hub_lay.addStretch()
 
-        row = QFrame()
-        row.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
-        )
-        lay = QHBoxLayout(row)
-        lay.setContentsMargins(10, 6, 10, 6)
-        lay.setSpacing(8)
+    def _start_all_timers(self) -> None:
+        for path in _load_paths():
+            self._ensure_timer(path)
 
-        # Status dot
-        dot = QLabel("●")
-        if not exists:
-            dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px;")
-        elif ok:
-            dot.setStyleSheet(f"color:{GREEN}; font-size:11px;")
-        else:
-            dot.setStyleSheet(f"color:{AMBER}; font-size:11px;")
-        dot.setFixedWidth(16)
-        lay.addWidget(dot)
+    def _run_all_on_startup(self) -> None:
+        """Run every imported plugin once at startup — staggered 3 s apart.
 
-        # Name + path
-        name   = meta.get("name", Path(path).stem) if ok else Path(path).stem
-        hw_type = meta.get("type", "") if ok else ""
-        type_str = f"  [{hw_type}]" if hw_type else ""
-        info = QLabel(f"<b style='color:{TEXT_PRIMARY};'>{name}</b>"
-                      f"<span style='color:{TEXT_MUTED};'>{type_str}</span>")
-        info.setTextFormat(Qt.TextFormat.RichText)
-        info.setToolTip(path)
-        sub_lbl = QLabel(path)
-        sub_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
-        sub_lbl.setToolTip(path)
+        This pre-populates _plugin_enrichments in the dashboard so the first
+        device scan picks up hostname / node / band data without waiting for
+        the 5-minute auto-refresh cycle.
+        """
+        for i, path in enumerate(_load_paths()):
+            QTimer.singleShot(i * 3000, lambda p=path: self._run_plugin(p))
 
-        info_col = QVBoxLayout()
-        info_col.setSpacing(1)
-        info_col.setContentsMargins(0, 0, 0, 0)
-        info_col.addWidget(info)
-        info_col.addWidget(sub_lbl)
-        lay.addLayout(info_col, 1)
-
-        # Buttons
-        if exists and ok:
-            btn_test = _btn("▶  Test")
-            btn_test.setToolTip("Run the script in a subprocess and show its output")
-            btn_test.clicked.connect(lambda _, p=path, r=row: self._on_test(p, r))
-            lay.addWidget(btn_test)
-
-        btn_remove = _btn("✕")
-        btn_remove.setFixedWidth(32)
-        btn_remove.setToolTip("Remove this script from the list")
-        btn_remove.clicked.connect(lambda _, p=path: self._on_remove(p))
-        lay.addWidget(btn_remove)
-
-        # Output area (hidden until Test is run)
-        wrapper = QVBoxLayout()
-        wrapper.setContentsMargins(0, 0, 0, 0)
-        wrapper.setSpacing(4)
-
-        outer = QVBoxLayout()
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(4)
-        outer.addLayout(lay)
-
-        output = QTextEdit()
-        output.setReadOnly(True)
-        output.setFont(QFont("Consolas", 8))
-        output.setFixedHeight(120)
-        output.setVisible(False)
-        output.setStyleSheet(
-            f"QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px;"
-            f" font-family:Consolas,monospace; }}"
-        )
-        outer.addWidget(output)
-
-        container = QFrame()
-        container.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
-        )
-        container.setLayout(outer)
-
-        # Attach output reference so _on_test can find it
-        row._output_edit = output    # type: ignore[attr-defined]
-        row._outer_frame = container  # type: ignore[attr-defined]
-        return container
-
-    # ── Handlers ──────────────────────────────────────────────────────────────
-
-    def _on_copy_template(self) -> None:
-        QApplication.clipboard().setText(_TEMPLATE)
-        sender = self.sender()
-        if sender:
-            sender.setText("✓  Copied!")
-            from PyQt6.QtCore import QTimer
-            QTimer.singleShot(2000, lambda: sender.setText("⎘  Copy template"))
-
-    def _on_save_template(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save integration template", "netsentinel_hardware.py",
-            "Python files (*.py)",
-        )
-        if not path:
+    def _ensure_timer(self, path: str) -> None:
+        if path in self._timers:
             return
-        try:
-            Path(path).write_text(_TEMPLATE, encoding="utf-8")
-            self._import_status.setText(f"Template saved to {Path(path).name}")
-            self._import_status.setStyleSheet(f"font-size:10px; color:{GREEN};")
-        except Exception as exc:
-            self._import_status.setText(f"Save failed: {exc}")
-            self._import_status.setStyleSheet(f"font-size:10px; color:{RED};")
+        timer = QTimer(self)
+        timer.setInterval(_AUTO_REFRESH_S * 1000)
+        timer.timeout.connect(lambda p=path: self._run_plugin(p))
+        timer.start()
+        self._timers[path] = timer
+
+    def _stop_timer(self, path: str) -> None:
+        t = self._timers.pop(path, None)
+        if t:
+            t.stop()
+
+    @pyqtSlot()
+    def _tick_timestamps(self) -> None:
+        for card in self._cards.values():
+            card.tick_timestamp()
+
+    # ── Plugin execution ──────────────────────────────────────────────────────
+
+    @pyqtSlot(str)
+    def _run_plugin(self, path: str) -> None:
+        # Kill any still-running worker for this path
+        old = self._workers.get(path)
+        if old and old.isRunning():
+            old.terminate()
+            old.wait(500)
+
+        card = self._cards.get(path)
+        if card:
+            card.set_refreshing(True)
+
+        ok, _, meta = _validate_script(path)
+        hw_type = meta.get("type", "unknown") if ok else "unknown"
+        is_modem = hw_type == "modem"
+
+        if is_modem:
+            self._pending_modem_resume.add(path)
+            self.modem_pause_requested.emit()
+
+        worker = PluginWorker(path, timeout=120)
+        worker.result.connect(lambda data, p=path: self._on_plugin_result(p, data))
+        worker.error.connect(lambda msg, p=path: self._on_plugin_error(p, msg, is_modem))
+        worker.start()
+        self._workers[path] = worker
+
+    def _on_plugin_result(self, path: str, data: dict) -> None:
+        ts = time.time()
+        data["_ts"] = ts
+        data["_path"] = path
+        _save_last_result(path, data)
+
+        card = self._cards.get(path)
+        if card:
+            card.update_result(data, ts)
+
+        if path in self._pending_modem_resume:
+            self._pending_modem_resume.discard(path)
+            self.modem_resume_requested.emit()
+
+        self.plugin_result.emit(data)
+
+    def _on_plugin_error(self, path: str, msg: str, was_modem: bool) -> None:
+        card = self._cards.get(path)
+        if card:
+            card.set_error(msg)
+
+        if was_modem and path in self._pending_modem_resume:
+            self._pending_modem_resume.discard(path)
+            self.modem_resume_requested.emit()
+
+    # ── Import / remove ───────────────────────────────────────────────────────
 
     def _on_browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -860,8 +1240,7 @@ class HardwareIntegrationPage(QWidget):
 
         ok, msg, meta = _validate_script(path)
         if not ok:
-            self._import_status.setText(f"Validation failed: {msg}")
-            self._import_status.setStyleSheet(f"font-size:10px; color:{AMBER};")
+            self._set_status(f"Validation failed: {msg}", error=True)
             return
 
         paths = _load_paths()
@@ -870,48 +1249,150 @@ class HardwareIntegrationPage(QWidget):
             _save_paths(paths)
 
         name = meta.get("name", Path(path).stem)
-        self._import_status.setText(f"Imported '{name}' successfully.")
-        self._import_status.setStyleSheet(f"font-size:10px; color:{GREEN};")
-        self._refresh_scripts_list()
+        self._set_status(f"Imported '{name}' — running first check…", error=False)
+        self._rebuild_hub()
+        self._ensure_timer(path)
+        # Kick off an immediate first run
+        self._run_plugin(path)
 
-    def _on_remove(self, path: str) -> None:
+    @pyqtSlot(str)
+    def _remove_plugin(self, path: str) -> None:
+        self._stop_timer(path)
+        old = self._workers.pop(path, None)
+        if old and old.isRunning():
+            old.terminate()
+            old.wait(500)
         paths = [p for p in _load_paths() if p != path]
         _save_paths(paths)
-        self._import_status.setText(f"Removed {Path(path).name}.")
-        self._import_status.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
-        self._refresh_scripts_list()
+        self._set_status(f"Removed {Path(path).name}.", error=False)
+        self._rebuild_hub()
 
-    def _on_test(self, path: str, row_frame) -> None:
-        output: QTextEdit = row_frame._output_edit
-        output.setPlainText("Running…")
-        output.setVisible(True)
+    # ── Status helper ─────────────────────────────────────────────────────────
 
-        if self._test_worker and self._test_worker.isRunning():
-            self._test_worker.terminate()
+    def _set_status(self, text: str, error: bool = False) -> None:
+        color = AMBER if error else GREEN
+        self._status_lbl.setText(text)
+        self._status_lbl.setStyleSheet(f"font-size:10px; color:{color};")
+        QTimer.singleShot(5000, lambda: self._status_lbl.setText(""))
 
-        self._test_worker = PluginWorker(path)
-        self._test_worker.result.connect(
-            lambda data, out=output: self._on_test_result(data, out)
-        )
-        self._test_worker.error.connect(
-            lambda msg, out=output: self._on_test_error(msg, out)
-        )
-        self._test_worker.start()
+    # ── Guide content (collapsible) ───────────────────────────────────────────
 
-    def _on_test_result(self, data: dict, output: QTextEdit) -> None:
-        import json as _json
-        output.setPlainText(_json.dumps(data, indent=2, default=str))
-        output.setStyleSheet(
+    def _build_step1(self) -> QWidget:
+        frame, lay = _step_card(1, "Find your hardware's local API")
+        lay.addWidget(_para(
+            "You do not need to be a programmer — an AI can write almost all "
+            "the code for you. Your job is to find out HOW your specific hardware "
+            "exposes data, then hand that to the AI."
+        ))
+        lay.addWidget(_sub_header("1a  Search GitHub for an existing implementation"))
+        lay.addWidget(_para("Paste one of these search strings into github.com:"))
+        for s in ['"Brand Model" python router', '"Brand Model" python api',
+                  '"Brand" router python script', '"Brand" modem python library']:
+            lay.addWidget(_code_chip(s))
+
+        lay.addWidget(_sub_header("1b  Ask an AI to write the script for you"))
+        lay.addWidget(_para(
+            "Claude, ChatGPT, and Gemini can write the full Python script "
+            "if you give them the right information."
+        ))
+        lay.addWidget(_prompt_block(
+            "PROMPT A — General (start here)",
+            "I want to write a Python script that reads live data from my [Brand] [Model] "
+            "router/modem. The admin panel is at http://192.168.1.1. "
+            "Login: username 'admin', password 'admin'.\n\n"
+            "Please:\n"
+            "1. Find if this router has a local JSON REST API or requires HTML scraping\n"
+            "2. Write a Python script using requests that logs in and returns:\n"
+            "   - WAN IP, Uptime, Connected clients (name, IP, MAC)\n"
+            "3. Add a main block at the bottom that prints all results as JSON\n"
+            "4. Tell me which packages to install with pip",
+        ))
+        lay.addWidget(_prompt_block(
+            "PROMPT B — From a cURL command (best results)",
+            "I captured this API call from my router admin panel using browser dev tools "
+            "(F12 → Network → right-click request → Copy as cURL). "
+            "Convert it to a Python function using requests.\n\n"
+            "[Paste your cURL command here]\n\n"
+            "Then wrap the result in the NetSentinel plugin format:\n"
+            "- HARDWARE_NAME, HARDWARE_TYPE, get_info(), get_status(), get_clients()\n"
+            "- if __name__ == '__main__': print all results as JSON",
+        ))
+
+        lay.addWidget(_sub_header("1c  Spy on your own router with browser dev tools"))
+        lay.addWidget(_para(
+            "Open your router admin panel in a browser, press F12, go to the Network tab, "
+            "reload the page, look for JSON responses, and right-click → Copy as cURL. "
+            "Paste into Prompt B above."
+        ))
+        return frame
+
+    def _build_step2(self) -> QWidget:
+        frame, lay = _step_card(2, "Get the script written (template + AI)")
+        lay.addWidget(_para(
+            "Either fill in the template yourself or hand it to an AI."
+        ))
+        lay.addWidget(_sub_header("Template"))
+
+        template_edit = QTextEdit()
+        template_edit.setReadOnly(True)
+        template_edit.setPlainText(_TEMPLATE)
+        template_edit.setFont(QFont("Consolas", 8))
+        template_edit.setFixedHeight(240)
+        template_edit.setStyleSheet(
             f"QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:3px;"
-            f" font-family:Consolas,monospace; }}"
+            f" border:1px solid {BORDER}; border-radius:4px; }}"
         )
-        self.plugin_result.emit(data)
+        lay.addWidget(template_edit)
 
-    def _on_test_error(self, msg: str, output: QTextEdit) -> None:
-        output.setPlainText(msg)
-        output.setStyleSheet(
-            f"QTextEdit {{ background:{BG_DARK}; color:{AMBER};"
-            f" border:1px solid {BORDER}; border-radius:3px;"
-            f" font-family:Consolas,monospace; }}"
+        btn_row = QHBoxLayout()
+        btn_copy = _btn("⎘  Copy template")
+        btn_save = _btn("💾  Save template as .py…")
+        btn_copy.clicked.connect(lambda: _copy_text(btn_copy, _TEMPLATE))
+        btn_save.clicked.connect(self._on_save_template)
+        btn_row.addWidget(btn_copy)
+        btn_row.addWidget(btn_save)
+        btn_row.addStretch()
+        lay.addLayout(btn_row)
+
+        lay.addWidget(_prompt_block(
+            "PROMPT — Ask AI to complete the template",
+            "I want to integrate my [Brand] [Model] router/modem into a monitoring app. "
+            "I have a Python plugin template. Hardware details:\n"
+            "- Admin panel URL: http://192.168.1.1\n"
+            "- Username: admin  Password: admin\n\n"
+            "Please complete get_info() and get_status() using the real API for my hardware.\n"
+            "[Paste the template here]",
+        ))
+        return frame
+
+    def _build_step3_guide(self) -> QWidget:
+        frame, lay = _step_card(3, "Test locally, then import via ＋ Add Integration above")
+        lay.addWidget(_para(
+            "Once your script prints correct data when run standalone "
+            "(python your_file.py), click ＋ Add Integration at the top of this page. "
+            "NetSentinel validates the interface, then runs the script and shows the result "
+            "in the Hub above."
+        ))
+        return frame
+
+    def _build_step4(self) -> QWidget:
+        frame, lay = _step_card(4, "Share your script with the community")
+        lay.addWidget(_para(
+            "A script that works for you almost certainly works for everyone with "
+            "the same hardware. Open a GitHub Issue at github.com/ossianericson/netsentinel "
+            "with title: [Hardware Plugin] Brand Model XYZ. Attach your .py file."
+        ))
+        return frame
+
+    def _on_save_template(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save integration template", "netsentinel_hardware.py",
+            "Python files (*.py)",
         )
+        if not path:
+            return
+        try:
+            Path(path).write_text(_TEMPLATE, encoding="utf-8")
+            self._set_status(f"Template saved to {Path(path).name}", error=False)
+        except Exception as exc:
+            self._set_status(f"Save failed: {exc}", error=True)

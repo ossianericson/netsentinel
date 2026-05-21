@@ -460,15 +460,15 @@ _FEATURES: list[dict] = [
     {
         "group": "Extend",
         "icon": "⬡",
-        "name": "Integrate Any Hardware",
+        "name": "Hardware Hub",
         "desc": (
-            "Write a small Python script that talks to your router, modem, or AP and "
-            "import it into NetSentinel. A built-in template and four-step guide walk you "
-            "through finding your device's local API, testing the script standalone, "
-            "and importing it. Scripts that work are shared back and become first-class "
-            "built-in integrations for all users."
+            "Live status dashboard for all integrated hardware — routers, modems, APs. "
+            "Each imported plugin shows real-time signal metrics, node topology, and "
+            "connected clients, with a full detail panel per device. Plugins auto-refresh "
+            "every 5 minutes and enrich the Devices table with hostnames and mesh node data. "
+            "A built-in guide and template walk you through writing and importing a plugin."
         ),
-        "page": "Integrate Hardware",
+        "page": "Hardware",
         "requires": None,
         "tags": [
             "hardware", "router", "modem", "ap", "plugin", "script", "python",
