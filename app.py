@@ -355,7 +355,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.17")
+    app.setApplicationVersion("1.9.18")
 
     # ── Splash screen ─────────────────────────────────────────────────────────
     _px = QPixmap(460, 260)
