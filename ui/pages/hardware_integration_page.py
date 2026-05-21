@@ -35,7 +35,7 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 
 from workers.plugin_worker import PluginWorker
 from PyQt6.QtGui import QFont
@@ -377,6 +377,8 @@ def _save_paths(paths: list[str]) -> None:
 
 class HardwareIntegrationPage(QWidget):
     """Teach, scaffold, and import custom hardware integration scripts."""
+
+    plugin_result = pyqtSignal(dict)   # emitted after a successful Test run
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -904,6 +906,7 @@ class HardwareIntegrationPage(QWidget):
             f" border:1px solid {BORDER}; border-radius:3px;"
             f" font-family:Consolas,monospace; }}"
         )
+        self.plugin_result.emit(data)
 
     def _on_test_error(self, msg: str, output: QTextEdit) -> None:
         output.setPlainText(msg)

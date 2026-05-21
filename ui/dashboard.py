@@ -1225,6 +1225,10 @@ class Dashboard(QMainWindow):
         # Mesh enrichment — populated when MeshRouterPage scan completes
         self._mesh_enrichment: dict = {}   # normalised MAC → MeshClient
 
+        # Plugin enrichment — populated when HardwareIntegrationPage Test succeeds
+        self._plugin_enrichment: dict = {}   # normalised MAC → client dict
+        self._plugin_hardware_name: str = "" # e.g. "TP-Link Deco XE75"
+
         # M1 satellite grouping state
         self._m1_sat_expanded: dict = {}   # node_name → bool (default False = collapsed)
         self._m1_grouping_active: bool = False
@@ -2265,6 +2269,7 @@ class Dashboard(QMainWindow):
 
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
+        self._hardware_integration_page.plugin_result.connect(self._on_plugin_result)
 
         from ui.pages.mesh_router_page import MeshRouterPage
         self._mesh_router_page = MeshRouterPage(parent=None)
@@ -8978,9 +8983,31 @@ class Dashboard(QMainWindow):
                     except Exception:
                         pass
 
+    @pyqtSlot(dict)
+    def _on_plugin_result(self, data: dict) -> None:
+        """Receive a successful plugin Test result and enrich the Devices table."""
+        from modules.deco_client import _norm_mac
+        clients = data.get("clients", [])
+        self._plugin_hardware_name = data.get("info", {}).get("name", "plugin")
+        self._plugin_enrichment = {
+            _norm_mac(c.get("mac", "")): c
+            for c in clients
+            if c.get("mac")
+        }
+        self._apply_mesh_enrichment()
+        n = len(self._plugin_enrichment)
+        if hasattr(self, "_m1_status"):
+            summary = getattr(self, "_m1_scan_summary", "")
+            label = self._plugin_hardware_name
+            self._m1_status.setText(
+                f"{summary}  ·  {label}: {n} device{'s' if n != 1 else ''} enriched"
+            )
+
     def _apply_mesh_enrichment(self) -> None:
-        """Merge MeshClient data into the M1 table rows and DeviceInfo objects."""
-        if not self._mesh_enrichment or not self._m1_result:
+        """Merge MeshClient and plugin client data into the M1 table rows."""
+        if not self._m1_result:
+            return
+        if not self._mesh_enrichment and not getattr(self, "_plugin_enrichment", None):
             return
 
         from PyQt6.QtGui import QColor
@@ -9024,6 +9051,24 @@ class Dashboard(QMainWindow):
         if any_matched:
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
+
+        # Plugin enrichment — update hostname column for any matching MAC
+        plugin_enrichment = getattr(self, "_plugin_enrichment", {})
+        plugin_name = getattr(self, "_plugin_hardware_name", "plugin")
+        if plugin_enrichment:
+            for row in range(self._m1_table.rowCount()):
+                mac_item = self._m1_table.item(row, 2)
+                if not mac_item:
+                    continue
+                pc = plugin_enrichment.get(_norm_mac(mac_item.text()))
+                if not pc:
+                    continue
+                hostname = pc.get("hostname", "")
+                if hostname and not _mac_re.match(hostname):
+                    name_item = QTableWidgetItem(hostname)
+                    name_item.setForeground(QColor(TEXT_PRIMARY))
+                    name_item.setToolTip(f"Name from {plugin_name}")
+                    self._m1_table.setItem(row, 1, name_item)
 
         # Mirror enrichment onto DeviceInfo objects so exports include it
         for d in self._m1_result.get("devices", []):
