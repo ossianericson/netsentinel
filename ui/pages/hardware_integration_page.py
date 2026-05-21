@@ -32,12 +32,12 @@ from __future__ import annotations
 
 import ast
 import json
-import subprocess
-import sys
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings
+
+from workers.plugin_worker import PluginWorker
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -161,33 +161,18 @@ if __name__ == "__main__":
     print(json.dumps(get_status(), indent=2, default=str))
     print("\\n=== Clients ===")
     print(json.dumps(get_clients(), indent=2, default=str))
+
+# ── NetSentinel plugin shim (do not remove) ───────────────────────────────────
+import sys as _sys
+if "--netsentinel" in _sys.argv:
+    import json as _json
+    _sys.stdout.write(_json.dumps({
+        "info":    get_info(),
+        "status":  get_status(),
+        "clients": get_clients(),
+    }, default=str) + "\\n")
+    _sys.exit(0)
 '''
-
-
-# ── Worker — runs the user script in a subprocess ─────────────────────────────
-
-class _TestWorker(QThread):
-    done = pyqtSignal(str, bool)   # (output_text, success)
-
-    def __init__(self, script_path: str) -> None:
-        super().__init__()
-        self._path = script_path
-
-    def run(self) -> None:
-        try:
-            result = subprocess.run(
-                [sys.executable, self._path],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode == 0:
-                self.done.emit(result.stdout or "(no output)", True)
-            else:
-                out = (result.stderr or result.stdout or "Script exited with an error.").strip()
-                self.done.emit(out, False)
-        except subprocess.TimeoutExpired:
-            self.done.emit("Timed out after 15 seconds — check for blocking network calls.", False)
-        except Exception as exc:
-            self.done.emit(str(exc), False)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -395,7 +380,7 @@ class HardwareIntegrationPage(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._test_worker: Optional[_TestWorker] = None
+        self._test_worker: Optional[PluginWorker] = None
         self._build_ui()
 
     # ── Construction ──────────────────────────────────────────────────────────
@@ -902,17 +887,28 @@ class HardwareIntegrationPage(QWidget):
         if self._test_worker and self._test_worker.isRunning():
             self._test_worker.terminate()
 
-        self._test_worker = _TestWorker(path)
-        self._test_worker.done.connect(
-            lambda text, ok, out=output: self._on_test_done(text, ok, out)
+        self._test_worker = PluginWorker(path)
+        self._test_worker.result.connect(
+            lambda data, out=output: self._on_test_result(data, out)
+        )
+        self._test_worker.error.connect(
+            lambda msg, out=output: self._on_test_error(msg, out)
         )
         self._test_worker.start()
 
-    def _on_test_done(self, text: str, success: bool, output: QTextEdit) -> None:
-        output.setPlainText(text)
-        color = TEXT_PRIMARY if success else AMBER
+    def _on_test_result(self, data: dict, output: QTextEdit) -> None:
+        import json as _json
+        output.setPlainText(_json.dumps(data, indent=2, default=str))
         output.setStyleSheet(
-            f"QTextEdit {{ background:{BG_DARK}; color:{color};"
+            f"QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px;"
+            f" font-family:Consolas,monospace; }}"
+        )
+
+    def _on_test_error(self, msg: str, output: QTextEdit) -> None:
+        output.setPlainText(msg)
+        output.setStyleSheet(
+            f"QTextEdit {{ background:{BG_DARK}; color:{AMBER};"
             f" border:1px solid {BORDER}; border-radius:3px;"
             f" font-family:Consolas,monospace; }}"
         )
