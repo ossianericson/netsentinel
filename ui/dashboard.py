@@ -2278,6 +2278,7 @@ class Dashboard(QMainWindow):
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
         self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
+        self._hardware_integration_page.navigate_to.connect(self._nav_rail_go_to)
 
         # Pre-populate enrichment from cached QSettings so the first scan has
         # hostname / band / node data without waiting for the first poll cycle.
@@ -3275,8 +3276,6 @@ class Dashboard(QMainWindow):
         self._nav_begin_section("Discover", "network")
         self._nav_add_rail_item("Devices",             self._m1_tab)
         self._nav_add_rail_item("Network Map",         self._topology_tab_widget)
-        self._nav_add_rail_item("Mesh & Router",       self._mesh_router_page)
-        self._nav_add_rail_item("Modem",               self._modem_page)
         self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
         self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
         self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
@@ -3346,7 +3345,9 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Help & Reference",    self._help_tab_widget)
 
         self._nav_begin_section("Extend", "plug")
-        self._nav_add_rail_item("Hardware",  self._hardware_integration_page)
+        self._nav_add_rail_item("Hardware",        self._hardware_integration_page)
+        self._nav_add_rail_item("Modem",           self._modem_page)
+        self._nav_add_rail_item("Mesh & Router",   self._mesh_router_page)
 
     #── Favourites / pinnable pages ───────────────────────────────────────────
 
@@ -3612,9 +3613,29 @@ class Dashboard(QMainWindow):
         self._m1_group_btn.setVisible(False)
         self._m1_group_btn.clicked.connect(self._m1_toggle_all_groups)
 
+        _node_grp_on = QSettings("NetSentinel", "NetSentinel").value(
+            "devices/group_by_node", False, type=bool
+        )
+        self._m1_group_by_node: bool = _node_grp_on
+        self._m1_node_group_btn = QPushButton(
+            "≡  Group by node  ✓" if _node_grp_on else "≡  Group by node"
+        )
+        self._m1_node_group_btn.setFixedHeight(22)
+        self._m1_node_group_btn.setCheckable(True)
+        self._m1_node_group_btn.setChecked(_node_grp_on)
+        _nbtn_ss = (
+            f"QPushButton{{background:{BG_DARK};color:{TEXT_MUTED};border:1px solid {BORDER};"
+            f"border-radius:3px;padding:0 8px;font-size:10px;}}"
+            f"QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
+            f"QPushButton:checked{{background:{ACCENT_DARK};color:#fff;border-color:{ACCENT};}}"
+        )
+        self._m1_node_group_btn.setStyleSheet(_nbtn_ss)
+        self._m1_node_group_btn.toggled.connect(self._on_node_group_toggled)
+
         _status_row = QHBoxLayout()
         _status_row.setContentsMargins(0, 0, 0, 0)
         _status_row.addWidget(self._m1_status, 1)
+        _status_row.addWidget(self._m1_node_group_btn)
         _status_row.addWidget(self._m1_group_btn)
 
         self._m1_table = _table([
@@ -8995,11 +9016,15 @@ class Dashboard(QMainWindow):
     def _on_mesh_result(self, data: dict) -> None:
         """Receive scan result from MeshRouterPage and enrich the Devices table."""
         from modules.deco_client import _norm_mac
-        clients = data.get("clients", [])
+        clients  = data.get("clients", [])
+        provider = data.get("provider", "mesh").title()
         self._mesh_units      = data.get("units", [])
         self._mesh_enrichment = {c.mac: c for c in clients}
         self._apply_mesh_enrichment()
-        provider = data.get("provider", "mesh").title()
+        if hasattr(self, "_hardware_integration_page"):
+            self._hardware_integration_page.on_mesh_card_data(
+                self._mesh_units, clients, provider
+            )
         matched  = sum(1 for c in clients if c.mac in self._mesh_enrichment)
         summary  = getattr(self, "_m1_scan_summary", "")
         self._m1_status.setText(
@@ -9359,9 +9384,58 @@ class Dashboard(QMainWindow):
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
 
-        # Regroup M1 table into collapsible satellite sections
-        if any_matched or _synth_added or plugin_any_matched or _plugin_synth_added:
+        # Regroup M1 table into collapsible satellite sections (only when toggle is ON)
+        if (any_matched or _synth_added or plugin_any_matched or _plugin_synth_added) \
+                and getattr(self, "_m1_group_by_node", False):
             self._regroup_m1_by_satellite()
+
+    @pyqtSlot(bool)
+    def _on_node_group_toggled(self, checked: bool) -> None:
+        self._m1_group_by_node = checked
+        QSettings("NetSentinel", "NetSentinel").setValue("devices/group_by_node", checked)
+        self._m1_node_group_btn.setText(
+            "≡  Group by node  ✓" if checked else "≡  Group by node"
+        )
+        if checked:
+            self._regroup_m1_by_satellite()
+        else:
+            self._m1_flatten_table()
+
+    def _m1_flatten_table(self) -> None:
+        """Strip satellite section headers — restore flat device list."""
+        from PyQt6.QtGui import QColor as _QC
+        rows_data = []
+        for row in range(self._m1_table.rowCount()):
+            first = self._m1_table.item(row, 0)
+            if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                continue
+            cells, risk = [], "CLEAN"
+            for col in range(self._m1_table.columnCount()):
+                item = self._m1_table.item(row, col)
+                cells.append({
+                    "text":    item.text()    if item else "",
+                    "tooltip": item.toolTip() if item else "",
+                })
+            risk_item = self._m1_table.item(row, 4)
+            if risk_item:
+                risk = risk_item.text().strip()
+            rows_data.append({"cells": cells, "risk": risk})
+
+        if not rows_data:
+            return
+        self._m1_table.setRowCount(0)
+        self._m1_group_btn.setVisible(False)
+        for rd in rows_data:
+            r = self._m1_table.rowCount()
+            self._m1_table.insertRow(r)
+            rc = _color_for_level(rd["risk"])
+            high = rd["risk"] in ("HIGH", "STORM")
+            for col, cell in enumerate(rd["cells"]):
+                item = QTableWidgetItem(cell["text"])
+                item.setForeground(_QC(rc if (col == 4 or high) else TEXT_PRIMARY))
+                if cell["tooltip"]:
+                    item.setToolTip(cell["tooltip"])
+                self._m1_table.setItem(r, col, item)
 
     def _regroup_m1_by_satellite(self) -> None:
         """Rebuild M1 table with collapsible satellite section header rows."""
@@ -9590,15 +9664,32 @@ class Dashboard(QMainWindow):
     @pyqtSlot(str, str)
     @pyqtSlot(object)
     def _on_speed_test_modem_forward(self, result) -> None:
-        """Forward speed-test modem snapshot to the Modem page immediately.
-
-        The speed test worker captures a fresh ZTE signal dict during the test.
-        ZteWorker only polls every 30 s, so the modem page would otherwise show
-        stale data for up to 29 s after the test completes.
-        """
+        """Forward speed-test modem snapshot to the Modem page and Hardware Hub."""
         sig = getattr(result, "zte_signal", None)
-        if sig and hasattr(self, "_modem_page"):
-            self._modem_page.on_modem_signal(sig)
+        if sig:
+            if hasattr(self, "_modem_page"):
+                self._modem_page.on_modem_signal(sig)
+            if hasattr(self, "_hardware_integration_page"):
+                self._hardware_integration_page.on_modem_card_data(sig)
+            return
+        # No ZTE signal — check if a plugin modem has a cached result
+        if not hasattr(self, "_hardware_integration_page"):
+            return
+        try:
+            from ui.pages.hardware_integration_page import (
+                _load_paths, _load_last_result, _validate_script
+            )
+            for _p in _load_paths():
+                _ok, _, _meta = _validate_script(_p)
+                if _ok and _meta.get("type") == "modem":
+                    _cached = _load_last_result(_p)
+                    if _cached:
+                        _extra = _cached.get("status", {}).get("extra", {})
+                        if _extra:
+                            self._hardware_integration_page.on_modem_card_data(_extra)
+                        break
+        except Exception:
+            pass
 
     def _on_modem_connect(self, host: str, password: str) -> None:
         """Start (or restart) the ZTE polling worker."""
@@ -9651,9 +9742,9 @@ class Dashboard(QMainWindow):
             self._modem_page.on_modem_signal(data)
         if hasattr(self, "_overview_page"):
             self._overview_page.on_modem_signal(data)
-        # Keep modem cards in the Hardware Hub current with live ZteWorker data
         if hasattr(self, "_hardware_integration_page"):
             self._hardware_integration_page.on_native_modem_data(data)
+            self._hardware_integration_page.on_modem_card_data(data)
         # Update topology if a scan result is already loaded
         if getattr(self, "_m1_result", None) and hasattr(self, "_topology_widget"):
             try:
