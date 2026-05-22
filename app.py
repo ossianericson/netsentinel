@@ -392,12 +392,17 @@ def main():
 
     # Apply QMenu rules at application level so top-level (parentless) menus
     # are styled — widget-level stylesheets do not reach separate top-level windows.
-    from ui.styles import BG_CARD, TEXT_PRIMARY, BORDER, BG_HOVER
+    from ui.styles import BG_CARD, TEXT_PRIMARY, BORDER, BG_HOVER, WHITE
+    from ui.styles import TOOLTIP_BG, TOOLTIP_BORDER
     app.setStyleSheet(
         f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
         f" border:1px solid {BORDER}; padding:4px; font-size:12px; }}"
         f"QMenu::item {{ padding:4px 16px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
         f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        # QToolTip is a top-level window — must be set at app level to take effect
+        f"QToolTip {{ background:{TOOLTIP_BG}; color:{WHITE};"
+        f" border:1px solid {TOOLTIP_BORDER}; border-radius:3px; padding:4px 8px;"
+        f" font-size:11px; }}"
     )
 
     # ── Single instance guard ─────────────────────────────────────────────────
