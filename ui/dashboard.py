@@ -1709,6 +1709,42 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_edge_grips"):
             self._place_edge_grips()
 
+    # ── Windows Snap Layouts ─────────────────────────────────────────────────
+
+    def nativeEvent(self, event_type, message):
+        """Return HTMAXBUTTON over our maximize button → Windows Snap Layout flyout.
+
+        Safety: reads only the 4-byte message UINT at offset sizeof(HWND) using
+        string_at (a byte-copy, not a live struct view).  QCursor.pos() replaces
+        lParam parsing entirely.  IsBadReadPtr guards any memory access.
+        """
+        if event_type == b"windows_generic_MSG":
+            try:
+                import ctypes, struct
+                msg_ptr = int(message)
+                if not msg_ptr:
+                    return super().nativeEvent(event_type, message)
+
+                ptr_sz = ctypes.sizeof(ctypes.c_void_p)   # 8 on 64-bit Windows
+                if ctypes.windll.kernel32.IsBadReadPtr(msg_ptr, ptr_sz + 4):
+                    return super().nativeEvent(event_type, message)
+
+                # Read only the UINT message field — 4 bytes at offset sizeof(HWND)
+                msg_id = struct.unpack_from("<I",
+                    ctypes.string_at(msg_ptr + ptr_sz, 4))[0]
+
+                if msg_id == 0x0084 and self._maximize_btn is not None:  # WM_NCHITTEST
+                    from PyQt6.QtGui import QCursor
+                    p   = QCursor.pos()
+                    btn = self._maximize_btn
+                    tl  = btn.mapToGlobal(btn.rect().topLeft())
+                    if (tl.x() <= p.x() < tl.x() + btn.width() and
+                            tl.y() <= p.y() < tl.y() + btn.height()):
+                        return True, 9  # HTMAXBUTTON
+            except Exception:
+                pass
+        return super().nativeEvent(event_type, message)
+
     def _install_edge_grips(self):
         """Create 8 transparent resize-grip strips around the window border."""
         from PyQt6.QtCore import Qt, QRect, QPoint
