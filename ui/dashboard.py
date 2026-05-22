@@ -2384,6 +2384,26 @@ class Dashboard(QMainWindow):
                     if c.get("mac")
                 }
 
+        # Create one PluginDevicePage per saved plugin path.
+        # Pages are registered in the nav by _build_pro_nav() further below.
+        from ui.pages.plugin_device_page import PluginDevicePage
+        from ui.pages.hardware_integration_page import _validate_plugin as _hw_validate
+        from pathlib import Path as _HwPath
+        self._plugin_pages: dict[str, PluginDevicePage] = {}
+        for _hw_p in _hw_paths():
+            _ok, _msg, _meta = _hw_validate(_hw_p)
+            _hw_type  = _meta.get("type", "other") if _ok else "other"
+            _hw_label = _meta.get("name") if _ok else _HwPath(_hw_p).stem
+            _pg = PluginDevicePage(_hw_p, _hw_label, _hw_type, parent=None)
+            if not _ok or not _HwPath(_hw_p).is_file():
+                _pg.mark_unavailable()
+            else:
+                # Seed with cached result so page shows data on first open
+                _hw_cached2 = _hw_last(_hw_p)
+                if _hw_cached2:
+                    _pg.update(_hw_cached2)
+            self._plugin_pages[_hw_p] = _pg
+
         from ui.pages.mesh_router_page import MeshRouterPage
         self._mesh_router_page = MeshRouterPage(parent=None)
         self._mesh_router_page.scan_done.connect(self._on_mesh_result)
@@ -3440,6 +3460,12 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Modem",           self._modem_page)
         self._nav_add_rail_item("Mesh & Router",   self._mesh_router_page)
 
+        # Plugin pages — one entry per imported plugin, below legacy entries.
+        if getattr(self, "_plugin_pages", {}):
+            self._nav_begin_section("Plugins", "cpu")
+            for _hw_p, _pg in self._plugin_pages.items():
+                self._nav_add_rail_item(_pg._label, _pg)
+
     #── Favourites / pinnable pages ───────────────────────────────────────────
 
     def _load_pinned_labels(self) -> set:
@@ -3714,6 +3740,10 @@ class Dashboard(QMainWindow):
         self._m1_node_group_btn.setFixedHeight(22)
         self._m1_node_group_btn.setCheckable(True)
         self._m1_node_group_btn.setChecked(_node_grp_on)
+        self._m1_node_group_btn.setToolTip(
+            "Group scanned devices under their mesh node / AP.\n"
+            "Activates once mesh data arrives from a running hardware plugin."
+        )
         _nbtn_ss = (
             f"QPushButton{{background:{BG_DARK};color:{TEXT_MUTED};border:1px solid {BORDER};"
             f"border-radius:3px;padding:0 8px;font-size:10px;}}"
@@ -9199,6 +9229,8 @@ class Dashboard(QMainWindow):
             path = data.get("_path", hw_name)
             from modules.network_infrastructure import hw_state
             hw_state.update_modem(status.get("extra", {}), source=path, hw_name=hw_name)
+            if path in getattr(self, "_plugin_pages", {}):
+                self._plugin_pages[path].update(data)
             return  # modem plugins have no LAN clients to enrich
 
         # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
@@ -9220,6 +9252,11 @@ class Dashboard(QMainWindow):
             self._m1_status.setText(
                 f"{summary}  ·  {hw_name}: {n} device{'s' if n != 1 else ''} enriched"
             )
+
+        # Update plugin device page (modem path returns early above, so this
+        # only runs for router/AP/switch types).
+        if path in getattr(self, "_plugin_pages", {}):
+            self._plugin_pages[path].update(data)
 
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient and plugin client data into the M1 table rows."""
