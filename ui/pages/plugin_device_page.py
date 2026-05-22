@@ -498,8 +498,8 @@ class PluginDevicePage(QWidget):
             QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
         )
         self._r_node_tree.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        self._r_node_tree.itemExpanded.connect(self._r_node_tree.updateGeometry)
-        self._r_node_tree.itemCollapsed.connect(self._r_node_tree.updateGeometry)
+        self._r_node_tree.itemExpanded.connect(self._resize_node_tree_columns)
+        self._r_node_tree.itemCollapsed.connect(self._resize_node_tree_columns)
         card2_outer.addWidget(self._r_node_tree)
         self._root.addWidget(card2)
 
@@ -633,6 +633,11 @@ class PluginDevicePage(QWidget):
         self._m_enb_id.setText(_fmt(extra.get("enb_id")))
         self._m_mcc.setText(_fmt(extra.get("mcc")))
         self._m_mnc.setText(_fmt(extra.get("mnc")))
+
+    def _resize_node_tree_columns(self) -> None:
+        for col in range(self._r_node_tree.columnCount()):
+            self._r_node_tree.resizeColumnToContents(col)
+        self._r_node_tree.updateGeometry()
 
     def _fill_router(self, status: dict, extra: dict, clients: list) -> None:
         nodes = extra.get("nodes", [])
