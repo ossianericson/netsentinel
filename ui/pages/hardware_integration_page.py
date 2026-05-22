@@ -1568,12 +1568,22 @@ class HardwareIntegrationPage(QWidget):
             plugin     = match["plugin"]
             confidence = match["confidence"]
             signals    = match["signals"]
-            self._detect_lay.addWidget(self._build_detect_row(plugin, confidence, signals))
+            # Determine if this device's native worker is already supplying data
+            native_active = (
+                (plugin.get("id") == "zte_mc889" and self._native_modem_card is not None) or
+                (plugin.get("id") == "deco"      and self._native_mesh_card  is not None)
+            )
+            self._detect_lay.addWidget(
+                self._build_detect_row(plugin, confidence, signals, native_active)
+            )
 
         self._detect_lay.addStretch()
         self._detect_frame.setVisible(True)
 
-    def _build_detect_row(self, plugin: dict, confidence: float, signals: list) -> QWidget:
+    def _build_detect_row(
+        self, plugin: dict, confidence: float, signals: list,
+        native_active: bool = False,
+    ) -> QWidget:
         row = QFrame()
         row.setStyleSheet(
             f"QFrame {{ background:transparent; border:none;"
@@ -1610,22 +1620,41 @@ class HardwareIntegrationPage(QWidget):
         lay.addLayout(info_col, 1)
 
         # Action buttons
+        native_page = plugin.get("native_page", "")
         has_bundled = bool(plugin.get("file"))
         has_prompt  = bool(plugin.get("ai_prompt"))
 
-        if has_bundled:
-            btn_install = _btn("⬇  Install", accent=True)
-            btn_install.setFixedHeight(24)
-            btn_install.setToolTip("Copy bundled plugin into your NetSentinel data folder and register it")
-            btn_install.clicked.connect(lambda _=False, p=plugin: self._install_from_catalogue(p))
-            lay.addWidget(btn_install)
+        if native_active and native_page:
+            # Device is already supplying live data via its native worker.
+            # Show "Open page" instead of Install — no script copy needed.
+            status_lbl = QLabel("Active")
+            status_lbl.setStyleSheet(
+                f"color:{GREEN}; font-size:9px; font-weight:bold; border:none;"
+            )
+            lay.addWidget(status_lbl)
+            btn_open = _btn(f"Open {native_page} →", accent=True)
+            btn_open.setFixedHeight(24)
+            btn_open.setToolTip(f"Navigate to the {native_page} page")
+            btn_open.clicked.connect(lambda _=False, pg=native_page: self.navigate_to.emit(pg))
+            lay.addWidget(btn_open)
+        else:
+            if has_bundled:
+                btn_install = _btn("⬇  Install", accent=True)
+                btn_install.setFixedHeight(24)
+                btn_install.setToolTip(
+                    "Copy bundled plugin into your NetSentinel data folder and register it"
+                )
+                btn_install.clicked.connect(lambda _=False, p=plugin: self._install_from_catalogue(p))
+                lay.addWidget(btn_install)
 
-        if has_prompt:
-            btn_prompt = _btn("⎘  Copy AI prompt")
-            btn_prompt.setFixedHeight(24)
-            btn_prompt.setToolTip("Copy a pre-written prompt for an AI to generate this plugin")
-            btn_prompt.clicked.connect(lambda _=False, p=plugin: self._copy_ai_prompt(p, btn_prompt))
-            lay.addWidget(btn_prompt)
+            if has_prompt:
+                btn_prompt = _btn("⎘  Copy AI prompt")
+                btn_prompt.setFixedHeight(24)
+                btn_prompt.setToolTip("Copy a pre-written prompt for an AI to generate this plugin")
+                btn_prompt.clicked.connect(
+                    lambda _=False, p=plugin: self._copy_ai_prompt(p, btn_prompt)
+                )
+                lay.addWidget(btn_prompt)
 
         return row
 
@@ -1702,9 +1731,16 @@ class HardwareIntegrationPage(QWidget):
     # ── Native modem / mesh card data ────────────────────────────────────────
 
     def on_modem_card_data(self, raw: dict) -> None:
-        """Update (or create) the native modem card from ZteWorker data."""
+        """Update (or create) the native modem card from ZteWorker data.
+
+        Skipped when the user has imported zte_plugin.py as a HubCard — the
+        HubCard is the canonical view in that case and we avoid showing the
+        same data twice.
+        """
         if self._native_lay is None:
             return
+        if any("zte_plugin" in p for p in _load_paths()):
+            return  # HubCard is the representation — skip native card
         if self._native_modem_card is None:
             self._native_modem_card = NativeHwCard("modem", "5G / LTE Modem", parent=self)
             self._native_modem_card.open_page.connect(
@@ -1715,9 +1751,15 @@ class HardwareIntegrationPage(QWidget):
         self._native_modem_card.update_modem(raw)
 
     def on_mesh_card_data(self, units: list, clients: list, provider: str = "Mesh") -> None:
-        """Update (or create) the native mesh/router card from MeshWorker data."""
+        """Update (or create) the native mesh/router card from MeshWorker data.
+
+        Skipped when the user has imported deco_plugin.py as a HubCard — the
+        HubCard is the canonical view in that case.
+        """
         if self._native_lay is None:
             return
+        if any("deco_plugin" in p for p in _load_paths()):
+            return  # HubCard is the representation — skip native card
         if self._native_mesh_card is None:
             self._native_mesh_card = NativeHwCard("router", "Mesh / Router", parent=self)
             self._native_mesh_card.open_page.connect(

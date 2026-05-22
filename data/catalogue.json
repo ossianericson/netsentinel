@@ -11,6 +11,7 @@
       "description": "Full 5G NR + LTE signal, WAN IP, cell ID, eNB ID, ENDC",
       "author": "ossianericson",
       "file": "plugins/zte_plugin.py",
+      "native_page": "Modem",
       "requires": ["keyring"],
       "credentials_hint": "Use the password from your ZTE web UI (default: admin)",
       "fingerprints": {
@@ -35,6 +36,7 @@
       "description": "Mesh nodes with per-node client assignment, band (5G/6G/2.4G/Wired), hostname",
       "author": "ossianericson",
       "file": "plugins/deco_plugin.py",
+      "native_page": "Mesh & Router",
       "requires": ["keyring"],
       "credentials_hint": "Use the Deco app password (set when you first configured the Deco)",
       "fingerprints": {
