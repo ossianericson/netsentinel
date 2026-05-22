@@ -3,7 +3,7 @@ PluginDevicePage — live status page for a hardware integration plugin.
 
 Renders differently based on plugin type:
   "modem"  → signal panel (NR5G / LTE bands, RSRP, SINR, cell info)
-  "router" → mesh node cards + connected-client table
+  "router" → mesh node tree (expandable) + flat connected-client table
   other    → generic key/value status panel
 
 Receives data via update(result) where result has the shape:
@@ -105,6 +105,22 @@ def _fmt(v, suffix: str = "") -> str:
     return f"{v}{suffix}"
 
 
+_TBL_SS = (
+    f"QTableWidget {{ border:none; background:{BG_CARD};"
+    f" alternate-background-color:{BG_ALT_ROW}; }}"
+    f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
+    f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
+)
+
+_TREE_SS = (
+    f"QTreeWidget {{ border:none; background:{BG_CARD}; outline:none; }}"
+    f"QTreeWidget::item {{ padding:3px 4px; color:{TEXT_PRIMARY}; }}"
+    f"QTreeWidget::item:selected {{ background:{ACCENT}22; color:{TEXT_PRIMARY}; }}"
+    f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
+    f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
+)
+
+
 # ── page ───────────────────────────────────────────────────────────────────────
 
 class PluginDevicePage(QWidget):
@@ -202,10 +218,6 @@ class PluginDevicePage(QWidget):
         self._root.addWidget(card4)
 
     def _build_router_ui(self) -> None:
-        self._r_group_by_node: bool = False
-        self._r_last_nodes:   list  = []
-        self._r_last_clients: list  = []
-
         # Summary
         card, body = _card("Status")
         self._r_clients = _row("Connected clients", body)
@@ -213,43 +225,49 @@ class PluginDevicePage(QWidget):
         self._r_wan_ip  = _row("WAN IP",            body)
         self._root.addWidget(card)
 
-        # Nodes table
-        card2, body2 = _card("Mesh Nodes")
-        self._r_node_tbl = QTableWidget(0, 3)
-        self._r_node_tbl.setHorizontalHeaderLabels(["Name", "MAC", "Role"])
-        self._r_node_tbl.horizontalHeader().setStretchLastSection(True)
-        self._r_node_tbl.verticalHeader().setVisible(False)
-        self._r_node_tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._r_node_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._r_node_tbl.setAlternatingRowColors(True)
-        self._r_node_tbl.setStyleSheet(
-            f"QTableWidget {{ border:none; background:{BG_CARD}; alternate-background-color:{BG_ALT_ROW}; }}"
-            f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
-            f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
+        # Mesh Nodes tree — top-level rows are nodes, children are connected clients
+        card2 = QFrame()
+        card2.setObjectName("pluginCard")
+        card2.setStyleSheet(
+            f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}"
         )
-        self._r_node_tbl.setMaximumHeight(150)
-        body2.addWidget(self._r_node_tbl)
+        card2_outer = QVBoxLayout(card2)
+        card2_outer.setContentsMargins(0, 0, 0, 0)
+        card2_outer.setSpacing(0)
+
+        hdr2 = QFrame()
+        hdr2.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
+        )
+        hdr2_lay = QHBoxLayout(hdr2)
+        hdr2_lay.setContentsMargins(12, 6, 12, 6)
+        hdr2_lbl = QLabel("MESH NODES")
+        hdr2_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+            " letter-spacing:0.5px; background:transparent; border:none;"
+        )
+        hdr2_lay.addWidget(hdr2_lbl)
+        hdr2_lay.addStretch()
+        hint = QLabel("▶ expand node to see connected devices")
+        hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
+        hdr2_lay.addWidget(hint)
+        card2_outer.addWidget(hdr2)
+
+        self._r_node_tree = QTreeWidget()
+        self._r_node_tree.setColumnCount(4)
+        self._r_node_tree.setHeaderLabels(["NAME", "MAC ADDRESS", "IP ADDRESS", "ROLE"])
+        self._r_node_tree.header().setStretchLastSection(True)
+        self._r_node_tree.setEditTriggers(QTreeWidget.EditTrigger.NoEditTriggers)
+        self._r_node_tree.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
+        self._r_node_tree.setRootIsDecorated(True)
+        self._r_node_tree.setStyleSheet(_TREE_SS)
+        self._r_node_tree.setMaximumHeight(250)
+        card2_outer.addWidget(self._r_node_tree)
         self._root.addWidget(card2)
 
-        # Clients card — header row contains the flat/grouped toggle
-        _tbl_ss = (
-            f"QTableWidget {{ border:none; background:{BG_CARD};"
-            f" alternate-background-color:{BG_ALT_ROW}; }}"
-            f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
-            f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
-        )
-        _tree_ss = (
-            f"QTreeWidget {{ border:none; background:{BG_CARD}; outline:none; }}"
-            f"QTreeWidget::item {{ padding:3px 4px; color:{TEXT_PRIMARY}; }}"
-            f"QTreeWidget::item:selected {{ background:{ACCENT}22; color:{TEXT_PRIMARY}; }}"
-            f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
-            f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
-            f"QTreeWidget::branch:has-children:!has-siblings:closed,"
-            f"QTreeWidget::branch:closed:has-children:has-siblings {{"
-            f" border-image:none; image:url(none); }}"
-        )
-
-        # Build the clients card manually so we can inject the toggle into the header
+        # Connected Clients — flat table matching old Mesh Router view
         card3 = QFrame()
         card3.setObjectName("pluginCard")
         card3.setStyleSheet(
@@ -266,7 +284,7 @@ class PluginDevicePage(QWidget):
             f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
         )
         hdr3_lay = QHBoxLayout(hdr3)
-        hdr3_lay.setContentsMargins(12, 4, 8, 4)
+        hdr3_lay.setContentsMargins(12, 6, 12, 6)
         hdr3_lbl = QLabel("CONNECTED CLIENTS")
         hdr3_lbl.setStyleSheet(
             f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
@@ -274,49 +292,19 @@ class PluginDevicePage(QWidget):
         )
         hdr3_lay.addWidget(hdr3_lbl)
         hdr3_lay.addStretch()
-
-        self._r_group_btn = QPushButton("≡  Group by node")
-        self._r_group_btn.setFixedHeight(22)
-        self._r_group_btn.setCheckable(True)
-        self._r_group_btn.setToolTip("Show clients grouped under their mesh node (expand/collapse each node)")
-        self._r_group_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
-            f" border-radius:3px; padding:0 8px; font-size:10px; }}"
-            f"QPushButton:hover {{ background:{BG_ALT_ROW}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:checked {{ background:{ACCENT}22; color:{ACCENT}; border-color:{ACCENT}; }}"
-        )
-        self._r_group_btn.toggled.connect(self._on_group_toggled)
-        hdr3_lay.addWidget(self._r_group_btn)
         card3_outer.addWidget(hdr3)
 
-        body3 = QVBoxLayout()
-        body3.setContentsMargins(0, 0, 0, 0)
-        body3.setSpacing(0)
-
-        # Flat table (default view)
-        self._r_client_tbl = QTableWidget(0, 5)
-        self._r_client_tbl.setHorizontalHeaderLabels(["IP", "Hostname", "MAC", "Band", "Node"])
+        self._r_client_tbl = QTableWidget(0, 7)
+        self._r_client_tbl.setHorizontalHeaderLabels(
+            ["DEVICE NAME", "MAC ADDRESS", "IP ADDRESS", "MESH NODE", "BAND", "↑ KB/S", "↓ KB/S"]
+        )
         self._r_client_tbl.horizontalHeader().setStretchLastSection(True)
         self._r_client_tbl.verticalHeader().setVisible(False)
         self._r_client_tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._r_client_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._r_client_tbl.setAlternatingRowColors(True)
-        self._r_client_tbl.setStyleSheet(_tbl_ss)
-        body3.addWidget(self._r_client_tbl)
-
-        # Grouped tree (hidden by default)
-        self._r_tree = QTreeWidget()
-        self._r_tree.setColumnCount(4)
-        self._r_tree.setHeaderLabels(["Device", "IP", "MAC", "Band"])
-        self._r_tree.header().setStretchLastSection(True)
-        self._r_tree.setEditTriggers(QTreeWidget.EditTrigger.NoEditTriggers)
-        self._r_tree.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
-        self._r_tree.setRootIsDecorated(True)
-        self._r_tree.setStyleSheet(_tree_ss)
-        self._r_tree.setVisible(False)
-        body3.addWidget(self._r_tree)
-
-        card3_outer.addLayout(body3, 1)
+        self._r_client_tbl.setStyleSheet(_TBL_SS)
+        card3_outer.addWidget(self._r_client_tbl)
         self._root.addWidget(card3)
 
     def _build_generic_ui(self) -> None:
@@ -337,7 +325,6 @@ class PluginDevicePage(QWidget):
         extra   = status.get("extra", {})
         err     = extra.get("error")
 
-        # File-missing warning
         file_ok = os.path.isfile(self._path)
         if not file_ok:
             self._show_banner(f"Plugin file not found: {self._path}", RED)
@@ -408,102 +395,65 @@ class PluginDevicePage(QWidget):
         self._r_nodes.setText(str(status.get("mesh_nodes") or len(nodes)))
         self._r_wan_ip.setText(_fmt(status.get("wan_ip")))
 
-        # Nodes table
-        self._r_node_tbl.setRowCount(0)
-        for node in nodes:
-            r = self._r_node_tbl.rowCount()
-            self._r_node_tbl.insertRow(r)
-            self._r_node_tbl.setItem(r, 0, QTableWidgetItem(node.get("name", "")))
-            self._r_node_tbl.setItem(r, 1, QTableWidgetItem(node.get("mac", "")))
-            role_item = QTableWidgetItem(node.get("role", ""))
-            role_item.setForeground(
-                __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(
-                    ACCENT if node.get("role") == "master" else TEXT_SECONDARY
-                )
-            )
-            self._r_node_tbl.setItem(r, 2, role_item)
-        self._r_node_tbl.resizeColumnsToContents()
-
-        # Store for re-use when toggle switches
-        self._r_last_nodes   = nodes
-        self._r_last_clients = clients
-
-        # Flat clients table
-        self._r_client_tbl.setRowCount(0)
-        for c in clients:
-            r = self._r_client_tbl.rowCount()
-            self._r_client_tbl.insertRow(r)
-            self._r_client_tbl.setItem(r, 0, QTableWidgetItem(c.get("ip", "") or ""))
-            self._r_client_tbl.setItem(r, 1, QTableWidgetItem(c.get("hostname", "") or ""))
-            self._r_client_tbl.setItem(r, 2, QTableWidgetItem(c.get("mac", "") or ""))
-            self._r_client_tbl.setItem(r, 3, QTableWidgetItem(c.get("band", "") or ""))
-            self._r_client_tbl.setItem(r, 4, QTableWidgetItem(c.get("unit", "") or ""))
-        self._r_client_tbl.resizeColumnsToContents()
-
-        if self._r_group_by_node:
-            self._rebuild_tree(nodes, clients)
-
-    # ── grouping ──────────────────────────────────────────────────────────────
-
-    def _on_group_toggled(self, checked: bool) -> None:
-        self._r_group_by_node = checked
-        self._r_client_tbl.setVisible(not checked)
-        self._r_tree.setVisible(checked)
-        if checked:
-            self._rebuild_tree(self._r_last_nodes, self._r_last_clients)
-
-    def _rebuild_tree(self, nodes: list, clients: list) -> None:
-        self._r_tree.clear()
-
-        # Build node-name → client list map using client["unit"]
-        node_names = [n.get("name", "") for n in nodes]
-        buckets: dict[str, list] = {n: [] for n in node_names}
-        unassigned: list = []
+        # Build node-name → client list map
+        buckets: dict[str, list] = {n.get("name", ""): [] for n in nodes}
         for c in clients:
             unit = c.get("unit", "") or ""
             if unit in buckets:
                 buckets[unit].append(c)
-            else:
-                unassigned.append(c)
 
         bold = QFont()
         bold.setBold(True)
 
-        def _make_client_item(c: dict) -> QTreeWidgetItem:
-            name = c.get("hostname") or c.get("mac") or "Unknown"
-            it = QTreeWidgetItem([name, c.get("ip", "") or "", c.get("mac", "") or "", c.get("band", "") or ""])
-            it.setForeground(0, QColor(TEXT_PRIMARY))
-            return it
-
+        # Mesh nodes tree
+        self._r_node_tree.clear()
         for node in nodes:
-            node_name = node.get("name", "")
-            role      = node.get("role", "")
-            node_clients = buckets.get(node_name, [])
-            count = len(node_clients)
+            name = node.get("name", "")
+            mac  = node.get("mac", "")
+            ip   = node.get("ip", "") or "—"
+            role = node.get("role", "")
 
-            role_chip = f"  [{role}]" if role else ""
-            header = QTreeWidgetItem([f"{node_name}{role_chip}  ({count} device{'s' if count != 1 else ''})", "", "", ""])
-            header.setFont(0, bold)
-            header.setForeground(0, QColor(ACCENT if role == "master" else TEXT_PRIMARY))
-            header.setExpanded(True)
+            node_item = QTreeWidgetItem([name, mac, ip, role])
+            node_item.setFont(0, bold)
+            node_item.setForeground(
+                0, QColor(ACCENT if role == "master" else TEXT_PRIMARY)
+            )
+            node_item.setForeground(3, QColor(ACCENT if role == "master" else TEXT_SECONDARY))
 
-            for c in node_clients:
-                header.addChild(_make_client_item(c))
+            # Child rows: clients connected to this node
+            for c in buckets.get(name, []):
+                device = c.get("hostname") or c.get("mac") or "Unknown"
+                child = QTreeWidgetItem([
+                    f"  {device}",
+                    c.get("mac", "") or "",
+                    c.get("ip", "") or "",
+                    c.get("band", "") or "",
+                ])
+                child.setForeground(0, QColor(TEXT_SECONDARY))
+                node_item.addChild(child)
 
-            self._r_tree.addTopLevelItem(header)
+            self._r_node_tree.addTopLevelItem(node_item)
 
-        if unassigned:
-            ua = QTreeWidgetItem([f"Unassigned  ({len(unassigned)})", "", "", ""])
-            ua.setFont(0, bold)
-            ua.setForeground(0, QColor(TEXT_MUTED))
-            ua.setExpanded(True)
-            for c in unassigned:
-                ua.addChild(_make_client_item(c))
-            self._r_tree.addTopLevelItem(ua)
+        self._r_node_tree.resizeColumnToContents(0)
+        self._r_node_tree.resizeColumnToContents(1)
+        self._r_node_tree.resizeColumnToContents(2)
 
-        self._r_tree.resizeColumnToContents(0)
-        self._r_tree.resizeColumnToContents(1)
-        self._r_tree.resizeColumnToContents(2)
+        # Flat connected clients table
+        self._r_client_tbl.setRowCount(0)
+        for c in clients:
+            r = self._r_client_tbl.rowCount()
+            self._r_client_tbl.insertRow(r)
+            device = c.get("hostname") or c.get("mac") or ""
+            self._r_client_tbl.setItem(r, 0, QTableWidgetItem(device))
+            self._r_client_tbl.setItem(r, 1, QTableWidgetItem(c.get("mac", "") or ""))
+            self._r_client_tbl.setItem(r, 2, QTableWidgetItem(c.get("ip", "") or ""))
+            self._r_client_tbl.setItem(r, 3, QTableWidgetItem(c.get("unit", "") or ""))
+            self._r_client_tbl.setItem(r, 4, QTableWidgetItem(c.get("band", "") or ""))
+            up   = c.get("upload_kbps")
+            down = c.get("download_kbps")
+            self._r_client_tbl.setItem(r, 5, QTableWidgetItem("" if up   is None else f"{up:.1f}"))
+            self._r_client_tbl.setItem(r, 6, QTableWidgetItem("" if down is None else f"{down:.1f}"))
+        self._r_client_tbl.resizeColumnsToContents()
 
     def _fill_generic(self, status: dict) -> None:
         for key, lbl in self._g_rows.items():

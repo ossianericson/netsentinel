@@ -85,7 +85,7 @@ def get_status() -> dict:
             "connected_clients": len(clients),
             "mesh_nodes":        len(units),
             "extra": {
-                "nodes": [{"name": u.name, "mac": u.mac, "role": u.role} for u in units],
+                "nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip, "role": u.role} for u in units],
             },
         }
     except (MeshAuthError, MeshApiError) as exc:
@@ -157,7 +157,7 @@ if "--netsentinel" in _sys.argv:
             "wan_ip": None, "uptime_sec": None, "download_mbps": None,
             "upload_mbps": None, "signal_dbm": None,
             "connected_clients": len(_client_list), "mesh_nodes": len(_units),
-            "extra": {"nodes": [{"name": u.name, "mac": u.mac, "role": u.role}
+            "extra": {"nodes": [{"name": u.name, "mac": u.mac, "ip": u.ip, "role": u.role}
                                  for u in _units]},
         }
         _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": _host,
