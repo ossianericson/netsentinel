@@ -309,6 +309,10 @@ class PluginDevicePage(QWidget):
         self._r_client_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._r_client_tbl.setAlternatingRowColors(True)
         self._r_client_tbl.setStyleSheet(_TBL_SS)
+        self._r_client_tbl.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self._r_client_tbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         card3_outer.addWidget(self._r_client_tbl)
         self._root.addWidget(card3)
 
