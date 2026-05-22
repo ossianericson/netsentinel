@@ -3465,12 +3465,8 @@ class Dashboard(QMainWindow):
 
         self._nav_begin_section("Extend", "plug")
         self._nav_add_rail_item("Hardware",        self._hardware_integration_page)
-
-        # Plugin pages — one entry per imported plugin, below legacy entries.
-        if getattr(self, "_plugin_pages", {}):
-            self._nav_begin_section("Plugins", "cpu")
-            for _hw_p, _pg in self._plugin_pages.items():
-                self._nav_add_rail_item(_pg._label, _pg)
+        for _hw_p, _pg in getattr(self, "_plugin_pages", {}).items():
+            self._nav_add_rail_item(_pg._label, _pg)
 
     #── Favourites / pinnable pages ───────────────────────────────────────────
 
