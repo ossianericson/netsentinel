@@ -1069,6 +1069,14 @@ class HubCard(QFrame):
         pw_lay.addWidget(btn_pw_forget)
         outer.addWidget(pw_row)
 
+        # Security note — reassure user password is not stored in plain text
+        _sec_lbl = QLabel("🔒  Saved securely in the OS keychain — never written to disk or this file")
+        _sec_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; background:transparent; border:none;"
+            " padding:0 0 2px 40px;"
+        )
+        outer.addWidget(_sec_lbl)
+
         # ── Detail panel (v2.1) ───────────────────────────────────────────────
         if self._hw_type == "modem":
             self._detail = _ModemDetailPanel()

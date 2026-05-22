@@ -316,6 +316,13 @@ class PluginDevicePage(QWidget):
         row1_lay.addWidget(self._cred_status, 1)
         cred_outer.addWidget(row1)
 
+        _sec_note = QLabel("🔒  Password saved to OS keychain — never written to disk or plugin file")
+        _sec_note.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; background:transparent; border:none;"
+            " padding:0 0 4px 12px;"
+        )
+        cred_outer.addWidget(_sec_note)
+
         # Divider
         div = QFrame()
         div.setFrameShape(QFrame.Shape.HLine)
