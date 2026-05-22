@@ -9671,7 +9671,7 @@ class Dashboard(QMainWindow):
     @pyqtSlot(object)
     def _on_speed_test_modem_forward(self, result) -> None:
         """Forward speed-test modem snapshot to the Modem page and Hardware Hub."""
-        sig = getattr(result, "zte_signal", None)
+        sig = getattr(result, "modem_signal", None)
         if sig:
             if hasattr(self, "_modem_page"):
                 self._modem_page.on_modem_signal(sig)

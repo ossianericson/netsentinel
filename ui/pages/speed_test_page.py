@@ -966,10 +966,17 @@ class SpeedTestPage(QWidget):
         _zte_pw   = self._zte_password
         self.modem_pause_requested.emit()
 
+        # For plugin modems (no ZTE creds), use the latest hw_state snapshot
+        _modem_snapshot = None
+        if not (_zte_host and _zte_pw):
+            from modules.network_infrastructure import hw_state
+            _modem_snapshot = hw_state.modem_signal
+
         self._test_worker = SpeedTestWorker(
             server_id=self._selected_server_id,
             zte_host=_zte_host,
             zte_password=_zte_pw,
+            modem_snapshot=_modem_snapshot,
             parent=self,
         )
         self._test_worker.phase_changed.connect(self._on_phase_changed)
@@ -1039,7 +1046,7 @@ class SpeedTestPage(QWidget):
         )
 
         # Show modem signal snapshot panel if present
-        sig = getattr(result, "zte_signal", None)
+        sig = getattr(result, "modem_signal", None)
         if sig:
             self._update_signal_panel(sig)
 
@@ -1110,7 +1117,7 @@ class SpeedTestPage(QWidget):
         if result:
             backend = getattr(result, "backend", "") or "OK"
             backend_color = GREEN if backend == "Ookla CLI" else AMBER
-            sig = getattr(result, "zte_signal", None)
+            sig = getattr(result, "modem_signal", None)
             band = (sig.get("nr5g_band") or sig.get("lte_band") or "—") if sig else "—"
             rsrp = (sig.get("nr5g_rsrp_dbm") if sig and sig.get("nr5g_rsrp_dbm") is not None
                     else (sig.get("lte_rsrp_dbm") if sig else None))

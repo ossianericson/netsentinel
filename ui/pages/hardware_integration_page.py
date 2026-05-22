@@ -45,10 +45,13 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -496,7 +499,16 @@ class _ModemDetailPanel(QFrame):
 # ── Router/AP detail panel ────────────────────────────────────────────────────
 
 class _RouterDetailPanel(QFrame):
-    """Mesh nodes table + connected clients table for router/AP plugins."""
+    """Mesh nodes table + connected clients table for router/AP plugins.
+
+    The client list supports two view modes toggled by a button in the header:
+      flat    — QTableWidget sorted by hostname (default)
+      grouped — QTreeWidget with each mesh node as a collapsible group header
+
+    Both modes work for all plugins: Deco (many nodes), FritzBox/Netgear (single
+    router group), UniFi, MikroTik, etc. Clients with no unit field go to a
+    "Router" fallback group.
+    """
 
     _TABLE_SS = (
         f"QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; }}"
@@ -509,9 +521,28 @@ class _RouterDetailPanel(QFrame):
         f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
         f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
     )
+    _TREE_SS = (
+        f"QTreeWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY};"
+        f"  background:{BG_DARK}; alternate-background-color:{BG_ALT_ROW}; }}"
+        f"QTreeWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER};"
+        f"  padding:2px 0; }}"
+        f"QTreeWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+        f"QHeaderView::section {{"
+        f"  background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
+        f"  font-weight:bold; padding:3px 5px; border:none;"
+        f"  border-right:1px solid {TH_BORDER};"
+        f"}}"
+        f"QTreeWidget::branch:has-children:!has-siblings:closed,"
+        f"QTreeWidget::branch:closed:has-children:has-siblings {{"
+        f"  image: none; border-image: none; }}"
+    )
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._view_mode = "flat"
+        self._last_clients: list = []
+        self._last_nodes: list = []
+
         self.setStyleSheet(
             f"QFrame {{ background:{BG_DARK}; border:none;"
             f" border-top:1px solid {BORDER}; }}"
@@ -541,7 +572,7 @@ class _RouterDetailPanel(QFrame):
         self._node_table.setStyleSheet(self._TABLE_SS)
         lay.addWidget(self._node_table)
 
-        # ── Connected clients ─────────────────────────────────────────────────
+        # ── Connected clients header ──────────────────────────────────────────
         cli_hdr_row = QHBoxLayout()
         cli_hdr_row.setContentsMargins(0, 4, 0, 0)
         clients_hdr = QLabel("CONNECTED CLIENTS")
@@ -553,11 +584,26 @@ class _RouterDetailPanel(QFrame):
         self._client_count_lbl.setStyleSheet(
             f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
         )
+        self._toggle_btn = QPushButton("Group by node")
+        self._toggle_btn.setFixedHeight(20)
+        self._toggle_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_DARK}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            f"  border-radius:3px; font-size:9px; padding:0 6px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
+            f"QPushButton:checked {{ background:{ACCENT}; color:#000; border-color:{ACCENT}; }}"
+        )
+        self._toggle_btn.setCheckable(True)
+        self._toggle_btn.toggled.connect(self._on_toggle)
         cli_hdr_row.addWidget(clients_hdr)
         cli_hdr_row.addWidget(self._client_count_lbl)
         cli_hdr_row.addStretch()
+        cli_hdr_row.addWidget(self._toggle_btn)
         lay.addLayout(cli_hdr_row)
 
+        # ── Client stack (flat table / grouped tree) ──────────────────────────
+        self._client_stack = QStackedWidget()
+
+        # Page 0: flat QTableWidget
         self._client_table = QTableWidget(0, 4)
         self._client_table.setHorizontalHeaderLabels(["Hostname", "IP", "Band", "Node"])
         self._client_table.horizontalHeader().setSectionResizeMode(
@@ -572,14 +618,49 @@ class _RouterDetailPanel(QFrame):
         self._client_table.verticalHeader().setVisible(False)
         self._client_table.setShowGrid(True)
         self._client_table.verticalHeader().setDefaultSectionSize(20)
-        self._client_table.setMaximumHeight(200)
+        self._client_table.setMaximumHeight(220)
         self._client_table.setStyleSheet(self._TABLE_SS)
-        lay.addWidget(self._client_table)
+        self._client_stack.addWidget(self._client_table)  # index 0
+
+        # Page 1: grouped QTreeWidget
+        self._tree_widget = QTreeWidget()
+        self._tree_widget.setHeaderLabels(["Node / Hostname", "IP", "Band"])
+        self._tree_widget.header().setSectionResizeMode(
+            0, self._tree_widget.header().ResizeMode.Stretch
+        )
+        self._tree_widget.setColumnWidth(1, 130)
+        self._tree_widget.setColumnWidth(2, 80)
+        self._tree_widget.setAlternatingRowColors(True)
+        self._tree_widget.setEditTriggers(QTreeWidget.EditTrigger.NoEditTriggers)
+        self._tree_widget.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
+        self._tree_widget.setMaximumHeight(220)
+        self._tree_widget.setStyleSheet(self._TREE_SS)
+        self._tree_widget.setRootIsDecorated(True)
+        self._client_stack.addWidget(self._tree_widget)   # index 1
+
+        lay.addWidget(self._client_stack)
+
+    # ── Toggle ────────────────────────────────────────────────────────────────
+
+    def _on_toggle(self, checked: bool) -> None:
+        self._view_mode = "grouped" if checked else "flat"
+        self._toggle_btn.setText("Show flat list" if checked else "Group by node")
+        self._client_stack.setCurrentIndex(1 if checked else 0)
+        if checked:
+            self._rebuild_tree(self._last_clients, self._last_nodes)
+
+    # ── Data population ───────────────────────────────────────────────────────
 
     def update(self, status: dict, clients: list) -> None:
+        import re as _re
+        _mac_re = _re.compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", _re.I)
+
         nodes   = status.get("extra", {}).get("nodes", [])
         n_nodes = status.get("mesh_nodes") or len(nodes)
         n_cli   = status.get("connected_clients") or len(clients)
+
+        self._last_clients = clients
+        self._last_nodes   = nodes
 
         # Node table
         self._node_table.setRowCount(0)
@@ -593,23 +674,16 @@ class _RouterDetailPanel(QFrame):
             self._node_table.setItem(r, 1, role_item)
             self._node_table.setItem(r, 2, QTableWidgetItem(node.get("mac", "—")))
 
-        # Client count label
-        parts = []
-        if n_nodes:
-            parts.append(f"{n_nodes} node{'s' if n_nodes != 1 else ''}")
         self._client_count_lbl.setText(
             f"({n_cli} device{'s' if n_cli != 1 else ''})" if n_cli is not None else ""
         )
 
-        # Client table
+        # Flat table — always kept current so toggling back is instant
         self._client_table.setRowCount(0)
-        import re as _re
-        _mac_re = _re.compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", _re.I)
         for c in clients:
             r = self._client_table.rowCount()
             self._client_table.insertRow(r)
             hostname = c.get("hostname", "") or ""
-            # Don't show MAC as hostname — fall back to IP
             display_name = hostname if hostname and not _mac_re.match(hostname) else c.get("ip", "—")
             self._client_table.setItem(r, 0, QTableWidgetItem(display_name))
             self._client_table.setItem(r, 1, QTableWidgetItem(c.get("ip", "—")))
@@ -619,6 +693,59 @@ class _RouterDetailPanel(QFrame):
                 band_item.setForeground(QColor(ACCENT))
             self._client_table.setItem(r, 2, band_item)
             self._client_table.setItem(r, 3, QTableWidgetItem(c.get("unit", "") or "—"))
+
+        # Grouped tree — rebuild only when visible
+        if self._view_mode == "grouped":
+            self._rebuild_tree(clients, nodes)
+
+    def _rebuild_tree(self, clients: list, nodes: list) -> None:
+        import re as _re
+        _mac_re = _re.compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", _re.I)
+
+        self._tree_widget.clear()
+
+        # Build ordered group map: node name → list of client dicts
+        # Preserve node table order; unassigned go last as "Router"
+        node_names = [n.get("name", "") for n in nodes if n.get("name")]
+        groups: dict[str, list] = {name: [] for name in node_names}
+        ungrouped: list = []
+
+        for c in clients:
+            unit = (c.get("unit") or "").strip()
+            if unit in groups:
+                groups[unit].append(c)
+            elif unit:
+                groups.setdefault(unit, []).append(c)
+            else:
+                ungrouped.append(c)
+
+        if ungrouped:
+            groups["Router"] = ungrouped
+
+        for group_name, group_clients in groups.items():
+            node_meta = next(
+                (n for n in nodes if n.get("name") == group_name), {}
+            )
+            role = node_meta.get("role", "")
+            role_suffix = " (main)" if role == "master" else (" (satellite)" if role == "slave" else "")
+            n = len(group_clients)
+            header = QTreeWidgetItem([
+                f"{group_name}{role_suffix}  ·  {n} device{'s' if n != 1 else ''}",
+                "", "",
+            ])
+            header.setForeground(0, QColor(ACCENT if role == "master" else TEXT_MUTED))
+            self._tree_widget.addTopLevelItem(header)
+
+            for c in group_clients:
+                hostname = c.get("hostname", "") or ""
+                display = hostname if hostname and not _mac_re.match(hostname) else c.get("ip", "—")
+                band = c.get("band", "") or ""
+                child = QTreeWidgetItem([display, c.get("ip", "—"), band if band else "—"])
+                if "5" in band:
+                    child.setForeground(2, QColor(ACCENT))
+                header.addChild(child)
+
+            header.setExpanded(True)
 
 
 # ── Pip install dialog ────────────────────────────────────────────────────────
