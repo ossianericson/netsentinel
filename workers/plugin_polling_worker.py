@@ -35,7 +35,7 @@ class PluginPollingWorker(QThread):
     error  = pyqtSignal(str)
 
     _INTERVALS: dict[str, int] = {
-        "modem":  60,
+        "modem":  30,    # match ZteWorker cadence
         "router": 120,
         "ap":     120,
         "switch": 300,

@@ -71,6 +71,7 @@ def get_status() -> dict:
         data = client.get_signal_data()
         return {
             "wan_ip":            data.wan_ip,
+            "wan_status":        data.wan_status,
             "uptime_sec":        None,
             "download_mbps":     None,
             "upload_mbps":       None,
@@ -136,6 +137,7 @@ if "--netsentinel" in _sys.argv:
         _data = _client.get_signal_data()
         _status = {
             "wan_ip":            _data.wan_ip,
+            "wan_status":        _data.wan_status,
             "uptime_sec":        None,
             "download_mbps":     None,
             "upload_mbps":       None,

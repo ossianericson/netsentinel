@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor, QCursor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -508,7 +509,16 @@ class _RouterDetailPanel(QFrame):
     Both modes work for all plugins: Deco (many nodes), FritzBox/Netgear (single
     router group), UniFi, MikroTik, etc. Clients with no unit field go to a
     "Router" fallback group.
+
+    Right-click context menus mirror mesh_router_page:
+      Nodes:   Geo Map | Copy IP | Copy MAC
+      Clients: Port Scan | Geo Map | AbuseIPDB | Copy IP | Copy MAC
     """
+
+    # Emitted on context-menu actions — parent page connects to its own signals
+    geo_map_ip     = pyqtSignal(str)
+    port_scan_ip   = pyqtSignal(str)
+    check_abuse_ip = pyqtSignal(str)
 
     _TABLE_SS = (
         f"QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; }}"
@@ -603,15 +613,18 @@ class _RouterDetailPanel(QFrame):
         # ── Client stack (flat table / grouped tree) ──────────────────────────
         self._client_stack = QStackedWidget()
 
-        # Page 0: flat QTableWidget
-        self._client_table = QTableWidget(0, 4)
-        self._client_table.setHorizontalHeaderLabels(["Hostname", "IP", "Band", "Node"])
-        self._client_table.horizontalHeader().setSectionResizeMode(
-            0, self._client_table.horizontalHeader().ResizeMode.Stretch
+        # Page 0: flat QTableWidget — cols: Hostname, IP, Band, Node, ↑ KB/s, ↓ KB/s
+        self._client_table = QTableWidget(0, 6)
+        self._client_table.setHorizontalHeaderLabels(
+            ["Hostname", "IP", "Band", "Node", "↑ KB/s", "↓ KB/s"]
         )
-        self._client_table.setColumnWidth(1, 130)
-        self._client_table.setColumnWidth(2, 80)
-        self._client_table.setColumnWidth(3, 110)
+        hdr = self._client_table.horizontalHeader()
+        hdr.setSectionResizeMode(0, hdr.ResizeMode.Stretch)
+        self._client_table.setColumnWidth(1, 115)
+        self._client_table.setColumnWidth(2, 68)
+        self._client_table.setColumnWidth(3, 95)
+        self._client_table.setColumnWidth(4, 62)
+        self._client_table.setColumnWidth(5, 62)
         self._client_table.setAlternatingRowColors(True)
         self._client_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._client_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -620,23 +633,32 @@ class _RouterDetailPanel(QFrame):
         self._client_table.verticalHeader().setDefaultSectionSize(20)
         self._client_table.setMaximumHeight(220)
         self._client_table.setStyleSheet(self._TABLE_SS)
+        self._client_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._client_table.customContextMenuRequested.connect(self._client_context_menu)
         self._client_stack.addWidget(self._client_table)  # index 0
 
-        # Page 1: grouped QTreeWidget
+        # Page 1: grouped QTreeWidget — cols: Node/Hostname, IP, Band, ↑ KB/s, ↓ KB/s
         self._tree_widget = QTreeWidget()
-        self._tree_widget.setHeaderLabels(["Node / Hostname", "IP", "Band"])
-        self._tree_widget.header().setSectionResizeMode(
-            0, self._tree_widget.header().ResizeMode.Stretch
-        )
-        self._tree_widget.setColumnWidth(1, 130)
-        self._tree_widget.setColumnWidth(2, 80)
+        self._tree_widget.setHeaderLabels(["Node / Hostname", "IP", "Band", "↑ KB/s", "↓ KB/s"])
+        thdr = self._tree_widget.header()
+        thdr.setSectionResizeMode(0, thdr.ResizeMode.Stretch)
+        self._tree_widget.setColumnWidth(1, 115)
+        self._tree_widget.setColumnWidth(2, 68)
+        self._tree_widget.setColumnWidth(3, 62)
+        self._tree_widget.setColumnWidth(4, 62)
         self._tree_widget.setAlternatingRowColors(True)
         self._tree_widget.setEditTriggers(QTreeWidget.EditTrigger.NoEditTriggers)
         self._tree_widget.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
         self._tree_widget.setMaximumHeight(220)
         self._tree_widget.setStyleSheet(self._TREE_SS)
         self._tree_widget.setRootIsDecorated(True)
+        self._tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._tree_widget.customContextMenuRequested.connect(self._tree_context_menu)
         self._client_stack.addWidget(self._tree_widget)   # index 1
+
+        # Node table context menu
+        self._node_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._node_table.customContextMenuRequested.connect(self._node_context_menu)
 
         lay.addWidget(self._client_stack)
 
@@ -651,18 +673,29 @@ class _RouterDetailPanel(QFrame):
 
     # ── Data population ───────────────────────────────────────────────────────
 
-    def update(self, status: dict, clients: list) -> None:
+    @staticmethod
+    def _display_name(c: dict) -> str:
         import re as _re
         _mac_re = _re.compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", _re.I)
+        hostname = c.get("hostname", "") or ""
+        return hostname if hostname and not _mac_re.match(hostname) else c.get("ip", "—")
 
-        nodes   = status.get("extra", {}).get("nodes", [])
-        n_nodes = status.get("mesh_nodes") or len(nodes)
-        n_cli   = status.get("connected_clients") or len(clients)
+    @staticmethod
+    def _bw_str(val) -> str:
+        try:
+            v = float(val)
+            return f"{v:.0f}" if v else ""
+        except (TypeError, ValueError):
+            return ""
+
+    def update(self, status: dict, clients: list) -> None:
+        nodes = status.get("extra", {}).get("nodes", [])
+        n_cli = status.get("connected_clients") or len(clients)
 
         self._last_clients = clients
         self._last_nodes   = nodes
 
-        # Node table
+        # Node table — store IP in col 2, MAC col 3 (IP hidden by default but accessible for menu)
         self._node_table.setRowCount(0)
         for node in nodes:
             r = self._node_table.rowCount()
@@ -672,20 +705,23 @@ class _RouterDetailPanel(QFrame):
             if node.get("role") == "master":
                 role_item.setForeground(QColor(GREEN))
             self._node_table.setItem(r, 1, role_item)
-            self._node_table.setItem(r, 2, QTableWidgetItem(node.get("mac", "—")))
+            # MAC in col 2 — store IP as UserRole for context menu
+            mac_item = QTableWidgetItem(node.get("mac", "—"))
+            mac_item.setData(Qt.ItemDataRole.UserRole, node.get("ip", ""))
+            self._node_table.setItem(r, 2, mac_item)
 
         self._client_count_lbl.setText(
             f"({n_cli} device{'s' if n_cli != 1 else ''})" if n_cli is not None else ""
         )
 
-        # Flat table — always kept current so toggling back is instant
+        # Flat table
         self._client_table.setRowCount(0)
         for c in clients:
             r = self._client_table.rowCount()
             self._client_table.insertRow(r)
-            hostname = c.get("hostname", "") or ""
-            display_name = hostname if hostname and not _mac_re.match(hostname) else c.get("ip", "—")
-            self._client_table.setItem(r, 0, QTableWidgetItem(display_name))
+            hn_item = QTableWidgetItem(self._display_name(c))
+            hn_item.setData(Qt.ItemDataRole.UserRole, {"ip": c.get("ip", ""), "mac": c.get("mac", "")})
+            self._client_table.setItem(r, 0, hn_item)
             self._client_table.setItem(r, 1, QTableWidgetItem(c.get("ip", "—")))
             band = c.get("band", "") or ""
             band_item = QTableWidgetItem(band if band else "—")
@@ -693,19 +729,19 @@ class _RouterDetailPanel(QFrame):
                 band_item.setForeground(QColor(ACCENT))
             self._client_table.setItem(r, 2, band_item)
             self._client_table.setItem(r, 3, QTableWidgetItem(c.get("unit", "") or "—"))
+            ul = QTableWidgetItem(self._bw_str(c.get("upload_kbps")))
+            ul.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            dl = QTableWidgetItem(self._bw_str(c.get("download_kbps")))
+            dl.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self._client_table.setItem(r, 4, ul)
+            self._client_table.setItem(r, 5, dl)
 
-        # Grouped tree — rebuild only when visible
         if self._view_mode == "grouped":
             self._rebuild_tree(clients, nodes)
 
     def _rebuild_tree(self, clients: list, nodes: list) -> None:
-        import re as _re
-        _mac_re = _re.compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", _re.I)
-
         self._tree_widget.clear()
 
-        # Build ordered group map: node name → list of client dicts
-        # Preserve node table order; unassigned go last as "Router"
         node_names = [n.get("name", "") for n in nodes if n.get("name")]
         groups: dict[str, list] = {name: [] for name in node_names}
         ungrouped: list = []
@@ -723,29 +759,84 @@ class _RouterDetailPanel(QFrame):
             groups["Router"] = ungrouped
 
         for group_name, group_clients in groups.items():
-            node_meta = next(
-                (n for n in nodes if n.get("name") == group_name), {}
-            )
+            node_meta = next((n for n in nodes if n.get("name") == group_name), {})
             role = node_meta.get("role", "")
             role_suffix = " (main)" if role == "master" else (" (satellite)" if role == "slave" else "")
             n = len(group_clients)
             header = QTreeWidgetItem([
                 f"{group_name}{role_suffix}  ·  {n} device{'s' if n != 1 else ''}",
-                "", "",
+                "", "", "", "",
             ])
             header.setForeground(0, QColor(ACCENT if role == "master" else TEXT_MUTED))
             self._tree_widget.addTopLevelItem(header)
 
             for c in group_clients:
-                hostname = c.get("hostname", "") or ""
-                display = hostname if hostname and not _mac_re.match(hostname) else c.get("ip", "—")
                 band = c.get("band", "") or ""
-                child = QTreeWidgetItem([display, c.get("ip", "—"), band if band else "—"])
+                child = QTreeWidgetItem([
+                    self._display_name(c),
+                    c.get("ip", "—"),
+                    band if band else "—",
+                    self._bw_str(c.get("upload_kbps")),
+                    self._bw_str(c.get("download_kbps")),
+                ])
+                child.setData(0, Qt.ItemDataRole.UserRole,
+                              {"ip": c.get("ip", ""), "mac": c.get("mac", "")})
                 if "5" in band:
                     child.setForeground(2, QColor(ACCENT))
+                for col in (3, 4):
+                    child.setTextAlignment(col, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 header.addChild(child)
 
             header.setExpanded(True)
+
+    # ── Context menus ─────────────────────────────────────────────────────────
+
+    def _node_context_menu(self, pos) -> None:
+        row = self._node_table.rowAt(pos.y())
+        if row < 0:
+            return
+        mac_item = self._node_table.item(row, 2)
+        ip  = (mac_item.data(Qt.ItemDataRole.UserRole) or "") if mac_item else ""
+        mac = self._node_table.item(row, 2).text() if self._node_table.item(row, 2) else ""
+        menu = QMenu(self)
+        if ip:
+            menu.addAction("Show on Geo Map", lambda: self.geo_map_ip.emit(ip))
+            menu.addSeparator()
+            menu.addAction(f"Copy IP  {ip}", lambda: QApplication.clipboard().setText(ip))
+        if mac and mac != "—":
+            menu.addAction(f"Copy MAC  {mac}", lambda: QApplication.clipboard().setText(mac))
+        if not menu.isEmpty():
+            menu.exec(QCursor.pos())
+
+    def _client_context_menu(self, pos) -> None:
+        row = self._client_table.rowAt(pos.y())
+        if row < 0:
+            return
+        data = self._client_table.item(row, 0)
+        info = data.data(Qt.ItemDataRole.UserRole) if data else {}
+        ip  = info.get("ip", "") if info else ""
+        mac = info.get("mac", "") if info else ""
+        self._show_client_menu(ip, mac)
+
+    def _tree_context_menu(self, pos) -> None:
+        item = self._tree_widget.itemAt(pos)
+        if not item or item.parent() is None:
+            return  # top-level node header — no client menu
+        info = item.data(0, Qt.ItemDataRole.UserRole) or {}
+        self._show_client_menu(info.get("ip", ""), info.get("mac", ""))
+
+    def _show_client_menu(self, ip: str, mac: str) -> None:
+        menu = QMenu(self)
+        if ip:
+            menu.addAction("Port Scan", lambda: self.port_scan_ip.emit(ip))
+            menu.addAction("Show on Geo Map", lambda: self.geo_map_ip.emit(ip))
+            menu.addAction("Check IP (AbuseIPDB)", lambda: self.check_abuse_ip.emit(ip))
+            menu.addSeparator()
+            menu.addAction(f"Copy IP  {ip}", lambda: QApplication.clipboard().setText(ip))
+        if mac and mac != "—":
+            menu.addAction(f"Copy MAC  {mac}", lambda: QApplication.clipboard().setText(mac))
+        if not menu.isEmpty():
+            menu.exec(QCursor.pos())
 
 
 # ── Pip install dialog ────────────────────────────────────────────────────────
@@ -837,6 +928,7 @@ class HubCard(QFrame):
 
     refresh_clicked = pyqtSignal(str)   # path
     remove_clicked  = pyqtSignal(str)   # path
+    stop_clicked    = pyqtSignal(str)   # path — stop polling worker
 
     def __init__(self, path: str, meta: dict, last_result: Optional[dict], parent=None):
         super().__init__(parent)
@@ -913,10 +1005,17 @@ class HubCard(QFrame):
         self._btn_refresh.clicked.connect(lambda: self.refresh_clicked.emit(self._path))
         hdr_lay.addWidget(self._btn_refresh)
 
+        # Stop polling button
+        self._btn_stop = _btn("■")
+        self._btn_stop.setFixedWidth(28)
+        self._btn_stop.setToolTip("Stop polling (disconnect)")
+        self._btn_stop.clicked.connect(lambda: self.stop_clicked.emit(self._path))
+        hdr_lay.addWidget(self._btn_stop)
+
         # Remove button
         btn_remove = _btn("✕")
         btn_remove.setFixedWidth(28)
-        btn_remove.setToolTip("Remove")
+        btn_remove.setToolTip("Remove plugin")
         btn_remove.clicked.connect(lambda: self.remove_clicked.emit(self._path))
         hdr_lay.addWidget(btn_remove)
 
@@ -1098,8 +1197,12 @@ class HubCard(QFrame):
             return
         try:
             import keyring
-            from keyring.errors import PasswordDeleteError
-            keyring.delete_password("NetSentinel/hardware", hw_ip)
+            # Clear all services that a plugin might read credentials from
+            for service in ("NetSentinel/hardware", "NetSentinel/modem", "NetSentinel/mesh"):
+                try:
+                    keyring.delete_password(service, hw_ip)
+                except Exception:
+                    pass
             status.setText("Forgotten")
             status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
         except Exception:
@@ -1235,6 +1338,9 @@ class HardwareIntegrationPage(QWidget):
     # data dict has "_path" embedded so dashboard knows which plugin
     plugin_result  = pyqtSignal(dict)
     navigate_to    = pyqtSignal(str)   # page label → _nav_rail_go_to
+    geo_map_ip     = pyqtSignal(str)   # open geo map for this IP
+    port_scan_ip   = pyqtSignal(str)   # pre-fill port scanner with this IP
+    check_abuse_ip = pyqtSignal(str)   # check IP on AbuseIPDB
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -1382,6 +1488,9 @@ class HardwareIntegrationPage(QWidget):
         self._mesh_panel.setStyleSheet(
             f"QFrame {{ background:{BG_DARK}; border:none; }}"
         )
+        self._mesh_panel.geo_map_ip.connect(self.geo_map_ip)
+        self._mesh_panel.port_scan_ip.connect(self.port_scan_ip)
+        self._mesh_panel.check_abuse_ip.connect(self.check_abuse_ip)
         mesh_tab_lay.addWidget(self._mesh_panel)
         mesh_tab_lay.addStretch()
         self._mesh_tab_idx = self._tabs.addTab(mesh_tab, "Mesh & Router")
@@ -1461,6 +1570,7 @@ class HardwareIntegrationPage(QWidget):
             card = HubCard(path, meta, last_result, parent=self._hub_body)
             card.refresh_clicked.connect(self._run_plugin)
             card.remove_clicked.connect(self._remove_plugin)
+            card.stop_clicked.connect(self._stop_poll_worker)
             self._hub_lay.addWidget(card)
             self._cards[path] = card
 
@@ -1800,7 +1910,9 @@ class HardwareIntegrationPage(QWidget):
         clients_dicts = [
             {"ip": getattr(c, "ip", ""), "mac": str(getattr(c, "mac", "")),
              "hostname": getattr(c, "name", "") or "", "band": getattr(c, "band", ""),
-             "unit": getattr(c, "unit_name", "")}
+             "unit": getattr(c, "unit_name", ""),
+             "upload_kbps": getattr(c, "upload_kbps", 0),
+             "download_kbps": getattr(c, "download_kbps", 0)}
             for c in clients
         ]
         status = {

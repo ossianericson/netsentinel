@@ -2279,6 +2279,13 @@ class Dashboard(QMainWindow):
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
         self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
         self._hardware_integration_page.navigate_to.connect(self._nav_rail_go_to)
+        self._hardware_integration_page.geo_map_ip.connect(self._show_ip_on_geo_map)
+        self._hardware_integration_page.port_scan_ip.connect(
+            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (SYN)"))
+        )
+        self._hardware_integration_page.check_abuse_ip.connect(
+            lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intelligence"))
+        )
 
         # Pre-populate enrichment from cached QSettings so the first scan has
         # hostname / band / node data without waiting for the first poll cycle.
@@ -9083,7 +9090,7 @@ class Dashboard(QMainWindow):
             self._on_modem_signal({
                 "ts":               int(_t.time()),
                 "wan_ip":           status.get("wan_ip"),
-                "wan_status":       None,
+                "wan_status":       status.get("wan_status"),
                 "firmware_version": extra.get("firmware"),
                 "network_type":     extra.get("network_type"),
                 "signal_bars":      extra.get("signal_bars"),

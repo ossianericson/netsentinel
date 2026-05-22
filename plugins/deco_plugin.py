@@ -107,11 +107,13 @@ def get_clients() -> list:
         raw    = client.get_all_clients(units=units)
         return [
             {
-                "ip":       c.ip,
-                "mac":      c.mac,
-                "hostname": c.name,
-                "band":     c.band,
-                "unit":     c.unit_name,
+                "ip":            c.ip,
+                "mac":           c.mac,
+                "hostname":      c.name,
+                "band":          c.band,
+                "unit":          c.unit_name,
+                "upload_kbps":   c.upload_kbps,
+                "download_kbps": c.download_kbps,
             }
             for c in raw
         ]
@@ -140,11 +142,13 @@ if "--netsentinel" in _sys.argv:
         _units  = _client.get_mesh_units()
         _client_list = [
             {
-                "ip":       c.ip,
-                "mac":      c.mac,
-                "hostname": c.name or "",
-                "band":     c.band,
-                "unit":     c.unit_name,
+                "ip":            c.ip,
+                "mac":           c.mac,
+                "hostname":      c.name or "",
+                "band":          c.band,
+                "unit":          c.unit_name,
+                "upload_kbps":   c.upload_kbps,
+                "download_kbps": c.download_kbps,
             }
             for c in _client.get_all_clients(units=_units)
         ]
