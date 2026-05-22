@@ -19,10 +19,12 @@ Stop: call stop() then wait().
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -71,13 +73,23 @@ class PluginPollingWorker(QThread):
                 # Interruptible sleep — wakes within 0.5 s of stop() or trigger_now()
                 self._trigger.wait(timeout=self._interval_s)
 
+    # Repo root (workers/ → parent) so plugins can do `from modules.xxx import`
+    _NS_ROOT = str(Path(__file__).parent.parent)
+
     def _run_once(self) -> None:
         try:
+            env = os.environ.copy()
+            # Ensure plugins can import NetSentinel modules regardless of cwd
+            existing = env.get("PYTHONPATH", "")
+            paths = [self._NS_ROOT] + ([existing] if existing else [])
+            env["PYTHONPATH"] = os.pathsep.join(paths)
+
             proc = subprocess.run(
                 [sys.executable, self._path, "--netsentinel"],
                 capture_output=True,
                 text=True,
                 timeout=self._SUBPROCESS_TIMEOUT,
+                env=env,
             )
             if self._stop:
                 return

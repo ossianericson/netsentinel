@@ -95,6 +95,7 @@ Tip: search "<your model> local API" or "<your model> REST API"
 """
 
 import json
+import sys
 
 # ── Metadata (required) ───────────────────────────────────────────────────────
 HARDWARE_NAME = "My Router XYZ"     # displayed in the app
@@ -170,10 +171,14 @@ if __name__ == "__main__" and "--netsentinel" not in sys.argv:
 import sys as _sys
 if "--netsentinel" in _sys.argv:
     import json as _json
+    try:
+        _clients = get_clients()
+    except NameError:
+        _clients = []
     _sys.stdout.write(_json.dumps({
         "info":    get_info(),
         "status":  get_status(),
-        "clients": get_clients(),
+        "clients": _clients,
     }, default=str) + "\\n")
     _sys.exit(0)
 '''
@@ -1091,6 +1096,11 @@ class HardwareIntegrationPage(QWidget):
 
         self._guide_area.setWidget(guide_body)
         root.addWidget(self._guide_area, 2)
+
+        # Show guide by default when no plugins are registered yet
+        if not _load_paths():
+            self._guide_area.setVisible(True)
+            self._guide_toggle.setText("▼  How to write a plugin script")
 
     def _toggle_guide(self) -> None:
         visible = not self._guide_area.isVisible()
