@@ -9105,6 +9105,9 @@ class Dashboard(QMainWindow):
                 "lte_earfcn":       extra.get("lte_earfcn"),
                 "endc_info":        extra.get("endc_info"),
             })
+            path = data.get("_path", hw_name)
+            from modules.network_infrastructure import hw_state
+            hw_state.update_modem(status.get("extra", {}), source=path, hw_name=hw_name)
             return  # modem plugins have no LAN clients to enrich
 
         # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
@@ -9115,8 +9118,11 @@ class Dashboard(QMainWindow):
             if c.get("mac")
         }
         # Store node list so topology can group devices by AP/satellite
-        self._plugin_nodes[path] = status.get("extra", {}).get("nodes", [])
+        nodes = status.get("extra", {}).get("nodes", [])
+        self._plugin_nodes[path] = nodes
         self._apply_mesh_enrichment()  # handles topology + regrouping + synthesis
+        from modules.network_infrastructure import hw_state
+        hw_state.update_router(clients, nodes, source=path, hw_name=hw_name)
         n = len(self._plugin_enrichments[path])
         if hasattr(self, "_m1_status"):
             summary = getattr(self, "_m1_scan_summary", "")
@@ -9728,6 +9734,8 @@ class Dashboard(QMainWindow):
                 worker.wait(500)
             self._zte_worker = None
         self._last_modem_data = None
+        from modules.network_infrastructure import hw_state
+        hw_state.clear_modem()
         if hasattr(self, "_speed_test_page"):
             self._speed_test_page.clear_modem_credentials()
         # Resume modem plugin workers — native session is gone
@@ -9738,6 +9746,8 @@ class Dashboard(QMainWindow):
     def _on_modem_signal(self, data: dict) -> None:
         """Cache signal data, route to Modem page, Overview tile, topology, and Monitor."""
         self._last_modem_data = data
+        from modules.network_infrastructure import hw_state
+        hw_state.update_modem(data, source="zte", hw_name="ZTE MC889")
         if hasattr(self, "_modem_page"):
             self._modem_page.on_modem_signal(data)
         if hasattr(self, "_overview_page"):

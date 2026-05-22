@@ -45,6 +45,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -1101,134 +1102,6 @@ def _prompt_block(label: str, text: str) -> QWidget:
 
 # ── Main page ─────────────────────────────────────────────────────────────────
 
-# ── Native hardware card (modem / mesh from ZteWorker / MeshWorker) ───────────
-
-class NativeHwCard(QFrame):
-    """Compact read-only card for a natively-managed hardware source.
-
-    Unlike HubCard there is no password row or remove button.  Data arrives
-    via update_modem() or update_router() and is displayed using the same
-    detail panels already used by HubCard.
-    """
-
-    open_page = pyqtSignal()   # "Open page" button clicked
-
-    def __init__(self, hw_type: str, name: str, parent=None):
-        super().__init__(parent)
-        self._hw_type = hw_type
-        self._detail_visible = False
-
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        # Header row
-        hdr = QFrame()
-        hdr.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; border-radius:{CARD_RADIUS}; }}")
-        hdr_lay = QHBoxLayout(hdr)
-        hdr_lay.setContentsMargins(12, 8, 10, 8)
-        hdr_lay.setSpacing(8)
-
-        self._dot = QLabel("●")
-        self._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
-        self._dot.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._dot.setToolTip("Click to expand / collapse detail")
-        self._dot.mousePressEvent = lambda _: self._toggle_detail()
-        hdr_lay.addWidget(self._dot)
-
-        name_col = QVBoxLayout()
-        name_col.setSpacing(1)
-        name_col.setContentsMargins(0, 0, 0, 0)
-        self._name_lbl = QLabel(f"<b>{name}</b>")
-        self._name_lbl.setTextFormat(Qt.TextFormat.RichText)
-        self._name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px; border:none; background:transparent;")
-        self._sub_lbl = QLabel(hw_type)
-        self._sub_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;")
-        name_col.addWidget(self._name_lbl)
-        name_col.addWidget(self._sub_lbl)
-        hdr_lay.addLayout(name_col)
-
-        self._metrics_lbl = QLabel("Not yet connected")
-        self._metrics_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none; background:transparent;")
-        hdr_lay.addWidget(self._metrics_lbl, 1)
-
-        btn_open = _btn("Open page →")
-        btn_open.setToolTip("Open the full detail page for this device")
-        btn_open.clicked.connect(self.open_page)
-        hdr_lay.addWidget(btn_open)
-        outer.addWidget(hdr)
-
-        if hw_type == "modem":
-            self._detail = _ModemDetailPanel()
-        else:
-            self._detail = _RouterDetailPanel()
-        self._detail.setVisible(False)
-        outer.addWidget(self._detail)
-
-    def update_modem(self, raw: dict) -> None:
-        extra  = {k: v for k, v in raw.items() if k != "host"}
-        status = {"wan_ip": raw.get("wan_ip"), "extra": extra}
-
-        nt   = extra.get("network_type", "")
-        band = extra.get("nr5g_band") or extra.get("lte_band") or ""
-        rsrp = extra.get("nr5g_rsrp_dbm") or extra.get("lte_rsrp_dbm")
-        parts = [p for p in [nt, band] if p]
-        if rsrp is not None:
-            try:
-                parts.append(f"RSRP {float(rsrp):.0f} dBm")
-            except (TypeError, ValueError):
-                pass
-        self._metrics_lbl.setText("  ·  ".join(parts) if parts else "Online")
-        self._metrics_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;")
-        self._dot.setStyleSheet(f"color:{GREEN}; font-size:13px; border:none;")
-        self._detail.update(extra, status)
-        if not self._detail_visible:
-            self._toggle_detail()
-
-    def update_router(self, units: list, clients: list, provider: str = "Mesh") -> None:
-        n_nodes  = len(units)
-        n_cli    = len(clients)
-        parts    = []
-        if n_nodes:
-            parts.append(f"{n_nodes} node{'s' if n_nodes != 1 else ''}")
-        if n_cli:
-            parts.append(f"{n_cli} client{'s' if n_cli != 1 else ''}")
-        self._metrics_lbl.setText("  ·  ".join(parts) if parts else "Online")
-        self._metrics_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;")
-        self._dot.setStyleSheet(f"color:{GREEN}; font-size:13px; border:none;")
-        self._sub_lbl.setText(provider)
-
-        nodes_dicts = [
-            {"name": getattr(u, "name", ""), "role": getattr(u, "role", "satellite"),
-             "mac": str(getattr(u, "mac", ""))}
-            for u in units
-        ]
-        clients_dicts = [
-            {"ip": getattr(c, "ip", ""), "mac": str(getattr(c, "mac", "")),
-             "hostname": getattr(c, "name", "") or "", "band": getattr(c, "band", ""),
-             "unit": getattr(c, "unit_name", "")}
-            for c in clients
-        ]
-        status = {
-            "mesh_nodes": n_nodes,
-            "connected_clients": n_cli,
-            "extra": {"nodes": nodes_dicts},
-        }
-        self._detail.update(status, clients_dicts)
-        if not self._detail_visible:
-            self._toggle_detail()
-
-    def _toggle_detail(self) -> None:
-        self._detail_visible = not self._detail_visible
-        self._detail.setVisible(self._detail_visible)
-
-
-# ── Main page ─────────────────────────────────────────────────────────────────
-
 class HardwareIntegrationPage(QWidget):
     """Hardware Hub — live status dashboard for all imported hardware plugins."""
 
@@ -1241,11 +1114,15 @@ class HardwareIntegrationPage(QWidget):
         self._poll_workers: Dict[str, PluginPollingWorker] = {}
         self._cards:   Dict[str, HubCard] = {}
         self._native_modem_connected: bool = False
-        self._detect_frame: Optional[QFrame] = None
-        self._detect_lay:   Optional[QVBoxLayout] = None
-        self._native_modem_card: Optional[NativeHwCard] = None
-        self._native_mesh_card:  Optional[NativeHwCard] = None
-        self._native_lay:   Optional[QVBoxLayout] = None
+        # Tab indices — set by _build_ui
+        self._tabs: Optional[QTabWidget] = None
+        self._modem_tab_idx:     int = 1
+        self._mesh_tab_idx:      int = 2
+        self._suggested_tab_idx: int = 3
+        # Panels inside tabs
+        self._modem_panel:    Optional[_ModemDetailPanel]  = None
+        self._mesh_panel:     Optional[_RouterDetailPanel] = None
+        self._suggested_lay:  Optional[QVBoxLayout]        = None
 
         self._build_ui()
 
@@ -1265,7 +1142,7 @@ class HardwareIntegrationPage(QWidget):
         root.setContentsMargins(16, 12, 16, 8)
         root.setSpacing(8)
 
-        # Page header
+        # Page header — outside tabs so it's always visible
         hdr_row = QHBoxLayout()
         title = QLabel("Hardware")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
@@ -1277,108 +1154,63 @@ class HardwareIntegrationPage(QWidget):
         hdr_row.addWidget(self._btn_add)
         root.addLayout(hdr_row)
 
+        # Status label (import feedback) — outside tabs
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        root.addWidget(self._status_lbl)
+
+        # ── Tab widget ────────────────────────────────────────────────────────
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(
+            f"QTabWidget::pane {{ border:1px solid {BORDER}; border-radius:4px; }}"
+            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED};"
+            f" padding:5px 14px; border:none; border-bottom:2px solid transparent; }}"
+            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY};"
+            f" border-bottom:2px solid {ACCENT}; }}"
+            f"QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        root.addWidget(self._tabs, 1)
+
+        # ── Tab 0: Hardware (HubCards + guide) — always visible ──────────────
+        hub_tab = QWidget()
+        hub_tab.setStyleSheet(f"background:{BG_DARK};")
+        hub_tab_lay = QVBoxLayout(hub_tab)
+        hub_tab_lay.setContentsMargins(0, 6, 0, 0)
+        hub_tab_lay.setSpacing(6)
+
         sub = QLabel(
             "Live status for all integrated hardware. "
             "Modem plugins refresh every 60 s · router/AP every 2 min · switch every 5 min. "
             "Click ● to expand the signal / topology detail panel."
         )
         sub.setWordWrap(True)
-        sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
-        root.addWidget(sub)
+        sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; padding:0 8px;")
+        hub_tab_lay.addWidget(sub)
 
-        # Status label (import feedback)
-        self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
-        root.addWidget(self._status_lbl)
-
-        # ── Native hardware section (modem + mesh — populated on first data) ────
-        self._native_section = QFrame()
-        self._native_section.setStyleSheet("QFrame { background: transparent; border: none; }")
-        native_outer = QVBoxLayout(self._native_section)
-        native_outer.setContentsMargins(0, 0, 0, 0)
-        native_outer.setSpacing(8)
-        native_hdr = QLabel("MY HARDWARE")
-        native_hdr.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold; letter-spacing:0.5px;"
-        )
-        native_outer.addWidget(native_hdr)
-        self._native_lay = native_outer
-        self._native_section.setVisible(False)
-        root.addWidget(self._native_section)
-
-        # ── Detected hardware section (populated by on_hardware_detected) ─────
-        self._detect_frame = QFrame()
-        self._detect_frame.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {AMBER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
-        detect_outer = QVBoxLayout(self._detect_frame)
-        detect_outer.setContentsMargins(0, 0, 0, 0)
-        detect_outer.setSpacing(0)
-
-        detect_hdr = QFrame()
-        detect_hdr.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
-            f" border-bottom:1px solid {BORDER}; }}"
-        )
-        detect_hdr_lay = QHBoxLayout(detect_hdr)
-        detect_hdr_lay.setContentsMargins(12, 7, 10, 7)
-        detect_hdr_lay.setSpacing(8)
-        detect_title = QLabel("Suggested for your network")
-        detect_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        detect_title.setStyleSheet(f"color:{AMBER}; border:none; background:transparent;")
-        detect_hdr_lay.addWidget(detect_title)
-        detect_hdr_lay.addStretch()
-        btn_dismiss = _btn("✕  Dismiss")
-        btn_dismiss.setFixedHeight(22)
-        btn_dismiss.clicked.connect(lambda: self._detect_frame.setVisible(False))
-        detect_hdr_lay.addWidget(btn_dismiss)
-        detect_outer.addWidget(detect_hdr)
-
-        detect_scroll = QScrollArea()
-        detect_scroll.setWidgetResizable(True)
-        detect_scroll.setStyleSheet("QScrollArea { border: none; }")
-        detect_scroll.setMaximumHeight(260)
-        detect_inner = QWidget()
-        detect_inner.setStyleSheet(f"background:{BG_CARD};")
-        self._detect_lay = QVBoxLayout(detect_inner)
-        self._detect_lay.setContentsMargins(0, 2, 0, 6)
-        self._detect_lay.setSpacing(0)
-        detect_scroll.setWidget(detect_inner)
-        detect_outer.addWidget(detect_scroll)
-
-        self._detect_frame.setVisible(False)
-        root.addWidget(self._detect_frame)
-
-        # ── Hub cards scroll area ─────────────────────────────────────────────
         self._hub_scroll = QScrollArea()
         self._hub_scroll.setWidgetResizable(True)
         self._hub_scroll.setStyleSheet("QScrollArea { border: none; }")
-
         self._hub_body = QWidget()
         self._hub_body.setStyleSheet(f"background:{BG_DARK};")
         self._hub_lay = QVBoxLayout(self._hub_body)
         self._hub_lay.setContentsMargins(0, 4, 0, 4)
         self._hub_lay.setSpacing(8)
-
         self._rebuild_hub()
-
         self._hub_scroll.setWidget(self._hub_body)
-        root.addWidget(self._hub_scroll, 3)
+        hub_tab_lay.addWidget(self._hub_scroll, 3)
 
-        # ── Collapsible guide ─────────────────────────────────────────────────
         guide_toggle_row = QHBoxLayout()
+        guide_toggle_row.setContentsMargins(8, 0, 8, 0)
         self._guide_toggle = _btn("▶  How to write a plugin script")
         self._guide_toggle.clicked.connect(self._toggle_guide)
         guide_toggle_row.addWidget(self._guide_toggle)
         guide_toggle_row.addStretch()
-        root.addLayout(guide_toggle_row)
+        hub_tab_lay.addLayout(guide_toggle_row)
 
         self._guide_area = QScrollArea()
         self._guide_area.setWidgetResizable(True)
         self._guide_area.setStyleSheet("QScrollArea { border: none; }")
         self._guide_area.setVisible(False)
-
         guide_body = QWidget()
         guide_body.setStyleSheet(f"background:{BG_DARK};")
         guide_lay = QVBoxLayout(guide_body)
@@ -1389,14 +1221,79 @@ class HardwareIntegrationPage(QWidget):
         guide_lay.addWidget(self._build_step3_guide())
         guide_lay.addWidget(self._build_step4())
         guide_lay.addStretch()
-
         self._guide_area.setWidget(guide_body)
-        root.addWidget(self._guide_area, 2)
+        hub_tab_lay.addWidget(self._guide_area, 2)
 
-        # Show guide by default when no plugins are registered yet
         if not _load_paths():
             self._guide_area.setVisible(True)
             self._guide_toggle.setText("▼  How to write a plugin script")
+
+        self._tabs.addTab(hub_tab, "Hardware")
+
+        # ── Tab 1: Modem — hidden until modem data arrives ────────────────────
+        modem_tab = QWidget()
+        modem_tab.setStyleSheet(f"background:{BG_DARK};")
+        modem_tab_lay = QVBoxLayout(modem_tab)
+        modem_tab_lay.setContentsMargins(0, 0, 0, 0)
+        modem_tab_lay.setSpacing(0)
+        self._modem_panel = _ModemDetailPanel()
+        self._modem_panel.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:none; }}"
+        )
+        modem_tab_lay.addWidget(self._modem_panel)
+        modem_tab_lay.addStretch()
+        self._modem_tab_idx = self._tabs.addTab(modem_tab, "Modem")
+        self._tabs.setTabVisible(self._modem_tab_idx, False)
+
+        # ── Tab 2: Mesh & Router — hidden until router data arrives ───────────
+        mesh_tab = QWidget()
+        mesh_tab.setStyleSheet(f"background:{BG_DARK};")
+        mesh_tab_lay = QVBoxLayout(mesh_tab)
+        mesh_tab_lay.setContentsMargins(0, 0, 0, 0)
+        mesh_tab_lay.setSpacing(0)
+        self._mesh_panel = _RouterDetailPanel()
+        self._mesh_panel.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:none; }}"
+        )
+        mesh_tab_lay.addWidget(self._mesh_panel)
+        mesh_tab_lay.addStretch()
+        self._mesh_tab_idx = self._tabs.addTab(mesh_tab, "Mesh & Router")
+        self._tabs.setTabVisible(self._mesh_tab_idx, False)
+
+        # ── Tab 3: Suggested — hidden until hw_detect finds matches ───────────
+        suggested_tab = QWidget()
+        suggested_tab.setStyleSheet(f"background:{BG_DARK};")
+        suggested_outer = QVBoxLayout(suggested_tab)
+        suggested_outer.setContentsMargins(0, 0, 0, 0)
+        suggested_outer.setSpacing(0)
+
+        sug_hdr = QFrame()
+        sug_hdr.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f" border-bottom:1px solid {BORDER}; }}"
+        )
+        sug_hdr_lay = QHBoxLayout(sug_hdr)
+        sug_hdr_lay.setContentsMargins(12, 7, 10, 7)
+        sug_title = QLabel("Suggested for your network")
+        sug_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        sug_title.setStyleSheet(f"color:{AMBER}; border:none; background:transparent;")
+        sug_hdr_lay.addWidget(sug_title)
+        sug_hdr_lay.addStretch()
+        suggested_outer.addWidget(sug_hdr)
+
+        sug_scroll = QScrollArea()
+        sug_scroll.setWidgetResizable(True)
+        sug_scroll.setStyleSheet("QScrollArea { border: none; }")
+        sug_inner = QWidget()
+        sug_inner.setStyleSheet(f"background:{BG_DARK};")
+        self._suggested_lay = QVBoxLayout(sug_inner)
+        self._suggested_lay.setContentsMargins(0, 2, 0, 6)
+        self._suggested_lay.setSpacing(0)
+        sug_scroll.setWidget(sug_inner)
+        suggested_outer.addWidget(sug_scroll)
+
+        self._suggested_tab_idx = self._tabs.addTab(suggested_tab, "Suggested")
+        self._tabs.setTabVisible(self._suggested_tab_idx, False)
 
     def _toggle_guide(self) -> None:
         visible = not self._guide_area.isVisible()
@@ -1543,24 +1440,24 @@ class HardwareIntegrationPage(QWidget):
     # ── Hardware auto-detection ───────────────────────────────────────────────
 
     def on_hardware_detected(self, matches: list) -> None:
-        """Populate the 'Suggested for your network' section from catalogue matches.
+        """Populate the Suggested tab from catalogue matches.
 
         Called from dashboard after HwDetectWorker finishes.
         Skips devices that are already installed.
         """
-        if self._detect_lay is None or self._detect_frame is None:
+        if self._suggested_lay is None or self._tabs is None:
             return
 
-        # Filter out already-installed
         from modules.hw_detect import already_installed
         visible = [m for m in matches if not already_installed(m["plugin"].get("id", ""))]
+
         if not visible:
-            self._detect_frame.setVisible(False)
+            self._tabs.setTabVisible(self._suggested_tab_idx, False)
             return
 
         # Clear previous rows
-        while self._detect_lay.count():
-            item = self._detect_lay.takeAt(0)
+        while self._suggested_lay.count():
+            item = self._suggested_lay.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
@@ -1568,17 +1465,21 @@ class HardwareIntegrationPage(QWidget):
             plugin     = match["plugin"]
             confidence = match["confidence"]
             signals    = match["signals"]
-            # Determine if this device's native worker is already supplying data
+            # Modem tab visible → ZTE is already active; Mesh tab → Deco is active
             native_active = (
-                (plugin.get("id") == "zte_mc889" and self._native_modem_card is not None) or
-                (plugin.get("id") == "deco"      and self._native_mesh_card  is not None)
+                (plugin.get("id") == "zte_mc889"
+                 and self._tabs.isTabVisible(self._modem_tab_idx)) or
+                (plugin.get("id") == "deco"
+                 and self._tabs.isTabVisible(self._mesh_tab_idx))
             )
-            self._detect_lay.addWidget(
+            self._suggested_lay.addWidget(
                 self._build_detect_row(plugin, confidence, signals, native_active)
             )
 
-        self._detect_lay.addStretch()
-        self._detect_frame.setVisible(True)
+        self._suggested_lay.addStretch()
+        n = len(visible)
+        self._tabs.setTabText(self._suggested_tab_idx, f"Suggested ({n})")
+        self._tabs.setTabVisible(self._suggested_tab_idx, True)
 
     def _build_detect_row(
         self, plugin: dict, confidence: float, signals: list,
@@ -1725,49 +1626,77 @@ class HardwareIntegrationPage(QWidget):
         self._set_status(f"Installed '{name}' — opening password field…", error=False)
         self._rebuild_hub()
         self._start_poll_worker(dest_str)
-        # Refresh the detection banner so the just-installed device disappears
-        self._detect_frame.setVisible(False)
+        # Hide the Suggested tab since the device is now installed
+        if self._tabs is not None:
+            self._tabs.setTabVisible(self._suggested_tab_idx, False)
 
-    # ── Native modem / mesh card data ────────────────────────────────────────
+    # ── Modem / mesh tab data ────────────────────────────────────────────────
 
     def on_modem_card_data(self, raw: dict) -> None:
-        """Update (or create) the native modem card from ZteWorker data.
+        """Update the Modem tab with incoming signal data (any modem source).
 
-        Skipped when the user has imported zte_plugin.py as a HubCard — the
-        HubCard is the canonical view in that case and we avoid showing the
-        same data twice.
+        Also updates the shared hw_state singleton so speed test and other
+        surfaces can read the latest modem snapshot without a dashboard ref.
         """
-        if self._native_lay is None:
+        if self._tabs is None or self._modem_panel is None:
             return
-        if any("zte_plugin" in p for p in _load_paths()):
-            return  # HubCard is the representation — skip native card
-        if self._native_modem_card is None:
-            self._native_modem_card = NativeHwCard("modem", "5G / LTE Modem", parent=self)
-            self._native_modem_card.open_page.connect(
-                lambda: self.navigate_to.emit("Modem")
-            )
-            self._native_lay.addWidget(self._native_modem_card)
-            self._native_section.setVisible(True)
-        self._native_modem_card.update_modem(raw)
+        extra  = {k: v for k, v in raw.items() if k != "host"}
+        status = {"wan_ip": raw.get("wan_ip"), "extra": extra}
+        self._modem_panel.update(extra, status)
+
+        nt = raw.get("network_type", "")
+        if "NR5G" in nt.upper() or "5G" in nt.upper():
+            suffix = " · 5G NR"
+        elif "LTE" in nt.upper():
+            suffix = " · LTE"
+        else:
+            suffix = ""
+        self._tabs.setTabText(self._modem_tab_idx, f"Modem{suffix}")
+        self._tabs.setTabVisible(self._modem_tab_idx, True)
+
+        from modules.network_infrastructure import hw_state
+        hw_state.update_modem(raw, source="hub", hw_name=raw.get("host", "Modem"))
 
     def on_mesh_card_data(self, units: list, clients: list, provider: str = "Mesh") -> None:
-        """Update (or create) the native mesh/router card from MeshWorker data.
+        """Update the Mesh & Router tab with incoming router data (any source).
 
-        Skipped when the user has imported deco_plugin.py as a HubCard — the
-        HubCard is the canonical view in that case.
+        Also updates the shared hw_state singleton.
         """
-        if self._native_lay is None:
+        if self._tabs is None or self._mesh_panel is None:
             return
-        if any("deco_plugin" in p for p in _load_paths()):
-            return  # HubCard is the representation — skip native card
-        if self._native_mesh_card is None:
-            self._native_mesh_card = NativeHwCard("router", "Mesh / Router", parent=self)
-            self._native_mesh_card.open_page.connect(
-                lambda: self.navigate_to.emit("Mesh & Router")
-            )
-            self._native_lay.addWidget(self._native_mesh_card)
-            self._native_section.setVisible(True)
-        self._native_mesh_card.update_router(units, clients, provider)
+
+        nodes_dicts = [
+            {"name": getattr(u, "name", ""), "role": getattr(u, "role", "satellite"),
+             "mac": str(getattr(u, "mac", ""))}
+            for u in units
+        ]
+        clients_dicts = [
+            {"ip": getattr(c, "ip", ""), "mac": str(getattr(c, "mac", "")),
+             "hostname": getattr(c, "name", "") or "", "band": getattr(c, "band", ""),
+             "unit": getattr(c, "unit_name", "")}
+            for c in clients
+        ]
+        status = {
+            "mesh_nodes": len(units),
+            "connected_clients": len(clients),
+            "extra": {"nodes": nodes_dicts},
+        }
+        self._mesh_panel.update(status, clients_dicts)
+
+        n_cli = len(clients)
+        n_nodes = len(units)
+        parts = []
+        if n_nodes:
+            parts.append(f"{n_nodes} node{'s' if n_nodes != 1 else ''}")
+        if n_cli:
+            parts.append(f"{n_cli} client{'s' if n_cli != 1 else ''}")
+        title = "Mesh & Router" + (f"  ·  {', '.join(parts)}" if parts else "")
+        self._tabs.setTabText(self._mesh_tab_idx, title)
+        self._tabs.setTabVisible(self._mesh_tab_idx, True)
+
+        from modules.network_infrastructure import hw_state
+        hw_state.update_router(clients_dicts, nodes_dicts,
+                               source="hub", hw_name=provider)
 
     def _copy_ai_prompt(self, plugin: dict, btn: QPushButton) -> None:
         """Copy the catalogue AI prompt to clipboard, replacing {ip} placeholder."""

@@ -139,6 +139,7 @@ hiddenimports: list = [
     "modules.tls_checker",
     "modules.trend_analyser",
     "modules.hw_detect",
+    "modules.network_infrastructure",
     "modules.utils",
     "modules.wifi_heatmap",
     "modules.wifi_scanner",
