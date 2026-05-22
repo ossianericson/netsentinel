@@ -2405,12 +2405,35 @@ class Dashboard(QMainWindow):
                 if _hw_cached2:
                     _pg.update(_hw_cached2)
                     if _hw_type == "modem":
+                        import time as _t2
                         from modules.network_infrastructure import hw_state as _hws
-                        _hws.update_modem(
-                            _hw_cached2.get("status", {}).get("extra", {}),
-                            source=_hw_p,
-                            hw_name=_hw_label,
-                        )
+                        _s2 = _hw_cached2.get("status", {})
+                        _x2 = _s2.get("extra", {})
+                        _hws.update_modem({
+                            "ts":               int(_t2.time()),
+                            "wan_ip":           _s2.get("wan_ip"),
+                            "wan_status":       _s2.get("wan_status"),
+                            "firmware_version": _x2.get("firmware"),
+                            "network_type":     _x2.get("network_type"),
+                            "signal_bars":      _x2.get("signal_bars"),
+                            "mcc":              _x2.get("mcc"),
+                            "mnc":              _x2.get("mnc"),
+                            "cell_id":          _x2.get("cell_id"),
+                            "enb_id":           _x2.get("enb_id"),
+                            "nr5g_rsrp_dbm":    _x2.get("nr5g_rsrp_dbm"),
+                            "nr5g_sinr_db":     _x2.get("nr5g_sinr_db"),
+                            "nr5g_rsrq_db":     _x2.get("nr5g_rsrq_db"),
+                            "nr5g_band":        _x2.get("nr5g_band"),
+                            "nr5g_pci":         _x2.get("nr5g_pci"),
+                            "nr5g_arfcn":       _x2.get("nr5g_arfcn"),
+                            "lte_rsrp_dbm":     _x2.get("lte_rsrp_dbm"),
+                            "lte_snr_db":       _x2.get("lte_snr_db"),
+                            "lte_rsrq_db":      _x2.get("lte_rsrq_db"),
+                            "lte_band":         _x2.get("lte_band"),
+                            "lte_pci":          _x2.get("lte_pci"),
+                            "lte_earfcn":       _x2.get("lte_earfcn"),
+                            "endc_info":        _x2.get("endc_info"),
+                        }, source=_hw_p, hw_name=_hw_label)
             self._plugin_pages[_hw_p] = _pg
 
         from ui.pages.mesh_router_page import MeshRouterPage
@@ -9229,8 +9252,6 @@ class Dashboard(QMainWindow):
                 "endc_info":        extra.get("endc_info"),
             })
             path = data.get("_path", hw_name)
-            from modules.network_infrastructure import hw_state
-            hw_state.update_modem(status.get("extra", {}), source=path, hw_name=hw_name)
             if path in getattr(self, "_plugin_pages", {}):
                 self._plugin_pages[path].update(data)
             return  # modem plugins have no LAN clients to enrich

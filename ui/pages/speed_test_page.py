@@ -961,16 +961,15 @@ class SpeedTestPage(QWidget):
         self._anim_current = 0.0
         self._set_status("Connecting to server…")
 
-        # Snapshot credentials before pause fires — _on_modem_disconnect clears them
+        # Snapshot BEFORE pause: modem_pause_requested → _on_modem_disconnect →
+        # hw_state.clear_modem(), so we must read the plugin snapshot first.
         _zte_host = self._zte_host
         _zte_pw   = self._zte_password
-        self.modem_pause_requested.emit()
-
-        # For plugin modems (no ZTE creds), use the latest hw_state snapshot
         _modem_snapshot = None
         if not (_zte_host and _zte_pw):
             from modules.network_infrastructure import hw_state
             _modem_snapshot = hw_state.modem_signal
+        self.modem_pause_requested.emit()
 
         self._test_worker = SpeedTestWorker(
             server_id=self._selected_server_id,
