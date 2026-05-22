@@ -1228,6 +1228,7 @@ class Dashboard(QMainWindow):
         # Plugin enrichment — one entry per plugin path; merged in _apply_mesh_enrichment
         # dict[path, dict[mac, client_dict]] — supports multiple router/AP plugins
         self._plugin_enrichments: dict[str, dict] = {}
+        self._plugin_nodes:       dict[str, list] = {}  # path → [{name,mac,role}]
         self._plugin_hardware_name: str = ""  # name of last-run plugin
 
         # Last modem credentials — used to resume ZteWorker after plugin test
@@ -9063,24 +9064,15 @@ class Dashboard(QMainWindow):
             for c in clients
             if c.get("mac")
         }
-        self._apply_mesh_enrichment()
+        # Store node list so topology can group devices by AP/satellite
+        self._plugin_nodes[path] = status.get("extra", {}).get("nodes", [])
+        self._apply_mesh_enrichment()  # handles topology + regrouping + synthesis
         n = len(self._plugin_enrichments[path])
         if hasattr(self, "_m1_status"):
             summary = getattr(self, "_m1_scan_summary", "")
             self._m1_status.setText(
                 f"{summary}  ·  {hw_name}: {n} device{'s' if n != 1 else ''} enriched"
             )
-
-        # Re-render topology so plugin-supplied hostnames/nodes appear on the map
-        if getattr(self, "_m1_result", None) and hasattr(self, "_topology_widget"):
-            try:
-                gw_ip  = self._net_info.get("gateway")     if self._net_info else None
-                gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
-                self._topology_widget.render(
-                    self._m1_result.get("devices", []), gw_ip, gw_mac,
-                )
-            except Exception:
-                pass
 
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient and plugin client data into the M1 table rows."""
@@ -9098,6 +9090,7 @@ class Dashboard(QMainWindow):
 
         _mac_re = __import__("re").compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", __import__("re").I)
         any_matched = False
+        plugin_any_matched = False
 
         for row in range(self._m1_table.rowCount()):
             mac_item = self._m1_table.item(row, 2)
@@ -9150,6 +9143,7 @@ class Dashboard(QMainWindow):
                         pc = plugin_by_ip.get(ip_item.text())
                 if not pc:
                     continue
+                plugin_any_matched = True
                 hostname = pc.get("hostname", "")
                 if hostname and not _mac_re.match(hostname):
                     name_item = QTableWidgetItem(hostname)
@@ -9186,6 +9180,20 @@ class Dashboard(QMainWindow):
                     d.mesh_band      = mc.band
                     d.mesh_up_kbps   = mc.upload_kbps
                     d.mesh_down_kbps = mc.download_kbps
+
+        # Mirror plugin band/unit onto DeviceInfo objects so exports include them
+        for d in self._m1_result.get("devices", []):
+            _dmac = _norm_mac(d.mac if not isinstance(d, dict) else d.get("mac", ""))
+            _pc = _all_plugin.get(_dmac)
+            if not _pc:
+                continue
+            _pu, _pb = _pc.get("unit", ""), _pc.get("band", "")
+            if _pu:
+                if isinstance(d, dict): d["mesh_unit"] = _pu
+                else: d.mesh_unit = _pu
+            if _pb:
+                if isinstance(d, dict): d["mesh_band"] = _pb
+                else: d.mesh_band = _pb
 
         # Sync every enriched hostname from the table back onto the DeviceInfo
         # objects so the topology render sees the same names as the Devices table.
@@ -9238,14 +9246,33 @@ class Dashboard(QMainWindow):
         except Exception:
             pass
 
-        # Re-render topology with mesh structure now that enrichment is complete
+        # Re-render topology — native mesh preferred; fall back to plugin node data
         try:
             gw_ip  = self._net_info.get("gateway")     if self._net_info else None
             gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+            _eff_units  = getattr(self, "_mesh_units", None)
+            _eff_enrich = self._mesh_enrichment or None
+            if not _eff_units and _all_plugin:
+                from types import SimpleNamespace as _SN
+                _pnodes_flat: list = []
+                for _pnlist in getattr(self, "_plugin_nodes", {}).values():
+                    for _n in _pnlist:
+                        _pnodes_flat.append(_SN(
+                            name=_n.get("name", ""), role=_n.get("role", "satellite"),
+                            mac=_norm_mac(_n.get("mac", "")), online=True,
+                        ))
+                if _pnodes_flat:
+                    _eff_units  = _pnodes_flat
+                    _eff_enrich = {
+                        mac: _SN(mac=mac, ip=c.get("ip", ""), name=c.get("hostname", ""),
+                                 band=c.get("band", ""), unit_name=c.get("unit", ""),
+                                 upload_kbps=0, download_kbps=0)
+                        for mac, c in _all_plugin.items()
+                    }
             self._topology_widget.render(
                 self._m1_result.get("devices", []), gw_ip, gw_mac,
-                mesh_units=getattr(self, "_mesh_units", None),
-                mesh_enrichment=self._mesh_enrichment,
+                mesh_units=_eff_units,
+                mesh_enrichment=_eff_enrich,
                 modem_data=getattr(self, "_last_modem_data", None),
             )
         except Exception:
@@ -9281,8 +9308,34 @@ class Dashboard(QMainWindow):
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
 
+        # Synthesize rows for plugin-only clients not seen by ARP scan
+        # (e.g. a phone connected to the router that didn't reply to ARP)
+        _plugin_synth_added = False
+        for _pmac, _pc in _all_plugin.items():
+            if not _pmac or _pmac in _existing_macs:
+                continue
+            _pip   = _pc.get("ip", "") or "—"
+            _phn   = _pc.get("hostname", "") or "—"
+            if _pip == "—" and _phn == "—":
+                continue  # nothing useful to show
+            _add_row(
+                self._m1_table,
+                [_pip, _phn, _pmac, "", "CLEAN",
+                 "Wireless Client", _pc.get("unit", ""), _pc.get("band", ""),
+                 "Plugin-only — not visible to ARP scan"],
+                "CLEAN",
+            )
+            _psi = self._m1_table.item(self._m1_table.rowCount() - 1, 0)
+            if _psi:
+                _psi.setData(Qt.ItemDataRole.UserRole + 10, "__plugin_synth__")
+            _existing_macs.add(_pmac)
+            _plugin_synth_added = True
+        if _plugin_synth_added:
+            self._m1_table.setColumnHidden(6, False)
+            self._m1_table.setColumnHidden(7, False)
+
         # Regroup M1 table into collapsible satellite sections
-        if any_matched or _synth_added:
+        if any_matched or _synth_added or plugin_any_matched or _plugin_synth_added:
             self._regroup_m1_by_satellite()
 
     def _regroup_m1_by_satellite(self) -> None:
