@@ -35,11 +35,13 @@ from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -49,6 +51,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PyQt6.QtCore import QProcess
 
 from workers.plugin_polling_worker import PluginPollingWorker
 from ui.styles import (
@@ -77,6 +80,24 @@ from ui.styles import (
 
 _SETTINGS_KEY    = "hardware/custom_scripts"
 _SETTINGS_RESULT = "hardware/last_result/{}"  # .format(path_hash)
+
+
+def _find_python_exe() -> str:
+    """Return a usable Python interpreter path.
+
+    In development sys.executable is already python.exe.  In a frozen
+    (PyInstaller onefile) bundle sys.executable is the .exe itself, so we
+    search PATH for python3 / python.
+    """
+    import sys as _sys
+    if not getattr(_sys, "frozen", False):
+        return _sys.executable
+    import shutil
+    for candidate in ("python3", "python", "py"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+    return "python"
 
 _TEMPLATE = '''\
 """
@@ -597,6 +618,88 @@ class _RouterDetailPanel(QFrame):
                 band_item.setForeground(QColor(ACCENT))
             self._client_table.setItem(r, 2, band_item)
             self._client_table.setItem(r, 3, QTableWidgetItem(c.get("unit", "") or "—"))
+
+
+# ── Pip install dialog ────────────────────────────────────────────────────────
+
+class PipInstallDialog(QDialog):
+    """Runs `pip install <package>` in a QProcess and streams output to a log.
+
+    Usage:
+        dlg = PipInstallDialog("fritzconnection", parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            # library is now installed
+    """
+
+    def __init__(self, package: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._package = package
+        self._success = False
+        self.setWindowTitle(f"Install {package}")
+        self.setMinimumWidth(520)
+        self.setModal(True)
+
+        lay = QVBoxLayout(self)
+        lay.setSpacing(10)
+
+        hdr = QLabel(f"Installing <b>{package}</b> via pip…")
+        hdr.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:14px;")
+        lay.addWidget(hdr)
+
+        self._log = QTextEdit()
+        self._log.setReadOnly(True)
+        self._log.setMinimumHeight(200)
+        self._log.setStyleSheet(
+            f"background:{BG_DARK}; color:{TEXT_SECONDARY}; "
+            f"font-family:monospace; font-size:12px; border:none;"
+        )
+        lay.addWidget(self._log)
+
+        self._bar = QProgressBar()
+        self._bar.setRange(0, 0)  # indeterminate
+        self._bar.setTextVisible(False)
+        lay.addWidget(self._bar)
+
+        btn_row = QHBoxLayout()
+        self._btn_close = QPushButton("Cancel")
+        self._btn_close.setFixedHeight(32)
+        self._btn_close.clicked.connect(self._on_cancel)
+        btn_row.addStretch()
+        btn_row.addWidget(self._btn_close)
+        lay.addLayout(btn_row)
+
+        self._proc = QProcess(self)
+        self._proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self._proc.readyReadStandardOutput.connect(self._on_output)
+        self._proc.finished.connect(self._on_finished)
+
+        python = _find_python_exe()
+        self._proc.start(python, ["-m", "pip", "install", "--upgrade", package])
+
+    def _on_output(self) -> None:
+        data = bytes(self._proc.readAllStandardOutput()).decode("utf-8", errors="replace")
+        self._log.moveCursor(self._log.textCursor().End)
+        self._log.insertPlainText(data)
+        sb = self._log.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+    def _on_finished(self, exit_code: int, _status) -> None:
+        self._bar.setRange(0, 1)
+        self._bar.setValue(1)
+        if exit_code == 0:
+            self._success = True
+            self._log.append(f"\n✓  {self._package} installed successfully.")
+            self._btn_close.setText("Done")
+            self._btn_close.clicked.disconnect()
+            self._btn_close.clicked.connect(self.accept)
+        else:
+            self._log.append(f"\n✗  pip exited with code {exit_code}.")
+            self._btn_close.setText("Close")
+
+    def _on_cancel(self) -> None:
+        if self._proc.state() != QProcess.ProcessState.NotRunning:
+            self._proc.kill()
+        self.reject()
 
 
 # ── Hub card ──────────────────────────────────────────────────────────────────
@@ -1527,7 +1630,34 @@ class HardwareIntegrationPage(QWidget):
         return row
 
     def _install_from_catalogue(self, plugin: dict) -> None:
-        """Copy a bundled plugin to the user data dir and register it."""
+        """Copy a bundled plugin to the user data dir and register it.
+
+        If the plugin requires a PyPI library that is not yet installed,
+        opens PipInstallDialog first and only proceeds on success.
+        """
+        # ── 1. Check / install PyPI dependency ────────────────────────────────
+        pypi_lib = plugin.get("pypi_library", "")
+        if pypi_lib:
+            import importlib.util
+            # Map dash-separated package names to their importable module name
+            module_name = pypi_lib.replace("-", "_")
+            if importlib.util.find_spec(module_name) is None:
+                dlg = PipInstallDialog(pypi_lib, parent=self)
+                if dlg.exec() != QDialog.DialogCode.Accepted:
+                    self._set_status("Dependency install cancelled.", error=True)
+                    return
+                # Verify the library is now importable after pip install
+                import importlib
+                importlib.invalidate_caches()
+                if importlib.util.find_spec(module_name) is None:
+                    self._set_status(
+                        f"Library '{pypi_lib}' still not importable after install — "
+                        "check the pip output for errors.",
+                        error=True,
+                    )
+                    return
+
+        # ── 2. Copy the bundled plugin script to the user data dir ────────────
         from modules.hw_detect import bundled_plugin_path
         file_rel = plugin.get("file", "")
         if not file_rel:
@@ -1539,7 +1669,7 @@ class HardwareIntegrationPage(QWidget):
             self._set_status(f"Bundled file not found: {file_rel}", error=True)
             return
 
-        import shutil, os
+        import shutil
         from pathlib import Path as _Path
         try:
             dest_dir = _Path.home() / ".netsentinel" / "plugins"
