@@ -3767,6 +3767,7 @@ class Dashboard(QMainWindow):
         self._m1_node_group_btn.setFixedHeight(22)
         self._m1_node_group_btn.setCheckable(True)
         self._m1_node_group_btn.setChecked(_node_grp_on)
+        self._m1_node_group_btn.setEnabled(False)  # enabled once mesh data arrives
         self._m1_node_group_btn.setToolTip(
             "Group scanned devices under their mesh node / AP.\n"
             "Activates once mesh data arrives from a running hardware plugin."
@@ -5289,8 +5290,8 @@ class Dashboard(QMainWindow):
             self._ps_status.setText(f"Scanning {host} ({mode} mode)…")
         self._ps_worker = PortScanWorker(host=host, mode=mode)
         self._ps_worker.result.connect(self._on_port_scan_result)
-        self._ps_worker.status.connect(lambda m: self._ps_status.setText(m) if hasattr(self, "_ps_status") else None)
-        self._ps_worker.error.connect(lambda e: self._ps_status.setText(f"Error: {e}") if hasattr(self, "_ps_status") else None)
+        self._ps_worker.status.connect(lambda m: self._ps_status.setText(m) if hasattr(self, "_ps_status") else None, Qt.ConnectionType.QueuedConnection)
+        self._ps_worker.error.connect(lambda e: self._ps_status.setText(f"Error: {e}") if hasattr(self, "_ps_status") else None, Qt.ConnectionType.QueuedConnection)
         self._ps_worker.start()
 
     @pyqtSlot(object)
@@ -5378,7 +5379,8 @@ class Dashboard(QMainWindow):
             self._logger_worker.status.connect(self._log_status_lbl.setText)
             self._logger_worker.rotated.connect(self._on_log_rotate)
             self._logger_worker.error.connect(
-                lambda e: self._log_status_lbl.setText(f"Error: {e}")
+                lambda e: self._log_status_lbl.setText(f"Error: {e}"),
+                Qt.ConnectionType.QueuedConnection,
             )
             self._logger_worker.start()
             self._btn_log_start.setText("⏹  Stop Logger")
@@ -5803,10 +5805,12 @@ class Dashboard(QMainWindow):
         self._ipv6_worker.result.connect(self._on_ipv6_result)
         self._ipv6_worker.status.connect(self._ipv6_status.setText)
         self._ipv6_worker.error.connect(
-            lambda e: self._ipv6_status.setText(f"⚠ {e}")
+            lambda e: self._ipv6_status.setText(f"⚠ {e}"),
+            Qt.ConnectionType.QueuedConnection,
         )
         self._ipv6_worker.finished.connect(
-            lambda: self._btn_ipv6_scan.setEnabled(True)
+            lambda: self._btn_ipv6_scan.setEnabled(True),
+            Qt.ConnectionType.QueuedConnection,
         )
         self._ipv6_worker.start()
 
@@ -5909,10 +5913,12 @@ class Dashboard(QMainWindow):
         self._cloud_worker.network_result.connect(self._on_cloud_network_result)
         self._cloud_worker.status.connect(self._cloud_status.setText)
         self._cloud_worker.error.connect(
-            lambda e: self._cloud_status.setText(f"⚠ {e}")
+            lambda e: self._cloud_status.setText(f"⚠ {e}"),
+            Qt.ConnectionType.QueuedConnection,
         )
         self._cloud_worker.finished.connect(
-            lambda: self._btn_cloud_scan.setEnabled(True)
+            lambda: self._btn_cloud_scan.setEnabled(True),
+            Qt.ConnectionType.QueuedConnection,
         )
         self._cloud_worker.start()
 
@@ -7125,9 +7131,9 @@ class Dashboard(QMainWindow):
         gateway_ip = self._net_info.get("gateway") if self._net_info else None
         self._arp_worker = ARPMonitorWorker(gateway_ip=gateway_ip, duration=30)
         self._arp_worker.event_found.connect(self._on_arp_event)
-        self._arp_worker.result.connect(lambda r: self._arp_status.setText(r.plain_verdict))
+        self._arp_worker.result.connect(lambda r: self._arp_status.setText(r.plain_verdict), Qt.ConnectionType.QueuedConnection)
         self._arp_worker.status.connect(self._arp_status.setText)
-        self._arp_worker.error.connect(lambda e: self._arp_status.setText(f"⚠ {e}"))
+        self._arp_worker.error.connect(lambda e: self._arp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._arp_worker.start()
         self._arp_status.setText("ARP monitor started…")
 
@@ -7184,9 +7190,9 @@ class Dashboard(QMainWindow):
         self._dhcp_table.setRowCount(0)
         self._dhcp_worker = DHCPDetectorWorker(duration=10)
         self._dhcp_worker.offer_found.connect(self._on_dhcp_offer)
-        self._dhcp_worker.result.connect(lambda r: self._dhcp_status.setText(r.plain_verdict))
+        self._dhcp_worker.result.connect(lambda r: self._dhcp_status.setText(r.plain_verdict), Qt.ConnectionType.QueuedConnection)
         self._dhcp_worker.status.connect(self._dhcp_status.setText)
-        self._dhcp_worker.error.connect(lambda e: self._dhcp_status.setText(f"⚠ {e}"))
+        self._dhcp_worker.error.connect(lambda e: self._dhcp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._dhcp_worker.start()
         self._dhcp_status.setText("DHCP discover sent — listening for offers…")
 
@@ -7249,7 +7255,7 @@ class Dashboard(QMainWindow):
         self._bw_worker = BandwidthWorker(interval_s=5.0, label_map=label_map)
         self._bw_worker.snapshot.connect(self._on_bw_snapshot)
         self._bw_worker.status.connect(self._bw_status.setText)
-        self._bw_worker.error.connect(lambda e: self._bw_status.setText(f"⚠ {e}"))
+        self._bw_worker.error.connect(lambda e: self._bw_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._bw_worker.start()
 
     @pyqtSlot()
@@ -7329,8 +7335,8 @@ class Dashboard(QMainWindow):
             notify_desktop=_qs.value("tray/notify_new_device", False, type=bool),
         )
         self._sched_worker.status.connect(self._on_sched_status)
-        self._sched_worker.alert.connect(lambda t, m: self._sched_log.append(f"🔔 {t}: {m}"))
-        self._sched_worker.error.connect(lambda e: self._sched_log.append(f"⚠ {e}"))
+        self._sched_worker.alert.connect(lambda t, m: self._sched_log.append(f"🔔 {t}: {m}"), Qt.ConnectionType.QueuedConnection)
+        self._sched_worker.error.connect(lambda e: self._sched_log.append(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._sched_worker.start()
 
     @pyqtSlot()
@@ -7403,7 +7409,7 @@ class Dashboard(QMainWindow):
         self._snmp_worker = SNMPWorker(hosts=hosts, community=community)
         self._snmp_worker.host_result.connect(self._on_snmp_result)
         self._snmp_worker.status.connect(self._snmp_status.setText)
-        self._snmp_worker.error.connect(lambda e: self._snmp_status.setText(f"⚠ {e}"))
+        self._snmp_worker.error.connect(lambda e: self._snmp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._snmp_worker.start()
 
     @pyqtSlot()
@@ -7510,7 +7516,7 @@ class Dashboard(QMainWindow):
         self._syn_worker = SYNScanWorker(host=host, ports=ports, rate_pps=rate)
         self._syn_worker.result.connect(self._on_syn_result)
         self._syn_worker.status.connect(self._syn_status.setText)
-        self._syn_worker.error.connect(lambda e: self._syn_status.setText(f"⚠ {e}"))
+        self._syn_worker.error.connect(lambda e: self._syn_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._syn_worker.start()
 
     @pyqtSlot()
@@ -7636,7 +7642,7 @@ class Dashboard(QMainWindow):
         self._udp_worker = UDPScanWorker(host=host)
         self._udp_worker.result.connect(self._on_udp_result)
         self._udp_worker.status.connect(self._udp_status.setText)
-        self._udp_worker.error.connect(lambda e: self._udp_status.setText(f"⚠ {e}"))
+        self._udp_worker.error.connect(lambda e: self._udp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._udp_worker.start()
 
     @pyqtSlot(object)
@@ -7703,7 +7709,7 @@ class Dashboard(QMainWindow):
         self._os_worker = OSFingerprintWorker(ips=ips)
         self._os_worker.result.connect(self._on_os_result)
         self._os_worker.status.connect(self._os_status.setText)
-        self._os_worker.error.connect(lambda e: self._os_status.setText(f"⚠ {e}"))
+        self._os_worker.error.connect(lambda e: self._os_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._os_worker.start()
 
     @pyqtSlot(dict)
@@ -7844,7 +7850,7 @@ class Dashboard(QMainWindow):
         self._cve_worker.status.connect(self._cve_status.setText)
         self._cve_worker.finished_all.connect(lambda: self._cve_status.setText(
             self._cve_status.text() + "  ✓ Done."
-        ))
+        ), Qt.ConnectionType.QueuedConnection)
         self._cve_worker.start()
 
     @pyqtSlot(str, object)
@@ -7921,7 +7927,7 @@ class Dashboard(QMainWindow):
         self._exposure_worker = InternetExposureWorker()
         self._exposure_worker.result.connect(self._on_exposure_result)
         self._exposure_worker.status.connect(self._exposure_status.setText)
-        self._exposure_worker.error.connect(lambda e: self._exposure_status.setText(f"⚠ {e}"))
+        self._exposure_worker.error.connect(lambda e: self._exposure_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._exposure_worker.start()
 
     @pyqtSlot(object)
@@ -9167,7 +9173,7 @@ class Dashboard(QMainWindow):
         worker.result.connect(self._mesh_router_page._on_result)
         worker.status.connect(lambda msg: self._m1_status.setText(
             f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
-        ))
+        ), Qt.ConnectionType.QueuedConnection)
         # Keep a reference so the thread isn't garbage-collected mid-run
         self._mesh_auto_worker = worker
         worker.start()
@@ -9197,7 +9203,7 @@ class Dashboard(QMainWindow):
             self._hardware_integration_page.on_hardware_detected(matches)
 
     def _plugin_gateway_map(self) -> dict:
-        """Return {ip: plugin_name} for all bundled plugins. Result is cached."""
+        """Return {ip: plugin_name} for all bundled plugins. Cached per session; cleared by _clear_plugin_gateway_cache."""
         if hasattr(self, "_plugin_gateway_map_cache"):
             return self._plugin_gateway_map_cache
         import ast
@@ -9344,6 +9350,9 @@ class Dashboard(QMainWindow):
         hw_name = info.get("name", "plugin")
         self._plugin_hardware_name = hw_name
 
+        # Clear discovery banner cache so next scan re-evaluates imported plugins
+        self.__dict__.pop("_plugin_gateway_map_cache", None)
+
         # ── Modem plugins: route signal to Modem page + Overview tile ─────────
         if hw_type == "modem":
             extra = status.get("extra", {})
@@ -9467,6 +9476,9 @@ class Dashboard(QMainWindow):
         if any_matched:
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
+            self._m1_node_group_btn.setEnabled(True)
+            if self._m1_group_by_node:
+                self._regroup_m1_by_satellite()
 
         # Plugin enrichment — update hostname column for any matching MAC or IP
         plugin_enrichment = _all_plugin
@@ -9504,6 +9516,12 @@ class Dashboard(QMainWindow):
                     band_item.setToolTip(f"Band from {plugin_name}")
                     self._m1_table.setItem(row, 7, band_item)
                     self._m1_table.setColumnHidden(7, False)
+
+        # Enable grouping button if any plugin matched a node
+        if plugin_any_matched:
+            self._m1_node_group_btn.setEnabled(True)
+            if self._m1_group_by_node:
+                self._regroup_m1_by_satellite()
 
         # Mirror enrichment onto DeviceInfo objects so exports include it
         for d in self._m1_result.get("devices", []):
@@ -9947,7 +9965,7 @@ class Dashboard(QMainWindow):
         worker.result.connect(self._mesh_router_page._on_result)
         worker.status.connect(lambda msg: self._m1_status.setText(
             f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
-        ))
+        ), Qt.ConnectionType.QueuedConnection)
         self._mesh_auto_worker = worker
         worker.start()
 
@@ -10720,7 +10738,7 @@ class Dashboard(QMainWindow):
             return
         self._net_info_worker = NetworkInfoWorker()
         self._net_info_worker.result.connect(self._update_net_info_ui)
-        self._net_info_worker.error.connect(lambda e: self._net_info_label.setText(f"Error: {e}"))
+        self._net_info_worker.error.connect(lambda e: self._net_info_label.setText(f"Error: {e}"), Qt.ConnectionType.QueuedConnection)
         self._net_info_worker.start()
         self._net_info_label.setText("Refreshing network information…")
 
@@ -10747,13 +10765,14 @@ class Dashboard(QMainWindow):
 
         gw = self._net_info.get("gateway") if self._net_info else None
         self._diag_worker = DiagnosticsWorker(gateway_ip=gw)
-        self._diag_worker.status.connect(lambda m: self._diag_status_lbl.setText(m))
+        self._diag_worker.status.connect(lambda m: self._diag_status_lbl.setText(m), Qt.ConnectionType.QueuedConnection)
         self._diag_worker.result.connect(self._on_diag_result)
         self._diag_worker.error.connect(
             lambda e: (
                 self._diag_status_lbl.setText(f"Error: {e}"),
                 self._btn_diag.setEnabled(True),
-            )
+            ),
+            Qt.ConnectionType.QueuedConnection,
         )
         self._diag_worker.finished.connect(self._on_diag_worker_finished)
         self._diag_worker.start()
@@ -10983,7 +11002,7 @@ class Dashboard(QMainWindow):
         )
         self._cred_worker.result.connect(self._on_cred_result)
         self._cred_worker.status.connect(self._cred_status.setText)
-        self._cred_worker.error.connect(lambda e: self._cred_status.setText(f"⚠ {e}"))
+        self._cred_worker.error.connect(lambda e: self._cred_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._cred_worker.start()
 
     @pyqtSlot(object)
@@ -11107,7 +11126,7 @@ class Dashboard(QMainWindow):
         )
         self._discovery_worker.result.connect(self._on_discovery_result)
         self._discovery_worker.status.connect(self._disc_status.setText)
-        self._discovery_worker.error.connect(lambda e: self._disc_status.setText(f"⚠ {e}"))
+        self._discovery_worker.error.connect(lambda e: self._disc_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._discovery_worker.start()
 
     @pyqtSlot(object)
@@ -11210,7 +11229,7 @@ class Dashboard(QMainWindow):
         )
         self._smb_worker.result.connect(self._on_smb_result)
         self._smb_worker.status.connect(self._smb_status.setText)
-        self._smb_worker.error.connect(lambda e: self._smb_status.setText(f"⚠ {e}"))
+        self._smb_worker.error.connect(lambda e: self._smb_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._smb_worker.start()
 
     @pyqtSlot(object)
@@ -11511,7 +11530,7 @@ class Dashboard(QMainWindow):
         self._pe_worker = PrivateEndpointWorker(specs)
         self._pe_worker.result.connect(self._on_pe_result)
         self._pe_worker.status.connect(self._pe_status.setText)
-        self._pe_worker.error.connect(lambda e: self._pe_status.setText(f"⚠ {e}"))
+        self._pe_worker.error.connect(lambda e: self._pe_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._pe_worker.finished_all.connect(self._on_pe_done)
         self._pe_worker.start()
 
