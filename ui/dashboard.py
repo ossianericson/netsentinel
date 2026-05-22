@@ -1709,37 +1709,6 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_edge_grips"):
             self._place_edge_grips()
 
-    # ── Windows Snap Layouts ─────────────────────────────────────────────────
-
-    def nativeEvent(self, event_type, message):
-        """Return HTMAXBUTTON when hovering over the maximize button so Windows
-        shows the Snap Layout flyout.  Handle NCLBUTTONUP to fire _toggle_maximize
-        (click routing bypasses Qt when hit-test returns a non-client value)."""
-        import sys
-        if sys.platform == "win32" and event_type == b"windows_generic_MSG":
-            try:
-                import ctypes, ctypes.wintypes as wt
-                msg = ctypes.cast(int(message), ctypes.POINTER(wt.MSG)).contents
-                WM_NCHITTEST   = 0x0084
-                WM_NCLBUTTONUP = 0x00A2
-                HTMAXBUTTON    = 9
-
-                if msg.message == WM_NCHITTEST and self._maximize_btn is not None:
-                    x = ctypes.c_short(msg.lParam & 0xFFFF).value
-                    y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
-                    btn   = self._maximize_btn
-                    tl    = btn.mapToGlobal(btn.rect().topLeft())
-                    if (tl.x() <= x < tl.x() + btn.width() and
-                            tl.y() <= y < tl.y() + btn.height()):
-                        return True, HTMAXBUTTON
-
-                elif msg.message == WM_NCLBUTTONUP and msg.wParam == HTMAXBUTTON:
-                    self._toggle_maximize()
-                    return True, 0
-            except Exception:
-                pass
-        return super().nativeEvent(event_type, message)
-
     def _install_edge_grips(self):
         """Create 8 transparent resize-grip strips around the window border."""
         from PyQt6.QtCore import Qt, QRect, QPoint
