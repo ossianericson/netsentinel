@@ -31,6 +31,14 @@ datas = [
     ("data/catalogue.json", "data"),
     ("plugins/zte_plugin.py", "plugins"),
     ("plugins/deco_plugin.py", "plugins"),
+    ("plugins/fritzbox_plugin.py", "plugins"),
+    ("plugins/unifi_plugin.py", "plugins"),
+    ("plugins/asus_plugin.py", "plugins"),
+    ("plugins/netgear_plugin.py", "plugins"),
+    ("plugins/mikrotik_plugin.py", "plugins"),
+    ("plugins/openwrt_plugin.py", "plugins"),
+    ("plugins/synology_plugin.py", "plugins"),
+    ("plugins/ha_plugin.py", "plugins"),
 ]
 
 # ── Collect whole packages (data + binaries + submodule tree) ─────────────────

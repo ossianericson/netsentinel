@@ -1,0 +1,103 @@
+"""
+NetSentinel Hardware Plugin — AVM FRITZ!Box
+Library: fritzconnection  (pip install fritzconnection)
+Tested:  fritzconnection >= 1.12
+
+Standalone test:
+    python plugins/fritzbox_plugin.py
+
+Import via Hardware Hub, enter your FRITZ!Box password in the card's password field.
+No username needed — FRITZ!Box only requires the admin password.
+"""
+
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+HARDWARE_NAME = "AVM FRITZ!Box"
+HARDWARE_TYPE = "router"
+HARDWARE_IP   = "192.168.178.1"   # default FRITZ!Box LAN address
+
+
+def _check_deps():
+    try:
+        import fritzconnection  # noqa: F401
+    except ImportError:
+        print("Missing dependency — run:  pip install fritzconnection", file=sys.stderr)
+        sys.exit(1)
+
+
+def _load_password() -> str:
+    try:
+        import keyring
+        pw = keyring.get_password("NetSentinel/hardware", HARDWARE_IP)
+        if pw:
+            return pw
+    except Exception:
+        pass
+    raise RuntimeError(
+        f"No password saved for {HARDWARE_IP}. "
+        "Enter it in the Hardware Hub password field and click Save."
+    )
+
+
+# ── Plugin interface ──────────────────────────────────────────────────────────
+
+def get_info() -> dict:
+    return {
+        "name":         HARDWARE_NAME,
+        "type":         HARDWARE_TYPE,
+        "ip":           HARDWARE_IP,
+        "manufacturer": "AVM",
+        "model":        "FRITZ!Box",
+    }
+
+
+def get_status() -> dict:
+    _check_deps()
+    from fritzconnection.lib.fritzstatus import FritzStatus
+    pw = _load_password()
+    fs = FritzStatus(address=HARDWARE_IP, password=pw)
+    return {
+        "wan_ip":            fs.external_ip,
+        "uptime_sec":        fs.uptime,
+        "connected_clients": None,
+        "extra":             {"is_connected": fs.is_connected},
+    }
+
+
+def get_clients() -> list:
+    _check_deps()
+    from fritzconnection.lib.fritzhosts import FritzHosts
+    pw = _load_password()
+    fh = FritzHosts(address=HARDWARE_IP, password=pw)
+    return [
+        {
+            "ip":       h.get("ip", ""),
+            "mac":      h.get("mac", ""),
+            "hostname": h.get("name", ""),
+            "band":     h.get("interface_type", ""),
+        }
+        for h in fh.get_active_hosts()
+    ]
+
+
+# ── Standalone test ───────────────────────────────────────────────────────────
+if __name__ == "__main__" and "--netsentinel" not in sys.argv:
+    print("=== Info ===");    print(json.dumps(get_info(), indent=2))
+    print("\n=== Status ==="); print(json.dumps(get_status(), indent=2, default=str))
+    print("\n=== Clients ==="); print(json.dumps(get_clients(), indent=2))
+
+# ── NetSentinel shim ──────────────────────────────────────────────────────────
+if "--netsentinel" in sys.argv:
+    import json as _j, sys as _s
+    try:
+        _clients = get_clients()
+    except Exception:
+        _clients = []
+    _s.stdout.write(_j.dumps({"info": get_info(), "status": get_status(), "clients": _clients},
+                              default=str) + "\n")
+    _s.exit(0)

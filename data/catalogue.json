@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "remote_url": "https://raw.githubusercontent.com/ossianericson/netsentinel/main/data/catalogue.json",
   "plugins": [
     {
@@ -53,34 +53,6 @@
       }
     },
     {
-      "id": "asus_router",
-      "name": "ASUS Router / ZenWiFi",
-      "type": "router",
-      "manufacturer": "ASUS",
-      "models": [
-        "RT-AX88U", "RT-AX86U", "RT-AX58U", "RT-AC86U", "RT-AC68U",
-        "ZenWiFi AX (XT8)", "ZenWiFi Pro ET12", "ZenWiFi XD6"
-      ],
-      "description": "ASUS ASUSWRT — client list with hostnames, WAN status, bandwidth",
-      "file": null,
-      "pypi_library": "asusrouter",
-      "credentials_hint": "Your ASUS router admin username and password",
-      "ai_prompt": "Write a NetSentinel hardware plugin for my ASUS router at {ip}. Install 'pip install asusrouter' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'ASUS Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (include connected_clients count, mesh_nodes count)\n  def get_clients() -> list  (each item: ip, mac, hostname, band, unit)\n\nUse the asusrouter library: AsusRouter class, method async_get_connected_devices(). Since it's async, wrap with asyncio.run(). Map device fields: ip, mac, name→hostname, connection_type→band.",
-      "fingerprints": {
-        "default_ips": ["192.168.1.1", "192.168.50.1"],
-        "http_title_any": ["ASUS"],
-        "http_header_any": ["asuswrt"],
-        "oui_prefixes": [
-          "04:42:1A", "2C:FD:A1", "3C:7C:3F", "50:EB:71", "6C:72:20",
-          "74:D4:35", "AC:22:0B", "F8:32:E4", "10:7B:44", "14:DD:A9",
-          "1C:87:2C", "20:CF:30", "24:4B:FE", "30:5A:3A", "38:D5:47",
-          "3C:18:A0", "40:B0:76", "4C:ED:FB", "54:A0:50", "5C:A6:E6",
-          "60:45:CB", "6C:F3:7F", "78:24:AF", "88:D7:F6", "8C:8D:28",
-          "90:E6:BA", "9C:5C:8E", "A0:36:9F", "B0:6E:BF", "D8:50:E6"
-        ]
-      }
-    },
-    {
       "id": "fritzbox",
       "name": "AVM FRITZ!Box",
       "type": "router",
@@ -90,10 +62,10 @@
         "FRITZ!Box 6890 LTE", "FRITZ!Box 4060", "FRITZ!Box 3490"
       ],
       "description": "FRITZ!Box via TR-064 — client list, WAN IP, DSL sync stats, uptime",
-      "file": null,
+      "file": "plugins/fritzbox_plugin.py",
       "pypi_library": "fritzconnection",
+      "requires": ["fritzconnection", "keyring"],
       "credentials_hint": "Your FRITZ!Box admin password (shown on the label on the device)",
-      "ai_prompt": "Write a NetSentinel hardware plugin for my AVM FRITZ!Box at {ip}. Install 'pip install fritzconnection' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'AVM FRITZ!Box'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (wan_ip, uptime_sec, connected_clients count)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse FritzHosts(address=HARDWARE_IP, password=pw) to get active_hosts(). Use FritzStatus for WAN IP and uptime. No username needed, only password.",
       "fingerprints": {
         "default_ips": ["192.168.178.1"],
         "http_title_any": ["FRITZ!Box", "FRITZ!"],
@@ -114,10 +86,10 @@
         "UniFi Dream Router", "Cloud Key Gen2", "USG"
       ],
       "description": "UniFi controller — full client list with SSID, band, signal, hostname",
-      "file": null,
+      "file": "plugins/unifi_plugin.py",
       "pypi_library": "pyunifi",
+      "requires": ["pyunifi", "keyring"],
       "credentials_hint": "Your UniFi Network admin username and password",
-      "ai_prompt": "Write a NetSentinel hardware plugin for my Ubiquiti UniFi controller at {ip}. Install 'pip install pyunifi' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'Ubiquiti UniFi'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients count)\n  def get_clients() -> list  (each: ip, mac, hostname, band, unit=ap_mac)\n\nUse Controller(host, username, password, version='UDMP-unifiOS', ssl_verify=False) from pyunifi.controller. Call get_clients(). Map: ip, mac, hostname, radio→band ('ng'→'2.4G' '5G-1'→'5G'), ap_mac→unit.",
       "fingerprints": {
         "default_ips": ["192.168.1.1", "192.168.1.254", "192.168.0.1"],
         "http_title_any": ["UniFi", "Ubiquiti"],
@@ -131,6 +103,34 @@
       }
     },
     {
+      "id": "asus_router",
+      "name": "ASUS Router / ZenWiFi",
+      "type": "router",
+      "manufacturer": "ASUS",
+      "models": [
+        "RT-AX88U", "RT-AX86U", "RT-AX58U", "RT-AC86U", "RT-AC68U",
+        "ZenWiFi AX (XT8)", "ZenWiFi Pro ET12", "ZenWiFi XD6"
+      ],
+      "description": "ASUS ASUSWRT — client list with hostnames, WAN status, bandwidth",
+      "file": "plugins/asus_plugin.py",
+      "pypi_library": "asusrouter",
+      "requires": ["asusrouter", "keyring"],
+      "credentials_hint": "Your ASUS router admin username and password",
+      "fingerprints": {
+        "default_ips": ["192.168.1.1", "192.168.50.1"],
+        "http_title_any": ["ASUS"],
+        "http_header_any": ["asuswrt"],
+        "oui_prefixes": [
+          "04:42:1A", "2C:FD:A1", "3C:7C:3F", "50:EB:71", "6C:72:20",
+          "74:D4:35", "AC:22:0B", "F8:32:E4", "10:7B:44", "14:DD:A9",
+          "1C:87:2C", "20:CF:30", "24:4B:FE", "30:5A:3A", "38:D5:47",
+          "3C:18:A0", "40:B0:76", "4C:ED:FB", "54:A0:50", "5C:A6:E6",
+          "60:45:CB", "6C:F3:7F", "78:24:AF", "88:D7:F6", "8C:8D:28",
+          "90:E6:BA", "9C:5C:8E", "A0:36:9F", "B0:6E:BF", "D8:50:E6"
+        ]
+      }
+    },
+    {
       "id": "netgear",
       "name": "Netgear Router / Orbi",
       "type": "router",
@@ -140,10 +140,10 @@
         "Nighthawk RAX200", "R7000", "R8000", "R9000"
       ],
       "description": "Netgear router — connected devices with IP, MAC, hostname, connection type",
-      "file": null,
+      "file": "plugins/netgear_plugin.py",
       "pypi_library": "pynetgear",
+      "requires": ["pynetgear", "keyring"],
       "credentials_hint": "Your Netgear router admin password",
-      "ai_prompt": "Write a NetSentinel hardware plugin for my Netgear router at {ip}. Install 'pip install pynetgear' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'Netgear Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients count, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse Netgear(password=pw, host=HARDWARE_IP) from pynetgear. Call get_attached_devices_v2(). Map: ip, mac, name→hostname, connection_type→band.",
       "fingerprints": {
         "default_ips": ["192.168.1.1", "192.168.0.1"],
         "http_title_any": ["NETGEAR", "Orbi", "Nighthawk"],
@@ -156,33 +156,16 @@
       }
     },
     {
-      "id": "openwrt",
-      "name": "OpenWrt",
-      "type": "router",
-      "manufacturer": "OpenWrt",
-      "models": ["Any router running OpenWrt / LEDE"],
-      "description": "OpenWrt via LUCI RPC — client list with IP, MAC, hostname, wireless band",
-      "file": null,
-      "pypi_library": "openwrt-luci-rpc",
-      "credentials_hint": "Your OpenWrt root password",
-      "ai_prompt": "Write a NetSentinel hardware plugin for my OpenWrt router at {ip}. Install 'pip install openwrt-luci-rpc' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'OpenWrt Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients count, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse OpenWrtRpc(HARDWARE_IP, 'root', password) from openwrt_luci_rpc. Call rpc.get_arp_table() and rpc.get_wireless_devices() for client data.",
-      "fingerprints": {
-        "default_ips": ["192.168.1.1", "10.0.0.1"],
-        "http_title_any": ["OpenWrt", "LuCI", "Barrier Breaker", "Chaos Calmer"],
-        "http_header_any": ["openwrt"]
-      }
-    },
-    {
       "id": "mikrotik",
       "name": "MikroTik RouterOS",
       "type": "router",
       "manufacturer": "MikroTik",
       "models": ["hAP ax³", "hAP ac²", "CCR2004", "RB4011", "Audience LTE6"],
       "description": "MikroTik RouterOS via API — ARP table, DHCP leases, wireless clients",
-      "file": null,
+      "file": "plugins/mikrotik_plugin.py",
       "pypi_library": "routeros-api",
-      "credentials_hint": "MikroTik admin username and password",
-      "ai_prompt": "Write a NetSentinel hardware plugin for my MikroTik router at {ip}. Install 'pip install routeros-api' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'MikroTik Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse routeros_api.connect(host, username, password) on port 8728. Run commands '/ip/arp/print' and '/ip/dhcp-server/lease/print' for clients. Run '/ip/address/print' for WAN IP.",
+      "requires": ["routeros-api", "keyring"],
+      "credentials_hint": "MikroTik admin username and password (API port 8728 must be enabled)",
       "fingerprints": {
         "default_ips": ["192.168.88.1"],
         "http_title_any": ["MikroTik", "RouterOS"],
@@ -195,24 +178,56 @@
       }
     },
     {
+      "id": "openwrt",
+      "name": "OpenWrt",
+      "type": "router",
+      "manufacturer": "OpenWrt",
+      "models": ["Any router running OpenWrt / LEDE"],
+      "description": "OpenWrt via LuCI RPC — client list with IP, MAC, wireless band",
+      "file": "plugins/openwrt_plugin.py",
+      "pypi_library": "openwrt-luci-rpc",
+      "requires": ["openwrt-luci-rpc", "keyring"],
+      "credentials_hint": "Your OpenWrt root password",
+      "fingerprints": {
+        "default_ips": ["192.168.1.1", "10.0.0.1"],
+        "http_title_any": ["OpenWrt", "LuCI", "Barrier Breaker", "Chaos Calmer"],
+        "http_header_any": ["openwrt"]
+      }
+    },
+    {
       "id": "synology",
-      "name": "Synology NAS / Router",
+      "name": "Synology Router (SRM)",
       "type": "router",
       "manufacturer": "Synology",
       "models": ["RT6600ax", "RT2600ac", "MR2200ac", "WRX560"],
-      "description": "Synology router — connected devices, WAN status, SRM info",
-      "file": null,
-      "pypi_library": "python-synology",
-      "credentials_hint": "Your Synology admin username and password",
-      "ai_prompt": "Write a NetSentinel hardware plugin for my Synology router at {ip}. Install 'pip install python-synology' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'Synology Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse SynologyDSM or the raw SRM API at http://{ip}:8000/webapi/ endpoint SYNO.Core.Network.NSMDevice to list connected devices.",
+      "description": "Synology SRM router — connected devices, mesh nodes, WAN status",
+      "file": "plugins/synology_plugin.py",
+      "requires": ["keyring"],
+      "credentials_hint": "Your Synology admin username and password (SRM web UI at port 8000)",
       "fingerprints": {
         "default_ips": ["192.168.1.1", "192.168.0.1"],
         "http_title_any": ["Synology", "SRM"],
         "http_header_any": ["synology"],
         "oui_prefixes": [
           "00:11:32", "00:1F:33", "08:00:27", "28:C6:3F",
-          "BC:EC:EB", "00:11:32", "90:09:D0", "D2:21:F9"
+          "BC:EC:EB", "90:09:D0", "D2:21:F9"
         ]
+      }
+    },
+    {
+      "id": "home_assistant",
+      "name": "Home Assistant",
+      "type": "router",
+      "manufacturer": "Home Assistant",
+      "models": ["Any HA instance with device_tracker integrations"],
+      "description": "Home Assistant REST API — pulls all tracked devices (hundreds of hardware types via HA integrations)",
+      "file": "plugins/ha_plugin.py",
+      "requires": [],
+      "credentials_hint": "HA long-lived access token: Profile → Long-Lived Access Tokens → Create Token. Paste into ha_plugin.py",
+      "fingerprints": {
+        "default_ips": [],
+        "http_title_any": ["Home Assistant"],
+        "http_header_any": ["home-assistant", "homeassistant"]
       }
     }
   ]
