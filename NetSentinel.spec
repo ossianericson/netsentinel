@@ -28,6 +28,9 @@ datas = [
     ("offenders.json", "."),
     ("assets/icons", "assets/icons"),
     ("ui/assets", "ui/assets"),
+    ("data/catalogue.json", "data"),
+    ("plugins/zte_plugin.py", "plugins"),
+    ("plugins/deco_plugin.py", "plugins"),
 ]
 
 # ── Collect whole packages (data + binaries + submodule tree) ─────────────────
@@ -127,6 +130,7 @@ hiddenimports: list = [
     "modules.threat_intel",
     "modules.tls_checker",
     "modules.trend_analyser",
+    "modules.hw_detect",
     "modules.utils",
     "modules.wifi_heatmap",
     "modules.wifi_scanner",
@@ -200,7 +204,10 @@ hiddenimports: list = [
     "workers.speed_test_worker",
     "workers.syslog_worker",
     "workers.threat_intel_worker",
+    "workers.hw_detect_worker",
+    "workers.plugin_polling_worker",
     "workers.zte_worker",
+    "ui.pages.hardware_integration_page",
 ]
 
 for _pkg in ("scapy", "PyQt6", "matplotlib", "flask", "keyring"):
