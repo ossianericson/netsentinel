@@ -2387,7 +2387,7 @@ class Dashboard(QMainWindow):
         # Create one PluginDevicePage per saved plugin path.
         # Pages are registered in the nav by _build_pro_nav() further below.
         from ui.pages.plugin_device_page import PluginDevicePage
-        from ui.pages.hardware_integration_page import _validate_plugin as _hw_validate
+        from ui.pages.hardware_integration_page import _validate_script as _hw_validate
         from pathlib import Path as _HwPath
         self._plugin_pages: dict[str, PluginDevicePage] = {}
         for _hw_p in _hw_paths():
