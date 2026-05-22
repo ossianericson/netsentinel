@@ -21,7 +21,7 @@ from typing import Optional
 from PyQt6.QtCore    import Qt, pyqtSignal
 from PyQt6.QtGui     import QColor, QFont
 from PyQt6.QtWidgets import (
-    QAbstractScrollArea, QCheckBox, QFrame, QHBoxLayout, QLabel,
+    QCheckBox, QFrame, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QScrollArea, QSizePolicy, QTableWidget,
     QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -494,10 +494,7 @@ class PluginDevicePage(QWidget):
         self._r_node_tree.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
         self._r_node_tree.setRootIsDecorated(True)
         self._r_node_tree.setStyleSheet(_TREE_SS)
-        self._r_node_tree.setSizeAdjustPolicy(
-            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
-        )
-        self._r_node_tree.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._r_node_tree.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._r_node_tree.itemExpanded.connect(self._resize_node_tree_columns)
         self._r_node_tree.itemCollapsed.connect(self._resize_node_tree_columns)
         card2_outer.addWidget(self._r_node_tree)
@@ -540,10 +537,7 @@ class PluginDevicePage(QWidget):
         self._r_client_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._r_client_tbl.setAlternatingRowColors(True)
         self._r_client_tbl.setStyleSheet(_TBL_SS)
-        self._r_client_tbl.setSizeAdjustPolicy(
-            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
-        )
-        self._r_client_tbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._r_client_tbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card3_outer.addWidget(self._r_client_tbl)
         self._root.addWidget(card3)
 
@@ -637,7 +631,27 @@ class PluginDevicePage(QWidget):
     def _resize_node_tree_columns(self) -> None:
         for col in range(self._r_node_tree.columnCount()):
             self._r_node_tree.resizeColumnToContents(col)
-        self._r_node_tree.updateGeometry()
+        self._set_tree_height()
+
+    def _set_tree_height(self) -> None:
+        """Set an explicit fixed height so no layout cascade is triggered."""
+        tree = self._r_node_tree
+        row_h = max(tree.sizeHintForRow(0), 22)
+        h = tree.header().sizeHint().height()
+        for i in range(tree.topLevelItemCount()):
+            item = tree.topLevelItem(i)
+            h += row_h
+            if item.isExpanded():
+                h += item.childCount() * row_h
+        tree.setFixedHeight(h + 4)
+
+    def _set_table_height(self) -> None:
+        """Set an explicit fixed height so no layout cascade is triggered."""
+        tbl = self._r_client_tbl
+        h = tbl.horizontalHeader().sizeHint().height()
+        row_h = tbl.verticalHeader().defaultSectionSize()
+        h += tbl.rowCount() * row_h
+        tbl.setFixedHeight(h + 4)
 
     def _fill_router(self, status: dict, extra: dict, clients: list) -> None:
         nodes = extra.get("nodes", [])
@@ -687,6 +701,7 @@ class PluginDevicePage(QWidget):
         self._r_node_tree.resizeColumnToContents(0)
         self._r_node_tree.resizeColumnToContents(1)
         self._r_node_tree.resizeColumnToContents(2)
+        self._set_tree_height()
 
         # Flat connected clients table
         self._r_client_tbl.setRowCount(0)
@@ -704,6 +719,7 @@ class PluginDevicePage(QWidget):
             self._r_client_tbl.setItem(r, 5, QTableWidgetItem("" if up   is None else f"{up:.1f}"))
             self._r_client_tbl.setItem(r, 6, QTableWidgetItem("" if down is None else f"{down:.1f}"))
         self._r_client_tbl.resizeColumnsToContents()
+        self._set_table_height()
 
     def _fill_generic(self, status: dict) -> None:
         for key, lbl in self._g_rows.items():
