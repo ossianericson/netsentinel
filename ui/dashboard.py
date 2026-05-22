@@ -2277,8 +2277,19 @@ class Dashboard(QMainWindow):
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
         self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
-        self._hardware_integration_page.modem_pause_requested.connect(self._on_modem_disconnect)
-        self._hardware_integration_page.modem_resume_requested.connect(self._resume_modem_worker)
+
+        # Pre-populate enrichment from cached QSettings so the first scan has
+        # hostname / band / node data without waiting for the first poll cycle.
+        from ui.pages.hardware_integration_page import _load_paths as _hw_paths, _load_last_result as _hw_last
+        from modules.deco_client import _norm_mac as _hw_nm
+        for _hw_p in _hw_paths():
+            _hw_cached = _hw_last(_hw_p)
+            if _hw_cached and _hw_cached.get("info", {}).get("type") != "modem":
+                self._plugin_enrichments[_hw_p] = {
+                    _hw_nm(c.get("mac", "")): c
+                    for c in _hw_cached.get("clients", [])
+                    if c.get("mac")
+                }
 
         from ui.pages.mesh_router_page import MeshRouterPage
         self._mesh_router_page = MeshRouterPage(parent=None)
@@ -9526,6 +9537,9 @@ class Dashboard(QMainWindow):
         # Give the speed test page the modem credentials for signal enrichment
         if hasattr(self, "_speed_test_page"):
             self._speed_test_page.set_modem_credentials(host, password)
+        # Pause modem plugin workers — native ZteWorker owns the session
+        if hasattr(self, "_hardware_integration_page"):
+            self._hardware_integration_page.set_native_modem_connected(True)
 
     def _resume_modem_worker(self) -> None:
         """Restart ZteWorker after a plugin test, using cached or keyring credentials."""
@@ -9547,6 +9561,9 @@ class Dashboard(QMainWindow):
         self._last_modem_data = None
         if hasattr(self, "_speed_test_page"):
             self._speed_test_page.clear_modem_credentials()
+        # Resume modem plugin workers — native session is gone
+        if hasattr(self, "_hardware_integration_page"):
+            self._hardware_integration_page.set_native_modem_connected(False)
 
     @pyqtSlot(dict)
     def _on_modem_signal(self, data: dict) -> None:
@@ -9556,6 +9573,9 @@ class Dashboard(QMainWindow):
             self._modem_page.on_modem_signal(data)
         if hasattr(self, "_overview_page"):
             self._overview_page.on_modem_signal(data)
+        # Keep modem cards in the Hardware Hub current with live ZteWorker data
+        if hasattr(self, "_hardware_integration_page"):
+            self._hardware_integration_page.on_native_modem_data(data)
         # Update topology if a scan result is already loaded
         if getattr(self, "_m1_result", None) and hasattr(self, "_topology_widget"):
             try:

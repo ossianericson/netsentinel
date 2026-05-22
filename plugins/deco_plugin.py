@@ -132,38 +132,22 @@ if __name__ == "__main__" and "--netsentinel" not in sys.argv:
 import sys as _sys
 if "--netsentinel" in _sys.argv:
     import json as _json
-    from modules.deco_client import (
-        DecoMeshClient, MeshAuthError, MeshApiError, _norm_mac, _decode_name,
-    )
+    from modules.deco_client import DecoMeshClient, MeshAuthError, MeshApiError
     try:
         _host, _pw = _load_credentials()
         _client = DecoMeshClient(_host, _pw)
         _client.login()
         _units  = _client.get_mesh_units()
-
-        # Single bulk call — 1 request instead of N-per-node requests.
-        # Falls back to per-node only if the bulk call returns nothing.
-        try:
-            _raw  = _client._request("admin/client?form=client_list", {"operation": "read"})
-            _bulk = [c for c in _raw.get("client_list", []) if c.get("online", False)]
-        except Exception:
-            _bulk = []
-
-        if _bulk:
-            _client_list = [
-                {
-                    "ip":       c.get("ip", ""),
-                    "mac":      _norm_mac(c.get("mac", "")),
-                    "hostname": _decode_name(c.get("name") or "") or _norm_mac(c.get("mac", "")),
-                }
-                for c in _bulk
-            ]
-        else:
-            _client_list = [
-                {"ip": c.ip, "mac": c.mac, "hostname": c.name,
-                 "band": c.band, "unit": c.unit_name}
-                for c in _client.get_all_clients(units=_units)
-            ]
+        _client_list = [
+            {
+                "ip":       c.ip,
+                "mac":      c.mac,
+                "hostname": c.name or "",
+                "band":     c.band,
+                "unit":     c.unit_name,
+            }
+            for c in _client.get_all_clients(units=_units)
+        ]
 
         _status = {
             "wan_ip": None, "uptime_sec": None, "download_mbps": None,

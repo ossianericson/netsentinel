@@ -50,7 +50,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from workers.plugin_worker import PluginWorker
+from workers.plugin_polling_worker import PluginPollingWorker
 from ui.styles import (
     ACCENT,
     ACCENT_DARK,
@@ -77,7 +77,6 @@ from ui.styles import (
 
 _SETTINGS_KEY    = "hardware/custom_scripts"
 _SETTINGS_RESULT = "hardware/last_result/{}"  # .format(path_hash)
-_AUTO_REFRESH_S  = 300  # 5 minutes default
 
 _TEMPLATE = '''\
 """
@@ -998,19 +997,15 @@ class HardwareIntegrationPage(QWidget):
     """Hardware Hub — live status dashboard for all imported hardware plugins."""
 
     # data dict has "_path" embedded so dashboard knows which plugin
-    plugin_result          = pyqtSignal(dict)
-    modem_pause_requested  = pyqtSignal()
-    modem_resume_requested = pyqtSignal()
+    plugin_result = pyqtSignal(dict)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._workers: Dict[str, Optional[PluginWorker]] = {}
-        self._timers:  Dict[str, QTimer] = {}
+        self._poll_workers: Dict[str, PluginPollingWorker] = {}
         self._cards:   Dict[str, HubCard] = {}
-        self._pending_modem_resume: set[str] = set()  # paths awaiting modem resume
+        self._native_modem_connected: bool = False
 
         self._build_ui()
-        self._start_all_timers()
 
         # Tick timer — updates "X min ago" labels every 30s
         self._tick_timer = QTimer(self)
@@ -1018,9 +1013,8 @@ class HardwareIntegrationPage(QWidget):
         self._tick_timer.timeout.connect(self._tick_timestamps)
         self._tick_timer.start()
 
-        # Run all plugins ~3 s after startup so _plugin_enrichments is populated
-        # before the user's first scan, and dashboard enrichment works immediately.
-        QTimer.singleShot(3000, self._run_all_on_startup)
+        # Start persistent poll workers for all imported plugins, staggered 3 s apart
+        self._start_all_poll_workers()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -1043,7 +1037,7 @@ class HardwareIntegrationPage(QWidget):
 
         sub = QLabel(
             "Live status for all integrated hardware. "
-            "Each plugin auto-refreshes every 5 minutes. "
+            "Modem plugins refresh every 60 s · router/AP every 2 min · switch every 5 min. "
             "Click ● to expand the signal / topology detail panel."
         )
         sub.setWordWrap(True)
@@ -1142,33 +1136,28 @@ class HardwareIntegrationPage(QWidget):
 
         self._hub_lay.addStretch()
 
-    def _start_all_timers(self) -> None:
-        for path in _load_paths():
-            self._ensure_timer(path)
-
-    def _run_all_on_startup(self) -> None:
-        """Run every imported plugin once at startup — staggered 3 s apart.
-
-        This pre-populates _plugin_enrichments in the dashboard so the first
-        device scan picks up hostname / node / band data without waiting for
-        the 5-minute auto-refresh cycle.
-        """
+    def _start_all_poll_workers(self) -> None:
         for i, path in enumerate(_load_paths()):
-            QTimer.singleShot(i * 3000, lambda p=path: self._run_plugin(p))
+            QTimer.singleShot(i * 3000, lambda p=path: self._start_poll_worker(p))
 
-    def _ensure_timer(self, path: str) -> None:
-        if path in self._timers:
+    def _start_poll_worker(self, path: str) -> None:
+        if path in self._poll_workers:
             return
-        timer = QTimer(self)
-        timer.setInterval(_AUTO_REFRESH_S * 1000)
-        timer.timeout.connect(lambda p=path: self._run_plugin(p))
-        timer.start()
-        self._timers[path] = timer
+        ok, _, meta = _validate_script(path)
+        hw_type = meta.get("type", "other") if ok else "other"
+        if hw_type == "modem" and self._native_modem_connected:
+            return
+        worker = PluginPollingWorker(path=path, hw_type=hw_type, parent=self)
+        worker.result.connect(lambda data, p=path: self._on_plugin_result(p, data))
+        worker.error.connect(lambda msg, p=path: self._on_plugin_error(p, msg))
+        worker.start()
+        self._poll_workers[path] = worker
 
-    def _stop_timer(self, path: str) -> None:
-        t = self._timers.pop(path, None)
-        if t:
-            t.stop()
+    def _stop_poll_worker(self, path: str) -> None:
+        worker = self._poll_workers.pop(path, None)
+        if worker:
+            worker.stop()
+            worker.wait(2000)
 
     @pyqtSlot()
     def _tick_timestamps(self) -> None:
@@ -1179,54 +1168,30 @@ class HardwareIntegrationPage(QWidget):
 
     @pyqtSlot(str)
     def _run_plugin(self, path: str) -> None:
-        # Kill any still-running worker for this path
-        old = self._workers.get(path)
-        if old and old.isRunning():
-            old.terminate()
-            old.wait(500)
-
+        """Trigger an immediate poll — called by Refresh button or import."""
         card = self._cards.get(path)
         if card:
             card.set_refreshing(True)
-
-        ok, _, meta = _validate_script(path)
-        hw_type = meta.get("type", "unknown") if ok else "unknown"
-        is_modem = hw_type == "modem"
-
-        if is_modem:
-            self._pending_modem_resume.add(path)
-            self.modem_pause_requested.emit()
-
-        worker = PluginWorker(path, timeout=120)
-        worker.result.connect(lambda data, p=path: self._on_plugin_result(p, data))
-        worker.error.connect(lambda msg, p=path: self._on_plugin_error(p, msg, is_modem))
-        worker.start()
-        self._workers[path] = worker
+        worker = self._poll_workers.get(path)
+        if worker and worker.isRunning():
+            worker.trigger_now()
+        else:
+            self._start_poll_worker(path)
 
     def _on_plugin_result(self, path: str, data: dict) -> None:
         ts = time.time()
         data["_ts"] = ts
         data["_path"] = path
         _save_last_result(path, data)
-
         card = self._cards.get(path)
         if card:
             card.update_result(data, ts)
-
-        if path in self._pending_modem_resume:
-            self._pending_modem_resume.discard(path)
-            self.modem_resume_requested.emit()
-
         self.plugin_result.emit(data)
 
-    def _on_plugin_error(self, path: str, msg: str, was_modem: bool) -> None:
+    def _on_plugin_error(self, path: str, msg: str) -> None:
         card = self._cards.get(path)
         if card:
             card.set_error(msg)
-
-        if was_modem and path in self._pending_modem_resume:
-            self._pending_modem_resume.discard(path)
-            self.modem_resume_requested.emit()
 
     # ── Import / remove ───────────────────────────────────────────────────────
 
@@ -1251,17 +1216,11 @@ class HardwareIntegrationPage(QWidget):
         name = meta.get("name", Path(path).stem)
         self._set_status(f"Imported '{name}' — running first check…", error=False)
         self._rebuild_hub()
-        self._ensure_timer(path)
-        # Kick off an immediate first run
-        self._run_plugin(path)
+        self._start_poll_worker(path)
 
     @pyqtSlot(str)
     def _remove_plugin(self, path: str) -> None:
-        self._stop_timer(path)
-        old = self._workers.pop(path, None)
-        if old and old.isRunning():
-            old.terminate()
-            old.wait(500)
+        self._stop_poll_worker(path)
         paths = [p for p in _load_paths() if p != path]
         _save_paths(paths)
         self._set_status(f"Removed {Path(path).name}.", error=False)
@@ -1274,6 +1233,62 @@ class HardwareIntegrationPage(QWidget):
         self._status_lbl.setText(text)
         self._status_lbl.setStyleSheet(f"font-size:10px; color:{color};")
         QTimer.singleShot(5000, lambda: self._status_lbl.setText(""))
+
+    # ── Native modem coordination ─────────────────────────────────────────────
+
+    def set_native_modem_connected(self, connected: bool) -> None:
+        """Called by dashboard when ZteWorker connects/disconnects.
+
+        ZTE MC889 supports only one web session.  While the native ZteWorker is
+        active, modem plugin workers are stopped and data flows via
+        on_native_modem_data instead.  When ZteWorker stops, the plugin worker
+        takes over automatically.
+        """
+        self._native_modem_connected = connected
+        modem_paths = [
+            p for p in list(self._poll_workers.keys())
+            if _validate_script(p)[2].get("type") == "modem"
+        ]
+        if connected:
+            for p in modem_paths:
+                self._stop_poll_worker(p)
+        else:
+            for p in _load_paths():
+                if _validate_script(p)[2].get("type") == "modem":
+                    self._start_poll_worker(p)
+
+    def on_native_modem_data(self, raw: dict) -> None:
+        """Forward ZteWorker signal payload to modem-type plugin cards.
+
+        Converts the flat ZteSignalData dict to the {info, status, clients}
+        envelope that HubCard.update_result() expects.  Saves to QSettings so
+        the card shows data on next launch without waiting for first poll.
+        """
+        ts = time.time()
+        for path, card in self._cards.items():
+            ok, _, meta = _validate_script(path)
+            if not ok or meta.get("type") != "modem":
+                continue
+            extra = {k: v for k, v in raw.items() if k != "host"}
+            status = {
+                "wan_ip":            raw.get("wan_ip"),
+                "uptime_sec":        None,
+                "download_mbps":     None,
+                "upload_mbps":       None,
+                "signal_dbm":        raw.get("nr5g_rsrp_dbm") or raw.get("lte_rsrp_dbm"),
+                "connected_clients": None,
+                "extra":             extra,
+            }
+            info = {
+                "name": meta.get("name", "Modem"),
+                "type": "modem",
+                "ip":   raw.get("host", meta.get("ip", "")),
+            }
+            data = {"info": info, "status": status, "clients": [],
+                    "_path": path, "_ts": ts}
+            _save_last_result(path, data)
+            card.update_result(data, ts)
+            self.plugin_result.emit(data)
 
     # ── Guide content (collapsible) ───────────────────────────────────────────
 
