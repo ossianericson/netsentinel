@@ -1394,7 +1394,7 @@ class Dashboard(QMainWindow):
         )
 
         self._pulse_online_lbl.clicked.connect(
-            lambda: self._nav_rail_go_to("Connectivity Tests"))
+            lambda: self._nav_rail_go_to("What's Wrong?"))
         self._pulse_devices_lbl.clicked.connect(
             lambda: self._nav_rail_go_to("Overview"))
         self._pulse_scan_lbl.clicked.connect(
@@ -2365,7 +2365,7 @@ class Dashboard(QMainWindow):
         self._hardware_integration_page.navigate_to.connect(self._nav_rail_go_to)
         self._hardware_integration_page.geo_map_ip.connect(self._show_ip_on_geo_map)
         self._hardware_integration_page.port_scan_ip.connect(
-            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (SYN)"))
+            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (TCP)"))
         )
         self._hardware_integration_page.check_abuse_ip.connect(
             lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intelligence"))
@@ -2443,7 +2443,7 @@ class Dashboard(QMainWindow):
         self._mesh_router_page.scan_done.connect(self._on_mesh_result)
         self._mesh_router_page.geo_map_ip.connect(self._show_ip_on_geo_map)
         self._mesh_router_page.port_scan_ip.connect(
-            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (SYN)"))
+            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (TCP)"))
         )
         self._mesh_router_page.check_abuse_ip.connect(
             lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intelligence"))
@@ -2624,9 +2624,7 @@ class Dashboard(QMainWindow):
 
         # Diagnostics — collapsed; deeper investigation tools
         self._nav_add_subgroup("Diagnostics", icon="💊")
-        self._nav_add_page("✚", "Health Check",         dia)
         self._nav_add_page("≣", "Network Logger",        self._logging_container)
-        self._nav_add_page("⊕", "Root Cause Analysis",  self._correlator_tab_widget)
         self._nav_add_page("↗", "Trend Forecasts",      self._trend_page)
         self._nav_add_page("⬡", "IPv6 Devices",         self._ipv6_tab_widget)
         self._nav_current_subgroup = -1
@@ -2661,7 +2659,6 @@ class Dashboard(QMainWindow):
 
         _adv_tools_row = self._nav_add_page("⚙", "Tools & Wake-on-LAN", self._adv_tab_widget)
         _adv_map_row   = self._nav_add_page("⬡", "Network Map",          self._topology_tab_widget)
-        _adv_dhcp_row  = self._nav_add_page("⊞", "DHCP Leases",          self._dhcp_tab_widget)
         _adv_bw_row    = self._nav_add_page("▲", "Bandwidth Usage",       self._bw_tab_widget)
         _adv_sched_row = self._nav_add_page("⏱", "Scheduled Scans",       self._sched_tab_widget)
         _adv_auto_row  = self._nav_add_page("→", "Automation Hooks",      self._automation_page)
@@ -2670,7 +2667,7 @@ class Dashboard(QMainWindow):
 
         # compat refs
         self._nav_adv_rows      = [_mtr_row, _adv_tools_row, _adv_map_row,
-                                    _arp_row, _adv_dhcp_row, _adv_bw_row, _adv_sched_row,
+                                    _arp_row, _adv_bw_row, _adv_sched_row,
                                     _snmp_row, _snmp_trap_row, _syslog_row,
                                     _adv_auto_row, _adv_doc_row, _adv_mqtt_row,
                                     _tools_heatmap_row]
@@ -2685,7 +2682,7 @@ class Dashboard(QMainWindow):
             self._nav_add_page("⊙", "Security Overview",      self._security_overview_page),
             self._nav_add_page("🧠", "Threat Intelligence",    self._threat_intel_page),
             self._nav_add_page("✚", "TLS & exposure",         self._cert_page),
-            self._nav_add_page("�🔎", "Port Scan (SYN)",       self._recon_syn_tab_widget),
+            self._nav_add_page("🔎", "Port Scan (TCP)",        self._recon_syn_tab_widget),
             self._nav_add_page("🔎", "Port Scan (UDP)",        self._recon_udp_tab_widget),
             self._nav_add_page("💻", "OS Detection",           self._recon_os_tab_widget),
             self._nav_add_page("⚠",  "Device Risk Score",     self._recon_risk_tab_widget),
@@ -3287,12 +3284,6 @@ class Dashboard(QMainWindow):
                 self._tip_bar.setChecked(True)
         self._track_page_visit(label)
 
-        # When the user navigates to the Modem page, immediately push the last
-        # known modem signal so the page shows current data rather than whatever
-        # was last received up to 30 s ago from ZteWorker's polling interval.
-        if label == "Modem" and getattr(self, "_last_modem_data", None) and hasattr(self, "_modem_page"):
-            self._modem_page.on_modem_signal(self._last_modem_data)
-
     def _update_help_panel(self, label: str) -> None:
         """Refresh tip bar text and collapse the help panel when the page changes."""
         info = _PAGE_HELP.get(label, {})
@@ -3346,7 +3337,7 @@ class Dashboard(QMainWindow):
         ("Lab Mode",            "Try a guided exercise: find a rogue device or diagnose slow DNS on your live network"),
         ("Network Grade",       "Get an A–F score for your network health across 8 dimensions"),
         ("ISP Report",          "Generate a professional report to send to your ISP when things go wrong"),
-        ("Connectivity Tests",  "Run ping, DNS, HTTP, and MTR in one click — plain-English verdict"),
+        ("What's Wrong?",       "Pick a symptom and get a plain-English verdict with a prioritised fix list"),
         ("Feature Guide",       "See everything this app can do — including features most users never find"),
         ("Network Logger",      "Configure log sources and view the live activity log — all in one place"),
     ]
@@ -3415,7 +3406,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Overview",            self._overview_page)
         self._nav_add_rail_item("Speed Test",          self._speed_test_page)
         self._nav_add_rail_item("DNS & Stability",     self._m5_tab)
-        self._nav_add_rail_item("Diagnose",            self._diagnosis_page)
+        self._nav_add_rail_item("What's Wrong?",       self._diagnosis_page)
 
         self._nav_begin_section("Discover", "network")
         self._nav_add_rail_item("Devices",             self._m1_tab)
@@ -3442,7 +3433,6 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Notifications",       self._notifications_page)
 
         self._nav_begin_section("Analysis", "cpu")
-        self._nav_add_rail_item("Connectivity Tests",  self._dia_tab)
         self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
         self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
         self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
@@ -3452,7 +3442,6 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
         self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
         self._nav_add_rail_item("Trend Forecasts",     self._trend_page)
-        self._nav_add_rail_item("Root Cause Analysis", self._correlator_tab_widget)
 
         self._nav_begin_section("Automation", "zap")
         self._nav_add_rail_item("Automation Hooks",    self._automation_page)
@@ -3592,7 +3581,7 @@ class Dashboard(QMainWindow):
             self._nav_goto_label(label)
 
     def _open_diagnosis(self) -> None:
-        self._nav_rail_go_to("Diagnose")
+        self._nav_rail_go_to("What's Wrong?")
 
     # ── Alert badge on Security Audit nav section ─────────────────────────────
 
@@ -8222,7 +8211,7 @@ class Dashboard(QMainWindow):
         ]))
 
         bl.addWidget(_section("Security Audit Features (Pro mode — admin required)", [
-            ("Port Scan (SYN)",       "Raw SYN scanner — stealthy, fast, admin required"),
+            ("Port Scan (TCP)",       "Raw SYN scanner — stealthy, fast, admin required"),
             ("Port Scan (UDP)",       "UDP service discovery"),
             ("OS Detection",          "OS fingerprinting via TTL + banner + SYN probe"),
             ("Device Risk Score",     "Per-device numeric risk score with remediation guidance"),
@@ -9384,6 +9373,7 @@ class Dashboard(QMainWindow):
             path = data.get("_path", hw_name)
             if path in getattr(self, "_plugin_pages", {}):
                 self._plugin_pages[path].update(data)
+            self._refresh_hardware_badge()
             return  # modem plugins have no LAN clients to enrich
 
         # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
@@ -9415,6 +9405,17 @@ class Dashboard(QMainWindow):
         # only runs for router/AP/switch types).
         if path in getattr(self, "_plugin_pages", {}):
             self._plugin_pages[path].update(data)
+
+        self._refresh_hardware_badge()
+
+    def _refresh_hardware_badge(self) -> None:
+        """Update the Extend section rail button tooltip to show active plugin count."""
+        n = len(getattr(self, "_plugin_pages", {}))
+        if n == 0:
+            return
+        btn = self._nav_rail_buttons.get("Extend")
+        if btn:
+            btn.setToolTip(f"Extend — {n} plugin{'s' if n != 1 else ''} active")
 
     @pyqtSlot(str)
     def _on_plugin_page_test(self, path: str) -> None:

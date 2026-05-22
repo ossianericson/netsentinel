@@ -536,11 +536,15 @@ class NetworkGradeTile(_BaseTile):
         self._grade_lbl.setStyleSheet(
             f"font-size:56px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;"
         )
-        self._sub_lbl = QLabel("Run Network Grade for a score")
+        self._sub_lbl = QPushButton("Run Network Grade →")
+        self._sub_lbl.setFlat(True)
+        self._sub_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sub_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+            f"QPushButton {{ font-size:10px; color:{ACCENT}; border:none;"
+            f" background:transparent; padding:0; }}"
+            f"QPushButton:hover {{ color:#005A9E; }}"
         )
-        self._sub_lbl.setWordWrap(True)
+        self._sub_lbl.clicked.connect(lambda: self._rerun_cb() if self._rerun_cb else None)
         self._body_layout.addWidget(
             self._grade_lbl, alignment=Qt.AlignmentFlag.AlignCenter
         )
@@ -556,7 +560,21 @@ class NetworkGradeTile(_BaseTile):
         self._grade_lbl.setStyleSheet(
             f"font-size:56px; font-weight:bold; color:{colour}; border:none;"
         )
-        self._sub_lbl.setText(f"Score: {score:.0f} / 100" if score else "")
+        if grade:
+            self._sub_lbl.setText(f"Score: {score:.0f} / 100" if score else "")
+            self._sub_lbl.setStyleSheet(
+                f"QPushButton {{ font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+                f" background:transparent; padding:0; cursor:default; }}"
+            )
+            self._sub_lbl.setEnabled(False)
+        else:
+            self._sub_lbl.setText("Run Network Grade →")
+            self._sub_lbl.setStyleSheet(
+                f"QPushButton {{ font-size:10px; color:{ACCENT}; border:none;"
+                f" background:transparent; padding:0; }}"
+                f"QPushButton:hover {{ color:#005A9E; }}"
+            )
+            self._sub_lbl.setEnabled(True)
 
 
 class _AlertRow(QFrame):
@@ -1096,7 +1114,7 @@ class ModemSignalTile(_BaseTile):
         self._body_layout.addStretch()
 
         # Placeholder hint
-        self._hint_lbl = QLabel("Connect a modem in the Modem tab →")
+        self._hint_lbl = QLabel("Import a modem plugin via Hardware →")
         self._hint_lbl.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; border:none; font-style:italic;"
         )
@@ -1166,7 +1184,7 @@ class _SecurityScanPanel(QWidget):
         ("TLS & exposure",       "TLS & Certificates",   True,  False),
         ("Device Risk Score",    "Device Risk Score",    True,  False),
         ("Known CVEs",           "Known CVEs",           True,  False),
-        ("Port Scan (SYN)",      "Port Scan (SYN) ⚠",   False, True),
+        ("Port Scan (TCP)",      "Port Scan (TCP) ⚠",   False, True),
         ("Exposed to Internet",  "Exposed to Internet ⚠",False, True),
     ]
 

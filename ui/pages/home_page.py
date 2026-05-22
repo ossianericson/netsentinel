@@ -430,15 +430,15 @@ class HomePage(QWidget):
         btn_row.setSpacing(8)
         self._btn_scan = QPushButton("\u25b6  Scan Network")
         self._btn_scan.setObjectName("btnScanHero")
-        self._btn_diagnose = QPushButton("\u25c6  Diagnose")
+        self._btn_diagnose = QPushButton("\u25c6  What\u2019s Wrong?")
         self._btn_diagnose.setToolTip(
-            "Run after scanning \u2014 sequences root-cause checks and surfaces a plain-English verdict"
+            "Pick a symptom \u2014 slow, dropping, or no connection \u2014 and get a plain-English diagnosis"
         )
         self._btn_diagnose.setStyleSheet(
             f"QPushButton {{ min-height: 34px; font-size: 12px; font-weight: 600;"
-            f" background: transparent; color: {ACCENT};"
-            f" border: 1px solid {ACCENT}; border-radius: 4px; padding: 0 12px; }}"
-            f"QPushButton:hover {{ background: {ACCENT}; color: #ffffff; }}"
+            f" background: {ACCENT}; color: #ffffff;"
+            f" border: none; border-radius: 4px; padding: 0 14px; }}"
+            f"QPushButton:hover {{ background: #005A9E; }}"
         )
         btn_row.addWidget(self._btn_scan)
         btn_row.addWidget(self._btn_diagnose)
@@ -917,6 +917,10 @@ class HomePage(QWidget):
                 )
         except Exception:
             pass
+        if self._device_count == 0:
+            self._hero_sub.setText(
+                "Press ▶ Scan Network to discover your devices — takes about 30 seconds."
+            )
 
     # ── Public slots ──────────────────────────────────────────────────────────
 

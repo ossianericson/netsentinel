@@ -10,123 +10,194 @@ Everything on this backlog serves one of those three goals. If an item does not 
 
 ---
 
-## Priority 0 — Hardware Plugin Data Flow  ← build this next
+## Completed (feature/p0-plugin-data-flow — v1.9.18)
 
-The plugin import, validation, and test sandbox shipped in v1.9.8. This sprint completes the feature: data from a plugin flows into the rest of the app exactly like the built-in Deco and ZTE integrations. Until this is done the plugin system is a tutorial, not a feature.
+The following were built in the plugin data-flow sprint and are done:
 
-**Validation plan before merging:** disable Deco credentials and ZTE modem login, then use only the in-app Integrate Hardware guide + an AI assistant to recreate both scripts from scratch. If the workflow produces working plugins that populate the Devices table and topology, the protocol is proven for any hardware.
-
----
-
-### P0-A. PluginWorker — run plugin in background thread, emit structured result
-
-**What:** A `PluginWorker(QThread)` that runs `subprocess.run([sys.executable, script_path, "--netsentinel"])` and parses stdout as JSON. The `--netsentinel` flag is detected by a shim injected at the bottom of the template — it calls `get_info()`, `get_status()`, and `get_clients()` and prints a single JSON object. This keeps the plugin's own `if __name__ == "__main__"` block intact for standalone testing.
-
-**Output contract (stdout JSON):**
-```json
-{
-  "info":    { "name": "...", "type": "...", "ip": "...", "firmware": "..." },
-  "status":  { "wan_ip": "...", "uptime_sec": 3600, "download_mbps": 94.2, ... },
-  "clients": [ { "ip": "...", "mac": "...", "hostname": "..." }, ... ]
-}
-```
-
-**Signals:** `result(dict)`, `error(str)`
-
-**Effort:** S
-
-**Files:**
-- `workers/plugin_worker.py` — new worker, mirrors structure of `workers/mesh_worker.py`
-- `ui/pages/hardware_integration_page.py` — replace `_TestWorker` with `PluginWorker`; the existing Test button already shows output, now the result dict is also emitted upward
+- **PluginWorker** — runs plugin via `--netsentinel` subprocess shim, emits `{"info","status","clients"}` JSON
+- **Plugin clients → Devices table** — `_apply_mesh_enrichment` handles both Deco and plugin enrichment; `unit` field populates Node column; fallback synthesised from `plugin_name` if absent
+- **Plugin status → topology** — `_plugin_nodes` drives topology mid-layer; synthesised for single-router plugins that omit `nodes`
+- **Periodic refresh** — 5-min auto-worker for each active plugin
+- **Discovery banner** — AST-parses bundled plugins, flags unimported matches after scan, cache cleared on each plugin result
+- **`template_plugin.py`** — complete authoring template based on verified deco_plugin.py structure
+- **`fritzbox_plugin.py`** — FritzBox integration using `fritzconnection`
+- **Group by node button** — disabled until enrichment data arrives; re-enabled with node data
+- **Speed test empty state** — stacked widget; empty panel before first run
+- **Keychain security notes** — Hardware Hub password field + plugin card password field
+- **24 QueuedConnection fixes** — all worker lambda connects use `Qt.ConnectionType.QueuedConnection`
+- **Dashboard fallbacks** — missing `unit`/`nodes` fields handled in dashboard, not requiring plugin authors to know about them
 
 ---
 
-### P0-B. Plugin clients → Devices table
+## P0 — Bugs / Broken Experiences ✅ All done
 
-**What:** After a plugin worker result arrives, convert `clients` list into a dict keyed by normalised MAC, cache it as `self._plugin_enrichment` in dashboard.py, and pass it into `_apply_mesh_enrichment`. Client rows enriched by a plugin get a subtle source badge (e.g. "via GL.iNet") in the hostname column — same mechanic as the existing Deco name replacement, just a different label.
-
-**Effort:** S
-
-**Files:**
-- `ui/dashboard.py` — `_on_plugin_result(data: dict)` handler; extend `_apply_mesh_enrichment` to handle both `_mesh_enrichment` and `_plugin_enrichment`
-- `ui/pages/hardware_integration_page.py` — emit `plugin_result = pyqtSignal(dict)` from the page; wire to `_on_plugin_result` in dashboard
+| ID | Status | Description |
+|----|--------|-------------|
+| P0-N3 | ✅ Done | `_modem_page` and `_mesh_router_page` confirmed as background data handlers only (never in nav). Dead `label == "Modem"` nav-change check removed. Plugin pages (Extend section) are the visible UI for hardware. |
+| P0-N5 | ✅ Done | All "Port Scan (SYN)" labels standardised to "Port Scan (TCP)". Two `_nav_rail_go_to("Port Scan (SYN)")` calls fixed. Standard nav entry fixed. Help panel text fixed. overview_page.py scan button fixed. |
+| P0-HW1 | ✅ Done | Already implemented in prior sprint: `_pg.test_requested.connect(self._on_plugin_page_test)` at dashboard.py line 2401; `_on_plugin_page_test` delegates to `HardwareIntegrationPage._run_plugin`. |
 
 ---
 
-### P0-C. Plugin status → Overview hardware tile
+## P1 — High Impact UX (biggest improvement per session of work)
 
-**What:** `get_status()` returns `wan_ip`, `uptime_sec`, `download_mbps`, `upload_mbps`. Show these in a tile on the Overview page labelled with `HARDWARE_NAME` — same visual pattern as the modem signal tile. Grey/hidden when no plugin is active. Updates each time the worker runs.
+### D — Diagnostic Consolidation
 
-**Effort:** S
+The app has five nav entries that answer "what's wrong with my network?": `_dia_tab` (old Health Check / Connectivity Tests), `_diagnosis_page` (new What's Wrong?), and `_correlator_tab_widget` (Root Cause Analysis × 2 nav entries). A new user cannot know which to use.
 
-**Files:**
-- `ui/pages/overview_page.py` — add `update_plugin_status(data: dict)` method; tile is hidden by default and shown only when data arrives
-- `ui/dashboard.py` — call `update_plugin_status` from `_on_plugin_result`
+| ID | Description |
+|----|-------------|
+| D1 | **Retire `_dia_tab`.** The old diagnostics tab (`_build_diagnostics_tab`, registered as "Health Check" in Standard nav and "Connectivity Tests" in Analysis rail) is a strict subset of `_diagnosis_page`. Remove it from both nav modes. Fold its raw ping/DNS/traceroute tables into `DiagnosisPage` as a collapsible "Full details" section shown below the verdict card. Users who need the raw data can expand it; the default experience stays clean. |
+| D2 | **Retire standalone Root Cause Analysis nav entries.** `_correlator_tab_widget` appears in both the Diagnostics subgroup and the Analysis rail. The `_diagnosis_page` already runs the root-cause correlator as step 5. Remove the standalone nav entries. Add a secondary "Re-analyse" button in `DiagnosisPage`'s result view that re-runs only the correlator against cached scan data (no new 30-sec scan needed). |
+| D3 | **Rename "Diagnose" rail item to "What's Wrong?".** The current label reads like a verb command; "What's Wrong?" is the question users actually have in their head when they open this page. |
+| D4 | **Promote Diagnose button on Home page.** `_btn_diagnose` is a small ghost/transparent secondary button next to Scan. Make it equal weight: same height as Scan, same visual prominence. The scan-then-diagnose flow is the core app loop. |
+| D5 | **Cross-link DiagnosisPage "healthy" result.** When the verdict is "Your network looks healthy", add an inline CTA: "Get a Network Grade score →" linking to the Network Grade page. Different question (reactive vs proactive health) — good natural next step. |
 
----
+### N — Navigation Cleanup
 
-### P0-D. Topology diagram — plugin clients grouped under hardware node
+| ID | Description |
+|----|-------------|
+| N1 | **Hardware discoverability.** "Hardware" is only in "Extend" (collapsed, last section). When 1+ plugins are active, add a compact hardware status item in the Monitor section or a badge on the Extend section header showing how many plugins are connected. Users should not need to know to look in "Extend" to find their active router integration. |
+| N2 | **DHCP deduplication.** Four entries: "DHCP Lease Inventory" (Standard nav), "DHCP Leases" (Advanced nav), "DHCP Rogue Monitor" (Security Audit rail), "DHCP Leases" (Discover rail). Consolidate to one canonical page ("DHCP Lease Inventory") that has tabs or a filter for active leases vs rogue detection. Remove the duplicate Advanced nav entry; keep the Security Audit entry only if it shows distinct audit-focused data. |
+| N4 | **Syslog / SNMP Trap duplication.** "Syslog Viewer" and "SNMP Trap Receiver" appear in Deep Analysis nav AND feed into Log Hub. If Log Hub is the canonical home, either remove the standalone nav entries or rename them "Raw Syslog" / "Raw SNMP" to distinguish from the aggregated view. |
 
-**What:** When plugin clients are present, the topology renders a new node between the gateway and the client row labelled with `HARDWARE_NAME` (e.g. "GL.iNet AX1800"). Plugin clients attach to this node. Uses the existing three-tier mesh layout — the plugin node is treated as a single-satellite mesh unit with `role="plugin"`.
+### HW — Hardware & Plugin Experience
 
-**Effort:** M
+| ID | Description |
+|----|-------------|
+| HW2 | **Plugin credential feedback.** After saving a password in a plugin card, is there a visible success/failure toast? User gets no confirmation that the credentials were accepted and the plugin connected. Add inline status feedback in the card (green checkmark + "Connected" or red + error message). |
+| HW3 | **Discovery banner deep link.** When the banner appears ("TP-Link Deco detected — import plugin?"), the "Import" button should navigate directly to the Hardware Hub with that plugin pre-selected or auto-imported, not just open the Hardware page. |
+| HW5 | **Plugin onboarding completeness.** Walk through the full first-time flow: open Hardware Hub → browse bundled plugins → click "Import" on fritzbox_plugin.py → enter password → Test → data appears. Every step should have visible feedback. Gaps are likely in the import success state and the transition from "imported" to "active + polling". |
+| HW8 | **Hardware Hub "How to write a plugin" guide accuracy.** The in-app guide must reference `template_plugin.py` and reflect the `unit`/`nodes` field documentation added this sprint. Verify it is up to date. |
 
-**Files:**
-- `ui/topology_widget.py` — extend `_render_mesh` to accept plugin clients as a synthetic satellite node when `mesh_units` is empty but `plugin_enrichment` is present
-- `ui/dashboard.py` — pass `plugin_enrichment` into topology `render()` call
+### UX — First-Time User Experience
 
----
+| ID | Description |
+|----|-------------|
+| UX1 | **First-run state on Home page.** Brand-new user: grade circle is empty, no devices, no data. Is there a visible "Start here: scan your network" instruction? The current home page relies on the user knowing to click "Scan Network". Add a first-run banner or prominent step-by-step instruction strip that disappears after the first scan completes. |
+| UX2 | **Npcap gating: which features, specifically.** When Npcap is missing, the banner explains it is required but does not list which 6 features need it. A user enabling one blocked feature should see a clear "requires Npcap" message with a link to install it, not a silent failure. Audit all 6 Npcap-gated features for consistent messaging. |
 
-### P0-E. Periodic refresh + auto-run on import
+### XF — Cross-Feature Deep Links
 
-**What:** When a plugin is active, re-run `PluginWorker` every 5 minutes (configurable). Also run immediately on app start if a plugin is registered. This makes plugin data live, not just test-on-demand.
+| ID | Description |
+|----|-------------|
+| XF2 | **Alert Feed tile navigation.** Clicking an alert in the Overview Alert Feed tile should navigate to the page that generated it (e.g. "Broadcast storm detected" → Broadcast Storm page). Currently alerts are informational only. |
 
-**Effort:** S
+### ES — Empty States
 
-**Files:**
-- `ui/dashboard.py` — `QTimer` started after first successful plugin run; same pattern as mesh auto-worker at line 8926
-
----
-
-## Priority 1 — Clear explanations for every detection event
-
-**"What just happened?"** — After every scan result, every BPDU detection, every CVE match, every alert, a collapsible panel at the bottom of the relevant page explains in plain English what the protocol is, why this result matters, and what to do about it. Collapsed by default so it does not obstruct experienced users.
-
-This is not an educational feature — it is a usability feature. "BPDU detected" means nothing to 95% of users. "A device on your network is claiming to be the root bridge — this causes periodic 30-second disconnections" is actionable. Every confused home user benefits from this, not just students.
-
-`ui/widgets/explainer_panel.py` already exists. This is wiring it to detection results on each page.
-
-**Effort:** M — one page at a time, shippable incrementally.
-
----
-
-## Priority 2 — ISP comparison (requires backend)
-
-Anonymous opt-in only, zero PII. Submits: ISP name, country code, anonymised speed, latency, and uptime percentage once per day. Shows the user how their connection compares to the median for their ISP and country.
-
-**Why it matters:** "Your latency is 42 ms" is not actionable. "Your latency is 42 ms — 38% worse than the median for your ISP in your country" is. Creates a re-engagement hook and produces data that benefits all users.
-
-**Honest flag:** This is the only item on the backlog that requires server infrastructure. That makes it a different category of work — ongoing costs, API maintenance, privacy policy update. Do not start this until the plugin data flow is complete and there is a clear plan for the backend. Effort is L and that L is mostly the backend, not the UI.
-
-**Files:**
-- `modules/isp_telemetry.py` — new module, opt-in only, no passive collection fallback
-- `ui/pages/speed_test_page.py` — opt-in toggle and comparison panel
-- Backend endpoint — document the API contract before any code is written
+| ID | Description |
+|----|-------------|
+| ES1 | **WiFi Heatmap first-run.** The page is unusable without a floor plan image and the current empty state does not make this clear. Add a prominent "Import floor plan" inline CTA with a brief explanation of the workflow. |
+| ES2 | **Config Snapshots first-run.** Empty state should have a "Take snapshot now" inline button so users understand the feature immediately and have a natural first action. |
+| ES9 | **Overview tile CTAs.** "Run Network Grade for a score" and "Connect a modem in the Modem tab" are plain text labels. Replace with inline link buttons that navigate directly to the relevant page. Applies to all tiles that show a "go do X first" empty state. |
 
 ---
 
-## Priority 3 — Polish
+## P2 — Meaningful Improvements (good features made great)
 
-Self-contained items, no dependencies between them.
+### N — Navigation Cleanup (continued)
 
-- **Skeleton loading rows while scan workers run** — prevents layout jump when data arrives; placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results.
-- **"Abyss" WCAG AA high-contrast theme** — true black background, high-contrast text, no low-opacity elements. Accessibility requirement for some users.
-- **Keyboard shortcut reference card in Help panel** — the shortcut list currently only appears in Settings.
-- **Per-page documentation link** — small `?` on each page header linking to the relevant wiki section.
-- **Passive 802.11 monitor mode capture** — puts a supported NIC into monitor mode via Npcap, reads raw 802.11 management/probe/beacon frames. Useful on networks with AP client isolation. Silently falls back to standard capture if unsupported. Power-user feature, not a default.
+| ID | Description |
+|----|-------------|
+| N6 | **Analysis rail section split.** The Analysis section mixes threat detection (Broadcast Storm, Rogue Bridge, IoT Behaviour) with analysis tools (Hop-by-Hop Trace, ARP Spoof Watch, Root Cause Analysis). These answer different questions. Consider splitting into "Threat Detection" and "Deep Analysis" sub-sections in the rail, or reorganising the item order so threat items are grouped at the top. |
+| N7 | **"Plugin Modules" in Security Audit renamed.** Users confuse this (custom recon plugins) with Hardware Hub plugins. Rename to "Recon Plugins" with a tooltip: "Custom port-scanner and enumeration scripts — not hardware driver plugins." |
+
+### HW — Hardware & Plugin Experience (continued)
+
+| ID | Description |
+|----|-------------|
+| HW4 | **Hardware nav badge.** When 1+ plugins are active and returning data, show a status indicator on the Hardware nav item — green dot or a device count badge — so users know the integration is live without navigating there. |
+| HW7 | **Per-instance IP override.** `HARDWARE_IP` in a plugin file is a compile-time constant. If two users have different gateway IPs, neither can use the same plugin file unchanged. The plugin card should let the user override the IP at import time; override is stored in settings alongside the password, and passed to the subprocess as an env var or argument. |
+
+### UX — First-Time User Experience (continued)
+
+| ID | Description |
+|----|-------------|
+| UX3 | **"What to do next" suggestions quality.** The Home page suggestions section should guide a new user through the most valuable next step after their first scan, not show generic items. Evaluate whether the current suggestion logic actually prioritises "new device joined", "high-risk CVE", and "run Network Grade" in that order for a first-time user. |
+| UX4 | **Ctrl+K discoverability.** The Ctrl+K shortcut is the best feature in the app for discovering functionality. Its hint is in the collapsible Quick Tips section below the fold — too hidden. Add a one-line "Try Ctrl+K to find anything →" prompt in the Home page empty state, visible before the first scan. |
+
+### XF — Cross-Feature Deep Links (continued)
+
+| ID | Description |
+|----|-------------|
+| XF1 | **CVE hits in Devices table deep link.** When a device row shows a CVE flag, the right-click menu should include "View in CVE Tracker →" which navigates to that device's CVE entry. |
+| XF3 | **Threat Intel link from Active Connections.** When a remote IP in Active Connections matches a known bad IP in the Threat Intelligence cache, show a flag icon in that row. Clicking navigates to Threat Intel and highlights that IP. |
+| XF4 | **Network Grade fix links.** When a grade dimension scores D or F, the card should show a "Fix this →" link that navigates to the relevant page (e.g. "DNS: F" → "DNS & Outages", "Security: D" → "Security Overview"). |
+| XF5 | **Security Overview aggregation.** The Security Overview page should aggregate findings from all audit scans run so far, not require the user to run each scan individually to see the combined picture. After any audit scan completes, push its findings into the Security Overview. |
+| XF6 | **Inventory Changes deep link.** Clicking a device row in Inventory Changes should open that device highlighted in the Devices table (filter/scroll to that MAC). |
+| XF7 | **Modem tile navigation.** When a modem plugin is active, clicking the ModemSignalTile on Overview should navigate to that plugin's device page. |
+
+### ES — Empty States (continued)
+
+| ID | Description |
+|----|-------------|
+| ES3 | **DHCP Lease page.** Empty before DHCP scan runs. Add an inline "Scan DHCP leases" button so users understand the page is data-driven and know how to populate it. |
+| ES4 | **Custom Triggers.** Empty state should explain what a trigger is and offer a template ("Alert me when a new device joins") as a one-click starting point. |
+| ES5 | **Home Automation page.** Empty state should explain the HA integration and link to MQTT setup if MQTT is not yet configured. |
+| ES6 | **Trend Forecasts.** Needs Log Hub data to work. Empty state should say "Enable Network RTT logging in Log Hub to start building forecast data" with a direct link to Log Hub. |
+| ES7 | **IPv6 Devices.** Most home networks have no IPv6. The empty state should say "No IPv6 devices found — this is normal for most home networks" rather than looking like a scan failure. |
+| ES8 | **Availability History.** Before first scan the page is blank. Add a brief empty state with a "Run a scan to start tracking device availability" prompt. |
+
+### VC — Visual Consistency
+
+| ID | Description |
+|----|-------------|
+| VC1 | **Group by node hint when disabled.** Add 10px muted hint text below the button: "Connect a router plugin to enable grouping". |
+| VC3 | **Loading state standardisation.** Some pages show "Loading…" text, others show spinners, others show nothing at all while a worker runs. Standardise to a subtle inline spinner + muted text label across all scan-driven pages. |
+| VC4 | **Compatibility notice updates.** The Modem page (ZTE MC889) and Mesh Router page (TP-Link Deco) have compatibility notice strips. Verify these mention the Hardware Hub plugin system as the path for other hardware models. |
+
+### MA — Monitoring & Alerts
+
+| ID | Description |
+|----|-------------|
+| MA1 | **IoT Behaviour anomaly action.** When an anomaly fires, the user needs a "Investigate" or "Quarantine" CTA. Currently the anomaly appears in the table but there is no suggested next action. Add a context-sensitive action row below the anomaly finding. |
+| MA2 | **Custom Triggers discoverability.** The trigger builder is powerful but impossible to find. Add a "Create custom alert →" link-button in the Notifications page empty/footer area. |
+
+### RP — Reports
+
+| ID | Description |
+|----|-------------|
+| RP1 | **Rename "ISP Report".** "ISP Report" is unclear to home users who have never filed an ISP complaint. Rename to "Network Health Report" with subtitle "Great for ISP support tickets". |
+| RP2 | **Baseline drift notifications.** When a Config Snapshot detects drift after a scan, the user should receive a toast notification. Currently drift is only visible if the user navigates to the Snapshots page. |
 
 ---
 
-## Parking lot — revisit only if there is clear demand
+## P3 — Polish (self-contained, no dependencies)
 
-- **CompTIA Network+ / CCNA curriculum alignment** — badges on each page showing which exam objective it covers; exportable study-session report. S effort but creates institutional positioning that may conflict with the hardware plugin angle. Only worth doing if educators ask for it directly.
+| ID | Description |
+|----|-------------|
+| D6 | DiagnosisPage re-analysis diff: show "1 new finding since last run" when severity changed vs previous result. |
+| N8 | Right-click to pin nav items: mention this somewhere visible on first launch, not only in the collapsible Quick Tips section. |
+| VC2 | Nav icon consistency: most pages use Unicode math symbols but Security Audit uses emoji (🔎, 🛡, 🧠). Pick one system and apply it throughout. |
+| HW6 | Legacy Modem/Mesh pages (ZTE MC889 / TP-Link Deco XE75) run parallel to the plugin architecture. Long-term these should be converted to plugin-backed pages — the plugin provides data, the existing rich UI stays. Not urgent; the current two-system approach works. |
+| SK1 | Skeleton loading rows while scan workers run: prevents layout jump when data arrives; placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results. |
+| A11Y | "Abyss" WCAG AA high-contrast theme: true black background, high-contrast text, no low-opacity elements. |
+| KBD | Keyboard shortcut reference card in Help panel — the shortcut list currently only appears in Settings. |
+| 802 | Passive 802.11 monitor mode capture — puts a supported NIC into monitor mode via Npcap, reads raw management/probe/beacon frames. Falls back silently if unsupported. Power-user feature. |
+
+---
+
+## P1-Carry — Explainer Panels (from previous sprint)
+
+**"What just happened?"** — After every scan result, every BPDU detection, every CVE match, every alert, a collapsible panel explains in plain English what the protocol is, why this result matters, and what to do about it.
+
+`ui/widgets/explainer_panel.py` already exists. This is wiring it to detection results on each page, one page at a time, shippable incrementally.
+
+**Order:** Broadcast Storm → Rogue Bridge (STP) → ARP Spoof Watch → IoT Behaviour → Protocol Visualizer (already done).
+
+---
+
+## P2-Carry — ISP Comparison (requires backend)
+
+Anonymous opt-in only, zero PII. Submits ISP name, country code, anonymised speed, latency, and uptime percentage once per day. Shows the user how their connection compares to the median for their ISP and country.
+
+"Your latency is 42 ms — 38% worse than the median for your ISP" is actionable. Creates a re-engagement hook.
+
+**Honest flag:** Only item on the backlog that requires server infrastructure — ongoing costs, API maintenance, privacy policy update. Do not start until plugin data flow is complete and there is a clear backend plan. Effort is L and that L is mostly the backend.
+
+---
+
+## Parking Lot
+
+- **CompTIA Network+ / CCNA curriculum alignment** — badges on each page showing which exam objective it covers. S effort but creates institutional positioning that may conflict with the hardware plugin angle. Only worth doing if educators ask directly.
+- **Per-page documentation link** — small `?` on each page header linking to the relevant wiki section. Requires a wiki to exist first.

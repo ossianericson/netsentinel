@@ -282,6 +282,19 @@ class DiagnosisPage(QWidget):
         self._findings_scroll.setWidget(self._findings_container)
         outer.addWidget(self._findings_scroll, 1)
 
+        # "All clear" CTA — shown only when no findings
+        self._grade_cta = QPushButton("Get a Network Grade score →")
+        self._grade_cta.setFlat(True)
+        self._grade_cta.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:2px 0; text-align:left; }}"
+            f"QPushButton:hover {{ color:#005A9E; }}"
+        )
+        self._grade_cta.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._grade_cta.clicked.connect(lambda: self.navigate_to.emit("Network Grade"))
+        self._grade_cta.hide()
+        outer.addWidget(self._grade_cta)
+
         # Run Again button
         btn_row = QHBoxLayout()
         self._again_btn = QPushButton("Run Again")
@@ -442,6 +455,7 @@ class DiagnosisPage(QWidget):
             self._hero_card_container.hide()
             self._other_toggle.hide()
             self._findings_scroll.hide()
+            self._grade_cta.show()
         else:
             color = _SEV_COLOR.get(sev, ACCENT)
             self._verdict_card.setStyleSheet(
@@ -455,6 +469,7 @@ class DiagnosisPage(QWidget):
                 f" border:none; background:transparent;"
             )
             self._verdict_text.setText(summary)
+            self._grade_cta.hide()
 
             # Hero card — "Do this first": top finding, larger label
             hero_finding = findings[0]
