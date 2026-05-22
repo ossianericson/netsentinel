@@ -17,9 +17,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-HARDWARE_NAME = "AVM FRITZ!Box"
-HARDWARE_TYPE = "router"
-HARDWARE_IP   = "192.168.178.1"   # default FRITZ!Box LAN address
+HARDWARE_NAME      = "AVM FRITZ!Box"
+HARDWARE_TYPE      = "router"
+HARDWARE_IP        = "192.168.178.1"   # default FRITZ!Box LAN address
+DESCRIPTION        = "AVM FRITZ!Box routers — all models; requires pip install fritzconnection"
+CREDENTIAL_LABEL   = "Password"
 
 
 def _check_deps():
@@ -93,11 +95,17 @@ if __name__ == "__main__" and "--netsentinel" not in sys.argv:
 
 # ── NetSentinel shim ──────────────────────────────────────────────────────────
 if "--netsentinel" in sys.argv:
-    import json as _j, sys as _s
+    import json as _json
+    _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP,
+             "manufacturer": "AVM", "model": "FRITZ!Box"}
     try:
+        _status  = get_status()
         _clients = get_clients()
-    except Exception:
+    except Exception as _exc:
+        _status  = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
+                    "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
+                    "extra": {"error": str(_exc)}}
         _clients = []
-    _s.stdout.write(_j.dumps({"info": get_info(), "status": get_status(), "clients": _clients},
-                              default=str) + "\n")
-    _s.exit(0)
+    sys.stdout.write(_json.dumps({"info": _info, "status": _status, "clients": _clients},
+                                 default=str) + "\n")
+    sys.exit(0)

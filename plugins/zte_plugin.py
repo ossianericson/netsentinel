@@ -22,9 +22,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ── Metadata (required) ───────────────────────────────────────────────────────
-HARDWARE_NAME = "ZTE MC889"
-HARDWARE_TYPE = "modem"
-HARDWARE_IP   = "192.168.254.1"   # default; keyring lookup uses the saved host at runtime
+HARDWARE_NAME    = "ZTE MC889"
+HARDWARE_TYPE    = "modem"
+HARDWARE_IP      = "192.168.254.1"   # default; keyring lookup uses the saved host at runtime
+DESCRIPTION      = "ZTE MC889 5G modem — cellular signal strength, WAN IP, band and cell identity"
+CREDENTIAL_LABEL = "Password"
 
 
 def _load_credentials() -> tuple[str, str]:

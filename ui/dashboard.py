@@ -2392,10 +2392,12 @@ class Dashboard(QMainWindow):
         self._plugin_pages: dict[str, PluginDevicePage] = {}
         for _hw_p in _hw_paths():
             _ok, _msg, _meta = _hw_validate(_hw_p)
-            _hw_type  = _meta.get("type", "other") if _ok else "other"
-            _hw_label = _meta.get("name") if _ok else _HwPath(_hw_p).stem
-            _hw_ip    = _meta.get("ip", "") if _ok else ""
-            _pg = PluginDevicePage(_hw_p, _hw_label, _hw_type, hw_ip=_hw_ip, parent=None)
+            _hw_type   = _meta.get("type", "other") if _ok else "other"
+            _hw_label  = _meta.get("name") if _ok else _HwPath(_hw_p).stem
+            _hw_ip     = _meta.get("ip", "") if _ok else ""
+            _cred_lbl  = _meta.get("credential_label", "Password") if _ok else "Password"
+            _pg = PluginDevicePage(_hw_p, _hw_label, _hw_type, hw_ip=_hw_ip,
+                                   credential_label=_cred_lbl, parent=None)
             _pg.test_requested.connect(self._on_plugin_page_test)
             if not _ok or not _HwPath(_hw_p).is_file():
                 _pg.mark_unavailable()
@@ -3783,6 +3785,38 @@ class Dashboard(QMainWindow):
         _status_row.addWidget(self._m1_status, 1)
         _status_row.addWidget(self._m1_node_group_btn)
         _status_row.addWidget(self._m1_group_btn)
+
+        # Integration discovery banner — hidden until scan finds a device matching
+        # a bundled plugin's default gateway IP
+        from PyQt6.QtWidgets import QLabel as _QL, QPushButton as _QPB
+        self._m1_int_banner = QFrame()
+        self._m1_int_banner.setVisible(False)
+        _ib_lay = QHBoxLayout(self._m1_int_banner)
+        _ib_lay.setContentsMargins(10, 5, 10, 5)
+        _ib_lay.setSpacing(8)
+        self._m1_int_banner.setStyleSheet(
+            f"QFrame {{ background:{ACCENT}18; border:1px solid {ACCENT}55;"
+            " border-radius:4px; }}"
+        )
+        self._m1_int_lbl = QLabel()
+        self._m1_int_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
+        )
+        _ib_lay.addWidget(self._m1_int_lbl, 1)
+        _int_cfg_btn = QPushButton("Configure  →")
+        _int_cfg_btn.setFixedHeight(22)
+        _int_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _int_cfg_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            " border-radius:3px; font-size:10px; padding:0 10px; }}"
+            f"QPushButton:hover {{ background:#005A9E; }}"
+        )
+        _int_cfg_btn.clicked.connect(
+            lambda: self._nav_rail_go_to("Hardware")
+        )
+        _ib_lay.addWidget(_int_cfg_btn)
+        lay.addLayout(_status_row)
+        lay.addWidget(self._m1_int_banner)
 
         self._m1_table = _table([
             "IP Address", "Hostname", "MAC Address", "Vendor", "Risk", "Device Type",
@@ -9030,6 +9064,10 @@ class Dashboard(QMainWindow):
         if not self._wan_ip:
             self._fetch_wan_ip()
 
+        # Integration discovery banner — show when scanned devices match a
+        # bundled plugin gateway that isn't already imported
+        self._check_integration_banner(devices)
+
     def _fetch_wan_ip(self) -> None:
         """Fetch the public WAN IP once per session in a background thread."""
         import threading
@@ -9157,6 +9195,89 @@ class Dashboard(QMainWindow):
     def _on_hw_detected(self, matches: list) -> None:
         if hasattr(self, "_hardware_integration_page"):
             self._hardware_integration_page.on_hardware_detected(matches)
+
+    def _plugin_gateway_map(self) -> dict:
+        """Return {ip: plugin_name} for all bundled plugins. Result is cached."""
+        if hasattr(self, "_plugin_gateway_map_cache"):
+            return self._plugin_gateway_map_cache
+        import ast
+        plugins_dir = Path(__file__).parent.parent / "plugins"
+        result: dict = {}
+        if not plugins_dir.is_dir():
+            self._plugin_gateway_map_cache = result
+            return result
+        for py in plugins_dir.glob("*.py"):
+            try:
+                tree = ast.parse(py.read_text(encoding="utf-8", errors="replace"))
+                ip = name = None
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Assign):
+                        for t in node.targets:
+                            if isinstance(t, ast.Name):
+                                if t.id == "HARDWARE_IP" and isinstance(node.value, ast.Constant):
+                                    ip = node.value.value
+                                elif t.id == "HARDWARE_NAME" and isinstance(node.value, ast.Constant):
+                                    name = node.value.value
+                if ip and name:
+                    result[ip] = name
+            except Exception:
+                continue
+        self._plugin_gateway_map_cache = result
+        return result
+
+    def _check_integration_banner(self, devices: list) -> None:
+        """Show discovery banner when a scanned device matches an un-imported bundled plugin."""
+        if not hasattr(self, "_m1_int_banner"):
+            return
+        try:
+            gateway_map = self._plugin_gateway_map()
+            if not gateway_map:
+                self._m1_int_banner.setVisible(False)
+                return
+
+            # Find which plugin IPs are already imported
+            from PyQt6.QtCore import QSettings as _QS
+            _imported_paths = set(
+                _QS("NetSentinel", "NetSentinel").value("hardware/plugin_paths", [], type=list)
+            )
+            import ast
+            imported_ips: set = set()
+            for p in _imported_paths:
+                try:
+                    tree = ast.parse(Path(p).read_text(encoding="utf-8", errors="replace"))
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.Assign):
+                            for t in node.targets:
+                                if (isinstance(t, ast.Name) and t.id == "HARDWARE_IP"
+                                        and isinstance(node.value, ast.Constant)):
+                                    imported_ips.add(node.value.value)
+                except Exception:
+                    continue
+
+            # Collect scanned IPs
+            scanned_ips = {
+                (d.ip if not isinstance(d, dict) else d.get("ip", ""))
+                for d in devices
+            }
+
+            # Find matches: gateway IP in scan AND plugin not yet imported
+            matches = [
+                name for ip, name in gateway_map.items()
+                if ip in scanned_ips and ip not in imported_ips
+            ]
+
+            if matches:
+                names = ", ".join(matches[:3])
+                if len(matches) > 3:
+                    names += f" +{len(matches) - 3} more"
+                self._m1_int_lbl.setText(
+                    f"⚡  Hardware detected — {names} available for integration"
+                )
+                self._m1_int_banner.setVisible(True)
+            else:
+                self._m1_int_banner.setVisible(False)
+        except Exception:
+            self._m1_int_banner.setVisible(False)
 
     @pyqtSlot(dict)
     def _on_mesh_result(self, data: dict) -> None:

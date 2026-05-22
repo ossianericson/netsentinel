@@ -24,6 +24,8 @@ HARDWARE_TYPE       = "router"
 HARDWARE_IP         = "192.168.1.1"
 USERNAME            = "admin"
 CONTROLLER_VERSION  = "UDMP-unifiOS"   # or "v5" for older standalone controllers
+DESCRIPTION         = "Ubiquiti UniFi — UDM, UDM Pro, Cloud Key Gen2+; requires pip install pyunifi"
+CREDENTIAL_LABEL    = "Password"
 
 
 def _check_deps():
@@ -108,11 +110,17 @@ if __name__ == "__main__" and "--netsentinel" not in sys.argv:
 
 # ── NetSentinel shim ──────────────────────────────────────────────────────────
 if "--netsentinel" in sys.argv:
-    import json as _j, sys as _s
+    import json as _json
+    _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP,
+             "manufacturer": "Ubiquiti", "model": "UniFi"}
     try:
+        _status  = get_status()
         _clients = get_clients()
-    except Exception:
+    except Exception as _exc:
+        _status  = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
+                    "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
+                    "extra": {"error": str(_exc)}}
         _clients = []
-    _s.stdout.write(_j.dumps({"info": get_info(), "status": get_status(), "clients": _clients},
-                              default=str) + "\n")
-    _s.exit(0)
+    sys.stdout.write(_json.dumps({"info": _info, "status": _status, "clients": _clients},
+                                 default=str) + "\n")
+    sys.exit(0)

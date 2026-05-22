@@ -175,14 +175,16 @@ class PluginDevicePage(QWidget):
     _keyring_warned: bool = False      # class-level: warn once per session
 
     def __init__(self, plugin_path: str, label: str, hw_type: str,
-                 hw_ip: str = "", parent: Optional[QWidget] = None) -> None:
+                 hw_ip: str = "", credential_label: str = "Password",
+                 parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._path       = plugin_path
-        self._label      = label
-        self._type       = hw_type
-        self._hw_ip      = hw_ip
-        self._keyring_ok = _keyring_available()
-        self._testing    = False
+        self._path             = plugin_path
+        self._label            = label
+        self._type             = hw_type
+        self._hw_ip            = hw_ip
+        self._credential_label = credential_label
+        self._keyring_ok       = _keyring_available()
+        self._testing          = False
         self._build_ui()
 
     # ── layout ────────────────────────────────────────────────────────────────
@@ -283,12 +285,12 @@ class PluginDevicePage(QWidget):
         )
         row1_lay.addWidget(ip_badge)
 
-        pw_lbl = QLabel("Password")
+        pw_lbl = QLabel(self._credential_label)
         pw_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
         row1_lay.addWidget(pw_lbl)
 
         self._cred_pw_edit = QLineEdit()
-        self._cred_pw_edit.setPlaceholderText("Device password")
+        self._cred_pw_edit.setPlaceholderText(f"Device {self._credential_label.lower()}")
         self._cred_pw_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self._cred_pw_edit.setFixedWidth(160)
         self._cred_pw_edit.setStyleSheet(_field_ss)

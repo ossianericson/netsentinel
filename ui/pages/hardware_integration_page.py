@@ -262,9 +262,11 @@ def _validate_script(path: str) -> tuple[bool, str, dict]:
         return False, f"Missing: {', '.join(sorted(missing))}", {}
 
     return True, "OK", {
-        "name": str(top_names.get("HARDWARE_NAME", Path(path).stem)),
-        "type": str(top_names.get("HARDWARE_TYPE", "unknown")),
-        "ip":   str(top_names.get("HARDWARE_IP", "")),
+        "name":             str(top_names.get("HARDWARE_NAME", Path(path).stem)),
+        "type":             str(top_names.get("HARDWARE_TYPE", "unknown")),
+        "ip":               str(top_names.get("HARDWARE_IP", "")),
+        "description":      str(top_names.get("DESCRIPTION", "")),
+        "credential_label": str(top_names.get("CREDENTIAL_LABEL", "Password")),
     }
 
 
@@ -1541,6 +1543,14 @@ class HardwareIntegrationPage(QWidget):
 
     # ── Hub management ────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _bundled_plugins_dir() -> Path:
+        return Path(__file__).parent.parent.parent / "plugins"
+
+    def _zte_plugin_imported(self) -> bool:
+        bdir = self._bundled_plugins_dir()
+        return str(bdir / "zte_plugin.py") in _load_paths()
+
     def _rebuild_hub(self) -> None:
         # Remove all existing card widgets
         while self._hub_lay.count():
@@ -1549,32 +1559,140 @@ class HardwareIntegrationPage(QWidget):
                 item.widget().deleteLater()
         self._cards.clear()
 
+        # ── Catalog: bundled plugins not yet imported ─────────────────────────
+        self._rebuild_catalog()
+
+        # ── Active integrations ───────────────────────────────────────────────
         paths = _load_paths()
         if not paths:
             empty = QLabel(
                 "No hardware imported yet.\n"
-                "Click  ＋ Add Integration  to import a plugin script."
+                "Use a catalog entry above, or click  ＋ Add Integration  to import a script."
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:11px; padding:32px 0;"
+                f"color:{TEXT_MUTED}; font-size:11px; padding:24px 0;"
             )
             self._hub_lay.addWidget(empty)
-            return
-
-        for path in paths:
-            ok, _, meta = _validate_script(path)
-            if not ok:
-                meta = {"name": Path(path).stem, "type": "unknown", "ip": ""}
-            last_result = _load_last_result(path)
-            card = HubCard(path, meta, last_result, parent=self._hub_body)
-            card.refresh_clicked.connect(self._run_plugin)
-            card.remove_clicked.connect(self._remove_plugin)
-            card.stop_clicked.connect(self._stop_poll_worker)
-            self._hub_lay.addWidget(card)
-            self._cards[path] = card
+        else:
+            for path in paths:
+                ok, _, meta = _validate_script(path)
+                if not ok:
+                    meta = {"name": Path(path).stem, "type": "unknown", "ip": ""}
+                last_result = _load_last_result(path)
+                card = HubCard(path, meta, last_result, parent=self._hub_body)
+                card.refresh_clicked.connect(self._run_plugin)
+                card.remove_clicked.connect(self._remove_plugin)
+                card.stop_clicked.connect(self._stop_poll_worker)
+                self._hub_lay.addWidget(card)
+                self._cards[path] = card
 
         self._hub_lay.addStretch()
+
+        # Phase 3: keep native modem tab hidden when ZTE plugin is active
+        if self._tabs and self._zte_plugin_imported():
+            self._tabs.setTabVisible(self._modem_tab_idx, False)
+
+    def _rebuild_catalog(self) -> None:
+        """Inject catalog cards for bundled plugins that are not yet imported."""
+        bdir = self._bundled_plugins_dir()
+        if not bdir.is_dir():
+            return
+        imported = set(_load_paths())
+        entries: list[tuple[str, dict]] = []
+        for pyf in sorted(bdir.glob("*_plugin.py")):
+            ps = str(pyf)
+            if ps in imported:
+                continue
+            ok, _, meta = _validate_script(ps)
+            if ok:
+                entries.append((ps, meta))
+        if not entries:
+            return
+
+        # Section header
+        hdr_lbl = QLabel("AVAILABLE PLUGINS")
+        hdr_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; font-weight:bold;"
+            " letter-spacing:0.5px; padding:4px 8px 2px 8px;"
+        )
+        self._hub_lay.addWidget(hdr_lbl)
+
+        for path, meta in entries:
+            self._hub_lay.addWidget(self._build_catalog_card(path, meta))
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(
+            f"QFrame {{ border:none; border-top:1px solid {BORDER}; background:transparent; }}"
+        )
+        sep.setFixedHeight(1)
+        self._hub_lay.addWidget(sep)
+
+    def _build_catalog_card(self, path: str, meta: dict) -> QFrame:
+        _TYPE_ICON = {"modem": "📡", "router": "🔀", "ap": "📶",
+                      "switch": "🔗", "other": "🔌"}
+        card = QFrame()
+        card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}"
+        )
+        lay = QHBoxLayout(card)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(10)
+
+        icon_lbl = QLabel(_TYPE_ICON.get(meta.get("type", ""), "🔌"))
+        icon_lbl.setFixedWidth(22)
+        icon_lbl.setStyleSheet("background:transparent; border:none;")
+        lay.addWidget(icon_lbl)
+
+        txt = QVBoxLayout()
+        txt.setSpacing(1)
+        name_lbl = QLabel(meta.get("name", Path(path).stem))
+        name_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+            " background:transparent; border:none;"
+        )
+        txt.addWidget(name_lbl)
+        desc = meta.get("description", "")
+        if desc:
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+            )
+            desc_lbl.setWordWrap(True)
+            txt.addWidget(desc_lbl)
+        lay.addLayout(txt, 1)
+
+        ip_lbl = QLabel(meta.get("ip", ""))
+        ip_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; background:transparent; border:none;"
+        )
+        lay.addWidget(ip_lbl)
+
+        add_btn = QPushButton("＋  Add")
+        add_btn.setFixedHeight(26)
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            " border-radius:3px; font-size:11px; padding:0 12px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+        )
+        add_btn.clicked.connect(lambda _, p=path: self._import_bundled(p))
+        lay.addWidget(add_btn)
+        return card
+
+    def _import_bundled(self, path: str) -> None:
+        """Add a bundled plugin to the imported list and start polling."""
+        paths = _load_paths()
+        if path not in paths:
+            paths.append(path)
+            _save_paths(paths)
+        self._set_status(
+            f"Imported '{Path(path).stem}' — running first check…", error=False
+        )
+        self._rebuild_hub()
+        self._start_poll_worker(path)
 
     def _start_all_poll_workers(self) -> None:
         for i, path in enumerate(_load_paths()):
@@ -1891,7 +2009,8 @@ class HardwareIntegrationPage(QWidget):
         else:
             suffix = ""
         self._tabs.setTabText(self._modem_tab_idx, f"Modem{suffix}")
-        self._tabs.setTabVisible(self._modem_tab_idx, True)
+        if not self._zte_plugin_imported():
+            self._tabs.setTabVisible(self._modem_tab_idx, True)
 
         from modules.network_infrastructure import hw_state
         hw_state.update_modem(raw, source="hub", hw_name=raw.get("host", "Modem"))

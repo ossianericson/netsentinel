@@ -20,9 +20,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ── Metadata (required) ───────────────────────────────────────────────────────
-HARDWARE_NAME = "TP-Link Deco XE75"
-HARDWARE_TYPE = "router"
-HARDWARE_IP   = "192.168.68.1"   # default; keyring lookup uses the saved host at runtime
+HARDWARE_NAME    = "TP-Link Deco XE75"
+HARDWARE_TYPE    = "router"
+HARDWARE_IP      = "192.168.68.1"   # default; keyring lookup uses the saved host at runtime
+DESCRIPTION      = "TP-Link Deco mesh systems — all Deco models with TP-Link account login"
+CREDENTIAL_LABEL = "Password"
 
 
 def _load_credentials() -> tuple[str, str]:

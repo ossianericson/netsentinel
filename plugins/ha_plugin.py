@@ -25,11 +25,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-HARDWARE_NAME = "Home Assistant"
-HARDWARE_TYPE = "router"       # treated as enrichment source like a router
-HARDWARE_IP   = "192.168.1.x" # HA host — update to your HA IP or hostname
-HA_URL        = f"http://{HARDWARE_IP}:8123"
-HA_TOKEN      = ""             # paste your Long-Lived Access Token here
+HARDWARE_NAME    = "Home Assistant"
+HARDWARE_TYPE    = "router"       # treated as enrichment source like a router
+HARDWARE_IP      = "192.168.1.x"  # HA host — update to your HA IP or hostname
+HA_URL           = f"http://{HARDWARE_IP}:8123"
+HA_TOKEN         = ""             # paste your Long-Lived Access Token here
+DESCRIPTION      = "Home Assistant — all HA-tracked devices (Hue, Sonos, IoT…) via Long-Lived Access Token"
+CREDENTIAL_LABEL = "Token"
 
 
 def _load_token() -> str:
@@ -115,11 +117,17 @@ if __name__ == "__main__" and "--netsentinel" not in sys.argv:
 
 # ── NetSentinel shim ──────────────────────────────────────────────────────────
 if "--netsentinel" in sys.argv:
-    import json as _j, sys as _s
+    import json as _json
+    _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP,
+             "manufacturer": "Home Assistant", "model": "Local HA instance"}
     try:
+        _status  = get_status()
         _clients = get_clients()
-    except Exception:
+    except Exception as _exc:
+        _status  = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
+                    "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
+                    "extra": {"error": str(_exc)}}
         _clients = []
-    _s.stdout.write(_j.dumps({"info": get_info(), "status": get_status(), "clients": _clients},
-                              default=str) + "\n")
-    _s.exit(0)
+    sys.stdout.write(_json.dumps({"info": _info, "status": _status, "clients": _clients},
+                                 default=str) + "\n")
+    sys.exit(0)
