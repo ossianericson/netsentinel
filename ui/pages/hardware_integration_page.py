@@ -1588,8 +1588,10 @@ class HardwareIntegrationPage(QWidget):
         if hw_type == "modem" and self._native_modem_connected:
             return
         worker = PluginPollingWorker(path=path, hw_type=hw_type, parent=self)
-        worker.result.connect(lambda data, p=path: self._on_plugin_result(p, data))
-        worker.error.connect(lambda msg, p=path: self._on_plugin_error(p, msg))
+        worker.result.connect(lambda data, p=path: self._on_plugin_result(p, data),
+                              Qt.ConnectionType.QueuedConnection)
+        worker.error.connect(lambda msg, p=path: self._on_plugin_error(p, msg),
+                             Qt.ConnectionType.QueuedConnection)
         worker.start()
         self._poll_workers[path] = worker
 

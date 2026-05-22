@@ -481,7 +481,7 @@ class PluginDevicePage(QWidget):
         )
         hdr2_lay.addWidget(hdr2_lbl)
         hdr2_lay.addStretch()
-        hint = QLabel("▶ expand node to see connected devices")
+        hint = QLabel("▶ click node to collapse/expand connected devices")
         hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;")
         hdr2_lay.addWidget(hint)
         card2_outer.addWidget(hdr2)
@@ -642,7 +642,11 @@ class PluginDevicePage(QWidget):
             item = tree.topLevelItem(i)
             h += row_h
             if item.isExpanded():
-                h += item.childCount() * row_h
+                for j in range(item.childCount()):
+                    h += row_h
+                    child = item.child(j)
+                    if child.isExpanded():
+                        h += child.childCount() * row_h
         tree.setFixedHeight(h + 4)
 
     def _set_table_height(self) -> None:
@@ -696,6 +700,7 @@ class PluginDevicePage(QWidget):
                 child.setForeground(0, QColor(TEXT_SECONDARY))
                 node_item.addChild(child)
 
+            node_item.setExpanded(True)
             self._r_node_tree.addTopLevelItem(node_item)
 
         self._r_node_tree.resizeColumnToContents(0)

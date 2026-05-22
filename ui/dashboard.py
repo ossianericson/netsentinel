@@ -2404,6 +2404,13 @@ class Dashboard(QMainWindow):
                 _hw_cached2 = _hw_last(_hw_p)
                 if _hw_cached2:
                     _pg.update(_hw_cached2)
+                    if _hw_type == "modem":
+                        from modules.network_infrastructure import hw_state as _hws
+                        _hws.update_modem(
+                            _hw_cached2.get("status", {}).get("extra", {}),
+                            source=_hw_p,
+                            hw_name=_hw_label,
+                        )
             self._plugin_pages[_hw_p] = _pg
 
         from ui.pages.mesh_router_page import MeshRouterPage
@@ -2573,7 +2580,6 @@ class Dashboard(QMainWindow):
         self._nav_add_page ("ℹ",  "Network Info",         net)
         self._nav_add_page ("≡", "DHCP Lease Inventory", self._dhcp_lease_page)
         self._nav_add_page ("⊹", "DNS Zone Map",         self._dns_zone_page)
-        self._nav_add_page ("⊛", "Mesh & Router",        self._mesh_router_page)
         self._nav_current_subgroup = -1
 
         # Threat Detection — collapsed; expand when you need security analysis
@@ -3459,8 +3465,6 @@ class Dashboard(QMainWindow):
 
         self._nav_begin_section("Extend", "plug")
         self._nav_add_rail_item("Hardware",        self._hardware_integration_page)
-        self._nav_add_rail_item("Modem",           self._modem_page)
-        self._nav_add_rail_item("Mesh & Router",   self._mesh_router_page)
 
         # Plugin pages — one entry per imported plugin, below legacy entries.
         if getattr(self, "_plugin_pages", {}):
@@ -4790,7 +4794,7 @@ class Dashboard(QMainWindow):
         self._log_chk_mesh = _chk(
             "Mesh router status",
             "Log mesh node status (online count, worst RSSI…) to the database at the set interval.\n"
-            "Requires Deco credentials saved on the Mesh Router page."
+            "Requires Deco credentials saved on the Hardware Integration page."
         )
         self._log_chk_mesh.setChecked(_qs.value("logging/mesh_enabled", False, type=bool))
         mesh_int_lbl = QLabel("Log every:")
@@ -9897,8 +9901,13 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_hardware_integration_page"):
             self._hardware_integration_page.on_native_modem_data(data)
             self._hardware_integration_page.on_modem_card_data(data)
-        # Update topology if a scan result is already loaded
-        if getattr(self, "_m1_result", None) and hasattr(self, "_topology_widget"):
+        # Update topology only when the modem's connection details change.
+        # Skipping on every poll prevents a costly matplotlib redraw every 30 s.
+        _topo_key = (data.get("wan_ip"), data.get("network_type"))
+        if (_topo_key != getattr(self, "_last_modem_topo_key", None)
+                and getattr(self, "_m1_result", None)
+                and hasattr(self, "_topology_widget")):
+            self._last_modem_topo_key = _topo_key
             try:
                 gw_ip  = self._net_info.get("gateway")     if self._net_info else None
                 gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
