@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QSizePolicy,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -612,7 +613,18 @@ class SpeedTestPage(QWidget):
         )
 
         self._hist_table.itemSelectionChanged.connect(self._on_history_row_selected)
-        hist_body.addWidget(self._hist_table)
+
+        # Empty state — shown when no history exists yet
+        _hist_empty = QLabel("No tests recorded yet.\nRun a speed test to start building history.")
+        _hist_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _hist_empty.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;"
+        )
+        self._hist_stack = QStackedWidget()
+        self._hist_stack.addWidget(_hist_empty)   # index 0 — empty state
+        self._hist_stack.addWidget(self._hist_table)  # index 1 — data
+        self._hist_stack.setCurrentIndex(0)
+        hist_body.addWidget(self._hist_stack)
 
         # ── Modem signal snapshot panel (hidden until a test with modem data) ──
         self._signal_panel = self._build_signal_panel()
@@ -1110,6 +1122,7 @@ class SpeedTestPage(QWidget):
     # ── History ───────────────────────────────────────────────────────────────
 
     def _add_history_row(self, result, error: str = "") -> None:
+        self._hist_stack.setCurrentIndex(1)  # reveal table
         self._hist_table.insertRow(0)  # newest at top
         sig = None
 
@@ -1228,6 +1241,8 @@ class SpeedTestPage(QWidget):
                     if col == 0:
                         item.setData(Qt.ItemDataRole.UserRole, sig)
                     self._hist_table.setItem(row, col, item)
+            if self._hist_table.rowCount() > 0:
+                self._hist_stack.setCurrentIndex(1)
         except Exception:
             pass  # DB not available yet is fine
 
