@@ -1768,6 +1768,24 @@ class Dashboard(QMainWindow):
 
             self._snap_subclass_proc = SUBCLASSPROC(_proc)
             hwnd = int(self.winId())
+
+            # WS_THICKFRAME + WS_MAXIMIZEBOX are required for Windows to show the
+            # Snap Layout flyout — without them it ignores HTMAXBUTTON entirely.
+            GWL_STYLE      = -16
+            WS_THICKFRAME  = 0x00040000
+            WS_MAXIMIZEBOX = 0x00010000
+            _GetWindowLong = ctypes.windll.user32.GetWindowLongW
+            _SetWindowLong = ctypes.windll.user32.SetWindowLongW
+            _GetWindowLong.argtypes = [wt.HWND, ctypes.c_int]
+            _GetWindowLong.restype  = ctypes.c_long
+            _SetWindowLong.argtypes = [wt.HWND, ctypes.c_int, ctypes.c_long]
+            _SetWindowLong.restype  = ctypes.c_long
+            style = _GetWindowLong(hwnd, GWL_STYLE)
+            _SetWindowLong(hwnd, GWL_STYLE, style | WS_THICKFRAME | WS_MAXIMIZEBOX)
+            # Tell DWM to recalculate the non-client area after the style change.
+            SWP_FLAGS = 0x0027  # SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED
+            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_FLAGS)
+
             _SetWindowSubclass = ctypes.windll.comctl32.SetWindowSubclass
             _SetWindowSubclass.argtypes = [wt.HWND, SUBCLASSPROC, ctypes.c_size_t, ctypes.c_size_t]
             _SetWindowSubclass.restype  = wt.BOOL
