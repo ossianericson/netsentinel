@@ -8852,6 +8852,7 @@ class Dashboard(QMainWindow):
         # Mesh enrichment — show button when a gateway is found; auto-run if
         # the user has already entered their mesh password this session.
         self._check_mesh_autodetect(data)
+        self._check_hw_autodetect()
 
         # Push cached modem signal to the Modem page so it shows fresh data
         # immediately after a network scan, without waiting for the next 30 s poll.
@@ -8965,6 +8966,30 @@ class Dashboard(QMainWindow):
         # Keep a reference so the thread isn't garbage-collected mid-run
         self._mesh_auto_worker = worker
         worker.start()
+
+    def _check_hw_autodetect(self) -> None:
+        """Run hardware catalogue detection once per gateway IP per session."""
+        gw_ip  = (self._net_info or {}).get("gateway", "").strip()
+        gw_mac = (self._net_info or {}).get("gateway_mac", "").strip()
+        if not gw_ip:
+            return
+        # Only re-run when the gateway IP changes (avoid redundant HTTP probes)
+        if getattr(self, "_hw_detect_last_gw", "") == gw_ip:
+            return
+        existing = getattr(self, "_hw_detect_worker", None)
+        if existing and existing.isRunning():
+            return
+        self._hw_detect_last_gw = gw_ip
+        from workers.hw_detect_worker import HwDetectWorker
+        worker = HwDetectWorker(ip=gw_ip, gateway_mac=gw_mac or None, parent=self)
+        worker.detected.connect(self._on_hw_detected)
+        self._hw_detect_worker = worker
+        worker.start()
+
+    @pyqtSlot(list)
+    def _on_hw_detected(self, matches: list) -> None:
+        if hasattr(self, "_hardware_integration_page"):
+            self._hardware_integration_page.on_hardware_detected(matches)
 
     @pyqtSlot(dict)
     def _on_mesh_result(self, data: dict) -> None:

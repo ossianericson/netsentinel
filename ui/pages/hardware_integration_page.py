@@ -1009,6 +1009,8 @@ class HardwareIntegrationPage(QWidget):
         self._poll_workers: Dict[str, PluginPollingWorker] = {}
         self._cards:   Dict[str, HubCard] = {}
         self._native_modem_connected: bool = False
+        self._detect_frame: Optional[QFrame] = None
+        self._detect_lay:   Optional[QVBoxLayout] = None
 
         self._build_ui()
 
@@ -1053,6 +1055,50 @@ class HardwareIntegrationPage(QWidget):
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
         root.addWidget(self._status_lbl)
+
+        # ── Detected hardware section (populated by on_hardware_detected) ─────
+        self._detect_frame = QFrame()
+        self._detect_frame.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {AMBER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        detect_outer = QVBoxLayout(self._detect_frame)
+        detect_outer.setContentsMargins(0, 0, 0, 0)
+        detect_outer.setSpacing(0)
+
+        detect_hdr = QFrame()
+        detect_hdr.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f" border-bottom:1px solid {BORDER}; }}"
+        )
+        detect_hdr_lay = QHBoxLayout(detect_hdr)
+        detect_hdr_lay.setContentsMargins(12, 7, 10, 7)
+        detect_hdr_lay.setSpacing(8)
+        detect_title = QLabel("Suggested for your network")
+        detect_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        detect_title.setStyleSheet(f"color:{AMBER}; border:none; background:transparent;")
+        detect_hdr_lay.addWidget(detect_title)
+        detect_hdr_lay.addStretch()
+        btn_dismiss = _btn("✕  Dismiss")
+        btn_dismiss.setFixedHeight(22)
+        btn_dismiss.clicked.connect(lambda: self._detect_frame.setVisible(False))
+        detect_hdr_lay.addWidget(btn_dismiss)
+        detect_outer.addWidget(detect_hdr)
+
+        detect_scroll = QScrollArea()
+        detect_scroll.setWidgetResizable(True)
+        detect_scroll.setStyleSheet("QScrollArea { border: none; }")
+        detect_scroll.setMaximumHeight(260)
+        detect_inner = QWidget()
+        detect_inner.setStyleSheet(f"background:{BG_CARD};")
+        self._detect_lay = QVBoxLayout(detect_inner)
+        self._detect_lay.setContentsMargins(0, 2, 0, 6)
+        self._detect_lay.setSpacing(0)
+        detect_scroll.setWidget(detect_inner)
+        detect_outer.addWidget(detect_scroll)
+
+        self._detect_frame.setVisible(False)
+        root.addWidget(self._detect_frame)
 
         # ── Hub cards scroll area ─────────────────────────────────────────────
         self._hub_scroll = QScrollArea()
@@ -1243,6 +1289,148 @@ class HardwareIntegrationPage(QWidget):
         self._status_lbl.setText(text)
         self._status_lbl.setStyleSheet(f"font-size:10px; color:{color};")
         QTimer.singleShot(5000, lambda: self._status_lbl.setText(""))
+
+    # ── Hardware auto-detection ───────────────────────────────────────────────
+
+    def on_hardware_detected(self, matches: list) -> None:
+        """Populate the 'Suggested for your network' section from catalogue matches.
+
+        Called from dashboard after HwDetectWorker finishes.
+        Skips devices that are already installed.
+        """
+        if self._detect_lay is None or self._detect_frame is None:
+            return
+
+        # Filter out already-installed
+        from modules.hw_detect import already_installed
+        visible = [m for m in matches if not already_installed(m["plugin"].get("id", ""))]
+        if not visible:
+            self._detect_frame.setVisible(False)
+            return
+
+        # Clear previous rows
+        while self._detect_lay.count():
+            item = self._detect_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for match in visible:
+            plugin     = match["plugin"]
+            confidence = match["confidence"]
+            signals    = match["signals"]
+            self._detect_lay.addWidget(self._build_detect_row(plugin, confidence, signals))
+
+        self._detect_lay.addStretch()
+        self._detect_frame.setVisible(True)
+
+    def _build_detect_row(self, plugin: dict, confidence: float, signals: list) -> QWidget:
+        row = QFrame()
+        row.setStyleSheet(
+            f"QFrame {{ background:transparent; border:none;"
+            f" border-bottom:1px solid {BORDER}; }}"
+        )
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(12, 8, 10, 8)
+        lay.setSpacing(10)
+
+        # Confidence dot
+        dot = QLabel("●")
+        if confidence >= 0.7:
+            dot.setStyleSheet(f"color:{GREEN}; font-size:11px; border:none;")
+            dot.setToolTip(f"Strong match ({confidence:.0%})")
+        else:
+            dot.setStyleSheet(f"color:{AMBER}; font-size:11px; border:none;")
+            dot.setToolTip(f"Possible match ({confidence:.0%})")
+        lay.addWidget(dot)
+
+        # Device info
+        info_col = QVBoxLayout()
+        info_col.setSpacing(2)
+        info_col.setContentsMargins(0, 0, 0, 0)
+        name_lbl = QLabel(f"<b>{plugin.get('name', '?')}</b>  "
+                          f"<span style='color:{TEXT_MUTED}; font-size:9px;'>"
+                          f"{plugin.get('manufacturer','')}</span>")
+        name_lbl.setTextFormat(Qt.TextFormat.RichText)
+        name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; border:none;")
+        sig_lbl = QLabel(" · ".join(signals[:3]))
+        sig_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px; border:none;")
+        sig_lbl.setWordWrap(True)
+        info_col.addWidget(name_lbl)
+        info_col.addWidget(sig_lbl)
+        lay.addLayout(info_col, 1)
+
+        # Action buttons
+        has_bundled = bool(plugin.get("file"))
+        has_prompt  = bool(plugin.get("ai_prompt"))
+
+        if has_bundled:
+            btn_install = _btn("⬇  Install", accent=True)
+            btn_install.setFixedHeight(24)
+            btn_install.setToolTip("Copy bundled plugin into your NetSentinel data folder and register it")
+            btn_install.clicked.connect(lambda _=False, p=plugin: self._install_from_catalogue(p))
+            lay.addWidget(btn_install)
+
+        if has_prompt:
+            btn_prompt = _btn("⎘  Copy AI prompt")
+            btn_prompt.setFixedHeight(24)
+            btn_prompt.setToolTip("Copy a pre-written prompt for an AI to generate this plugin")
+            btn_prompt.clicked.connect(lambda _=False, p=plugin: self._copy_ai_prompt(p, btn_prompt))
+            lay.addWidget(btn_prompt)
+
+        return row
+
+    def _install_from_catalogue(self, plugin: dict) -> None:
+        """Copy a bundled plugin to the user data dir and register it."""
+        from modules.hw_detect import bundled_plugin_path
+        file_rel = plugin.get("file", "")
+        if not file_rel:
+            self._set_status("No bundled plugin file for this entry.", error=True)
+            return
+
+        src = bundled_plugin_path(file_rel)
+        if src is None:
+            self._set_status(f"Bundled file not found: {file_rel}", error=True)
+            return
+
+        import shutil, os
+        from pathlib import Path as _Path
+        try:
+            dest_dir = _Path.home() / ".netsentinel" / "plugins"
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / src.name
+            if dest != src:
+                shutil.copy2(src, dest)
+            dest_str = str(dest)
+        except Exception as exc:
+            self._set_status(f"Copy failed: {exc}", error=True)
+            return
+
+        ok, msg, _ = _validate_script(dest_str)
+        if not ok:
+            self._set_status(f"Plugin validation failed: {msg}", error=True)
+            return
+
+        paths = _load_paths()
+        if dest_str not in paths:
+            paths.append(dest_str)
+            _save_paths(paths)
+
+        name = plugin.get("name", src.name)
+        self._set_status(f"Installed '{name}' — opening password field…", error=False)
+        self._rebuild_hub()
+        self._start_poll_worker(dest_str)
+        # Refresh the detection banner so the just-installed device disappears
+        self._detect_frame.setVisible(False)
+
+    def _copy_ai_prompt(self, plugin: dict, btn: QPushButton) -> None:
+        """Copy the catalogue AI prompt to clipboard, replacing {ip} placeholder."""
+        prompt = plugin.get("ai_prompt", "")
+        default_ip = (plugin.get("fingerprints", {}).get("default_ips") or ["192.168.1.1"])[0]
+        prompt = prompt.replace("{ip}", default_ip)
+        QApplication.clipboard().setText(prompt)
+        orig = btn.text()
+        btn.setText("✓  Copied!")
+        QTimer.singleShot(2000, lambda: btn.setText(orig))
 
     # ── Native modem coordination ─────────────────────────────────────────────
 

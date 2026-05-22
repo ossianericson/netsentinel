@@ -1,0 +1,219 @@
+{
+  "version": 1,
+  "remote_url": "https://raw.githubusercontent.com/ossianericson/netsentinel/main/data/catalogue.json",
+  "plugins": [
+    {
+      "id": "zte_mc889",
+      "name": "ZTE MC889 5G Modem",
+      "type": "modem",
+      "manufacturer": "ZTE",
+      "models": ["MC889"],
+      "description": "Full 5G NR + LTE signal, WAN IP, cell ID, eNB ID, ENDC",
+      "author": "ossianericson",
+      "file": "plugins/zte_plugin.py",
+      "requires": ["keyring"],
+      "credentials_hint": "Use the password from your ZTE web UI (default: admin)",
+      "fingerprints": {
+        "default_ips": ["192.168.254.1"],
+        "http_title_any": ["MC889", "ZTE"],
+        "oui_prefixes": [
+          "00:1E:73", "88:CB:87", "50:A4:D0", "4C:09:D4",
+          "7C:2E:BD", "00:26:ED", "58:20:B1", "64:6E:69"
+        ]
+      }
+    },
+    {
+      "id": "deco",
+      "name": "TP-Link Deco Mesh",
+      "type": "router",
+      "manufacturer": "TP-Link",
+      "models": [
+        "Deco XE75", "Deco XE75 Pro", "Deco XE200", "Deco X68",
+        "Deco X60", "Deco X20", "Deco M5", "Deco M9 Plus",
+        "Deco W7960", "Deco BE85", "Deco BE65"
+      ],
+      "description": "Mesh nodes with per-node client assignment, band (5G/6G/2.4G/Wired), hostname",
+      "author": "ossianericson",
+      "file": "plugins/deco_plugin.py",
+      "requires": ["keyring"],
+      "credentials_hint": "Use the Deco app password (set when you first configured the Deco)",
+      "fingerprints": {
+        "default_ips": ["192.168.68.1"],
+        "http_title_any": ["TP-Link", "Deco"],
+        "http_header_any": ["tplink", "deco"],
+        "oui_prefixes": [
+          "50:91:E3", "B0:A7:B9", "98:DA:C4", "E8:DE:27", "54:AF:97",
+          "A0:F3:C1", "EC:08:6B", "C4:E9:84", "14:EB:B6", "18:D6:C7",
+          "28:87:BA", "30:DE:4B", "34:60:F9", "3C:84:6A", "40:3F:8C",
+          "50:D4:F7", "54:E6:FC", "58:D5:6E", "60:32:B1", "60:A4:B7",
+          "70:4F:57", "78:44:76", "7C:39:53", "84:16:F9", "90:9A:4A",
+          "94:D9:B3", "9C:A6:15", "A8:57:4E", "B0:95:75", "C0:06:C3",
+          "C4:6E:1F", "DC:EF:09", "E8:D8:28"
+        ]
+      }
+    },
+    {
+      "id": "asus_router",
+      "name": "ASUS Router / ZenWiFi",
+      "type": "router",
+      "manufacturer": "ASUS",
+      "models": [
+        "RT-AX88U", "RT-AX86U", "RT-AX58U", "RT-AC86U", "RT-AC68U",
+        "ZenWiFi AX (XT8)", "ZenWiFi Pro ET12", "ZenWiFi XD6"
+      ],
+      "description": "ASUS ASUSWRT — client list with hostnames, WAN status, bandwidth",
+      "file": null,
+      "pypi_library": "asusrouter",
+      "credentials_hint": "Your ASUS router admin username and password",
+      "ai_prompt": "Write a NetSentinel hardware plugin for my ASUS router at {ip}. Install 'pip install asusrouter' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'ASUS Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (include connected_clients count, mesh_nodes count)\n  def get_clients() -> list  (each item: ip, mac, hostname, band, unit)\n\nUse the asusrouter library: AsusRouter class, method async_get_connected_devices(). Since it's async, wrap with asyncio.run(). Map device fields: ip, mac, name→hostname, connection_type→band.",
+      "fingerprints": {
+        "default_ips": ["192.168.1.1", "192.168.50.1"],
+        "http_title_any": ["ASUS"],
+        "http_header_any": ["asuswrt"],
+        "oui_prefixes": [
+          "04:42:1A", "2C:FD:A1", "3C:7C:3F", "50:EB:71", "6C:72:20",
+          "74:D4:35", "AC:22:0B", "F8:32:E4", "10:7B:44", "14:DD:A9",
+          "1C:87:2C", "20:CF:30", "24:4B:FE", "30:5A:3A", "38:D5:47",
+          "3C:18:A0", "40:B0:76", "4C:ED:FB", "54:A0:50", "5C:A6:E6",
+          "60:45:CB", "6C:F3:7F", "78:24:AF", "88:D7:F6", "8C:8D:28",
+          "90:E6:BA", "9C:5C:8E", "A0:36:9F", "B0:6E:BF", "D8:50:E6"
+        ]
+      }
+    },
+    {
+      "id": "fritzbox",
+      "name": "AVM FRITZ!Box",
+      "type": "router",
+      "manufacturer": "AVM",
+      "models": [
+        "FRITZ!Box 7590 AX", "FRITZ!Box 7590", "FRITZ!Box 7490",
+        "FRITZ!Box 6890 LTE", "FRITZ!Box 4060", "FRITZ!Box 3490"
+      ],
+      "description": "FRITZ!Box via TR-064 — client list, WAN IP, DSL sync stats, uptime",
+      "file": null,
+      "pypi_library": "fritzconnection",
+      "credentials_hint": "Your FRITZ!Box admin password (shown on the label on the device)",
+      "ai_prompt": "Write a NetSentinel hardware plugin for my AVM FRITZ!Box at {ip}. Install 'pip install fritzconnection' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'AVM FRITZ!Box'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (wan_ip, uptime_sec, connected_clients count)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse FritzHosts(address=HARDWARE_IP, password=pw) to get active_hosts(). Use FritzStatus for WAN IP and uptime. No username needed, only password.",
+      "fingerprints": {
+        "default_ips": ["192.168.178.1"],
+        "http_title_any": ["FRITZ!Box", "FRITZ!"],
+        "oui_prefixes": [
+          "14:86:7E", "18:C0:4D", "34:31:C4", "3C:A6:2F", "74:31:70",
+          "A4:37:40", "BC:05:43", "D4:21:22", "F8:D0:27", "1C:25:E1",
+          "38:C9:86", "68:54:ED", "C4:A8:1D", "E0:28:6D", "9C:C7:A6"
+        ]
+      }
+    },
+    {
+      "id": "unifi",
+      "name": "Ubiquiti UniFi",
+      "type": "router",
+      "manufacturer": "Ubiquiti",
+      "models": [
+        "UniFi Dream Machine", "UDM Pro", "UDM SE", "UDM Pro Max",
+        "UniFi Dream Router", "Cloud Key Gen2", "USG"
+      ],
+      "description": "UniFi controller — full client list with SSID, band, signal, hostname",
+      "file": null,
+      "pypi_library": "pyunifi",
+      "credentials_hint": "Your UniFi Network admin username and password",
+      "ai_prompt": "Write a NetSentinel hardware plugin for my Ubiquiti UniFi controller at {ip}. Install 'pip install pyunifi' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'Ubiquiti UniFi'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients count)\n  def get_clients() -> list  (each: ip, mac, hostname, band, unit=ap_mac)\n\nUse Controller(host, username, password, version='UDMP-unifiOS', ssl_verify=False) from pyunifi.controller. Call get_clients(). Map: ip, mac, hostname, radio→band ('ng'→'2.4G' '5G-1'→'5G'), ap_mac→unit.",
+      "fingerprints": {
+        "default_ips": ["192.168.1.1", "192.168.1.254", "192.168.0.1"],
+        "http_title_any": ["UniFi", "Ubiquiti"],
+        "http_header_any": ["ubiquiti", "unifi"],
+        "oui_prefixes": [
+          "00:27:22", "04:18:D6", "24:A4:3C", "44:D9:E7", "68:72:51",
+          "78:8A:20", "80:2A:A8", "B4:FB:E4", "DC:9F:DB", "E0:63:DA",
+          "F0:9F:C2", "FC:EC:DA", "18:E8:29", "28:70:4E", "50:2A:C4",
+          "58:EF:68", "74:AC:B9", "78:45:58", "80:A0:36", "98:F0:AB"
+        ]
+      }
+    },
+    {
+      "id": "netgear",
+      "name": "Netgear Router / Orbi",
+      "type": "router",
+      "manufacturer": "Netgear",
+      "models": [
+        "Orbi RBK863S", "Orbi RBK752", "Nighthawk AX12",
+        "Nighthawk RAX200", "R7000", "R8000", "R9000"
+      ],
+      "description": "Netgear router — connected devices with IP, MAC, hostname, connection type",
+      "file": null,
+      "pypi_library": "pynetgear",
+      "credentials_hint": "Your Netgear router admin password",
+      "ai_prompt": "Write a NetSentinel hardware plugin for my Netgear router at {ip}. Install 'pip install pynetgear' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'Netgear Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients count, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse Netgear(password=pw, host=HARDWARE_IP) from pynetgear. Call get_attached_devices_v2(). Map: ip, mac, name→hostname, connection_type→band.",
+      "fingerprints": {
+        "default_ips": ["192.168.1.1", "192.168.0.1"],
+        "http_title_any": ["NETGEAR", "Orbi", "Nighthawk"],
+        "oui_prefixes": [
+          "A0:21:B7", "A4:2B:8C", "C0:FF:D4", "6C:B0:CE", "00:14:6C",
+          "20:4E:7F", "28:C6:8E", "2C:B0:5D", "44:94:FC", "4C:17:EB",
+          "84:1B:5E", "9C:3D:CF", "C4:04:15", "C0:3F:0E", "E0:46:9A",
+          "E4:F4:C6", "6C:F3:7F", "8C:3B:AD"
+        ]
+      }
+    },
+    {
+      "id": "openwrt",
+      "name": "OpenWrt",
+      "type": "router",
+      "manufacturer": "OpenWrt",
+      "models": ["Any router running OpenWrt / LEDE"],
+      "description": "OpenWrt via LUCI RPC — client list with IP, MAC, hostname, wireless band",
+      "file": null,
+      "pypi_library": "openwrt-luci-rpc",
+      "credentials_hint": "Your OpenWrt root password",
+      "ai_prompt": "Write a NetSentinel hardware plugin for my OpenWrt router at {ip}. Install 'pip install openwrt-luci-rpc' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'OpenWrt Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients count, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse OpenWrtRpc(HARDWARE_IP, 'root', password) from openwrt_luci_rpc. Call rpc.get_arp_table() and rpc.get_wireless_devices() for client data.",
+      "fingerprints": {
+        "default_ips": ["192.168.1.1", "10.0.0.1"],
+        "http_title_any": ["OpenWrt", "LuCI", "Barrier Breaker", "Chaos Calmer"],
+        "http_header_any": ["openwrt"]
+      }
+    },
+    {
+      "id": "mikrotik",
+      "name": "MikroTik RouterOS",
+      "type": "router",
+      "manufacturer": "MikroTik",
+      "models": ["hAP ax³", "hAP ac²", "CCR2004", "RB4011", "Audience LTE6"],
+      "description": "MikroTik RouterOS via API — ARP table, DHCP leases, wireless clients",
+      "file": null,
+      "pypi_library": "routeros-api",
+      "credentials_hint": "MikroTik admin username and password",
+      "ai_prompt": "Write a NetSentinel hardware plugin for my MikroTik router at {ip}. Install 'pip install routeros-api' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'MikroTik Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse routeros_api.connect(host, username, password) on port 8728. Run commands '/ip/arp/print' and '/ip/dhcp-server/lease/print' for clients. Run '/ip/address/print' for WAN IP.",
+      "fingerprints": {
+        "default_ips": ["192.168.88.1"],
+        "http_title_any": ["MikroTik", "RouterOS"],
+        "http_header_any": ["mikrotik"],
+        "oui_prefixes": [
+          "08:55:31", "18:FD:74", "2C:C8:1B", "4C:5E:0C", "6C:3B:6B",
+          "74:4D:28", "B8:69:F4", "CC:2D:E0", "D4:CA:6D", "DC:2C:6E",
+          "E4:8D:8C", "48:8F:5A", "64:D1:54"
+        ]
+      }
+    },
+    {
+      "id": "synology",
+      "name": "Synology NAS / Router",
+      "type": "router",
+      "manufacturer": "Synology",
+      "models": ["RT6600ax", "RT2600ac", "MR2200ac", "WRX560"],
+      "description": "Synology router — connected devices, WAN status, SRM info",
+      "file": null,
+      "pypi_library": "python-synology",
+      "credentials_hint": "Your Synology admin username and password",
+      "ai_prompt": "Write a NetSentinel hardware plugin for my Synology router at {ip}. Install 'pip install python-synology' first.\n\nThe plugin must export:\n  HARDWARE_NAME = 'Synology Router'\n  HARDWARE_TYPE = 'router'\n  HARDWARE_IP = '{ip}'\n  def get_info() -> dict\n  def get_status() -> dict  (connected_clients, wan_ip)\n  def get_clients() -> list  (each: ip, mac, hostname, band)\n\nUse SynologyDSM or the raw SRM API at http://{ip}:8000/webapi/ endpoint SYNO.Core.Network.NSMDevice to list connected devices.",
+      "fingerprints": {
+        "default_ips": ["192.168.1.1", "192.168.0.1"],
+        "http_title_any": ["Synology", "SRM"],
+        "http_header_any": ["synology"],
+        "oui_prefixes": [
+          "00:11:32", "00:1F:33", "08:00:27", "28:C6:3F",
+          "BC:EC:EB", "00:11:32", "90:09:D0", "D2:21:F9"
+        ]
+      }
+    }
+  ]
+}
