@@ -20,9 +20,9 @@ from typing import Optional
 from PyQt6.QtCore    import Qt
 from PyQt6.QtGui     import QColor, QFont
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
-    QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem,
-    QVBoxLayout, QWidget,
+    QAbstractScrollArea, QFrame, QHBoxLayout, QLabel, QPushButton,
+    QScrollArea, QSizePolicy, QTableWidget, QTableWidgetItem,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -263,7 +263,12 @@ class PluginDevicePage(QWidget):
         self._r_node_tree.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
         self._r_node_tree.setRootIsDecorated(True)
         self._r_node_tree.setStyleSheet(_TREE_SS)
-        self._r_node_tree.setMaximumHeight(250)
+        self._r_node_tree.setSizeAdjustPolicy(
+            QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        )
+        self._r_node_tree.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._r_node_tree.itemExpanded.connect(self._r_node_tree.updateGeometry)
+        self._r_node_tree.itemCollapsed.connect(self._r_node_tree.updateGeometry)
         card2_outer.addWidget(self._r_node_tree)
         self._root.addWidget(card2)
 
