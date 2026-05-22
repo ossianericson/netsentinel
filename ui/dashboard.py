@@ -9393,8 +9393,13 @@ class Dashboard(QMainWindow):
             for c in clients
             if c.get("mac")
         }
-        # Store node list so topology can group devices by AP/satellite
+        # Store node list so topology can group devices by AP/satellite.
+        # If the plugin returned clients but no nodes (single-AP router),
+        # synthesize one node so topology and "Group by node" still work.
         nodes = status.get("extra", {}).get("nodes", [])
+        if not nodes and clients and hw_type in ("router", "mesh", "ap"):
+            nodes = [{"name": hw_name, "role": "primary",
+                      "ip": info.get("ip", ""), "mac": ""}]
         self._plugin_nodes[path] = nodes
         self._apply_mesh_enrichment()  # handles topology + regrouping + synthesis
         from modules.network_infrastructure import hw_state
@@ -9502,7 +9507,8 @@ class Dashboard(QMainWindow):
                     name_item.setForeground(QColor(TEXT_PRIMARY))
                     name_item.setToolTip(f"Name from {plugin_name}")
                     self._m1_table.setItem(row, 1, name_item)
-                unit = pc.get("unit", "")
+                # Fall back to hw name so single-AP plugins still enable grouping
+                unit = pc.get("unit", "") or plugin_name
                 if unit:
                     node_item = QTableWidgetItem(unit)
                     node_item.setForeground(QColor(TEXT_PRIMARY))
