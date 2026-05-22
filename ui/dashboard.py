@@ -2390,7 +2390,6 @@ class Dashboard(QMainWindow):
         from ui.pages.hardware_integration_page import _validate_script as _hw_validate
         from pathlib import Path as _HwPath
         self._plugin_pages: dict[str, PluginDevicePage] = {}
-        self._plugin_test_workers: dict[str, object] = {}
         for _hw_p in _hw_paths():
             _ok, _msg, _meta = _hw_validate(_hw_p)
             _hw_type  = _meta.get("type", "other") if _ok else "other"
@@ -9263,38 +9262,15 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(str)
     def _on_plugin_page_test(self, path: str) -> None:
-        """Run the plugin once immediately when the Test button is clicked."""
-        import time as _t
-        from workers.plugin_polling_worker import PluginPollingWorker
-        from ui.pages.hardware_integration_page import (
-            _validate_script as _hw_val, _save_last_result,
-        )
+        """Run the plugin once immediately when the Test button is clicked.
 
-        page = self._plugin_pages.get(path)
-        if not page:
-            return
-
-        ok, _, meta = _hw_val(path)
-        hw_type = meta.get("type", "other") if ok else "other"
-
-        worker = PluginPollingWorker(path=path, hw_type=hw_type, parent=self)
-
-        def _on_result(data: dict) -> None:
-            data["_path"] = path
-            data["_ts"]   = _t.time()
-            _save_last_result(path, data)
-            worker.stop()
-            self._on_hardware_plugin_result(data)     # updates page + resets btn
-
-        def _on_error(msg: str) -> None:
-            worker.stop()
-            if page:
-                page.test_done(error_msg=msg)
-
-        worker.result.connect(_on_result)
-        worker.error.connect(_on_error)
-        worker.start()
-        self._plugin_test_workers[path] = worker      # prevent GC
+        Delegates to HardwareIntegrationPage._run_plugin so that:
+        - only one PluginPollingWorker exists per plugin (no duplicate logins)
+        - all signal connections are QObject→QObject (auto-queued, thread-safe)
+        - the result flows through the existing plugin_result→_on_hardware_plugin_result
+          path which calls page.update(data) → test_done()
+        """
+        self._hardware_integration_page._run_plugin(path)
 
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient and plugin client data into the M1 table rows."""
