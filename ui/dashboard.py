@@ -1200,7 +1200,6 @@ class Dashboard(QMainWindow):
         self.setStyleSheet(MAIN_STYLE)
         self._maximize_btn = None   # set by _build_header; updated in changeEvent
         self._pre_maximize_geo: "QRect | None" = None  # saved before showMaximized()
-        self._snap_ready = False    # guards nativeEvent — True only after init completes
 
         # Window icon
         from pathlib import Path as _Path
@@ -1427,8 +1426,6 @@ class Dashboard(QMainWindow):
         self._install_edge_grips()
         # Auto-start modem polling if credentials were saved from a prior session
         self._check_modem_autorun()
-        # nativeEvent is now safe to handle WM_NCHITTEST (init fully complete)
-        self._snap_ready = True
 
     def _build_mode_bar(self) -> QWidget:
         """Mode-switcher pill — now built inline inside the sidebar in _build_tabs().
@@ -1714,34 +1711,69 @@ class Dashboard(QMainWindow):
 
     # ── Windows Snap Layouts ─────────────────────────────────────────────────
 
-    def nativeEvent(self, event_type, message):
-        """Return HTMAXBUTTON over the maximize button so Windows shows the Snap Layout flyout."""
-        if not self._snap_ready:
-            return super().nativeEvent(event_type, message)
-        if event_type == b"windows_generic_MSG":
-            try:
-                import ctypes, struct
-                msg_ptr = int(message)
-                if not msg_ptr:
-                    return super().nativeEvent(event_type, message)
-                ptr_sz = ctypes.sizeof(ctypes.c_void_p)  # 8 on 64-bit Windows
-                _ibr = ctypes.windll.kernel32.IsBadReadPtr
-                _ibr.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
-                _ibr.restype  = ctypes.c_bool
-                if _ibr(msg_ptr, ptr_sz + 4):
-                    return super().nativeEvent(event_type, message)
-                msg_id = struct.unpack_from("<I", ctypes.string_at(msg_ptr + ptr_sz, 4))[0]
-                if msg_id == 0x0084 and self._maximize_btn is not None:  # WM_NCHITTEST
-                    from PyQt6.QtGui import QCursor
-                    p   = QCursor.pos()
-                    btn = self._maximize_btn
-                    tl  = btn.mapToGlobal(btn.rect().topLeft())
-                    if (tl.x() <= p.x() < tl.x() + btn.width() and
-                            tl.y() <= p.y() < tl.y() + btn.height()):
-                        return True, 9  # HTMAXBUTTON
-            except Exception:
-                pass
-        return super().nativeEvent(event_type, message)
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_snap_subclass_installed", False):
+            self._install_snap_subclass()
+            self._snap_subclass_installed = True
+
+    def _install_snap_subclass(self):
+        """Subclass the Win32 HWND so WM_NCHITTEST returns HTMAXBUTTON over our
+        maximize button.  This is safer than nativeEvent because the message ID
+        arrives as a plain C argument — no MSG struct pointer parsing needed."""
+        try:
+            import ctypes, ctypes.wintypes as wt
+
+            WM_NCHITTEST = 0x0084
+            HTMAXBUTTON  = 9
+
+            _DefSubclassProc = ctypes.windll.comctl32.DefSubclassProc
+            _DefSubclassProc.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM]
+            _DefSubclassProc.restype  = ctypes.c_ssize_t
+
+            SUBCLASSPROC = ctypes.WINFUNCTYPE(
+                ctypes.c_ssize_t,
+                wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM,
+                ctypes.c_size_t,   # UINT_PTR  uIdSubclass
+                ctypes.c_size_t,   # DWORD_PTR dwRefData
+            )
+
+            WM_NCLBUTTONDOWN = 0x00A1
+            WM_NCLBUTTONUP   = 0x00A2
+
+            win = self
+
+            def _over_maximize_btn():
+                btn = win._maximize_btn
+                if btn is None:
+                    return False
+                from PyQt6.QtGui import QCursor
+                p  = QCursor.pos()
+                tl = btn.mapToGlobal(btn.rect().topLeft())
+                return (tl.x() <= p.x() < tl.x() + btn.width() and
+                        tl.y() <= p.y() < tl.y() + btn.height())
+
+            def _proc(hwnd, msg, wparam, lparam, uid, ref):
+                if msg == WM_NCHITTEST and _over_maximize_btn():
+                    return HTMAXBUTTON
+                # Intercept non-client clicks on the maximize button so we drive
+                # the toggle ourselves instead of letting DefWindowProc do it.
+                if wparam == HTMAXBUTTON:
+                    if msg == WM_NCLBUTTONDOWN:
+                        return 0  # swallow — we act on release
+                    if msg == WM_NCLBUTTONUP:
+                        win._toggle_maximize()
+                        return 0
+                return _DefSubclassProc(hwnd, msg, wparam, lparam)
+
+            self._snap_subclass_proc = SUBCLASSPROC(_proc)
+            hwnd = int(self.winId())
+            _SetWindowSubclass = ctypes.windll.comctl32.SetWindowSubclass
+            _SetWindowSubclass.argtypes = [wt.HWND, SUBCLASSPROC, ctypes.c_size_t, ctypes.c_size_t]
+            _SetWindowSubclass.restype  = wt.BOOL
+            _SetWindowSubclass(hwnd, self._snap_subclass_proc, 1, 0)
+        except Exception:
+            pass
 
     def _install_edge_grips(self):
         """Create 8 transparent resize-grip strips around the window border."""
