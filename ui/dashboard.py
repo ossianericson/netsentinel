@@ -2390,11 +2390,14 @@ class Dashboard(QMainWindow):
         from ui.pages.hardware_integration_page import _validate_script as _hw_validate
         from pathlib import Path as _HwPath
         self._plugin_pages: dict[str, PluginDevicePage] = {}
+        self._plugin_test_workers: dict[str, object] = {}
         for _hw_p in _hw_paths():
             _ok, _msg, _meta = _hw_validate(_hw_p)
             _hw_type  = _meta.get("type", "other") if _ok else "other"
             _hw_label = _meta.get("name") if _ok else _HwPath(_hw_p).stem
-            _pg = PluginDevicePage(_hw_p, _hw_label, _hw_type, parent=None)
+            _hw_ip    = _meta.get("ip", "") if _ok else ""
+            _pg = PluginDevicePage(_hw_p, _hw_label, _hw_type, hw_ip=_hw_ip, parent=None)
+            _pg.test_requested.connect(self._on_plugin_page_test)
             if not _ok or not _HwPath(_hw_p).is_file():
                 _pg.mark_unavailable()
             else:
@@ -9257,6 +9260,41 @@ class Dashboard(QMainWindow):
         # only runs for router/AP/switch types).
         if path in getattr(self, "_plugin_pages", {}):
             self._plugin_pages[path].update(data)
+
+    @pyqtSlot(str)
+    def _on_plugin_page_test(self, path: str) -> None:
+        """Run the plugin once immediately when the Test button is clicked."""
+        import time as _t
+        from workers.plugin_polling_worker import PluginPollingWorker
+        from ui.pages.hardware_integration_page import (
+            _validate_script as _hw_val, _save_last_result,
+        )
+
+        page = self._plugin_pages.get(path)
+        if not page:
+            return
+
+        ok, _, meta = _hw_val(path)
+        hw_type = meta.get("type", "other") if ok else "other"
+
+        worker = PluginPollingWorker(path=path, hw_type=hw_type, parent=self)
+
+        def _on_result(data: dict) -> None:
+            data["_path"] = path
+            data["_ts"]   = _t.time()
+            _save_last_result(path, data)
+            worker.stop()
+            self._on_hardware_plugin_result(data)     # updates page + resets btn
+
+        def _on_error(msg: str) -> None:
+            worker.stop()
+            if page:
+                page.test_done(error_msg=msg)
+
+        worker.result.connect(_on_result)
+        worker.error.connect(_on_error)
+        worker.start()
+        self._plugin_test_workers[path] = worker      # prevent GC
 
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient and plugin client data into the M1 table rows."""

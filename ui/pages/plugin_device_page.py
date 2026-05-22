@@ -13,22 +13,66 @@ The page is marked disabled/greyed when the plugin file no longer exists.
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from typing import Optional
 
-from PyQt6.QtCore    import Qt
+from PyQt6.QtCore    import Qt, pyqtSignal
 from PyQt6.QtGui     import QColor, QFont
 from PyQt6.QtWidgets import (
-    QAbstractScrollArea, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QTableWidget, QTableWidgetItem,
-    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAbstractScrollArea, QCheckBox, QFrame, QHBoxLayout, QLabel,
+    QLineEdit, QPushButton, QScrollArea, QSizePolicy, QTableWidget,
+    QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
     ACCENT, AMBER, BORDER, BG_CARD, BG_DARK, BG_ALT_ROW,
     GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
+
+log = logging.getLogger(__name__)
+
+# ── keyring helpers ────────────────────────────────────────────────────────────
+
+_KEYRING_SERVICE = "NetSentinel/hardware"
+
+
+def _keyring_available() -> bool:
+    try:
+        import keyring
+        kr = keyring.get_keyring()
+        return type(kr).__name__ not in ("FailKeyring", "NullKeyring", "PlaintextKeyring")
+    except Exception:
+        return False
+
+
+def _keyring_load(ip: str) -> Optional[str]:
+    try:
+        import keyring
+        return keyring.get_password(_KEYRING_SERVICE, ip)
+    except Exception:
+        return None
+
+
+def _keyring_save(ip: str, password: str) -> bool:
+    try:
+        import keyring
+        keyring.set_password(_KEYRING_SERVICE, ip, password)
+        return True
+    except Exception as exc:
+        log.warning("keyring save failed: %s", exc)
+        return False
+
+
+def _keyring_delete(ip: str) -> bool:
+    try:
+        import keyring
+        from keyring.errors import PasswordDeleteError
+        keyring.delete_password(_KEYRING_SERVICE, ip)
+        return True
+    except Exception:
+        return False
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -126,12 +170,19 @@ _TREE_SS = (
 class PluginDevicePage(QWidget):
     """Live status page for one hardware plugin."""
 
+    test_requested = pyqtSignal(str)   # emits plugin path when Test button clicked
+
+    _keyring_warned: bool = False      # class-level: warn once per session
+
     def __init__(self, plugin_path: str, label: str, hw_type: str,
-                 parent: Optional[QWidget] = None) -> None:
+                 hw_ip: str = "", parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._path   = plugin_path
-        self._label  = label
-        self._type   = hw_type
+        self._path       = plugin_path
+        self._label      = label
+        self._type       = hw_type
+        self._hw_ip      = hw_ip
+        self._keyring_ok = _keyring_available()
+        self._testing    = False
         self._build_ui()
 
     # ── layout ────────────────────────────────────────────────────────────────
@@ -170,6 +221,8 @@ class PluginDevicePage(QWidget):
         self._ts_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px;")
         self._root.addWidget(self._ts_lbl)
 
+        self._build_credentials_card()
+
         if self._type == "modem":
             self._build_modem_ui()
         elif self._type in ("router", "ap", "switch"):
@@ -178,6 +231,184 @@ class PluginDevicePage(QWidget):
             self._build_generic_ui()
 
         self._root.addStretch(1)
+
+    def _build_credentials_card(self) -> None:
+        _field_ss = (
+            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:3px 6px; font-size:12px;"
+        )
+
+        cred_card = QFrame()
+        cred_card.setObjectName("pluginCard")
+        cred_card.setStyleSheet(
+            f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}"
+        )
+        cred_outer = QVBoxLayout(cred_card)
+        cred_outer.setContentsMargins(0, 0, 0, 0)
+        cred_outer.setSpacing(0)
+
+        hdr = QFrame()
+        hdr.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
+        )
+        hdr_lay = QHBoxLayout(hdr)
+        hdr_lay.setContentsMargins(12, 6, 12, 6)
+        hdr_lbl = QLabel("CONNECTION")
+        hdr_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-weight:bold; font-size:11px;"
+            " letter-spacing:0.5px; background:transparent; border:none;"
+        )
+        hdr_lay.addWidget(hdr_lbl)
+        hdr_lay.addStretch()
+        cred_outer.addWidget(hdr)
+
+        # Row 1 — IP badge + password + Test button + status
+        row1 = QFrame()
+        row1.setStyleSheet("QFrame { border:none; background:transparent; }")
+        row1_lay = QHBoxLayout(row1)
+        row1_lay.setContentsMargins(12, 8, 12, 8)
+        row1_lay.setSpacing(8)
+
+        ip_lbl = QLabel("Gateway IP")
+        ip_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
+        row1_lay.addWidget(ip_lbl)
+
+        ip_badge = QLabel(self._hw_ip or "—")
+        ip_badge.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+            f" background:{BG_DARK}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:3px 8px;"
+        )
+        row1_lay.addWidget(ip_badge)
+
+        pw_lbl = QLabel("Password")
+        pw_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;")
+        row1_lay.addWidget(pw_lbl)
+
+        self._cred_pw_edit = QLineEdit()
+        self._cred_pw_edit.setPlaceholderText("Device password")
+        self._cred_pw_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self._cred_pw_edit.setFixedWidth(160)
+        self._cred_pw_edit.setStyleSheet(_field_ss)
+        self._cred_pw_edit.returnPressed.connect(self._on_test_clicked)
+        row1_lay.addWidget(self._cred_pw_edit)
+
+        self._cred_test_btn = QPushButton("▶  Test")
+        self._cred_test_btn.setFixedHeight(28)
+        self._cred_test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cred_test_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            " border-radius:3px; font-size:12px; padding:0 16px; }}"
+            f"QPushButton:hover {{ background:#005A9E; }}"
+            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
+        )
+        self._cred_test_btn.clicked.connect(self._on_test_clicked)
+        row1_lay.addWidget(self._cred_test_btn)
+
+        self._cred_status = QLabel()
+        self._cred_status.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        row1_lay.addWidget(self._cred_status, 1)
+        cred_outer.addWidget(row1)
+
+        # Divider
+        div = QFrame()
+        div.setFrameShape(QFrame.Shape.HLine)
+        div.setStyleSheet(f"border:none; border-top:1px solid {BORDER}; background:transparent;")
+        div.setFixedHeight(1)
+        cred_outer.addWidget(div)
+
+        # Row 2 — keyring controls
+        row2 = QFrame()
+        row2.setStyleSheet("QFrame { border:none; background:transparent; }")
+        row2_lay = QHBoxLayout(row2)
+        row2_lay.setContentsMargins(12, 6, 12, 6)
+        row2_lay.setSpacing(12)
+
+        self._cred_remember_cb = QCheckBox("Remember in OS Keychain")
+        self._cred_remember_cb.setChecked(self._keyring_ok)
+        self._cred_remember_cb.setEnabled(self._keyring_ok)
+        self._cred_remember_cb.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        row2_lay.addWidget(self._cred_remember_cb)
+
+        self._cred_forget_btn = QPushButton("Forget Saved Password")
+        self._cred_forget_btn.setFixedHeight(24)
+        self._cred_forget_btn.setEnabled(False)
+        self._cred_forget_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._cred_forget_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
+            " border-radius:3px; font-size:11px; padding:0 10px; }}"
+            f"QPushButton:hover {{ background:{AMBER}; color:#000; }}"
+            f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
+        )
+        self._cred_forget_btn.clicked.connect(self._on_forget_clicked)
+        row2_lay.addWidget(self._cred_forget_btn)
+        row2_lay.addStretch()
+        cred_outer.addWidget(row2)
+        self._root.addWidget(cred_card)
+
+        # Keyring warning — shown once per session if no backend
+        if not self._keyring_ok and not PluginDevicePage._keyring_warned:
+            PluginDevicePage._keyring_warned = True
+            warn = QFrame()
+            warn.setStyleSheet(
+                f"QFrame {{ background:#3a2800; border:1px solid {AMBER}; border-radius:0px; }}"
+            )
+            warn_lay = QHBoxLayout(warn)
+            warn_lay.setContentsMargins(12, 8, 12, 8)
+            warn_lbl = QLabel(
+                "⚠  No keyring backend found — password will not be saved between sessions."
+            )
+            warn_lbl.setStyleSheet(
+                f"color:{AMBER}; font-size:11px; background:transparent; border:none;"
+            )
+            warn_lbl.setWordWrap(True)
+            warn_lay.addWidget(warn_lbl)
+            self._root.addWidget(warn)
+
+        # Pre-populate from keyring
+        if self._hw_ip:
+            saved = _keyring_load(self._hw_ip)
+            if saved:
+                self._cred_pw_edit.setText(saved)
+                self._cred_forget_btn.setEnabled(True)
+                self._cred_status.setText("Password saved securely in OS Credential Manager.")
+
+    # ── credentials handlers ──────────────────────────────────────────────────
+
+    def _on_test_clicked(self) -> None:
+        pw = self._cred_pw_edit.text().strip()
+        if not pw:
+            self._cred_status.setText("Enter a password first.")
+            return
+        if self._cred_remember_cb.isChecked() and self._hw_ip:
+            if _keyring_save(self._hw_ip, pw):
+                self._cred_forget_btn.setEnabled(True)
+        self._testing = True
+        self._cred_test_btn.setEnabled(False)
+        self._cred_test_btn.setText("Testing…")
+        self._cred_status.setText("")
+        self.test_requested.emit(self._path)
+
+    def _on_forget_clicked(self) -> None:
+        if self._hw_ip:
+            _keyring_delete(self._hw_ip)
+        self._cred_pw_edit.clear()
+        self._cred_forget_btn.setEnabled(False)
+        self._cred_status.setText("Password removed.")
+
+    def test_done(self, error_msg: str = "") -> None:
+        """Re-enable Test button after a one-shot run finishes (success or error)."""
+        self._testing = False
+        self._cred_test_btn.setEnabled(True)
+        self._cred_test_btn.setText("▶  Test")
+        if error_msg:
+            self._cred_status.setText(f"Error: {error_msg}")
 
     def _build_modem_ui(self) -> None:
         # Status
@@ -352,6 +583,11 @@ class PluginDevicePage(QWidget):
             self._fill_router(status, extra, clients)
         else:
             self._fill_generic(status)
+
+        if self._testing:
+            self.test_done()
+            self._cred_status.setText("Password saved securely in OS Credential Manager."
+                                      if self._cred_remember_cb.isChecked() else "")
 
     def _show_banner(self, text: str, color: str) -> None:
         self._banner.setText(text)
