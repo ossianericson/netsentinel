@@ -326,12 +326,46 @@ class ProtocolVizPage(QWidget):
         tb_lay.addStretch()
         canvas_lay.addWidget(title_bar)
 
-        # Placeholder shown when data is missing
-        self._placeholder = QLabel()
-        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:12px; padding:32px;"
+        # Empty state shown when scan data is missing for selected protocol
+        self._placeholder = QWidget()
+        _ph_lay = QVBoxLayout(self._placeholder)
+        _ph_lay.setContentsMargins(32, 32, 32, 32)
+        _ph_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ph_icon = QLabel("◎")
+        _ph_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ph_icon.setStyleSheet(
+            f"font-size:32px; color:{TEXT_MUTED}; background:transparent; border:none;"
         )
+        self._placeholder_msg = QLabel("No capture session active")
+        self._placeholder_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._placeholder_msg.setStyleSheet(
+            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
+        )
+        _ph_sub = QLabel("Run a network scan to populate protocol diagrams with real device data.")
+        _ph_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ph_sub.setWordWrap(True)
+        _ph_sub.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _ph_cta = QPushButton("▶  Start Scan")
+        _ph_cta.setFixedHeight(30)
+        _ph_cta.setCursor(Qt.CursorShape.PointingHandCursor)
+        _ph_cta.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
+            f"QPushButton:hover {{ background:#1a6fc4; }}"
+        )
+        _ph_cta.clicked.connect(lambda: self.navigate_to.emit("Home"))
+        _ph_lay.addWidget(_ph_icon)
+        _ph_lay.addWidget(self._placeholder_msg)
+        _ph_lay.addSpacing(4)
+        _ph_lay.addWidget(_ph_sub)
+        _ph_lay.addSpacing(10)
+        _ph_cta_row = QHBoxLayout()
+        _ph_cta_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ph_cta_row.addWidget(_ph_cta)
+        _ph_lay.addLayout(_ph_cta_row)
         self._placeholder.setVisible(False)
         canvas_lay.addWidget(self._placeholder)
 
@@ -439,7 +473,7 @@ class ProtocolVizPage(QWidget):
         scene = self._build_scene(key)
 
         if scene.missing_data_msg:
-            self._placeholder.setText(scene.missing_data_msg)
+            self._placeholder_msg.setText(scene.missing_data_msg)
             self._placeholder.setVisible(True)
             self._canvas.setVisible(False)
             self._canvas_title.setText(scene.title or key)

@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime
 from typing import Optional
 
-from PyQt6.QtCore    import Qt, pyqtSlot
+from PyQt6.QtCore    import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QDialog, QHBoxLayout, QLabel, QSizePolicy,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QPushButton,
@@ -109,6 +109,8 @@ _MAX_ROWS = 500    # cap live table at 500 rows to prevent memory growth
 class SnmpTrapPage(QWidget):
     """Live SNMP trap viewer page."""
 
+    navigate_to_settings = pyqtSignal()
+
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store     = store
@@ -171,17 +173,52 @@ class SnmpTrapPage(QWidget):
         self._table.setColumnWidth(4, 150)
         self._table.doubleClicked.connect(self._show_detail)
         card_body.addWidget(self._table)
-        root.addWidget(card, 1)
 
-        # Empty state label (hidden when rows exist)
-        self._empty_lbl = QLabel(
-            "No traps received yet.\n"
-            "Configure your router/switch to send traps to this host on UDP port 162."
+        # Empty state (replaces table when no traps received)
+        self._empty_state = QWidget()
+        _es_lay = QVBoxLayout(self._empty_state)
+        _es_lay.setContentsMargins(32, 32, 32, 32)
+        _es_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _es_icon = QLabel("⊲")
+        _es_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _es_icon.setStyleSheet(
+            f"font-size:32px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
-        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet(f"font-size:11px; color:#9BA8B4; padding:20px;")
-        root.addWidget(self._empty_lbl)
+        _es_head = QLabel("No traps received yet")
+        _es_head.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _es_head.setStyleSheet(
+            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
+        )
+        _es_sub = QLabel(
+            "Configure your router or switch to send SNMP traps\n"
+            "to this host on UDP port 162."
+        )
+        _es_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _es_sub.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _es_cta = QPushButton("Configure SNMP →")
+        _es_cta.setFixedHeight(28)
+        _es_cta.setCursor(Qt.CursorShape.PointingHandCursor)
+        _es_cta.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 14px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}22; }}"
+        )
+        _es_cta.clicked.connect(self.navigate_to_settings)
+        _es_lay.addWidget(_es_icon)
+        _es_lay.addWidget(_es_head)
+        _es_lay.addSpacing(4)
+        _es_lay.addWidget(_es_sub)
+        _es_lay.addSpacing(10)
+        _es_row = QHBoxLayout()
+        _es_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _es_row.addWidget(_es_cta)
+        _es_lay.addLayout(_es_row)
+        card_body.addWidget(self._empty_state)
 
+        root.addWidget(card, 1)
         self._sync_empty()
 
     # ── Slots ─────────────────────────────────────────────────────────────────
@@ -262,7 +299,7 @@ class SnmpTrapPage(QWidget):
     def _sync_empty(self) -> None:
         has_rows = self._table.rowCount() > 0
         self._table.setVisible(has_rows)
-        self._empty_lbl.setVisible(not has_rows)
+        self._empty_state.setVisible(not has_rows)
 
 
 class _TrapDetailDialog(QDialog):

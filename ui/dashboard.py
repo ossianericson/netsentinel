@@ -164,6 +164,48 @@ def _add_skeleton_rows(table: QTableWidget, count: int = 8) -> None:
             table.setItem(row, col, item)
 
 
+def _empty_state_widget(icon: str, headline: str, body: str,
+                        cta_label: "str | None", cta_action: "callable | None") -> "QWidget":
+    """Reusable empty-state panel: icon + headline + body text + optional CTA button."""
+    from PyQt6.QtWidgets import QWidget as _W, QVBoxLayout as _VL, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
+    from PyQt6.QtCore import Qt as _Qt
+    from ui.styles import ACCENT as _AC, TEXT_PRIMARY as _TP, TEXT_SECONDARY as _TS
+    w = _W()
+    vl = _VL(w)
+    vl.setContentsMargins(32, 32, 32, 32)
+    vl.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+    ic = _L(icon)
+    ic.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+    ic.setStyleSheet(f"font-size:30px; background:transparent; border:none;")
+    hd = _L(headline)
+    hd.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+    hd.setStyleSheet(f"font-size:13px; font-weight:bold; color:{_TP}; background:transparent; border:none;")
+    bd = _L(body)
+    bd.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+    bd.setWordWrap(True)
+    bd.setStyleSheet(f"font-size:11px; color:{_TS}; background:transparent; border:none;")
+    vl.addWidget(ic)
+    vl.addWidget(hd)
+    vl.addSpacing(4)
+    vl.addWidget(bd)
+    if cta_label and cta_action:
+        vl.addSpacing(10)
+        btn = _B(cta_label)
+        btn.setFixedHeight(28)
+        btn.setCursor(_Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton {{ background:{_AC}; color:#fff; border:none;"
+            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
+            f"QPushButton:hover {{ background:#1a6fc4; }}"
+        )
+        btn.clicked.connect(cta_action)
+        hl = _HL()
+        hl.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+        hl.addWidget(btn)
+        vl.addLayout(hl)
+    return w
+
+
 def _make_card(title: str) -> tuple:
     """
     Build a standard enterprise card frame.
@@ -481,6 +523,7 @@ class _RailButton(QPushButton):
         # First word of section name, max 9 chars — shown below the icon
         self._short_label = (tooltip.split()[0]) if tooltip else ""
         self._badge_color: str = ""
+        self._badge_count: str = ""   # non-empty → numeric red pill overrides dot
         self.setCheckable(True)
         self.setFixedSize(56, 58)
         self.setToolTip(tooltip)
@@ -500,14 +543,27 @@ class _RailButton(QPushButton):
             f"}}"
         )
 
-    def set_badge(self, color: str) -> None:
-        """Set or clear the status dot. Pass empty string to clear."""
-        self._badge_color = color or ""
+    def set_badge(self, value) -> None:
+        """Set or clear the badge.
+
+        Pass a positive int/str digit to show a red numeric pill.
+        Pass a colour string (hex) to show a plain status dot.
+        Pass 0, empty string, or None to clear.
+        """
+        if value and str(value).isdigit() and int(value) > 0:
+            self._badge_count = str(value)
+            self._badge_color = ""
+        elif value and not str(value).isdigit():
+            self._badge_color = str(value)
+            self._badge_count = ""
+        else:
+            self._badge_color = ""
+            self._badge_count = ""
         self.update()
 
     def paintEvent(self, event):
-        from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics
-        from PyQt6.QtCore import QRect
+        from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen
+        from PyQt6.QtCore import QRect, QRectF
         # QSS background + hover/checked effects
         super().paintEvent(event)
         p = QPainter(self)
@@ -520,8 +576,26 @@ class _RailButton(QPushButton):
             p.setBrush(QColor(ACCENT))
             p.drawRect(0, 10, 3, 38)   # spans the 48px icon zone, inset 10px top/bottom
 
-        # Status dot badge — top-right corner
-        if self._badge_color:
+        # Numeric red pill badge — top-right corner
+        if self._badge_count:
+            badge_font = QFont("Segoe UI", 7)
+            badge_font.setBold(True)
+            p.setFont(badge_font)
+            fm = QFontMetrics(badge_font)
+            text_w = fm.horizontalAdvance(self._badge_count)
+            pill_w = max(15, text_w + 6)
+            pill_h = 14
+            pill_x = self.width() - pill_w - 2
+            pill_y = 2
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(RED))
+            p.drawRoundedRect(QRectF(pill_x, pill_y, pill_w, pill_h), 7, 7)
+            p.setPen(QColor("#FFFFFF"))
+            p.drawText(QRect(pill_x, pill_y, pill_w, pill_h),
+                       Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                       self._badge_count)
+        # Plain colour dot badge — top-right corner
+        elif self._badge_color:
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(self._badge_color))
             p.drawEllipse(self.width() - 11, 3, 7, 7)
@@ -2356,6 +2430,9 @@ class Dashboard(QMainWindow):
 
         from ui.pages.snmp_trap_page import SnmpTrapPage
         self._snmp_trap_page = SnmpTrapPage(store=self._store)
+        self._snmp_trap_page.navigate_to_settings.connect(
+            lambda: self._nav_go_to("Settings")
+        )
 
         from ui.pages.syslog_page import SyslogPage
         self._syslog_page = SyslogPage(parent=None)
@@ -2629,6 +2706,7 @@ class Dashboard(QMainWindow):
             self._home_page.start_monitoring_requested.connect(self._toggle_logger)
             self._home_page.investigate_live_requested.connect(self._on_investigate_live)
             self._home_page.alert_view_requested.connect(self._on_alert_view_requested)
+            self._home_page.rescan_requested.connect(self._start_full_scan)
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
         self._overview_page.scan_requested.connect(self._start_full_scan)
@@ -6887,8 +6965,13 @@ class Dashboard(QMainWindow):
             self._bm_verdict_label.setText(result.overall_verdict)
             self._overview_page.on_grade(result.overall_grade, result.overall_score)
             self._home_page.on_grade(result.overall_grade, result.overall_score)
+            self._home_page.on_grade_details(result.overall_grade, result.overall_score,
+                                             getattr(result, "dimensions", []))
             if hasattr(self, "_monitor_overview_page"):
                 self._monitor_overview_page.set_grade(result.overall_grade, result.overall_score)
+                self._monitor_overview_page.set_grade_details(result.overall_grade,
+                                                              result.overall_score,
+                                                              getattr(result, "dimensions", []))
             QSettings("NetSentinel", "NetSentinel").setValue("grade/last_run", True)
             self._home_page.refresh_checklist()
             from modules.diagnostic_card import build_card_data
@@ -7560,9 +7643,18 @@ class Dashboard(QMainWindow):
         self._arp_table.setColumnWidth(1, 145)
         self._arp_table.setColumnWidth(2, 120)
         self._arp_table.setColumnWidth(5, 400)
+        # Empty state shown when monitor hasn't started / no events yet
+        from PyQt6.QtWidgets import QStackedWidget as _SW
+        self._arp_stack = _SW()
+        self._arp_stack.addWidget(_empty_state_widget(
+            "⊙", "ARP Watch not running",
+            "Monitor your network for ARP spoofing and man-in-the-middle attacks.",
+            "Start ARP Watch", self._start_arp_monitor,
+        ))
+        self._arp_stack.addWidget(self._arp_table)
         lay.addWidget(self._arp_status)
         lay.addLayout(btn_row)
-        lay.addWidget(self._arp_table, 1)
+        lay.addWidget(self._arp_stack, 1)
         return w
 
     @pyqtSlot()
@@ -7586,6 +7678,7 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(object)
     def _on_arp_event(self, event):
+        self._arp_stack.setCurrentIndex(1)   # switch from empty state to table
         row = self._arp_table.rowCount()
         self._arp_table.insertRow(row)
         level = "HIGH" if event.event_type in ("GATEWAY_HIJACK",) else "MEDIUM"
@@ -7683,9 +7776,17 @@ class Dashboard(QMainWindow):
         btn_row.addWidget(btn_stop)
         btn_row.addStretch()
         self._bw_table = _table(["MAC / Label", "TX (kbps)", "RX (kbps)", "Total (kbps)", "Total (Mbps)"])
+        from PyQt6.QtWidgets import QStackedWidget as _SW2
+        self._bw_stack = _SW2()
+        self._bw_stack.addWidget(_empty_state_widget(
+            "▲", "No traffic captured yet",
+            "Start the bandwidth monitor to see per-device upload and download rates.",
+            "Start Monitor", self._start_bandwidth_monitor,
+        ))
+        self._bw_stack.addWidget(self._bw_table)
         lay.addWidget(self._bw_status)
         lay.addLayout(btn_row)
-        lay.addWidget(self._bw_table, 1)
+        lay.addWidget(self._bw_stack, 1)
         return w
 
     @pyqtSlot()
@@ -7716,6 +7817,7 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(object)
     def _on_bw_snapshot(self, snap):
+        self._bw_stack.setCurrentIndex(1)   # switch from empty state to table
         self._bw_table.setRowCount(0)
         for entry in snap.entries:
             row = self._bw_table.rowCount()
@@ -7938,10 +8040,18 @@ class Dashboard(QMainWindow):
         self._recon_syn_table.setColumnWidth(3, 220)
         self._recon_syn_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._recon_syn_table.customContextMenuRequested.connect(self._syn_table_context_menu)
+        from PyQt6.QtWidgets import QStackedWidget as _SW3
+        self._syn_stack = _SW3()
+        self._syn_stack.addWidget(_empty_state_widget(
+            "🔎", "No scan run yet",
+            "Enter a target host above and click SYN Scan to discover open TCP ports.",
+            None, None,
+        ))
+        self._syn_stack.addWidget(self._recon_syn_table)
         lay.addWidget(warn)
         lay.addWidget(self._syn_status)
         lay.addLayout(ctrl)
-        lay.addWidget(self._recon_syn_table, 1)
+        lay.addWidget(self._syn_stack, 1)
         return w
 
     @pyqtSlot()
@@ -8017,6 +8127,7 @@ class Dashboard(QMainWindow):
     @pyqtSlot(object)
     def _on_syn_result(self, result):
         from PyQt6.QtGui import QColor
+        self._syn_stack.setCurrentIndex(1)   # switch from empty state to table
         self._recon_syn_table.setRowCount(0)
         for p in result.open_ports:
             row = self._recon_syn_table.rowCount()
@@ -9933,7 +10044,7 @@ class Dashboard(QMainWindow):
         ana_btn = self._nav_rail_buttons.get("Analysis")
         if ana_btn:
             ana_btn.set_badge(GREEN if (arp or storm) else "")
-        # Security Audit — amber when unacked alerts exist, green when DHCP scanner running
+        # Security Audit — numeric red pill when unacked alerts exist, green dot when DHCP running
         sec_btn = self._nav_rail_buttons.get("Security Audit")
         if sec_btn:
             try:
@@ -9941,13 +10052,13 @@ class Dashboard(QMainWindow):
             except Exception:
                 alert_count = 0
             if alert_count > 0:
-                sec_btn.set_badge(AMBER)
-                sec_btn.setToolTip(f"Security Audit ({alert_count})")
+                sec_btn.set_badge(alert_count)   # numeric red pill
+                sec_btn.setToolTip(f"Security Audit — {alert_count} unacknowledged alert(s)")
             elif dhcp:
                 sec_btn.set_badge(GREEN)
                 sec_btn.setToolTip("Security Audit")
             else:
-                sec_btn.set_badge("")
+                sec_btn.set_badge(0)
                 sec_btn.setToolTip("Security Audit")
 
     def _check_weekly_digest(self) -> None:

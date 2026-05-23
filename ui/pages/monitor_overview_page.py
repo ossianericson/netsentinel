@@ -161,18 +161,35 @@ class _GradeTile(QFrame):
 
         right = QVBoxLayout()
         right.setSpacing(2)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
         title = QLabel("Network Grade")
         title.setStyleSheet(
             f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
             " background:transparent; border:none;"
         )
+        self._details_btn = QPushButton("?")
+        self._details_btn.setFixedSize(18, 16)
+        self._details_btn.setVisible(False)
+        self._details_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._details_btn.setToolTip("Show grade breakdown")
+        self._details_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:9px; border-radius:3px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._details_btn.clicked.connect(self._on_details_clicked)
+        title_row.addWidget(title)
+        title_row.addWidget(self._details_btn)
+        title_row.addStretch()
         self._sub_lbl = QLabel("Run a network grade scan to see your security score →")
         self._sub_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
-        right.addWidget(title)
+        right.addLayout(title_row)
         right.addWidget(self._sub_lbl)
         lay.addLayout(right, 1)
+        self._dimensions: list = []
 
     def update(self, grade: str, sub: str, color: str) -> None:
         self._grade_circle.setText(grade)
@@ -181,6 +198,16 @@ class _GradeTile(QFrame):
             f" border:3px solid {color}; border-radius:28px; background:{BG_CARD};"
         )
         self._sub_lbl.setText(sub)
+
+    def set_dimensions(self, dimensions: list) -> None:
+        self._dimensions = dimensions or []
+        self._details_btn.setVisible(bool(dimensions))
+
+    def _on_details_clicked(self) -> None:
+        from ui.pages.home_page import _GradeBreakdownDialog
+        grade = self._grade_circle.text()
+        dlg = _GradeBreakdownDialog(grade, self._dimensions, parent=self)
+        dlg.exec()
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
         self.clicked.emit("Network Grade")
@@ -295,8 +322,12 @@ class MonitorOverviewPage(QWidget):
             color = AMBER
         else:
             color = RED
-        sub = f"Score {score:.0f}/100 — click to see dimension breakdown"
+        sub = f"Score {score:.0f}/100 — click (?) for dimension breakdown"
         self._grade_tile.update(grade, sub, color)
+
+    def set_grade_details(self, grade: str, score: float, dimensions: list) -> None:
+        self.set_grade(grade, score)
+        self._grade_tile.set_dimensions(dimensions)
 
     def set_arp_status(self, running: bool, alerted: bool) -> None:
         if alerted:

@@ -338,6 +338,11 @@ class MeshRouterPage(QWidget):
         self._nodes_table.setColumnWidth(0, 200)
         self._nodes_table.setColumnWidth(1, 160)
         self._nodes_table.setColumnWidth(2, 140)
+        _node_tips = {3: "master = primary router node; slave = satellite/extender node."}
+        for _c, _t in _node_tips.items():
+            _item = self._nodes_table.horizontalHeaderItem(_c)
+            if _item:
+                _item.setToolTip(_t)
         self._nodes_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._nodes_table.customContextMenuRequested.connect(self._nodes_context_menu)
         self._nodes_empty = _empty("Run a scan to discover mesh nodes.")
@@ -360,6 +365,17 @@ class MeshRouterPage(QWidget):
         self._clients_table.setColumnWidth(3, 180)
         self._clients_table.setColumnWidth(4, 60)
         self._clients_table.setColumnWidth(5, 70)
+        _client_tips = {
+            4: ("Wi-Fi band this device is using.\n"
+                "2.4 GHz: longer range, lower throughput.\n"
+                "5 GHz / 6 GHz: shorter range, much higher throughput."),
+            5: "Upload throughput from this device to its mesh node in kilobytes per second.",
+            6: "Download throughput from this device's mesh node in kilobytes per second.",
+        }
+        for _c, _t in _client_tips.items():
+            _item = self._clients_table.horizontalHeaderItem(_c)
+            if _item:
+                _item.setToolTip(_t)
         self._clients_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._clients_table.customContextMenuRequested.connect(self._clients_context_menu)
         self._clients_empty = _empty("Run a scan to see connected clients.")

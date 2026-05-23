@@ -379,28 +379,81 @@ class ModemPage(QWidget):
         # 5G NR card
         nr5g_card, nr5g_body = _card("5G NR")
         self._v_nr5g_rsrp  = _row("RSRP",  nr5g_body)
+        self._v_nr5g_rsrp.setToolTip(
+            "Reference Signal Received Power — 5G NR signal strength from the tower.\n"
+            "Good: ≥ −80 dBm   Acceptable: −80 to −100 dBm   Poor: < −100 dBm"
+        )
         self._v_nr5g_sinr  = _row("SINR",  nr5g_body)
+        self._v_nr5g_sinr.setToolTip(
+            "Signal-to-Interference-plus-Noise Ratio — signal clarity vs. interference.\n"
+            "Good: ≥ 20 dB   Acceptable: 0–20 dB   Poor: < 0 dB"
+        )
         self._v_nr5g_rsrq  = _row("RSRQ",  nr5g_body)
+        self._v_nr5g_rsrq.setToolTip(
+            "Reference Signal Received Quality — signal quality factoring in cell load and interference.\n"
+            "Good: ≥ −10 dB   Acceptable: −10 to −15 dB   Poor: < −15 dB"
+        )
         self._v_nr5g_band  = _row("Band",  nr5g_body)
+        self._v_nr5g_band.setToolTip(
+            "5G NR radio band in use. Sub-6 GHz bands (n1, n3, n78) offer wider coverage;\n"
+            "mmWave bands (n257+) offer peak speeds but short range."
+        )
         self._v_nr5g_pci   = _row("PCI",   nr5g_body)
+        self._v_nr5g_pci.setToolTip(
+            "Physical Cell ID — identifies the specific antenna sector serving you (0–1007). Informational only."
+        )
         self._v_nr5g_arfcn = _row("ARFCN", nr5g_body)
+        self._v_nr5g_arfcn.setToolTip(
+            "Absolute Radio Frequency Channel Number — the channel index for the 5G NR carrier frequency. Informational only."
+        )
         data_lay.addWidget(nr5g_card)
 
         # LTE card
         lte_card, lte_body = _card("LTE Primary")
         self._v_lte_rsrp  = _row("RSRP",   lte_body)
+        self._v_lte_rsrp.setToolTip(
+            "Reference Signal Received Power — LTE signal strength from the tower.\n"
+            "Good: ≥ −80 dBm   Acceptable: −80 to −100 dBm   Poor: < −100 dBm"
+        )
         self._v_lte_snr   = _row("SNR",    lte_body)
+        self._v_lte_snr.setToolTip(
+            "Signal-to-Noise Ratio — ratio of signal power to background noise on the LTE carrier.\n"
+            "Good: ≥ 20 dB   Acceptable: 0–20 dB   Poor: < 0 dB"
+        )
         self._v_lte_rsrq  = _row("RSRQ",   lte_body)
+        self._v_lte_rsrq.setToolTip(
+            "Reference Signal Received Quality — LTE signal quality factoring in cell load and interference.\n"
+            "Good: ≥ −10 dB   Acceptable: −10 to −15 dB   Poor: < −15 dB"
+        )
         self._v_lte_band  = _row("Band",   lte_body)
+        self._v_lte_band.setToolTip(
+            "LTE frequency band in use (e.g., B3 = 1800 MHz, B20 = 800 MHz).\n"
+            "Lower bands travel further; higher bands carry more data."
+        )
         self._v_lte_pci   = _row("PCI",    lte_body)
+        self._v_lte_pci.setToolTip(
+            "Physical Cell ID — identifies the specific LTE antenna sector (0–503). Informational only."
+        )
         self._v_lte_earfcn= _row("EARFCN", lte_body)
+        self._v_lte_earfcn.setToolTip(
+            "E-UTRA Absolute Radio Frequency Channel Number — LTE carrier frequency index. Informational only."
+        )
         data_lay.addWidget(lte_card)
 
         # Cell identity card
         cell_card, cell_body = _card("Cell Identity")
         self._v_cell_id   = _row("Cell ID",        cell_body)
+        self._v_cell_id.setToolTip(
+            "Unique ID of the serving cell (sector) within the base station. Changes when you hand off to a different sector."
+        )
         self._v_enb_id    = _row("eNB / gNB ID",   cell_body)
+        self._v_enb_id.setToolTip(
+            "Base station ID: eNB = 4G LTE, gNB = 5G NR. Identifies the physical tower you're connected to."
+        )
         self._v_endc_info = _row("EN-DC Active",   cell_body)
+        self._v_endc_info.setToolTip(
+            "E-UTRA–NR Dual Connectivity — running LTE and 5G NR simultaneously for higher combined throughput."
+        )
         self._v_firmware  = _row("Firmware",       cell_body)
         data_lay.addWidget(cell_card)
 

@@ -60,6 +60,8 @@ class HomePage(QWidget):
     navigate_to = pyqtSignal(str)
     #: Emitted when the user clicks "Start Monitoring" on the stability card.
     start_monitoring_requested = pyqtSignal()
+    #: Emitted when the user clicks the refresh icon on the freshness strip.
+    rescan_requested = pyqtSignal()
     #: Emitted when the user clicks "Investigate →" on a live challenge suggestion.
     investigate_live_requested = pyqtSignal()
     #: Emitted when the user clicks an alert row; carries the raw alert object.
@@ -213,6 +215,7 @@ class HomePage(QWidget):
         self._recurring_mode: bool = False
         self._current_grade: str = ""
         self._last_scan_ts: "datetime.datetime | None" = None
+        self._grade_dimensions: list = []
         self._sheet_action_target: str = "Notifications"
         self._dashboard_url = "http://localhost:8765/dashboard"
         self._setup_ui()
@@ -307,6 +310,105 @@ class HomePage(QWidget):
 
         return banner
 
+    # ── Freshness strip ───────────────────────────────────────────────────────
+
+    def _build_freshness_strip(self) -> QFrame:
+        strip = QFrame()
+        strip.setFixedHeight(30)
+        strip.setStyleSheet(
+            f"QFrame {{ background:#1C2530; border-bottom:1px solid {BORDER}; }}"
+        )
+        row = QHBoxLayout(strip)
+        row.setContentsMargins(14, 0, 8, 0)
+        row.setSpacing(12)
+
+        # Last scan timestamp
+        self._fs_scan_lbl = QLabel("Last scan: —")
+        self._fs_scan_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        row.addWidget(self._fs_scan_lbl)
+
+        _sep = QLabel("|")
+        _sep.setStyleSheet(f"font-size:11px; color:{BORDER}; background:transparent; border:none;")
+        row.addWidget(_sep)
+
+        # Monitor status pills
+        self._fs_pill_arp   = self._make_fs_pill("ARP")
+        self._fs_pill_dhcp  = self._make_fs_pill("DHCP")
+        self._fs_pill_storm = self._make_fs_pill("Storm")
+        self._fs_pill_log   = self._make_fs_pill("Logger")
+        for pill in (self._fs_pill_arp, self._fs_pill_dhcp, self._fs_pill_storm, self._fs_pill_log):
+            row.addWidget(pill)
+
+        row.addStretch()
+
+        # Refresh button
+        self._fs_refresh_btn = QPushButton("↻")
+        self._fs_refresh_btn.setFixedSize(24, 22)
+        self._fs_refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._fs_refresh_btn.setToolTip("Rescan network")
+        self._fs_refresh_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:14px; border-radius:3px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
+        )
+        self._fs_refresh_btn.clicked.connect(self.rescan_requested)
+        row.addWidget(self._fs_refresh_btn)
+
+        # Restore last scan time from QSettings on startup
+        qs = QSettings("NetSentinel", "NetSentinel")
+        _ts = qs.value("home/last_scan_ts", "")
+        if _ts:
+            try:
+                _dt = datetime.datetime.fromisoformat(_ts)
+                self._fs_scan_lbl.setText(f"Last scan: {self._fmt_age(_dt)}")
+            except ValueError:
+                pass
+
+        return strip
+
+    @staticmethod
+    def _make_fs_pill(label: str) -> QLabel:
+        lbl = QLabel(f"○ {label}")
+        lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        return lbl
+
+    @staticmethod
+    def _fmt_age(dt: "datetime.datetime") -> str:
+        delta = datetime.datetime.now() - dt
+        secs = int(delta.total_seconds())
+        if secs < 60:
+            return "just now"
+        if secs < 3600:
+            return f"{secs // 60} min ago"
+        if secs < 86400:
+            h = secs // 3600
+            return f"{h} hour{'s' if h != 1 else ''} ago"
+        d = secs // 86400
+        return f"{d} day{'s' if d != 1 else ''} ago"
+
+    def _update_freshness_strip(self, arp: bool = False, dhcp: bool = False,
+                                 storm: bool = False, logger: bool = False) -> None:
+        def _set_pill(pill: QLabel, active: bool, name: str) -> None:
+            if active:
+                pill.setText(f"● {name}")
+                pill.setStyleSheet(
+                    f"font-size:10px; color:{GREEN}; background:transparent; border:none;"
+                )
+            else:
+                pill.setText(f"○ {name}")
+                pill.setStyleSheet(
+                    f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                )
+
+        _set_pill(self._fs_pill_arp,   arp,    "ARP")
+        _set_pill(self._fs_pill_dhcp,  dhcp,   "DHCP")
+        _set_pill(self._fs_pill_storm, storm,  "Storm")
+        _set_pill(self._fs_pill_log,   logger, "Logger")
+
     # ── UI build ──────────────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
@@ -321,6 +423,10 @@ class HomePage(QWidget):
         if _banner is not None:
             outer.addWidget(_banner)
         # ─────────────────────────────────────────────────────────────────────
+
+        # ── Freshness strip — always visible above scroll area ────────────────
+        self._freshness_strip = self._build_freshness_strip()
+        outer.addWidget(self._freshness_strip)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -403,6 +509,33 @@ class HomePage(QWidget):
         lv_lay.addWidget(_lv_icon)
         lv_lay.addWidget(self._lv_text, 1)
         lay.addWidget(self._last_visit_card)
+
+        # ── Post-scan delta banner (hidden until 2nd+ scan) ───────────────────
+        self._delta_banner = QFrame()
+        self._delta_banner.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._delta_banner.setVisible(False)
+        _db_lay = QHBoxLayout(self._delta_banner)
+        _db_lay.setContentsMargins(12, 6, 8, 6)
+        _db_lay.setSpacing(10)
+        self._delta_chips_lbl = QLabel("")
+        self._delta_chips_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _db_dismiss = QPushButton("×")
+        _db_dismiss.setFixedSize(20, 20)
+        _db_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _db_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        _db_dismiss.clicked.connect(lambda: self._delta_banner.setVisible(False))
+        _db_lay.addWidget(self._delta_chips_lbl, 1)
+        _db_lay.addWidget(_db_dismiss)
+        lay.addWidget(self._delta_banner)
 
         # ── Recurring-user top section (hidden until conditions met) ──────────
         self._recurring_section = QFrame()
@@ -496,7 +629,29 @@ class HomePage(QWidget):
             f" border:3px solid {BORDER}; border-radius:34px;"
             f" background:{BG_CARD};"
         )
-        hero_lay.addWidget(self._grade_circle)
+        self._grade_circle.setToolTip(
+            "Network Grade \u2014 A\u2013F score across 8 health dimensions:\n"
+            "Uptime, Latency, Jitter, DNS Speed, Download Speed,\n"
+            "Device Safety, STP Health, Broadcast Storm Level.\n"
+            "Click (?) to see the full breakdown."
+        )
+        self._grade_details_btn = QPushButton("?")
+        self._grade_details_btn.setFixedSize(20, 18)
+        self._grade_details_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._grade_details_btn.setToolTip("Show grade breakdown")
+        self._grade_details_btn.setVisible(False)
+        self._grade_details_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:10px; border-radius:3px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
+        )
+        self._grade_details_btn.clicked.connect(self._show_grade_breakdown)
+        _grade_col = QVBoxLayout()
+        _grade_col.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        _grade_col.setSpacing(2)
+        _grade_col.addWidget(self._grade_circle)
+        _grade_col.addWidget(self._grade_details_btn, 0, Qt.AlignmentFlag.AlignHCenter)
+        hero_lay.addLayout(_grade_col)
 
         right = QVBoxLayout()
         right.setSpacing(4)
@@ -1335,6 +1490,7 @@ class HomePage(QWidget):
                 )
         if any([arp, dhcp, storm, logger]):
             self._monitoring_nudge.setVisible(False)
+        self._update_freshness_strip(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
         # Sync recurring section pills
         _rec_map = [
             (self._rec_pill_arp,    arp,    "ARP Watch"),
@@ -1482,12 +1638,51 @@ class HomePage(QWidget):
     @pyqtSlot(dict)
     def on_cycle_done(self, result: dict) -> None:
         """Refresh devices and stability cards from an availability cycle result."""
+        # Update freshness strip timestamp
+        _now = datetime.datetime.now()
+        self._last_scan_ts = _now
+        QSettings("NetSentinel", "NetSentinel").setValue("home/last_scan_ts", _now.isoformat())
+        self._fs_scan_lbl.setText(f"Last scan: just now")
+        self._fs_scan_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+
         devices = result.get("devices", [])
         rtts = result.get("rtts", {})
         n_total = len(devices)
         was_first_run = self._first_run_mode
         if n_total > 0 and self._first_run_mode:
             self._set_first_run_mode(False)
+
+        # Post-scan delta banner
+        import json as _json
+        _qs_delta = QSettings("NetSentinel", "NetSentinel")
+        _current_macs = {
+            (d.get("mac") or getattr(d, "mac", None) or "")
+            for d in devices
+            if (d.get("mac") if isinstance(d, dict) else getattr(d, "mac", None))
+        }
+        _prev_raw = _qs_delta.value("home/last_scan_macs", "[]")
+        try:
+            _prev_macs = set(_json.loads(_prev_raw))
+        except Exception:
+            _prev_macs = set()
+        _qs_delta.setValue("home/last_scan_macs", _json.dumps(list(_current_macs)))
+        if _prev_macs:
+            _new_count  = len(_current_macs - _prev_macs)
+            _gone_count = len(_prev_macs - _current_macs)
+            if _new_count == 0 and _gone_count == 0:
+                _chips_html = f'<span style="color:{GREEN};">● No changes since last scan</span>'
+            else:
+                _parts = []
+                if _new_count:
+                    _parts.append(f'<span style="color:{AMBER};">+{_new_count} new device{"s" if _new_count != 1 else ""}</span>')
+                if _gone_count:
+                    _parts.append(f'<span style="color:{RED};">−{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
+                _chips_html = "  ·  ".join(_parts)
+            self._delta_chips_lbl.setText(_chips_html)
+            self._delta_chips_lbl.setTextFormat(Qt.TextFormat.RichText)
+            self._delta_banner.setVisible(True)
 
         # Devices card
         n_at_risk = sum(
@@ -1772,6 +1967,176 @@ class HomePage(QWidget):
         )
         if self._recurring_mode:
             self._update_recurring_grade_display()
+
+    def on_grade_details(self, grade: str, score: float, dimensions: list) -> None:
+        """Store grade sub-score dimensions and reveal the (?) button."""
+        self.on_grade(grade, score)
+        self._grade_dimensions = dimensions or []
+        self._grade_details_btn.setVisible(bool(dimensions))
+
+    def _show_grade_breakdown(self) -> None:
+        dlg = _GradeBreakdownDialog(
+            self._current_grade,
+            self._grade_dimensions,
+            parent=self,
+        )
+        dlg.exec()
+
+
+class _GradeBreakdownDialog:
+    """QDialog showing the grade sub-score breakdown."""
+
+    def __new__(cls, grade: str, dimensions: list, parent=None):
+        from PyQt6.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+            QScrollArea, QWidget, QFrame, QPushButton,
+        )
+        from PyQt6.QtCore import Qt
+        from ui.styles import (
+            ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, GREEN, RED,
+            TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+        )
+
+        _GRADE_COLOR = {
+            "A": GREEN, "B": "#4CAF8A", "C": AMBER, "D": RED, "F": RED,
+        }
+
+        dlg = QDialog(parent)
+        dlg.setWindowTitle("Network Grade Breakdown")
+        dlg.setMinimumWidth(440)
+        dlg.setStyleSheet(f"QDialog {{ background:{BG_DARK}; }}")
+
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(20, 16, 20, 16)
+        lay.setSpacing(12)
+
+        # Header
+        hdr_row = QHBoxLayout()
+        overall_lbl = QLabel(grade)
+        _fg = _GRADE_COLOR.get(grade, TEXT_SECONDARY)
+        overall_lbl.setStyleSheet(
+            f"font-size:36px; font-weight:bold; color:{_fg};"
+            f" background:{BG_CARD}; border:3px solid {_fg}; border-radius:28px;"
+            f" min-width:56px; min-height:56px;"
+        )
+        overall_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        overall_lbl.setFixedSize(56, 56)
+        hdr_text = QLabel(
+            "<b>Network Grade Breakdown</b><br>"
+            f"<span style='font-size:11px; color:{TEXT_SECONDARY};'>"
+            "Hover each row for thresholds. The lowest score determines the overall grade.</span>"
+        )
+        hdr_text.setTextFormat(Qt.TextFormat.RichText)
+        hdr_text.setWordWrap(True)
+        hdr_text.setStyleSheet(f"background:transparent; border:none; color:{TEXT_PRIMARY};")
+        hdr_row.addWidget(overall_lbl)
+        hdr_row.addSpacing(12)
+        hdr_row.addWidget(hdr_text, 1)
+        lay.addLayout(hdr_row)
+
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"border:none; border-top:1px solid {BORDER};")
+        lay.addWidget(sep)
+
+        # Dimension rows
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("background:transparent;")
+        inner = QWidget()
+        inner.setStyleSheet(f"background:{BG_DARK};")
+        il = QVBoxLayout(inner)
+        il.setContentsMargins(0, 0, 0, 0)
+        il.setSpacing(4)
+
+        worst_dim = None
+        if dimensions:
+            _grade_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4, "N/A": 5}
+            worst_dim = max(dimensions, key=lambda d: _grade_rank.get(getattr(d, "grade", "N/A"), 5))
+
+        for dim in dimensions:
+            dg = getattr(dim, "grade", "N/A")
+            dg_color = _GRADE_COLOR.get(dg, TEXT_SECONDARY)
+            row_w = QWidget()
+            row_w.setStyleSheet(
+                f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}"
+            )
+            rl = QHBoxLayout(row_w)
+            rl.setContentsMargins(10, 6, 10, 6)
+            rl.setSpacing(10)
+
+            dim_grade_lbl = QLabel(dg)
+            dim_grade_lbl.setFixedSize(28, 28)
+            dim_grade_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            dim_grade_lbl.setStyleSheet(
+                f"font-size:13px; font-weight:bold; color:{dg_color};"
+                f" border:2px solid {dg_color}; border-radius:14px;"
+                f" background:transparent;"
+            )
+            name_lbl = QLabel(getattr(dim, "name", ""))
+            name_lbl.setStyleSheet(
+                f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+                f" background:transparent; border:none;"
+            )
+            val_lbl = QLabel(getattr(dim, "value_label", ""))
+            val_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            if getattr(dim, "tip", ""):
+                row_w.setToolTip(getattr(dim, "tip", ""))
+
+            rl.addWidget(dim_grade_lbl)
+            rl.addWidget(name_lbl)
+            rl.addStretch()
+            rl.addWidget(val_lbl)
+            il.addWidget(row_w)
+
+        il.addStretch()
+        scroll.setWidget(inner)
+        lay.addWidget(scroll, 1)
+
+        # "How to improve" tip for worst dimension
+        if worst_dim and getattr(worst_dim, "tip", ""):
+            tip_frame = QFrame()
+            tip_frame.setStyleSheet(
+                f"QFrame {{ background:{AMBER}22; border:1px solid {AMBER}44; border-radius:4px; }}"
+            )
+            tip_lay = QHBoxLayout(tip_frame)
+            tip_lay.setContentsMargins(10, 8, 10, 8)
+            tip_icon = QLabel("▲")
+            tip_icon.setStyleSheet(
+                f"font-size:11px; color:{AMBER}; background:transparent; border:none;"
+            )
+            tip_lbl = QLabel(
+                f"<b>How to improve:</b> {worst_dim.tip}"
+            )
+            tip_lbl.setWordWrap(True)
+            tip_lbl.setTextFormat(Qt.TextFormat.RichText)
+            tip_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            )
+            tip_lay.addWidget(tip_icon)
+            tip_lay.addWidget(tip_lbl, 1)
+            lay.addWidget(tip_frame)
+
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.setFixedHeight(28)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+            f" border-radius:4px; font-size:11px; padding:0 16px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}22; }}"
+        )
+        close_btn.clicked.connect(dlg.accept)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        lay.addLayout(btn_row)
+
+        return dlg
 
 
 # ── Standard mode welcome page ────────────────────────────────────────────────

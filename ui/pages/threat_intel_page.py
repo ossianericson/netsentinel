@@ -259,11 +259,46 @@ class ThreatIntelPage(QWidget):
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
         bl_lay.addWidget(self._table)
-        self._empty_lbl = QLabel(
-            "No threat data loaded. Click 'Update Feeds' to download the latest blocklists."
+        # Empty state shown when no blocklist data is loaded
+        self._empty_lbl = QWidget()
+        _el_lay = QVBoxLayout(self._empty_lbl)
+        _el_lay.setContentsMargins(32, 32, 32, 32)
+        _el_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el_icon = QLabel("🧠")
+        _el_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el_icon.setStyleSheet(
+            f"font-size:30px; background:transparent; border:none;"
         )
-        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet(f"font-size:12px; color:#9BA8B4; padding:20px;")
+        _el_head = QLabel("No threat data loaded")
+        _el_head.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el_head.setStyleSheet(
+            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
+        )
+        _el_sub = QLabel("Download the latest IP/domain blocklists to start screening your network.")
+        _el_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el_sub.setWordWrap(True)
+        _el_sub.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _el_cta = QPushButton("Update Feeds")
+        _el_cta.setFixedHeight(28)
+        _el_cta.setCursor(Qt.CursorShape.PointingHandCursor)
+        _el_cta.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
+            f"QPushButton:hover {{ background:#1a6fc4; }}"
+        )
+        _el_cta.clicked.connect(self._run_refresh)
+        _el_lay.addWidget(_el_icon)
+        _el_lay.addWidget(_el_head)
+        _el_lay.addSpacing(4)
+        _el_lay.addWidget(_el_sub)
+        _el_lay.addSpacing(10)
+        _el_row = QHBoxLayout()
+        _el_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el_row.addWidget(_el_cta)
+        _el_lay.addLayout(_el_row)
         bl_lay.addWidget(self._empty_lbl)
         root.addWidget(bl_card, stretch=1)
 

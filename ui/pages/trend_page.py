@@ -261,6 +261,21 @@ class TrendPage(QWidget):
         self._table.setHorizontalHeaderLabels(
             ["Host", "Metric", "Current", "Trend/h", "Threshold", "ETA", "Verdict"]
         )
+        _hdr_tips = {
+            1: "Metric being tracked: RTT (round-trip time), Loss (packet loss %), or Jitter (variation in RTT).",
+            2: ("Current measured value.\n"
+                "RTT: Good < 20 ms · Acceptable 20–100 ms · Poor > 100 ms\n"
+                "Loss: Good 0% · Acceptable < 1% · Poor ≥ 1%\n"
+                "Jitter: Good < 5 ms · Acceptable 5–20 ms · Poor > 20 ms"),
+            3: "Rate of change per hour (linear regression slope). Positive = getting worse.",
+            4: "The configured alert threshold. When the projected value exceeds this, a verdict is raised.",
+            5: "Estimated time until the metric breaches its threshold at the current trend rate.",
+            6: "CRITICAL = breach imminent.  WARNING = trending up.  CLEAN = stable or improving.",
+        }
+        for col, tip in _hdr_tips.items():
+            item = self._table.horizontalHeaderItem(col)
+            if item:
+                item.setToolTip(tip)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.horizontalHeader().setSectionResizeMode(
             0, __import__("PyQt6.QtWidgets", fromlist=["QHeaderView"]).QHeaderView.ResizeMode.Stretch
