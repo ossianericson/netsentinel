@@ -48,12 +48,12 @@ _LIVE_CHALLENGE_COOLDOWN = 60.0
 
 # Source key → (display label, accent colour)
 _SOURCES: dict[str, tuple[str, str]] = {
-    "net":    ("RTT",    ACCENT),
-    "modem":  ("ZTE MC889", GREEN),
-    "mesh":   ("MESH",   AMBER),
-    "syslog": ("SYSLOG", TEXT_SECONDARY),
-    "snmp":   ("SNMP",   RED),
-    "plugin": ("PLUGIN", "#A78BFA"),
+    "net":    ("RTT",         ACCENT),
+    "modem":  ("5G Modem",    GREEN),
+    "mesh":   ("Mesh Router", AMBER),
+    "syslog": ("Syslog",      TEXT_SECONDARY),
+    "snmp":   ("SNMP Traps",  RED),
+    "plugin": ("PLUGIN",      "#A78BFA"),
 }
 _LABEL_TO_KEY = {label: key for key, (label, _) in _SOURCES.items()}
 
@@ -583,6 +583,8 @@ class LogHubPage(QWidget):
             lay.addWidget(btn)
             if key == "plugin":
                 btn.setVisible(False)
+            if key == "modem" and not enabled:
+                btn.setToolTip("Connect a modem plugin to enable modem logging.")
 
         cfg_lbl = QLabel("· Configure in Network Logger")
         cfg_lbl.setStyleSheet(

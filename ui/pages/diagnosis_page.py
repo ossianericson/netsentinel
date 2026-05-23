@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from typing import Optional
 
+import datetime as _dt
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QButtonGroup, QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton,
-    QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QProgressBar,
+    QPushButton, QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore
@@ -62,6 +64,7 @@ class DiagnosisPage(QWidget):
         self._gateway_mac  = None
         self._symptom      = ""   # set by symptom tile before _start()
         self._prev_finding_headlines: set[str] = set()
+        self._last_findings: list = []
         self._setup_ui()
 
     def set_network_info(
@@ -319,18 +322,25 @@ class DiagnosisPage(QWidget):
         self._grade_cta.hide()
         outer.addWidget(self._grade_cta)
 
-        # Run Again button
+        # Run Again + Copy report buttons
         btn_row = QHBoxLayout()
         self._again_btn = QPushButton("Run Again")
         self._again_btn.setFixedWidth(120)
-        self._again_btn.setStyleSheet(
+        _btn_qss = (
             f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
             f" border:1px solid {ACCENT}; padding:4px 14px; font-size:11px;"
             f" border-radius:4px; }}"
             f"QPushButton:hover {{ background:{ACCENT}; color:#fff; }}"
         )
+        self._again_btn.setStyleSheet(_btn_qss)
         self._again_btn.clicked.connect(self._reset)
         btn_row.addWidget(self._again_btn)
+
+        self._copy_btn = QPushButton("Copy report")
+        self._copy_btn.setFixedWidth(120)
+        self._copy_btn.setStyleSheet(_btn_qss)
+        self._copy_btn.clicked.connect(self._copy_report)
+        btn_row.addWidget(self._copy_btn)
         btn_row.addStretch()
         outer.addLayout(btn_row)
 
@@ -448,6 +458,34 @@ class DiagnosisPage(QWidget):
             self._worker = None
         self._stack.setCurrentIndex(_IDLE)
 
+    def _copy_report(self) -> None:
+        """FLOW-3: copy plain-text diagnosis report to clipboard."""
+        date_str = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+        verdict = self._verdict_title.text()
+        summary = self._verdict_text.text()
+        lines = [
+            f"NetSentinel Diagnosis Report — {date_str}",
+            f"Verdict: {verdict}",
+            f"Summary: {summary}",
+        ]
+        if self._last_findings:
+            lines.append("")
+            lines.append("Findings:")
+            for f in self._last_findings:
+                h = getattr(f, "headline", "")
+                if h:
+                    lines.append(f"  • {h}")
+            lines.append("")
+            lines.append("Recommended actions:")
+            for f in self._last_findings:
+                r = getattr(f, "remediation", "")
+                if r:
+                    lines.append(f"  • {r}")
+        QApplication.clipboard().setText("\n".join(lines))
+        self._copy_btn.setText("Copied ✓")
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(2000, lambda: self._copy_btn.setText("Copy report"))
+
     def _on_progress(self, pct: int, msg: str) -> None:
         self._progress_bar.setValue(pct)
         self._step_lbl.setText(msg)
@@ -462,6 +500,7 @@ class DiagnosisPage(QWidget):
         sev      = getattr(result, "global_severity", "INFO")
         summary  = getattr(result, "plain_summary",   "") or "No issues detected."
         findings = getattr(result, "findings",        [])
+        self._last_findings = list(findings)
 
         prev_headlines = self._prev_finding_headlines.copy()
 

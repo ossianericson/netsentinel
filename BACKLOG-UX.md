@@ -19,128 +19,9 @@ Every item on this backlog serves the same thesis Apple proved: people don't wan
 
 ---
 
-## NUX — New User Experience
-
-### NUX-5 · P2 · Feature Guide has no "start here" for new users
-
-**What the user sees today:** Feature Guide lists every feature alphabetically by group. A new user has no idea which five features matter most for them.
-
-**Acceptance criteria:**
-- Add a "Start here" group at the top of Feature Guide (above Security) with 4–5 curated entries: Devices, Network Grade, What's Wrong?, ARP Spoof Watch, Notifications. Each entry has a "Why this matters" one-liner.
-- Add a "New in this version" group that shows the 3 most recently added features (hardcoded list updated with each release).
-
----
-
-## LOG — Logger / Log Hub
-
-### LOG-8 · P3 · Source toggle bar label is unclear ("Modem" not "5G Modem")
-
-**What happens today:** The source bar just says "Modem" — but the modem page is titled "5G Modem Signal". For users with non-5G modems or multiple hardware types, this is ambiguous.
-
-**Acceptance criteria:** Source toggle labels match the full hardware page name: "5G Modem", "Mesh Router", "Syslog", "SNMP Traps". If a modem plugin is not connected, the "5G Modem" toggle is disabled with tooltip "Connect a modem plugin to enable modem logging."
-
----
-
-## NOTIF — Notifications Setup Flow
-
-### NOTIF-5 · P2 · Escalation channel UX is confusing
-
-**What happens today:** "Escalation" is a second channel that fires when the primary channel fails. This is a power feature. But it's presented as a flat field next to the primary channel with no explanation. Most users either ignore it or think it's a required field.
-
-**Acceptance criteria:**
-- Move escalation into an expandable "Advanced: Escalation" section below each channel, collapsed by default.
-- Add explainer text: "If this channel fails to deliver, NetSentinel will try the escalation channel instead."
-- Show a visual flow: `[Primary] → fails → [Escalation]`.
-
----
-
-### NOTIF-6 · P2 · No history of which alerts fired, only delivery log
-
-**What happens today:** Delivery log shows deliveries. But a user asking "did ARP spoof watch fire last night?" has to correlate delivery timestamps with monitoring events mentally.
-
-**Acceptance criteria:**
-- Add "Alert History" tab (beside Delivery Log): shows every triggered alert with Type, Device/IP, Time, and Delivery Status.
-- Clicking a row shows the alert detail and navigates to the relevant monitoring page.
-
----
-
-## NAV — Navigation & Discovery
-
-### NAV-3 · P2 · No "Recently visited" or "Pinned" quick access visible at a glance
-
-**What happens today:** Pins to Quick Access work, but a user has to right-click a flyout item to discover pinning exists. The N8 hint ("Right-click any page to pin it ★") added in the last sprint helps, but pinned items live at the top of the rail as unlabeled items.
-
-**Acceptance criteria:**
-- Pinned items at the top of the rail have a visible label (not just an icon) when fewer than 4 are pinned.
-- "Quick Access" section label appears above the pinned items when any exist.
-- First-time use: after the first time a user visits 3 different Analysis pages, show a one-time toast: "Tip: right-click any page to pin it for faster access."
-
----
-
-### NAV-4 · P3 · Flyout closes immediately on click — no visual confirmation of destination
-
-**What happens today:** User clicks a flyout item, flyout closes, page transitions. This is fast but feels abrupt — there's no visual connection between the click and the resulting page.
-
-**Acceptance criteria:**
-- Clicked flyout item highlights (filled background) for 120ms before the flyout closes.
-- No animation delay — purely the highlight, then close. Snappy but confirms the tap.
-
----
-
-## FLOW — Cross-page Workflows
-
-### FLOW-3 · P1 · Diagnosis results have no "share" or "copy" action
-
-**What happens today:** The "What's Wrong?" diagnosis page produces a detailed report. If a user wants to share it with ISP support or a sysadmin, they screenshot it or retype it.
-
-**Acceptance criteria:**
-- Diagnosis result has a "Copy report" button that puts a plain-text summary on the clipboard.
-- Format: "NetSentinel Diagnosis Report — [date] / [verdict] / Findings: [list] / Recommended actions: [list]"
-- Same clipboard output as the ISP Report export flow.
-
----
-
-## RECUR — Recurring User Power Features
-
-### RECUR-4 · P3 · Trend Forecasts page has no "this week vs. last week" at a glance
-
-**What happens today:** Trend Forecasts shows a chart. The chart requires interpretation. A user wanting "is my latency getting worse?" has to stare at a line.
-
-**Acceptance criteria:**
-- Above the chart: a single headline stat. "RTT this week: 14ms avg (↑ 3ms vs. last week)" in green/amber/red based on direction and magnitude.
-- This is a QLabel computed from the last 14 days of RTT log data — no new ML, just averages.
-
----
-
-## VC — Visual Consistency Carry
-
-### VC3 · P2 · Loading states are inconsistent
-
-**What happens today:** Some pages show a spinner, some show a skeleton (SK1 now done for Devices), some show nothing. A user who navigates to a page and sees it blank for 2 seconds assumes nothing is happening.
-
-**Acceptance criteria:**
-- All pages that have a fetch/compute step (Port Scan, DNS Lookup, Trace, Network Grade, etc.) show a consistent loading state: either the SK1 skeleton row pattern or a centered spinner with a one-line label ("Scanning ports… this may take up to 30 seconds").
-- Pages that complete in <300ms do not show a loading state (flash avoidance threshold).
-
----
-
-### VC5 · P3 · Section headers in the flyout have no visual weight hierarchy
-
-**What happens today:** Flyout section headers (e.g., "Monitor", "Analysis", "Tools") are plain text labels. Flyout items are only marginally smaller. The hierarchy is present but not felt.
-
-**Acceptance criteria:**
-- Section headers are uppercase, letter-spaced (0.08em), 9px, `TEXT_MUTED` color — clearly categorical, not navigable.
-- Items are 11px, `TEXT_PRIMARY`, with left padding for indentation.
-- This matches the macOS sidebar visual grammar users are already trained on.
-
----
-
 ## Implementation order (remaining)
 
-| Sprint | Items | Rationale |
-|--------|-------|-----------|
-| 7 | NAV-3, NUX-5, VC3 | Polish and discovery |
-| 8 | NOTIF-5, NOTIF-6, RECUR-4, VC5, FLOW-3, LOG-8, NAV-4 | Finishing touches |
+All items complete. Backlog shipped.
 
 ---
 
@@ -174,3 +55,13 @@ All items below are shipped. Spec detail lives in git history.
 | RECUR-2 | Weekly digest notification (opt-in) with time-of-day picker | 6 |
 | RECUR-3 | Command palette "Recent actions" section (last 5, re-runnable) | 6 |
 | NAV-2 | Command palette results include monitor running state | 4 |
+| NAV-3 | Pinned items label + "Quick Access" label + first-use toast | 7 |
+| NUX-5 | Feature Guide "Start here" + "New in this version" groups | 7 |
+| VC3 | Loading states for Port Scan, Network Grade, Diagnostics | 7 |
+| NOTIF-5 | Escalation card collapsible "Advanced: Escalation" section | 8 |
+| NOTIF-6 | Alert History tab in delivery log card | 8 |
+| RECUR-4 | Trend Forecast this-week vs last-week RTT headline stat | 8 |
+| VC5 | Flyout section headers 9px TEXT_MUTED; items 11px TEXT_PRIMARY | 8 |
+| FLOW-3 | Diagnosis "Copy report" button with clipboard plain-text output | 8 |
+| LOG-8 | Source toggle labels: "5G Modem", "Mesh Router", "Syslog", "SNMP Traps" | 8 |
+| NAV-4 | Flyout item 120ms highlight before close (already done in prior sprint) | 4 |

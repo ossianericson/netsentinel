@@ -22,6 +22,112 @@ from ui.styles import (
 # Each entry: group, icon, name, desc, page (nav label or None), requires, tags
 
 _FEATURES: list[dict] = [
+    # ── Start here ─────────────────────────────────────────────────────────────
+    {
+        "group": "Start here",
+        "icon": "⊛",
+        "name": "Devices",
+        "desc": (
+            "See every device on your network — names, IPs, MACs, and vendors — "
+            "at a glance. Start here to understand what's connected and flag anything "
+            "unexpected. Why this matters: you can't secure what you can't see."
+        ),
+        "page": "Devices",
+        "requires": None,
+        "tags": ["start", "devices", "network", "inventory", "scan"],
+    },
+    {
+        "group": "Start here",
+        "icon": "⊛",
+        "name": "Network Grade",
+        "desc": (
+            "Scores your network A–F across speed, latency, DNS, packet loss, and "
+            "device security in under two minutes. Why this matters: gives you a "
+            "single number to track improvement over time."
+        ),
+        "page": "Network Grade",
+        "requires": None,
+        "tags": ["start", "grade", "score", "health"],
+    },
+    {
+        "group": "Start here",
+        "icon": "⊛",
+        "name": "What's Wrong?",
+        "desc": (
+            "One-click root-cause diagnosis — pick a symptom and get a plain-English "
+            "verdict with a prioritised fix list. Why this matters: skips hours of "
+            "manual troubleshooting and tells you exactly what to do first."
+        ),
+        "page": "What's Wrong?",
+        "requires": None,
+        "tags": ["start", "diagnosis", "fix", "troubleshoot", "symptom"],
+    },
+    {
+        "group": "Start here",
+        "icon": "⊛",
+        "name": "ARP Spoof Watch",
+        "desc": (
+            "Watches for man-in-the-middle attacks in real time by detecting MAC "
+            "address conflicts on your network. Why this matters: this is the most "
+            "common active attack on home and small-office networks."
+        ),
+        "page": "ARP Spoof Watch",
+        "requires": "Npcap",
+        "tags": ["start", "arp", "security", "attack", "mitm"],
+    },
+    {
+        "group": "Start here",
+        "icon": "⊛",
+        "name": "Notifications",
+        "desc": (
+            "Configure alerts so NetSentinel tells you when something is wrong — "
+            "by email, webhook, Pushover, ntfy, or Telegram. Why this matters: "
+            "the app works 24/7, but you need to hear about problems even when "
+            "the window is closed."
+        ),
+        "page": "Notifications",
+        "requires": None,
+        "tags": ["start", "alerts", "notify", "email", "webhook"],
+    },
+    # ── New in this version ────────────────────────────────────────────────────
+    {
+        "group": "New in this version",
+        "icon": "★",
+        "name": "Monitor Overview",
+        "desc": (
+            "Single-glance security posture — one tile per detection monitor. "
+            "See what's running, what's clear, and jump to any detail page. "
+            "Added in v1.9."
+        ),
+        "page": "Monitor Overview",
+        "requires": None,
+        "tags": ["new", "overview", "monitor", "security", "status"],
+    },
+    {
+        "group": "New in this version",
+        "icon": "★",
+        "name": "Weekly Digest",
+        "desc": (
+            "Opt-in weekly summary of your network's health, alert history, and "
+            "device changes — delivered via your configured notification channel "
+            "at a time you choose. Added in v1.9."
+        ),
+        "page": "Notifications",
+        "requires": None,
+        "tags": ["new", "weekly", "digest", "summary", "report"],
+    },
+    {
+        "group": "New in this version",
+        "icon": "★",
+        "name": "Recent Actions (Command Palette)",
+        "desc": (
+            "The command palette now shows your last 5 actions so you can re-run "
+            "them with one click. Open with Ctrl+K or the search bar. Added in v1.9."
+        ),
+        "page": "Feature Guide",
+        "requires": None,
+        "tags": ["new", "command palette", "recent", "actions", "quick"],
+    },
     # ── Monitoring ─────────────────────────────────────────────────────────────
     {
         "group": "Monitoring",

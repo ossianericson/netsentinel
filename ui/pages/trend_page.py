@@ -169,6 +169,16 @@ class TrendPage(QWidget):
         kpi_row.addStretch()
         outer.addLayout(kpi_row)
 
+        # RECUR-4: this-week vs last-week RTT headline
+        self._headline_lbl = QLabel("")
+        self._headline_lbl.setVisible(False)
+        self._headline_lbl.setStyleSheet(
+            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:8px 14px;"
+        )
+        outer.addWidget(self._headline_lbl)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -303,12 +313,78 @@ class TrendPage(QWidget):
         self._btn_run.setText("▶  Run Analysis")
         self._populate_table(report)
         self._update_kpis(report)
+        self._update_rtt_headline()
         self._btn_log_hub.setVisible(False)
         hosts = len({r.host for r in report.results})
         ts_str = time.strftime("%H:%M:%S", time.localtime(report.ts))
         self._status_lbl.setText(
             f"Last run: {ts_str} — {hosts} host(s), {len(report.results)} metric(s) analysed"
         )
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._update_rtt_headline()
+
+    def _update_rtt_headline(self) -> None:
+        """RECUR-4: compute this-week vs last-week RTT average and update headline label."""
+        if self._store is None:
+            return
+        try:
+            hosts = self._store.query_all_rtt_hosts(hours=336)  # 14 days
+        except Exception:
+            return
+        if not hosts:
+            self._headline_lbl.setVisible(False)
+            return
+
+        now = time.time()
+        week_boundary = now - 7 * 86400  # 7 days ago
+
+        this_week_vals: list[float] = []
+        last_week_vals: list[float] = []
+        for host in hosts:
+            try:
+                pts = self._store.query_rtt_history(host, hours=336)
+            except Exception:
+                continue
+            for pt in pts:
+                rtt = getattr(pt, "rtt_ms", None)
+                if rtt is None or rtt <= 0:
+                    continue
+                if pt.ts >= week_boundary:
+                    this_week_vals.append(rtt)
+                else:
+                    last_week_vals.append(rtt)
+
+        if not this_week_vals:
+            self._headline_lbl.setVisible(False)
+            return
+
+        this_avg = sum(this_week_vals) / len(this_week_vals)
+
+        if last_week_vals:
+            last_avg = sum(last_week_vals) / len(last_week_vals)
+            delta = this_avg - last_avg
+            if delta > 5:
+                arrow, color = "↑", AMBER if delta < 20 else RED
+            elif delta < -5:
+                arrow, color = "↓", GREEN
+            else:
+                arrow, color = "→", GREEN
+            diff_str = f" ({arrow} {abs(delta):.0f}ms vs. last week)"
+        else:
+            color = GREEN if this_avg < 50 else AMBER if this_avg < 150 else RED
+            diff_str = " (no prior week data)"
+
+        self._headline_lbl.setText(
+            f"RTT this week: {this_avg:.0f}ms avg{diff_str}"
+        )
+        self._headline_lbl.setStyleSheet(
+            f"font-size:13px; font-weight:bold; color:{color};"
+            f" background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:8px 14px;"
+        )
+        self._headline_lbl.setVisible(True)
 
     @pyqtSlot(str)
     def _on_error(self, err: str):

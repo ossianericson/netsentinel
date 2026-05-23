@@ -72,6 +72,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -683,18 +684,41 @@ class NotificationsPage(QWidget):
     def _build_escalation_card(self) -> QWidget:
         card, bl = _card("Alert Escalation")
 
-        info = QLabel(
-            "Re-notify a second channel when an alert is not acknowledged within a set time. "
-            "Acknowledgement is available by right-clicking an alert in any alert table."
+        # Expander toggle — "Advanced: Escalation" collapsed by default
+        self._escalation_expand_btn = QPushButton("▶  Advanced: Escalation")
+        self._escalation_expand_btn.setFlat(True)
+        self._escalation_expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._escalation_expand_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; font-weight:bold;"
+            f" background:transparent; border:none; padding:2px 0; text-align:left; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
         )
-        info.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
-        info.setWordWrap(True)
-        bl.addWidget(info)
+        bl.addWidget(self._escalation_expand_btn)
+
+        # Collapsible body — hidden by default
+        self._escalation_body = QWidget()
+        self._escalation_body.setVisible(False)
+        body_lay = QVBoxLayout(self._escalation_body)
+        body_lay.setContentsMargins(0, 6, 0, 0)
+        body_lay.setSpacing(8)
+
+        explainer = QLabel(
+            "If this channel fails to deliver, NetSentinel will try the escalation channel instead."
+        )
+        explainer.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+        explainer.setWordWrap(True)
+        body_lay.addWidget(explainer)
+
+        flow_lbl = QLabel("[Primary]  →  fails  →  [Escalation]")
+        flow_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; font-style:italic; border:none; padding:2px 0;"
+        )
+        body_lay.addWidget(flow_lbl)
 
         self._chk_escalation = QCheckBox("Enable escalation")
         self._chk_escalation.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
         self._chk_escalation.stateChanged.connect(self._save)
-        bl.addWidget(self._chk_escalation)
+        body_lay.addWidget(self._chk_escalation)
 
         # Wait time row
         wait_row = QHBoxLayout()
@@ -714,7 +738,7 @@ class NotificationsPage(QWidget):
         wait_row.addWidget(wait_lbl)
         wait_row.addWidget(self._spin_escalation_wait)
         wait_row.addStretch()
-        bl.addLayout(wait_row)
+        body_lay.addLayout(wait_row)
 
         # Channel to escalate to
         ch_row = QHBoxLayout()
@@ -733,7 +757,7 @@ class NotificationsPage(QWidget):
         ch_row.addWidget(ch_lbl)
         ch_row.addWidget(self._combo_escalation_channel)
         ch_row.addStretch()
-        bl.addLayout(ch_row)
+        body_lay.addLayout(ch_row)
 
         # Rules to watch (comma-separated)
         rules_row = QHBoxLayout()
@@ -748,12 +772,83 @@ class NotificationsPage(QWidget):
         self._txt_escalation_rules.editingFinished.connect(self._save)
         rules_row.addWidget(rules_lbl)
         rules_row.addWidget(self._txt_escalation_rules, 1)
-        bl.addLayout(rules_row)
+        body_lay.addLayout(rules_row)
 
+        bl.addWidget(self._escalation_body)
+
+        self._escalation_expand_btn.clicked.connect(self._toggle_escalation_body)
         return card
 
+    def _toggle_escalation_body(self) -> None:
+        expanded = self._escalation_body.isVisible()
+        self._escalation_body.setVisible(not expanded)
+        arrow = "▼" if not expanded else "▶"
+        self._escalation_expand_btn.setText(f"{arrow}  Advanced: Escalation")
+
     def _build_log_card(self) -> QWidget:
-        card, bl = _card("Recent Delivery Log")
+        card, bl = _card("Alert History & Delivery Log")
+
+        _tbl_qss = (
+            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
+            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
+            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
+            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
+            f"QTableWidget::item{{padding:2px 5px;}}"
+        )
+
+        tabs = QTabWidget()
+        tabs.setStyleSheet(
+            f"QTabWidget::pane {{ border:1px solid {BORDER}; border-top:none; }}"
+            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            f" border-bottom:none; padding:4px 12px; font-size:11px; }}"
+            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; border-bottom:2px solid {ACCENT}; }}"
+            f"QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+
+        # ── Tab 1: Alert History ──────────────────────────────────────────────
+        hist_tab = QWidget()
+        hist_lay = QVBoxLayout(hist_tab)
+        hist_lay.setContentsMargins(0, 6, 0, 0)
+        hist_lay.setSpacing(4)
+
+        self._alert_history_table = QTableWidget(0, 5)
+        self._alert_history_table.setHorizontalHeaderLabels(
+            ["Time", "Rule", "Host", "Severity", "Status"]
+        )
+        self._alert_history_table.horizontalHeader().setStretchLastSection(False)
+        self._alert_history_table.horizontalHeader().setSectionResizeMode(
+            1, self._alert_history_table.horizontalHeader().ResizeMode.Stretch
+        )
+        self._alert_history_table.verticalHeader().setVisible(False)
+        self._alert_history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._alert_history_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._alert_history_table.setAlternatingRowColors(True)
+        self._alert_history_table.setFixedHeight(200)
+        self._alert_history_table.setStyleSheet(_tbl_qss)
+        for w, col in zip((100, 80, 100, 80), range(4)):
+            self._alert_history_table.setColumnWidth(col, w)
+        self._alert_history_table.itemDoubleClicked.connect(self._on_alert_history_row_clicked)
+        hist_lay.addWidget(self._alert_history_table)
+
+        hist_btn_row = QHBoxLayout()
+        btn_hist_refresh = QPushButton("Refresh")
+        btn_hist_refresh.setFixedHeight(24)
+        btn_hist_refresh.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
+            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
+            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+        )
+        btn_hist_refresh.clicked.connect(self._refresh_alert_history)
+        hist_btn_row.addWidget(btn_hist_refresh)
+        hist_btn_row.addStretch()
+        hist_lay.addLayout(hist_btn_row)
+        tabs.addTab(hist_tab, "Alert History")
+
+        # ── Tab 2: Delivery Log ───────────────────────────────────────────────
+        log_tab = QWidget()
+        log_lay = QVBoxLayout(log_tab)
+        log_lay.setContentsMargins(0, 6, 0, 0)
+        log_lay.setSpacing(4)
 
         self._log_table = QTableWidget(0, 6)
         self._log_table.setHorizontalHeaderLabels(
@@ -767,18 +862,12 @@ class NotificationsPage(QWidget):
         self._log_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._log_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._log_table.setAlternatingRowColors(True)
-        self._log_table.setFixedHeight(220)
-        self._log_table.setStyleSheet(
-            f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
-            f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
-            f"QHeaderView::section{{background:{ACCENT};color:{WHITE};"
-            f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
-            f"QTableWidget::item{{padding:2px 5px;}}"
-        )
+        self._log_table.setFixedHeight(200)
+        self._log_table.setStyleSheet(_tbl_qss)
         for w, col in zip((110, 90, 80, 120, 80), range(5)):
             self._log_table.setColumnWidth(col, w)
         self._log_table.itemClicked.connect(self._on_log_row_clicked)
-        bl.addWidget(self._log_table)
+        log_lay.addWidget(self._log_table)
 
         # Detail panel — shown when a failed row is clicked
         self._log_detail = QFrame()
@@ -816,7 +905,7 @@ class NotificationsPage(QWidget):
         _det_btn_row.addStretch()
         _det_lay.addWidget(self._log_detail_error_lbl)
         _det_lay.addLayout(_det_btn_row)
-        bl.addWidget(self._log_detail)
+        log_lay.addWidget(self._log_detail)
         self._log_detail_entry: dict | None = None
 
         btn_row = QHBoxLayout()
@@ -835,7 +924,7 @@ class NotificationsPage(QWidget):
         btn_row.addWidget(btn_refresh)
         btn_row.addWidget(btn_clear)
         btn_row.addStretch()
-        bl.addLayout(btn_row)
+        log_lay.addLayout(btn_row)
 
         cta = QPushButton("＋  Create custom alert →")
         cta.setFlat(True)
@@ -846,8 +935,10 @@ class NotificationsPage(QWidget):
             f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
         )
         cta.clicked.connect(lambda: self.navigate_to.emit("Custom Triggers"))
-        bl.addWidget(cta)
+        log_lay.addWidget(cta)
+        tabs.addTab(log_tab, "Delivery Log")
 
+        bl.addWidget(tabs)
         return card
 
     # ── Persistence ───────────────────────────────────────────────────────────
@@ -1238,6 +1329,7 @@ class NotificationsPage(QWidget):
 
     @pyqtSlot()
     def refresh_log(self) -> None:
+        self._refresh_alert_history()
         if self._router is None:
             return
         from PyQt6.QtGui import QColor, QBrush
@@ -1319,6 +1411,64 @@ class NotificationsPage(QWidget):
             self._router.clear_delivery_log()
         self._log_table.setRowCount(0)
         self._log_detail.setVisible(False)
+
+    def _refresh_alert_history(self) -> None:
+        """NOTIF-6: populate Alert History tab from store."""
+        if self._store is None:
+            return
+        from PyQt6.QtGui import QColor
+        try:
+            alerts = self._store.get_recent_alerts(hours=72, limit=200)
+        except Exception:
+            return
+        self._alert_history_table.setRowCount(0)
+        for alert in alerts:
+            row = self._alert_history_table.rowCount()
+            self._alert_history_table.insertRow(row)
+            ts_str  = time.strftime("%m-%d %H:%M", time.localtime(alert.get("ts", 0)))
+            sev     = alert.get("severity", "INFO")
+            sev_col = _SEV_COLOR.get(sev, TEXT_PRIMARY)
+            status  = "✓ Acked" if alert.get("acked_ts") else "Pending"
+            st_col  = GREEN if alert.get("acked_ts") else AMBER
+            for col, val in enumerate([
+                ts_str,
+                alert.get("rule_name", ""),
+                alert.get("host", ""),
+                sev,
+                status,
+            ]):
+                it = QTableWidgetItem(str(val))
+                it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if col == 3:
+                    it.setForeground(QColor(sev_col))
+                elif col == 4:
+                    it.setForeground(QColor(st_col))
+                self._alert_history_table.setItem(row, col, it)
+            self._alert_history_table.item(row, 0).setData(
+                Qt.ItemDataRole.UserRole, alert
+            )
+
+    def _on_alert_history_row_clicked(self, item: "QTableWidgetItem") -> None:
+        """NOTIF-6: double-click an alert row to navigate to the relevant page."""
+        first = self._alert_history_table.item(item.row(), 0)
+        if first is None:
+            return
+        alert = first.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(alert, dict):
+            return
+        rule = alert.get("rule_name", "")
+        if "Port Scan" in rule or "PORT_SCAN" in rule:
+            self.navigate_to.emit("Port Scan (TCP)")
+        elif "THREAT_INTEL" in rule or "CVE" in rule or "Cert" in rule:
+            self.navigate_to.emit("Threat Intelligence")
+        elif "RATE_SPIKE" in rule or "Bandwidth" in rule:
+            self.navigate_to.emit("Bandwidth")
+        elif "ARP" in rule:
+            self.navigate_to.emit("ARP Spoof Watch")
+        elif "DHCP" in rule:
+            self.navigate_to.emit("DHCP Rogue Monitor")
+        else:
+            self.navigate_to.emit("Notifications")
 
     # ── Test helpers ──────────────────────────────────────────────────────────
 

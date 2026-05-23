@@ -565,12 +565,12 @@ class _FlyoutItem(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_ctx_menu)
-        _fg = AUDIT_RED if danger else SIDEBAR_ITEM_FG
+        _fg = AUDIT_RED if danger else TEXT_PRIMARY
         self.setStyleSheet(
             f"QPushButton {{"
-            f"  text-align: left; padding: 0 12px;"
+            f"  text-align: left; padding: 0 14px;"
             f"  background: transparent; color: {_fg};"
-            f"  border: none; font-size: 12px;"
+            f"  border: none; font-size: 11px;"
             f"}}"
             f"QPushButton:hover {{ background: {SIDEBAR_HOVER}; color: {WHITE}; }}"
             f"QPushButton:checked {{ background: {SIDEBAR_SEL_BG}; color: {WHITE}; }}"
@@ -637,8 +637,8 @@ class _FlyoutPanel(QWidget):
         hlay.setSpacing(4)
         self._title_lbl = QLabel()
         self._title_lbl.setStyleSheet(
-            f"color: {TEXT_PRIMARY}; font-size: 11px; font-weight: 600;"
-            f" background: transparent; border: none;"
+            f"color: {TEXT_MUTED}; font-size: 9px; font-weight: 600;"
+            f" letter-spacing: 1px; background: transparent; border: none;"
         )
         self._pin_btn = QPushButton("⊞")
         self._pin_btn.setFixedSize(24, 24)
@@ -4133,11 +4133,9 @@ class Dashboard(QMainWindow):
             lambda: self._nav_rail_go_to("Hardware")
         )
         _ib_lay.addWidget(_int_cfg_btn)
-        lay.addLayout(_status_row)
 
         self._m1_node_hint = QLabel()   # hidden stub — hint lives in By Node group header
         self._m1_node_hint.setVisible(False)
-        lay.addWidget(self._m1_int_banner)
 
         self._m1_table = _table([
             "IP Address", "Hostname", "MAC Address", "Vendor", "Risk", "Device Type",
@@ -4188,6 +4186,7 @@ class Dashboard(QMainWindow):
         m1_body.addWidget(self._m1_stack)
 
         lay.addLayout(_status_row)
+        lay.addWidget(self._m1_int_banner)
         lay.addWidget(m1_card, 1)
 
         from ui.widgets.explainer_panel import ExplainerPanel
@@ -7960,6 +7959,7 @@ class Dashboard(QMainWindow):
             params={"host": host},
         )
         self._recon_syn_table.setRowCount(0)
+        self._syn_status.setText("⏳  Scanning ports…  this may take up to 30 seconds")
         mode_text = self._syn_ports_combo.currentText()
         if "Full range" in mode_text:
             ports = list(range(1, 65536))
@@ -8096,6 +8096,7 @@ class Dashboard(QMainWindow):
         if self._udp_worker and self._udp_worker.isRunning():
             return
         self._recon_udp_table.setRowCount(0)
+        self._udp_status.setText("⏳  Scanning UDP ports…  this may take 1–2 minutes")
         self._udp_worker = UDPScanWorker(host=host)
         self._udp_worker.result.connect(self._on_udp_result)
         self._udp_worker.status.connect(self._udp_status.setText)
@@ -10357,6 +10358,7 @@ class Dashboard(QMainWindow):
 
         if not rows_data:
             return
+        self._m1_table.setSortingEnabled(False)
         self._m1_table.setRowCount(0)
         self._m1_group_btn.setVisible(False)
         for rd in rows_data:
@@ -10370,6 +10372,8 @@ class Dashboard(QMainWindow):
                 if cell["tooltip"]:
                     item.setToolTip(cell["tooltip"])
                 self._m1_table.setItem(r, col, item)
+        self._m1_table.resizeColumnsToContents()
+        self._m1_table.setSortingEnabled(True)
 
     def _regroup_m1_by_satellite(self) -> None:
         """Rebuild M1 table with collapsible satellite section header rows."""
@@ -10408,7 +10412,8 @@ class Dashboard(QMainWindow):
         if "__unassigned__" in groups:
             sorted_nodes.append("__unassigned__")
 
-        # Rebuild table
+        # Rebuild table — sorting must be off to prevent sentinel rows from scrambling
+        self._m1_table.setSortingEnabled(False)
         self._m1_table.setRowCount(0)
         n_cols = self._m1_table.columnCount()
 
@@ -10462,6 +10467,7 @@ class Dashboard(QMainWindow):
 
         self._m1_grouping_active = True
         self._m1_group_btn.setVisible(True)
+        # Sorting stays OFF in grouped mode — re-enabled by _m1_flatten_table on switch back
         # Connect click handler once
         if not getattr(self, "_m1_group_click_connected", False):
             self._m1_table.cellClicked.connect(self._m1_toggle_sat_section)
