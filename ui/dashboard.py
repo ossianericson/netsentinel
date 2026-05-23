@@ -10429,6 +10429,12 @@ class Dashboard(QMainWindow):
                 if not pc:
                     continue
                 plugin_any_matched = True
+                # Backfill MAC into the table row when ARP scan left it blank
+                if (not mac_item or not mac_item.text()) and pc.get("mac"):
+                    _mac_fill = QTableWidgetItem(pc["mac"])
+                    _mac_fill.setForeground(QColor(TEXT_PRIMARY))
+                    _mac_fill.setToolTip(f"MAC from {plugin_name}")
+                    self._m1_table.setItem(row, 2, _mac_fill)
                 hostname = pc.get("hostname", "")
                 if hostname and not _mac_re.match(hostname):
                     name_item = QTableWidgetItem(hostname)
@@ -10573,13 +10579,20 @@ class Dashboard(QMainWindow):
         # Synthesize M1 rows for mesh clients that ARP scan did not see
         # (e.g. phones connected to a satellite that did not respond to ARP)
         _existing_macs: set = set()
+        _existing_ips: set = set()
         for _r in range(self._m1_table.rowCount()):
             _mi = self._m1_table.item(_r, 2)
-            if _mi:
+            if _mi and _mi.text():
                 _existing_macs.add(_norm_mac(_mi.text()))
+            _ii = self._m1_table.item(_r, 0)
+            if _ii and _ii.text() and _ii.text() != "—":
+                _existing_ips.add(_ii.text().strip())
         _synth_added = False
         for _mc in self._mesh_enrichment.values():
             if _norm_mac(_mc.mac) in _existing_macs:
+                continue
+            # Also skip if the device's IP is already in the table (ARP found it without MAC)
+            if _mc.ip and _mc.ip in _existing_ips:
                 continue
             _add_row(
                 self._m1_table,
@@ -10607,6 +10620,9 @@ class Dashboard(QMainWindow):
             _phn   = _pc.get("hostname", "") or "—"
             if _pip == "—" and _phn == "—":
                 continue  # nothing useful to show
+            # Skip if the device's IP is already in the table (ARP found it without MAC)
+            if _pip != "—" and _pip in _existing_ips:
+                continue
             _add_row(
                 self._m1_table,
                 [_pip, _phn, _pmac, "", "CLEAN",
