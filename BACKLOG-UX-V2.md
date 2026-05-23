@@ -23,32 +23,32 @@ Every item below is anchored to a specific user moment of confusion, mistrust, o
 
 ## Implementation order (remaining)
 
-| # | Item | Title | Priority | Sprint |
-|---|------|-------|----------|--------|
-| 1 | TRUST-1 | Home "last checked" freshness strip | P0 | 1 |
-| 2 | TRUST-2 | Rail badge counts for alerts | P0 | 1 |
-| 3 | EMPTY-1 | Consistent empty states with inline CTAs on all data pages | P1 | 1 |
-| 4 | SCAN-1 | Post-scan delta summary ("3 new devices since last scan") | P1 | 2 |
-| 5 | EXPLAIN-1 | Network Grade score breakdown tooltip/drawer | P1 | 2 |
-| 6 | EXPLAIN-2 | Contextual help tooltips on all technical metric labels | P1 | 2 |
-| 7 | FILTER-1 | Global search/filter bar on Inventory table | P2 | 3 |
-| 8 | FILTER-2 | Sortable columns + persistent sort in Inventory | P2 | 3 |
-| 9 | DEVICE-1 | Device notes and custom name/tag editing | P2 | 3 |
-| 10 | ALERT-1 | Alert snooze (1h / 8h / forever) per rule | P1 | 4 |
-| 11 | ALERT-2 | Alert deduplication counter ("fired 7 times in 1h") | P2 | 4 |
-| 12 | TIME-1 | Data age indicators on Monitor Overview tiles | P1 | 4 |
-| 13 | KEYBOARD-1 | Global keyboard shortcut map (? opens overlay) | P2 | 5 |
-| 14 | KEYBOARD-2 | J/K row navigation in all tables | P2 | 5 |
-| 15 | VISUAL-1 | Severity colour consistency: amber/red/green used only for their semantic | P3 | 5 |
-| 16 | DEVICE-2 | Per-device history drawer: last-seen, scan appearances, signal | P2 | 6 |
-| 17 | SCAN-2 | Scan progress: per-host status ("probing 192.168.1.12…") | P2 | 6 |
-| 18 | SETTINGS-1 | Settings search bar | P3 | 6 |
-| 19 | SETTINGS-2 | Unsaved-changes guard (dirty dot + confirm-on-leave) | P1 | 7 |
-| 20 | TRUST-3 | Monitor health indicators (last event time per monitor) | P1 | 7 |
-| 21 | DASH-1 | "Action needed" section on Home (pending alerts + offline devices) | P1 | 7 |
-| 22 | EXPLAIN-3 | Inline remediation steps for each Diagnosis finding (expandable) | P2 | 8 |
-| 23 | FILTER-3 | Alert history filter: severity / rule / time range | P2 | 8 |
-| 24 | VISUAL-2 | Loading skeleton rows for all async data loads (no more blank → populated flash) | P3 | 8 |
+| # | Item | Title | Priority | Sprint | Status |
+|---|------|-------|----------|--------|--------|
+| 1 | TRUST-1 | Home "last checked" freshness strip | P0 | 1 | ✅ done |
+| 2 | TRUST-2 | Rail badge counts for alerts | P0 | 1 | ✅ done |
+| 3 | EMPTY-1 | Consistent empty states with inline CTAs on all data pages | P1 | 1 | ✅ done |
+| 4 | SCAN-1 | Post-scan delta summary ("3 new devices since last scan") | P1 | 2 | ✅ done |
+| 5 | EXPLAIN-1 | Network Grade score breakdown tooltip/drawer | P1 | 2 | ✅ done |
+| 6 | EXPLAIN-2 | Contextual help tooltips on all technical metric labels | P1 | 2 | ✅ done |
+| 7 | FILTER-1 | Global search/filter bar on Inventory table | P2 | 3 | ✅ done |
+| 8 | FILTER-2 | Sortable columns + persistent sort in Inventory | P2 | 3 | ✅ done |
+| 9 | DEVICE-1 | Device notes and custom name/tag editing | P2 | 3 | ✅ done |
+| 10 | ALERT-1 | Alert snooze (1h / 8h / forever) per rule | P1 | 4 | ✅ done |
+| 11 | ALERT-2 | Alert deduplication counter ("fired 7 times in 1h") | P2 | 4 | ✅ done |
+| 12 | TIME-1 | Data age indicators on Monitor Overview tiles | P1 | 4 | ✅ done |
+| 13 | KEYBOARD-1 | Global keyboard shortcut map (? opens overlay) | P2 | 5 | ✅ done |
+| 14 | KEYBOARD-2 | J/K row navigation in all tables | P2 | 5 | ✅ done |
+| 15 | VISUAL-1 | Severity colour consistency: amber/red/green used only for their semantic | P3 | 5 | ✅ done |
+| 16 | DEVICE-2 | Per-device history drawer: last-seen, scan appearances, signal | P2 | 6 | ✅ done |
+| 17 | SCAN-2 | Scan progress: per-host status ("probing 192.168.1.12…") | P2 | 6 | ✅ done |
+| 18 | SETTINGS-1 | Settings search bar | P3 | 6 | ✅ done |
+| 19 | SETTINGS-2 | Unsaved-changes guard (dirty dot + confirm-on-leave) | P1 | 7 | ✅ done |
+| 20 | TRUST-3 | Monitor health indicators (last event time per monitor) | P1 | 7 | ✅ done |
+| 21 | DASH-1 | "Action needed" section on Home (pending alerts + offline devices) | P1 | 7 | ✅ done |
+| 22 | EXPLAIN-3 | Inline remediation steps for each Diagnosis finding (expandable) | P2 | 8 | ✅ done |
+| 23 | FILTER-3 | Alert history filter: severity / rule / time range | P2 | 8 | ✅ done |
+| 24 | VISUAL-2 | Loading skeleton rows for all async data loads (no more blank → populated flash) | P3 | 8 | ✅ done |
 
 ---
 

@@ -375,6 +375,7 @@ class KnownDevice:
     category: str = "unknown"
     notes: Optional[str] = None
     is_pinned: bool = False
+    tags: Optional[str] = None
 
 
 @dataclass
@@ -549,6 +550,8 @@ class MetricStore:
                 "ALTER TABLE speed_test ADD COLUMN lte_rsrq REAL",
                 "ALTER TABLE speed_test ADD COLUMN lte_pci INTEGER",
                 "ALTER TABLE speed_test ADD COLUMN lte_earfcn INTEGER",
+                # DEVICE-1: device tags for user labelling (v2 sprint)
+                "ALTER TABLE known_device ADD COLUMN tags TEXT",
             ]:
                 try:
                     conn.execute(col_def)
@@ -1006,7 +1009,7 @@ class MetricStore:
         rows = self._execute_read(
             "SELECT mac, ip, hostname, vendor, device_type, "
             "first_seen, last_seen, is_authorized, "
-            "custom_name, room, category, notes, is_pinned FROM known_device",
+            "custom_name, room, category, notes, is_pinned, tags FROM known_device",
             (),
         )
         return {
@@ -1020,6 +1023,7 @@ class MetricStore:
                 category=r["category"] or "unknown",
                 notes=r["notes"],
                 is_pinned=bool(r["is_pinned"]),
+                tags=r["tags"],
             )
             for r in rows
         }
@@ -1034,10 +1038,12 @@ class MetricStore:
         category: Optional[str] = None,
         notes: Optional[str] = None,
         is_pinned: Optional[bool] = None,
+        tags: Optional[str] = None,
     ) -> None:
         """
         Update the Home Automation Hub metadata for a known device.
         Only non-None arguments are written; others are preserved.
+        tags: comma-separated string of user tags.
         """
         sets, params = [], []
         if custom_name is not None:
@@ -1050,6 +1056,8 @@ class MetricStore:
             sets.append("notes = ?"); params.append(notes)
         if is_pinned is not None:
             sets.append("is_pinned = ?"); params.append(int(is_pinned))
+        if tags is not None:
+            sets.append("tags = ?"); params.append(tags)
         if not sets:
             return
         params.append(mac)
@@ -1373,6 +1381,15 @@ class MetricStore:
             (since, limit),
         )
         return [dict(r) for r in rows]
+
+    def get_last_event_time(self, rule_prefix: str) -> Optional[float]:
+        """Return Unix timestamp of the most recent alert whose rule_name starts with rule_prefix, or None."""
+        rows = self._execute_read(
+            "SELECT MAX(ts) AS t FROM alert_fired WHERE rule_name LIKE ?",
+            (f"{rule_prefix}%",),
+        )
+        val = rows[0]["t"] if rows else None
+        return float(val) if val is not None else None
 
     # ── Write / Read: modem signal log ───────────────────────────────────────
 

@@ -1444,6 +1444,18 @@ class Dashboard(QMainWindow):
         _esc_sc = QShortcut(QKeySequence("Escape"), self)
         _esc_sc.activated.connect(self._on_canvas_click)
 
+        # ? — shortcut overlay
+        _help_sc = QShortcut(QKeySequence("?"), self)
+        _help_sc.activated.connect(self._open_shortcut_overlay)
+
+        # Ctrl+, — Settings
+        _settings_sc = QShortcut(QKeySequence("Ctrl+,"), self)
+        _settings_sc.activated.connect(lambda: self._nav_rail_go_to("Settings"))
+
+        # Ctrl+L — Log Hub
+        _loghub_sc = QShortcut(QKeySequence("Ctrl+L"), self)
+        _loghub_sc.activated.connect(lambda: self._nav_rail_go_to("Network Logger"))
+
         # Pinned pages — persisted across sessions
         self._nav_pinned_labels: set = self._load_pinned_labels()
         self._nav_label_to_widget: dict = {}
@@ -3512,6 +3524,13 @@ class Dashboard(QMainWindow):
         widget = self._nav_label_to_widget.get(label)
         if widget is None:
             return
+        if (
+            label != "Settings"
+            and hasattr(self, "_settings_page")
+            and self._settings_page.is_dirty()
+            and not self._settings_page.confirm_leave()
+        ):
+            return
         self._nav_current_page_label = label
         self._stack.setCurrentWidget(widget)
         self._nav_flyout.set_active(label)
@@ -3931,6 +3950,63 @@ class Dashboard(QMainWindow):
         pal.action_requested.connect(self._on_palette_action)
         pal.exec()
 
+    def _open_shortcut_overlay(self) -> None:
+        """Show the keyboard shortcut reference overlay (KEYBOARD-1)."""
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox
+        from ui.styles import BG_CARD, BORDER, CARD_RADIUS, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Keyboard Shortcuts")
+        dlg.setMinimumWidth(420)
+        dlg.setModal(True)
+        dlg.setStyleSheet(
+            f"QDialog {{ background:{BG_CARD}; }}"
+            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+        vlay = QVBoxLayout(dlg)
+        vlay.setContentsMargins(20, 16, 20, 16)
+        vlay.setSpacing(8)
+        hdr = QLabel("Keyboard Shortcuts")
+        hdr.setStyleSheet(f"font-size:15px; font-weight:bold; color:{TEXT_PRIMARY};")
+        vlay.addWidget(hdr)
+        shortcuts = [
+            ("?",           "Show this reference"),
+            ("Ctrl+K",      "Command palette"),
+            ("Ctrl+F",      "Focus nav search"),
+            ("Ctrl+R",      "Run full scan"),
+            ("Ctrl+,",      "Settings"),
+            ("Ctrl+L",      "Log Hub"),
+            ("Ctrl+Q",      "Quit"),
+            ("J / K",       "Next / previous row in tables"),
+            ("Escape",      "Close panel / flyout"),
+        ]
+        for key, desc in shortcuts:
+            row_w = QWidget()
+            row_w.setStyleSheet("background:transparent;")
+            row_lay = QHBoxLayout(row_w)
+            row_lay.setContentsMargins(0, 2, 0, 2)
+            key_lbl = QLabel(key)
+            key_lbl.setFixedWidth(110)
+            key_lbl.setStyleSheet(
+                f"font-family:monospace; font-size:11px; font-weight:bold;"
+                f" color:{ACCENT}; background:{BORDER}22;"
+                f" border:1px solid {BORDER}; border-radius:3px; padding:1px 5px;"
+            )
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+            row_lay.addWidget(key_lbl)
+            row_lay.addSpacing(12)
+            row_lay.addWidget(desc_lbl, 1)
+            vlay.addWidget(row_w)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btns.rejected.connect(dlg.accept)
+        btns.button(QDialogButtonBox.StandardButton.Close).setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:4px; padding:4px 14px; }}"
+        )
+        vlay.addSpacing(4)
+        vlay.addWidget(btns)
+        dlg.exec()
+
     def _on_palette_action(self, action: str) -> None:
         if action.startswith("__recent__"):
             self._replay_recent_action(action[len("__recent__"):])
@@ -4237,6 +4313,9 @@ class Dashboard(QMainWindow):
         # Column sorting (click header to sort ascending/descending)
         self._m1_table.setSortingEnabled(True)
         self._m1_table.horizontalHeader().setSortIndicatorShown(True)
+        self._m1_table.horizontalHeader().sortIndicatorChanged.connect(
+            self._m1_sort_changed
+        )
 
         # Right-click context menu
         self._m1_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -4255,6 +4334,53 @@ class Dashboard(QMainWindow):
 
         # ── Card wrapping table + empty state ─────────────────────────────────
         m1_card, m1_body = _make_card("Discovered Devices")
+
+        # Search bar + filter chips (FILTER-1)
+        _frow_w = QWidget()
+        _frow_w.setStyleSheet("background:transparent;")
+        _frow = QHBoxLayout(_frow_w)
+        _frow.setContentsMargins(8, 5, 8, 4)
+        _frow.setSpacing(6)
+
+        self._m1_search = QLineEdit()
+        self._m1_search.setPlaceholderText("Search IP, hostname, MAC, vendor…")
+        self._m1_search.setFixedHeight(26)
+        self._m1_search.setClearButtonEnabled(True)
+        self._m1_search.setStyleSheet(
+            f"QLineEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:0 6px; font-size:11px; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        self._m1_search.textChanged.connect(self._m1_apply_filter)
+        _frow.addWidget(self._m1_search, 1)
+
+        self._m1_chip_active_ss = (
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:3px; padding:0 8px; font-size:10px; }}"
+        )
+        self._m1_chip_inactive_ss = (
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; font-size:10px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{TEXT_MUTED}; }}"
+        )
+        self._m1_chip = "all"
+        self._m1_chip_btns: dict = {}
+        for _ckey, _clabel in (
+            ("all", "All"), ("online", "Online"),
+            ("offline", "Offline"), ("unknown", "Unknown vendor"),
+        ):
+            _cbtn = QPushButton(_clabel)
+            _cbtn.setFixedHeight(22)
+            _cbtn.setCursor(Qt.CursorShape.PointingHandCursor)
+            _cbtn.setStyleSheet(
+                self._m1_chip_active_ss if _ckey == "all" else self._m1_chip_inactive_ss
+            )
+            _cbtn.clicked.connect(lambda _=False, k=_ckey: self._m1_set_chip(k))
+            self._m1_chip_btns[_ckey] = _cbtn
+            _frow.addWidget(_cbtn)
+
+        m1_body.addWidget(_frow_w)
+
         # Stack: table on top, empty label behind — we toggle visibility
         from PyQt6.QtWidgets import QStackedWidget as _SW
         self._m1_stack = _SW()
@@ -4282,6 +4408,41 @@ class Dashboard(QMainWindow):
             if ip and hasattr(self, "_syn_host"):
                 self._syn_host.setText(ip)
                 self._nav_rail_go_to("Port Scan (TCP)")
+
+    def _m1_set_chip(self, key: str) -> None:
+        self._m1_chip = key
+        for k, btn in self._m1_chip_btns.items():
+            btn.setStyleSheet(
+                self._m1_chip_active_ss if k == key else self._m1_chip_inactive_ss
+            )
+        self._m1_apply_filter()
+
+    def _m1_apply_filter(self) -> None:
+        text = self._m1_search.text().lower().strip()
+        chip = self._m1_chip
+        for row in range(self._m1_table.rowCount()):
+            text_match = not text or any(
+                text in (self._m1_table.item(row, col) or QTableWidgetItem()).text().lower()
+                for col in (0, 1, 2, 3)
+            )
+            risk_item = self._m1_table.item(row, 4)
+            risk = (risk_item.text() if risk_item else "").upper()
+            vendor_item = self._m1_table.item(row, 3)
+            vendor = (vendor_item.text() if vendor_item else "").lower().strip()
+            if chip == "all":
+                chip_match = True
+            elif chip == "online":
+                chip_match = risk != "UNKNOWN"
+            elif chip == "offline":
+                chip_match = risk == "UNKNOWN"
+            else:
+                chip_match = vendor in ("unknown", "—", "")
+            self._m1_table.setRowHidden(row, not (text_match and chip_match))
+
+    def _m1_sort_changed(self, col: int, order) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("home/m1_sort_col", col)
+        qs.setValue("home/m1_sort_order", int(order))
 
     def _m1_context_menu(self, pos):
         from PyQt6.QtWidgets import QMenu
@@ -9295,6 +9456,8 @@ class Dashboard(QMainWindow):
         for lbl in (self._m1_status, self._m2_status, self._m3_status,
                     self._m4_status, self._m5_status):
             lbl.setText(m)
+        if hasattr(self, "_home_page"):
+            self._home_page.set_scan_progress(m)
 
     @pyqtSlot()
     def _launch_modules(self):
@@ -9331,7 +9494,10 @@ class Dashboard(QMainWindow):
         # Module 1 — always runs
         w1 = Module1Worker(self._offenders_path)
         w1.result.connect(self._on_m1_result)
-        w1.status.connect(lambda m: (self._set_status(m), self._m1_status.setText(m)))
+        w1.status.connect(lambda m: (
+            self._set_status(m), self._m1_status.setText(m),
+            hasattr(self, "_home_page") and self._home_page.set_scan_progress(m),
+        ))
         w1.error.connect(lambda e: self._m1_status.setText(f"Error: {e}"))
         w1.finished.connect(self._on_worker_done)
         self._workers.append(w1)
@@ -9427,6 +9593,14 @@ class Dashboard(QMainWindow):
                 dtype = d.connection_type if not isinstance(d, dict) else d.get("connection_type", "Unknown Device")
             verdict = d.verdict  if not isinstance(d, dict) else d.get("verdict", "")
             _add_row(self._m1_table, [ip, host or "—", mac, vendor, level, dtype, "", "", verdict], level)
+
+        # Re-apply search/chip filter and restore persisted sort (FILTER-1 / FILTER-2)
+        self._m1_apply_filter()
+        _qs = QSettings("NetSentinel", "NetSentinel")
+        _sc = _qs.value("home/m1_sort_col", -1, type=int)
+        _so = _qs.value("home/m1_sort_order", 0, type=int)
+        if _sc >= 0:
+            self._m1_table.sortByColumn(_sc, Qt.SortOrder(_so))
 
         self._m1_scan_summary = (
             f"✓  {data.get('total_count', 0)} devices scanned — "
@@ -10119,6 +10293,17 @@ class Dashboard(QMainWindow):
         )
         if hasattr(self, "_home_page"):
             self._home_page.set_monitor_pills(arp, dhcp, storm, logger)
+            if self._store is not None:
+                try:
+                    pending = len(self._store.get_unacked_alerts())
+                    offline = sum(
+                        1 for d in self._store.get_known_devices().values()
+                        if getattr(d, "last_seen", 0) and
+                        (__import__("time").time() - d.last_seen) > 1800
+                    )
+                    self._home_page.set_action_needed(pending, offline)
+                except Exception:
+                    pass
         # Flyout item dots — always reflect current state
         self._set_flyout_dot("ARP Spoof Watch",    GREEN if arp    else "")
         self._set_flyout_dot("DHCP Rogue Monitor", GREEN if dhcp   else "")
@@ -10130,6 +10315,18 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_monitor_overview_page"):
             self._monitor_overview_page.set_arp_status(arp, alerted=False)
             self._monitor_overview_page.set_dhcp_status(dhcp)
+            if self._store is not None:
+                try:
+                    self._monitor_overview_page.set_monitor_event_times(
+                        arp=self._store.get_last_event_time("ARP"),
+                        dhcp=self._store.get_last_event_time("DHCP"),
+                        storm=self._store.get_last_event_time("Storm"),
+                        iot=self._store.get_last_event_time("IoT"),
+                        ports=self._store.get_last_event_time("Port"),
+                        cve=self._store.get_last_event_time("CVE"),
+                    )
+                except Exception:
+                    pass
 
     def _m3_monitoring_active(self) -> bool:
         """Return True if any scan worker (including storm) is currently running."""

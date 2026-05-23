@@ -15,14 +15,19 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+import time as _time
+
+from PyQt6.QtCore import (
+    QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer, pyqtSignal, pyqtSlot,
+)
 from PyQt6.QtWidgets import (
-    QCheckBox, QFormLayout, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QStackedWidget, QTableWidgetItem,
-    QVBoxLayout, QWidget,
+    QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
+    QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
+    QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
@@ -31,6 +36,236 @@ from ui.styles import (
 
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
+
+
+# ── Device label editor dialog (DEVICE-1) ────────────────────────────────────
+
+class _DeviceLabelDialog(QDialog):
+    """Edit custom name, tags, and notes for a known device."""
+
+    def __init__(self, mac: str, store: "MetricStore", parent=None) -> None:
+        super().__init__(parent)
+        self._mac = mac
+        self._store = store
+        self.setWindowTitle("Edit Device")
+        self.setMinimumWidth(380)
+        self.setModal(True)
+        self.setStyleSheet(
+            f"QDialog {{ background:{BG_CARD}; }}"
+            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
+            f"QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+
+        known = store.get_known_devices()
+        device = known.get(mac.lower()) or known.get(mac)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 16, 20, 16)
+        lay.setSpacing(12)
+
+        hdr = QLabel(f"Device  <span style='color:{TEXT_MUTED};font-size:10px;'>{mac}</span>")
+        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        lay.addWidget(hdr)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+        form.setHorizontalSpacing(12)
+
+        self._name = QLineEdit()
+        self._name.setPlaceholderText("e.g. Living Room TV")
+        if device and device.custom_name:
+            self._name.setText(device.custom_name)
+
+        self._tags = QLineEdit()
+        self._tags.setPlaceholderText("e.g. iot, trusted, media — comma-separated")
+        if device and device.tags:
+            self._tags.setText(device.tags)
+
+        self._notes = QTextEdit()
+        self._notes.setPlaceholderText("Notes…")
+        self._notes.setFixedHeight(72)
+        if device and device.notes:
+            self._notes.setPlainText(device.notes)
+
+        def _lbl(t: str) -> QLabel:
+            l = QLabel(t)
+            l.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            return l
+
+        form.addRow(_lbl("Name"), self._name)
+        form.addRow(_lbl("Tags"), self._tags)
+        form.addRow(_lbl("Notes"), self._notes)
+        lay.addLayout(form)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}dd; }}"
+        )
+        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:4px 14px; }}"
+        )
+        btns.accepted.connect(self._save)
+        btns.rejected.connect(self.reject)
+        lay.addWidget(btns)
+
+    def _save(self) -> None:
+        name = self._name.text().strip() or None
+        tags = self._tags.text().strip() or None
+        notes = self._notes.toPlainText().strip() or None
+        self._store.update_device_ha_info(
+            self._mac, custom_name=name, tags=tags, notes=notes
+        )
+        self.accept()
+
+
+# ── Device history drawer (DEVICE-2) ─────────────────────────────────────────
+
+class _DeviceDrawer(QFrame):
+    """Slide-in panel showing per-device history — last seen, event count, metadata."""
+
+    closed = pyqtSignal()
+
+    _DRAWER_WIDTH = 300
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setObjectName("deviceDrawer")
+        self.setStyleSheet(
+            f"QFrame#deviceDrawer {{ background:{BG_CARD}; border-left:1px solid {BORDER}; }}"
+            f"QLabel {{ background:transparent; border:none; color:{TEXT_PRIMARY}; }}"
+        )
+        self.setFixedWidth(self._DRAWER_WIDTH)
+        self.setVisible(False)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 12, 14, 12)
+        lay.setSpacing(8)
+
+        hdr_row = QHBoxLayout()
+        self._title_lbl = QLabel("Device")
+        self._title_lbl.setStyleSheet(
+            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
+        )
+        close_btn = QPushButton("×")
+        close_btn.setFixedSize(22, 22)
+        close_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:15px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        close_btn.clicked.connect(self.close_drawer)
+        hdr_row.addWidget(self._title_lbl, 1)
+        hdr_row.addWidget(close_btn)
+        lay.addLayout(hdr_row)
+
+        self._mac_lbl    = QLabel("")
+        self._mac_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        lay.addWidget(self._mac_lbl)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color:{BORDER}; background:{BORDER}; max-height:1px;")
+        lay.addWidget(sep)
+
+        def _row(label: str, value_lbl: QLabel) -> None:
+            r = QHBoxLayout()
+            l = QLabel(label)
+            l.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; min-width:90px;")
+            value_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            r.addWidget(l)
+            r.addWidget(value_lbl, 1)
+            lay.addLayout(r)
+
+        self._first_seen_val = QLabel("—")
+        self._last_seen_val  = QLabel("—")
+        self._event_count_val = QLabel("—")
+        self._vendor_val     = QLabel("—")
+        self._custom_val     = QLabel("—")
+        self._tags_val       = QLabel("—")
+        self._notes_val      = QLabel("—")
+        self._notes_val.setWordWrap(True)
+
+        _row("First seen",   self._first_seen_val)
+        _row("Last seen",    self._last_seen_val)
+        _row("Events",       self._event_count_val)
+        _row("Vendor",       self._vendor_val)
+        _row("Custom name",  self._custom_val)
+        _row("Tags",         self._tags_val)
+        _row("Notes",        self._notes_val)
+        lay.addStretch()
+
+        self._anim = QPropertyAnimation(self, b"geometry", self)
+        self._anim.setDuration(180)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+    def load(self, mac: str, store: "Optional[MetricStore]") -> None:
+        self._title_lbl.setText("Device")
+        self._mac_lbl.setText(mac)
+        if store is None:
+            return
+        devices = store.get_known_devices()
+        kd = devices.get(mac.lower()) or devices.get(mac)
+        if kd:
+            self._first_seen_val.setText(
+                datetime.datetime.fromtimestamp(kd.first_seen).strftime("%Y-%m-%d %H:%M")
+                if kd.first_seen else "—"
+            )
+            self._last_seen_val.setText(
+                datetime.datetime.fromtimestamp(kd.last_seen).strftime("%Y-%m-%d %H:%M")
+                if kd.last_seen else "—"
+            )
+            self._vendor_val.setText(kd.vendor or "—")
+            self._custom_val.setText(kd.custom_name or "—")
+            self._tags_val.setText(kd.tags or "—")
+            self._notes_val.setText(kd.notes or "—")
+            if kd.custom_name:
+                self._title_lbl.setText(kd.custom_name)
+        try:
+            events = store.query_device_events(hours=720, event_types=None)
+            count = sum(1 for e in events if (e.mac or "").lower() == mac.lower())
+            self._event_count_val.setText(str(count) if count else "0")
+        except Exception:
+            self._event_count_val.setText("—")
+
+    def open_drawer(self) -> None:
+        parent = self.parent()
+        if parent is None:
+            return
+        ph = parent.height()
+        pw = parent.width()
+        w  = self._DRAWER_WIDTH
+        self.setGeometry(pw, 0, w, ph)
+        self.setVisible(True)
+        self.raise_()
+        self._anim.setStartValue(QRect(pw, 0, w, ph))
+        self._anim.setEndValue(QRect(pw - w, 0, w, ph))
+        self._anim.start()
+
+    def close_drawer(self) -> None:
+        parent = self.parent()
+        if parent is None:
+            self.setVisible(False)
+            self.closed.emit()
+            return
+        pw = parent.width()
+        w  = self._DRAWER_WIDTH
+        ph = parent.height()
+        self._anim.setStartValue(QRect(pw - w, 0, w, ph))
+        self._anim.setEndValue(QRect(pw, 0, w, ph))
+        self._anim.finished.connect(self._on_close_done)
+        self._anim.start()
+
+    def _on_close_done(self) -> None:
+        self._anim.finished.disconnect(self._on_close_done)
+        self.setVisible(False)
+        self.closed.emit()
 
 
 # ── Event type display config ─────────────────────────────────────────────────
@@ -100,6 +335,11 @@ class InventoryPage(QWidget):
         if store:
             self._refresh()
             self._auto_timer.start()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._table.rowCount() == 0:
+            insert_skeleton_rows(self._table, count=6)
 
     # ── Build ─────────────────────────────────────────────────────────────────
 
@@ -243,12 +483,17 @@ class InventoryPage(QWidget):
         hdr.resizeSection(4, 130)
         hdr.setStretchLastSection(True)
         self._table.cellDoubleClicked.connect(self._on_row_double_clicked)
+        self._table.cellClicked.connect(self._on_row_single_clicked)
         card_lay.addWidget(self._table)
         cl.addWidget(card, 1)
         self._content_stack.addWidget(content)
 
         root.addWidget(self._content_stack, 1)
         self._set_window("24h")
+
+        # DEVICE-2: slide-in drawer (overlay, parented to self)
+        self._device_drawer = _DeviceDrawer(self)
+        self._device_drawer.closed.connect(lambda: None)  # no-op; drawer hides itself
 
     # ── Window / filter controls ──────────────────────────────────────────────
 
@@ -342,6 +587,7 @@ class InventoryPage(QWidget):
         self._set_kpi(self._kpi_devices, str(known))
 
         # Table
+        clear_skeleton_rows(self._table)
         self._table.setSortingEnabled(False)
         self._table.clear_detail()
         self._table.setRowCount(0)
@@ -356,18 +602,21 @@ class InventoryPage(QWidget):
         known_devices = self._store.get_known_devices()
         for evt in events:
             vendor = ""
+            custom_name = ""
             kd = known_devices.get((evt.mac or "").lower())
             if kd:
                 vendor = kd.vendor or ""
+                custom_name = kd.custom_name or ""
             self._rows.append((evt, vendor))
 
             row = self._table.rowCount()
             self._table.insertRow(row)
             dt_str = datetime.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
             color, _ = _EVENT_STYLE.get(evt.event_type, (TEXT_SECONDARY, evt.event_type))
+            host_cell = custom_name or evt.ip or "—"
             self._table.setItem(row, 0, _plain_item(dt_str))
             self._table.setItem(row, 1, _badge_item(evt.event_type, color))
-            self._table.setItem(row, 2, _plain_item(evt.ip or "—"))
+            self._table.setItem(row, 2, _plain_item(host_cell))
             self._table.setItem(row, 3, _plain_item(evt.mac or "—"))
             self._table.setItem(row, 4, _plain_item(vendor or "—"))
             self._table.setItem(row, 5, _plain_item(evt.detail or ""))
@@ -434,10 +683,37 @@ class InventoryPage(QWidget):
         lay.addStretch()
         return outer
 
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        if hasattr(self, "_device_drawer") and self._device_drawer.isVisible():
+            w = _DeviceDrawer._DRAWER_WIDTH
+            self._device_drawer.setGeometry(
+                self.width() - w, 0, w, self.height()
+            )
+
+    @pyqtSlot(int, int)
+    def _on_row_single_clicked(self, row: int, _col: int) -> None:
+        item = self._table.item(row, 3)  # MAC column
+        if not item:
+            return
+        mac = item.text().strip()
+        if not mac or mac == "—":
+            return
+        self._device_drawer.load(mac, self._store)
+        if not self._device_drawer.isVisible():
+            self._device_drawer.open_drawer()
+
     @pyqtSlot(int, int)
     def _on_row_double_clicked(self, row: int, _col: int) -> None:
         item = self._table.item(row, 3)  # MAC column
-        if item:
-            mac = item.text().strip()
-            if mac and mac != "—":
-                self.device_selected.emit(mac)
+        if not item:
+            return
+        mac = item.text().strip()
+        if not mac or mac == "—":
+            return
+        if self._store:
+            dlg = _DeviceLabelDialog(mac, self._store, parent=self)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                self._refresh()
+        else:
+            self.device_selected.emit(mac)

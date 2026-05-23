@@ -20,6 +20,7 @@ the currently displayed data, ignoring the injected detail row).  Store
 your data list as an instance attribute and index into it from the builder.
 """
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QTableWidget
 
 
@@ -80,3 +81,13 @@ class ExpandingTable(QTableWidget):
         self.setRowHeight(detail_pos, self._detail_height)
         self._detail_row      = detail_pos
         self._expanded_logical = logical
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        key = event.key()
+        if key in (Qt.Key.Key_J, Qt.Key.Key_K):
+            current = self.currentRow()
+            step = 1 if key == Qt.Key.Key_J else -1
+            target = max(0, min(self.rowCount() - 1, current + step))
+            self.setCurrentCell(target, self.currentColumn())
+            return
+        super().keyPressEvent(event)

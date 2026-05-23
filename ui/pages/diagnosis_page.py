@@ -21,8 +21,8 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, BG_HOVER, GREEN, RED,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 
 _SEV_COLOR = {
@@ -45,6 +45,66 @@ _CTA_MAP: dict[str, tuple[str, str]] = {
     "Broadcast Storm":                           ("Open Broadcast Storm →",    "Broadcast Storm"),
     "Degraded IoT Device — Excessive Broadcasting": ("Open IoT Behaviour →",  "IoT Behaviour"),
     "Rogue Network Bridge":                      ("Open Rogue Bridge (STP) →", "Rogue Bridge (STP)"),
+}
+
+_REMEDIATION: dict[str, list[str]] = {
+    "DNS Resolution Failure": [
+        "1. Open Command Prompt and run: nslookup google.com",
+        "2. If it times out, try setting your DNS to 8.8.8.8 in network adapter settings.",
+        "3. Restart your router and retry.",
+        "4. If still failing, contact your ISP.",
+    ],
+    "DNS Leak Detected": [
+        "1. Check your VPN settings — leaks often occur when split tunnelling is enabled.",
+        "2. Use a DNS resolver that supports DNS-over-HTTPS (DoH), e.g. Cloudflare 1.1.1.1.",
+        "3. Verify with dnsleaktest.com after each change.",
+    ],
+    "Chronic Connectivity Loss": [
+        "1. Run a ping -t 8.8.8.8 in Command Prompt and watch for dropped replies.",
+        "2. Check all cable connections between your device, switch, and router.",
+        "3. Look for interference on 2.4 GHz Wi-Fi — switch to 5 GHz if possible.",
+        "4. If only one device is affected, try a different NIC or cable.",
+    ],
+    "High Jitter — Unstable Latency": [
+        "1. Run a speed test — high jitter often signals congestion on the WAN link.",
+        "2. On Wi-Fi, move closer to the AP or switch bands (5 GHz for lower latency).",
+        "3. Check QoS settings on your router and prioritise interactive traffic.",
+        "4. If on a shared connection, identify bandwidth-hungry devices in Bandwidth Usage.",
+    ],
+    "Very Low Download Speed": [
+        "1. Run the Speed Test page to confirm the result.",
+        "2. Compare against your plan speed — if far below, restart the modem.",
+        "3. Check for other heavy users or devices (torrents, backups) in Bandwidth Usage.",
+        "4. If the problem persists, contact your ISP with test results.",
+    ],
+    "External ISP Issue": [
+        "1. Power-cycle your modem (unplug, wait 30 s, replug).",
+        "2. Test from a different device to confirm it's not device-specific.",
+        "3. Check your ISP's status page for outages in your area.",
+        "4. If your modem has a status page, look for red indicators on the WAN port.",
+    ],
+    "Local Network / Router Unreachable": [
+        "1. Check the physical connection between your device and the router.",
+        "2. Try releasing and renewing your IP: run ipconfig /release then ipconfig /renew.",
+        "3. Reboot the router.",
+        "4. If the router admin page (192.168.1.1) is also unreachable, factory-reset it.",
+    ],
+    "Broadcast Storm": [
+        "1. Open the Broadcast Storm page to see which devices are flooding.",
+        "2. Disconnect suspect devices one at a time until the storm stops.",
+        "3. Check for bridging loops — a switch or access point may be creating a cycle.",
+        "4. Enable Spanning Tree Protocol (STP) on your managed switches.",
+    ],
+    "Degraded IoT Device — Excessive Broadcasting": [
+        "1. Identify the MAC in IoT Behaviour and power-cycle that device.",
+        "2. If it continues flooding after a reboot, isolate it on a VLAN.",
+        "3. Check for firmware updates for the device.",
+    ],
+    "Rogue Network Bridge": [
+        "1. Open Rogue Bridge (STP) to see which device sent BPDUs.",
+        "2. Disconnect it if it is not a managed switch.",
+        "3. Enable BPDU Guard on switch ports that connect end devices.",
+    ],
 }
 
 _IDLE    = 0
@@ -411,6 +471,45 @@ class DiagnosisPage(QWidget):
             lay.addWidget(rem)
 
         category = getattr(finding, "category", "")
+
+        # EXPLAIN-3: collapsible "▶ What to do" remediation expander
+        steps = _REMEDIATION.get(category) or _REMEDIATION.get(headline)
+        if steps:
+            expander_btn = QPushButton("▶  What to do")
+            expander_btn.setFlat(True)
+            expander_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            expander_btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                f" border:none; padding:2px 0; text-align:left; }}"
+                f"QPushButton:hover {{ color:{color}; }}"
+            )
+            steps_widget = QFrame()
+            steps_widget.setStyleSheet(
+                f"QFrame {{ background:{BG_HOVER}; border-left:2px solid {BORDER};"
+                f" border-top:none; border-right:none; border-bottom:none;"
+                f" margin-left:4px; }}"
+            )
+            steps_widget.setVisible(False)
+            sw_lay = QVBoxLayout(steps_widget)
+            sw_lay.setContentsMargins(10, 6, 6, 6)
+            sw_lay.setSpacing(3)
+            for step in steps:
+                sl = QLabel(step)
+                sl.setWordWrap(True)
+                sl.setStyleSheet(
+                    f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+                )
+                sw_lay.addWidget(sl)
+
+            def _toggle_steps(checked: bool, btn=expander_btn, sw=steps_widget) -> None:
+                sw.setVisible(checked)
+                btn.setText(("▼" if checked else "▶") + "  What to do")
+
+            expander_btn.setCheckable(True)
+            expander_btn.toggled.connect(_toggle_steps)
+            lay.addWidget(expander_btn)
+            lay.addWidget(steps_widget)
+
         if category in _CTA_MAP:
             cta_label, cta_target = _CTA_MAP[category]
             cta_btn = QPushButton(cta_label)

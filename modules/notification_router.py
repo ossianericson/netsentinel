@@ -366,6 +366,35 @@ class NotificationRouter:
         self._log: List[dict] = []
         self._log_max = 500
 
+        # Snooze registry: rule_name → expiry Unix timestamp (float); 0 = forever
+        self._snooze: Dict[str, float] = {}
+
+    # ── Snooze management ─────────────────────────────────────────────────────
+
+    def set_snooze(self, rule_name: str, until_ts: float) -> None:
+        """Snooze rule_name until until_ts (Unix seconds). Pass 0 for 'forever'."""
+        with self._lock:
+            self._snooze[rule_name] = until_ts
+
+    def clear_snooze(self, rule_name: str) -> None:
+        with self._lock:
+            self._snooze.pop(rule_name, None)
+
+    def get_snooze_expiry(self, rule_name: str) -> Optional[float]:
+        """Return expiry ts for snoozed rule, 0 if forever, None if not snoozed."""
+        with self._lock:
+            return self._snooze.get(rule_name)
+
+    def get_all_snoozes(self) -> Dict[str, float]:
+        with self._lock:
+            return dict(self._snooze)
+
+    def _is_snoozed(self, rule_name: str) -> bool:
+        expiry = self._snooze.get(rule_name)
+        if expiry is None:
+            return False
+        return expiry == 0 or time.time() < expiry
+
     # ── Configuration ─────────────────────────────────────────────────────────
 
     def set_channels(self, channels: List[Channel]) -> None:
@@ -390,6 +419,10 @@ class NotificationRouter:
         """
         with self._lock:
             channels = list(self._channels)
+            snoozed = self._is_snoozed(alert.rule_name)
+
+        if snoozed:
+            return
 
         for ch in channels:
             if not ch.enabled:

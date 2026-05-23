@@ -343,6 +343,14 @@ class HomePage(QWidget):
 
         row.addStretch()
 
+        # SCAN-2: per-host scan progress label (hidden when idle)
+        self._scan_progress_lbl = QLabel("")
+        self._scan_progress_lbl.setStyleSheet(
+            f"font-size:10px; color:{AMBER}; background:transparent; border:none;"
+        )
+        self._scan_progress_lbl.setVisible(False)
+        row.addWidget(self._scan_progress_lbl)
+
         # Refresh button
         self._fs_refresh_btn = QPushButton("↻")
         self._fs_refresh_btn.setFixedSize(24, 22)
@@ -509,6 +517,61 @@ class HomePage(QWidget):
         lv_lay.addWidget(_lv_icon)
         lv_lay.addWidget(self._lv_text, 1)
         lay.addWidget(self._last_visit_card)
+
+        # ── DASH-1: "Action needed" card ─────────────────────────────────────
+        self._action_card = QFrame()
+        self._action_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {RED}44;"
+            f" border-left:3px solid {RED}; border-radius:{CARD_RADIUS}; }}"
+        )
+        self._action_card.setVisible(False)
+        _ac_outer = QVBoxLayout(self._action_card)
+        _ac_outer.setContentsMargins(14, 10, 14, 10)
+        _ac_outer.setSpacing(6)
+        _ac_hdr_row = QHBoxLayout()
+        _ac_hdr_lbl = QLabel("⚠  Action needed")
+        _ac_hdr_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{RED};"
+            " background:transparent; border:none;"
+        )
+        _ac_hdr_row.addWidget(_ac_hdr_lbl)
+        _ac_hdr_row.addStretch()
+        _ac_outer.addLayout(_ac_hdr_row)
+        _ac_items_row = QHBoxLayout()
+        _ac_items_row.setSpacing(16)
+        self._ac_alerts_lbl = QLabel("")
+        self._ac_alerts_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _ac_alerts_btn = QPushButton("View Alerts →")
+        _ac_alerts_btn.setFixedHeight(24)
+        _ac_alerts_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _ac_alerts_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
+            f" border-radius:3px; font-size:11px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{AMBER}22; }}"
+        )
+        _ac_alerts_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
+        self._ac_devices_lbl = QLabel("")
+        self._ac_devices_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _ac_devices_btn = QPushButton("View Devices →")
+        _ac_devices_btn.setFixedHeight(24)
+        _ac_devices_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _ac_devices_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{RED}; border:1px solid {RED};"
+            f" border-radius:3px; font-size:11px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{RED}22; }}"
+        )
+        _ac_devices_btn.clicked.connect(lambda: self.navigate_to.emit("Inventory"))
+        _ac_items_row.addWidget(self._ac_alerts_lbl)
+        _ac_items_row.addWidget(_ac_alerts_btn)
+        _ac_items_row.addWidget(self._ac_devices_lbl)
+        _ac_items_row.addWidget(_ac_devices_btn)
+        _ac_items_row.addStretch()
+        _ac_outer.addLayout(_ac_items_row)
+        lay.addWidget(self._action_card)
 
         # ── Post-scan delta banner (hidden until 2nd+ scan) ───────────────────
         self._delta_banner = QFrame()
@@ -879,7 +942,7 @@ class HomePage(QWidget):
         self._monitoring_nudge.setVisible(False)
         self._monitoring_nudge.setCursor(Qt.CursorShape.PointingHandCursor)
         self._monitoring_nudge.setStyleSheet(
-            f"font-size:11px; color:{AMBER}; background:transparent;"
+            f"font-size:11px; color:{ACCENT}; background:transparent;"
             " border:none; padding-top:2px;"
         )
         self._monitoring_nudge.mousePressEvent = (  # type: ignore[method-assign]
@@ -1515,6 +1578,25 @@ class HomePage(QWidget):
                     f"QPushButton:hover {{ border-color:{ACCENT}; }}"
                 )
 
+    def set_action_needed(self, pending_alerts: int, offline_devices: int) -> None:
+        """Show or hide the 'Action needed' card (DASH-1)."""
+        if pending_alerts == 0 and offline_devices == 0:
+            self._action_card.setVisible(False)
+            return
+        if pending_alerts > 0:
+            self._ac_alerts_lbl.setText(
+                f"{pending_alerts} unacked alert{'s' if pending_alerts != 1 else ''}"
+            )
+        else:
+            self._ac_alerts_lbl.setText("")
+        if offline_devices > 0:
+            self._ac_devices_lbl.setText(
+                f"{offline_devices} device{'s' if offline_devices != 1 else ''} offline"
+            )
+        else:
+            self._ac_devices_lbl.setText("")
+        self._action_card.setVisible(True)
+
     def _scroll_to_setup_card(self) -> None:
         """Scroll to / expand the setup checklist card (NUX-4)."""
         if not hasattr(self, "_setup_card"):
@@ -1587,6 +1669,18 @@ class HomePage(QWidget):
         else:
             self._update_scan_button_label()
             self._hero_sub.setText("Discover devices · check stability · detect threats")
+            self._scan_progress_lbl.setVisible(False)
+            self._scan_progress_lbl.setText("")
+
+    @pyqtSlot(str)
+    def set_scan_progress(self, message: str) -> None:
+        """Show per-host scan status in the freshness strip (SCAN-2)."""
+        if not message:
+            self._scan_progress_lbl.setVisible(False)
+            return
+        text = message if len(message) <= 60 else message[:57] + "…"
+        self._scan_progress_lbl.setText(text)
+        self._scan_progress_lbl.setVisible(True)
 
     # ── Startup preload ───────────────────────────────────────────────────────
 
@@ -2101,13 +2195,13 @@ class _GradeBreakdownDialog:
         if worst_dim and getattr(worst_dim, "tip", ""):
             tip_frame = QFrame()
             tip_frame.setStyleSheet(
-                f"QFrame {{ background:{AMBER}22; border:1px solid {AMBER}44; border-radius:4px; }}"
+                f"QFrame {{ background:{ACCENT}22; border:1px solid {ACCENT}44; border-radius:4px; }}"
             )
             tip_lay = QHBoxLayout(tip_frame)
             tip_lay.setContentsMargins(10, 8, 10, 8)
-            tip_icon = QLabel("▲")
+            tip_icon = QLabel("ℹ")
             tip_icon.setStyleSheet(
-                f"font-size:11px; color:{AMBER}; background:transparent; border:none;"
+                f"font-size:11px; color:{ACCENT}; background:transparent; border:none;"
             )
             tip_lbl = QLabel(
                 f"<b>How to improve:</b> {worst_dim.tip}"

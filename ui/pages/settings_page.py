@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QTableWidget,
@@ -170,14 +171,60 @@ class SettingsPage(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("contentArea")
+        self._dirty = False
+        self._all_cards: list[tuple[QFrame, str]] = []
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(10)
+        outer.setSpacing(0)
 
-        outer.addWidget(_page_header(
-            "Settings & Customisation",
-            "Change the colour theme, display preferences, and more",
-        ))
+        # Header with dirty indicator
+        hdr_container = QFrame()
+        hdr_container.setStyleSheet(
+            f"QFrame {{ background:transparent; border-bottom:1px solid {BORDER}; }}"
+        )
+        hdr_lay = QHBoxLayout(hdr_container)
+        hdr_lay.setContentsMargins(20, 16, 20, 12)
+        hdr_lay.setSpacing(8)
+        hdr_title = QLabel("Settings & Customisation")
+        hdr_title.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
+            " padding:0; background:transparent; border:none;"
+        )
+        self._dirty_dot = QLabel("● Unsaved changes")
+        self._dirty_dot.setStyleSheet(
+            f"font-size:10px; color:#F59E0B; background:transparent; border:none;"
+        )
+        self._dirty_dot.setVisible(False)
+        hdr_lay.addWidget(hdr_title)
+        hdr_lay.addSpacing(8)
+        hdr_lay.addWidget(self._dirty_dot)
+        hdr_lay.addStretch()
+        outer.addWidget(hdr_container)
+
+        # SETTINGS-1: search bar
+        search_row = QFrame()
+        search_row.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border-bottom:1px solid {BORDER}; }}"
+        )
+        search_lay = QHBoxLayout(search_row)
+        search_lay.setContentsMargins(16, 6, 16, 6)
+        search_lay.setSpacing(8)
+        search_icon = QLabel("🔍")
+        search_icon.setStyleSheet(
+            f"font-size:12px; background:transparent; border:none; color:{TEXT_MUTED};"
+        )
+        self._settings_search = QLineEdit()
+        self._settings_search.setPlaceholderText("Search settings…")
+        self._settings_search.setStyleSheet(
+            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:4px 8px; font-size:11px; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        self._settings_search.textChanged.connect(self._on_search_changed)
+        search_lay.addWidget(search_icon)
+        search_lay.addWidget(self._settings_search, 1)
+        outer.addWidget(search_row)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -190,16 +237,59 @@ class SettingsPage(QWidget):
         bl.setContentsMargins(0, 0, 12, 20)
         bl.setSpacing(12)
 
-        bl.addWidget(self._build_appearance_card())
-        bl.addWidget(self._build_display_card())
-        bl.addWidget(self._build_tray_card())
-        bl.addWidget(self._build_plugin_marketplace_card())
-        bl.addWidget(self._build_shortcuts_card())
-        bl.addWidget(self._build_maintenance_card())
+        for builder, title in [
+            (self._build_appearance_card,         "Appearance — Colour Theme"),
+            (self._build_display_card,            "Display"),
+            (self._build_tray_card,               "Notifications & Tray"),
+            (self._build_plugin_marketplace_card, "Plugin Marketplace"),
+            (self._build_shortcuts_card,          "Keyboard Shortcuts"),
+            (self._build_maintenance_card,        "Maintenance"),
+        ]:
+            card = builder()
+            self._all_cards.append((card, title))
+            bl.addWidget(card)
         bl.addStretch()
 
         scroll.setWidget(body)
         outer.addWidget(scroll, 1)
+
+    # ── Search + dirty guard ─────────────────────────────────────────────────
+
+    def _on_search_changed(self, text: str) -> None:
+        q = text.strip().lower()
+        if len(q) < 3:
+            for card, _ in self._all_cards:
+                card.setVisible(True)
+        else:
+            for card, title in self._all_cards:
+                card.setVisible(q in title.lower())
+
+    def _mark_dirty(self) -> None:
+        self._dirty = True
+        self._dirty_dot.setVisible(True)
+
+    def is_dirty(self) -> bool:
+        return self._dirty
+
+    def clear_dirty(self) -> None:
+        self._dirty = False
+        self._dirty_dot.setVisible(False)
+
+    def confirm_leave(self) -> bool:
+        """Return True if it's OK to navigate away (prompts if dirty)."""
+        if not self._dirty:
+            return True
+        result = QMessageBox.question(
+            self,
+            "Unsaved changes",
+            "You have unsaved settings changes.\nLeave anyway?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if result == QMessageBox.StandardButton.Yes:
+            self.clear_dirty()
+            return True
+        return False
 
     # ── Appearance ────────────────────────────────────────────────────────────
 
@@ -302,10 +392,12 @@ class SettingsPage(QWidget):
     def _on_compact_toggled(self, checked: bool):
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("display/compact_rows", checked)
+        self._mark_dirty()
 
     def _on_tooltip_toggled(self, checked: bool):
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("display/tooltips_enabled", checked)
+        self._mark_dirty()
 
     # ── System Tray & Startup ─────────────────────────────────────────────────
 
@@ -367,7 +459,10 @@ class SettingsPage(QWidget):
             qs.value("tray/notify_new_device", False, type=bool)
         )
         self._chk_notify_new_device.toggled.connect(
-            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("tray/notify_new_device", v)
+            lambda v: (
+                QSettings("NetSentinel", "NetSentinel").setValue("tray/notify_new_device", v),
+                self._mark_dirty(),
+            )
         )
         bl.addWidget(self._chk_notify_new_device)
 
@@ -381,7 +476,10 @@ class SettingsPage(QWidget):
             qs.value("tray/notify_device_gone", False, type=bool)
         )
         self._chk_notify_gone.toggled.connect(
-            lambda v: QSettings("NetSentinel", "NetSentinel").setValue("tray/notify_device_gone", v)
+            lambda v: (
+                QSettings("NetSentinel", "NetSentinel").setValue("tray/notify_device_gone", v),
+                self._mark_dirty(),
+            )
         )
         bl.addWidget(self._chk_notify_gone)
 
@@ -397,6 +495,7 @@ class SettingsPage(QWidget):
         return card
 
     def _on_tray_toggled(self, checked: bool) -> None:
+        self._mark_dirty()
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("tray/minimize_to_tray", checked)
         # Also update the live tray manager if reachable
@@ -415,6 +514,7 @@ class SettingsPage(QWidget):
             pass
 
     def _on_startup_toggled(self, checked: bool) -> None:
+        self._mark_dirty()
         from ui.system_tray import set_run_on_startup
         set_run_on_startup(checked)
 

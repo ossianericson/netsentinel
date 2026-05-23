@@ -61,7 +61,7 @@ def _load_secret(key: str) -> str:
     except Exception:
         return ""
 
-from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QEvent, QObject, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -69,6 +69,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -86,6 +87,31 @@ from ui.styles import (
 )
 
 from modules.alert_engine import rule_settings_key as _rule_key
+from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
+
+
+# ── J/K table navigation event filter (KEYBOARD-2) ───────────────────────────
+
+class _JKNavFilter(QObject):
+    """Event filter that adds J/K row navigation to a QTableWidget."""
+
+    def __init__(self, table: "QTableWidget", parent=None) -> None:
+        super().__init__(parent)
+        self._table = table
+
+    def eventFilter(self, obj, event) -> bool:
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and obj is self._table.viewport()
+        ):
+            key = event.key()
+            if key in (Qt.Key.Key_J, Qt.Key.Key_K):
+                current = self._table.currentRow()
+                step = 1 if key == Qt.Key.Key_J else -1
+                target = max(0, min(self._table.rowCount() - 1, current + step))
+                self._table.setCurrentCell(target, self._table.currentColumn())
+                return True
+        return False
 
 
 # ── Helpers (shared with settings_page pattern) ───────────────────────────────
@@ -811,6 +837,47 @@ class NotificationsPage(QWidget):
         hist_lay.setContentsMargins(0, 6, 0, 0)
         hist_lay.setSpacing(4)
 
+        # FILTER-3: severity chips + time range filter row
+        self._hist_sev_filter: set[str] = {"INFO", "WARNING", "CRITICAL"}
+        self._hist_hours = 72.0
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(6)
+        filter_row.setContentsMargins(0, 0, 0, 2)
+        sev_lbl = QLabel("Severity:")
+        sev_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        filter_row.addWidget(sev_lbl)
+        self._hist_sev_btns: dict[str, QPushButton] = {}
+        for sev, col in _SEV_COLOR.items():
+            btn = QPushButton(sev)
+            btn.setCheckable(True)
+            btn.setChecked(True)
+            btn.setFixedHeight(20)
+            btn.setStyleSheet(
+                f"QPushButton {{ font-size:9px; font-weight:bold; border:1px solid {col};"
+                f" border-radius:3px; padding:0 6px; color:{col}; background:transparent; }}"
+                f"QPushButton:checked {{ background:{col}; color:#fff; }}"
+                f"QPushButton:unchecked {{ background:transparent; }}"
+            )
+            btn.toggled.connect(lambda checked, s=sev: self._toggle_hist_sev(s, checked))
+            self._hist_sev_btns[sev] = btn
+            filter_row.addWidget(btn)
+        filter_row.addSpacing(12)
+        time_lbl = QLabel("Window:")
+        time_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        filter_row.addWidget(time_lbl)
+        self._hist_time_combo = QComboBox()
+        self._hist_time_combo.setFixedHeight(22)
+        self._hist_time_combo.addItems(["1h", "6h", "24h", "72h", "7d"])
+        self._hist_time_combo.setCurrentText("72h")
+        self._hist_time_combo.setStyleSheet(
+            f"QComboBox {{ font-size:10px; background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:0 4px; }}"
+        )
+        self._hist_time_combo.currentTextChanged.connect(self._on_hist_time_changed)
+        filter_row.addWidget(self._hist_time_combo)
+        filter_row.addStretch()
+        hist_lay.addLayout(filter_row)
+
         self._alert_history_table = QTableWidget(0, 5)
         self._alert_history_table.setHorizontalHeaderLabels(
             ["Time", "Rule", "Host", "Severity", "Status"]
@@ -828,6 +895,10 @@ class NotificationsPage(QWidget):
         for w, col in zip((100, 80, 100, 80), range(4)):
             self._alert_history_table.setColumnWidth(col, w)
         self._alert_history_table.itemDoubleClicked.connect(self._on_alert_history_row_clicked)
+        self._alert_history_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._alert_history_table.customContextMenuRequested.connect(self._on_alert_history_context_menu)
+        self._jk_filter_hist = _JKNavFilter(self._alert_history_table, self)
+        self._alert_history_table.viewport().installEventFilter(self._jk_filter_hist)
         hist_lay.addWidget(self._alert_history_table)
 
         hist_btn_row = QHBoxLayout()
@@ -867,6 +938,8 @@ class NotificationsPage(QWidget):
         for w, col in zip((110, 90, 80, 120, 80), range(5)):
             self._log_table.setColumnWidth(col, w)
         self._log_table.itemClicked.connect(self._on_log_row_clicked)
+        self._jk_filter_log = _JKNavFilter(self._log_table, self)
+        self._log_table.viewport().installEventFilter(self._jk_filter_log)
         log_lay.addWidget(self._log_table)
 
         # Detail panel — shown when a failed row is clicked
@@ -1192,6 +1265,11 @@ class NotificationsPage(QWidget):
         self._alert_engine = engine
         self._apply_to_engine()
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._alert_history_table.rowCount() == 0:
+            insert_skeleton_rows(self._alert_history_table, count=4)
+
     # ── Store injection (RECUR-2) ─────────────────────────────────────────────
 
     def set_store(self, store) -> None:
@@ -1413,29 +1491,57 @@ class NotificationsPage(QWidget):
         self._log_detail.setVisible(False)
 
     def _refresh_alert_history(self) -> None:
-        """NOTIF-6: populate Alert History tab from store."""
+        """NOTIF-6: populate Alert History tab from store (with dedup ×N and snooze status)."""
         if self._store is None:
             return
         from PyQt6.QtGui import QColor
         try:
-            alerts = self._store.get_recent_alerts(hours=72, limit=200)
+            alerts = self._store.get_recent_alerts(hours=self._hist_hours, limit=500)
         except Exception:
             return
-        self._alert_history_table.setRowCount(0)
+        if self._hist_sev_filter != {"INFO", "WARNING", "CRITICAL"}:
+            alerts = [a for a in alerts if a.get("severity", "INFO") in self._hist_sev_filter]
+
+        # ALERT-2: group by (rule_name, host) → keep most-recent, add count
+        seen: dict = {}  # key → (alert_dict, count)
         for alert in alerts:
+            key = (alert.get("rule_name", ""), alert.get("host", ""))
+            if key not in seen:
+                seen[key] = (alert, 1)
+            else:
+                seen[key] = (seen[key][0], seen[key][1] + 1)
+        grouped = list(seen.values())
+
+        # ALERT-1: get snooze state from router
+        snoozes = self._router.get_all_snoozes() if self._router else {}
+
+        clear_skeleton_rows(self._alert_history_table)
+        self._alert_history_table.setRowCount(0)
+        for alert, count in grouped:
             row = self._alert_history_table.rowCount()
             self._alert_history_table.insertRow(row)
-            ts_str  = time.strftime("%m-%d %H:%M", time.localtime(alert.get("ts", 0)))
-            sev     = alert.get("severity", "INFO")
-            sev_col = _SEV_COLOR.get(sev, TEXT_PRIMARY)
-            status  = "✓ Acked" if alert.get("acked_ts") else "Pending"
-            st_col  = GREEN if alert.get("acked_ts") else AMBER
+            ts_str    = time.strftime("%m-%d %H:%M", time.localtime(alert.get("ts", 0)))
+            sev       = alert.get("severity", "INFO")
+            sev_col   = _SEV_COLOR.get(sev, TEXT_PRIMARY)
+            rule_name = alert.get("rule_name", "")
+            rule_disp = f"{rule_name}  ×{count}" if count > 1 else rule_name
+
+            snooze_expiry = snoozes.get(rule_name)
+            if snooze_expiry is not None:
+                if snooze_expiry == 0:
+                    status = "Snoozed ∞"
+                else:
+                    status = time.strftime("Snoozed →%H:%M", time.localtime(snooze_expiry))
+                st_col = TEXT_MUTED
+            elif alert.get("acked_ts"):
+                status = "✓ Acked"
+                st_col = GREEN
+            else:
+                status = "Pending"
+                st_col = AMBER
+
             for col, val in enumerate([
-                ts_str,
-                alert.get("rule_name", ""),
-                alert.get("host", ""),
-                sev,
-                status,
+                ts_str, rule_disp, alert.get("host", ""), sev, status,
             ]):
                 it = QTableWidgetItem(str(val))
                 it.setFlags(it.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -1469,6 +1575,71 @@ class NotificationsPage(QWidget):
             self.navigate_to.emit("DHCP Rogue Monitor")
         else:
             self.navigate_to.emit("Notifications")
+
+    @pyqtSlot("QPoint")
+    def _on_alert_history_context_menu(self, pos) -> None:
+        """Right-click snooze menu on alert history rows (ALERT-1)."""
+        row = self._alert_history_table.rowAt(pos.y())
+        if row < 0:
+            return
+        first = self._alert_history_table.item(row, 0)
+        if first is None:
+            return
+        alert = first.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(alert, dict):
+            return
+        rule_name = alert.get("rule_name", "")
+        if not rule_name or not self._router:
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f" font-size:11px; }}"
+            f"QMenu::item:selected {{ background:{ACCENT}; color:#fff; }}"
+        )
+        expiry = self._router.get_snooze_expiry(rule_name)
+        if expiry is not None:
+            label = "Snoozed ∞" if expiry == 0 else time.strftime("Snoozed until %H:%M", time.localtime(expiry))
+            menu.addAction(f"  {label}").setEnabled(False)
+            menu.addSeparator()
+            menu.addAction("Un-snooze").triggered.connect(
+                lambda: self._apply_snooze(rule_name, None)
+            )
+        else:
+            menu.addAction(f"Snooze: {rule_name}").setEnabled(False)
+            menu.addSeparator()
+            menu.addAction("Snooze 1 hour").triggered.connect(
+                lambda: self._apply_snooze(rule_name, time.time() + 3600)
+            )
+            menu.addAction("Snooze 8 hours").triggered.connect(
+                lambda: self._apply_snooze(rule_name, time.time() + 28800)
+            )
+            menu.addAction("Snooze forever").triggered.connect(
+                lambda: self._apply_snooze(rule_name, 0)
+            )
+        menu.exec(self._alert_history_table.viewport().mapToGlobal(pos))
+
+    def _apply_snooze(self, rule_name: str, until_ts) -> None:
+        if not self._router:
+            return
+        if until_ts is None:
+            self._router.clear_snooze(rule_name)
+        else:
+            self._router.set_snooze(rule_name, until_ts)
+        self._refresh_alert_history()
+
+    def _toggle_hist_sev(self, sev: str, checked: bool) -> None:
+        if checked:
+            self._hist_sev_filter.add(sev)
+        else:
+            self._hist_sev_filter.discard(sev)
+        self._refresh_alert_history()
+
+    def _on_hist_time_changed(self, text: str) -> None:
+        mapping = {"1h": 1.0, "6h": 6.0, "24h": 24.0, "72h": 72.0, "7d": 168.0}
+        self._hist_hours = mapping.get(text, 72.0)
+        self._refresh_alert_history()
 
     # ── Test helpers ──────────────────────────────────────────────────────────
 

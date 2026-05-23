@@ -28,7 +28,7 @@ import os as _os
 import time as _t
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QEvent, QObject, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFileDialog,
@@ -79,6 +79,24 @@ def _fmt_ts(ts: float) -> str:
 
 def _status_color(status: str) -> str:
     return {"OK": GREEN, "SLOW": AMBER, "FAIL": RED}.get(status.upper(), TEXT_SECONDARY)
+
+
+class _JKNavFilter(QObject):
+    """J/K row navigation event filter for QTableWidget."""
+    def __init__(self, table, parent=None) -> None:
+        super().__init__(parent)
+        self._table = table
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() == QEvent.Type.KeyPress and obj is self._table.viewport():
+            key = event.key()
+            if key in (Qt.Key.Key_J, Qt.Key.Key_K):
+                cur = self._table.currentRow()
+                step = 1 if key == Qt.Key.Key_J else -1
+                target = max(0, min(self._table.rowCount() - 1, cur + step))
+                self._table.setCurrentCell(target, self._table.currentColumn())
+                return True
+        return False
 
 
 def _make_table(headers: list[str]) -> QTableWidget:
@@ -390,6 +408,8 @@ class LogHubPage(QWidget):
         card_lay.addWidget(self._cap_banner)
 
         self._table = _make_table(self._HEADERS)
+        self._jk_filter = _JKNavFilter(self._table, self)
+        self._table.viewport().installEventFilter(self._jk_filter)
         self._table.setColumnWidth(0, 130)
         self._table.setColumnWidth(1, 68)
         self._table.setColumnWidth(2, 150)
@@ -720,7 +740,7 @@ class LogHubPage(QWidget):
             )
         else:
             self._show_db_feedback(
-                f"{label} logging stopped. History recorded so far is preserved.", AMBER
+                f"{label} logging stopped. History recorded so far is preserved.", TEXT_SECONDARY
             )
 
     def _on_interval_changed(self, key: str, combo: QComboBox) -> None:
@@ -1009,7 +1029,7 @@ class LogHubPage(QWidget):
             )
         else:
             self._show_db_feedback(
-                f"{name} logging stopped. History recorded so far is preserved.", AMBER
+                f"{name} logging stopped. History recorded so far is preserved.", TEXT_SECONDARY
             )
 
     def _style_toggle(self, btn: QPushButton, enabled: bool, color: str) -> None:

@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from modules.metric_store import MetricStore, ServiceCheckPoint
 from modules.service_monitor import ServiceTarget
@@ -76,6 +77,7 @@ class ServicePage(QWidget):
         self._setup_ui()
         if self._configured:
             self._content_stack.setCurrentIndex(1)
+        insert_skeleton_rows(self._table, count=4)
         self._refresh()
         timer = QTimer(self)
         timer.timeout.connect(self._refresh)
@@ -350,6 +352,7 @@ class ServicePage(QWidget):
 
     def _populate(self, rows: List[ServiceCheckPoint]) -> None:
         self._rows = list(rows)
+        clear_skeleton_rows(self._table)
         self._table.setSortingEnabled(False)
         self._table.clear_detail()
         self._table.setRowCount(0)

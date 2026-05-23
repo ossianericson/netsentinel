@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
 
 from modules.threat_intel import AbuseIpDbResult, ThreatEntry, ThreatIntelDB, load_from_cache
 from workers.threat_intel_worker import AbuseIpDbWorker, ThreatFeedRefreshWorker
+from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from ui.styles import (
     ACCENT,
     AMBER,
@@ -477,6 +478,7 @@ class ThreatIntelPage(QWidget):
         self._refresh_worker.result_ready.connect(self._on_refresh_done)
         self._refresh_worker.error.connect(self._on_refresh_error)
         self._refresh_worker.start()
+        insert_skeleton_rows(self._table, count=8)
 
     def _on_refresh_done(self, db: ThreatIntelDB) -> None:
         self._refresh_btn.setEnabled(True)
@@ -514,6 +516,7 @@ class ThreatIntelPage(QWidget):
         _set_kpi(self._kpi_domains, str(domain_count))
         _set_kpi(self._kpi_updated, self._last_updated or "—")
 
+        clear_skeleton_rows(self._table)
         self._table.setRowCount(0)
         self._table.setSortingEnabled(False)
 

@@ -13,9 +13,10 @@ Tile grid:
 from __future__ import annotations
 
 import datetime
+import time
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -56,8 +57,32 @@ def _status_tile(
     return tile
 
 
+def _age_string(ts: float) -> str:
+    """Human-readable 'X ago' from a Unix timestamp."""
+    delta = time.time() - ts
+    if delta < 60:
+        return "just now"
+    if delta < 3600:
+        return f"{int(delta // 60)}m ago"
+    if delta < 86400:
+        return f"{int(delta // 3600)}h ago"
+    return f"{int(delta // 86400)}d ago"
+
+
+def _health_color(ts: Optional[float]) -> str:
+    """Green < 5 min, amber < 1 h, grey = no data or > 1 h."""
+    if ts is None:
+        return TEXT_MUTED
+    delta = time.time() - ts
+    if delta < 300:
+        return GREEN
+    if delta < 3600:
+        return AMBER
+    return TEXT_MUTED
+
+
 class _StatusTile(QFrame):
-    """Clickable status tile — icon, title, value, subtitle, color dot."""
+    """Clickable status tile — icon, title, value, subtitle, health dot, age."""
 
     clicked = pyqtSignal(str)  # nav target
 
@@ -73,7 +98,8 @@ class _StatusTile(QFrame):
     ) -> None:
         super().__init__(parent)
         self._target = target
-        self.setMinimumHeight(90)
+        self._last_event_ts: Optional[float] = None
+        self.setMinimumHeight(100)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._base_style = (
@@ -100,8 +126,14 @@ class _StatusTile(QFrame):
             f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
             " background:transparent; border:none; letter-spacing:0.5px;"
         )
+        self._dot_lbl = QLabel("●")
+        self._dot_lbl.setFixedWidth(12)
+        self._dot_lbl.setStyleSheet(
+            f"font-size:8px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
         title_row.addWidget(self._icon_lbl)
         title_row.addWidget(self._title_lbl, 1)
+        title_row.addWidget(self._dot_lbl)
         lay.addLayout(title_row)
 
         self._value_lbl = QLabel(value)
@@ -117,6 +149,12 @@ class _StatusTile(QFrame):
         )
         lay.addWidget(self._sub_lbl)
 
+        self._age_lbl = QLabel("")
+        self._age_lbl.setStyleSheet(
+            f"font-size:9px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        lay.addWidget(self._age_lbl)
+
     def update(self, value: str, sub: str, color: str) -> None:
         self._value_lbl.setText(value)
         self._value_lbl.setStyleSheet(
@@ -127,6 +165,21 @@ class _StatusTile(QFrame):
             f"font-size:13px; color:{color}; background:transparent; border:none;"
         )
         self._sub_lbl.setText(sub)
+
+    def set_last_event_ts(self, ts: Optional[float]) -> None:
+        self._last_event_ts = ts
+        self.refresh_age()
+
+    def refresh_age(self) -> None:
+        """Refresh the 'last event X ago' label and health dot."""
+        dot_color = _health_color(self._last_event_ts)
+        self._dot_lbl.setStyleSheet(
+            f"font-size:8px; color:{dot_color}; background:transparent; border:none;"
+        )
+        if self._last_event_ts is not None:
+            self._age_lbl.setText(f"Last event: {_age_string(self._last_event_ts)}")
+        else:
+            self._age_lbl.setText("")
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
         self.clicked.emit(self._target)
@@ -223,6 +276,10 @@ class MonitorOverviewPage(QWidget):
         super().__init__(parent)
         self._last_scan_ts: Optional[datetime.datetime] = None
         self._build_ui()
+        self._age_timer = QTimer(self)
+        self._age_timer.setInterval(60_000)
+        self._age_timer.timeout.connect(self._refresh_ages)
+        self._age_timer.start()
 
     def _build_ui(self) -> None:
         self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
@@ -312,6 +369,34 @@ class MonitorOverviewPage(QWidget):
 
         lay.addWidget(grid_w)
         lay.addStretch()
+
+    # ── Age refresh ──────────────────────────────────────────────────────────
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        self._refresh_ages()
+        super().showEvent(event)
+
+    def _refresh_ages(self) -> None:
+        for tile in (self._tile_arp, self._tile_dhcp, self._tile_storm,
+                     self._tile_iot, self._tile_ports, self._tile_cve):
+            tile.refresh_age()
+
+    def set_monitor_event_times(
+        self,
+        arp: Optional[float] = None,
+        dhcp: Optional[float] = None,
+        storm: Optional[float] = None,
+        iot: Optional[float] = None,
+        ports: Optional[float] = None,
+        cve: Optional[float] = None,
+    ) -> None:
+        """Set last-event timestamps (Unix seconds) for each monitor tile."""
+        self._tile_arp.set_last_event_ts(arp)
+        self._tile_dhcp.set_last_event_ts(dhcp)
+        self._tile_storm.set_last_event_ts(storm)
+        self._tile_iot.set_last_event_ts(iot)
+        self._tile_ports.set_last_event_ts(ports)
+        self._tile_cve.set_last_event_ts(cve)
 
     # ── Public setters called by dashboard.py ─────────────────────────────────
 
