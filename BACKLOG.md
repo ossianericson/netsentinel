@@ -162,15 +162,15 @@ The following were built in the plugin data-flow sprint and are done:
 
 ## P3 — Polish (self-contained, no dependencies)
 
-| ID | Description |
-|----|-------------|
-| D6 | DiagnosisPage re-analysis diff: show "1 new finding since last run" when severity changed vs previous result. |
-| N8 | Right-click to pin nav items: mention this somewhere visible on first launch, not only in the collapsible Quick Tips section. |
-| VC2 | Nav icon consistency: most pages use Unicode math symbols but Security Audit uses emoji (🔎, 🛡, 🧠). Pick one system and apply it throughout. |
-| HW6 | Legacy Modem/Mesh pages (ZTE MC889 / TP-Link Deco XE75) run parallel to the plugin architecture. Long-term these should be converted to plugin-backed pages — the plugin provides data, the existing rich UI stays. Not urgent; the current two-system approach works. |
-| SK1 | Skeleton loading rows while scan workers run: prevents layout jump when data arrives; placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results. |
-| A11Y | "Abyss" WCAG AA high-contrast theme: true black background, high-contrast text, no low-opacity elements. |
-| KBD | Keyboard shortcut reference card in Help panel — the shortcut list currently only appears in Settings. |
+| ID | Status | Description |
+|----|--------|-------------|
+| D6 | ✅ Done | DiagnosisPage stores previous run's finding headlines. On re-run, shows "▲ N new · ▼ N resolved since last run" diff badge below verdict card. First run: badge hidden. |
+| N8 | ✅ Done | Flyout panel footer shows "Right-click any page to pin it ★" hint on every section open — always visible, no clicks needed to discover. |
+| VC2 | N/A | The Standard nav (QListWidget) that had emoji icons is permanently hidden (`setVisible(False)`) — the rail nav uses string-based icon names, not emoji. No visible inconsistency in the live UI. |
+| HW6 | N/A | ZTE MC889 and TP-Link Deco pages are background data handlers — never shown in the nav. They coexist with the plugin system without conflict. No migration needed. |
+| SK1 | ✅ Done | `_add_skeleton_rows()` inserts 8 muted "—" placeholder rows into the Devices table at scan start. Result handler calls `setRowCount(0)` which clears them naturally. |
+| A11Y | — | "Abyss" WCAG AA theme. Not yet implemented. |
+| KBD | ✅ Done | Help panel gains a permanent `_help_shortcuts_lbl` showing Ctrl+K/R/E/Q, F5, Escape, Right-click, Ctrl+Shift+M. Panel always opens on click (no "go to Feature Guide" fallback); on pages without page-specific tips, tip bar reads "Keyboard Shortcuts ▾". |
 | 802 | ✅ Done | Passive 802.11 monitor mode capture — WiFiMonitorPage + WiFiMonitorWorker. Interface selector, Start/Stop, live frame table (Time, Frame Type, Source MAC, SSID, Destination). Falls back silently via `unsupported` signal. Added to Analysis rail section, Feature Guide (Security group), and smoke test. |
 
 ---

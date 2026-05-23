@@ -47,6 +47,7 @@ class DiagnosisPage(QWidget):
         self._gateway_ip   = None
         self._gateway_mac  = None
         self._symptom      = ""   # set by symptom tile before _start()
+        self._prev_finding_headlines: set[str] = set()
         self._setup_ui()
 
     def set_network_info(
@@ -244,6 +245,15 @@ class DiagnosisPage(QWidget):
         vc_lay.addWidget(self._verdict_text)
         outer.addWidget(self._verdict_card)
 
+        # Diff badge — shown on re-runs when new findings appeared
+        self._diff_lbl = QLabel("")
+        self._diff_lbl.setStyleSheet(
+            f"font-size:10px; color:{AMBER}; background:transparent;"
+            f" border:none; padding:0 2px;"
+        )
+        self._diff_lbl.hide()
+        outer.addWidget(self._diff_lbl)
+
         # "Do this first" hero finding card (top priority, always visible)
         self._hero_card_container = QWidget()
         self._hero_card_container.setStyleSheet("background:transparent;")
@@ -423,6 +433,8 @@ class DiagnosisPage(QWidget):
         summary  = getattr(result, "plain_summary",   "") or "No issues detected."
         findings = getattr(result, "findings",        [])
 
+        prev_headlines = self._prev_finding_headlines.copy()
+
         # Clear hero card
         while self._hero_card_layout.count():
             item = self._hero_card_layout.takeAt(0)
@@ -492,5 +504,29 @@ class DiagnosisPage(QWidget):
             else:
                 self._other_toggle.hide()
                 self._findings_scroll.hide()
+
+        # Update headline tracking and show diff badge on re-runs
+        current_headlines = {getattr(f, "headline", "") for f in findings if getattr(f, "headline", "")}
+        if prev_headlines:
+            new_count = len(current_headlines - prev_headlines)
+            gone_count = len(prev_headlines - current_headlines)
+            parts = []
+            if new_count:
+                parts.append(f"▲ {new_count} new finding{'s' if new_count != 1 else ''}")
+            if gone_count:
+                parts.append(f"▼ {gone_count} resolved")
+            if parts:
+                self._diff_lbl.setText("  ·  ".join(parts) + " since last run")
+                self._diff_lbl.show()
+            else:
+                self._diff_lbl.setText("No change since last run")
+                self._diff_lbl.setStyleSheet(
+                    f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+                    f" border:none; padding:0 2px;"
+                )
+                self._diff_lbl.show()
+        else:
+            self._diff_lbl.hide()
+        self._prev_finding_headlines = current_headlines
 
         self._stack.setCurrentIndex(_DONE)

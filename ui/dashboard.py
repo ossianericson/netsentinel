@@ -150,6 +150,20 @@ def _add_row(table: QTableWidget, values: list, level: str = "CLEAN"):
         table.setItem(row, col, item)
 
 
+def _add_skeleton_rows(table: QTableWidget, count: int = 8) -> None:
+    """Insert placeholder rows while a scan worker is running."""
+    from PyQt6.QtGui import QColor
+    from ui.styles import TEXT_MUTED as _TM
+    col_count = table.columnCount()
+    for _ in range(count):
+        row = table.rowCount()
+        table.insertRow(row)
+        for col in range(col_count):
+            item = QTableWidgetItem("—")
+            item.setForeground(QColor(_TM))
+            table.setItem(row, col, item)
+
+
 def _make_card(title: str) -> tuple:
     """
     Build a standard enterprise card frame.
@@ -626,6 +640,16 @@ class _FlyoutPanel(QWidget):
         self._item_layout.addStretch()
         scroll.setWidget(self._item_container)
         outer.addWidget(scroll, 1)
+
+        # Pin hint footer
+        _hint = QLabel("Right-click any page to pin it ★")
+        _hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _hint.setStyleSheet(
+            f"color: {TEXT_MUTED}; font-size: 9px; padding: 4px 0;"
+            f" background: {SIDEBAR_BG}; border: none;"
+            f" border-top: 1px solid {NAV_DIVIDER};"
+        )
+        outer.addWidget(_hint)
 
         self._items: dict = {}   # label -> _FlyoutItem
 
@@ -2927,6 +2951,29 @@ class Dashboard(QMainWindow):
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
         hp_lay.addWidget(self._help_hidden_lbl)
+
+        _kbd_shortcuts = [
+            ("Ctrl+K",         "Command palette — find any page or feature"),
+            ("Ctrl+R",         "Run full network scan"),
+            ("Ctrl+E",         "Export last scan results"),
+            ("Ctrl+Q",         "Quit"),
+            ("F5",             "Refresh current page"),
+            ("Escape",         "Close section panel"),
+            ("Right-click",    "Context menu on any table row"),
+            ("Ctrl+Shift+M",   "Visual Diagnostic Overlay"),
+        ]
+        self._help_shortcuts_lbl = QLabel(
+            "<b>Keyboard shortcuts:</b>  " +
+            "   ·   ".join(f"<code>{k}</code> {d}" for k, d in _kbd_shortcuts)
+        )
+        self._help_shortcuts_lbl.setWordWrap(True)
+        self._help_shortcuts_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            f" border-top:1px solid {BORDER}; padding-top:4px; margin-top:2px;"
+        )
+        self._help_shortcuts_lbl.setTextFormat(Qt.TextFormat.RichText)
+        hp_lay.addWidget(self._help_shortcuts_lbl)
+
         cw_lay.addWidget(self._help_panel)
 
         cw_lay.setSpacing(6)
@@ -3349,7 +3396,11 @@ class Dashboard(QMainWindow):
 
         if not info:
             if hasattr(self, "_tip_bar"):
-                self._tip_bar.setText("ⓘ  Open Feature Guide  →")
+                self._tip_bar.setText("ⓘ  Keyboard Shortcuts  ▾")
+            if hasattr(self, "_help_what_lbl"):
+                self._help_what_lbl.setText("")
+            if hasattr(self, "_help_hidden_lbl"):
+                self._help_hidden_lbl.setVisible(False)
             return
 
         if hasattr(self, "_tip_bar"):
@@ -3368,14 +3419,7 @@ class Dashboard(QMainWindow):
                 self._help_hidden_lbl.setVisible(False)
 
     def _toggle_help_panel(self, checked: bool) -> None:
-        if not getattr(self, "_tip_bar_has_content", False):
-            # No tips for this page — clicking navigates to Feature Guide instead
-            if hasattr(self, "_tip_bar"):
-                self._tip_bar.blockSignals(True)
-                self._tip_bar.setChecked(False)
-                self._tip_bar.blockSignals(False)
-            self._nav_rail_go_to("Feature Guide")
-            return
+        # Panel always opens — shortcuts are useful on every page
         if hasattr(self, "_help_panel"):
             self._help_panel.setVisible(checked)
 
@@ -8803,6 +8847,7 @@ class Dashboard(QMainWindow):
         self._m1_grouping_active = False
         self._m1_group_btn.setVisible(False)
         self._m1_table.setRowCount(0)
+        _add_skeleton_rows(self._m1_table)
         self._m2_table.setRowCount(0)
         self._m3_table.setRowCount(0)
         self._m4_table.setRowCount(0)
