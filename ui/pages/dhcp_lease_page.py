@@ -203,11 +203,30 @@ class DhcpLeasePage(QWidget):
         root.addWidget(card, stretch=1)
 
         # Empty state placeholder
-        self._empty_lbl = QLabel("No lease data found — run a scan or check permissions.")
-        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet(f"font-size:12px; color:#9BA8B4;")
-        self._empty_lbl.hide()
-        root.addWidget(self._empty_lbl)
+        self._empty_widget = QWidget()
+        _el = QVBoxLayout(self._empty_widget)
+        _el.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el.setSpacing(10)
+        _el.setContentsMargins(40, 20, 40, 20)
+        _empty_lbl = QLabel(
+            "No DHCP leases found — this page reads lease files from\n"
+            "your system and the ARP cache. Click below to scan again."
+        )
+        _empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _empty_lbl.setWordWrap(True)
+        _empty_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        _el.addWidget(_empty_lbl)
+        _btn_empty_scan = QPushButton("▶  Scan DHCP Leases")
+        _btn_empty_scan.setFixedHeight(32)
+        _btn_empty_scan.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:12px;"
+            f" font-weight:bold; border:none; border-radius:4px; padding:0 16px; }}"
+            f"QPushButton:hover {{ background:#006BBD; }}"
+        )
+        _btn_empty_scan.clicked.connect(self._run_scan)
+        _el.addWidget(_btn_empty_scan, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._empty_widget.hide()
+        root.addWidget(self._empty_widget)
 
     # ── Scan logic ────────────────────────────────────────────────────────────
 
@@ -249,11 +268,11 @@ class DhcpLeasePage(QWidget):
 
         if not leases:
             self._table.setRowCount(0)
-            self._empty_lbl.show()
+            self._empty_widget.show()
             self._status_lbl.setText("No lease data found.")
             return
 
-        self._empty_lbl.hide()
+        self._empty_widget.hide()
         self._table.setRowCount(0)
         self._table.setSortingEnabled(False)
 

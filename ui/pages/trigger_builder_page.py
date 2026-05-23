@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -373,6 +374,37 @@ class TriggerBuilderPage(QWidget):
 
         card, inner = _card("Rules")
 
+        # Stacked: page 0 = empty state, page 1 = rule table
+        self._rules_stack = QStackedWidget()
+
+        _empty_w = QWidget()
+        _el = QVBoxLayout(_empty_w)
+        _el.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _el.setSpacing(10)
+        _el.setContentsMargins(12, 20, 12, 20)
+        _empty_desc = QLabel(
+            "Custom triggers alert you when a network metric\n"
+            "crosses a threshold — e.g. RTT spikes or a host\n"
+            "goes down. Create your first rule to get started."
+        )
+        _empty_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _empty_desc.setWordWrap(True)
+        _empty_desc.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; background:transparent;"
+        )
+        _btn_template = QPushButton("＋  Alert when host goes down →")
+        _btn_template.setFixedHeight(28)
+        _btn_template.setStyleSheet(
+            f"QPushButton{{background:{ACCENT};color:#fff;border:none;"
+            f"border-radius:3px;padding:0 10px;font-size:10px;font-weight:bold;}}"
+            f"QPushButton:hover{{background:#005A9E;}}"
+        )
+        _btn_template.clicked.connect(self._on_add_template)
+        _el.addWidget(_empty_desc)
+        _el.addSpacing(4)
+        _el.addWidget(_btn_template, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._rules_stack.addWidget(_empty_w)
+
         self._rule_table = _table(["Name", "Severity", "Enabled"])
         self._rule_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch)
@@ -381,7 +413,8 @@ class TriggerBuilderPage(QWidget):
         self._rule_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents)
         self._rule_table.itemSelectionChanged.connect(self._on_rule_selected)
-        inner.addWidget(self._rule_table)
+        self._rules_stack.addWidget(self._rule_table)
+        inner.addWidget(self._rules_stack)
 
         btn_row = QHBoxLayout()
         self._btn_add    = _btn("✚  Add", accent=True)
@@ -476,6 +509,7 @@ class TriggerBuilderPage(QWidget):
     # ── Rule list management ──────────────────────────────────────────────────
 
     def _refresh_table(self) -> None:
+        self._rules_stack.setCurrentIndex(0 if not self._rules else 1)
         self._rule_table.setRowCount(0)
         for rule in self._rules:
             row = self._rule_table.rowCount()
@@ -512,6 +546,21 @@ class TriggerBuilderPage(QWidget):
         self._selected_name_lbl.setText(rule.name)
         self._expr_display.setPlainText(rule.expression)
         self._preview_lbl.setText(preview_expression(rule.expression))
+
+    def _on_add_template(self) -> None:
+        template = TriggerRule(
+            id=new_rule_id(),
+            name="Host Down",
+            expression='state["192.168.1.1"] == "DOWN"',
+            severity="CRITICAL",
+            cooldown_s=300,
+            description="Alert when the gateway stops responding",
+        )
+        dlg = _RuleEditorDialog(rule=template, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._rules.append(dlg.result_rule)
+            save_rules(self._rules)
+            self._refresh_table()
 
     def _on_add(self) -> None:
         dlg = _RuleEditorDialog(parent=self)

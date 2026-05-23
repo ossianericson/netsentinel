@@ -81,6 +81,7 @@ class InventoryPage(QWidget):
     """
 
     scan_requested = pyqtSignal()
+    device_selected = pyqtSignal(str)  # emits MAC when a row is double-clicked
 
     REFRESH_MS = 15_000   # refresh every 15 s
 
@@ -241,6 +242,7 @@ class InventoryPage(QWidget):
         hdr.resizeSection(3, 135)
         hdr.resizeSection(4, 130)
         hdr.setStretchLastSection(True)
+        self._table.cellDoubleClicked.connect(self._on_row_double_clicked)
         card_lay.addWidget(self._table)
         cl.addWidget(card, 1)
         self._content_stack.addWidget(content)
@@ -431,3 +433,11 @@ class InventoryPage(QWidget):
         lay.addWidget(col2)
         lay.addStretch()
         return outer
+
+    @pyqtSlot(int, int)
+    def _on_row_double_clicked(self, row: int, _col: int) -> None:
+        item = self._table.item(row, 3)  # MAC column
+        if item:
+            mac = item.text().strip()
+            if mac and mac != "—":
+                self.device_selected.emit(mac)

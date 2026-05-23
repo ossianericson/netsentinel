@@ -193,9 +193,9 @@ class MeshRouterPage(QWidget):
         compat_lay = QHBoxLayout(compat)
         compat_lay.setContentsMargins(12, 6, 12, 6)
         compat_lbl = QLabel(
-            "ℹ  Tested with <b>TP-Link Deco XE75</b>. Other mesh systems (Eero, Orbi, UniFi) "
-            "can be added by implementing the same worker interface — "
-            "see <code>workers/mesh_worker.py</code>."
+            "ℹ  Tested with <b>TP-Link Deco XE75</b>. For other mesh systems (Eero, Orbi, "
+            "UniFi, FritzBox), use the <b>Hardware Hub</b> plugin system (Extend section) — "
+            "import a plugin script and it will provide the same client enrichment and topology data."
         )
         compat_lbl.setTextFormat(Qt.TextFormat.RichText)
         compat_lbl.setWordWrap(True)

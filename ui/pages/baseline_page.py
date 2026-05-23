@@ -177,6 +177,8 @@ def _btn(text: str, primary: bool = False) -> QPushButton:
 class BaselinePage(QWidget):
     """Configuration baseline snapshot and diff page."""
 
+    drift_detected = pyqtSignal(str)   # message describing the drift found
+
     def __init__(self, store=None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("contentArea")
@@ -473,6 +475,11 @@ class BaselinePage(QWidget):
         if kpi:
             kpi.setText(drift_txt)
             kpi.setStyleSheet(f"color:{drift_col};font-size:22px;font-weight:bold;")
+
+        if diff.has_drift:
+            self.drift_detected.emit(
+                f"Config drift detected: {diff.summary()} ({old_ts} → {new_ts})"
+            )
 
         self._diff_table.setRowCount(0)
 

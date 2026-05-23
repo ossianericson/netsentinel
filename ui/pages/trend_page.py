@@ -29,7 +29,6 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, RED_BG,
@@ -140,6 +139,8 @@ _METRIC_LABEL = {"rtt_ms": "RTT (ms)", "loss_pct": "Loss (%)", "jitter_ms": "Jit
 class TrendPage(QWidget):
     """Predictive trend alerting page."""
 
+    navigate_to = pyqtSignal(str)
+
     def __init__(self, store=None, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("contentArea")
@@ -222,9 +223,22 @@ class TrendPage(QWidget):
         self._btn_run.clicked.connect(self._run_analysis)
         hl.addWidget(self._btn_run)
 
-        self._status_lbl = QLabel("No analysis run yet. Click Run Analysis.")
+        self._status_lbl = QLabel(
+            "Enable Network RTT logging in Log Hub to build forecast data."
+        )
         self._status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
         hl.addWidget(self._status_lbl)
+
+        self._btn_log_hub = QPushButton("Open Log Hub →")
+        self._btn_log_hub.setFlat(True)
+        self._btn_log_hub.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_log_hub.setStyleSheet(
+            f"QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
+            f"border:none;padding:0 0 0 4px;}}"
+            f"QPushButton:hover{{color:{ACCENT_DARK};}}"
+        )
+        self._btn_log_hub.clicked.connect(lambda: self.navigate_to.emit("Network Logger"))
+        hl.addWidget(self._btn_log_hub)
         hl.addStretch()
         return row
 
@@ -289,6 +303,7 @@ class TrendPage(QWidget):
         self._btn_run.setText("▶  Run Analysis")
         self._populate_table(report)
         self._update_kpis(report)
+        self._btn_log_hub.setVisible(False)
         hosts = len({r.host for r in report.results})
         ts_str = time.strftime("%H:%M:%S", time.localtime(report.ts))
         self._status_lbl.setText(

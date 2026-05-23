@@ -61,7 +61,7 @@ def _load_secret(key: str) -> str:
     except Exception:
         return ""
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSlot
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -205,6 +205,8 @@ _ALERT_RULE_DEFS = [
 
 class NotificationsPage(QWidget):
     """Notification routing configuration and delivery log page."""
+
+    navigate_to = pyqtSignal(str)
 
     def __init__(self, router=None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -646,6 +648,18 @@ class NotificationsPage(QWidget):
         btn_row.addWidget(btn_clear)
         btn_row.addStretch()
         bl.addLayout(btn_row)
+
+        cta = QPushButton("＋  Create custom alert →")
+        cta.setFlat(True)
+        cta.setCursor(Qt.CursorShape.PointingHandCursor)
+        cta.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:4px 0; text-align:left; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+        )
+        cta.clicked.connect(lambda: self.navigate_to.emit("Custom Triggers"))
+        bl.addWidget(cta)
+
         return card
 
     # ── Persistence ───────────────────────────────────────────────────────────

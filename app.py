@@ -167,6 +167,8 @@ def _smoke_test() -> None:
         "workers.mesh_worker",
         "workers.zte_worker",
         "ui.pages.hardware_integration_page",
+        "ui.pages.wifi_monitor_page",
+        "workers.wifi_monitor_worker",
     ]
     for _mod in _checks:
         try:

@@ -23,7 +23,7 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -377,6 +378,8 @@ class HomeAutomationPage(QWidget):
     Home Automation Hub — discover, label, and monitor HA devices.
     """
 
+    navigate_to = pyqtSignal(str)
+
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._store = store
@@ -537,7 +540,43 @@ class HomeAutomationPage(QWidget):
         self._tbl.selectionModel().currentRowChanged.connect(
             lambda cur, _prev: self._on_row_selected(cur.row())
         )
-        tbl_body.addWidget(self._tbl)
+        # Stacked: page 0 = empty state, page 1 = table
+        self._tbl_stack = QStackedWidget()
+
+        _empty_ha = QWidget()
+        _elay = QVBoxLayout(_empty_ha)
+        _elay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _elay.setSpacing(10)
+        _elay.setContentsMargins(40, 30, 40, 30)
+        _empty_ha_desc = QLabel(
+            "No Home Automation devices found yet.\n\n"
+            "Run a network scan first, then devices matching\n"
+            "smart-home vendors will appear here automatically.\n\n"
+            "For live state and events, connect an MQTT broker\n"
+            "in the MQTT / Home Assistant settings."
+        )
+        _empty_ha_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _empty_ha_desc.setWordWrap(True)
+        _empty_ha_desc.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        _btn_mqtt = QPushButton("Configure MQTT / Home Assistant →")
+        _btn_mqtt.setFlat(True)
+        _btn_mqtt.setCursor(Qt.CursorShape.PointingHandCursor)
+        _btn_mqtt.setStyleSheet(
+            f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
+            f"border:none;padding:4px 0;}}"
+            f"QPushButton:hover{{color:#005A9E;}}"
+        )
+        _btn_mqtt.clicked.connect(
+            lambda: self.navigate_to.emit("MQTT / Home Assistant")
+        )
+        _elay.addWidget(_empty_ha_desc)
+        _elay.addWidget(_btn_mqtt, alignment=Qt.AlignmentFlag.AlignCenter)
+        self._tbl_stack.addWidget(_empty_ha)
+        self._tbl_stack.addWidget(self._tbl)
+
+        tbl_body.addWidget(self._tbl_stack)
         splitter.addWidget(tbl_card)
 
         # Detail panel
@@ -698,6 +737,7 @@ class HomeAutomationPage(QWidget):
         self._room_filter.blockSignals(False)
 
     def _populate_table(self, devices: List[dict]) -> None:
+        self._tbl_stack.setCurrentIndex(0 if not devices else 1)
         self._tbl.setRowCount(0)
         for d in devices:
             row = self._tbl.rowCount()

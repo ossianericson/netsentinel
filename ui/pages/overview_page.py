@@ -1066,6 +1066,9 @@ class ModemSignalTile(_BaseTile):
     TILE_ICON  = "⊕"
     MIN_HEIGHT = 140
 
+    clicked = pyqtSignal()  # emitted when the tile is clicked and data is present
+    _data_active: bool = False
+
     def _build_body(self) -> None:
         # Top row: network type badge + RSRP value
         top = QHBoxLayout()
@@ -1120,10 +1123,18 @@ class ModemSignalTile(_BaseTile):
         )
         self._body_layout.addWidget(self._hint_lbl)
 
+    def mousePressEvent(self, event) -> None:
+        if self._data_active and event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
     @pyqtSlot(dict)
     def on_modem_signal(self, data: dict) -> None:
         """Receive a ZteSignalData dict from the dashboard."""
         self._hint_lbl.hide()
+        if not self._data_active:
+            self._data_active = True
+            self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         nr_rsrp  = data.get("nr5g_rsrp_dbm")
         lte_rsrp = data.get("lte_rsrp_dbm")
@@ -1349,6 +1360,8 @@ class OverviewPage(QWidget):
 
     #: Emitted when the user clicks "What's Wrong?"; carries the target page label.
     navigate_to = pyqtSignal(str)
+    #: Emitted when the Modem Signal tile is clicked (modem plugin active).
+    modem_tile_clicked = pyqtSignal()
     #: Emitted when the user requests a Quick Network Assessment (M1–M5 bundle).
     scan_requested = pyqtSignal()
     #: Emitted when the user clicks "▣ Report" — run all modules + open HTML report.
@@ -1597,6 +1610,9 @@ class OverviewPage(QWidget):
             event_tile.viewall_clicked.connect(
                 lambda: self.navigate_to.emit("Monitor")
             )
+        modem_tile = self._tiles.get("modem_signal")
+        if modem_tile is not None:
+            modem_tile.clicked.connect(self.modem_tile_clicked.emit)
         self._reflow()
 
     def _on_scan_clicked(self) -> None:

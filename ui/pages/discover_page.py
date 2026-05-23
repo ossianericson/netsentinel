@@ -203,12 +203,12 @@ _FEATURES: list[dict] = [
     {
         "group": "Diagnostics",
         "icon": "⊟",
-        "name": "ISP Report",
+        "name": "Network Health Report",
         "desc": (
-            "Generates a professional, self-contained HTML report with MTR hop table, "
-            "outage log, and network grade. Print to PDF and attach to an ISP support ticket."
+            "Generates a self-contained HTML report with MTR hop table, outage log, and "
+            "network grade. Print to PDF and attach to an ISP support ticket."
         ),
-        "page": "ISP Report",
+        "page": "Network Health Report",
         "requires": None,
         "tags": ["isp", "report", "pdf", "html", "support", "ticket", "outage", "evidence", "mtr"],
     },
@@ -428,6 +428,21 @@ _FEATURES: list[dict] = [
         "page": "IoT Behaviour",
         "requires": "Npcap",
         "tags": ["iot", "baseline", "behaviour", "behavior", "anomaly", "smart home", "traffic", "device"],
+    },
+    {
+        "group": "Security",
+        "icon": "◐",
+        "name": "802.11 Monitor Mode",
+        "desc": (
+            "Puts a supported NIC into monitor mode via Npcap and reads raw 802.11 "
+            "management frames — beacons, probe requests/responses, auth, association, "
+            "and deauth frames.  Purely passive: no packets transmitted.  Useful for "
+            "surveying nearby APs and detecting rogue SSIDs or unusual probe activity.  "
+            "Falls back silently if the adapter does not support monitor mode."
+        ),
+        "page": "802.11 Monitor",
+        "requires": "Npcap",
+        "tags": ["802.11", "wifi", "wireless", "monitor mode", "beacon", "probe", "ssid", "management frame", "passive", "npcap"],
     },
     # ── Learning ───────────────────────────────────────────────────────────────
     {

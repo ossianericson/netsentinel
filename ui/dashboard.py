@@ -861,8 +861,8 @@ _PAGE_HELP: dict[str, dict] = {
             "Run 'Grade My Network' after making changes to see whether they improved the score.",
         ],
     },
-    "ISP Report": {
-        "what": "Generates a standalone HTML report with MTR hop table, packet-loss %, DNS latency, and timestamped outage log — formatted for ISP support escalation.",
+    "Network Health Report": {
+        "what": "Generates a standalone HTML report with MTR hop table, packet-loss %, DNS latency, and timestamped outage log. Great for ISP support tickets.",
         "hidden": [
             "The report is a single self-contained HTML file — email it or attach it to a support ticket with no extra files needed.",
             "Run the Network Logger for at least an hour before generating the report so the outage log has enough data.",
@@ -1091,10 +1091,11 @@ _PAGE_HELP: dict[str, dict] = {
             "Shared folders that are visible without a password are flagged — these are a common data-exfiltration risk on home networks.",
         ],
     },
-    "Plugin Modules": {
-        "what": "Third-party scan modules — drop a .py plugin file into the plugins/ directory to add new capabilities.",
+    "Recon Plugins": {
+        "what": "Custom port-scanner and enumeration scripts — not hardware driver plugins. Drop a .py plugin file into the plugins/ directory to add new scan capabilities.",
         "hidden": [
             "See CONTRIBUTING.md for the plugin API — a plugin is a single Python class with a run() method.",
+            "These are recon/scan scripts, not hardware integrations. For routers and modems, use the Hardware section.",
         ],
     },
     "Private Endpoint Check": {
@@ -2246,6 +2247,10 @@ class Dashboard(QMainWindow):
 
         from ui.pages.inventory_page import InventoryPage
         self._inventory_page = InventoryPage(store=self._store)
+        self._inventory_page.device_selected.connect(
+            self._on_inventory_device_selected,
+            Qt.ConnectionType.QueuedConnection,
+        )
 
         from ui.pages.cert_page import CertPage
         self._cert_page = CertPage(store=self._store)
@@ -2261,12 +2266,15 @@ class Dashboard(QMainWindow):
 
         from ui.pages.notifications_page import NotificationsPage
         self._notifications_page = NotificationsPage(router=None, parent=None)
+        self._notifications_page.navigate_to.connect(self._nav_rail_go_to)
 
         from ui.pages.baseline_page import BaselinePage
         self._baseline_page = BaselinePage(store=self._store, parent=None)
+        self._baseline_page.drift_detected.connect(self._on_config_drift_detected)
 
         from ui.pages.trend_page import TrendPage
         self._trend_page = TrendPage(store=self._store, parent=None)
+        self._trend_page.navigate_to.connect(self._nav_rail_go_to)
 
         from ui.pages.maintenance_page import MaintenancePage
         self._maintenance_page = MaintenancePage(parent=None)
@@ -2301,6 +2309,7 @@ class Dashboard(QMainWindow):
 
         from ui.pages.home_automation_page import HomeAutomationPage
         self._ha_page = HomeAutomationPage(store=self._store, parent=None)
+        self._ha_page.navigate_to.connect(self._nav_rail_go_to)
 
         from ui.pages.connections_page import ConnectionsPage
         self._connections_page = ConnectionsPage(parent=None)
@@ -2482,6 +2491,9 @@ class Dashboard(QMainWindow):
         self._correlator_tab_widget      = self._build_correlator_tab()
         self._iot_baseline_tab_widget    = self._build_iot_baseline_tab()
         self._benchmark_tab_widget       = self._build_benchmark_tab()
+
+        from ui.pages.wifi_monitor_page import WiFiMonitorPage
+        self._wifi_monitor_page = WiFiMonitorPage(parent=None)
         self._help_tab_widget            = self._build_help_tab()
 
         # ── Store tab refs for mode nav builders ──────────────────────────────
@@ -2530,6 +2542,8 @@ class Dashboard(QMainWindow):
         self._overview_page.report_requested.connect(self._run_full_report)
         self._overview_page.export_requested.connect(self._export_report)
         self._overview_page.security_scan_requested.connect(self._run_security_scans)
+        self._overview_page.modem_tile_clicked.connect(self._on_modem_tile_clicked)
+        self._active_modem_plugin_label: str = ""
         self._diagnosis_page.navigate_to.connect(self._on_overview_navigate)
 
         # Populate home page suggestions on first build (deferred so _home_page exists)
@@ -2692,7 +2706,7 @@ class Dashboard(QMainWindow):
             self._nav_add_page("🔑", "Login Test (SSH/SMB)",   self._recon_cred_tab_widget),
             self._nav_add_page("🔭", "Full Device Discovery",  self._recon_discovery_tab_widget),
             self._nav_add_page("🗂", "Windows Shares (SMB)",   self._recon_smb_tab_widget),
-            self._nav_add_page("🔌", "Plugin Modules",         self._recon_plugin_tab_widget),
+            self._nav_add_page("🔌", "Recon Plugins",          self._recon_plugin_tab_widget),
             self._nav_add_page("🔒", "Private Endpoint Check", self._recon_pe_tab_widget),
             self._nav_add_page("☁",  "Cloud Metadata Probe",  self._recon_cloud_tab_widget),
         ]
@@ -3018,10 +3032,9 @@ class Dashboard(QMainWindow):
         self._rebuild_nav_for_mode()
 
     def _open_isp_from_home(self) -> None:
-        """Navigate to ISP Report, switching out of Home mode first if needed."""
         if self._nav_mode == "home":
             self._set_mode("standard")
-        self._nav_go_to("ISP Report")
+        self._nav_go_to("Network Health Report")
 
     def _rebuild_nav_for_mode(self) -> None:
         """Clear sidebar and rebuild it for the current _nav_mode."""
@@ -3284,6 +3297,43 @@ class Dashboard(QMainWindow):
                 self._tip_bar.setChecked(True)
         self._track_page_visit(label)
 
+    @pyqtSlot()
+    def _on_modem_tile_clicked(self) -> None:
+        label = getattr(self, "_active_modem_plugin_label", "")
+        if label:
+            self._nav_rail_go_to(label)
+        else:
+            self._nav_rail_go_to("Hardware")
+
+    @pyqtSlot(str)
+    def _on_inventory_device_selected(self, mac: str) -> None:
+        """Navigate to Devices and scroll/select the row matching this MAC."""
+        self._nav_rail_go_to("Devices")
+        self._m1_highlight_mac(mac)
+
+    def _m1_highlight_mac(self, mac: str) -> None:
+        """Scroll the Devices table to the row matching `mac` and select it."""
+        if not hasattr(self, "_m1_table"):
+            return
+        mac_lower = mac.lower()
+        for row in range(self._m1_table.rowCount()):
+            item = self._m1_table.item(row, 2)  # MAC Address column
+            if item and item.text().lower() == mac_lower:
+                self._m1_table.selectRow(row)
+                self._m1_table.scrollToItem(
+                    item, self._m1_table.ScrollHint.PositionAtCenter
+                )
+                break
+
+    @pyqtSlot(str)
+    def _on_config_drift_detected(self, message: str) -> None:
+        """Show a status-bar and tray notification when snapshot comparison finds drift."""
+        self._set_status(f"⚠ {message}")
+        if self._tray_manager.is_available():
+            self._tray_manager.show_notification(
+                "Config Drift Detected", message, "WARNING"
+            )
+
     def _update_help_panel(self, label: str) -> None:
         """Refresh tip bar text and collapse the help panel when the page changes."""
         info = _PAGE_HELP.get(label, {})
@@ -3336,7 +3386,7 @@ class Dashboard(QMainWindow):
         ("Protocol Visualizer", "See animated diagrams of ARP, DNS, TCP and more — using your real devices"),
         ("Lab Mode",            "Try a guided exercise: find a rogue device or diagnose slow DNS on your live network"),
         ("Network Grade",       "Get an A–F score for your network health across 8 dimensions"),
-        ("ISP Report",          "Generate a professional report to send to your ISP when things go wrong"),
+        ("Network Health Report", "Generate a network health report — great for ISP support tickets"),
         ("What's Wrong?",       "Pick a symptom and get a plain-English verdict with a prioritised fix list"),
         ("Feature Guide",       "See everything this app can do — including features most users never find"),
         ("Network Logger",      "Configure log sources and view the live activity log — all in one place"),
@@ -3421,26 +3471,28 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
         self._nav_add_rail_item("Active Connections",  self._connections_page)
         self._nav_add_rail_item("Availability History", self._history_page)
+        self._nav_add_rail_item("Inventory Changes",   self._inventory_page)
         self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
         self._nav_add_rail_item("Service Heartbeat",   self._service_page)
         self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
 
         self._nav_begin_section("Reports", "bar-chart")
         self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)
-        self._nav_add_rail_item("ISP Report",          self._reports_page)
+        self._nav_add_rail_item("Network Health Report", self._reports_page)
         self._nav_add_rail_item("Network Doc",         self._network_doc_page)
         self._nav_add_rail_item("IP Calculator",       self._ip_calc_page)
         self._nav_add_rail_item("Notifications",       self._notifications_page)
 
         self._nav_begin_section("Analysis", "cpu")
-        self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
-        self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
-        self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
-        self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
-        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
         self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
         self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
         self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
+        self._nav_add_rail_item("802.11 Monitor",      self._wifi_monitor_page)
+        self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
+        self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
+        self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
+        self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
+        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
         self._nav_add_rail_item("Trend Forecasts",     self._trend_page)
 
         self._nav_begin_section("Automation", "zap")
@@ -3466,7 +3518,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Exposed to Internet",  self._recon_exposure_tab_widget,  audit_item=True)
         self._nav_add_rail_item("Full Device Discovery", self._recon_discovery_tab_widget, audit_item=True)
         self._nav_add_rail_item("Windows Shares (SMB)", self._recon_smb_tab_widget,       audit_item=True)
-        self._nav_add_rail_item("Plugin Modules",       self._recon_plugin_tab_widget,    audit_item=True)
+        self._nav_add_rail_item("Recon Plugins",         self._recon_plugin_tab_widget,    audit_item=True)
         self._nav_add_rail_item("Private Endpoint Check", self._recon_pe_tab_widget,      audit_item=True)
         self._nav_add_rail_item("Cloud Metadata Probe", self._recon_cloud_tab_widget,     audit_item=True)
         self._nav_add_rail_item("DHCP Rogue Monitor",   self._dhcp_tab_widget,            audit_item=True)
@@ -3806,6 +3858,12 @@ class Dashboard(QMainWindow):
         )
         _ib_lay.addWidget(_int_cfg_btn)
         lay.addLayout(_status_row)
+
+        self._m1_node_hint = QLabel("Connect a router plugin in Hardware to enable grouping")
+        self._m1_node_hint.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; padding:0 0 0 2px;"
+        )
+        lay.addWidget(self._m1_node_hint)
         lay.addWidget(self._m1_int_banner)
 
         self._m1_table = _table([
@@ -3875,6 +3933,14 @@ class Dashboard(QMainWindow):
         act_geo      = menu.addAction(f"🗺  Show on Geo Map →")
         act_abuseipdb = menu.addAction(f"🛡  Check IP (AbuseIPDB) →")
         act_wol      = menu.addAction(f"⚡  Wake-on-LAN  →  {mac}")
+        # Show CVE Tracker link only when this IP has tracked CVE entries
+        _has_cves = False
+        try:
+            if self._store:
+                _has_cves = any(c.get("host") == ip for c in self._store.list_cve_lifecycles())
+        except Exception:
+            pass
+        act_cve = menu.addAction(f"🔎  View in CVE Tracker →") if _has_cves else None
         menu.addSeparator()
         act_fix      = menu.addAction("🔧  How to Fix")
         menu.addSeparator()
@@ -3889,6 +3955,8 @@ class Dashboard(QMainWindow):
         elif chosen == act_abuseipdb:
             self._threat_intel_page.check_ip(ip)
             self._nav_rail_go_to("Threat Intelligence")
+        elif act_cve and chosen == act_cve:
+            self._nav_rail_go_to("CVE Tracker")
         elif chosen == act_wol:
             self._send_wol(mac)
         elif chosen == act_fix:
@@ -5824,11 +5892,16 @@ class Dashboard(QMainWindow):
                 else:
                     item.setForeground(QColor(TEXT_PRIMARY))
                 self._ipv6_table.setItem(row, col, item)
-        self._ipv6_status.setText(
-            f"{len(devices)} IPv6 device(s) found  "
-            f"({sum(1 for d in devices if d.get('source')=='active')} via active sweep, "
-            f"{sum(1 for d in devices if d.get('source')=='cache')} from cache)"
-        )
+        if not devices:
+            self._ipv6_status.setText(
+                "No IPv6 devices found — this is normal for most home networks"
+            )
+        else:
+            self._ipv6_status.setText(
+                f"{len(devices)} IPv6 device(s) found  "
+                f"({sum(1 for d in devices if d.get('source')=='active')} via active sweep, "
+                f"{sum(1 for d in devices if d.get('source')=='cache')} from cache)"
+            )
 
     # ── Cloud Metadata tab (Recon) ────────────────────────────────────────────
 
@@ -6180,13 +6253,15 @@ class Dashboard(QMainWindow):
         alerts_lbl = QLabel("Live Anomaly Alerts")
         alerts_lbl.setStyleSheet(f"color:{ACCENT_LITE};font-size:12px;font-weight:bold;padding:6px 0 2px 0;")
         self._iot_alert_table = _table([
-            "Time", "Device", "Alert Type", "Severity", "Detail", "Remediation"
+            "Time", "Device", "Alert Type", "Severity", "Detail", "Remediation", "Action"
         ])
         self._iot_alert_table.setColumnWidth(0, 75)
         self._iot_alert_table.setColumnWidth(1, 170)
         self._iot_alert_table.setColumnWidth(2, 130)
         self._iot_alert_table.setColumnWidth(3, 75)
-        self._iot_alert_table.setColumnWidth(4, 350)
+        self._iot_alert_table.setColumnWidth(4, 300)
+        self._iot_alert_table.setColumnWidth(5, 180)
+        self._iot_alert_table.setColumnWidth(6, 110)
 
         lay.addWidget(info)
         lay.addWidget(self._iot_status)
@@ -6261,6 +6336,14 @@ class Dashboard(QMainWindow):
                     return
                 self._populate_iot_baseline_table(baselines)
 
+                _IOT_INVESTIGATE_TARGET = {
+                    "SYN_SCAN":       "Port Scan (TCP)",
+                    "NEW_PORT":       "Port Scan (TCP)",
+                    "NEW_DEST":       "Threat Intel",
+                    "METADATA_PROBE": "Cloud Metadata Probe",
+                    "RATE_SPIKE":     "Live Bandwidth",
+                }
+
                 def _on_alert(alert):
                     row = self._iot_alert_table.rowCount()
                     self._iot_alert_table.insertRow(row)
@@ -6274,6 +6357,12 @@ class Dashboard(QMainWindow):
                         if col in (2, 3):
                             item.setForeground(QColor(sev_color))
                         self._iot_alert_table.setItem(row, col, item)
+                    target = _IOT_INVESTIGATE_TARGET.get(alert.alert_type, "Devices")
+                    inv_btn = QPushButton("Investigate →")
+                    inv_btn.setFlat(True)
+                    inv_btn.setStyleSheet(f"color:{ACCENT_LITE};font-size:11px;text-align:left;padding:2px 4px;")
+                    inv_btn.clicked.connect(lambda _checked, t=target: self._nav_rail_go_to(t))
+                    self._iot_alert_table.setCellWidget(row, 6, inv_btn)
                     self._iot_alert_table.scrollToBottom()
                     self._iot_status.setText(
                         f"⚠ Alert: {alert.alert_type} on {alert.device_label}"
@@ -6391,11 +6480,11 @@ class Dashboard(QMainWindow):
         btn_grade.setObjectName("btnScan")
         btn_grade.setToolTip("Score your network health across all available dimensions.")
         btn_grade.clicked.connect(self._run_benchmark)
-        btn_isp = QPushButton("⊟  Generate ISP Report")
+        btn_isp = QPushButton("⊟  Network Health Report")
         btn_isp.setObjectName("btnNetRefresh")
         btn_isp.setToolTip(
-            "Export an ISP Accountability Report — hop table, outages, grade — "
-            "as HTML you can print to PDF and attach to a support ticket."
+            "Export a Network Health Report — hop table, outages, grade — "
+            "as HTML you can print to PDF and attach to an ISP support ticket."
         )
         btn_isp.clicked.connect(self._export_isp_report)
         ctrl.addWidget(btn_grade)
@@ -6482,6 +6571,16 @@ class Dashboard(QMainWindow):
             if hasattr(self, "_tray_manager") and self._tray_manager:
                 self._tray_manager.set_grade(result.overall_grade)
 
+            _GRADE_FIX_TARGET = {
+                "Connection Uptime":          "Availability History",
+                "Average Latency":            "DNS & Stability",
+                "Jitter (Call Quality)":      "DNS & Stability",
+                "DNS Response Speed":         "DNS & Stability",
+                "Download Speed":             "Speed Test",
+                "Network Device Safety":      "Devices",
+                "Spanning Tree (STP) Health": "Rogue Bridge (STP)",
+                "Broadcast Storm Level":      "Broadcast Storm",
+            }
             # Populate dimension table
             self._bm_table.setRowCount(0)
             for d in result.dimensions:
@@ -6497,6 +6596,21 @@ class Dashboard(QMainWindow):
                     if col == 1:
                         item.setForeground(QColor(grade_color))
                     self._bm_table.setItem(row, col, item)
+                if d.grade in ("D", "F"):
+                    target = _GRADE_FIX_TARGET.get(d.name)
+                    if target:
+                        fix_btn = QPushButton(f"Fix this →")
+                        fix_btn.setFlat(True)
+                        fix_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                        fix_btn.setStyleSheet(
+                            f"QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
+                            f"border:none;text-align:left;padding:0 4px;}}"
+                            f"QPushButton:hover{{color:{ACCENT_DARK};}}"
+                        )
+                        fix_btn.clicked.connect(
+                            lambda _checked, t=target: self._nav_rail_go_to(t)
+                        )
+                        self._bm_table.setCellWidget(row, 5, fix_btn)
 
         except Exception as exc:
             self._bm_verdict_label.setText(f"⚠ Grading failed: {exc}")
@@ -6516,7 +6630,7 @@ class Dashboard(QMainWindow):
 
             # Collect optional ISP name & account ref from user
             dlg = QDialog(self)
-            dlg.setWindowTitle("ISP Report — Optional Details")
+            dlg.setWindowTitle("Network Health Report — Optional Details")
             dlg.setMinimumWidth(380)
             dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
             form = QFormLayout(dlg)
@@ -6555,7 +6669,7 @@ class Dashboard(QMainWindow):
             docs_dir = Path.home() / "Documents" / "NetSentinel" / "reports"
             docs_dir.mkdir(parents=True, exist_ok=True)
             path_str, _ = QFileDialog.getSaveFileName(
-                self, "Save ISP Report", str(docs_dir / default_name),
+                self, "Save Network Health Report", str(docs_dir / default_name),
                 "HTML Report (*.html);;All Files (*)"
             )
             if not path_str:
@@ -6573,7 +6687,7 @@ class Dashboard(QMainWindow):
             webbrowser.open(out.as_uri())
         except Exception as exc:
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "ISP Report Error", str(exc))
+            QMessageBox.warning(self, "Network Health Report Error", str(exc))
 
     # ── How to Fix dialog (shared by M1 / M2 / M3 context menus) ─────────────
 
@@ -8076,9 +8190,9 @@ class Dashboard(QMainWindow):
             "Only use on networks you own or have explicit written authorisation to test.<br><br>"
             "<b>5. Right-click anything</b> — every table row has a context menu "
             "with Copy IP, Copy MAC, Port Scan, How to Fix, Wake-on-LAN, and more.<br><br>"
-            "<b>6. Generate an ISP Report</b> — run the Stability Logger for at least "
-            "30 minutes, then open Network Grade → Generate ISP Report. Exports a "
-            "standalone HTML file with evidence-grade data for ISP support tickets."
+            "<b>6. Generate a Network Health Report</b> — run the Stability Logger for at least "
+            "30 minutes, then open Network Grade → Network Health Report. Exports a "
+            "standalone HTML file with evidence-grade data — great for ISP support tickets."
             "</p>"
         )
         intro_text.setWordWrap(True)
@@ -8142,7 +8256,7 @@ class Dashboard(QMainWindow):
             f"<b style='color:{ACCENT};'>Step 5 — Let it run in the background</b><br>"
             "Leave NetSentinel open for 30+ minutes while you use your network normally. "
             "The <b>Stability Log</b> and <b>Availability History</b> tabs build up "
-            "timestamped evidence. After 30 minutes, <b>Network Grade → Generate ISP Report</b> "
+            "timestamped evidence. After 30 minutes, <b>Network Grade → Network Health Report</b> "
             "produces a standalone HTML file you can attach to an ISP support ticket — "
             "with hop-by-hop packet loss, outage timestamps, and DNS latency data.<br><br>"
 
@@ -8178,7 +8292,7 @@ class Dashboard(QMainWindow):
             ("Health Check",         "On-demand ping, DNS speed test, traceroute, HTTP check, DNS leak test"),
             ("Stability Log",        "Long-term logger — timestamped outage evidence for ISP disputes"),
             ("Availability History", "Per-target uptime log with expandable incident detail per row"),
-            ("Network Grade",        "A–F score across 8 dimensions with an exportable ISP Report"),
+            ("Network Grade",        "A–F score across 8 dimensions with an exportable Network Health Report"),
             ("Root Cause Analysis",  "Correlates STP, Storm, DNS, and Logger data — ISP vs local verdict"),
             ("IoT Behaviour",        "Baselines normal IoT traffic, alerts on port scanning or new servers"),
             ("IPv6 Devices",         "Link-local segment sweep via OS neighbour cache and ping"),
@@ -8307,7 +8421,7 @@ class Dashboard(QMainWindow):
             ("…see every device on my network",       "Devices on Network — run a scan"),
             ("…find out why my internet is slow",     "Network Grade → run benchmark; Stability Log for long-term evidence"),
             ("…detect if someone is on my WiFi",      "WiFi Networks + Devices on Network → look for unknown MACs"),
-            ("…prove to my ISP the problem is theirs","Stability Log for 30+ min → Network Grade → Generate ISP Report"),
+            ("…prove to my ISP the problem is theirs","Stability Log for 30+ min → Network Grade → Network Health Report"),
             ("…check if a device is hacked",          "Device Risk Score + Known CVEs (Security Audit section)"),
             ("…monitor uptime of my servers",         "Service Heartbeat → add hosts + ports to watch"),
             ("…see all open ports on a device",       "Tools & Wake-on-LAN → TCP Port Scan (Advanced section)"),
@@ -9345,6 +9459,10 @@ class Dashboard(QMainWindow):
 
         # ── Modem plugins: route signal to Modem page + Overview tile ─────────
         if hw_type == "modem":
+            # Track which plugin page corresponds to the active modem
+            _modem_path = data.get("_path", hw_name)
+            if _modem_path in getattr(self, "_plugin_pages", {}):
+                self._active_modem_plugin_label = self._plugin_pages[_modem_path]._label
             extra = status.get("extra", {})
             self._on_modem_signal({
                 "ts":               int(_t.time()),
@@ -9484,6 +9602,8 @@ class Dashboard(QMainWindow):
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
             self._m1_node_group_btn.setEnabled(True)
+            if hasattr(self, "_m1_node_hint"):
+                self._m1_node_hint.setVisible(False)
             if self._m1_group_by_node:
                 self._regroup_m1_by_satellite()
 
@@ -9528,6 +9648,8 @@ class Dashboard(QMainWindow):
         # Enable grouping button if any plugin matched a node
         if plugin_any_matched:
             self._m1_node_group_btn.setEnabled(True)
+            if hasattr(self, "_m1_node_hint"):
+                self._m1_node_hint.setVisible(False)
             if self._m1_group_by_node:
                 self._regroup_m1_by_satellite()
 

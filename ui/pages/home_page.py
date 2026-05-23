@@ -447,8 +447,8 @@ class HomePage(QWidget):
         # Tertiary follow-up action \u2014 visually separated, link-style
         isp_row = QHBoxLayout()
         isp_row.setSpacing(0)
-        self._btn_isp = QPushButton("\ud83d\udcca  View ISP Report")
-        self._btn_isp.setToolTip("Open a formatted report comparing your speeds against ISP claims")
+        self._btn_isp = QPushButton("\ud83d\udcca  Network Health Report")
+        self._btn_isp.setToolTip("Generate a Network Health Report \u2014 great for ISP support tickets")
         self._btn_isp.setStyleSheet(
             f"QPushButton {{ min-height: 22px; font-size: 11px; font-weight: 500;"
             f" background: transparent; color: {TEXT_MUTED};"
@@ -920,6 +920,7 @@ class HomePage(QWidget):
         if self._device_count == 0:
             self._hero_sub.setText(
                 "Press ▶ Scan Network to discover your devices — takes about 30 seconds."
+                "   ·   Try Ctrl+K to find any feature instantly."
             )
 
     # ── Public slots ──────────────────────────────────────────────────────────
@@ -1224,9 +1225,9 @@ class StandardWelcomePage(QWidget):
         ("\u25fc", "Network Grade",   TEXT_PRIMARY,  ["A\u2013F across 8 dimensions",
                                                       "Colour-coded verdict per metric",
                                                       "Actionable fix tip per grade"]),
-        ("\u2197", "ISP Report",      TEXT_PRIMARY,  ["Self-contained HTML export",
-                                                      "MTR hop table + outage log",
-                                                      "Print-to-PDF for ISP support"]),
+        ("\u2197", "Network Health Report", TEXT_PRIMARY, ["Self-contained HTML export",
+                                                           "MTR hop table + outage log",
+                                                           "Great for ISP support tickets"]),
     ]
 
     def __init__(self, parent: QWidget | None = None) -> None:

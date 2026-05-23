@@ -220,8 +220,9 @@ class ModemPage(QWidget):
         compat_lay = QHBoxLayout(compat)
         compat_lay.setContentsMargins(12, 6, 12, 6)
         compat_lbl = QLabel(
-            "ℹ  Tested with <b>ZTE MC889</b>. Any modem with a local HTTP API can be added "
-            "by implementing the same worker interface — see <code>workers/zte_worker.py</code>."
+            "ℹ  Tested with <b>ZTE MC889</b>. For other modem models, use the "
+            "<b>Hardware Hub</b> plugin system (Extend section) — any device with a "
+            "local HTTP API can be integrated via a Python plugin script."
         )
         compat_lbl.setTextFormat(Qt.TextFormat.RichText)
         compat_lbl.setWordWrap(True)
