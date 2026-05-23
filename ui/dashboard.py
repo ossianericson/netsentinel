@@ -565,7 +565,7 @@ class _FlyoutItem(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_ctx_menu)
-        _fg = AUDIT_RED if danger else TEXT_PRIMARY
+        _fg = AUDIT_RED if danger else SIDEBAR_ITEM_FG
         self.setStyleSheet(
             f"QPushButton {{"
             f"  text-align: left; padding: 0 14px;"
