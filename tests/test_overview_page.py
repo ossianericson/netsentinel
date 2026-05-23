@@ -850,12 +850,12 @@ class TestAlertNavigation:
             MockQS.return_value = _qs_mock()
             return _make_overview()
 
-    def test_device_alert_navigates_to_devices_page(self):
+    def test_host_down_navigates_to_availability_history(self):
         page = self._page()
         received = []
         page.navigate_to.connect(received.append)
         page._on_alert_navigate("HOST_DOWN", "10.0.0.1")
-        assert received == ["Devices on Network"]
+        assert received == ["Availability History"]
 
     def test_service_alert_navigates_to_service_heartbeat(self):
         page = self._page()
@@ -869,14 +869,28 @@ class TestAlertNavigation:
         received = []
         page.navigate_to.connect(received.append)
         page._on_alert_navigate("CERT_EXPIRY", "")
-        assert received == ["TLS & exposure"]
+        assert received == ["TLS & Exposure"]
+
+    def test_rtt_alert_navigates_to_dns_stability(self):
+        page = self._page()
+        received = []
+        page.navigate_to.connect(received.append)
+        page._on_alert_navigate("RTT_THRESHOLD", "10.0.0.1")
+        assert received == ["DNS & Stability"]
+
+    def test_new_device_alert_navigates_to_devices(self):
+        page = self._page()
+        received = []
+        page.navigate_to.connect(received.append)
+        page._on_alert_navigate("NEW_DEVICE", "10.0.0.1")
+        assert received == ["Devices"]
 
     def test_unknown_rule_type_navigates_to_devices_page(self):
         page = self._page()
         received = []
         page.navigate_to.connect(received.append)
         page._on_alert_navigate("", "")
-        assert received == ["Devices on Network"]
+        assert received == ["Devices"]
 
 
 # ---------------------------------------------------------------------------

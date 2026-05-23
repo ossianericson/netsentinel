@@ -39,57 +39,56 @@ The following were built in the plugin data-flow sprint and are done:
 
 ---
 
-## P1 — High Impact UX (biggest improvement per session of work)
+## P1 — High Impact UX
 
-### D — Diagnostic Consolidation
+### D — Diagnostic Consolidation ✅ Done
 
-The app has five nav entries that answer "what's wrong with my network?": `_dia_tab` (old Health Check / Connectivity Tests), `_diagnosis_page` (new What's Wrong?), and `_correlator_tab_widget` (Root Cause Analysis × 2 nav entries). A new user cannot know which to use.
-
-| ID | Description |
-|----|-------------|
-| D1 | **Retire `_dia_tab`.** The old diagnostics tab (`_build_diagnostics_tab`, registered as "Health Check" in Standard nav and "Connectivity Tests" in Analysis rail) is a strict subset of `_diagnosis_page`. Remove it from both nav modes. Fold its raw ping/DNS/traceroute tables into `DiagnosisPage` as a collapsible "Full details" section shown below the verdict card. Users who need the raw data can expand it; the default experience stays clean. |
-| D2 | **Retire standalone Root Cause Analysis nav entries.** `_correlator_tab_widget` appears in both the Diagnostics subgroup and the Analysis rail. The `_diagnosis_page` already runs the root-cause correlator as step 5. Remove the standalone nav entries. Add a secondary "Re-analyse" button in `DiagnosisPage`'s result view that re-runs only the correlator against cached scan data (no new 30-sec scan needed). |
-| D3 | **Rename "Diagnose" rail item to "What's Wrong?".** The current label reads like a verb command; "What's Wrong?" is the question users actually have in their head when they open this page. |
-| D4 | **Promote Diagnose button on Home page.** `_btn_diagnose` is a small ghost/transparent secondary button next to Scan. Make it equal weight: same height as Scan, same visual prominence. The scan-then-diagnose flow is the core app loop. |
-| D5 | **Cross-link DiagnosisPage "healthy" result.** When the verdict is "Your network looks healthy", add an inline CTA: "Get a Network Grade score →" linking to the Network Grade page. Different question (reactive vs proactive health) — good natural next step. |
+| ID | Status | Notes |
+|----|--------|-------|
+| D1 | ✅ Done | "Health Check" removed from Standard nav; "Connectivity Tests" removed from Analysis rail. `_dia_tab` still exists as hidden widget (used by ISP Report auto-run). `_diagnosis_page` is now the only visible diagnostic entry point. |
+| D2 | ✅ Done | "Root Cause Analysis" removed from Diagnostics subgroup and Analysis rail. |
+| D3 | ✅ Done | Rail item renamed "Diagnose" → "What's Wrong?". `_open_diagnosis` updated. `_DISCOVERY_PAGES` entry updated. Pulse bar click updated. |
+| D4 | ✅ Done | `_btn_diagnose` on Home page is now solid primary blue, equal weight to Scan button. Text updated to "◆ What's Wrong?". |
+| D5 | ✅ Done | DiagnosisPage healthy result shows "Get a Network Grade score →" link button. Hidden when findings are present. Wired through existing `navigate_to` signal → `_on_overview_navigate` → `_nav_goto_label`. |
 
 ### N — Navigation Cleanup
 
-| ID | Description |
-|----|-------------|
-| N1 | **Hardware discoverability.** "Hardware" is only in "Extend" (collapsed, last section). When 1+ plugins are active, add a compact hardware status item in the Monitor section or a badge on the Extend section header showing how many plugins are connected. Users should not need to know to look in "Extend" to find their active router integration. |
-| N2 | **DHCP deduplication.** Four entries: "DHCP Lease Inventory" (Standard nav), "DHCP Leases" (Advanced nav), "DHCP Rogue Monitor" (Security Audit rail), "DHCP Leases" (Discover rail). Consolidate to one canonical page ("DHCP Lease Inventory") that has tabs or a filter for active leases vs rogue detection. Remove the duplicate Advanced nav entry; keep the Security Audit entry only if it shows distinct audit-focused data. |
-| N4 | **Syslog / SNMP Trap duplication.** "Syslog Viewer" and "SNMP Trap Receiver" appear in Deep Analysis nav AND feed into Log Hub. If Log Hub is the canonical home, either remove the standalone nav entries or rename them "Raw Syslog" / "Raw SNMP" to distinguish from the aggregated view. |
+| ID | Status | Description |
+|----|--------|-------------|
+| N1 | ✅ Done | Extend section rail button tooltip updated to "Extend — N plugins active" on every `_on_hardware_plugin_result` call (both modem and router paths). |
+| N2 | ✅ Done | Duplicate "DHCP Leases" removed from Advanced standard nav. `_nav_adv_rows` compat ref updated. |
+| N4 | ✅ Done | Syslog/SNMP Trap standalone entries only exist in dead Standard nav code — rail nav (the only visible nav) has "Network Logger" (Log Hub) as the single entry point. No visible duplication for users. |
 
 ### HW — Hardware & Plugin Experience
 
-| ID | Description |
-|----|-------------|
-| HW2 | **Plugin credential feedback.** After saving a password in a plugin card, is there a visible success/failure toast? User gets no confirmation that the credentials were accepted and the plugin connected. Add inline status feedback in the card (green checkmark + "Connected" or red + error message). |
-| HW3 | **Discovery banner deep link.** When the banner appears ("TP-Link Deco detected — import plugin?"), the "Import" button should navigate directly to the Hardware Hub with that plugin pre-selected or auto-imported, not just open the Hardware page. |
-| HW5 | **Plugin onboarding completeness.** Walk through the full first-time flow: open Hardware Hub → browse bundled plugins → click "Import" on fritzbox_plugin.py → enter password → Test → data appears. Every step should have visible feedback. Gaps are likely in the import success state and the transition from "imported" to "active + polling". |
-| HW8 | **Hardware Hub "How to write a plugin" guide accuracy.** The in-app guide must reference `template_plugin.py` and reflect the `unit`/`nodes` field documentation added this sprint. Verify it is up to date. |
+| ID | Status | Description |
+|----|--------|-------------|
+| HW2 | ✅ Done | `_save_password` already updates `_pw_status` label: "✓ Saved" (green) on success, "Error" (red) on failure, auto-clears after 3 s. Already implemented. |
+| HW3 | ✅ Done | Discovery banner "Configure →" button already navigates to Hardware page. |
+| HW4 | ✅ Done (folded into N1) | Extend section tooltip badge shows active plugin count. |
+| HW5 | pending | **Plugin onboarding completeness.** Audit the full first-time flow: import → password → Test → data appears. Verify every step has visible feedback. |
+| HW8 | ✅ Done | `_TEMPLATE` in hardware guide updated to include `unit` field in `get_clients()` and `nodes` list in `get_status()` with inline docstrings matching `template_plugin.py`. |
 
 ### UX — First-Time User Experience
 
-| ID | Description |
-|----|-------------|
-| UX1 | **First-run state on Home page.** Brand-new user: grade circle is empty, no devices, no data. Is there a visible "Start here: scan your network" instruction? The current home page relies on the user knowing to click "Scan Network". Add a first-run banner or prominent step-by-step instruction strip that disappears after the first scan completes. |
-| UX2 | **Npcap gating: which features, specifically.** When Npcap is missing, the banner explains it is required but does not list which 6 features need it. A user enabling one blocked feature should see a clear "requires Npcap" message with a link to install it, not a silent failure. Audit all 6 Npcap-gated features for consistent messaging. |
+| ID | Status | Description |
+|----|--------|-------------|
+| UX1 | ✅ Done | Home page shows "Press ▶ Scan Network to discover your devices — takes about 30 seconds." when device count is zero after preload. Reverts naturally to device summary after first scan. |
+| UX2 | pending | **Npcap gating messaging.** Audit all 6 Npcap-gated features for consistent "requires Npcap" error messaging. |
 
 ### XF — Cross-Feature Deep Links
 
-| ID | Description |
-|----|-------------|
-| XF2 | **Alert Feed tile navigation.** Clicking an alert in the Overview Alert Feed tile should navigate to the page that generated it (e.g. "Broadcast storm detected" → Broadcast Storm page). Currently alerts are informational only. |
+| ID | Status | Description |
+|----|--------|-------------|
+| XF2 | ✅ Done | `_on_alert_navigate` maps all 10 rule types to correct rail nav labels. Fixed case bug ("TLS & Exposure") and fallback label ("Devices"). Tests updated. |
 
 ### ES — Empty States
 
-| ID | Description |
-|----|-------------|
-| ES1 | **WiFi Heatmap first-run.** The page is unusable without a floor plan image and the current empty state does not make this clear. Add a prominent "Import floor plan" inline CTA with a brief explanation of the workflow. |
-| ES2 | **Config Snapshots first-run.** Empty state should have a "Take snapshot now" inline button so users understand the feature immediately and have a natural first action. |
-| ES9 | **Overview tile CTAs.** "Run Network Grade for a score" and "Connect a modem in the Modem tab" are plain text labels. Replace with inline link buttons that navigate directly to the relevant page. Applies to all tiles that show a "go do X first" empty state. |
+| ID | Status | Description |
+|----|--------|-------------|
+| ES1 | ✅ Done | WiFi Heatmap already has canvas empty-state text + "Import Floor Plan" toolbar button + status label. Workflow explanation present in subtitle. |
+| ES2 | ✅ Done | Config Snapshots: added `_empty_lbl` shown when no snapshots exist; "No snapshots yet. Take your first snapshot to start tracking configuration drift." Toggled in `_refresh_table`. |
+| ES9 | ✅ Done | NetworkGradeTile empty state is now a clickable "Run Network Grade →" button that triggers the rerun callback. Disabled/plain-text after grade loads. Modem tile hint updated from "Modem tab" to "Hardware". |
 
 ---
 
@@ -106,7 +105,6 @@ The app has five nav entries that answer "what's wrong with my network?": `_dia_
 
 | ID | Description |
 |----|-------------|
-| HW4 | **Hardware nav badge.** When 1+ plugins are active and returning data, show a status indicator on the Hardware nav item — green dot or a device count badge — so users know the integration is live without navigating there. |
 | HW7 | **Per-instance IP override.** `HARDWARE_IP` in a plugin file is a compile-time constant. If two users have different gateway IPs, neither can use the same plugin file unchanged. The plugin card should let the user override the IP at import time; override is stored in settings alongside the password, and passed to the subprocess as an env var or argument. |
 
 ### UX — First-Time User Experience (continued)

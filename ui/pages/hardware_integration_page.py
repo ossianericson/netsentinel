@@ -166,22 +166,42 @@ def get_info() -> dict:
 
 
 def get_status() -> dict:
-    """Live status — called periodically when the page is visible."""
+    """Live status — called periodically when the page is visible.
+
+    connected_clients  — total connected client count (shown on Overview tile)
+    extra.nodes        — list of node dicts; drives topology mid-layer and
+                         the "Group by node" button in the Devices table.
+                         For a single router: one entry with role="primary".
+                         Each node needs at least: name, mac, ip, role.
+    """
     return {
-        "wan_ip":            None,
-        "uptime_sec":        None,
+        "wan_ip":            None,      # WAN/public IP if available
+        "uptime_sec":        None,      # router uptime in seconds
         "download_mbps":     None,
         "upload_mbps":       None,
         "signal_dbm":        None,
-        "connected_clients": [],
-        "extra":             {},
+        "connected_clients": 0,
+        "mesh_nodes":        1,
+        "extra": {
+            "nodes": [
+                # For a single router use one entry like this:
+                {"name": HARDWARE_NAME, "mac": "", "ip": HARDWARE_IP, "role": "primary"},
+            ],
+        },
     }
 
 
 # ── Optional interface ────────────────────────────────────────────────────────
 
 def get_clients() -> list:
-    return []
+    """Return connected devices.
+
+    unit  — name of the mesh node / AP this device is connected to.
+             Populates the "Node" column in the Devices table and enables
+             the "Group by node" button. For a single router use HARDWARE_NAME.
+    band  — Wi-Fi band string, e.g. "2.4G", "5G", "6G", "Wired".
+    """
+    return []  # replace with: [{"ip": ..., "mac": ..., "hostname": ..., "unit": HARDWARE_NAME, "band": "5G"}, ...]
 
 
 # ── Standalone test ───────────────────────────────────────────────────────────

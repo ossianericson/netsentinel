@@ -1628,12 +1628,19 @@ class OverviewPage(QWidget):
         self._export_btn.setEnabled(enabled)
 
     def _on_alert_navigate(self, rule_type: str, host: str) -> None:
-        if rule_type == "SERVICE_DOWN":
-            self.navigate_to.emit("Service Heartbeat")
-        elif rule_type == "CERT_EXPIRY":
-            self.navigate_to.emit("TLS & exposure")
-        else:
-            self.navigate_to.emit("Devices on Network")
+        _MAP = {
+            "SERVICE_DOWN":   "Service Heartbeat",
+            "CERT_EXPIRY":    "TLS & Exposure",
+            "CERT_EXPIRED":   "TLS & Exposure",
+            "RTT_THRESHOLD":  "DNS & Stability",
+            "LOSS_THRESHOLD": "DNS & Stability",
+            "HOST_DOWN":      "Availability History",
+            "HOST_DEGRADED":  "Availability History",
+            "FLAP":           "Availability History",
+            "NEW_DEVICE":     "Devices",
+            "DEVICE_GONE":    "Devices",
+        }
+        self.navigate_to.emit(_MAP.get(rule_type, "Devices"))
 
     def _reflow(self) -> None:
         """Remove all grid items (hide tiles, delete filler), then re-add in order."""

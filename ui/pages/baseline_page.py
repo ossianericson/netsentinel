@@ -259,6 +259,15 @@ class BaselinePage(QWidget):
                 self._snap_table.setColumnWidth(col, w)
         bl.addWidget(self._snap_table)
 
+        self._empty_lbl = QLabel(
+            "No snapshots yet.  Take your first snapshot to start tracking configuration drift."
+        )
+        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; padding:16px 0;"
+        )
+        bl.addWidget(self._empty_lbl)
+
         # Label input + action buttons
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
@@ -338,6 +347,7 @@ class BaselinePage(QWidget):
 
     def _refresh_table(self) -> None:
         self._snap_table.setRowCount(0)
+        self._empty_lbl.setVisible(not self._snapshots)
         for snap in self._snapshots:
             row = self._snap_table.rowCount()
             self._snap_table.insertRow(row)
