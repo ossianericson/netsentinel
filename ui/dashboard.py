@@ -6118,6 +6118,7 @@ class Dashboard(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(NpcapMissingBanner(parent=w))
 
         info = QLabel(
             "NetSentinel learns what traffic is normal for each IoT device on your network "

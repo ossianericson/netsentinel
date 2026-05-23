@@ -66,7 +66,7 @@ The following were built in the plugin data-flow sprint and are done:
 | HW2 | ✅ Done | `_save_password` already updates `_pw_status` label: "✓ Saved" (green) on success, "Error" (red) on failure, auto-clears after 3 s. Already implemented. |
 | HW3 | ✅ Done | Discovery banner "Configure →" button already navigates to Hardware page. |
 | HW4 | ✅ Done (folded into N1) | Extend section tooltip badge shows active plugin count. |
-| HW5 | pending | **Plugin onboarding completeness.** Audit the full first-time flow: import → password → Test → data appears. Verify every step has visible feedback. |
+| HW5 | ✅ Done | Flow audited: import → validation feedback; card has password field with "✓ Saved"; refresh worker runs immediately; data appears in card. All steps have visible feedback. |
 | HW8 | ✅ Done | `_TEMPLATE` in hardware guide updated to include `unit` field in `get_clients()` and `nodes` list in `get_status()` with inline docstrings matching `template_plugin.py`. |
 
 ### UX — First-Time User Experience
@@ -74,7 +74,7 @@ The following were built in the plugin data-flow sprint and are done:
 | ID | Status | Description |
 |----|--------|-------------|
 | UX1 | ✅ Done | Home page shows "Press ▶ Scan Network to discover your devices — takes about 30 seconds." when device count is zero after preload. Reverts naturally to device summary after first scan. |
-| UX2 | pending | **Npcap gating messaging.** Audit all 6 Npcap-gated features for consistent "requires Npcap" error messaging. |
+| UX2 | ✅ Done | Audit complete. Added NpcapMissingBanner to IoT Behaviour tab (missing). Fixed Live Bandwidth Feature Guide entry: uses psutil (no Npcap needed). Rogue Bridge, Broadcast Storm, ARP Spoof Watch, DHCP Rogue Monitor, Bandwidth Monitor all already had banners. |
 
 ### XF — Cross-Feature Deep Links
 

@@ -88,7 +88,7 @@ _FEATURES: list[dict] = [
             "Find out instantly which interface is saturated."
         ),
         "page": "Live Bandwidth",
-        "requires": "Npcap",
+        "requires": None,
         "tags": ["bandwidth", "speed", "live", "chart", "upload", "download", "interface", "throughput"],
     },
     {
