@@ -96,10 +96,10 @@ The following were built in the plugin data-flow sprint and are done:
 
 ### N — Navigation Cleanup (continued)
 
-| ID | Description |
-|----|-------------|
-| N6 | **Analysis rail section split.** The Analysis section mixes threat detection (Broadcast Storm, Rogue Bridge, IoT Behaviour) with analysis tools (Hop-by-Hop Trace, ARP Spoof Watch, Root Cause Analysis). These answer different questions. Consider splitting into "Threat Detection" and "Deep Analysis" sub-sections in the rail, or reorganising the item order so threat items are grouped at the top. |
-| N7 | **"Plugin Modules" in Security Audit renamed.** Users confuse this (custom recon plugins) with Hardware Hub plugins. Rename to "Recon Plugins" with a tooltip: "Custom port-scanner and enumeration scripts — not hardware driver plugins." |
+| ID | Status | Description |
+|----|--------|-------------|
+| N6 | ✅ Done | Analysis rail reordered: Broadcast Storm, Rogue Bridge (STP), IoT Behaviour, 802.11 Monitor, ARP Spoof Watch, Hop-by-Hop Trace, SNMP Device Info, Tools & Wake-on-LAN, Geolocation Map, Trend Forecasts — threat items grouped at top. |
+| N7 | ✅ Done | "Plugin Modules" renamed to "Recon Plugins" everywhere — nav label, page header, feature guide, discover page. |
 
 ### HW — Hardware & Plugin Experience (continued)
 
@@ -109,54 +109,54 @@ The following were built in the plugin data-flow sprint and are done:
 
 ### UX — First-Time User Experience (continued)
 
-| ID | Description |
-|----|-------------|
-| UX3 | **"What to do next" suggestions quality.** The Home page suggestions section should guide a new user through the most valuable next step after their first scan, not show generic items. Evaluate whether the current suggestion logic actually prioritises "new device joined", "high-risk CVE", and "run Network Grade" in that order for a first-time user. |
-| UX4 | **Ctrl+K discoverability.** The Ctrl+K shortcut is the best feature in the app for discovering functionality. Its hint is in the collapsible Quick Tips section below the fold — too hidden. Add a one-line "Try Ctrl+K to find anything →" prompt in the Home page empty state, visible before the first scan. |
+| ID | Status | Description |
+|----|--------|-------------|
+| UX3 | — | "What to do next" suggestions quality. Not yet implemented. |
+| UX4 | ✅ Done | Home page empty state shows "Try Ctrl+K to find anything on the network →" inline button; navigates to command palette. |
 
 ### XF — Cross-Feature Deep Links (continued)
 
-| ID | Description |
-|----|-------------|
-| XF1 | **CVE hits in Devices table deep link.** When a device row shows a CVE flag, the right-click menu should include "View in CVE Tracker →" which navigates to that device's CVE entry. |
-| XF3 | **Threat Intel link from Active Connections.** When a remote IP in Active Connections matches a known bad IP in the Threat Intelligence cache, show a flag icon in that row. Clicking navigates to Threat Intel and highlights that IP. |
-| XF4 | **Network Grade fix links.** When a grade dimension scores D or F, the card should show a "Fix this →" link that navigates to the relevant page (e.g. "DNS: F" → "DNS & Outages", "Security: D" → "Security Overview"). |
-| XF5 | **Security Overview aggregation.** The Security Overview page should aggregate findings from all audit scans run so far, not require the user to run each scan individually to see the combined picture. After any audit scan completes, push its findings into the Security Overview. |
-| XF6 | **Inventory Changes deep link.** Clicking a device row in Inventory Changes should open that device highlighted in the Devices table (filter/scroll to that MAC). |
-| XF7 | **Modem tile navigation.** When a modem plugin is active, clicking the ModemSignalTile on Overview should navigate to that plugin's device page. |
+| ID | Status | Description |
+|----|--------|-------------|
+| XF1 | ✅ Done | Right-click menu in Devices table shows "View in CVE Tracker →" only when CVE Tracker has entries matching that device IP. Navigates via `_nav_rail_go_to("CVE Tracker")`. |
+| XF3 | — | Threat Intel link from Active Connections. Not yet implemented. |
+| XF4 | ✅ Done | Network Grade D/F rows get a "Fix this →" QPushButton via `setCellWidget`, mapped to relevant pages (DNS & Stability, Security Overview, etc.). |
+| XF5 | — | Security Overview aggregation. Not yet implemented. |
+| XF6 | ✅ Done | Inventory Changes added to Monitor section of rail nav. Double-clicking a row emits `device_selected(mac)` → dashboard navigates to Devices and scrolls/selects the matching row via `_m1_highlight_mac`. |
+| XF7 | ✅ Done | ModemSignalTile emits `clicked` when data is active; OverviewPage relays as `modem_tile_clicked`; dashboard navigates to the active modem plugin page (fallback: Hardware Hub). |
 
 ### ES — Empty States (continued)
 
-| ID | Description |
-|----|-------------|
-| ES3 | **DHCP Lease page.** Empty before DHCP scan runs. Add an inline "Scan DHCP leases" button so users understand the page is data-driven and know how to populate it. |
-| ES4 | **Custom Triggers.** Empty state should explain what a trigger is and offer a template ("Alert me when a new device joins") as a one-click starting point. |
-| ES5 | **Home Automation page.** Empty state should explain the HA integration and link to MQTT setup if MQTT is not yet configured. |
-| ES6 | **Trend Forecasts.** Needs Log Hub data to work. Empty state should say "Enable Network RTT logging in Log Hub to start building forecast data" with a direct link to Log Hub. |
-| ES7 | **IPv6 Devices.** Most home networks have no IPv6. The empty state should say "No IPv6 devices found — this is normal for most home networks" rather than looking like a scan failure. |
-| ES8 | **Availability History.** Before first scan the page is blank. Add a brief empty state with a "Run a scan to start tracking device availability" prompt. |
+| ID | Status | Description |
+|----|--------|-------------|
+| ES3 | ✅ Done | DHCP Lease page: inline "▶ Scan DHCP Leases" button in centered empty state widget replaces bare label. |
+| ES4 | ✅ Done | Custom Triggers: QStackedWidget empty state (page 0) with description + "＋ Alert when host goes down →" pre-fills a Host Down template in the rule editor dialog. |
+| ES5 | ✅ Done | Home Automation: QStackedWidget empty state (page 0) with "Configure MQTT / Home Assistant →" flat button that emits `navigate_to("MQTT / Home Assistant")`. |
+| ES6 | ✅ Done | Trend Forecasts: empty state shows "Enable Network RTT logging in Log Hub to build forecast data" + "Open Network Logger →" button; `navigate_to` signal wired to dashboard. |
+| ES7 | ✅ Done | IPv6 no-results status now reads "No IPv6 devices found — this is normal for most home networks" instead of looking like a scan failure. |
+| ES8 | ✅ Done | Already compliant — Availability History had proper empty state; no change needed. |
 
 ### VC — Visual Consistency
 
-| ID | Description |
-|----|-------------|
-| VC1 | **Group by node hint when disabled.** Add 10px muted hint text below the button: "Connect a router plugin to enable grouping". |
-| VC3 | **Loading state standardisation.** Some pages show "Loading…" text, others show spinners, others show nothing at all while a worker runs. Standardise to a subtle inline spinner + muted text label across all scan-driven pages. |
-| VC4 | **Compatibility notice updates.** The Modem page (ZTE MC889) and Mesh Router page (TP-Link Deco) have compatibility notice strips. Verify these mention the Hardware Hub plugin system as the path for other hardware models. |
+| ID | Status | Description |
+|----|--------|-------------|
+| VC1 | ✅ Done | Group by node button shows muted hint text "Connect a router plugin to enable node grouping" when disabled. |
+| VC3 | — | Loading state standardisation. Not yet implemented. |
+| VC4 | ✅ Done | Modem page compat notice updated to reference Hardware Hub plugin system for other modems. Mesh Router page compat notice updated similarly (Eero, Orbi, UniFi, FritzBox). |
 
 ### MA — Monitoring & Alerts
 
-| ID | Description |
-|----|-------------|
-| MA1 | **IoT Behaviour anomaly action.** When an anomaly fires, the user needs a "Investigate" or "Quarantine" CTA. Currently the anomaly appears in the table but there is no suggested next action. Add a context-sensitive action row below the anomaly finding. |
-| MA2 | **Custom Triggers discoverability.** The trigger builder is powerful but impossible to find. Add a "Create custom alert →" link-button in the Notifications page empty/footer area. |
+| ID | Status | Description |
+|----|--------|-------------|
+| MA1 | ✅ Done | IoT anomaly alert table has an "Action" column with a flat "Investigate →" button per row, mapped by alert type: SYN_SCAN/NEW_PORT → Port Scan (TCP), NEW_DEST → Threat Intel, METADATA_PROBE → Cloud Metadata Probe, RATE_SPIKE → Live Bandwidth. |
+| MA2 | ✅ Done | Notifications page footer has "Create custom alert →" flat button that navigates to Custom Triggers. |
 
 ### RP — Reports
 
-| ID | Description |
-|----|-------------|
-| RP1 | **Rename "ISP Report".** "ISP Report" is unclear to home users who have never filed an ISP complaint. Rename to "Network Health Report" with subtitle "Great for ISP support tickets". |
-| RP2 | **Baseline drift notifications.** When a Config Snapshot detects drift after a scan, the user should receive a toast notification. Currently drift is only visible if the user navigates to the Snapshots page. |
+| ID | Status | Description |
+|----|--------|-------------|
+| RP1 | ✅ Done | "ISP Report" renamed to "Network Health Report" with subtitle "Great for ISP support tickets" throughout nav, page header, and feature guide. |
+| RP2 | ✅ Done | BaselinePage emits `drift_detected(str)` on compare when drift found; dashboard shows status-bar message + tray notification via `_tray_manager.show_notification`. |
 
 ---
 
@@ -171,7 +171,7 @@ The following were built in the plugin data-flow sprint and are done:
 | SK1 | Skeleton loading rows while scan workers run: prevents layout jump when data arrives; placeholder rows styled in `TEXT_MUTED`, swapped out when the worker emits results. |
 | A11Y | "Abyss" WCAG AA high-contrast theme: true black background, high-contrast text, no low-opacity elements. |
 | KBD | Keyboard shortcut reference card in Help panel — the shortcut list currently only appears in Settings. |
-| 802 | Passive 802.11 monitor mode capture — puts a supported NIC into monitor mode via Npcap, reads raw management/probe/beacon frames. Falls back silently if unsupported. Power-user feature. |
+| 802 | ✅ Done | Passive 802.11 monitor mode capture — WiFiMonitorPage + WiFiMonitorWorker. Interface selector, Start/Stop, live frame table (Time, Frame Type, Source MAC, SSID, Destination). Falls back silently via `unsupported` signal. Added to Analysis rail section, Feature Guide (Security group), and smoke test. |
 
 ---
 
