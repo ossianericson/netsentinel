@@ -61,7 +61,7 @@ def _load_secret(key: str) -> str:
     except Exception:
         return ""
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -184,6 +184,8 @@ def _severity_combo(default: str = "WARNING") -> QComboBox:
     return cb
 
 
+_RECOMMENDED_RULES = {"Host Down", "New Device", "High RTT", "Cert Expiring", "Host Flapping"}
+
 _SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED}
 _SEV_BG    = {"INFO": BG_CARD, "WARNING": AMBER_BG, "CRITICAL": RED_BG}
 _CH_COLOR  = {"TOAST": ACCENT, "WEBHOOK": GREEN, "EMAIL": AMBER,
@@ -207,6 +209,7 @@ class NotificationsPage(QWidget):
     """Notification routing configuration and delivery log page."""
 
     navigate_to = pyqtSignal(str)
+    _test_done  = pyqtSignal(str, str)   # (channel_key, html_result)
 
     def __init__(self, router=None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -214,6 +217,9 @@ class NotificationsPage(QWidget):
         self._router = router
         self._alert_engine = None
         self._rule_checkboxes: dict = {}
+        self._test_labels: dict[str, QLabel] = {}
+        self._test_btns:   dict[str, QPushButton] = {}
+        self._test_done.connect(self._on_test_done)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -256,6 +262,13 @@ class NotificationsPage(QWidget):
     def _build_alert_rules_card(self) -> QWidget:
         card, bl = _card("Alert Rules")
 
+        # Active rules count \u2014 updated by _update_rules_badge()
+        self._active_rules_lbl = QLabel("0 rules active")
+        self._active_rules_lbl.setStyleSheet(
+            f"font-size:11px; color:{AMBER}; font-weight:bold; border:none;"
+        )
+        bl.addWidget(self._active_rules_lbl)
+
         info = QLabel(
             "All alert rules are disabled by default \u2014 you must opt in. "
             "Enable the rules you want; alerts only fire for rules that are active."
@@ -265,6 +278,33 @@ class NotificationsPage(QWidget):
             f"font-size:11px; color:{TEXT_SECONDARY}; border:none; padding-bottom:4px;"
         )
         bl.addWidget(info)
+
+        # Banner shown when no rules are active
+        self._zero_rules_banner = QFrame()
+        self._zero_rules_banner.setStyleSheet(
+            f"QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER};"
+            f" border-radius:4px; }}"
+        )
+        banner_lay = QHBoxLayout(self._zero_rules_banner)
+        banner_lay.setContentsMargins(10, 6, 10, 6)
+        banner_lay.setSpacing(10)
+        banner_txt = QLabel("No alert rules are active \u2014 you won\u2019t receive any alerts.")
+        banner_txt.setStyleSheet(
+            f"color:{AMBER}; font-size:11px; border:none; background:transparent;"
+        )
+        banner_lay.addWidget(banner_txt, 1)
+        rec_btn = QPushButton("Enable recommended rules \u2192")
+        rec_btn.setFlat(True)
+        rec_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        rec_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
+        )
+        rec_btn.clicked.connect(self._enable_recommended_rules)
+        banner_lay.addWidget(rec_btn)
+        self._zero_rules_banner.setVisible(False)
+        bl.addWidget(self._zero_rules_banner)
 
         from PyQt6.QtWidgets import QGridLayout
         grid = QGridLayout()
@@ -347,7 +387,14 @@ class NotificationsPage(QWidget):
         )
         btn_test.clicked.connect(self._test_webhook)
         btn_test.setToolTip("Sends a test alert through the configured webhook")
+        self._test_btns["webhook"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        _lbl = QLabel("")
+        _lbl.setVisible(False)
+        _lbl.setTextFormat(Qt.TextFormat.RichText)
+        _lbl.setStyleSheet("font-size:10px; border:none; background:transparent;")
+        self._test_labels["webhook"] = _lbl
+        bl.addWidget(_lbl)
         return card
 
     # ── Email card ────────────────────────────────────────────────────────────
@@ -404,7 +451,14 @@ class NotificationsPage(QWidget):
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_email)
+        self._test_btns["email"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        _lbl = QLabel("")
+        _lbl.setVisible(False)
+        _lbl.setTextFormat(Qt.TextFormat.RichText)
+        _lbl.setStyleSheet("font-size:10px; border:none; background:transparent;")
+        self._test_labels["email"] = _lbl
+        bl.addWidget(_lbl)
         return card
 
     # ── Pushover card ─────────────────────────────────────────────────────────
@@ -446,7 +500,14 @@ class NotificationsPage(QWidget):
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_pushover)
+        self._test_btns["pushover"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        _lbl = QLabel("")
+        _lbl.setVisible(False)
+        _lbl.setTextFormat(Qt.TextFormat.RichText)
+        _lbl.setStyleSheet("font-size:10px; border:none; background:transparent;")
+        self._test_labels["pushover"] = _lbl
+        bl.addWidget(_lbl)
         return card
 
     # ── ntfy card ─────────────────────────────────────────────────────────────
@@ -488,7 +549,14 @@ class NotificationsPage(QWidget):
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_ntfy)
+        self._test_btns["ntfy"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        _lbl = QLabel("")
+        _lbl.setVisible(False)
+        _lbl.setTextFormat(Qt.TextFormat.RichText)
+        _lbl.setStyleSheet("font-size:10px; border:none; background:transparent;")
+        self._test_labels["ntfy"] = _lbl
+        bl.addWidget(_lbl)
         return card
 
     # ── Telegram card ─────────────────────────────────────────────────────────
@@ -530,7 +598,14 @@ class NotificationsPage(QWidget):
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_telegram)
+        self._test_btns["telegram"] = btn_test
         bl.addWidget(btn_test, alignment=Qt.AlignmentFlag.AlignLeft)
+        _lbl = QLabel("")
+        _lbl.setVisible(False)
+        _lbl.setTextFormat(Qt.TextFormat.RichText)
+        _lbl.setStyleSheet("font-size:10px; border:none; background:transparent;")
+        self._test_labels["telegram"] = _lbl
+        bl.addWidget(_lbl)
         return card
 
     # ── Delivery log card ─────────────────────────────────────────────────────
@@ -705,6 +780,7 @@ class NotificationsPage(QWidget):
         # Alert rule enabled states (one key per rule, opt-in defaults to False)
         for name, chk in self._rule_checkboxes.items():
             qs.setValue(_rule_key(name), chk.isChecked())
+        self._update_rules_badge()
         self._apply_to_engine()
         self._apply_to_router()
 
@@ -761,6 +837,80 @@ class NotificationsPage(QWidget):
         finally:
             self._restoring = False
         self._apply_to_router()
+        self._update_rules_badge()
+
+    def _update_rules_badge(self) -> None:
+        count = sum(1 for chk in self._rule_checkboxes.values() if chk.isChecked())
+        lbl = getattr(self, "_active_rules_lbl", None)
+        banner = getattr(self, "_zero_rules_banner", None)
+        if lbl is None:
+            return
+        noun = "rule" if count == 1 else "rules"
+        lbl.setText(f"{count} {noun} active")
+        if count == 0:
+            lbl.setStyleSheet(
+                f"font-size:11px; color:{AMBER}; font-weight:bold; border:none;"
+            )
+            if banner:
+                banner.setVisible(True)
+        else:
+            lbl.setStyleSheet(
+                f"font-size:11px; color:{GREEN}; font-weight:bold; border:none;"
+            )
+            if banner:
+                banner.setVisible(False)
+
+    def _enable_recommended_rules(self) -> None:
+        for name, chk in self._rule_checkboxes.items():
+            if name in _RECOMMENDED_RULES:
+                chk.setChecked(True)
+        self._save()
+
+    def _run_test(self, key: str, deliver_fn, ch, alert) -> None:
+        import threading
+        lbl = self._test_labels.get(key)
+        btn = self._test_btns.get(key)
+        if lbl:
+            lbl.setTextFormat(Qt.TextFormat.PlainText)
+            lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+            )
+            lbl.setText("Testing…")
+            lbl.setVisible(True)
+        if btn:
+            btn.setEnabled(False)
+
+        def _worker() -> None:
+            try:
+                deliver_fn(ch, alert)
+                html = (
+                    f'<span style="color:{GREEN};">'
+                    f"✓ Sent — check your channel for a test alert.</span>"
+                )
+                self._test_done.emit(key, html)
+                t = threading.Timer(5.0, lambda: self._test_done.emit(key, ""))
+                t.daemon = True
+                t.start()
+            except Exception as exc:
+                err = f"{type(exc).__name__}: {str(exc)[:120]}"
+                html = f'<span style="color:{RED};">✗ {err}</span>'
+                self._test_done.emit(key, html)
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    @pyqtSlot(str, str)
+    def _on_test_done(self, key: str, html: str) -> None:
+        lbl = self._test_labels.get(key)
+        btn = self._test_btns.get(key)
+        if btn:
+            btn.setEnabled(True)
+        if lbl:
+            if html:
+                lbl.setTextFormat(Qt.TextFormat.RichText)
+                lbl.setText(html)
+                lbl.setVisible(True)
+            else:
+                lbl.setVisible(False)
 
     def _apply_to_router(self) -> None:
         """Push current UI state into the live NotificationRouter."""
@@ -888,7 +1038,7 @@ class NotificationsPage(QWidget):
     def _test_webhook(self) -> None:
         from modules.notification_router import WebhookChannel, _deliver_webhook
         from modules.alert_engine import AlertFired
-        import threading, time as _t
+        import time as _t
         url = self._webhook_url.text().strip()
         if not url:
             return
@@ -899,12 +1049,12 @@ class NotificationsPage(QWidget):
             host="netsentinel-test", message="This is a test alert from NetSentinel.",
             severity="INFO", ts=int(_t.time()),
         )
-        threading.Thread(target=_deliver_webhook, args=(ch, alert), daemon=True).start()
+        self._run_test("webhook", _deliver_webhook, ch, alert)
 
     def _test_email(self) -> None:
         from modules.notification_router import EmailChannel, _deliver_email
         from modules.alert_engine import AlertFired
-        import threading, time as _t
+        import time as _t
         try:
             port = int(self._email_port.text().strip() or "587")
         except ValueError:
@@ -926,12 +1076,12 @@ class NotificationsPage(QWidget):
             host="netsentinel-test", message="This is a test alert from NetSentinel.",
             severity="INFO", ts=int(_t.time()),
         )
-        threading.Thread(target=_deliver_email, args=(ch, alert), daemon=True).start()
+        self._run_test("email", _deliver_email, ch, alert)
 
     def _test_pushover(self) -> None:
         from modules.notification_router import PushoverChannel, _deliver_pushover
         from modules.alert_engine import AlertFired
-        import threading, time as _t
+        import time as _t
         ch = PushoverChannel(
             enabled=True,
             api_token=self._pushover_token.text(),
@@ -943,12 +1093,12 @@ class NotificationsPage(QWidget):
             host="netsentinel-test", message="This is a test push from NetSentinel.",
             severity="INFO", ts=int(_t.time()),
         )
-        threading.Thread(target=_deliver_pushover, args=(ch, alert), daemon=True).start()
+        self._run_test("pushover", _deliver_pushover, ch, alert)
 
     def _test_ntfy(self) -> None:
         from modules.notification_router import NtfyChannel, _deliver_ntfy
         from modules.alert_engine import AlertFired
-        import threading, time as _t
+        import time as _t
         ch = NtfyChannel(
             enabled=True,
             topic_url=self._ntfy_url.text().strip(),
@@ -960,12 +1110,12 @@ class NotificationsPage(QWidget):
             host="netsentinel-test", message="This is a test notification from NetSentinel.",
             severity="INFO", ts=int(_t.time()),
         )
-        threading.Thread(target=_deliver_ntfy, args=(ch, alert), daemon=True).start()
+        self._run_test("ntfy", _deliver_ntfy, ch, alert)
 
     def _test_telegram(self) -> None:
         from modules.notification_router import TelegramChannel, _deliver_telegram
         from modules.alert_engine import AlertFired
-        import threading, time as _t
+        import time as _t
         ch = TelegramChannel(
             enabled=True,
             bot_token=self._telegram_token.text(),
@@ -977,4 +1127,4 @@ class NotificationsPage(QWidget):
             host="netsentinel-test", message="This is a test message from NetSentinel.",
             severity="INFO", ts=int(_t.time()),
         )
-        threading.Thread(target=_deliver_telegram, args=(ch, alert), daemon=True).start()
+        self._run_test("telegram", _deliver_telegram, ch, alert)

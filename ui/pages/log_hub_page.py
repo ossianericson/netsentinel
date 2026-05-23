@@ -29,7 +29,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QScrollArea, QSizePolicy, QSpinBox, QTableWidget, QTableWidgetItem,
     QToolButton, QVBoxLayout, QWidget,
 )
@@ -193,7 +193,9 @@ class LogHubPage(QWidget):
         self._entries:            list[dict] = []
         self._consecutive_fails:  int        = 0
         self._last_live_challenge: float     = 0.0
-        self._toggle_btns: dict[str, QPushButton] = {}
+        self._toggle_btns:    dict[str, QPushButton] = {}
+        self._db_btns:        dict[str, QPushButton] = {}
+        self._interval_combos: dict[str, QComboBox]  = {}
         self._src_bold_font = QFont()
         self._src_bold_font.setBold(True)
         self._src_bold_font.setPointSize(8)
@@ -224,6 +226,7 @@ class LogHubPage(QWidget):
 
         inner_lay.addWidget(self._build_scan_config_panel())
         inner_lay.addWidget(self._build_source_bar())
+        inner_lay.addWidget(self._build_logged_sources_bar())
 
         card = QFrame()
         card.setObjectName("logcard")
@@ -440,6 +443,139 @@ class LogHubPage(QWidget):
         lay.addWidget(self._search_box)
 
         return bar
+
+    def _build_logged_sources_bar(self) -> QWidget:
+        """Persistent DB logging and interval controls for Modem and Mesh sources."""
+        _qs = QSettings("NetSentinel", "NetSentinel")
+
+        bar = QFrame()
+        bar.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        lay = QVBoxLayout(bar)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(6)
+
+        hdr = QLabel("LOGGING TO DATABASE")
+        hdr.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+            f" letter-spacing:0.08em; background:transparent; border:none;"
+        )
+        lay.addWidget(hdr)
+
+        for key in ("modem", "mesh"):
+            label, color = _SOURCES[key]
+            enabled  = _qs.value(f"logging/{key}_enabled",      False, type=bool)
+            interval = _qs.value(f"logging/{key}_interval_min", 5,     type=int)
+
+            row = QHBoxLayout()
+            row.setSpacing(8)
+
+            src_lbl = QLabel(f"● {label}")
+            src_lbl.setFixedWidth(60)
+            src_lbl.setStyleSheet(
+                f"color:{color}; font-size:11px; font-weight:bold;"
+                f" background:transparent; border:none;"
+            )
+            row.addWidget(src_lbl)
+
+            db_btn = QPushButton(
+                "● Logging to DB" if enabled else "○  Not logging  "
+            )
+            db_btn.setCheckable(True)
+            db_btn.setChecked(enabled)
+            db_btn.setFixedHeight(22)
+            db_btn.setFixedWidth(130)
+            self._style_db_btn(db_btn, enabled)
+            db_btn.clicked.connect(
+                lambda checked, k=key, b=db_btn: self._on_db_toggled(k, checked, b)
+            )
+            self._db_btns[key] = db_btn
+            row.addWidget(db_btn)
+
+            ev_lbl = QLabel("every")
+            ev_lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+            )
+            row.addWidget(ev_lbl)
+
+            combo = QComboBox()
+            for val in (1, 5, 10, 15, 30, 60):
+                combo.addItem(f"{val} min", val)
+            idx = combo.findData(interval)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            combo.setFixedHeight(22)
+            combo.setFixedWidth(76)
+            combo.setStyleSheet(
+                f"QComboBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY}; font-size:10px;"
+                f" border:1px solid {BORDER}; border-radius:3px; padding:1px 4px; }}"
+                f"QComboBox::drop-down {{ border:none; }}"
+                f"QComboBox QAbstractItemView {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+                f" border:1px solid {BORDER};"
+                f" selection-background-color:{ACCENT}; }}"
+            )
+            combo.currentIndexChanged.connect(
+                lambda _, k=key, c=combo: self._on_interval_changed(k, c)
+            )
+            self._interval_combos[key] = combo
+            row.addWidget(combo)
+            row.addStretch()
+            lay.addLayout(row)
+
+        self._db_feedback_lbl = QLabel("")
+        self._db_feedback_lbl.setStyleSheet(
+            f"color:{GREEN}; font-size:10px; background:transparent; border:none;"
+        )
+        self._db_feedback_lbl.setVisible(False)
+        lay.addWidget(self._db_feedback_lbl)
+
+        return bar
+
+    def _style_db_btn(self, btn: QPushButton, enabled: bool) -> None:
+        if enabled:
+            btn.setStyleSheet(
+                f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
+                f" padding:1px 10px; }}"
+                f"QPushButton:hover {{ background:{GREEN}44; }}"
+            )
+        else:
+            btn.setStyleSheet(
+                f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
+                f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            )
+
+    def _on_db_toggled(self, key: str, checked: bool, btn: QPushButton) -> None:
+        label = _SOURCES[key][0]
+        btn.setText("● Logging to DB" if checked else "○  Not logging  ")
+        self._style_db_btn(btn, checked)
+        QSettings("NetSentinel", "NetSentinel").setValue(f"logging/{key}_enabled", checked)
+        if checked:
+            self._show_db_feedback(
+                f"{label} data will be saved to your database.", GREEN
+            )
+        else:
+            self._show_db_feedback(
+                f"{label} logging stopped. History recorded so far is preserved.", AMBER
+            )
+
+    def _on_interval_changed(self, key: str, combo: QComboBox) -> None:
+        val = combo.currentData()
+        if val is not None:
+            QSettings("NetSentinel", "NetSentinel").setValue(
+                f"logging/{key}_interval_min", val
+            )
+
+    def _show_db_feedback(self, msg: str, color: str) -> None:
+        self._db_feedback_lbl.setText(msg)
+        self._db_feedback_lbl.setStyleSheet(
+            f"color:{color}; font-size:10px; background:transparent; border:none;"
+        )
+        self._db_feedback_lbl.setVisible(True)
+        QTimer.singleShot(3000, lambda: self._db_feedback_lbl.setVisible(False))
 
     def _style_toggle(self, btn: QPushButton, enabled: bool, color: str) -> None:
         if enabled:
