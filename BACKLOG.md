@@ -182,19 +182,3 @@ The following were built in the plugin data-flow sprint and are done:
 
 **Order:** Broadcast Storm → Rogue Bridge (STP) → ARP Spoof Watch → IoT Behaviour → Protocol Visualizer (already done).
 
----
-
-## P2-Carry — ISP Comparison (requires backend)
-
-Anonymous opt-in only, zero PII. Submits ISP name, country code, anonymised speed, latency, and uptime percentage once per day. Shows the user how their connection compares to the median for their ISP and country.
-
-"Your latency is 42 ms — 38% worse than the median for your ISP" is actionable. Creates a re-engagement hook.
-
-**Honest flag:** Only item on the backlog that requires server infrastructure — ongoing costs, API maintenance, privacy policy update. Do not start until plugin data flow is complete and there is a clear backend plan. Effort is L and that L is mostly the backend.
-
----
-
-## Parking Lot
-
-- **CompTIA Network+ / CCNA curriculum alignment** — badges on each page showing which exam objective it covers. S effort but creates institutional positioning that may conflict with the hardware plugin angle. Only worth doing if educators ask directly.
-- **Per-page documentation link** — small `?` on each page header linking to the relevant wiki section. Requires a wiki to exist first.
