@@ -31,6 +31,20 @@ _SEV_COLOR = {
     "INFO":     ACCENT,
 }
 
+# Maps CorrelatedFinding.category → (button label, navigate_to target)
+_CTA_MAP: dict[str, tuple[str, str]] = {
+    "DNS Resolution Failure":                    ("Run DNS lookup →",          "DNS & Stability"),
+    "DNS Leak Detected":                         ("Check DNS & Stability →",   "DNS & Stability"),
+    "Chronic Connectivity Loss":                 ("Check Availability →",      "DNS & Stability"),
+    "High Jitter — Unstable Latency":            ("Check Live Bandwidth →",    "Bandwidth Usage"),
+    "Very Low Download Speed":                   ("Run Speed Test →",          "Speed Test"),
+    "External ISP Issue":                        ("Run DNS lookup →",          "DNS & Stability"),
+    "Local Network / Router Unreachable":        ("Check Live Bandwidth →",    "Bandwidth Usage"),
+    "Broadcast Storm":                           ("Open Broadcast Storm →",    "Broadcast Storm"),
+    "Degraded IoT Device — Excessive Broadcasting": ("Open IoT Behaviour →",  "IoT Behaviour"),
+    "Rogue Network Bridge":                      ("Open Rogue Bridge (STP) →", "Rogue Bridge (STP)"),
+}
+
 _IDLE    = 0
 _RUNNING = 1
 _DONE    = 2
@@ -385,6 +399,22 @@ class DiagnosisPage(QWidget):
                 f"font-size:{rem_size}; color:{TEXT_SECONDARY}; border:none; background:transparent;"
             )
             lay.addWidget(rem)
+
+        category = getattr(finding, "category", "")
+        if category in _CTA_MAP:
+            cta_label, cta_target = _CTA_MAP[category]
+            cta_btn = QPushButton(cta_label)
+            cta_btn.setFlat(True)
+            cta_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            cta_btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                f" border:none; padding:2px 0; text-align:left; }}"
+                f"QPushButton:hover {{ color:#005A9E; }}"
+            )
+            cta_btn.clicked.connect(
+                lambda _=False, t=cta_target: self.navigate_to.emit(t)
+            )
+            lay.addWidget(cta_btn)
 
         return card
 

@@ -381,6 +381,20 @@ _FEATURES: list[dict] = [
     },
     {
         "group": "Security",
+        "icon": "◈",
+        "name": "Monitor Overview",
+        "desc": (
+            "Single-glance security posture — one tile per detection monitor: "
+            "ARP Spoof Watch, DHCP Rogue, Broadcast Storm, IoT anomalies, open ports, "
+            "and CVE matches. All green means everything is either clear or running. "
+            "Click any tile to go straight to that feature's detail page."
+        ),
+        "page": "Monitor Overview",
+        "requires": None,
+        "tags": ["overview", "status", "dashboard", "monitor", "arp", "dhcp", "storm", "iot", "cve", "ports", "security"],
+    },
+    {
+        "group": "Security",
         "icon": "⊗",
         "name": "CVE Lookup",
         "desc": (

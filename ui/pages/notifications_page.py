@@ -81,7 +81,7 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
     BORDER, BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 from modules.alert_engine import rule_settings_key as _rule_key
@@ -215,10 +215,13 @@ class NotificationsPage(QWidget):
         super().__init__(parent)
         self.setObjectName("contentArea")
         self._router = router
+        self._store = None
         self._alert_engine = None
         self._rule_checkboxes: dict = {}
         self._test_labels: dict[str, QLabel] = {}
         self._test_btns:   dict[str, QPushButton] = {}
+        self._kr_locked:      dict[str, "QLineEdit"] = {}
+        self._kr_change_btns: dict[str, QPushButton] = {}
         self._test_done.connect(self._on_test_done)
 
         outer = QVBoxLayout(self)
@@ -249,6 +252,7 @@ class NotificationsPage(QWidget):
         il.addWidget(self._build_ntfy_card())
         il.addWidget(self._build_telegram_card())
         il.addWidget(self._build_escalation_card())
+        il.addWidget(self._build_weekly_digest_card())
         il.addWidget(self._build_log_card())
         il.addStretch()
 
@@ -256,6 +260,67 @@ class NotificationsPage(QWidget):
         outer.addWidget(scroll, 1)
 
         self._restore()
+
+    # ── Keychain field helpers (NOTIF-3) ─────────────────────────────────────
+
+    def _kr_note_row(self, kr_key: str, field: "QLineEdit") -> QWidget:
+        """Note + 'Change ›' link placed below a keychain-backed password field."""
+        w = QWidget()
+        w.setStyleSheet("background:transparent;")
+        row = QHBoxLayout(w)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        note = QLabel("Stored securely in your OS keychain — not in any config file")
+        note.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+        )
+        row.addWidget(note)
+        change_btn = QPushButton("Change ›")
+        change_btn.setFixedHeight(18)
+        change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        change_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
+            f" font-size:10px; padding:0; }}"
+            f"QPushButton:hover {{ text-decoration:underline; }}"
+        )
+        change_btn.setVisible(False)
+        change_btn.clicked.connect(
+            lambda _=False, k=kr_key, f=field, b=change_btn:
+            self._unlock_kr_field(k, f, b)
+        )
+        row.addWidget(change_btn)
+        row.addStretch()
+        self._kr_change_btns[kr_key] = change_btn
+        return w
+
+    def _unlock_kr_field(
+        self, kr_key: str, field: "QLineEdit", btn: QPushButton
+    ) -> None:
+        self._kr_locked.pop(kr_key, None)
+        field.setPlaceholderText("")
+        btn.setVisible(False)
+        field.setFocus()
+
+    def _kr_restore_field(self, kr_key: str, field: "QLineEdit") -> None:
+        val = _load_secret(kr_key)
+        if val:
+            field.clear()
+            field.setPlaceholderText("●●●●●●●●")
+            self._kr_locked[kr_key] = field
+            if kr_key in self._kr_change_btns:
+                self._kr_change_btns[kr_key].setVisible(True)
+        else:
+            field.clear()
+            field.setPlaceholderText("")
+            self._kr_locked.pop(kr_key, None)
+            if kr_key in self._kr_change_btns:
+                self._kr_change_btns[kr_key].setVisible(False)
+
+    def _kr_save_field(self, kr_key: str, field: "QLineEdit") -> None:
+        if kr_key in self._kr_locked and not field.text():
+            return  # user hasn't changed — keep existing keychain entry
+        _save_secret(kr_key, field.text())
+        self._kr_locked.pop(kr_key, None)
 
     # ── Alert rules card ──────────────────────────────────────────────────────
 
@@ -422,6 +487,7 @@ class NotificationsPage(QWidget):
         self._email_pass = _lineedit("App password", password=True)
         self._email_pass.editingFinished.connect(self._save)
         bl.addLayout(_field_row("Password:", self._email_pass))
+        bl.addWidget(self._kr_note_row(_KR_EMAIL_PASS_KEY, self._email_pass))
 
         self._email_from = _lineedit("netsentinel@example.com")
         self._email_from.editingFinished.connect(self._save)
@@ -474,10 +540,12 @@ class NotificationsPage(QWidget):
         self._pushover_token = _lineedit("App API Token", password=True)
         self._pushover_token.editingFinished.connect(self._save)
         bl.addLayout(_field_row("API Token:", self._pushover_token))
+        bl.addWidget(self._kr_note_row(_KR_PUSHOVER_TOKEN_KEY, self._pushover_token))
 
         self._pushover_user = _lineedit("User / Group Key", password=True)
         self._pushover_user.editingFinished.connect(self._save)
         bl.addLayout(_field_row("User Key:", self._pushover_user))
+        bl.addWidget(self._kr_note_row(_KR_PUSHOVER_USER_KEY, self._pushover_user))
 
         self._pushover_severity = _severity_combo("WARNING")
         self._pushover_severity.currentTextChanged.connect(self._save)
@@ -527,6 +595,7 @@ class NotificationsPage(QWidget):
         self._ntfy_token = _lineedit("Access token (optional)", password=True)
         self._ntfy_token.editingFinished.connect(self._save)
         bl.addLayout(_field_row("Access Token:", self._ntfy_token))
+        bl.addWidget(self._kr_note_row(_KR_NTFY_TOKEN_KEY, self._ntfy_token))
 
         self._ntfy_severity = _severity_combo("WARNING")
         self._ntfy_severity.currentTextChanged.connect(self._save)
@@ -572,6 +641,7 @@ class NotificationsPage(QWidget):
         self._telegram_token = _lineedit("Bot token from @BotFather", password=True)
         self._telegram_token.editingFinished.connect(self._save)
         bl.addLayout(_field_row("Bot Token:", self._telegram_token))
+        bl.addWidget(self._kr_note_row(_KR_TELEGRAM_TOKEN_KEY, self._telegram_token))
 
         self._telegram_chat = _lineedit("Chat ID (e.g. -100123456789)")
         self._telegram_chat.editingFinished.connect(self._save)
@@ -685,16 +755,19 @@ class NotificationsPage(QWidget):
     def _build_log_card(self) -> QWidget:
         card, bl = _card("Recent Delivery Log")
 
-        self._log_table = QTableWidget(0, 5)
+        self._log_table = QTableWidget(0, 6)
         self._log_table.setHorizontalHeaderLabels(
-            ["Time", "Channel", "Severity", "Host", "Message"]
+            ["Time", "Channel", "Severity", "Host", "Message", "Status"]
         )
-        self._log_table.horizontalHeader().setStretchLastSection(True)
+        self._log_table.horizontalHeader().setStretchLastSection(False)
+        self._log_table.horizontalHeader().setSectionResizeMode(
+            4, self._log_table.horizontalHeader().ResizeMode.Stretch
+        )
         self._log_table.verticalHeader().setVisible(False)
         self._log_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._log_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._log_table.setAlternatingRowColors(True)
-        self._log_table.setFixedHeight(200)
+        self._log_table.setFixedHeight(220)
         self._log_table.setStyleSheet(
             f"QTableWidget{{border:none;font-size:11px;color:{TEXT_PRIMARY};"
             f"gridline-color:{BORDER};alternate-background-color:{BG_ALT_ROW};}}"
@@ -702,9 +775,49 @@ class NotificationsPage(QWidget):
             f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
             f"QTableWidget::item{{padding:2px 5px;}}"
         )
-        for w, col in zip((110, 90, 80, 120), range(4)):
+        for w, col in zip((110, 90, 80, 120, 80), range(5)):
             self._log_table.setColumnWidth(col, w)
+        self._log_table.itemClicked.connect(self._on_log_row_clicked)
         bl.addWidget(self._log_table)
+
+        # Detail panel — shown when a failed row is clicked
+        self._log_detail = QFrame()
+        self._log_detail.setVisible(False)
+        self._log_detail.setStyleSheet(
+            f"QFrame {{ background:{BG_ALT_ROW}; border:1px solid {BORDER};"
+            f" border-radius:4px; }}"
+        )
+        _det_lay = QVBoxLayout(self._log_detail)
+        _det_lay.setContentsMargins(10, 8, 10, 8)
+        _det_lay.setSpacing(4)
+        self._log_detail_error_lbl = QLabel("")
+        self._log_detail_error_lbl.setWordWrap(True)
+        self._log_detail_error_lbl.setStyleSheet(
+            f"font-size:11px; color:{RED}; background:transparent; border:none;"
+        )
+        _det_btn_row = QHBoxLayout()
+        self._log_detail_retry_btn = QPushButton("Retry →")
+        self._log_detail_retry_btn.setFixedHeight(24)
+        self._log_detail_retry_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:4px; padding:0 12px; font-size:11px; }}"
+            f"QPushButton:hover {{ background:#1a6fc4; }}"
+        )
+        _det_close_btn = QPushButton("Close")
+        _det_close_btn.setFixedHeight(24)
+        _det_close_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:11px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        _det_close_btn.clicked.connect(lambda: self._log_detail.setVisible(False))
+        _det_btn_row.addWidget(self._log_detail_retry_btn)
+        _det_btn_row.addWidget(_det_close_btn)
+        _det_btn_row.addStretch()
+        _det_lay.addWidget(self._log_detail_error_lbl)
+        _det_lay.addLayout(_det_btn_row)
+        bl.addWidget(self._log_detail)
+        self._log_detail_entry: dict | None = None
 
         btn_row = QHBoxLayout()
         btn_refresh = QPushButton("Refresh Log")
@@ -753,33 +866,37 @@ class NotificationsPage(QWidget):
         qs.setValue("notif/email_port",       self._email_port.text().strip())
         qs.setValue("notif/email_user",       self._email_user.text().strip())
         # RULE 22-A: password goes to OS keychain, never QSettings
-        _save_secret(_KR_EMAIL_PASS_KEY, self._email_pass.text())
+        self._kr_save_field(_KR_EMAIL_PASS_KEY, self._email_pass)
         qs.setValue("notif/email_from",       self._email_from.text().strip())
         qs.setValue("notif/email_to",         self._email_to.text().strip())
         qs.setValue("notif/email_severity",   self._email_severity.currentText())
         # Pushover — tokens to keychain (RULE 22-A)
         qs.setValue("notif/pushover_enabled",  self._chk_pushover.isChecked())
         qs.setValue("notif/pushover_severity", self._pushover_severity.currentText())
-        _save_secret(_KR_PUSHOVER_TOKEN_KEY, self._pushover_token.text())
-        _save_secret(_KR_PUSHOVER_USER_KEY,  self._pushover_user.text())
+        self._kr_save_field(_KR_PUSHOVER_TOKEN_KEY, self._pushover_token)
+        self._kr_save_field(_KR_PUSHOVER_USER_KEY,  self._pushover_user)
         # ntfy — access token to keychain (RULE 22-A); topic URL to QSettings (not a secret)
         qs.setValue("notif/ntfy_enabled",    self._chk_ntfy.isChecked())
         qs.setValue("notif/ntfy_url",        self._ntfy_url.text().strip())
         qs.setValue("notif/ntfy_severity",   self._ntfy_severity.currentText())
-        _save_secret(_KR_NTFY_TOKEN_KEY, self._ntfy_token.text())
+        self._kr_save_field(_KR_NTFY_TOKEN_KEY, self._ntfy_token)
         # Telegram — bot token to keychain (RULE 22-A); chat_id to QSettings (not a secret)
         qs.setValue("notif/telegram_enabled",  self._chk_telegram.isChecked())
         qs.setValue("notif/telegram_chat",     self._telegram_chat.text().strip())
         qs.setValue("notif/telegram_severity", self._telegram_severity.currentText())
-        _save_secret(_KR_TELEGRAM_TOKEN_KEY, self._telegram_token.text())
+        self._kr_save_field(_KR_TELEGRAM_TOKEN_KEY, self._telegram_token)
         # Escalation policy
         qs.setValue("notif/escalation_enabled",  self._chk_escalation.isChecked())
         qs.setValue("notif/escalation_wait",     self._spin_escalation_wait.value())
         qs.setValue("notif/escalation_channel",  self._combo_escalation_channel.currentText())
         qs.setValue("notif/escalation_rules",    self._txt_escalation_rules.text().strip())
         # Alert rule enabled states (one key per rule, opt-in defaults to False)
+        any_rule_on = False
         for name, chk in self._rule_checkboxes.items():
             qs.setValue(_rule_key(name), chk.isChecked())
+            if chk.isChecked():
+                any_rule_on = True
+        qs.setValue("notif/any_rule_enabled", any_rule_on)
         self._update_rules_badge()
         self._apply_to_engine()
         self._apply_to_router()
@@ -798,7 +915,7 @@ class NotificationsPage(QWidget):
             self._email_port.setText(qs.value("notif/email_port",          "587"))
             self._email_user.setText(qs.value("notif/email_user",          ""))
             # RULE 22-A: load password from OS keychain, never from QSettings
-            self._email_pass.setText(_load_secret(_KR_EMAIL_PASS_KEY))
+            self._kr_restore_field(_KR_EMAIL_PASS_KEY, self._email_pass)
             self._email_from.setText(qs.value("notif/email_from",          ""))
             self._email_to.setText(qs.value("notif/email_to",              ""))
             self._email_severity.setCurrentText(qs.value("notif/email_severity", "CRITICAL"))
@@ -806,23 +923,23 @@ class NotificationsPage(QWidget):
             legacy = qs.value("notif/email_pass", "")
             if legacy:
                 _save_secret(_KR_EMAIL_PASS_KEY, legacy)
-                self._email_pass.setText(legacy)
                 qs.remove("notif/email_pass")   # delete from INI immediately
+                self._kr_restore_field(_KR_EMAIL_PASS_KEY, self._email_pass)
             # Pushover
             self._chk_pushover.setChecked(qs.value("notif/pushover_enabled", False, type=bool))
             self._pushover_severity.setCurrentText(qs.value("notif/pushover_severity", "WARNING"))
-            self._pushover_token.setText(_load_secret(_KR_PUSHOVER_TOKEN_KEY))
-            self._pushover_user.setText(_load_secret(_KR_PUSHOVER_USER_KEY))
+            self._kr_restore_field(_KR_PUSHOVER_TOKEN_KEY, self._pushover_token)
+            self._kr_restore_field(_KR_PUSHOVER_USER_KEY,  self._pushover_user)
             # ntfy
             self._chk_ntfy.setChecked(qs.value("notif/ntfy_enabled", False, type=bool))
             self._ntfy_url.setText(qs.value("notif/ntfy_url", ""))
             self._ntfy_severity.setCurrentText(qs.value("notif/ntfy_severity", "WARNING"))
-            self._ntfy_token.setText(_load_secret(_KR_NTFY_TOKEN_KEY))
+            self._kr_restore_field(_KR_NTFY_TOKEN_KEY, self._ntfy_token)
             # Telegram
             self._chk_telegram.setChecked(qs.value("notif/telegram_enabled", False, type=bool))
             self._telegram_chat.setText(qs.value("notif/telegram_chat", ""))
             self._telegram_severity.setCurrentText(qs.value("notif/telegram_severity", "WARNING"))
-            self._telegram_token.setText(_load_secret(_KR_TELEGRAM_TOKEN_KEY))
+            self._kr_restore_field(_KR_TELEGRAM_TOKEN_KEY, self._telegram_token)
             # Escalation
             self._chk_escalation.setChecked(qs.value("notif/escalation_enabled", False, type=bool))
             self._spin_escalation_wait.setValue(int(qs.value("notif/escalation_wait", 15)))
@@ -984,6 +1101,128 @@ class NotificationsPage(QWidget):
         self._alert_engine = engine
         self._apply_to_engine()
 
+    # ── Store injection (RECUR-2) ─────────────────────────────────────────────
+
+    def set_store(self, store) -> None:
+        self._store = store
+
+    # ── Weekly digest (RECUR-2) ───────────────────────────────────────────────
+
+    def _build_weekly_digest_card(self) -> "QWidget":
+        card, bl = _card("Weekly Digest")
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        self._chk_weekly_digest = QCheckBox("Send weekly summary every Sunday at")
+        self._chk_weekly_digest.setStyleSheet(
+            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
+            f"QCheckBox::indicator {{ width:12px; height:12px;"
+            f" border:1px solid {BORDER}; border-radius:2px; background:{BG_CARD}; }}"
+            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
+        )
+        self._chk_weekly_digest.toggled.connect(self._save_digest_settings)
+
+        self._combo_digest_time = QComboBox()
+        for h in range(6, 23):
+            self._combo_digest_time.addItem(f"{h:02d}:00")
+        self._combo_digest_time.setCurrentText("09:00")
+        self._combo_digest_time.setFixedWidth(80)
+        self._combo_digest_time.setStyleSheet(
+            f"QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
+            f"QComboBox::drop-down{{border:none;}}"
+            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            f"border:1px solid {BORDER};selection-background-color:{ACCENT};}}"
+        )
+        self._combo_digest_time.currentTextChanged.connect(self._save_digest_settings)
+
+        row1.addWidget(self._chk_weekly_digest)
+        row1.addWidget(self._combo_digest_time)
+        row1.addStretch()
+        bl.addLayout(row1)
+
+        hint = QLabel(
+            "Includes: devices seen, new unknown devices, alerts fired, config drift, CVE matches."
+        )
+        hint.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; border:none;"
+        )
+        bl.addWidget(hint)
+
+        from PyQt6.QtWidgets import QPushButton as _PB
+        btn_gen = _PB("Generate now — copy to clipboard")
+        btn_gen.setFixedHeight(26)
+        btn_gen.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_gen.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {BORDER};"
+            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
+            f"QPushButton:hover{{border-color:{ACCENT};}}"
+        )
+        btn_gen.clicked.connect(self._on_generate_digest)
+        bl.addWidget(btn_gen)
+
+        self._digest_status_lbl = QLabel("")
+        self._digest_status_lbl.setStyleSheet(
+            f"color:{GREEN}; font-size:10px; border:none; background:transparent;"
+        )
+        self._digest_status_lbl.setVisible(False)
+        bl.addWidget(self._digest_status_lbl)
+
+        qs = QSettings("NetSentinel", "NetSentinel")
+        self._chk_weekly_digest.setChecked(qs.value("notif/weekly_digest_enabled", False, type=bool))
+        t = qs.value("notif/weekly_digest_time", "09:00")
+        idx = self._combo_digest_time.findText(t)
+        if idx >= 0:
+            self._combo_digest_time.setCurrentIndex(idx)
+
+        return card
+
+    def _save_digest_settings(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("notif/weekly_digest_enabled", self._chk_weekly_digest.isChecked())
+        qs.setValue("notif/weekly_digest_time", self._combo_digest_time.currentText())
+
+    def _on_generate_digest(self) -> None:
+        text = self._generate_weekly_summary()
+        from PyQt6.QtWidgets import QApplication
+        QApplication.clipboard().setText(text)
+        lbl = getattr(self, "_digest_status_lbl", None)
+        if lbl:
+            lbl.setText("✓ Copied to clipboard")
+            lbl.setVisible(True)
+            QTimer.singleShot(3000, lambda: lbl.setVisible(False))
+
+    def _generate_weekly_summary(self) -> str:
+        import datetime as _dt2
+        now = _dt2.datetime.now()
+        week_ago = now - _dt2.timedelta(days=7)
+        lines = [
+            f"NetSentinel Weekly Summary — {now.strftime('%A %d %B %Y')}",
+            f"Period: {week_ago.strftime('%d %b')} – {now.strftime('%d %b %Y')}",
+            "",
+        ]
+        if self._store:
+            try:
+                alerts = self._store.get_recent_alerts(hours=168)
+                lines.append(f"Alerts fired:        {len(alerts)}")
+            except Exception:
+                lines.append("Alerts fired:        —")
+            try:
+                devices = self._store.get_known_devices()
+                lines.append(f"Known devices:       {len(devices)}")
+            except Exception:
+                lines.append("Known devices:       —")
+            try:
+                grade = self._store.query_last_grade()
+                if grade:
+                    lines.append(f"Network grade:       {grade.get('grade', '—')}  ({grade.get('score', '—'):.0f}/100)")
+            except Exception:
+                pass
+        else:
+            lines.append("(Store not available — open the app to generate live data)")
+        lines += ["", "Generated by NetSentinel"]
+        return "\n".join(lines)
+
     def _apply_to_engine(self) -> None:
         """Push current rule checkbox states into the live AlertEngine."""
         if self._alert_engine is None:
@@ -1001,16 +1240,26 @@ class NotificationsPage(QWidget):
     def refresh_log(self) -> None:
         if self._router is None:
             return
+        from PyQt6.QtGui import QColor, QBrush
         entries = self._router.get_delivery_log()
         self._log_table.setRowCount(0)
         for entry in reversed(entries):
             row = self._log_table.rowCount()
             self._log_table.insertRow(row)
-            ts_str = time.strftime("%H:%M:%S", time.localtime(entry.get("ts", 0)))
-            sev    = entry.get("severity", "")
+            ts_str    = time.strftime("%H:%M:%S", time.localtime(entry.get("ts", 0)))
+            sev       = entry.get("severity", "")
             sev_color = _SEV_COLOR.get(sev, TEXT_PRIMARY)
             ch_type   = entry.get("channel_type", "")
             ch_color  = _CH_COLOR.get(ch_type, TEXT_PRIMARY)
+            status    = entry.get("status", "PENDING")
+            err       = entry.get("error", "")
+
+            if status == "DELIVERED":
+                status_txt, status_color = "✓ Delivered", GREEN
+            elif status == "FAILED":
+                status_txt, status_color = "✗ Failed", RED
+            else:
+                status_txt, status_color = "⟳ Pending", TEXT_MUTED
 
             for col, val in enumerate([
                 ts_str,
@@ -1018,20 +1267,58 @@ class NotificationsPage(QWidget):
                 sev,
                 entry.get("host", ""),
                 entry.get("message", ""),
+                status_txt,
             ]):
                 item = QTableWidgetItem(str(val))
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 if col == 2:
-                    item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(sev_color))
-                if col == 1:
-                    item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(ch_color))
+                    item.setForeground(QColor(sev_color))
+                elif col == 1:
+                    item.setForeground(QColor(ch_color))
+                elif col == 5:
+                    item.setForeground(QColor(status_color))
+                if status == "FAILED":
+                    item.setBackground(QBrush(QColor(RED + "22")))
+                    if err and col == 5:
+                        item.setToolTip(err)
                 self._log_table.setItem(row, col, item)
+            # Store entry ref in first column for click handler
+            self._log_table.item(row, 0).setData(
+                Qt.ItemDataRole.UserRole, entry
+            )
+
+    @pyqtSlot()
+    def _on_log_row_clicked(self, item: "QTableWidgetItem") -> None:
+        first = self._log_table.item(item.row(), 0)
+        if first is None:
+            return
+        entry = first.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(entry, dict) or entry.get("status") != "FAILED":
+            self._log_detail.setVisible(False)
+            return
+        err = entry.get("error", "Unknown error")
+        self._log_detail_error_lbl.setText(f"Error: {err}")
+        self._log_detail_entry = entry
+        try:
+            self._log_detail_retry_btn.clicked.disconnect()
+        except RuntimeError:
+            pass
+        self._log_detail_retry_btn.clicked.connect(self._retry_log_entry)
+        self._log_detail.setVisible(True)
+
+    def _retry_log_entry(self) -> None:
+        if self._router and self._log_detail_entry:
+            self._router.retry_delivery(self._log_detail_entry)
+            self._log_detail.setVisible(False)
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(2000, self.refresh_log)
 
     @pyqtSlot()
     def _clear_log(self) -> None:
         if self._router:
             self._router.clear_delivery_log()
         self._log_table.setRowCount(0)
+        self._log_detail.setVisible(False)
 
     # ── Test helpers ──────────────────────────────────────────────────────────
 

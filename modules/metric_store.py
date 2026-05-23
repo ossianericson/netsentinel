@@ -236,6 +236,16 @@ CREATE TABLE IF NOT EXISTS mesh_signal_log (
 );
 CREATE INDEX IF NOT EXISTS idx_mesh_ts ON mesh_signal_log(ts);
 
+-- Hardware plugin snapshots for long-term monitoring
+CREATE TABLE IF NOT EXISTS plugin_log (
+    id          INTEGER PRIMARY KEY,
+    ts          INTEGER NOT NULL,
+    plugin_name TEXT    NOT NULL,
+    data        TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_plugin_log_ts   ON plugin_log(ts);
+CREATE INDEX IF NOT EXISTS idx_plugin_log_name ON plugin_log(plugin_name);
+
 -- Alert acknowledgement + escalation tracking (schema v7)
 CREATE TABLE IF NOT EXISTS alert_fired (
     id          INTEGER PRIMARY KEY,
@@ -1467,6 +1477,52 @@ class MetricStore:
             for r in rows
         ]
 
+    def record_plugin_snapshot(self, plugin_name: str, data: dict) -> None:
+        """Persist a hardware plugin result snapshot to the long-term monitoring log."""
+        import json
+        self._execute_write(
+            "INSERT INTO plugin_log (ts, plugin_name, data) VALUES (?, ?, ?)",
+            (int(time.time()), plugin_name, json.dumps(data, default=str)),
+        )
+
+    def query_plugin_log(
+        self,
+        plugin_name: Optional[str] = None,
+        hours: float = 168.0,
+        limit: int = 500,
+    ) -> "List[dict]":
+        """Return plugin log entries within the last `hours`, newest first.
+
+        If plugin_name is given, filters to that plugin only.
+        Each item has keys: ts (int), plugin_name (str), data (dict).
+        """
+        import json
+        since = int(time.time()) - int(hours * 3600)
+        if plugin_name:
+            rows = self._execute_read(
+                "SELECT ts, plugin_name, data FROM plugin_log "
+                "WHERE ts >= ? AND plugin_name = ? ORDER BY ts DESC LIMIT ?",
+                (since, plugin_name, limit),
+            )
+        else:
+            rows = self._execute_read(
+                "SELECT ts, plugin_name, data FROM plugin_log "
+                "WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+                (since, limit),
+            )
+        result = []
+        for row in rows:
+            try:
+                data_dict = json.loads(row["data"])
+            except Exception:
+                data_dict = {}
+            result.append({
+                "ts": row["ts"],
+                "plugin_name": row["plugin_name"],
+                "data": data_dict,
+            })
+        return result
+
     # ── Maintenance ───────────────────────────────────────────────────────────
 
     def prune_old_data(self, retain_days: Optional[int] = None) -> int:
@@ -1477,7 +1533,7 @@ class MetricStore:
         days   = retain_days if retain_days is not None else self._retain_days
         cutoff = int(time.time()) - days * 86400
         deleted = 0
-        for tbl in ("rtt_sample", "device_state", "device_event", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log"):
+        for tbl in ("rtt_sample", "device_state", "device_event", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log", "plugin_log"):
             self._execute_write(f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,))
             deleted += 1  # rowcount not tracked per-table in unified path
         return deleted
@@ -1492,7 +1548,7 @@ class MetricStore:
     def get_row_counts(self) -> Dict[str, int]:
         """Return row counts for each data table."""
         result = {}
-        for tbl in ("rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log"):
+        for tbl in ("rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log", "plugin_log"):
             rows = self._execute_read(f"SELECT COUNT(*) AS n FROM {tbl}", ())
             result[tbl] = rows[0]["n"] if rows else 0
         return result

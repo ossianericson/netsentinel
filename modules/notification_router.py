@@ -279,6 +279,65 @@ def _deliver_telegram(channel: TelegramChannel, alert: AlertFired) -> None:
         pass
 
 
+# ── Status-tracked delivery wrappers ─────────────────────────────────────────
+
+def _deliver_webhook_tracked(
+    channel: WebhookChannel,
+    alert: AlertFired,
+    entry: dict,
+    on_ok: Callable,
+    on_err: Callable,
+) -> None:
+    payload = json.dumps(_build_payload(alert)).encode()
+    headers = {"Content-Type": "application/json", **channel.headers}
+    req = urllib.request.Request(channel.url, data=payload, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=channel.timeout_s):
+            on_ok(entry)
+    except Exception as exc:
+        on_err(entry, str(exc))
+
+
+def _deliver_email_tracked(
+    channel: EmailChannel,
+    alert: AlertFired,
+    entry: dict,
+    on_ok: Callable,
+    on_err: Callable,
+) -> None:
+    if not channel.smtp_host or not channel.to_addrs:
+        on_err(entry, "SMTP not configured")
+        return
+    import smtplib, ssl as _ssl
+    from email.mime.text import MIMEText as _MIMEText
+    subject = f"[NetSentinel {alert.severity}] {alert.rule_name} — {alert.host}"
+    body = (
+        f"Alert: {alert.rule_name}\nSeverity: {alert.severity}\n"
+        f"Host: {alert.host}\nMessage: {alert.message}\n"
+        f"Time: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(alert.ts))}\n"
+    )
+    msg = _MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = channel.from_addr or channel.username
+    msg["To"] = ", ".join(channel.to_addrs)
+    try:
+        ctx = _ssl.create_default_context()
+        if channel.use_tls:
+            with smtplib.SMTP(channel.smtp_host, channel.smtp_port, timeout=channel.timeout_s) as s:
+                s.ehlo(); s.starttls(context=ctx)
+                if channel.username:
+                    s.login(channel.username, channel.password)
+                s.sendmail(msg["From"], channel.to_addrs, msg.as_string())
+        else:
+            with smtplib.SMTP_SSL(channel.smtp_host, channel.smtp_port, context=ctx, timeout=channel.timeout_s) as s:
+                if channel.username:
+                    s.login(channel.username, channel.password)
+                s.sendmail(msg["From"], channel.to_addrs, msg.as_string())
+        on_ok(entry)
+    except Exception as exc:
+        on_err(entry, str(exc))
+
+
 # ── Router ────────────────────────────────────────────────────────────────────
 
 class NotificationRouter:
@@ -345,51 +404,62 @@ class NotificationRouter:
                         self._toast_cb(alert)
                     except Exception:
                         pass
-                self._log_delivery(ch.name, "TOAST", alert)
+                entry = self._log_delivery(ch.name, "TOAST", alert)
+                self._mark_delivered(entry)
 
             elif isinstance(ch, WebhookChannel):
                 if ch.url:
+                    entry = self._log_delivery(ch.name, "WEBHOOK", alert)
                     t = threading.Thread(
-                        target=_deliver_webhook, args=(ch, alert), daemon=True
+                        target=_deliver_webhook_tracked,
+                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                        daemon=True,
                     )
                     t.start()
-                    self._log_delivery(ch.name, "WEBHOOK", alert)
 
             elif isinstance(ch, EmailChannel):
                 if ch.smtp_host and ch.to_addrs:
+                    entry = self._log_delivery(ch.name, "EMAIL", alert)
                     t = threading.Thread(
-                        target=_deliver_email, args=(ch, alert), daemon=True
+                        target=_deliver_email_tracked,
+                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                        daemon=True,
                     )
                     t.start()
-                    self._log_delivery(ch.name, "EMAIL", alert)
 
             elif isinstance(ch, PushoverChannel):
                 if ch.api_token and ch.user_key:
+                    entry = self._log_delivery(ch.name, "PUSHOVER", alert)
                     t = threading.Thread(
                         target=_deliver_pushover, args=(ch, alert), daemon=True
                     )
                     t.start()
-                    self._log_delivery(ch.name, "PUSHOVER", alert)
+                    # Pushover has no error feedback path — mark delivered optimistically
+                    self._mark_delivered(entry)
 
             elif isinstance(ch, NtfyChannel):
                 if ch.topic_url:
+                    entry = self._log_delivery(ch.name, "NTFY", alert)
                     t = threading.Thread(
                         target=_deliver_ntfy, args=(ch, alert), daemon=True
                     )
                     t.start()
-                    self._log_delivery(ch.name, "NTFY", alert)
+                    self._mark_delivered(entry)
 
             elif isinstance(ch, TelegramChannel):
                 if ch.bot_token and ch.chat_id:
+                    entry = self._log_delivery(ch.name, "TELEGRAM", alert)
                     t = threading.Thread(
                         target=_deliver_telegram, args=(ch, alert), daemon=True
                     )
                     t.start()
-                    self._log_delivery(ch.name, "TELEGRAM", alert)
+                    self._mark_delivered(entry)
 
     # ── Delivery log ──────────────────────────────────────────────────────────
 
-    def _log_delivery(self, channel_name: str, channel_type: str, alert: AlertFired) -> None:
+    def _log_delivery(
+        self, channel_name: str, channel_type: str, alert: AlertFired
+    ) -> dict:
         entry = {
             "ts":           alert.ts,
             "channel_name": channel_name,
@@ -398,17 +468,64 @@ class NotificationRouter:
             "rule_name":    alert.rule_name,
             "host":         alert.host,
             "message":      alert.message,
+            "status":       "PENDING",
+            "error":        "",
         }
-        self._log.append(entry)
-        if len(self._log) > self._log_max:
-            self._log = self._log[-self._log_max:]
+        with self._lock:
+            self._log.append(entry)
+            if len(self._log) > self._log_max:
+                self._log = self._log[-self._log_max:]
+        return entry
+
+    def _mark_delivered(self, entry: dict) -> None:
+        with self._lock:
+            entry["status"] = "DELIVERED"
+
+    def _mark_failed(self, entry: dict, error: str) -> None:
+        with self._lock:
+            entry["status"] = "FAILED"
+            entry["error"]  = error
+
+    def retry_delivery(self, entry: dict) -> None:
+        """Re-attempt delivery for a failed log entry."""
+        ch_name = entry.get("channel_name", "")
+        ch_type = entry.get("channel_type", "")
+        alert = AlertFired(
+            ts=entry.get("ts", 0.0),
+            severity=entry.get("severity", "WARNING"),
+            rule_name=entry.get("rule_name", ""),
+            host=entry.get("host", ""),
+            message=entry.get("message", ""),
+            rule_type="",
+        )
+        for ch in self._channels:
+            if ch.name == ch_name:
+                entry["status"] = "PENDING"
+                entry["error"]  = ""
+                if isinstance(ch, WebhookChannel) and ch.url:
+                    t = threading.Thread(
+                        target=_deliver_webhook_tracked,
+                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                        daemon=True,
+                    )
+                    t.start()
+                elif isinstance(ch, EmailChannel) and ch.smtp_host and ch.to_addrs:
+                    t = threading.Thread(
+                        target=_deliver_email_tracked,
+                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                        daemon=True,
+                    )
+                    t.start()
+                break
 
     def get_delivery_log(self) -> List[dict]:
         """Return a copy of the recent delivery log (newest last)."""
-        return list(self._log)
+        with self._lock:
+            return list(self._log)
 
     def clear_delivery_log(self) -> None:
-        self._log.clear()
+        with self._lock:
+            self._log.clear()
 
 
 # ── Serialisation helpers (for QSettings persistence) ────────────────────────

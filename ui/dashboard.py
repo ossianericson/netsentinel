@@ -480,6 +480,7 @@ class _RailButton(QPushButton):
         self._icon_name = icon_name
         # First word of section name, max 9 chars — shown below the icon
         self._short_label = (tooltip.split()[0]) if tooltip else ""
+        self._badge_color: str = ""
         self.setCheckable(True)
         self.setFixedSize(56, 58)
         self.setToolTip(tooltip)
@@ -499,6 +500,11 @@ class _RailButton(QPushButton):
             f"}}"
         )
 
+    def set_badge(self, color: str) -> None:
+        """Set or clear the status dot. Pass empty string to clear."""
+        self._badge_color = color or ""
+        self.update()
+
     def paintEvent(self, event):
         from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics
         from PyQt6.QtCore import QRect
@@ -513,6 +519,12 @@ class _RailButton(QPushButton):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(ACCENT))
             p.drawRect(0, 10, 3, 38)   # spans the 48px icon zone, inset 10px top/bottom
+
+        # Status dot badge — top-right corner
+        if self._badge_color:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(self._badge_color))
+            p.drawEllipse(self.width() - 11, 3, 7, 7)
 
         # Short label below the icon
         font = QFont("Segoe UI", 7)
@@ -545,6 +557,7 @@ class _FlyoutItem(QPushButton):
         super().__init__(label, parent)
         self._label = label
         self._pinned = pinned
+        self._dot: str = ""
         self.setCheckable(True)
         self.setMinimumHeight(28)
         self.setMaximumHeight(36)
@@ -562,6 +575,22 @@ class _FlyoutItem(QPushButton):
             f"QPushButton:hover {{ background: {SIDEBAR_HOVER}; color: {WHITE}; }}"
             f"QPushButton:checked {{ background: {SIDEBAR_SEL_BG}; color: {WHITE}; }}"
         )
+
+    def set_dot(self, color: str) -> None:
+        """Set or clear the status dot. Pass empty string to clear."""
+        self._dot = color or ""
+        self.update()
+
+    def paintEvent(self, event) -> None:  # type: ignore[override]
+        super().paintEvent(event)
+        if self._dot:
+            from PyQt6.QtGui import QPainter, QColor
+            p = QPainter(self)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(self._dot))
+            p.drawEllipse(self.width() - 14, (self.height() - 7) // 2, 7, 7)
+            p.end()
 
     def _show_ctx_menu(self, pos):
         from PyQt6.QtWidgets import QMenu
@@ -674,14 +703,28 @@ class _FlyoutPanel(QWidget):
         for label, pinned, danger in entries:
             btn = _FlyoutItem(label, pinned, danger)
             btn.setChecked(label == active_label)
-            btn.clicked.connect(lambda _c, lbl=label: on_click(lbl))
+            btn.clicked.connect(
+                lambda _c, b=btn, lbl=label: self._on_item_clicked(b, lbl, on_click)
+            )
             btn.pin_toggled.connect(on_pin_toggle)
             self._item_layout.insertWidget(self._item_layout.count() - 1, btn)
             self._items[label] = btn
 
+    def _on_item_clicked(self, btn: "_FlyoutItem", label: str, on_click) -> None:
+        """NAV-4: flash checked highlight for 120ms then navigate."""
+        btn.setChecked(True)
+        from PyQt6.QtCore import QTimer as _QT
+        _QT.singleShot(120, lambda: on_click(label))
+
     def set_active(self, label: str) -> None:
         for lbl, btn in self._items.items():
             btn.setChecked(lbl == label)
+
+    def apply_dot(self, label: str, color: str) -> None:
+        """Set status dot on the named item if it's currently visible."""
+        btn = self._items.get(label)
+        if btn:
+            btn.set_dot(color)
 
     def open(self) -> None:
         self._anim.stop()
@@ -1294,6 +1337,13 @@ class Dashboard(QMainWindow):
         self._graph_timer = QTimer()
         self._graph_timer.setInterval(500)
         self._graph_timer.timeout.connect(self._refresh_graph)
+
+        # Weekly digest check — fires once per hour to see if a digest should be sent (RECUR-2)
+        self._digest_timer = QTimer()
+        self._digest_timer.setInterval(3_600_000)  # 1 hour
+        self._digest_timer.timeout.connect(self._check_weekly_digest)
+        self._digest_timer.start()
+        QTimer.singleShot(5000, self._check_weekly_digest)
 
         # System tray guardian
         self._tray_quit = False   # set True when quitting via tray menu
@@ -2291,6 +2341,7 @@ class Dashboard(QMainWindow):
         from ui.pages.notifications_page import NotificationsPage
         self._notifications_page = NotificationsPage(router=None, parent=None)
         self._notifications_page.navigate_to.connect(self._nav_rail_go_to)
+        self._notifications_page.set_store(self._store)
 
         from ui.pages.baseline_page import BaselinePage
         self._baseline_page = BaselinePage(store=self._store, parent=None)
@@ -2313,6 +2364,8 @@ class Dashboard(QMainWindow):
         self._log_hub_page = LogHubPage(store=self._store, parent=None)
         self._log_hub_page.animate_requested.connect(self._on_animate_log_entry)
         self._log_hub_page.live_challenge_detected.connect(self._on_live_challenge)
+        self._log_hub_page.logging_active_changed.connect(self._update_monitor_badge)
+        self._log_hub_page.navigate_to.connect(self._nav_rail_go_to)
         self._last_modem_log_ts: float = 0.0
         self._last_mesh_log_ts:  float = 0.0
 
@@ -2325,6 +2378,7 @@ class Dashboard(QMainWindow):
         from ui.pages.settings_page import SettingsPage
         self._settings_page = SettingsPage(parent=None)
         self._settings_page.reload_oui_requested.connect(self._reload_oui_db)
+        self._settings_page.reset_dismissed_requested.connect(self._reset_dismissed_notices)
 
         from ui.pages.speed_test_page import SpeedTestPage
         self._speed_test_page = SpeedTestPage(store=self._store, parent=None)
@@ -2471,6 +2525,14 @@ class Dashboard(QMainWindow):
                         }, source=_hw_p, hw_name=_hw_label)
             self._plugin_pages[_hw_p] = _pg
 
+        # Populate Log Hub DB bar and set initial Monitor badge once the event loop starts.
+        from PyQt6.QtCore import QTimer as _QT
+        _QT.singleShot(0, lambda: self._log_hub_page.update_plugin_sources(
+            [pg._label for pg in self._plugin_pages.values()]
+        ))
+        _QT.singleShot(0, self._update_monitor_badge)
+        _QT.singleShot(0, self._push_monitor_pills)
+
         from ui.pages.mesh_router_page import MeshRouterPage
         self._mesh_router_page = MeshRouterPage(parent=None)
         self._mesh_router_page.scan_done.connect(self._on_mesh_result)
@@ -2518,6 +2580,11 @@ class Dashboard(QMainWindow):
 
         from ui.pages.wifi_monitor_page import WiFiMonitorPage
         self._wifi_monitor_page = WiFiMonitorPage(parent=None)
+
+        from ui.pages.monitor_overview_page import MonitorOverviewPage
+        self._monitor_overview_page = MonitorOverviewPage(parent=None)
+        self._monitor_overview_page.navigate_to.connect(self._nav_rail_go_to)
+
         self._help_tab_widget            = self._build_help_tab()
 
         # ── Store tab refs for mode nav builders ──────────────────────────────
@@ -2553,6 +2620,7 @@ class Dashboard(QMainWindow):
         self._pending_live_scenario = None
         if not self._home_page._signals_connected:
             self._home_page._btn_scan.clicked.connect(self._start_full_scan)
+            self._home_page._btn_rescan_compact.clicked.connect(self._start_full_scan)
             self._home_page._btn_isp.clicked.connect(self._open_isp_from_home)
             self._home_page._btn_diagnose.clicked.connect(self._open_diagnosis)
             self._speed_test_page.test_completed.connect(self._home_page.on_speed_result)
@@ -2560,6 +2628,7 @@ class Dashboard(QMainWindow):
             self._home_page.navigate_to.connect(self._on_overview_navigate)
             self._home_page.start_monitoring_requested.connect(self._toggle_logger)
             self._home_page.investigate_live_requested.connect(self._on_investigate_live)
+            self._home_page.alert_view_requested.connect(self._on_alert_view_requested)
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
         self._overview_page.scan_requested.connect(self._start_full_scan)
@@ -3121,6 +3190,8 @@ class Dashboard(QMainWindow):
 
         # ── Inject Pinned section at the top if user has pins ─────────────────
         # _build_pro_nav populates _nav_label_to_widget so widget lookups work here
+        # NAV-3: ≤4 pins → individual direct-nav buttons with visible labels on rail
+        #        >4 pins → single "Pinned" flyout section (preserves existing behaviour)
         if self._nav_pinned_labels:
             _pinned_entries = []
             for _lbl in sorted(self._nav_pinned_labels):
@@ -3130,10 +3201,14 @@ class Dashboard(QMainWindow):
                         label=_lbl, page=_w,
                         admin_required=False, audit_item=False, pinned=True,
                     ))
-            if _pinned_entries:
+            if _pinned_entries and len(_pinned_entries) > 4:
                 self._nav_sections.insert(0, {
                     "name": "Pinned", "icon": "pin", "entries": _pinned_entries,
                 })
+            # ≤4 pins: stored separately; _nav_finalize_rail renders them as direct buttons
+            self._nav_direct_pins: list = _pinned_entries if len(_pinned_entries) <= 4 else []
+        else:
+            self._nav_direct_pins = []
 
         # ── Finalise rail and restore last-used section (VSCode style) ────────
         self._nav_finalize_rail()
@@ -3272,6 +3347,39 @@ class Dashboard(QMainWindow):
             stretch_idx -= 1
 
         self._nav_rail_buttons.clear()
+        self._nav_rail_pin_buttons: dict = {}  # label -> _RailPinButton
+
+        # NAV-3: Direct-nav Quick Access buttons (≤4 pins) ─────────────────────
+        direct_pins = getattr(self, "_nav_direct_pins", [])
+        if direct_pins:
+            # "QUICK ACCESS" separator label above the pin buttons
+            qa_lbl = QLabel("QUICK\nACCESS")
+            qa_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+            qa_lbl.setFixedSize(56, 24)
+            qa_lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:7px; font-weight:bold;"
+                f" letter-spacing:0.5px; background:transparent;"
+            )
+            insert_at = self._nav_rail_lay.count() - 2
+            self._nav_rail_lay.insertWidget(insert_at, qa_lbl)
+
+            for entry in direct_pins:
+                lbl = entry.label
+                # short display: first word, max 8 chars
+                short = lbl.split()[0][:8]
+                pin_btn = _RailButton("star", lbl)
+                pin_btn._short_label = short
+                pin_btn.setToolTip(lbl)
+                pin_btn.clicked.connect(
+                    lambda _c, label=lbl: (
+                        self._nav_rail_go_to(label),
+                        self._nav_flyout.close_panel() if hasattr(self, "_nav_flyout") else None,
+                    )
+                )
+                insert_at = self._nav_rail_lay.count() - 2
+                self._nav_rail_lay.insertWidget(insert_at, pin_btn)
+                self._nav_rail_pin_buttons[lbl] = pin_btn
+
         for sec in self._nav_sections:
             btn = _RailButton(sec["icon"], sec["name"])
             btn.clicked.connect(lambda _c, s=sec["name"]: self._nav_rail_toggle(s))
@@ -3313,6 +3421,10 @@ class Dashboard(QMainWindow):
             on_click=self._nav_rail_go_to,
             on_pin_toggle=self._on_rail_pin_toggle,
         )
+        # Re-apply any saved flyout dots after items are rebuilt
+        for _lbl, _color in getattr(self, "_flyout_dots", {}).items():
+            if _color:
+                self._nav_flyout.apply_dot(_lbl, _color)
         self._nav_flyout.open()
         _qs = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
         _qs.setValue("nav/last_section", section_name)
@@ -3448,6 +3560,19 @@ class Dashboard(QMainWindow):
             visited.append(label)
             qs.setValue("discover/visited_pages", _json.dumps(visited))
             self._refresh_home_suggestions()
+            # NAV-3: first-time pin hint after visiting 3 Analysis pages
+            if not qs.value("nav/pin_hint_shown", False, type=bool):
+                analysis_sec = next(
+                    (s for s in self._nav_sections if s["name"] == "Analysis"), None
+                )
+                if analysis_sec:
+                    analysis_labels = {e.label for e in analysis_sec["entries"]}
+                    visited_analysis = [p for p in visited if p in analysis_labels]
+                    if len(visited_analysis) >= 3:
+                        qs.setValue("nav/pin_hint_shown", True)
+                        self._set_status(
+                            "Tip: right-click any page in the menu to pin it ★ for faster access"
+                        )
 
     def _refresh_home_suggestions(self) -> None:
         if not hasattr(self, "_home_page"):
@@ -3531,6 +3656,7 @@ class Dashboard(QMainWindow):
         self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
         self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
         self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
+        self._nav_add_rail_item("Monitor Overview",    self._monitor_overview_page)
         self._nav_add_rail_item("802.11 Monitor",      self._wifi_monitor_page)
         self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
         self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
@@ -3637,21 +3763,88 @@ class Dashboard(QMainWindow):
 
     # ── Command palette ───────────────────────────────────────────────────────
 
+    # ── Monitoring state helpers (NAV-2) ──────────────────────────────────────
+
+    _MONITOR_PAGES: dict = {
+        "ARP Spoof Watch":     "_arp_worker",
+        "DHCP Rogue Monitor":  "_dhcp_worker",
+        "Bandwidth Monitor":   "_bw_worker",
+    }
+
+    def _is_monitor_running(self, worker_attr: str) -> bool:
+        w = getattr(self, worker_attr, None)
+        return bool(w and w.isRunning())
+
+    # ── Recent-action recording (RECUR-3) ─────────────────────────────────────
+
+    def _record_recent_action(self, action_id: str, label: str, page: str, params: dict) -> None:
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            existing: list = _json.loads(qs.value("recur/recent_actions", "[]"))
+        except Exception:
+            existing = []
+        existing = [a for a in existing if a.get("id") != action_id]
+        existing.insert(0, {"id": action_id, "label": label, "page": page, "params": params})
+        qs.setValue("recur/recent_actions", _json.dumps(existing[:10]))
+
     def _build_palette_items(self) -> list:
+        import json as _json
+
+        # Recent actions (RECUR-3) — prepend with separator
+        recent_items: list = []
+        try:
+            recent = _json.loads(
+                QSettings("NetSentinel", "NetSentinel").value("recur/recent_actions", "[]")
+            )
+        except Exception:
+            recent = []
+        if recent:
+            recent_items.append({"label": "Recent", "kind": "separator"})
+            for a in recent[:5]:
+                recent_items.append({
+                    "icon": "⟳", "label": a["label"], "kind": "recent",
+                    "id": a["id"], "page": a["page"], "params": a.get("params", {}),
+                })
+
+        # Pages (NAV-2: add monitoring state to monitor pages)
         seen: set = set()
         pages = []
         for sec in self._nav_sections:
             for entry in sec["entries"]:
                 if entry.label and entry.label not in seen:
                     seen.add(entry.label)
-                    pages.append({"icon": "◎", "label": entry.label, "kind": "page"})
+                    worker_attr = self._MONITOR_PAGES.get(entry.label)
+                    if worker_attr:
+                        running = self._is_monitor_running(worker_attr)
+                        state = "● Monitoring" if running else "○ Not running"
+                        pages.append({
+                            "icon": "◎",
+                            "label": f"{entry.label}  {state}",
+                            "kind": "page",
+                            "real_label": entry.label,
+                        })
+                        if not running:
+                            pages.append({
+                                "icon": "▶",
+                                "label": f"Start {entry.label}",
+                                "kind": "action",
+                            })
+                    else:
+                        pages.append({"icon": "◎", "label": entry.label, "kind": "page"})
+
+        if recent_items:
+            pages_section = [{"label": "Pages", "kind": "separator"}] + pages
+        else:
+            pages_section = pages
+
         actions = [
             {"icon": "⟳", "label": "Run Full Scan",    "kind": "action"},
             {"icon": "⚙", "label": "Open Settings",    "kind": "action"},
             {"icon": "◄", "label": "Toggle Sidebar",   "kind": "action"},
             {"icon": "◈", "label": "Diagnose Network", "kind": "action"},
         ]
-        return pages + actions
+        return recent_items + pages_section + actions
 
     def _open_command_palette(self) -> None:
         items = self._build_palette_items()
@@ -3661,7 +3854,9 @@ class Dashboard(QMainWindow):
         pal.exec()
 
     def _on_palette_action(self, action: str) -> None:
-        if action == "Run Full Scan":
+        if action.startswith("__recent__"):
+            self._replay_recent_action(action[len("__recent__"):])
+        elif action == "Run Full Scan":
             self._start_full_scan()
         elif action == "Open Settings":
             self._open_settings_dialog()
@@ -3669,6 +3864,35 @@ class Dashboard(QMainWindow):
             self._toggle_sidebar()
         elif action == "Diagnose Network":
             self._open_diagnosis()
+        elif action == "Start ARP Spoof Watch":
+            self._nav_rail_go_to("ARP Spoof Watch")
+            self._start_arp_monitor()
+        elif action == "Start DHCP Rogue Monitor":
+            self._nav_rail_go_to("DHCP Rogue Monitor")
+            self._start_dhcp_scan()
+        elif action == "Start Bandwidth Monitor":
+            self._nav_rail_go_to("Bandwidth Monitor")
+            self._start_bandwidth_monitor()
+
+    def _replay_recent_action(self, action_id: str) -> None:
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            recent: list = _json.loads(qs.value("recur/recent_actions", "[]"))
+        except Exception:
+            return
+        action = next((a for a in recent if a.get("id") == action_id), None)
+        if action is None:
+            return
+        page = action.get("page", "")
+        params = action.get("params", {})
+        self._nav_rail_go_to(page)
+        if page == "Port Scan (TCP)" and hasattr(self, "_syn_host"):
+            self._syn_host.setText(params.get("host", ""))
+        elif page == "Tools & Wake-on-LAN" and hasattr(self, "_ps_host"):
+            self._ps_host.setText(params.get("host", ""))
+        elif page == "Hop-by-Hop Trace" and hasattr(self, "_mtr_target"):
+            self._mtr_target.setText(params.get("target", ""))
 
     def _on_overview_navigate(self, label: str) -> None:
         if label == "Diagnose Network":
@@ -3684,22 +3908,8 @@ class Dashboard(QMainWindow):
     def _refresh_alert_badge(self) -> None:
         if not hasattr(self, "_store") or self._store is None:
             return
-        try:
-            count = len(self._store.get_unacked_alerts())
-        except Exception:
-            count = 0
-        if self._nav_mode != "home":
-            # Rail mode: update tooltip on Security Audit rail button
-            btn = self._nav_rail_buttons.get("Security Audit")
-            if btn:
-                label = f"Security Audit ({count})" if count else "Security Audit"
-                btn.setToolTip(label)
-            return
-        for row, label in self._nav_item_labels.items():
-            if "Security Audit" in label and row in self._nav_section_groups:
-                self._nav_delegate.set_count_badge(row, count, AUDIT_RED)
-                self._nav.viewport().update()
-                return
+        # Rail mode: dot + tooltip handled by _refresh_section_badges
+        self._refresh_section_badges()
 
     # ── Module 1 ──────────────────────────────────────────────────────────────
 
@@ -3846,30 +4056,52 @@ class Dashboard(QMainWindow):
             "devices/group_by_node", False, type=bool
         )
         self._m1_group_by_node: bool = _node_grp_on
-        self._m1_node_group_btn = QPushButton(
-            "≡  Group by node  ✓" if _node_grp_on else "≡  Group by node"
+
+        # Segmented view control — always enabled, no plugin gate
+        self._m1_seg_active_ss = (
+            f"QPushButton{{background:{ACCENT_DARK};color:#fff;border:none;"
+            f"border-radius:3px;padding:0 10px;font-size:10px;}}"
+            f"QPushButton:hover{{background:{ACCENT};}}"
         )
-        self._m1_node_group_btn.setFixedHeight(22)
-        self._m1_node_group_btn.setCheckable(True)
-        self._m1_node_group_btn.setChecked(_node_grp_on)
-        self._m1_node_group_btn.setEnabled(False)  # enabled once mesh data arrives
-        self._m1_node_group_btn.setToolTip(
-            "Group scanned devices under their mesh node / AP.\n"
-            "Activates once mesh data arrives from a running hardware plugin."
-        )
-        _nbtn_ss = (
-            f"QPushButton{{background:{BG_DARK};color:{TEXT_MUTED};border:1px solid {BORDER};"
-            f"border-radius:3px;padding:0 8px;font-size:10px;}}"
+        self._m1_seg_inactive_ss = (
+            f"QPushButton{{background:transparent;color:{TEXT_MUTED};border:none;"
+            f"border-radius:3px;padding:0 10px;font-size:10px;}}"
             f"QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
-            f"QPushButton:checked{{background:{ACCENT_DARK};color:#fff;border-color:{ACCENT};}}"
         )
-        self._m1_node_group_btn.setStyleSheet(_nbtn_ss)
-        self._m1_node_group_btn.toggled.connect(self._on_node_group_toggled)
+        _seg_frame = QFrame()
+        _seg_frame.setFixedHeight(24)
+        _seg_frame.setStyleSheet(
+            f"QFrame{{background:{BG_DARK};border:1px solid {BORDER};border-radius:4px;}}"
+        )
+        _seg_lay = QHBoxLayout(_seg_frame)
+        _seg_lay.setContentsMargins(1, 1, 1, 1)
+        _seg_lay.setSpacing(0)
+
+        self._m1_seg_list = QPushButton("≡  List")
+        self._m1_seg_list.setFixedHeight(22)
+        self._m1_seg_list.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._m1_seg_list.setToolTip("Flat device list")
+        self._m1_seg_list.setStyleSheet(
+            self._m1_seg_inactive_ss if _node_grp_on else self._m1_seg_active_ss
+        )
+        self._m1_seg_node = QPushButton("⊞  By Node")
+        self._m1_seg_node.setFixedHeight(22)
+        self._m1_seg_node.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._m1_seg_node.setToolTip("Group devices by mesh node / AP")
+        self._m1_seg_node.setStyleSheet(
+            self._m1_seg_active_ss if _node_grp_on else self._m1_seg_inactive_ss
+        )
+        _seg_lay.addWidget(self._m1_seg_list)
+        _seg_lay.addWidget(self._m1_seg_node)
+
+        self._m1_seg_list.clicked.connect(lambda: self._on_node_group_toggled(False))
+        self._m1_seg_node.clicked.connect(lambda: self._on_node_group_toggled(True))
 
         _status_row = QHBoxLayout()
         _status_row.setContentsMargins(0, 0, 0, 0)
         _status_row.addWidget(self._m1_status, 1)
-        _status_row.addWidget(self._m1_node_group_btn)
+        _status_row.addWidget(_seg_frame)
+        _status_row.addSpacing(4)
         _status_row.addWidget(self._m1_group_btn)
 
         # Integration discovery banner — hidden until scan finds a device matching
@@ -3903,11 +4135,8 @@ class Dashboard(QMainWindow):
         _ib_lay.addWidget(_int_cfg_btn)
         lay.addLayout(_status_row)
 
-        self._m1_node_hint = QLabel("Connect a router plugin in Hardware to enable grouping")
-        self._m1_node_hint.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; padding:0 0 0 2px;"
-        )
-        lay.addWidget(self._m1_node_hint)
+        self._m1_node_hint = QLabel()   # hidden stub — hint lives in By Node group header
+        self._m1_node_hint.setVisible(False)
         lay.addWidget(self._m1_int_banner)
 
         self._m1_table = _table([
@@ -3929,9 +4158,16 @@ class Dashboard(QMainWindow):
             f"QTableWidget::item:hover {{ background-color: {BG_HOVER}; }}"
         )
 
+        # Column sorting (click header to sort ascending/descending)
+        self._m1_table.setSortingEnabled(True)
+        self._m1_table.horizontalHeader().setSortIndicatorShown(True)
+
         # Right-click context menu
         self._m1_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._m1_table.customContextMenuRequested.connect(self._m1_context_menu)
+
+        # Double-click → pre-fill Port Scan (TCP) and navigate there
+        self._m1_table.doubleClicked.connect(self._m1_row_double_clicked)
 
         # Empty-state placeholder shown when table has no rows
         self._m1_empty = QLabel("Run a scan to discover devices on this network.")
@@ -3959,6 +4195,16 @@ class Dashboard(QMainWindow):
         self._m1_explainer.navigate_to.connect(self._nav_rail_go_to)
         lay.addWidget(self._m1_explainer)
         return w
+
+    @pyqtSlot('QModelIndex')
+    def _m1_row_double_clicked(self, index) -> None:
+        """Double-click a device row → pre-fill SYN scanner IP and navigate."""
+        ip_item = self._m1_table.item(index.row(), 0)
+        if ip_item:
+            ip = ip_item.text().strip()
+            if ip and hasattr(self, "_syn_host"):
+                self._syn_host.setText(ip)
+                self._nav_rail_go_to("Port Scan (TCP)")
 
     def _m1_context_menu(self, pos):
         from PyQt6.QtWidgets import QMenu
@@ -5325,6 +5571,12 @@ class Dashboard(QMainWindow):
             self._mtr_worker = None
         else:
             target = self._mtr_target.text().strip() or "8.8.8.8"
+            self._record_recent_action(
+                action_id=f"mtr:{target}",
+                label=f"Hop-by-hop trace · {target}",
+                page="Hop-by-Hop Trace",
+                params={"target": target},
+            )
             from workers.scan_worker import MTRWorker
             self._mtr_stats = {}
             self._mtr_table.setRowCount(0)
@@ -5381,6 +5633,12 @@ class Dashboard(QMainWindow):
     def _run_port_scan(self, host: str):
         if not host:
             return
+        self._record_recent_action(
+            action_id=f"ps:{host}",
+            label=f"Port scan · {host}",
+            page="Tools & Wake-on-LAN",
+            params={"host": host},
+        )
         from workers.scan_worker import PortScanWorker
         if hasattr(self, "_ps_host"):
             self._ps_host.setText(host)
@@ -5410,6 +5668,8 @@ class Dashboard(QMainWindow):
                 self._ps_table.setItem(row, col, item)
         if hasattr(self, "_ps_status"):
             self._ps_status.setText(data.plain_verdict)
+        if hasattr(self, "_monitor_overview_page"):
+            self._monitor_overview_page.set_open_port_count(len(data.open_ports))
         # ── Update NetworkDocPage with accumulated port data ──────────────────
         try:
             if data.open_ports:
@@ -5532,6 +5792,26 @@ class Dashboard(QMainWindow):
         self._nav_rail_go_to("Lab Mode")
         if hasattr(self, "_lab_mode_page"):
             self._lab_mode_page.inject_live_challenge(scenario)
+
+    @pyqtSlot(object)
+    def _on_alert_view_requested(self, alert) -> None:
+        """Navigate to the most relevant page for the alert that was clicked."""
+        rule_type = getattr(alert, "rule_type", "") or ""
+        host = getattr(alert, "host", "") or ""
+        if rule_type == "PORT_SCAN" and host:
+            if hasattr(self, "_syn_host"):
+                self._syn_host.setText(host)
+            self._nav_rail_go_to("Port Scan (TCP)")
+        elif rule_type in ("THREAT_INTEL", "CVE") and host:
+            if hasattr(self, "_threat_intel_page"):
+                self._threat_intel_page.check_ip(host)
+            self._nav_rail_go_to("Threat Intelligence")
+        elif rule_type == "RATE_SPIKE" and host:
+            self._nav_rail_go_to("Live Bandwidth")
+        elif host:
+            self._on_inventory_device_selected(host)
+        else:
+            self._nav_rail_go_to("Notifications")
 
     @pyqtSlot(object)
     def _on_animate_log_entry(self, entry) -> None:
@@ -6608,6 +6888,10 @@ class Dashboard(QMainWindow):
             self._bm_verdict_label.setText(result.overall_verdict)
             self._overview_page.on_grade(result.overall_grade, result.overall_score)
             self._home_page.on_grade(result.overall_grade, result.overall_score)
+            if hasattr(self, "_monitor_overview_page"):
+                self._monitor_overview_page.set_grade(result.overall_grade, result.overall_score)
+            QSettings("NetSentinel", "NetSentinel").setValue("grade/last_run", True)
+            self._home_page.refresh_checklist()
             from modules.diagnostic_card import build_card_data
             self._overview_page.set_card_data(
                 build_card_data(result, self._diag_result, self._store)
@@ -7231,6 +7515,18 @@ class Dashboard(QMainWindow):
         self._offenders_path = get_offenders_path()
         self._set_status("OUI vendor database reloaded.")
 
+    def _reset_dismissed_notices(self) -> None:
+        """Clear all permanently-dismissed banner QSettings keys and re-show banners."""
+        qs = QSettings("NetSentinel", "NetSentinel")
+        dismissed_keys = [k for k in qs.allKeys() if k.endswith("_dismissed")]
+        for k in dismissed_keys:
+            qs.remove(k)
+        # Trigger re-evaluation of Npcap banner state on next show
+        qs.remove("home/npcap_dismissed")
+        if hasattr(self, "_home_page"):
+            self._home_page.showEvent(None)
+        self._set_status("All dismissed notices have been reset.")
+
     # ── Topology tab ──────────────────────────────────────────────────────────
 
     def _build_topology_tab(self) -> QWidget:
@@ -7282,8 +7578,12 @@ class Dashboard(QMainWindow):
         self._arp_worker.result.connect(lambda r: self._arp_status.setText(r.plain_verdict), Qt.ConnectionType.QueuedConnection)
         self._arp_worker.status.connect(self._arp_status.setText)
         self._arp_worker.error.connect(lambda e: self._arp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._arp_worker.finished.connect(self._push_monitor_pills)
         self._arp_worker.start()
         self._arp_status.setText("ARP monitor started…")
+        QSettings("NetSentinel", "NetSentinel").setValue("home/setup/arp_started", True)
+        self._push_monitor_pills()
+        self._set_flyout_dot("ARP Spoof Watch", GREEN)
 
     @pyqtSlot(object)
     def _on_arp_event(self, event):
@@ -7341,8 +7641,11 @@ class Dashboard(QMainWindow):
         self._dhcp_worker.result.connect(lambda r: self._dhcp_status.setText(r.plain_verdict), Qt.ConnectionType.QueuedConnection)
         self._dhcp_worker.status.connect(self._dhcp_status.setText)
         self._dhcp_worker.error.connect(lambda e: self._dhcp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._dhcp_worker.finished.connect(self._push_monitor_pills)
         self._dhcp_worker.start()
         self._dhcp_status.setText("DHCP discover sent — listening for offers…")
+        self._push_monitor_pills()
+        self._set_flyout_dot("DHCP Rogue Monitor", GREEN)
 
     @pyqtSlot(object)
     def _on_dhcp_offer(self, offer):
@@ -7650,6 +7953,12 @@ class Dashboard(QMainWindow):
             return
         if self._syn_worker and self._syn_worker.isRunning():
             return
+        self._record_recent_action(
+            action_id=f"syn:{host}",
+            label=f"Port Scan (TCP) · {host}",
+            page="Port Scan (TCP)",
+            params={"host": host},
+        )
         self._recon_syn_table.setRowCount(0)
         mode_text = self._syn_ports_combo.currentText()
         if "Full range" in mode_text:
@@ -8019,6 +8328,8 @@ class Dashboard(QMainWindow):
                 item = QTableWidgetItem(str(val))
                 item.setForeground(QColor(color if col in (2, 3) else TEXT_PRIMARY))
                 self._recon_cve_table.setItem(row, col, item)
+        if hasattr(self, "_monitor_overview_page"):
+            self._monitor_overview_page.set_cve_count(self._recon_cve_table.rowCount())
 
     # ── Recon: Internet Exposure tab ──────────────────────────────────────────
 
@@ -8986,6 +9297,9 @@ class Dashboard(QMainWindow):
             self._overview_page.set_has_results(True)
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.notify_scan_complete()
+        if hasattr(self, "_monitor_overview_page"):
+            import datetime as _dt
+            self._monitor_overview_page.set_last_scan_time(_dt.datetime.now())
         if hasattr(self, "_home_page") and devices:
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
         self._m1_table.setRowCount(0)
@@ -9538,6 +9852,14 @@ class Dashboard(QMainWindow):
             if path in getattr(self, "_plugin_pages", {}):
                 self._plugin_pages[path].update(data)
             self._refresh_hardware_badge()
+            if hasattr(self, "_log_hub_page"):
+                _plugin_names = [pg._label for pg in getattr(self, "_plugin_pages", {}).values()]
+                self._log_hub_page.add_plugin_entry(data)
+                self._log_hub_page.update_plugin_sources(_plugin_names)
+                _qs_key = hw_name.lower().replace(" ", "_")
+                from PyQt6.QtCore import QSettings as _QS_pl
+                if self._store and _QS_pl().value(f"logging/plugin_{_qs_key}_enabled", False, type=bool):
+                    self._store.record_plugin_snapshot(hw_name, data)
             return  # modem plugins have no LAN clients to enrich
 
         # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
@@ -9571,6 +9893,139 @@ class Dashboard(QMainWindow):
             self._plugin_pages[path].update(data)
 
         self._refresh_hardware_badge()
+        if hasattr(self, "_log_hub_page"):
+            _plugin_names = [pg._label for pg in getattr(self, "_plugin_pages", {}).values()]
+            self._log_hub_page.add_plugin_entry(data)
+            self._log_hub_page.update_plugin_sources(_plugin_names)
+            _qs_key = hw_name.lower().replace(" ", "_")
+            from PyQt6.QtCore import QSettings as _QS_pl
+            if self._store and _QS_pl().value(f"logging/plugin_{_qs_key}_enabled", False, type=bool):
+                self._store.record_plugin_snapshot(hw_name, data)
+
+    def _update_monitor_badge(self, _active: bool = False) -> None:
+        """Refresh all section badges and Home pills when log source state changes."""
+        self._push_monitor_pills()
+
+    def _refresh_section_badges(self, *, arp: bool = None, dhcp: bool = None,
+                                 storm: bool = None, logger: bool = None) -> None:
+        """Update rail section button dots for Monitor, Analysis, and Security Audit."""
+        if not hasattr(self, "_nav_rail_buttons"):
+            return
+        if arp is None:
+            arp = bool(self._arp_worker and self._arp_worker.isRunning())
+        if dhcp is None:
+            dhcp = bool(self._dhcp_worker and self._dhcp_worker.isRunning())
+        if storm is None:
+            storm = self._m3_monitoring_active()
+        if logger is None:
+            qs = QSettings("NetSentinel", "NetSentinel")
+            logger = any(
+                qs.value(k, False, type=bool)
+                for k in qs.allKeys()
+                if k.startswith("logging/") and k.endswith("_enabled")
+            )
+        # Monitor — green when any log source is writing to DB
+        mon_btn = self._nav_rail_buttons.get("Monitor")
+        if mon_btn:
+            mon_btn.set_badge(GREEN if logger else "")
+        # Analysis — green when ARP watch or scan workers are running
+        ana_btn = self._nav_rail_buttons.get("Analysis")
+        if ana_btn:
+            ana_btn.set_badge(GREEN if (arp or storm) else "")
+        # Security Audit — amber when unacked alerts exist, green when DHCP scanner running
+        sec_btn = self._nav_rail_buttons.get("Security Audit")
+        if sec_btn:
+            try:
+                alert_count = len(self._store.get_unacked_alerts()) if self._store else 0
+            except Exception:
+                alert_count = 0
+            if alert_count > 0:
+                sec_btn.set_badge(AMBER)
+                sec_btn.setToolTip(f"Security Audit ({alert_count})")
+            elif dhcp:
+                sec_btn.set_badge(GREEN)
+                sec_btn.setToolTip("Security Audit")
+            else:
+                sec_btn.set_badge("")
+                sec_btn.setToolTip("Security Audit")
+
+    def _check_weekly_digest(self) -> None:
+        """Fire a weekly digest notification if conditions are met (RECUR-2)."""
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("notif/weekly_digest_enabled", False, type=bool):
+            return
+        now = datetime.datetime.now()
+        if now.weekday() != 6:  # Sunday only
+            return
+        time_str = qs.value("notif/weekly_digest_time", "09:00")
+        try:
+            h, m = (int(x) for x in time_str.split(":"))
+        except Exception:
+            return
+        if now.hour < h or (now.hour == h and now.minute < m):
+            return
+        last_ts = float(qs.value("notif/weekly_digest_last_ts", 0))
+        if now.timestamp() - last_ts < 6 * 86400:
+            return
+        qs.setValue("notif/weekly_digest_last_ts", now.timestamp())
+        if hasattr(self, "_notifications_page"):
+            body = self._notifications_page._generate_weekly_summary()
+        else:
+            body = "NetSentinel weekly digest"
+        if self._notif_router:
+            try:
+                from modules.notification_router import Alert as _Alert
+                alert = _Alert(
+                    rule_name="Weekly Digest",
+                    rule_type="WEEKLY_DIGEST",
+                    severity="INFO",
+                    host="NetSentinel",
+                    message=body,
+                )
+                self._notif_router.dispatch(alert)
+            except Exception:
+                pass
+
+    def _set_flyout_dot(self, label: str, color: str) -> None:
+        """Set or clear a status dot on a flyout item by label."""
+        if not hasattr(self, "_flyout_dots"):
+            self._flyout_dots: dict[str, str] = {}
+        self._flyout_dots[label] = color
+        if hasattr(self, "_nav_flyout"):
+            self._nav_flyout.apply_dot(label, color)
+
+    def _push_monitor_pills(self) -> None:
+        """Push current monitoring states to Home pills, flyout dots, and section badges."""
+        arp    = bool(self._arp_worker  and self._arp_worker.isRunning())
+        dhcp   = bool(self._dhcp_worker and self._dhcp_worker.isRunning())
+        storm  = self._m3_monitoring_active()
+        qs     = QSettings("NetSentinel", "NetSentinel")
+        logger = any(
+            qs.value(k, False, type=bool)
+            for k in qs.allKeys()
+            if k.startswith("logging/") and k.endswith("_enabled")
+        )
+        if hasattr(self, "_home_page"):
+            self._home_page.set_monitor_pills(arp, dhcp, storm, logger)
+        # Flyout item dots — always reflect current state
+        self._set_flyout_dot("ARP Spoof Watch",    GREEN if arp    else "")
+        self._set_flyout_dot("DHCP Rogue Monitor", GREEN if dhcp   else "")
+        self._set_flyout_dot("Broadcast Storm",    GREEN if storm  else "")
+        self._set_flyout_dot("Network Logger",     GREEN if logger else "")
+        # Section button badges
+        self._refresh_section_badges(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
+        # Push to Monitor Overview page
+        if hasattr(self, "_monitor_overview_page"):
+            self._monitor_overview_page.set_arp_status(arp, alerted=False)
+            self._monitor_overview_page.set_dhcp_status(dhcp)
+
+    def _m3_monitoring_active(self) -> bool:
+        """Return True if any scan worker (including storm) is currently running."""
+        return any(
+            w.isRunning()
+            for w in getattr(self, "_workers", [])
+            if hasattr(w, "isRunning")
+        )
 
     def _refresh_hardware_badge(self) -> None:
         """Update the Extend section rail button tooltip to show active plugin count."""
@@ -9646,9 +10101,6 @@ class Dashboard(QMainWindow):
         if any_matched:
             self._m1_table.setColumnHidden(6, False)
             self._m1_table.setColumnHidden(7, False)
-            self._m1_node_group_btn.setEnabled(True)
-            if hasattr(self, "_m1_node_hint"):
-                self._m1_node_hint.setVisible(False)
             if self._m1_group_by_node:
                 self._regroup_m1_by_satellite()
 
@@ -9690,13 +10142,8 @@ class Dashboard(QMainWindow):
                     self._m1_table.setItem(row, 7, band_item)
                     self._m1_table.setColumnHidden(7, False)
 
-        # Enable grouping button if any plugin matched a node
-        if plugin_any_matched:
-            self._m1_node_group_btn.setEnabled(True)
-            if hasattr(self, "_m1_node_hint"):
-                self._m1_node_hint.setVisible(False)
-            if self._m1_group_by_node:
-                self._regroup_m1_by_satellite()
+        if plugin_any_matched and self._m1_group_by_node:
+            self._regroup_m1_by_satellite()
 
         # Mirror enrichment onto DeviceInfo objects so exports include it
         for d in self._m1_result.get("devices", []):
@@ -9876,9 +10323,13 @@ class Dashboard(QMainWindow):
     def _on_node_group_toggled(self, checked: bool) -> None:
         self._m1_group_by_node = checked
         QSettings("NetSentinel", "NetSentinel").setValue("devices/group_by_node", checked)
-        self._m1_node_group_btn.setText(
-            "≡  Group by node  ✓" if checked else "≡  Group by node"
-        )
+        if hasattr(self, "_m1_seg_list"):
+            self._m1_seg_list.setStyleSheet(
+                self._m1_seg_inactive_ss if checked else self._m1_seg_active_ss
+            )
+            self._m1_seg_node.setStyleSheet(
+                self._m1_seg_active_ss if checked else self._m1_seg_inactive_ss
+            )
         if checked:
             self._regroup_m1_by_satellite()
         else:
@@ -9952,6 +10403,8 @@ class Dashboard(QMainWindow):
             groups.setdefault(rd["node"], []).append(rd)
 
         sorted_nodes = sorted(k for k in groups if k != "__unassigned__")
+        has_named_nodes = bool(sorted_nodes)
+        self._m1_has_named_nodes = has_named_nodes
         if "__unassigned__" in groups:
             sorted_nodes.append("__unassigned__")
 
@@ -9961,7 +10414,10 @@ class Dashboard(QMainWindow):
 
         for node_name in sorted_nodes:
             device_rows = groups[node_name]
-            display_name = "Unassigned / Direct" if node_name == "__unassigned__" else node_name
+            if node_name == "__unassigned__":
+                display_name = "Other / Direct" if has_named_nodes else "All devices"
+            else:
+                display_name = node_name
             expanded = self._m1_sat_expanded.get(node_name, True)
             arrow = "▼" if expanded else "▶"
             nc = len(device_rows)
@@ -10030,7 +10486,11 @@ class Dashboard(QMainWindow):
             nc += 1
             next_row += 1
 
-        display_name = "Unassigned / Direct" if node_name == "__unassigned__" else node_name
+        _hn = getattr(self, "_m1_has_named_nodes", False)
+        if node_name == "__unassigned__":
+            display_name = "Other / Direct" if _hn else "All devices"
+        else:
+            display_name = node_name
         arrow = "▼" if expanded else "▶"
         first.setText(f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}")
 
@@ -10059,7 +10519,11 @@ class Dashboard(QMainWindow):
                 nc += 1
                 next_row += 1
 
-            display_name = "Unassigned / Direct" if node_name == "__unassigned__" else node_name
+            _hn = getattr(self, "_m1_has_named_nodes", False)
+            if node_name == "__unassigned__":
+                display_name = "Other / Direct" if _hn else "All devices"
+            else:
+                display_name = node_name
             arrow = "▼" if expanded else "▶"
             first.setText(f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}")
             for dev_row in range(row + 1, next_row):
@@ -10425,6 +10889,8 @@ class Dashboard(QMainWindow):
 
         self._m3_status.setText(f"✓  Storm level: {level} ({bps:.1f} bcast/s)")
         self._update_overall_verdict()
+        if hasattr(self, "_monitor_overview_page"):
+            self._monitor_overview_page.set_storm_status(level)
 
     @pyqtSlot(object)
     def _on_m4_result(self, wifi):
@@ -10664,6 +11130,7 @@ class Dashboard(QMainWindow):
             self._graph_timer.stop()
             self._graph.redraw()
             self._workers.clear()
+            self._push_monitor_pills()   # clear Analysis badge + Broadcast Storm dot
             if self._auto_report_pending:
                 self._auto_report_scan_done = True
                 self._maybe_auto_report()

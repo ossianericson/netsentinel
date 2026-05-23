@@ -164,6 +164,8 @@ class SettingsPage(QWidget):
 
     #: Emitted when the user clicks "Reload OUI database" in the Maintenance card.
     reload_oui_requested = pyqtSignal()
+    #: Emitted when the user clicks "Reset all dismissed notices".
+    reset_dismissed_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -689,5 +691,16 @@ class SettingsPage(QWidget):
         )
         btn.clicked.connect(self.reload_oui_requested.emit)
         bl.addWidget(btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        reset_btn = QPushButton("Reset all dismissed notices")
+        reset_btn.setFixedWidth(220)
+        reset_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+        )
+        reset_btn.clicked.connect(self.reset_dismissed_requested.emit)
+        bl.addWidget(reset_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         return card

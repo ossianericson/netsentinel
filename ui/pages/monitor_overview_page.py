@@ -1,0 +1,351 @@
+"""
+MonitorOverviewPage — single-glance security posture for the Analysis section.
+
+Shows one tile per active monitor so a recurring user can confirm "all green"
+without visiting six separate pages.  No new logic — purely aggregates state
+pushed by dashboard.py via the public setter methods below.
+
+Tile grid:
+  Network Grade  (top, full-width accent tile)
+  ARP Spoof Watch · DHCP Rogue Monitor · Broadcast Storm
+  IoT Anomalies  · Open Ports (last scan) · CVE Matches
+"""
+from __future__ import annotations
+
+import datetime
+from typing import Optional
+
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ui.styles import (
+    ACCENT,
+    AMBER,
+    BG_CARD,
+    BG_DARK,
+    BORDER,
+    CARD_RADIUS,
+    GREEN,
+    RED,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
+
+
+def _status_tile(
+    icon: str,
+    title: str,
+    value: str,
+    sub: str,
+    color: str,
+    target: str,
+) -> tuple["_StatusTile", "_StatusTile"]:
+    """Return a _StatusTile instance ready to insert into the grid."""
+    tile = _StatusTile(icon, title, value, sub, color, target)
+    return tile
+
+
+class _StatusTile(QFrame):
+    """Clickable status tile — icon, title, value, subtitle, color dot."""
+
+    clicked = pyqtSignal(str)  # nav target
+
+    def __init__(
+        self,
+        icon: str,
+        title: str,
+        value: str,
+        sub: str,
+        color: str,
+        target: str,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._target = target
+        self.setMinimumHeight(90)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._base_style = (
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+            f"QFrame:hover {{ border-color:{ACCENT}; }}"
+        )
+        self.setStyleSheet(self._base_style)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 10, 12, 10)
+        lay.setSpacing(3)
+
+        title_row = QHBoxLayout()
+        title_row.setSpacing(6)
+        title_row.setContentsMargins(0, 0, 0, 0)
+        self._icon_lbl = QLabel(icon)
+        self._icon_lbl.setStyleSheet(
+            f"font-size:13px; color:{color}; background:transparent; border:none;"
+        )
+        self._icon_lbl.setFixedWidth(18)
+        self._title_lbl = QLabel(title)
+        self._title_lbl.setStyleSheet(
+            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; letter-spacing:0.5px;"
+        )
+        title_row.addWidget(self._icon_lbl)
+        title_row.addWidget(self._title_lbl, 1)
+        lay.addLayout(title_row)
+
+        self._value_lbl = QLabel(value)
+        self._value_lbl.setStyleSheet(
+            f"font-size:22px; font-weight:bold; color:{color};"
+            " background:transparent; border:none;"
+        )
+        lay.addWidget(self._value_lbl)
+
+        self._sub_lbl = QLabel(sub)
+        self._sub_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        lay.addWidget(self._sub_lbl)
+
+    def update(self, value: str, sub: str, color: str) -> None:
+        self._value_lbl.setText(value)
+        self._value_lbl.setStyleSheet(
+            f"font-size:22px; font-weight:bold; color:{color};"
+            " background:transparent; border:none;"
+        )
+        self._icon_lbl.setStyleSheet(
+            f"font-size:13px; color:{color}; background:transparent; border:none;"
+        )
+        self._sub_lbl.setText(sub)
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        self.clicked.emit(self._target)
+        super().mousePressEvent(event)
+
+
+class _GradeTile(QFrame):
+    """Full-width Network Grade tile with accent border."""
+
+    clicked = pyqtSignal(str)
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
+            f" border-radius:{CARD_RADIUS}; }}"
+            f"QFrame:hover {{ border-color:{ACCENT}; }}"
+        )
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(18, 14, 18, 14)
+        lay.setSpacing(16)
+
+        self._grade_circle = QLabel("–")
+        self._grade_circle.setFixedSize(56, 56)
+        self._grade_circle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._grade_circle.setStyleSheet(
+            f"font-size:24px; font-weight:bold; color:{TEXT_SECONDARY};"
+            f" border:3px solid {BORDER}; border-radius:28px; background:{BG_CARD};"
+        )
+        lay.addWidget(self._grade_circle)
+
+        right = QVBoxLayout()
+        right.setSpacing(2)
+        title = QLabel("Network Grade")
+        title.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        self._sub_lbl = QLabel("Run a network grade scan to see your security score →")
+        self._sub_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        right.addWidget(title)
+        right.addWidget(self._sub_lbl)
+        lay.addLayout(right, 1)
+
+    def update(self, grade: str, sub: str, color: str) -> None:
+        self._grade_circle.setText(grade)
+        self._grade_circle.setStyleSheet(
+            f"font-size:24px; font-weight:bold; color:{color};"
+            f" border:3px solid {color}; border-radius:28px; background:{BG_CARD};"
+        )
+        self._sub_lbl.setText(sub)
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        self.clicked.emit("Network Grade")
+        super().mousePressEvent(event)
+
+
+class MonitorOverviewPage(QWidget):
+    """Single-glance view of every active detection monitor."""
+
+    navigate_to = pyqtSignal(str)
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self._last_scan_ts: Optional[datetime.datetime] = None
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        inner = QWidget()
+        inner.setStyleSheet(f"background:{BG_DARK};")
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+
+        lay = QVBoxLayout(inner)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(10)
+
+        # ── Page header ───────────────────────────────────────────────────────
+        hdr_row = QHBoxLayout()
+        hdr_row.setSpacing(0)
+        page_title = QLabel("Monitor Overview")
+        page_title.setStyleSheet(
+            f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        self._last_scan_lbl = QLabel("")
+        self._last_scan_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        self._last_scan_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        hdr_row.addWidget(page_title)
+        hdr_row.addStretch()
+        hdr_row.addWidget(self._last_scan_lbl)
+        lay.addLayout(hdr_row)
+
+        sub = QLabel(
+            "Status of every active detection monitor — click any tile to go to that page."
+        )
+        sub.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        lay.addWidget(sub)
+
+        # ── Grade tile (full width) ───────────────────────────────────────────
+        self._grade_tile = _GradeTile()
+        self._grade_tile.clicked.connect(self.navigate_to.emit)
+        lay.addWidget(self._grade_tile)
+
+        # ── Section label ─────────────────────────────────────────────────────
+        sec_lbl = QLabel("DETECTION MONITORS")
+        sec_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; letter-spacing:1px; padding-top:2px;"
+        )
+        lay.addWidget(sec_lbl)
+
+        # ── 3×2 tile grid ─────────────────────────────────────────────────────
+        grid_w = QWidget()
+        grid_w.setStyleSheet("background:transparent;")
+        grid = QGridLayout(grid_w)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setSpacing(8)
+
+        self._tile_arp   = _StatusTile("◉", "ARP SPOOF WATCH",    "Off", "Not running", TEXT_MUTED,      "ARP Spoof Watch")
+        self._tile_dhcp  = _StatusTile("◉", "DHCP ROGUE MONITOR", "Off", "Not running", TEXT_MUTED,      "DHCP Rogue Monitor")
+        self._tile_storm = _StatusTile("◈", "BROADCAST STORM",    "–",   "Not measured",TEXT_MUTED,      "Broadcast Storm")
+        self._tile_iot   = _StatusTile("◎", "IOT ANOMALIES",      "–",   "Not measured",TEXT_MUTED,      "IoT Behaviour")
+        self._tile_ports = _StatusTile("⊙", "OPEN PORTS",         "–",   "No scan yet", TEXT_MUTED,      "Port Scan (TCP)")
+        self._tile_cve   = _StatusTile("⚠", "CVE MATCHES",        "–",   "No data yet", TEXT_MUTED,      "CVE Lookup")
+
+        for tile in (self._tile_arp, self._tile_dhcp, self._tile_storm,
+                     self._tile_iot, self._tile_ports, self._tile_cve):
+            tile.clicked.connect(self.navigate_to.emit)
+
+        grid.addWidget(self._tile_arp,   0, 0)
+        grid.addWidget(self._tile_dhcp,  0, 1)
+        grid.addWidget(self._tile_storm, 0, 2)
+        grid.addWidget(self._tile_iot,   1, 0)
+        grid.addWidget(self._tile_ports, 1, 1)
+        grid.addWidget(self._tile_cve,   1, 2)
+
+        lay.addWidget(grid_w)
+        lay.addStretch()
+
+    # ── Public setters called by dashboard.py ─────────────────────────────────
+
+    def set_grade(self, grade: str, score: float) -> None:  # noqa: ARG002
+        if grade in ("A", "B"):
+            color = GREEN
+        elif grade == "C":
+            color = AMBER
+        else:
+            color = RED
+        sub = f"Score {score:.0f}/100 — click to see dimension breakdown"
+        self._grade_tile.update(grade, sub, color)
+
+    def set_arp_status(self, running: bool, alerted: bool) -> None:
+        if alerted:
+            self._tile_arp.update("Alert", "Spoof detected", RED)
+        elif running:
+            self._tile_arp.update("On", "Monitoring",      GREEN)
+        else:
+            self._tile_arp.update("Off", "Not running",    TEXT_MUTED)
+
+    def set_dhcp_status(self, running: bool) -> None:
+        if running:
+            self._tile_dhcp.update("On",  "Monitoring",    GREEN)
+        else:
+            self._tile_dhcp.update("Off", "Not running",   TEXT_MUTED)
+
+    def set_storm_status(self, level: str) -> None:
+        if level == "STORM":
+            self._tile_storm.update("Storm", "Flooding detected",  RED)
+        elif level == "WARNING":
+            self._tile_storm.update("Warn",  "Elevated broadcast", AMBER)
+        else:
+            self._tile_storm.update("Clean", "No storm",           GREEN)
+
+    def set_iot_anomaly_count(self, count: int) -> None:
+        if count > 0:
+            self._tile_iot.update(str(count), f"anomal{'y' if count == 1 else 'ies'}", AMBER)
+        else:
+            self._tile_iot.update("0", "No anomalies", GREEN)
+
+    def set_open_port_count(self, count: int) -> None:
+        if count > 0:
+            color = AMBER if count < 5 else RED
+            self._tile_ports.update(str(count), f"open port{'s' if count != 1 else ''}", color)
+        elif count == 0:
+            self._tile_ports.update("0", "No open ports", GREEN)
+        else:
+            self._tile_ports.update("–", "No scan yet", TEXT_MUTED)
+
+    def set_cve_count(self, count: int) -> None:
+        if count > 0:
+            self._tile_cve.update(str(count), f"match{'es' if count != 1 else ''} found", RED)
+        elif count == 0:
+            self._tile_cve.update("0", "No matches", GREEN)
+        else:
+            self._tile_cve.update("–", "No data yet", TEXT_MUTED)
+
+    def set_last_scan_time(self, ts: Optional[datetime.datetime]) -> None:
+        self._last_scan_ts = ts
+        if ts is None:
+            self._last_scan_lbl.setText("")
+        else:
+            self._last_scan_lbl.setText(f"Last scan: {ts.strftime('%H:%M')}")

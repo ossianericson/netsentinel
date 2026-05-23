@@ -77,31 +77,53 @@ class CommandPalette(QDialog):
 
     def _populate(self, items: list):
         self._list.clear()
+        first_selectable = None
         for it in items:
             icon  = it.get("icon", "")
             label = it.get("label", "")
             kind  = it.get("kind", "page")
-            row   = QListWidgetItem(f"  {icon}  {label}")
-            row.setData(Qt.ItemDataRole.UserRole, it)
-            if kind == "action":
-                from PyQt6.QtGui import QColor
+            if kind == "separator":
+                row = QListWidgetItem(f"  {label.upper()}")
+                row.setFlags(Qt.ItemFlag.NoItemFlags)
+                from PyQt6.QtGui import QColor, QFont
                 row.setForeground(QColor(TEXT_SECONDARY))
+                f = QFont()
+                f.setPointSize(8)
+                f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
+                row.setFont(f)
+            else:
+                row = QListWidgetItem(f"  {icon}  {label}")
+                row.setData(Qt.ItemDataRole.UserRole, it)
+                if kind in ("action", "recent"):
+                    from PyQt6.QtGui import QColor
+                    row.setForeground(QColor(TEXT_SECONDARY))
+                if first_selectable is None:
+                    first_selectable = self._list.count()
             self._list.addItem(row)
-        if self._list.count():
-            self._list.setCurrentRow(0)
+        if first_selectable is not None:
+            self._list.setCurrentRow(first_selectable)
 
     def _filter(self, text: str):
         text = text.strip()
         if not text:
             self._populate(self._all_items)
             return
-        matched = [it for it in self._all_items if text.lower() in it["label"].lower()]
+        matched = [
+            it for it in self._all_items
+            if it.get("kind") != "separator"
+            and text.lower() in it["label"].lower()
+        ]
         self._populate(matched)
 
     def _activate(self, item: QListWidgetItem):
         data = item.data(Qt.ItemDataRole.UserRole)
-        if data["kind"] == "page":
-            self.page_requested.emit(data["label"])
+        if data is None:
+            return
+        kind = data.get("kind", "page")
+        if kind == "page":
+            self.page_requested.emit(data.get("real_label") or data["label"])
+        elif kind == "recent":
+            self.action_requested.emit(f"__recent__{data.get('id', data['label'])}")
         else:
             self.action_requested.emit(data["label"])
         self.accept()

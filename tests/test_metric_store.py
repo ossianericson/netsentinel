@@ -40,7 +40,7 @@ def mem_store():
 class TestConstruction:
     def test_opens_in_memory(self, mem_store):
         counts = mem_store.get_row_counts()
-        assert set(counts.keys()) == {"rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log"}
+        assert set(counts.keys()) == {"rtt_sample", "device_state", "device_event", "known_device", "cert_check", "service_check", "speed_test", "ha_detected", "modem_signal_log", "mesh_signal_log", "plugin_log"}
 
     def test_row_counts_start_at_zero(self, store):
         for v in store.get_row_counts().values():

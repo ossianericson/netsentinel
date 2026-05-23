@@ -22,16 +22,19 @@ QSettings keys (prefix "logging/"):
 """
 from __future__ import annotations
 
+import csv as _csv
 import datetime as _dt
+import os as _os
 import time as _t
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFileDialog,
+    QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QScrollArea, QSizePolicy, QSpinBox, QTableWidget, QTableWidgetItem,
-    QToolButton, QVBoxLayout, QWidget,
+    QTimeEdit, QToolButton, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -40,16 +43,17 @@ from ui.styles import (
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
-_MAX_ROWS = 500
+_MAX_ROWS = 2000
 _LIVE_CHALLENGE_COOLDOWN = 60.0
 
 # Source key → (display label, accent colour)
 _SOURCES: dict[str, tuple[str, str]] = {
     "net":    ("RTT",    ACCENT),
-    "modem":  ("MODEM",  GREEN),
+    "modem":  ("ZTE MC889", GREEN),
     "mesh":   ("MESH",   AMBER),
     "syslog": ("SYSLOG", TEXT_SECONDARY),
     "snmp":   ("SNMP",   RED),
+    "plugin": ("PLUGIN", "#A78BFA"),
 }
 _LABEL_TO_KEY = {label: key for key, (label, _) in _SOURCES.items()}
 
@@ -183,6 +187,8 @@ class LogHubPage(QWidget):
 
     animate_requested       = pyqtSignal(object)
     live_challenge_detected = pyqtSignal(object)
+    logging_active_changed  = pyqtSignal(bool)
+    navigate_to             = pyqtSignal(str)
 
     _HEADERS = ["Time", "Source", "Host", "Event", "Detail", "Status"]
 
@@ -190,12 +196,16 @@ class LogHubPage(QWidget):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._store = store
-        self._entries:            list[dict] = []
-        self._consecutive_fails:  int        = 0
-        self._last_live_challenge: float     = 0.0
+        self._entries:             list[dict] = []
+        self._consecutive_fails:   int        = 0
+        self._last_live_challenge: float      = 0.0
+        self._challenge_banner_ts: float      = 0.0
+        self._cap_shown:           bool       = False
         self._toggle_btns:    dict[str, QPushButton] = {}
         self._db_btns:        dict[str, QPushButton] = {}
         self._interval_combos: dict[str, QComboBox]  = {}
+        self._all_btn:         Optional[QPushButton]  = None
+        self._is_history_mode: bool = False
         self._src_bold_font = QFont()
         self._src_bold_font.setBold(True)
         self._src_bold_font.setPointSize(8)
@@ -225,6 +235,7 @@ class LogHubPage(QWidget):
         inner_lay.setSpacing(8)
 
         inner_lay.addWidget(self._build_scan_config_panel())
+        inner_lay.addWidget(self._build_mode_bar())
         inner_lay.addWidget(self._build_source_bar())
         inner_lay.addWidget(self._build_logged_sources_bar())
 
@@ -237,6 +248,146 @@ class LogHubPage(QWidget):
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
+
+        # ── History range bar (LOG-7) ─────────────────────────────────────────
+        self._history_bar = QFrame()
+        self._history_bar.setVisible(False)
+        self._history_bar.setStyleSheet(
+            f"QFrame {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
+            f" border-radius:0; padding:0; }}"
+        )
+        _hb_lay = QHBoxLayout(self._history_bar)
+        _hb_lay.setContentsMargins(12, 6, 12, 6)
+        _hb_lay.setSpacing(8)
+        _hb_from_lbl = QLabel("From:")
+        _hb_from_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        from PyQt6.QtCore import QDate, QTime
+        _today = _dt.date.today()
+        _yesterday = _today - _dt.timedelta(days=1)
+        self._hist_from_date = QDateEdit()
+        self._hist_from_date.setCalendarPopup(True)
+        self._hist_from_date.setDate(QDate(_yesterday.year, _yesterday.month, _yesterday.day))
+        self._hist_from_date.setFixedWidth(100)
+        self._hist_from_time = QTimeEdit()
+        self._hist_from_time.setTime(QTime(0, 0))
+        self._hist_from_time.setFixedWidth(72)
+        _hb_to_lbl = QLabel("To:")
+        _hb_to_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        self._hist_to_date = QDateEdit()
+        self._hist_to_date.setCalendarPopup(True)
+        self._hist_to_date.setDate(QDate(_today.year, _today.month, _today.day))
+        self._hist_to_date.setFixedWidth(100)
+        self._hist_to_time = QTimeEdit()
+        self._hist_to_time.setTime(QTime(23, 59))
+        self._hist_to_time.setFixedWidth(72)
+        for _w in (self._hist_from_date, self._hist_from_time,
+                   self._hist_to_date, self._hist_to_time):
+            _w.setStyleSheet(
+                f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px;"
+                f" padding:1px 4px; font-size:11px; color:{TEXT_PRIMARY};"
+            )
+        _hb_load = QPushButton("Load")
+        _hb_load.setFixedHeight(24)
+        _hb_load.setCursor(Qt.CursorShape.PointingHandCursor)
+        _hb_load.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:3px; padding:0 12px; font-size:11px; }}"
+            f"QPushButton:hover {{ background:#1a6fc4; }}"
+        )
+        _hb_load.clicked.connect(self._load_history_range)
+        _hb_export = QPushButton("Export →")
+        _hb_export.setFlat(True)
+        _hb_export.setCursor(Qt.CursorShape.PointingHandCursor)
+        _hb_export.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+        )
+        _hb_export.clicked.connect(self._open_export_dialog)
+        _hb_lay.addWidget(_hb_from_lbl)
+        _hb_lay.addWidget(self._hist_from_date)
+        _hb_lay.addWidget(self._hist_from_time)
+        _hb_lay.addWidget(_hb_to_lbl)
+        _hb_lay.addWidget(self._hist_to_date)
+        _hb_lay.addWidget(self._hist_to_time)
+        _hb_lay.addWidget(_hb_load)
+        _hb_lay.addStretch()
+        _hb_lay.addWidget(_hb_export)
+        card_lay.addWidget(self._history_bar)
+
+        # ── Live-challenge banner (LOG-5) ─────────────────────────────────────
+        self._challenge_banner = QFrame()
+        self._challenge_banner.setVisible(False)
+        self._challenge_banner.setStyleSheet(
+            f"QFrame {{ background:{AMBER}22; border-bottom:1px solid {AMBER}55;"
+            f" border-radius:0; padding:0; }}"
+        )
+        _cb_lay = QHBoxLayout(self._challenge_banner)
+        _cb_lay.setContentsMargins(12, 6, 12, 6)
+        _cb_lay.setSpacing(8)
+        self._challenge_time_lbl = QLabel("")
+        self._challenge_time_lbl.setStyleSheet(
+            f"font-size:11px; color:{AMBER}; background:transparent; border:none;"
+        )
+        _cb_view_btn = QPushButton("View alert →")
+        _cb_view_btn.setFlat(True)
+        _cb_view_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _cb_view_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+        )
+        _cb_view_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
+        _cb_x = QPushButton("×")
+        _cb_x.setFixedSize(18, 18)
+        _cb_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        _cb_x.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:13px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        _cb_x.clicked.connect(self._hide_challenge_banner)
+        _cb_lay.addWidget(self._challenge_time_lbl, 1)
+        _cb_lay.addWidget(_cb_view_btn)
+        _cb_lay.addWidget(_cb_x)
+
+        self._challenge_timer = QTimer(self)
+        self._challenge_timer.setSingleShot(True)
+        self._challenge_timer.timeout.connect(self._hide_challenge_banner)
+        card_lay.addWidget(self._challenge_banner)
+
+        # ── Row-cap banner (LOG-4) ─────────────────────────────────────────────
+        self._cap_banner = QFrame()
+        self._cap_banner.setVisible(False)
+        self._cap_banner.setStyleSheet(
+            f"QFrame {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
+            f" border-radius:0; padding:0; }}"
+        )
+        _cap_lay = QHBoxLayout(self._cap_banner)
+        _cap_lay.setContentsMargins(12, 5, 12, 5)
+        _cap_lay.setSpacing(8)
+        _cap_lbl = QLabel(
+            f"Showing last {_MAX_ROWS:,} entries — older entries are in your database."
+        )
+        _cap_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _cap_export_btn = QPushButton("Export log →")
+        _cap_export_btn.setFlat(True)
+        _cap_export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _cap_export_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+        )
+        _cap_export_btn.clicked.connect(self._open_export_dialog)
+        _cap_lay.addWidget(_cap_lbl, 1)
+        _cap_lay.addWidget(_cap_export_btn)
+        card_lay.addWidget(self._cap_banner)
 
         self._table = _make_table(self._HEADERS)
         self._table.setColumnWidth(0, 130)
@@ -406,6 +557,15 @@ class LogHubPage(QWidget):
         )
         lay.addWidget(lbl)
 
+        all_btn = QPushButton("● All")
+        all_btn.setCheckable(True)
+        all_btn.setChecked(True)
+        all_btn.setFixedHeight(26)
+        self._style_toggle(all_btn, True, ACCENT)
+        all_btn.clicked.connect(self._on_all_toggled)
+        self._all_btn = all_btn
+        lay.addWidget(all_btn)
+
         # Toggles are pure in-memory visibility filters — they do not persist to
         # QSettings.  Initial state reflects what is enabled in the Network Logger.
         s = QSettings()
@@ -421,6 +581,8 @@ class LogHubPage(QWidget):
             btn.clicked.connect(lambda checked, k=key: self._on_source_toggled(k, checked))
             self._toggle_btns[key] = btn
             lay.addWidget(btn)
+            if key == "plugin":
+                btn.setVisible(False)
 
         cfg_lbl = QLabel("· Configure in Network Logger")
         cfg_lbl.setStyleSheet(
@@ -444,10 +606,52 @@ class LogHubPage(QWidget):
 
         return bar
 
-    def _build_logged_sources_bar(self) -> QWidget:
-        """Persistent DB logging and interval controls for Modem and Mesh sources."""
-        _qs = QSettings("NetSentinel", "NetSentinel")
+    def _build_mode_bar(self) -> QWidget:
+        """Live / History segmented toggle (LOG-7)."""
+        bar = QFrame()
+        bar.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        lay = QHBoxLayout(bar)
+        lay.setContentsMargins(10, 5, 10, 5)
+        lay.setSpacing(4)
 
+        _seg_qss_on = (
+            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+            f" border:none; border-radius:3px; padding:2px 14px; }}"
+        )
+        _seg_qss_off = (
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+            f" border:none; border-radius:3px; padding:2px 14px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_HOVER}; }}"
+        )
+
+        self._live_mode_btn = QPushButton("● Live")
+        self._live_mode_btn.setFixedHeight(24)
+        self._live_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._live_mode_btn.setStyleSheet(_seg_qss_on)
+        self._live_mode_btn.clicked.connect(self._on_mode_live)
+
+        self._hist_mode_btn = QPushButton("⊙ History")
+        self._hist_mode_btn.setFixedHeight(24)
+        self._hist_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._hist_mode_btn.setStyleSheet(_seg_qss_off)
+        self._hist_mode_btn.clicked.connect(self._on_mode_history)
+
+        lay.addWidget(self._live_mode_btn)
+        lay.addWidget(self._hist_mode_btn)
+        lay.addStretch()
+
+        hint = QLabel("History mode queries your database for any time range")
+        hint.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        lay.addWidget(hint)
+        return bar
+
+    def _build_logged_sources_bar(self) -> QWidget:
+        """DB logging controls — one row per configured hardware plugin."""
         bar = QFrame()
         bar.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
@@ -464,65 +668,20 @@ class LogHubPage(QWidget):
         )
         lay.addWidget(hdr)
 
-        for key in ("modem", "mesh"):
-            label, color = _SOURCES[key]
-            enabled  = _qs.value(f"logging/{key}_enabled",      False, type=bool)
-            interval = _qs.value(f"logging/{key}_interval_min", 5,     type=int)
+        self._plugin_db_empty_lbl = QLabel(
+            "No hardware plugins configured — add one in Hardware Integrations"
+        )
+        self._plugin_db_empty_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+        )
+        lay.addWidget(self._plugin_db_empty_lbl)
 
-            row = QHBoxLayout()
-            row.setSpacing(8)
-
-            src_lbl = QLabel(f"● {label}")
-            src_lbl.setFixedWidth(60)
-            src_lbl.setStyleSheet(
-                f"color:{color}; font-size:11px; font-weight:bold;"
-                f" background:transparent; border:none;"
-            )
-            row.addWidget(src_lbl)
-
-            db_btn = QPushButton(
-                "● Logging to DB" if enabled else "○  Not logging  "
-            )
-            db_btn.setCheckable(True)
-            db_btn.setChecked(enabled)
-            db_btn.setFixedHeight(22)
-            db_btn.setFixedWidth(130)
-            self._style_db_btn(db_btn, enabled)
-            db_btn.clicked.connect(
-                lambda checked, k=key, b=db_btn: self._on_db_toggled(k, checked, b)
-            )
-            self._db_btns[key] = db_btn
-            row.addWidget(db_btn)
-
-            ev_lbl = QLabel("every")
-            ev_lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
-            )
-            row.addWidget(ev_lbl)
-
-            combo = QComboBox()
-            for val in (1, 5, 10, 15, 30, 60):
-                combo.addItem(f"{val} min", val)
-            idx = combo.findData(interval)
-            if idx >= 0:
-                combo.setCurrentIndex(idx)
-            combo.setFixedHeight(22)
-            combo.setFixedWidth(76)
-            combo.setStyleSheet(
-                f"QComboBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY}; font-size:10px;"
-                f" border:1px solid {BORDER}; border-radius:3px; padding:1px 4px; }}"
-                f"QComboBox::drop-down {{ border:none; }}"
-                f"QComboBox QAbstractItemView {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-                f" border:1px solid {BORDER};"
-                f" selection-background-color:{ACCENT}; }}"
-            )
-            combo.currentIndexChanged.connect(
-                lambda _, k=key, c=combo: self._on_interval_changed(k, c)
-            )
-            self._interval_combos[key] = combo
-            row.addWidget(combo)
-            row.addStretch()
-            lay.addLayout(row)
+        self._plugin_db_container = QWidget()
+        self._plugin_db_container.setStyleSheet("background:transparent;")
+        self._plugin_db_container_lay = QVBoxLayout(self._plugin_db_container)
+        self._plugin_db_container_lay.setContentsMargins(0, 0, 0, 0)
+        self._plugin_db_container_lay.setSpacing(6)
+        lay.addWidget(self._plugin_db_container)
 
         self._db_feedback_lbl = QLabel("")
         self._db_feedback_lbl.setStyleSheet(
@@ -577,6 +736,280 @@ class LogHubPage(QWidget):
         self._db_feedback_lbl.setVisible(True)
         QTimer.singleShot(3000, lambda: self._db_feedback_lbl.setVisible(False))
 
+    # ── LOG-5: live challenge banner ──────────────────────────────────────────
+
+    def _show_challenge_banner(self, time_str: str) -> None:
+        self._challenge_time_lbl.setText(
+            f"Live challenge detected at {time_str} — "
+        )
+        self._challenge_banner_ts = _t.time()
+        self._challenge_banner.setVisible(True)
+        self._challenge_timer.start(60_000)
+
+    def _hide_challenge_banner(self) -> None:
+        self._challenge_timer.stop()
+        self._challenge_banner.setVisible(False)
+
+    # ── LOG-7: mode switching ─────────────────────────────────────────────────
+
+    def _on_mode_live(self) -> None:
+        self._is_history_mode = False
+        _on  = (f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+                f" border:none; border-radius:3px; padding:2px 14px; }}")
+        _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+                f" border:none; border-radius:3px; padding:2px 14px; }}"
+                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_HOVER}; }}")
+        self._live_mode_btn.setStyleSheet(_on)
+        self._hist_mode_btn.setStyleSheet(_off)
+        self._history_bar.setVisible(False)
+        self._apply_filter()
+
+    def _on_mode_history(self) -> None:
+        self._is_history_mode = True
+        _on  = (f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+                f" border:none; border-radius:3px; padding:2px 14px; }}")
+        _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+                f" border:none; border-radius:3px; padding:2px 14px; }}"
+                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_HOVER}; }}")
+        self._hist_mode_btn.setStyleSheet(_on)
+        self._live_mode_btn.setStyleSheet(_off)
+        self._history_bar.setVisible(True)
+        self._load_history_range()
+
+    def _load_history_range(self) -> None:
+        from PyQt6.QtCore import QDate
+        fd = self._hist_from_date.date().toPyDate()
+        ft = _dt.time(self._hist_from_time.time().hour(), self._hist_from_time.time().minute())
+        td = self._hist_to_date.date().toPyDate()
+        tt = _dt.time(self._hist_to_time.time().hour(), self._hist_to_time.time().minute(), 59)
+        ts_start = _dt.datetime.combine(fd, ft).timestamp()
+        ts_end   = _dt.datetime.combine(td, tt).timestamp()
+
+        rows: list[dict] = []
+
+        # In-memory entries within range
+        for e in self._entries:
+            if ts_start <= e["ts"] <= ts_end:
+                rows.append(e)
+
+        # DB entries outside in-memory window
+        if self._store:
+            hours = max(1, int((ts_end - ts_start) / 3600) + 1)
+            try:
+                for p in self._store.query_modem_signal_log(hours=hours, limit=10_000):
+                    if ts_start <= float(p.ts) <= ts_end:
+                        rows.append(self._modem_point_to_entry(p))
+            except Exception:
+                pass
+            try:
+                for p in self._store.query_mesh_signal_log(hours=hours, limit=10_000):
+                    if ts_start <= float(p.ts) <= ts_end:
+                        parts = [f"{p.online_count}/{p.unit_count} units online"]
+                        if p.worst_unit and p.worst_rssi is not None:
+                            parts.append(f"worst: {p.worst_unit} {p.worst_rssi:.0f} dBm")
+                        rows.append(self._make_entry(
+                            "mesh", float(p.ts), "Mesh system",
+                            f"{p.online_count}/{p.unit_count} units",
+                            "  ·  ".join(parts), "OK",
+                        ))
+            except Exception:
+                pass
+            try:
+                for row in self._store.query_plugin_log(hours=hours, limit=10_000):
+                    if ts_start <= float(row.get("ts", 0)) <= ts_end:
+                        rows.append(self._plugin_row_to_entry(row))
+            except Exception:
+                pass
+
+        rows.sort(key=lambda e: e["ts"], reverse=True)
+        rows = rows[:_MAX_ROWS]
+
+        filt = self._search_box.text().strip().lower()
+        visible = [
+            e for e in rows
+            if self._is_source_enabled(e["source_key"])
+            and (not filt or self._row_matches(e["row"], filt))
+        ]
+
+        self._table.setRowCount(0)
+        for i, e in enumerate(visible):
+            self._table.insertRow(i)
+            self._set_table_row(i, e)
+
+    # ── LOG-4: export dialog ──────────────────────────────────────────────────
+
+    def _open_export_dialog(self) -> None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Export Log")
+        dlg.setMinimumWidth(340)
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(10)
+        lay.setContentsMargins(16, 16, 16, 12)
+
+        today = _dt.date.today()
+        week_ago = today - _dt.timedelta(days=7)
+
+        row1 = QHBoxLayout()
+        row1.addWidget(QLabel("From:"))
+        start_edit = QDateEdit(dlg)
+        start_edit.setCalendarPopup(True)
+        from PyQt6.QtCore import QDate
+        start_edit.setDate(QDate(week_ago.year, week_ago.month, week_ago.day))
+        row1.addWidget(start_edit)
+        lay.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.addWidget(QLabel("To:"))
+        end_edit = QDateEdit(dlg)
+        end_edit.setCalendarPopup(True)
+        end_edit.setDate(QDate(today.year, today.month, today.day))
+        row2.addWidget(end_edit)
+        lay.addLayout(row2)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText("Export CSV")
+        btns.accepted.connect(lambda: self._do_export(
+            start_edit.date().toPyDate(), end_edit.date().toPyDate(), dlg
+        ))
+        btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
+        dlg.exec()
+
+    def _do_export(self, start: "_dt.date", end: "_dt.date", dlg: QDialog) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Log CSV", f"netsentinel_log_{start}_{end}.csv", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+
+        ts_start = _dt.datetime.combine(start, _dt.time.min).timestamp()
+        ts_end   = _dt.datetime.combine(end,   _dt.time.max).timestamp()
+
+        rows: list[tuple] = []
+
+        # In-memory entries within range
+        for e in self._entries:
+            if ts_start <= e["ts"] <= ts_end:
+                r = e["row"]
+                rows.append((_fmt_ts(e["ts"]), r[1], r[2], r[3], r[4], r[5]))
+
+        # DB entries not yet in memory
+        if self._store:
+            hours = max(1, int((ts_end - ts_start) / 3600) + 1)
+            try:
+                for p in self._store.query_modem_signal_log(hours=hours, limit=10_000):
+                    if ts_start <= float(p.ts) <= ts_end:
+                        e = self._modem_point_to_entry(p)
+                        r = e["row"]
+                        rows.append((_fmt_ts(e["ts"]), r[1], r[2], r[3], r[4], r[5]))
+            except Exception:
+                pass
+            try:
+                for p in self._store.query_mesh_signal_log(hours=hours, limit=10_000):
+                    if ts_start <= float(p.ts) <= ts_end:
+                        parts = [f"{p.online_count}/{p.unit_count} units online"]
+                        if p.worst_unit and p.worst_rssi is not None:
+                            parts.append(f"worst: {p.worst_unit} {p.worst_rssi:.0f} dBm")
+                        rows.append((
+                            _fmt_ts(float(p.ts)), "MESH", "Mesh system",
+                            f"{p.online_count}/{p.unit_count} units",
+                            "  ·  ".join(parts), "OK",
+                        ))
+            except Exception:
+                pass
+            try:
+                for row in self._store.query_plugin_log(hours=hours, limit=10_000):
+                    if ts_start <= float(row.get("ts", 0)) <= ts_end:
+                        e = self._plugin_row_to_entry(row)
+                        r = e["row"]
+                        rows.append((_fmt_ts(e["ts"]), r[1], r[2], r[3], r[4], r[5]))
+            except Exception:
+                pass
+
+        rows.sort(key=lambda r: r[0])
+
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f)
+                w.writerow(["Time", "Source", "Host", "Event", "Detail", "Status"])
+                w.writerows(rows)
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Export failed", str(exc))
+            return
+
+        dlg.accept()
+
+    def update_plugin_sources(self, names: list) -> None:
+        """Rebuild the DB-logging bar rows for active hardware plugins.
+
+        Called by the dashboard after each plugin poll so the bar always
+        reflects the current set of configured plugins.
+        """
+        while self._plugin_db_container_lay.count():
+            item = self._plugin_db_container_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        btn = self._toggle_btns.get("plugin")
+        if btn:
+            btn.setVisible(bool(names))
+
+        self._plugin_db_empty_lbl.setVisible(not bool(names))
+
+        _qs = QSettings("NetSentinel", "NetSentinel")
+        for name in names:
+            qs_key = f"plugin_{name.lower().replace(' ', '_')}"
+            enabled = _qs.value(f"logging/{qs_key}_enabled", False, type=bool)
+
+            row_w = QWidget()
+            row_w.setStyleSheet("background:transparent;")
+            row_l = QHBoxLayout(row_w)
+            row_l.setContentsMargins(0, 0, 0, 0)
+            row_l.setSpacing(8)
+
+            src_lbl = QLabel(f"● {name}")
+            src_lbl.setFixedWidth(120)
+            src_lbl.setStyleSheet(
+                "color:#A78BFA; font-size:11px; font-weight:bold;"
+                " background:transparent; border:none;"
+            )
+            row_l.addWidget(src_lbl)
+
+            db_btn = QPushButton("● Logging to DB" if enabled else "○  Not logging  ")
+            db_btn.setCheckable(True)
+            db_btn.setChecked(enabled)
+            db_btn.setFixedHeight(22)
+            db_btn.setFixedWidth(130)
+            self._style_db_btn(db_btn, enabled)
+            db_btn.clicked.connect(
+                lambda checked, n=name, k=qs_key, b=db_btn:
+                self._on_plugin_db_toggled(n, k, checked, b)
+            )
+            row_l.addWidget(db_btn)
+            row_l.addStretch()
+            self._plugin_db_container_lay.addWidget(row_w)
+
+    def _on_plugin_db_toggled(
+        self, name: str, qs_key: str, checked: bool, btn: QPushButton
+    ) -> None:
+        btn.setText("● Logging to DB" if checked else "○  Not logging  ")
+        self._style_db_btn(btn, checked)
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            f"logging/{qs_key}_enabled", checked
+        )
+        self.logging_active_changed.emit(checked)
+        if checked:
+            self._show_db_feedback(
+                f"{name} data will be saved to your database.", GREEN
+            )
+        else:
+            self._show_db_feedback(
+                f"{name} logging stopped. History recorded so far is preserved.", AMBER
+            )
+
     def _style_toggle(self, btn: QPushButton, enabled: bool, color: str) -> None:
         if enabled:
             btn.setStyleSheet(
@@ -597,7 +1030,31 @@ class LogHubPage(QWidget):
         btn = self._toggle_btns[key]
         btn.setText(f"{'●' if checked else '○'}  {label}")
         self._style_toggle(btn, checked, color)
+        self._sync_all_btn()
         self._apply_filter()
+
+    def _on_all_toggled(self) -> None:
+        for key, btn in self._toggle_btns.items():
+            if not btn.isChecked():
+                btn.setChecked(True)
+                label, color = _SOURCES[key]
+                btn.setText(f"●  {label}")
+                self._style_toggle(btn, True, color)
+        if self._all_btn:
+            self._all_btn.setChecked(True)
+            self._style_toggle(self._all_btn, True, ACCENT)
+        self._apply_filter()
+
+    def _sync_all_btn(self) -> None:
+        if self._all_btn is None:
+            return
+        all_on = all(
+            btn.isChecked()
+            for btn in self._toggle_btns.values()
+            if btn.isVisible()
+        )
+        self._all_btn.setChecked(all_on)
+        self._style_toggle(self._all_btn, all_on, ACCENT)
 
     def _is_source_enabled(self, key: str) -> bool:
         btn = self._toggle_btns.get(key)
@@ -629,6 +1086,14 @@ class LogHubPage(QWidget):
         self._entries.insert(0, e)
         if len(self._entries) > _MAX_ROWS:
             self._entries = self._entries[:_MAX_ROWS]
+            if not self._cap_shown:
+                self._cap_shown = True
+                self._cap_banner.setVisible(True)
+        # Dismiss challenge banner on next entry after it was shown
+        if self._challenge_banner.isVisible() and e["ts"] > self._challenge_banner_ts:
+            self._hide_challenge_banner()
+        if self._is_history_mode:
+            return
         if not self._is_source_enabled(e["source_key"]):
             return
         filt = self._search_box.text().strip().lower()
@@ -741,7 +1206,39 @@ class LogHubPage(QWidget):
                 except Exception:
                     pass
 
+            # Plugin history
+            if self._is_source_enabled("plugin"):
+                try:
+                    for row in self._store.query_plugin_log(hours=168, limit=200):
+                        self._entries.append(self._plugin_row_to_entry(row))
+                except Exception:
+                    pass
+
         self._sort_and_render()
+
+    def _plugin_row_to_entry(self, row: dict) -> dict:
+        ts = float(row.get("ts", _t.time()))
+        data = row.get("data", {})
+        info = data.get("info", {})
+        status = data.get("status", {})
+        name = row.get("plugin_name", "plugin")
+        host = info.get("ip") or name
+        hw_type = info.get("type", "")
+        wan_status = status.get("wan_status", "")
+        clients = data.get("clients", [])
+        extra = status.get("extra", {})
+        detail_parts: list[str] = []
+        if wan_status:
+            detail_parts.append(wan_status)
+        if clients:
+            detail_parts.append(f"{len(clients)} clients")
+        nt = extra.get("network_type", "")
+        if nt:
+            detail_parts.append(nt)
+        event = f"{name}  ·  {hw_type}" if hw_type else name
+        return self._make_entry(
+            "plugin", ts, host, event, "  ·  ".join(detail_parts), wan_status or "",
+        )
 
     def _modem_point_to_entry(self, p) -> dict:
         ts      = float(getattr(p, "ts", _t.time()))
@@ -777,6 +1274,7 @@ class LogHubPage(QWidget):
             if scenario is not None:
                 self._last_live_challenge = now
                 self.live_challenge_detected.emit(scenario)
+                self._show_challenge_banner(_dt.datetime.now().strftime("%H:%M"))
 
         rtt_str  = f"{entry.rtt_ms:.0f}ms" if entry.rtt_ms >= 0 else "—"
         dns_str  = f"DNS {entry.dns_ms:.0f}ms" if entry.dns_ms >= 0 else ""
@@ -839,6 +1337,29 @@ class LogHubPage(QWidget):
         event  = getattr(trap, "trap_type", "")
         detail = getattr(trap, "oid", "")
         self._add_live(self._make_entry("snmp", _t.time(), host, event, detail, ""))
+
+    def add_plugin_entry(self, data: dict) -> None:
+        """Hardware plugin live entry — called from dashboard on each poll result."""
+        info = data.get("info", {})
+        status = data.get("status", {})
+        name = info.get("name", "plugin")
+        host = info.get("ip") or name
+        hw_type = info.get("type", "")
+        wan_status = status.get("wan_status", "")
+        clients = data.get("clients", [])
+        extra = status.get("extra", {})
+        detail_parts: list[str] = []
+        if wan_status:
+            detail_parts.append(wan_status)
+        if clients:
+            detail_parts.append(f"{len(clients)} clients")
+        nt = extra.get("network_type", "")
+        if nt:
+            detail_parts.append(nt)
+        event = f"{name}  ·  {hw_type}" if hw_type else name
+        self._add_live(self._make_entry(
+            "plugin", _t.time(), host, event, "  ·  ".join(detail_parts), wan_status or "",
+        ))
 
     def show_network_log(self) -> None:
         """Ensure Network RTT source is visible and scroll to top."""

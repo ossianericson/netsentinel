@@ -62,6 +62,8 @@ class HomePage(QWidget):
     start_monitoring_requested = pyqtSignal()
     #: Emitted when the user clicks "Investigate →" on a live challenge suggestion.
     investigate_live_requested = pyqtSignal()
+    #: Emitted when the user clicks an alert row; carries the raw alert object.
+    alert_view_requested = pyqtSignal(object)
 
     # ── _MiniCard ─────────────────────────────────────────────────────────────
 
@@ -155,10 +157,15 @@ class HomePage(QWidget):
     class _AlertRow(QFrame):
         """Single row in the recent-alerts strip."""
 
+        clicked = pyqtSignal(object)  # carries the raw alert object
+
         def __init__(self, colour: str, msg: str, time_str: str,
+                     alert: object = None,
                      parent: QWidget | None = None) -> None:
             super().__init__(parent)
+            self._alert = alert
             self.setFixedHeight(28)
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
             self.setStyleSheet("QFrame { background:transparent; border:none; }")
             lay = QHBoxLayout(self)
             lay.setContentsMargins(0, 0, 0, 0)
@@ -190,6 +197,10 @@ class HomePage(QWidget):
             lay.addWidget(msg_lbl, 1)
             lay.addWidget(time_lbl)
 
+        def mousePressEvent(self, event) -> None:  # type: ignore[override]
+            self.clicked.emit(self._alert)
+            super().mousePressEvent(event)
+
     # ── Constructor ───────────────────────────────────────────────────────────
 
     def __init__(self, store=None, parent: QWidget | None = None) -> None:
@@ -198,6 +209,11 @@ class HomePage(QWidget):
         self._alert_count = 0
         self._device_count: int = 0
         self._signals_connected: bool = False
+        self._first_run_mode: bool = False
+        self._recurring_mode: bool = False
+        self._current_grade: str = ""
+        self._last_scan_ts: "datetime.datetime | None" = None
+        self._sheet_action_target: str = "Notifications"
         self._dashboard_url = "http://localhost:8765/dashboard"
         self._setup_ui()
         if self._store is not None:
@@ -388,6 +404,80 @@ class HomePage(QWidget):
         lv_lay.addWidget(self._lv_text, 1)
         lay.addWidget(self._last_visit_card)
 
+        # ── Recurring-user top section (hidden until conditions met) ──────────
+        self._recurring_section = QFrame()
+        self._recurring_section.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._recurring_section.setVisible(False)
+        _rec_outer = QVBoxLayout(self._recurring_section)
+        _rec_outer.setContentsMargins(14, 10, 14, 12)
+        _rec_outer.setSpacing(8)
+
+        _rec_mon_hdr = QLabel("MONITORING STATUS")
+        _rec_mon_hdr.setStyleSheet(
+            f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; letter-spacing:1.5px;"
+        )
+        _rec_outer.addWidget(_rec_mon_hdr)
+
+        # Pill row — separate instances synced by set_monitor_pills()
+        _rec_pills_row = QHBoxLayout()
+        _rec_pills_row.setSpacing(6)
+        _rec_pills_row.setContentsMargins(0, 0, 0, 0)
+
+        def _rec_pill(label: str, target: str) -> QPushButton:
+            b = QPushButton(f"○  {label}")
+            b.setFixedHeight(22)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet(
+                f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:10px;"
+                f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+            )
+            b.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
+            return b
+
+        self._rec_pill_arp    = _rec_pill("ARP Watch",       "ARP Spoof Watch")
+        self._rec_pill_dhcp   = _rec_pill("DHCP Watch",      "DHCP Rogue Monitor")
+        self._rec_pill_storm  = _rec_pill("Broadcast Storm", "Broadcast Storm")
+        self._rec_pill_logger = _rec_pill("Network Logger",  "Logs")
+        for _rp in (self._rec_pill_arp, self._rec_pill_dhcp,
+                    self._rec_pill_storm, self._rec_pill_logger):
+            _rec_pills_row.addWidget(_rp)
+        _rec_pills_row.addStretch()
+        _rec_outer.addLayout(_rec_pills_row)
+
+        # Grade + last scan + rescan row
+        _rec_status_row = QHBoxLayout()
+        _rec_status_row.setSpacing(12)
+        _rec_status_row.setContentsMargins(0, 0, 0, 0)
+        self._rec_grade_lbl = QLabel("Network Grade: –")
+        self._rec_grade_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:600; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+        self._rec_scan_time_lbl = QLabel("Last scan: –")
+        self._rec_scan_time_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        self._btn_rescan_compact = QPushButton("▶  Rescan")
+        self._btn_rescan_compact.setFixedHeight(26)
+        self._btn_rescan_compact.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_rescan_compact.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 10px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}22; border-color:{ACCENT}; }}"
+        )
+        _rec_status_row.addWidget(self._rec_grade_lbl)
+        _rec_status_row.addWidget(self._rec_scan_time_lbl)
+        _rec_status_row.addStretch()
+        _rec_status_row.addWidget(self._btn_rescan_compact)
+        _rec_outer.addLayout(_rec_status_row)
+
+        lay.addWidget(self._recurring_section)
+
         # ── Hero card ─────────────────────────────────────────────────────────
         hero = QFrame()
         hero.setStyleSheet(
@@ -499,16 +589,85 @@ class HomePage(QWidget):
 
         lay.addWidget(search_card)
 
+        # ── Post-scan summary sheet (NUX-2, one-time) ─────────────────────────
+        self._post_scan_sheet = QFrame()
+        self._post_scan_sheet.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._post_scan_sheet.setVisible(False)
+        _sheet_lay = QVBoxLayout(self._post_scan_sheet)
+        _sheet_lay.setContentsMargins(14, 10, 14, 10)
+        _sheet_lay.setSpacing(6)
+
+        _sheet_hdr = QHBoxLayout()
+        _sheet_hdr.setSpacing(0)
+        _sheet_title_lbl = QLabel("Your network at a glance")
+        _sheet_title_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        _sheet_hdr.addWidget(_sheet_title_lbl)
+        _sheet_hdr.addStretch()
+        _sheet_x = QPushButton("×")
+        _sheet_x.setFixedSize(20, 20)
+        _sheet_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        _sheet_x.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        _sheet_x.clicked.connect(self._dismiss_post_scan_sheet)
+        _sheet_hdr.addWidget(_sheet_x)
+        _sheet_lay.addLayout(_sheet_hdr)
+
+        self._sheet_stats_lbl = QLabel("")
+        self._sheet_stats_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _sheet_lay.addWidget(self._sheet_stats_lbl)
+
+        _sheet_cta = QHBoxLayout()
+        _sheet_cta.setSpacing(16)
+        self._sheet_grade_btn = QPushButton("Run a Network Grade →")
+        self._sheet_grade_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sheet_grade_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
+            f" font-size:11px; padding:0; }}"
+            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+        )
+        self._sheet_grade_btn.clicked.connect(
+            lambda: self.navigate_to.emit("Network Grade")
+        )
+        _sheet_cta.addWidget(self._sheet_grade_btn)
+        self._sheet_action_btn = QPushButton("Set up notifications →")
+        self._sheet_action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sheet_action_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
+            f" font-size:11px; padding:0; }}"
+            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+        )
+        self._sheet_action_btn.clicked.connect(
+            lambda: self.navigate_to.emit(self._sheet_action_target)
+        )
+        _sheet_cta.addWidget(self._sheet_action_btn)
+        _sheet_cta.addStretch()
+        _sheet_lay.addLayout(_sheet_cta)
+        lay.addWidget(self._post_scan_sheet)
+
         # ── "Three things" section label ──────────────────────────────────────
-        _sec1 = QLabel("THE THREE THINGS THAT MATTER")
-        _sec1.setStyleSheet(
+        self._sec1_lbl = QLabel("THE THREE THINGS THAT MATTER")
+        self._sec1_lbl.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
             " border:none; padding-top:4px; letter-spacing:1px;"
         )
-        lay.addWidget(_sec1)
+        lay.addWidget(self._sec1_lbl)
 
         # ── Mini-card row — three equal-width columns ────────────────────────
-        card_row = QHBoxLayout()
+        self._mini_cards_widget = QWidget()
+        self._mini_cards_widget.setStyleSheet("background:transparent;")
+        card_row = QHBoxLayout(self._mini_cards_widget)
+        card_row.setContentsMargins(0, 0, 0, 0)
         card_row.setSpacing(8)
         self._speed_card     = HomePage._MiniCard("\u26a1", "Speed",     "\u2013", "\u2013")
         self._stability_card = HomePage._MiniCard("\u25ce", "Stability", "\u2013", "\u2013")
@@ -521,22 +680,72 @@ class HomePage(QWidget):
             lambda: self.navigate_to.emit("DNS & Stability"))
         self._devices_card.clicked.connect(
             lambda: self.navigate_to.emit("Devices"))
-        lay.addLayout(card_row)
+        lay.addWidget(self._mini_cards_widget)
+
+        # ── Monitoring status pills (NUX-3) ───────────────────────────────────
+        self._monitoring_pills_row = QWidget()
+        self._monitoring_pills_row.setStyleSheet("background:transparent;")
+        _pills_lay = QHBoxLayout(self._monitoring_pills_row)
+        _pills_lay.setContentsMargins(0, 4, 0, 0)
+        _pills_lay.setSpacing(6)
+
+        _pills_hdr = QLabel("MONITORING")
+        _pills_hdr.setStyleSheet(
+            f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; letter-spacing:1px;"
+        )
+        _pills_lay.addWidget(_pills_hdr)
+        _pills_lay.addSpacing(4)
+
+        def _pill(label: str, target: str) -> QPushButton:
+            b = QPushButton(f"○  {label}")
+            b.setFixedHeight(22)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet(
+                f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
+                f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            )
+            b.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
+            return b
+
+        self._pill_arp    = _pill("ARP Watch",       "ARP Spoof Watch")
+        self._pill_dhcp   = _pill("DHCP Watch",      "DHCP Rogue Monitor")
+        self._pill_storm  = _pill("Broadcast Storm", "Broadcast Storm")
+        self._pill_logger = _pill("Network Logger",  "Logs")
+        for _p in (self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger):
+            _pills_lay.addWidget(_p)
+        _pills_lay.addStretch()
+        lay.addWidget(self._monitoring_pills_row)
+
+        self._monitoring_nudge = QLabel(
+            "Monitoring is off — turn it on in 10 seconds →"
+        )
+        self._monitoring_nudge.setVisible(False)
+        self._monitoring_nudge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._monitoring_nudge.setStyleSheet(
+            f"font-size:11px; color:{AMBER}; background:transparent;"
+            " border:none; padding-top:2px;"
+        )
+        self._monitoring_nudge.mousePressEvent = (  # type: ignore[method-assign]
+            lambda _e: self._scroll_to_setup_card()
+        )
+        lay.addWidget(self._monitoring_nudge)
 
         # ── Stability monitoring card ─────────────────────────────────────────
-        _sec_mon = QLabel("STABILITY MONITORING")
-        _sec_mon.setStyleSheet(
+        self._sec_mon_lbl = QLabel("STABILITY MONITORING")
+        self._sec_mon_lbl.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
             " border:none; padding-top:4px; letter-spacing:1px;"
         )
-        lay.addWidget(_sec_mon)
+        lay.addWidget(self._sec_mon_lbl)
 
-        mon_card = QFrame()
-        mon_card.setStyleSheet(
+        self._mon_card = QFrame()
+        self._mon_card.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
-        mon_lay = QHBoxLayout(mon_card)
+        mon_lay = QHBoxLayout(self._mon_card)
         mon_lay.setContentsMargins(14, 10, 14, 10)
         mon_lay.setSpacing(10)
 
@@ -576,7 +785,7 @@ class HomePage(QWidget):
         mon_lay.addWidget(self._mon_status_lbl, 1)
         mon_lay.addWidget(self._btn_mon_start)
         mon_lay.addWidget(self._btn_mon_view)
-        lay.addWidget(mon_card)
+        lay.addWidget(self._mon_card)
 
         # ── Post-scan results strip (hidden until first scan completes) ────────
         self._results_strip = QFrame()
@@ -658,21 +867,41 @@ class HomePage(QWidget):
         self._suggestions_inner.setSpacing(4)
         lay.addWidget(self._suggestions_card)
 
-        # ── Recent alerts section label ───────────────────────────────────────
-        _sec2 = QLabel("RECENT ALERTS")
-        _sec2.setStyleSheet(
+        # ── Recent alerts section label (+ "View all →" in recurring mode) ────
+        self._alerts_hdr_row = QWidget()
+        self._alerts_hdr_row.setStyleSheet("background:transparent;")
+        _ahr_lay = QHBoxLayout(self._alerts_hdr_row)
+        _ahr_lay.setContentsMargins(0, 4, 0, 0)
+        _ahr_lay.setSpacing(0)
+        self._sec2_lbl = QLabel("RECENT ALERTS")
+        self._sec2_lbl.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-            " border:none; padding-top:4px; letter-spacing:1px;"
+            " border:none; letter-spacing:1px;"
         )
-        lay.addWidget(_sec2)
+        self._btn_view_all_alerts = QPushButton("View all →")
+        self._btn_view_all_alerts.setFlat(True)
+        self._btn_view_all_alerts.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_view_all_alerts.setVisible(False)
+        self._btn_view_all_alerts.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:#1a6fc4; }}"
+        )
+        self._btn_view_all_alerts.clicked.connect(
+            lambda: self.navigate_to.emit("Notifications")
+        )
+        _ahr_lay.addWidget(self._sec2_lbl)
+        _ahr_lay.addStretch()
+        _ahr_lay.addWidget(self._btn_view_all_alerts)
+        lay.addWidget(self._alerts_hdr_row)
 
         # ── Alert card ────────────────────────────────────────────────────────
-        alert_card = QFrame()
-        alert_card.setStyleSheet(
+        self._alert_card = QFrame()
+        self._alert_card.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
-        self._alert_inner = QVBoxLayout(alert_card)
+        self._alert_inner = QVBoxLayout(self._alert_card)
         self._alert_inner.setContentsMargins(12, 8, 12, 8)
         self._alert_inner.setSpacing(2)
 
@@ -690,7 +919,94 @@ class HomePage(QWidget):
             " background:transparent; border:none;"
         )
         self._alert_inner.addWidget(self._no_other_alerts_lbl)
-        lay.addWidget(alert_card)
+        lay.addWidget(self._alert_card)
+
+        # ── Setup checklist card (NUX-4) ──────────────────────────────────────
+        self._setup_card = QFrame()
+        self._setup_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        _sc_outer = QVBoxLayout(self._setup_card)
+        _sc_outer.setContentsMargins(12, 8, 12, 10)
+        _sc_outer.setSpacing(0)
+
+        # Header row — shows "Setup" or "✓ Setup complete" chip; clickable to collapse
+        self._setup_collapsed = False
+        _sc_hdr_row = QHBoxLayout()
+        _sc_hdr_row.setSpacing(8)
+        self._setup_hdr_lbl = QLabel("SETUP CHECKLIST")
+        self._setup_hdr_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none; letter-spacing:1px;"
+        )
+        self._setup_progress_lbl = QLabel("0/5 done")
+        self._setup_progress_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        _sc_collapse_btn = QPushButton("▼")
+        _sc_collapse_btn.setFixedSize(18, 18)
+        _sc_collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _sc_collapse_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:10px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._setup_collapse_btn = _sc_collapse_btn
+        _sc_collapse_btn.clicked.connect(self._setup_toggle_collapse)
+        _sc_hdr_row.addWidget(self._setup_hdr_lbl)
+        _sc_hdr_row.addWidget(self._setup_progress_lbl)
+        _sc_hdr_row.addStretch()
+        _sc_hdr_row.addWidget(_sc_collapse_btn)
+        _sc_outer.addLayout(_sc_hdr_row)
+
+        # Body — checklist rows
+        self._setup_body = QWidget()
+        self._setup_body.setStyleSheet("background:transparent;")
+        _sc_body_lay = QVBoxLayout(self._setup_body)
+        _sc_body_lay.setContentsMargins(0, 6, 0, 0)
+        _sc_body_lay.setSpacing(5)
+
+        _setup_steps = [
+            ("Run your first scan",        "Devices"),
+            ("Turn on ARP Spoof Watch",    "ARP Spoof Watch"),
+            ("Add a notification channel", "Notifications"),
+            ("Enable at least one alert rule", "Notifications"),
+            ("Run a Network Grade",        "Network Grade"),
+        ]
+        self._setup_check_lbls: list[QLabel] = []
+        for title, target in _setup_steps:
+            _row = QWidget()
+            _row.setStyleSheet("background:transparent;")
+            _rl = QHBoxLayout(_row)
+            _rl.setContentsMargins(0, 0, 0, 0)
+            _rl.setSpacing(8)
+            _chk = QLabel("○")
+            _chk.setFixedWidth(14)
+            _chk.setStyleSheet(
+                f"font-size:12px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+            self._setup_check_lbls.append(_chk)
+            _step_lbl = QLabel(title)
+            _step_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            _nav_btn = QPushButton("→")
+            _nav_btn.setFlat(True)
+            _nav_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            _nav_btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                f" border:none; padding:0; }}"
+                f"QPushButton:hover {{ color:#1a6fc4; }}"
+            )
+            _nav_btn.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
+            _rl.addWidget(_chk)
+            _rl.addWidget(_step_lbl, 1)
+            _rl.addWidget(_nav_btn)
+            _sc_body_lay.addWidget(_row)
+
+        _sc_outer.addWidget(self._setup_body)
+        lay.addWidget(self._setup_card)
 
         # ── Quick tips card (dismissible; hidden once user dismisses) ──────────
         self._tips_card = QFrame()
@@ -846,6 +1162,10 @@ class HomePage(QWidget):
             self._tips_card.setVisible(True)
         else:
             self._tips_card.setVisible(False)
+        self.refresh_checklist()
+        self._check_recurring_mode()
+        if self._recurring_mode:
+            self._update_recurring_scan_time()
 
     def _open_dashboard(self) -> None:
         QDesktopServices.openUrl(QUrl(self._dashboard_url))
@@ -860,9 +1180,246 @@ class HomePage(QWidget):
         QSettings("NetSentinel", "NetSentinel").setValue("home/tips_dismissed", True)
         self._tips_card.setVisible(False)
 
+    def _dismiss_post_scan_sheet(self) -> None:
+        self._post_scan_sheet.setVisible(False)
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            "home/post_scan_sheet_dismissed", True
+        )
+        # Show nudge if all monitoring pills are still off
+        if not any(p.text().startswith("●") for p in (
+            self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger
+        )):
+            self._monitoring_nudge.setVisible(True)
+
+    def _maybe_show_post_scan_sheet(
+        self, n_total: int, n_new: int, n_at_risk: int
+    ) -> None:
+        if QSettings("NetSentinel", "NetSentinel").value(
+            "home/post_scan_sheet_dismissed", False, type=bool
+        ):
+            return
+        n_recognized = n_total - n_new
+        parts = [f"{n_total} device{'s' if n_total != 1 else ''} found"]
+        if n_new:
+            parts.append(f"{n_new} new")
+        if n_recognized and n_new:
+            parts.append(f"{n_recognized} recognized")
+        self._sheet_stats_lbl.setText("  ·  ".join(parts))
+        if self._current_grade:
+            self._sheet_grade_btn.setText(
+                f"Network Grade: {self._current_grade}  →"
+            )
+        else:
+            self._sheet_grade_btn.setText("Run a Network Grade →")
+        if n_at_risk > 0:
+            self._sheet_action_btn.setText("Check unknown devices →")
+            self._sheet_action_target = "Devices"
+        else:
+            self._sheet_action_btn.setText("Set up notifications →")
+            self._sheet_action_target = "Notifications"
+        self._post_scan_sheet.setVisible(True)
+
+    def _set_first_run_mode(self, on: bool) -> None:
+        """Show/hide secondary sections based on whether any devices have been scanned."""
+        self._first_run_mode = on
+        for w in (
+            self._sec1_lbl, self._mini_cards_widget,
+            self._monitoring_pills_row, self._monitoring_nudge,
+            self._sec_mon_lbl, self._mon_card,
+            self._alerts_hdr_row, self._alert_card,
+        ):
+            w.setVisible(not on)
+        if on:
+            self._hero_title.setText("Discover your network")
+            self._hero_sub.setText(
+                "See every device, check your security score, and start monitoring"
+                " — takes about 30 seconds."
+                "   ·   Try Ctrl+K to find any feature instantly."
+            )
+            self._suggestions_sec.setVisible(False)
+            self._suggestions_card.setVisible(False)
+            self._tips_card.setVisible(False)
+
+    # ── Recurring-user layout ─────────────────────────────────────────────────
+
+    def _check_recurring_mode(self) -> None:
+        """Activate recurring layout if setup is complete and ≥5 scans recorded."""
+        if self._first_run_mode or self._recurring_mode:
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        scan_count = int(qs.value("home/scan_count", 0))
+        if scan_count >= 5 and all(self._checklist_states()):
+            self._apply_recurring_layout(True)
+
+    def _apply_recurring_layout(self, on: bool) -> None:
+        """Toggle between new-user and recurring-user Home layout."""
+        if self._recurring_mode == on:
+            return
+        self._recurring_mode = on
+        # Recurring top section: prominent monitoring status + grade/rescan
+        self._recurring_section.setVisible(on)
+        # Big scan button → compact rescan link
+        self._btn_scan.setVisible(not on)
+        self._btn_rescan_compact.setVisible(on)
+        # Existing monitoring pills row is duplicated in recurring section
+        self._monitoring_pills_row.setVisible(not on)
+        self._monitoring_nudge.setVisible(False)
+        # "View all →" next to Recent Alerts
+        self._btn_view_all_alerts.setVisible(on)
+        if on:
+            # Refresh recurring section display
+            self._update_recurring_grade_display()
+            self._update_recurring_scan_time()
+
+    def _update_recurring_grade_display(self) -> None:
+        if not hasattr(self, "_rec_grade_lbl"):
+            return
+        if self._current_grade:
+            from ui.styles import GREEN as _G, AMBER as _A, RED as _R
+            color = _G if self._current_grade in ("A", "B") else (
+                _A if self._current_grade == "C" else _R
+            )
+            self._rec_grade_lbl.setText(f"Network Grade: {self._current_grade}")
+            self._rec_grade_lbl.setStyleSheet(
+                f"font-size:11px; font-weight:600; color:{color};"
+                " background:transparent; border:none;"
+            )
+        else:
+            self._rec_grade_lbl.setText("Network Grade: –")
+
+    def _update_recurring_scan_time(self) -> None:
+        if not hasattr(self, "_rec_scan_time_lbl"):
+            return
+        if self._last_scan_ts is None:
+            self._rec_scan_time_lbl.setText("Last scan: –")
+            return
+        delta = datetime.datetime.now() - self._last_scan_ts
+        mins = int(delta.total_seconds() / 60)
+        if mins < 1:
+            self._rec_scan_time_lbl.setText("Last scan: just now")
+        elif mins < 60:
+            self._rec_scan_time_lbl.setText(f"Last scan: {mins} min ago")
+        else:
+            hrs = mins // 60
+            self._rec_scan_time_lbl.setText(f"Last scan: {hrs}h ago")
+
     def _update_scan_button_label(self) -> None:
         label = "▶  Scan Network" if self._device_count == 0 else "▶  Rescan"
         self._btn_scan.setText(label)
+
+    def set_monitor_pills(
+        self, arp: bool, dhcp: bool, storm: bool, logger: bool
+    ) -> None:
+        """Update monitoring pill badges. Called by dashboard on worker state changes."""
+        _pill_map = [
+            (self._pill_arp,    arp,    "ARP Watch"),
+            (self._pill_dhcp,   dhcp,   "DHCP Watch"),
+            (self._pill_storm,  storm,  "Broadcast Storm"),
+            (self._pill_logger, logger, "Network Logger"),
+        ]
+        for btn, active, label in _pill_map:
+            if active:
+                btn.setText(f"●  {label}")
+                btn.setStyleSheet(
+                    f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                    f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
+                    f" padding:1px 10px; }}"
+                    f"QPushButton:hover {{ background:{GREEN}44; }}"
+                )
+            else:
+                btn.setText(f"○  {label}")
+                btn.setStyleSheet(
+                    f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
+                    f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                    f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+                )
+        if any([arp, dhcp, storm, logger]):
+            self._monitoring_nudge.setVisible(False)
+        # Sync recurring section pills
+        _rec_map = [
+            (self._rec_pill_arp,    arp,    "ARP Watch"),
+            (self._rec_pill_dhcp,   dhcp,   "DHCP Watch"),
+            (self._rec_pill_storm,  storm,  "Broadcast Storm"),
+            (self._rec_pill_logger, logger, "Network Logger"),
+        ]
+        for rbtn, active, rlabel in _rec_map:
+            if active:
+                rbtn.setText(f"●  {rlabel}")
+                rbtn.setStyleSheet(
+                    f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                    f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
+                    f" padding:1px 10px; }}"
+                    f"QPushButton:hover {{ background:{GREEN}44; }}"
+                )
+            else:
+                rbtn.setText(f"○  {rlabel}")
+                rbtn.setStyleSheet(
+                    f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:10px;"
+                    f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                    f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+                )
+
+    def _scroll_to_setup_card(self) -> None:
+        """Scroll to / expand the setup checklist card (NUX-4)."""
+        if not hasattr(self, "_setup_card"):
+            return
+        self._setup_card.setVisible(True)
+        if self._setup_collapsed:
+            self._setup_toggle_collapse()
+
+    # ── NUX-4 setup checklist ─────────────────────────────────────────────────
+
+    def _setup_toggle_collapse(self) -> None:
+        self._setup_collapsed = not self._setup_collapsed
+        self._setup_body.setVisible(not self._setup_collapsed)
+        self._setup_collapse_btn.setText("▶" if self._setup_collapsed else "▼")
+
+    def _checklist_states(self) -> list[bool]:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        scan_done  = self._device_count > 0
+        arp_done   = qs.value("home/setup/arp_started", False, type=bool)
+        channel_done = any(
+            qs.value(k, False, type=bool)
+            for k in qs.allKeys()
+            if k.startswith("notif/") and k.endswith("_enabled")
+        )
+        rule_done  = qs.value("notif/any_rule_enabled", False, type=bool)
+        grade_done = qs.value("grade/last_run", False, type=bool)
+        return [scan_done, arp_done, channel_done, rule_done, grade_done]
+
+    def refresh_checklist(self) -> None:
+        """Re-read step states and update checklist UI. Call from showEvent and cycle_done."""
+        if not hasattr(self, "_setup_check_lbls"):
+            return
+        states = self._checklist_states()
+        done_count = sum(states)
+        for chk, done in zip(self._setup_check_lbls, states):
+            if done:
+                chk.setText("✓")
+                chk.setStyleSheet(
+                    f"font-size:12px; color:{GREEN}; background:transparent; border:none;"
+                )
+            else:
+                chk.setText("○")
+                chk.setStyleSheet(
+                    f"font-size:12px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                )
+        self._setup_progress_lbl.setText(f"{done_count}/5 done")
+        all_done = done_count == 5
+        if all_done:
+            self._setup_hdr_lbl.setText("✓ SETUP COMPLETE")
+            self._setup_hdr_lbl.setStyleSheet(
+                f"font-size:10px; color:{GREEN}; background:transparent;"
+                " border:none; letter-spacing:1px;"
+            )
+            if not self._setup_collapsed:
+                self._setup_toggle_collapse()
+        else:
+            self._setup_hdr_lbl.setText("SETUP CHECKLIST")
+            self._setup_hdr_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+                " border:none; letter-spacing:1px;"
+            )
 
     def set_scanning(self, running: bool) -> None:
         self._btn_scan.setEnabled(not running)
@@ -918,10 +1475,7 @@ class HomePage(QWidget):
         except Exception:
             pass
         if self._device_count == 0:
-            self._hero_sub.setText(
-                "Press ▶ Scan Network to discover your devices — takes about 30 seconds."
-                "   ·   Try Ctrl+K to find any feature instantly."
-            )
+            self._set_first_run_mode(True)
 
     # ── Public slots ──────────────────────────────────────────────────────────
 
@@ -930,9 +1484,12 @@ class HomePage(QWidget):
         """Refresh devices and stability cards from an availability cycle result."""
         devices = result.get("devices", [])
         rtts = result.get("rtts", {})
+        n_total = len(devices)
+        was_first_run = self._first_run_mode
+        if n_total > 0 and self._first_run_mode:
+            self._set_first_run_mode(False)
 
         # Devices card
-        n_total = len(devices)
         n_at_risk = sum(
             1 for d in devices
             if d.get("risk_level", "UNKNOWN") in ("HIGH", "UNKNOWN")
@@ -1029,6 +1586,18 @@ class HomePage(QWidget):
 
             self._results_strip.setVisible(True)
 
+        if was_first_run and n_total > 0:
+            self._maybe_show_post_scan_sheet(n_total, n_new, n_at_risk)
+        self.refresh_checklist()
+        if n_total > 0:
+            self._last_scan_ts = datetime.datetime.now()
+            qs = QSettings("NetSentinel", "NetSentinel")
+            qs.setValue("home/scan_count", int(qs.value("home/scan_count", 0)) + 1)
+            if self._recurring_mode:
+                self._update_recurring_scan_time()
+            else:
+                self._check_recurring_mode()
+
     @pyqtSlot(object)
     def on_speed_result(self, result) -> None:
         """Refresh the speed mini-card from a SpeedTestResult."""
@@ -1063,7 +1632,8 @@ class HomePage(QWidget):
         msg = str(getattr(alert, "message", alert))
         colour = RED if any(k in severity.upper() for k in ("HIGH", "CRITICAL")) else AMBER
         time_str = datetime.datetime.now().strftime("%H:%M")
-        row = HomePage._AlertRow(colour, msg[:80], time_str)
+        row = HomePage._AlertRow(colour, msg[:80], time_str, alert=alert)
+        row.clicked.connect(self.alert_view_requested.emit)
         # Insert before the footer labels (at index 0 — top of list)
         self._alert_inner.insertWidget(0, row)
         self._alert_count += 1
@@ -1187,6 +1757,7 @@ class HomePage(QWidget):
 
     def on_grade(self, grade: str, score: float) -> None:  # noqa: ARG002
         """Update the hero grade circle text and colour."""
+        self._current_grade = grade
         if grade in ("A", "B"):
             colour = GREEN
         elif grade == "C":
@@ -1199,6 +1770,8 @@ class HomePage(QWidget):
             f" border:3px solid {colour}; border-radius:34px;"
             f" background:{BG_CARD};"
         )
+        if self._recurring_mode:
+            self._update_recurring_grade_display()
 
 
 # ── Standard mode welcome page ────────────────────────────────────────────────
