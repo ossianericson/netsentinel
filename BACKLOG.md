@@ -169,7 +169,6 @@ The following were built in the plugin data-flow sprint and are done:
 | VC2 | N/A | The Standard nav (QListWidget) that had emoji icons is permanently hidden (`setVisible(False)`) — the rail nav uses string-based icon names, not emoji. No visible inconsistency in the live UI. |
 | HW6 | N/A | ZTE MC889 and TP-Link Deco pages are background data handlers — never shown in the nav. They coexist with the plugin system without conflict. No migration needed. |
 | SK1 | ✅ Done | `_add_skeleton_rows()` inserts 8 muted "—" placeholder rows into the Devices table at scan start. Result handler calls `setRowCount(0)` which clears them naturally. |
-| A11Y | — | "Abyss" WCAG AA theme. Not yet implemented. |
 | KBD | ✅ Done | Help panel gains a permanent `_help_shortcuts_lbl` showing Ctrl+K/R/E/Q, F5, Escape, Right-click, Ctrl+Shift+M. Panel always opens on click (no "go to Feature Guide" fallback); on pages without page-specific tips, tip bar reads "Keyboard Shortcuts ▾". |
 | 802 | ✅ Done | Passive 802.11 monitor mode capture — WiFiMonitorPage + WiFiMonitorWorker. Interface selector, Start/Stop, live frame table (Time, Frame Type, Source MAC, SSID, Destination). Falls back silently via `unsupported` signal. Added to Analysis rail section, Feature Guide (Security group), and smoke test. |
 
