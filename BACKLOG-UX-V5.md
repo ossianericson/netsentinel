@@ -121,7 +121,7 @@ No tile shows "No data" for data that was produced in the same session.
 
 ---
 
-### AUDIT-6 — Diagnosis CTA_MAP — all 10 nav targets resolve
+### AUDIT-6 — Diagnosis CTA_MAP — all 10 nav targets resolve ✅
 
 **What to verify**: `diagnosis_page.py` has a `_CTA_MAP` with 10 finding categories
 mapped to nav targets. Click "Navigate →" on a finding card for each category and confirm
@@ -137,7 +137,7 @@ wrong page or produce no navigation.
 
 ---
 
-### AUDIT-7 — FLOW-2 alert row click routing — all 4 targets
+### AUDIT-7 — FLOW-2 alert row click routing — all 4 targets ✅
 
 **What to verify**: In notifications_page, clicking an alert row routes by rule prefix:
 - `PORT_SCAN` → Port Scan page
@@ -157,7 +157,7 @@ row-select finds the device when the IP is known.
 
 ---
 
-### AUDIT-8 — Device popover → Inventory "View in Inventory" flow
+### AUDIT-8 — Device popover → Inventory "View in Inventory" flow ✅
 
 **What to verify**: Right-clicking a device IP in Connections, Threat Intel, CVE, or
 Log Hub opens the `DevicePopover`. The popover has a "View in Inventory" button.
@@ -177,7 +177,7 @@ the correct row. Graceful no-op if device not in table.
 
 ---
 
-### AUDIT-9 — Home "Action needed" card hide/show lifecycle
+### AUDIT-9 — Home "Action needed" card hide/show lifecycle ✅
 
 **What to verify**: The "Action needed" card (DASH-1) is shown when there are
 unacknowledged alerts or offline unlabelled devices, and hidden when both are zero.
@@ -197,7 +197,7 @@ current. Card never shows "0 alerts" when there are zero.
 
 ---
 
-### AUDIT-10 — Delivery log retry actually resends
+### AUDIT-10 — Delivery log retry actually resends ✅
 
 **What to verify**: In notifications_page, the delivery log has a retry panel for failed
 rows (NOTIF-4). Clicking Retry on a failed delivery should call

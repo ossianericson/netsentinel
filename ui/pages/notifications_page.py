@@ -293,6 +293,8 @@ class NotificationsPage(QWidget):
     navigate_to              = pyqtSignal(str)
     view_in_log_hub          = pyqtSignal(float, str)  # (alert_ts, source_key) — TIME-2 passthrough
     automation_rule_requested = pyqtSignal(str, str)   # (rule_name, match_value)
+    select_inventory_device  = pyqtSignal(str)         # ip/mac — navigate + select row
+    alert_acknowledged       = pyqtSignal()            # emitted after drawer acks; Home card refresh
     _test_done               = pyqtSignal(str, str)   # (channel_key, html_result)
 
     def __init__(self, router=None, parent: QWidget | None = None):
@@ -1676,6 +1678,7 @@ class NotificationsPage(QWidget):
     def _on_drawer_acknowledged(self, alert_id: int) -> None:
         """ALERT-1: refresh alert history after the drawer acks an alert."""
         self._refresh_alert_history()
+        self.alert_acknowledged.emit()
 
     def _on_alert_history_row_clicked(self, item: "QTableWidgetItem") -> None:
         """NOTIF-6: double-click an alert row to navigate to the relevant page."""
@@ -1686,16 +1689,21 @@ class NotificationsPage(QWidget):
         if not isinstance(alert, dict):
             return
         rule = alert.get("rule_name", "")
+        host = alert.get("host") or alert.get("ip") or ""
         if "Port Scan" in rule or "PORT_SCAN" in rule:
             self.navigate_to.emit("Port Scan (TCP)")
         elif "THREAT_INTEL" in rule or "CVE" in rule or "Cert" in rule:
-            self.navigate_to.emit("Threat Intelligence")
+            self.navigate_to.emit("Threat Intel")
         elif "RATE_SPIKE" in rule or "Bandwidth" in rule:
             self.navigate_to.emit("Live Bandwidth")
         elif "ARP" in rule:
             self.navigate_to.emit("ARP Spoof Watch")
         elif "DHCP" in rule:
             self.navigate_to.emit("DHCP Rogue Monitor")
+        elif any(k in rule for k in ("HOST_DOWN", "DEVICE_GONE", "DEVICE_")):
+            self.navigate_to.emit("Inventory Changes")
+            if host:
+                self.select_inventory_device.emit(host)
         else:
             self.navigate_to.emit("Notifications")
 
