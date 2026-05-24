@@ -575,7 +575,7 @@ class HomePage(QWidget):
             f" border-radius:3px; font-size:11px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{RED}22; }}"
         )
-        _ac_devices_btn.clicked.connect(lambda: self.navigate_to.emit("Inventory"))
+        _ac_devices_btn.clicked.connect(lambda: self.navigate_to.emit("Inventory Changes"))
         _ac_devices_row.addWidget(self._ac_devices_lbl)
         _ac_devices_row.addWidget(_ac_devices_btn)
         _ac_devices_row.addStretch()
@@ -649,7 +649,7 @@ class HomePage(QWidget):
         self._rec_pill_arp    = _rec_pill("ARP Watch",       "ARP Spoof Watch")
         self._rec_pill_dhcp   = _rec_pill("DHCP Watch",      "DHCP Rogue Monitor")
         self._rec_pill_storm  = _rec_pill("Broadcast Storm", "Broadcast Storm")
-        self._rec_pill_logger = _rec_pill("Network Logger",  "Logs")
+        self._rec_pill_logger = _rec_pill("Network Logger",  "Network Logger")
         for _rp in (self._rec_pill_arp, self._rec_pill_dhcp,
                     self._rec_pill_storm, self._rec_pill_logger):
             _rec_pills_row.addWidget(_rp)
@@ -962,7 +962,7 @@ class HomePage(QWidget):
         self._pill_arp    = _pill("ARP Watch",       "ARP Spoof Watch")
         self._pill_dhcp   = _pill("DHCP Watch",      "DHCP Rogue Monitor")
         self._pill_storm  = _pill("Broadcast Storm", "Broadcast Storm")
-        self._pill_logger = _pill("Network Logger",  "Logs")
+        self._pill_logger = _pill("Network Logger",  "Network Logger")
         for _p in (self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger):
             _pills_lay.addWidget(_p)
         _pills_lay.addStretch()
@@ -1029,7 +1029,7 @@ class HomePage(QWidget):
             f" background:transparent; border:none; padding:0; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
         )
-        self._btn_mon_view.clicked.connect(lambda: self.navigate_to.emit("Logs"))
+        self._btn_mon_view.clicked.connect(lambda: self.navigate_to.emit("Network Logger"))
 
         mon_lay.addWidget(self._mon_dot)
         mon_lay.addWidget(self._mon_status_lbl, 1)
@@ -1675,6 +1675,9 @@ class HomePage(QWidget):
                 f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
             )
             msg_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            msg_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+            msg_lbl.setToolTip("Click to view in Notifications")
+            msg_lbl.mousePressEvent = lambda _e, a=alert: self.alert_view_requested.emit(a)
 
             time_lbl = QLabel(time_str)
             time_lbl.setStyleSheet(

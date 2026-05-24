@@ -1690,7 +1690,7 @@ class NotificationsPage(QWidget):
         elif "THREAT_INTEL" in rule or "CVE" in rule or "Cert" in rule:
             self.navigate_to.emit("Threat Intelligence")
         elif "RATE_SPIKE" in rule or "Bandwidth" in rule:
-            self.navigate_to.emit("Bandwidth")
+            self.navigate_to.emit("Live Bandwidth")
         elif "ARP" in rule:
             self.navigate_to.emit("ARP Spoof Watch")
         elif "DHCP" in rule:

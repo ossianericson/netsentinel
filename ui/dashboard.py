@@ -1468,7 +1468,7 @@ class Dashboard(QMainWindow):
 
         # Ctrl+, — Settings
         _settings_sc = QShortcut(QKeySequence("Ctrl+,"), self)
-        _settings_sc.activated.connect(lambda: self._nav_rail_go_to("Settings"))
+        _settings_sc.activated.connect(self._open_settings_dialog)
 
         # Ctrl+L — Log Hub
         _loghub_sc = QShortcut(QKeySequence("Ctrl+L"), self)
@@ -4189,7 +4189,7 @@ class Dashboard(QMainWindow):
             self._nav_rail_go_to("DHCP Rogue Monitor")
             self._start_dhcp_scan()
         elif action == "Start Bandwidth Monitor":
-            self._nav_rail_go_to("Bandwidth Monitor")
+            self._nav_rail_go_to("Live Bandwidth")
             self._start_bandwidth_monitor()
 
     def _replay_recent_action(self, action_id: str) -> None:
@@ -6198,6 +6198,15 @@ class Dashboard(QMainWindow):
     @pyqtSlot(object)
     def _on_alert_view_requested(self, alert) -> None:
         """Navigate to the most relevant page for the alert that was clicked."""
+        # Dict alerts come from the Home action-needed card rows — open the drawer directly
+        if isinstance(alert, dict):
+            self._nav_rail_go_to("Notifications")
+            try:
+                if hasattr(self, "_notifications_page"):
+                    self._notifications_page._alert_drawer.open(alert)
+            except Exception:
+                pass
+            return
         rule_type = getattr(alert, "rule_type", "") or ""
         host = getattr(alert, "host", "") or ""
         if rule_type == "PORT_SCAN" and host:
