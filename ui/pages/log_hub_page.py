@@ -650,8 +650,8 @@ class LogHubPage(QWidget):
         lay.addStretch()
 
         self._search_box = QLineEdit()
-        self._search_box.setPlaceholderText("Search…")
-        self._search_box.setFixedWidth(200)
+        self._search_box.setPlaceholderText("Search…  (source:arp  ip:x  severity:critical)")
+        self._search_box.setFixedWidth(260)
         self._search_box.setFixedHeight(26)
         self._search_box.setClearButtonEnabled(True)
         self._search_box.setStyleSheet(
@@ -1155,7 +1155,7 @@ class LogHubPage(QWidget):
         if not self._is_source_enabled(e["source_key"]):
             return
         filt = self._search_box.text().strip().lower()
-        if filt and not self._row_matches(e["row"], filt):
+        if filt and not self._entry_matches(e, filt):
             return
         self._table.insertRow(0)
         self._set_table_row(0, e)
@@ -1167,12 +1167,42 @@ class LogHubPage(QWidget):
         visible = [
             e for e in self._entries
             if self._is_source_enabled(e["source_key"])
-            and (not filt or self._row_matches(e["row"], filt))
+            and self._entry_matches(e, filt)
         ]
         self._table.setRowCount(0)
         for i, e in enumerate(visible[:_MAX_ROWS]):
             self._table.insertRow(i)
             self._set_table_row(i, e)
+
+    @staticmethod
+    def _parse_filter_tokens(filt: str) -> tuple[dict, list]:
+        """Split 'source:arp ip:192 critical' → ({'source':'arp','ip':'192'}, ['critical'])."""
+        fields: dict[str, str] = {}
+        free: list[str] = []
+        for token in filt.split():
+            if ":" in token:
+                key, _, val = token.partition(":")
+                if key in ("source", "ip", "severity") and val:
+                    fields[key] = val
+                    continue
+            free.append(token)
+        return fields, free
+
+    def _entry_matches(self, e: dict, filt: str) -> bool:
+        if not filt:
+            return True
+        fields, free = self._parse_filter_tokens(filt)
+        row = e["row"]
+        if "source" in fields and fields["source"] not in e.get("source_key", ""):
+            return False
+        if "ip" in fields and fields["ip"] not in str(row[2] if len(row) > 2 else "").lower():
+            return False
+        if "severity" in fields and fields["severity"] not in str(row[5] if len(row) > 5 else "").lower():
+            return False
+        for term in free:
+            if not any(term in str(row[i]).lower() for i in (2, 3, 4) if i < len(row)):
+                return False
+        return True
 
     def _row_matches(self, row: tuple, filt: str) -> bool:
         return any(filt in str(row[i]).lower() for i in (2, 3, 4))

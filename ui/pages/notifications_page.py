@@ -290,9 +290,10 @@ _ALERT_RULE_DEFS = [
 class NotificationsPage(QWidget):
     """Notification routing configuration and delivery log page."""
 
-    navigate_to     = pyqtSignal(str)
-    view_in_log_hub = pyqtSignal(float, str)  # (alert_ts, source_key) — TIME-2 passthrough
-    _test_done      = pyqtSignal(str, str)   # (channel_key, html_result)
+    navigate_to              = pyqtSignal(str)
+    view_in_log_hub          = pyqtSignal(float, str)  # (alert_ts, source_key) — TIME-2 passthrough
+    automation_rule_requested = pyqtSignal(str, str)   # (rule_name, match_value)
+    _test_done               = pyqtSignal(str, str)   # (channel_key, html_result)
 
     def __init__(self, router=None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -1714,6 +1715,8 @@ class NotificationsPage(QWidget):
         if not rule_name or not self._router:
             return
 
+        host = alert.get("host") or alert.get("ip") or "*"
+
         menu = QMenu(self)
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
@@ -1723,6 +1726,7 @@ class NotificationsPage(QWidget):
         _col = self._alert_history_table.currentColumn()
         act_copy_cell = menu.addAction("Copy cell")
         act_copy_row  = menu.addAction("Copy row")
+        act_automate  = menu.addAction("Create automation rule…")
         menu.addSeparator()
         expiry = self._router.get_snooze_expiry(rule_name)
         if expiry is not None:
@@ -1745,7 +1749,9 @@ class NotificationsPage(QWidget):
                 lambda: self._apply_snooze(rule_name, 0)
             )
         chosen = menu.exec(self._alert_history_table.viewport().mapToGlobal(pos))
-        if chosen == act_copy_cell:
+        if chosen == act_automate:
+            self.automation_rule_requested.emit(rule_name, host)
+        elif chosen == act_copy_cell:
             from PyQt6.QtWidgets import QApplication as _QApp
             it = self._alert_history_table.item(row, _col) if _col >= 0 else None
             _QApp.clipboard().setText(it.text() if it else "")

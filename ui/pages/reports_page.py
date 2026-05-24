@@ -203,9 +203,17 @@ class ReportsPage(QWidget):
             f" border:1px solid {ACCENT}; padding:0 18px; border-radius:4px;"
         )
         self._btn_pdf.clicked.connect(self._export_pdf)
+        self._btn_copy = QPushButton("Copy Summary")
+        self._btn_copy.setFixedHeight(34)
+        self._btn_copy.setStyleSheet(
+            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
+            f" border:1px solid {BORDER}; padding:0 14px; border-radius:4px;"
+        )
+        self._btn_copy.clicked.connect(self._copy_summary)
         btn_row.addWidget(self._btn_apply)
         btn_row.addWidget(self._btn_now)
         btn_row.addWidget(self._btn_pdf)
+        btn_row.addWidget(self._btn_copy)
         btn_row.addStretch()
         cfg_lay.addLayout(btn_row)
 
@@ -336,6 +344,17 @@ class ReportsPage(QWidget):
         finally:
             self._btn_pdf.setEnabled(True)
             self._btn_pdf.setText("Export PDF")
+
+    def _copy_summary(self) -> None:
+        try:
+            from modules.report_scheduler import generate_status_report
+            text = generate_status_report(self._store)
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(text)
+            from ui.widgets.toast import ToastManager
+            ToastManager.instance().show_toast("Network summary copied to clipboard", "info")
+        except Exception as exc:
+            QMessageBox.warning(self, "Copy Failed", str(exc))
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

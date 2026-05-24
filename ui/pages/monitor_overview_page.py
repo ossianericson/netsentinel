@@ -355,9 +355,11 @@ class MonitorOverviewPage(QWidget):
         self._tile_iot   = _StatusTile("◎", "IOT ANOMALIES",      "–",   "Not measured",TEXT_MUTED,      "IoT Behaviour")
         self._tile_ports = _StatusTile("⊙", "OPEN PORTS",         "–",   "No scan yet", TEXT_MUTED,      "Port Scan (TCP)")
         self._tile_cve   = _StatusTile("⚠", "CVE MATCHES",        "–",   "No data yet", TEXT_MUTED,      "CVE Lookup")
+        self._tile_auto  = _StatusTile("⚡", "AUTOMATION",         "–",   "No rules",    TEXT_MUTED,      "Automation Hooks")
 
         for tile in (self._tile_arp, self._tile_dhcp, self._tile_storm,
-                     self._tile_iot, self._tile_ports, self._tile_cve):
+                     self._tile_iot, self._tile_ports, self._tile_cve,
+                     self._tile_auto):
             tile.clicked.connect(self.navigate_to.emit)
 
         grid.addWidget(self._tile_arp,   0, 0)
@@ -366,6 +368,7 @@ class MonitorOverviewPage(QWidget):
         grid.addWidget(self._tile_iot,   1, 0)
         grid.addWidget(self._tile_ports, 1, 1)
         grid.addWidget(self._tile_cve,   1, 2)
+        grid.addWidget(self._tile_auto,  2, 0)
 
         lay.addWidget(grid_w)
         lay.addStretch()
@@ -378,7 +381,8 @@ class MonitorOverviewPage(QWidget):
 
     def _refresh_ages(self) -> None:
         for tile in (self._tile_arp, self._tile_dhcp, self._tile_storm,
-                     self._tile_iot, self._tile_ports, self._tile_cve):
+                     self._tile_iot, self._tile_ports, self._tile_cve,
+                     self._tile_auto):
             tile.refresh_age()
 
     def set_monitor_event_times(
@@ -458,6 +462,16 @@ class MonitorOverviewPage(QWidget):
             self._tile_cve.update("0", "No matches", GREEN)
         else:
             self._tile_cve.update("–", "No data yet", TEXT_MUTED)
+
+    def set_automation_status(self, rule_count: int, last_triggered_ts: float) -> None:
+        import time as _time
+        if rule_count == 0:
+            self._tile_auto.update("–", "No rules", TEXT_MUTED)
+        elif last_triggered_ts > 0 and (_time.time() - last_triggered_ts) < 86400:
+            self._tile_auto.update(str(rule_count), "Fired in last 24h", GREEN)
+            self._tile_auto.set_last_event_ts(last_triggered_ts)
+        else:
+            self._tile_auto.update(str(rule_count), f"rule{'s' if rule_count != 1 else ''} enabled", ACCENT)
 
     def set_last_scan_time(self, ts: Optional[datetime.datetime]) -> None:
         self._last_scan_ts = ts

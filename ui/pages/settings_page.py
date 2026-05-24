@@ -187,6 +187,10 @@ class SettingsPage(QWidget):
     reload_oui_requested = pyqtSignal()
     #: Emitted when the user clicks "Reset all dismissed notices".
     reset_dismissed_requested = pyqtSignal()
+    #: Emitted when "Export All Data" is clicked; dashboard handles the store reference.
+    export_all_requested = pyqtSignal()
+    #: Emitted when "Run first-time setup" is clicked; dashboard resets state and navigates.
+    run_setup_requested = pyqtSignal()
     #: Emitted when "Configure →" is clicked in the integrations card.
     navigate_to = pyqtSignal(str)
 
@@ -945,5 +949,27 @@ class SettingsPage(QWidget):
         )
         reset_btn.clicked.connect(self.reset_dismissed_requested.emit)
         bl.addWidget(reset_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        export_btn = QPushButton("Export All Data (ZIP)")
+        export_btn.setFixedWidth(220)
+        export_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+        )
+        export_btn.clicked.connect(self.export_all_requested.emit)
+        bl.addWidget(export_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        setup_btn = QPushButton("Run first-time setup")
+        setup_btn.setFixedWidth(220)
+        setup_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+        )
+        setup_btn.clicked.connect(self.run_setup_requested.emit)
+        bl.addWidget(setup_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         return card

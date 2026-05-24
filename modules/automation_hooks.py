@@ -80,7 +80,12 @@ class AutomationEngine:
     def __init__(self) -> None:
         self._lock  = threading.Lock()
         self._rules: List[AutomationRule] = []
+        self._last_triggered: float = 0.0
         self._load()
+
+    def get_last_triggered(self) -> float:
+        """Return Unix timestamp of most recent rule execution, or 0."""
+        return self._last_triggered
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
@@ -160,8 +165,10 @@ class AutomationEngine:
             candidates = [r for r in self._rules
                           if r.enabled and r.trigger == trigger]
 
+        import time as _time
         for rule in candidates:
             if self._matches(rule, event_data):
+                self._last_triggered = _time.time()
                 threading.Thread(
                     target=self._run_rule,
                     args=(rule, event_data, on_log),

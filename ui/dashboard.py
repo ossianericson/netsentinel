@@ -206,6 +206,43 @@ def _empty_state_widget(icon: str, headline: str, body: str,
     return w
 
 
+def _error_state_widget(message: str, retry_fn: "callable") -> "QWidget":
+    """Reusable error-state panel: ⚠ icon + message + Retry button."""
+    from PyQt6.QtWidgets import QWidget as _W, QVBoxLayout as _VL, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
+    from PyQt6.QtCore import Qt as _Qt
+    from ui.styles import AMBER as _AM, TEXT_PRIMARY as _TP, TEXT_SECONDARY as _TS
+    w = _W()
+    vl = _VL(w)
+    vl.setContentsMargins(32, 32, 32, 32)
+    vl.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+    ic = _L("⚠")
+    ic.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+    ic.setStyleSheet(f"font-size:28px; color:{_AM}; background:transparent; border:none;")
+    hd = _L(message)
+    hd.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+    hd.setWordWrap(True)
+    hd.setStyleSheet(f"font-size:12px; color:{_TP}; background:transparent; border:none;")
+    vl.addWidget(ic)
+    vl.addSpacing(6)
+    vl.addWidget(hd)
+    if retry_fn:
+        vl.addSpacing(10)
+        btn = _B("Retry")
+        btn.setFixedHeight(28)
+        btn.setCursor(_Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{_AM}; border:1px solid {_AM};"
+            f" border-radius:4px; font-size:11px; padding:0 16px; }}"
+            f"QPushButton:hover {{ background:{_AM}22; }}"
+        )
+        btn.clicked.connect(retry_fn)
+        hl = _HL()
+        hl.setAlignment(_Qt.AlignmentFlag.AlignCenter)
+        hl.addWidget(btn)
+        vl.addLayout(hl)
+    return w
+
+
 def _make_card(title: str) -> tuple:
     """
     Build a standard enterprise card frame.
@@ -1477,6 +1514,7 @@ class Dashboard(QMainWindow):
         # Pinned pages — persisted across sessions
         self._nav_pinned_labels: set = self._load_pinned_labels()
         self._nav_label_to_widget: dict = {}
+        self._nav_history: list = []  # NAV-5: back-stack; direct rail clicks clear it
 
         # ── Progressive-disclosure nav mode ───────────────────────────────────
         self._nav_mode: str = "home"
@@ -1954,6 +1992,11 @@ class Dashboard(QMainWindow):
             from ui.widgets.scan_summary_sheet import ScanSummarySheet
             self._scan_sheet = ScanSummarySheet(self)
             self._scan_sheet.navigate_requested.connect(self._nav_rail_go_to)
+        # SCHED-3: restore monitors that were running before last close
+        if not getattr(self, "_monitors_restored", False):
+            self._monitors_restored = True
+            from PyQt6.QtCore import QTimer as _QT3
+            _QT3.singleShot(3000, self._restore_running_monitors)
 
     def _install_snap_subclass(self):
         """Subclass the Win32 HWND so WM_NCHITTEST returns HTMAXBUTTON over our
@@ -2554,6 +2597,7 @@ class Dashboard(QMainWindow):
         self._notifications_page = NotificationsPage(router=None, parent=None)
         self._notifications_page.navigate_to.connect(self._nav_rail_go_to)
         self._notifications_page.view_in_log_hub.connect(self._on_view_alert_in_log_hub)
+        self._notifications_page.automation_rule_requested.connect(self._on_automation_rule_requested)
         self._notifications_page.set_store(self._store)
         self.global_time_range_changed.connect(self._notifications_page.set_global_hours)
 
@@ -2596,6 +2640,8 @@ class Dashboard(QMainWindow):
         self._settings_page = SettingsPage(parent=None)
         self._settings_page.reload_oui_requested.connect(self._reload_oui_db)
         self._settings_page.reset_dismissed_requested.connect(self._reset_dismissed_notices)
+        self._settings_page.export_all_requested.connect(self._on_export_all)
+        self._settings_page.run_setup_requested.connect(self._on_run_first_time_setup)
         self._settings_page.navigate_to.connect(self._nav_rail_go_to)
 
         from ui.pages.speed_test_page import SpeedTestPage
@@ -3209,6 +3255,18 @@ class Dashboard(QMainWindow):
         bc_row = QHBoxLayout()
         bc_row.setContentsMargins(0, 0, 0, 0)
         bc_row.setSpacing(4)
+        self._back_btn = QPushButton("‹ Back")
+        self._back_btn.setFixedHeight(20)
+        self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._back_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0 4px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._back_btn.setVisible(False)
+        self._back_btn.clicked.connect(self._nav_go_back)
+        bc_row.addWidget(self._back_btn)
+
         self._breadcrumb_lbl = QLabel("Getting Started  ›  Home")
         self._breadcrumb_lbl.setFixedHeight(20)
         self._breadcrumb_lbl.setStyleSheet(
@@ -3666,7 +3724,7 @@ class Dashboard(QMainWindow):
         _qs = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
         _qs.setValue("nav/last_section", section_name)
 
-    def _nav_rail_go_to(self, label: str) -> None:
+    def _nav_rail_go_to(self, label: str, _push_history: bool = False) -> None:
         """Navigate to a page by label in rail mode. Flyout stays open."""
         widget = self._nav_label_to_widget.get(label)
         if widget is None:
@@ -3678,6 +3736,14 @@ class Dashboard(QMainWindow):
             and not self._settings_page.confirm_leave()
         ):
             return
+        if _push_history and hasattr(self, "_nav_history"):
+            current = getattr(self, "_nav_current_page_label", None)
+            if current and current != label:
+                self._nav_history.append(current)
+        elif hasattr(self, "_nav_history"):
+            self._nav_history.clear()
+        if hasattr(self, "_back_btn"):
+            self._back_btn.setVisible(bool(self._nav_history))
         self._nav_current_page_label = label
         self._nav_crossfade_to(widget)
         self._nav_flyout.set_active(label)
@@ -3699,6 +3765,35 @@ class Dashboard(QMainWindow):
             if label not in _visited2:
                 self._tip_bar.setChecked(True)
         self._track_page_visit(label)
+
+    def _nav_deep_link_go_to(self, label: str) -> None:
+        """Navigate via a deep link — pushes the current page onto the back stack."""
+        self._nav_rail_go_to(label, _push_history=True)
+
+    @pyqtSlot()
+    def _nav_go_back(self) -> None:
+        if not self._nav_history:
+            return
+        prev = self._nav_history.pop()
+        widget = self._nav_label_to_widget.get(prev)
+        if widget is None:
+            return
+        self._nav_current_page_label = prev
+        self._nav_crossfade_to(widget)
+        self._nav_flyout.set_active(prev)
+        section = self._nav_page_to_section.get(prev, "")
+        if hasattr(self, "_breadcrumb_lbl"):
+            self._breadcrumb_lbl.setText(f"{section}  ›  {prev}" if section else prev)
+        if hasattr(self, "_back_btn"):
+            self._back_btn.setVisible(bool(self._nav_history))
+
+    def keyPressEvent(self, event) -> None:
+        from PyQt6.QtCore import Qt as _Qt
+        if event.key() == _Qt.Key.Key_Escape and self._nav_history:
+            self._nav_go_back()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     @pyqtSlot()
     def _on_modem_tile_clicked(self) -> None:
@@ -7301,6 +7396,8 @@ class Dashboard(QMainWindow):
             self._home_page.on_grade(result.overall_grade, result.overall_score)
             self._home_page.on_grade_details(result.overall_grade, result.overall_score,
                                              getattr(result, "dimensions", []))
+            if hasattr(self._home_page, "_update_this_week"):
+                self._home_page._update_this_week()
             if hasattr(self, "_monitor_overview_page"):
                 self._monitor_overview_page.set_grade(result.overall_grade, result.overall_score)
                 self._monitor_overview_page.set_grade_details(result.overall_grade,
@@ -7729,6 +7826,39 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_log_hub_page"):
             self._log_hub_page.jump_to_alert_time(alert_ts, source_key)
 
+    @pyqtSlot(str, str)
+    def _on_automation_rule_requested(self, rule_name: str, match_value: str) -> None:
+        self._nav_rail_go_to("Automation Hooks")
+        if hasattr(self, "_automation_page"):
+            self._automation_page.prefill_rule(rule_name, match_value)
+
+    # ── SCHED-3: monitor persistence ──────────────────────────────────────────
+
+    _MONITOR_KEYS = {
+        "arp":       "_arp_worker",
+        "bandwidth": "_bw_worker",
+        "scheduler": "_sched_worker",
+    }
+
+    def _save_monitor_state(self, key: str, running: bool) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        saved = set(qs.value("monitors/was_running", "", type=str).split(",")) - {""}
+        if running:
+            saved.add(key)
+        else:
+            saved.discard(key)
+        qs.setValue("monitors/was_running", ",".join(sorted(saved)))
+
+    def _restore_running_monitors(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        keys = set(qs.value("monitors/was_running", "", type=str).split(",")) - {""}
+        if "arp" in keys and not (self._arp_worker and self._arp_worker.isRunning()):
+            self._start_arp_monitor()
+        if "bandwidth" in keys and not (self._bw_worker and self._bw_worker.isRunning()):
+            self._start_bandwidth_monitor()
+        if "scheduler" in keys and not (self._sched_worker and self._sched_worker.isRunning()):
+            self._start_scheduler()
+
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
         if hasattr(self, "_header_scan_btn"):
@@ -7979,6 +8109,37 @@ class Dashboard(QMainWindow):
             self._home_page.showEvent(None)
         self._set_status("All dismissed notices have been reset.")
 
+    @pyqtSlot()
+    def _on_run_first_time_setup(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("home/checklist_done", False)
+        qs.setValue("home/scan_count", 0)
+        self._nav_rail_go_to("Home")
+        if hasattr(self, "_home_page"):
+            self._home_page._recurring_mode = False
+            self._home_page._set_first_run_mode(True)
+            self._home_page.refresh_checklist()
+
+    @pyqtSlot()
+    def _on_export_all(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog as _QFD
+        import time as _t
+        default = f"netsentinel-export-{_t.strftime('%Y%m%d-%H%M%S')}.zip"
+        path, _ = _QFD.getSaveFileName(
+            self, "Export All Data", default, "ZIP Archives (*.zip)"
+        )
+        if not path:
+            return
+        try:
+            from modules.exporter import export_all_zip
+            from pathlib import Path as _P
+            export_all_zip(self._store, _P(path))
+            from ui.widgets.toast import ToastManager
+            ToastManager.instance().show_toast(f"Export saved to {path}", "info")
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox as _MB
+            _MB.warning(self, "Export Failed", str(exc))
+
     # ── Topology tab ──────────────────────────────────────────────────────────
 
     def _build_topology_tab(self) -> QWidget:
@@ -8043,6 +8204,7 @@ class Dashboard(QMainWindow):
         self._arp_worker.start()
         self._arp_status.setText("ARP monitor started…")
         QSettings("NetSentinel", "NetSentinel").setValue("home/setup/arp_started", True)
+        self._save_monitor_state("arp", True)
         self._push_monitor_pills()
         self._set_flyout_dot("ARP Spoof Watch", GREEN)
 
@@ -8178,12 +8340,14 @@ class Dashboard(QMainWindow):
         self._bw_worker.status.connect(self._bw_status.setText)
         self._bw_worker.error.connect(lambda e: self._bw_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._bw_worker.start()
+        self._save_monitor_state("bandwidth", True)
 
     @pyqtSlot()
     def _stop_bandwidth_monitor(self):
         if self._bw_worker:
             self._bw_worker.stop()
             self._bw_status.setText("Bandwidth monitor stopped.")
+            self._save_monitor_state("bandwidth", False)
 
     @pyqtSlot(object)
     def _on_bw_snapshot(self, snap):
@@ -8260,12 +8424,14 @@ class Dashboard(QMainWindow):
         self._sched_worker.alert.connect(lambda t, m: self._sched_log.append(f"🔔 {t}: {m}"), Qt.ConnectionType.QueuedConnection)
         self._sched_worker.error.connect(lambda e: self._sched_log.append(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._sched_worker.start()
+        self._save_monitor_state("scheduler", True)
 
     @pyqtSlot()
     def _stop_scheduler(self):
         if self._sched_worker:
             self._sched_worker.stop()
             self._sched_status.setText("Scheduler stopped.")
+            self._save_monitor_state("scheduler", False)
 
     @pyqtSlot(str)
     def _on_sched_status(self, msg: str):
@@ -8403,13 +8569,15 @@ class Dashboard(QMainWindow):
         ctrl.addWidget(btn)
         ctrl.addWidget(btn_stop)
         ctrl.addStretch()
-        self._recon_syn_table = _table(["Port", "State", "Protocol", "Service"])
+        self._recon_syn_table = _table(["Port", "State", "Protocol", "Service", "CVEs"])
         self._recon_syn_table.setColumnWidth(0, 70)
         self._recon_syn_table.setColumnWidth(1, 90)
         self._recon_syn_table.setColumnWidth(2, 70)
-        self._recon_syn_table.setColumnWidth(3, 220)
+        self._recon_syn_table.setColumnWidth(3, 180)
+        self._recon_syn_table.setColumnWidth(4, 70)
         self._recon_syn_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._recon_syn_table.customContextMenuRequested.connect(self._syn_table_context_menu)
+        self._recon_syn_table.cellClicked.connect(self._on_syn_cell_clicked)
         from PyQt6.QtWidgets import QStackedWidget as _SW3
         self._syn_stack = _SW3()
         self._syn_stack.addWidget(_empty_state_widget(
@@ -8461,6 +8629,14 @@ class Dashboard(QMainWindow):
         if self._syn_worker:
             self._syn_worker.stop()
 
+    @pyqtSlot(int, int)
+    def _on_syn_cell_clicked(self, row: int, col: int) -> None:
+        if col != 4:
+            return
+        svc_item = self._recon_syn_table.item(row, 3)
+        if svc_item and svc_item.text():
+            self._nav_rail_go_to("CVE Tracker")
+
     def _syn_table_context_menu(self, pos) -> None:
         from PyQt6.QtWidgets import QMenu
         row = self._recon_syn_table.rowAt(pos.y())
@@ -8499,6 +8675,17 @@ class Dashboard(QMainWindow):
         from PyQt6.QtGui import QColor
         self._syn_stack.setCurrentIndex(1)   # switch from empty state to table
         self._recon_syn_table.setRowCount(0)
+        # Build quick CVE-count lookup by service keyword from MetricStore
+        _cve_counts: dict[str, int] = {}
+        try:
+            if self._store is not None:
+                _all_cves = self._store.list_cve_lifecycles() or []
+                for _cve in _all_cves:
+                    _svc = (_cve.get("service") or "").split()[0].lower()
+                    if _svc:
+                        _cve_counts[_svc] = _cve_counts.get(_svc, 0) + 1
+        except Exception:
+            pass
         for p in result.open_ports:
             row = self._recon_syn_table.rowCount()
             self._recon_syn_table.insertRow(row)
@@ -8507,6 +8694,14 @@ class Dashboard(QMainWindow):
                 item = QTableWidgetItem(val)
                 item.setForeground(QColor(color))
                 self._recon_syn_table.setItem(row, col, item)
+            # CVE count badge (col 4)
+            svc_key = (p.service or "").split()[0].lower()
+            cve_n = _cve_counts.get(svc_key, 0)
+            cve_item = QTableWidgetItem(f"{cve_n} CVEs" if cve_n else "—")
+            cve_item.setForeground(QColor(AMBER if cve_n else TEXT_MUTED))
+            if cve_n:
+                cve_item.setToolTip(f"Click to view {cve_n} CVE(s) for {p.service}")
+            self._recon_syn_table.setItem(row, 4, cve_item)
         self._syn_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
         # ── Update NetworkDocPage with accumulated port data ──────────────────
         try:
@@ -10639,6 +10834,21 @@ class Dashboard(QMainWindow):
         self._set_flyout_dot("DHCP Rogue Monitor", GREEN if dhcp   else "")
         self._set_flyout_dot("Broadcast Storm",    GREEN if storm  else "")
         self._set_flyout_dot("Network Logger",     GREEN if logger else "")
+        # AUTO-1/2: Automation dot and tile — green if any rule fired in last 24h
+        try:
+            from modules.automation_hooks import get_engine as _get_ae
+            _ae = _get_ae()
+            _auto_ts = _ae.get_last_triggered()
+            _auto_rules = _ae.get_rules()
+            import time as _t
+            _auto_active = _auto_ts > 0 and (_t.time() - _auto_ts) < 86400
+            self._set_flyout_dot("Automation Hooks", GREEN if _auto_active else "")
+            if hasattr(self, "_monitor_overview_page"):
+                self._monitor_overview_page.set_automation_status(
+                    len(_auto_rules), _auto_ts
+                )
+        except Exception:
+            pass
         # Section button badges
         self._refresh_section_badges(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
         # Push to Monitor Overview page

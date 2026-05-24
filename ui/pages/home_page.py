@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import datetime
 
-from PyQt6.QtCore import Qt, QSettings, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QDesktopServices
+import json
+
+from PyQt6.QtCore import QPointF, Qt, QSettings, QUrl, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QColor, QDesktopServices, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -51,6 +53,92 @@ try:
     from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
 except ImportError:
     _GUIDE_FEATURES: list = []
+
+
+class _GradeSparkline(QWidget):
+    """80×28 QPainter sparkline showing grade score trend over last N runs."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(160, 32)
+        self._points: list[float] = []  # list of score values 0–100
+
+    def set_points(self, points: list[float]) -> None:
+        self._points = list(points)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        pts = self._points
+        if len(pts) < 2:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(QColor(TEXT_MUTED))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "—")
+            painter.end()
+            return
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor("transparent"))
+
+        w, h = self.width(), self.height()
+        pad = 4
+        usable_w = w - 2 * pad
+        usable_h = h - 2 * pad
+
+        mn, mx = min(pts), max(pts)
+        span = mx - mn if mx != mn else 1.0
+
+        def _x(i: int) -> float:
+            return pad + (i / (len(pts) - 1)) * usable_w
+
+        def _y(v: float) -> float:
+            return pad + (1.0 - (v - mn) / span) * usable_h
+
+        path = QPainterPath()
+        path.moveTo(QPointF(_x(0), _y(pts[0])))
+        for i, v in enumerate(pts[1:], 1):
+            path.lineTo(QPointF(_x(i), _y(v)))
+
+        last_score = pts[-1]
+        color = GREEN if last_score >= 70 else (AMBER if last_score >= 50 else RED)
+        pen = QPen(QColor(color), 2.0)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.drawPath(path)
+
+        # dot at last point
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(color))
+        painter.drawEllipse(QPointF(_x(len(pts) - 1), _y(pts[-1])), 3, 3)
+        painter.end()
+
+
+_GRADE_HISTORY_KEY = "grade/history_json"
+_GRADE_HISTORY_MAX = 14
+
+
+def _append_grade_history(grade: str, score: float) -> None:
+    import time as _time
+    qs = QSettings("NetSentinel", "NetSentinel")
+    try:
+        history: list = json.loads(qs.value(_GRADE_HISTORY_KEY, "[]", type=str))
+    except Exception:
+        history = []
+    history.append({"ts": int(_time.time()), "grade": grade, "score": score})
+    if len(history) > _GRADE_HISTORY_MAX:
+        history = history[-_GRADE_HISTORY_MAX:]
+    qs.setValue(_GRADE_HISTORY_KEY, json.dumps(history))
+
+
+def _load_grade_history() -> list[float]:
+    qs = QSettings("NetSentinel", "NetSentinel")
+    try:
+        history: list = json.loads(qs.value(_GRADE_HISTORY_KEY, "[]", type=str))
+        return [float(e["score"]) for e in history if "score" in e]
+    except Exception:
+        return []
 
 
 class HomePage(QWidget):
@@ -665,6 +753,7 @@ class HomePage(QWidget):
             f"font-size:11px; font-weight:600; color:{TEXT_SECONDARY};"
             " background:transparent; border:none;"
         )
+        self._grade_sparkline = _GradeSparkline()
         self._rec_scan_time_lbl = QLabel("Last scan: –")
         self._rec_scan_time_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
@@ -678,6 +767,7 @@ class HomePage(QWidget):
             f"QPushButton:hover {{ background:{ACCENT}22; border-color:{ACCENT}; }}"
         )
         _rec_status_row.addWidget(self._rec_grade_lbl)
+        _rec_status_row.addWidget(self._grade_sparkline)
         _rec_status_row.addWidget(self._rec_scan_time_lbl)
         _rec_status_row.addStretch()
         _rec_status_row.addWidget(self._btn_rescan_compact)
@@ -705,6 +795,65 @@ class HomePage(QWidget):
         _rec_outer.addLayout(_diag_row)
 
         lay.addWidget(self._recurring_section)
+
+        # ── This Week card (DASH-2) ───────────────────────────────────────────
+        self._this_week_card = QFrame()
+        self._this_week_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._this_week_card.setVisible(False)
+        _tw_outer = QVBoxLayout(self._this_week_card)
+        _tw_outer.setContentsMargins(14, 10, 14, 10)
+        _tw_outer.setSpacing(6)
+        _tw_hdr = QLabel("THIS WEEK")
+        _tw_hdr.setStyleSheet(
+            f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none; letter-spacing:1.5px;"
+        )
+        _tw_outer.addWidget(_tw_hdr)
+
+        _tw_chips_row = QHBoxLayout()
+        _tw_chips_row.setSpacing(8)
+        _tw_chips_row.setContentsMargins(0, 0, 0, 0)
+
+        def _tw_chip(color: str) -> tuple[QFrame, QLabel, QLabel]:
+            chip = QFrame()
+            chip.setStyleSheet(
+                f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER};"
+                f" border-radius:6px; }}"
+            )
+            chip_lay = QVBoxLayout(chip)
+            chip_lay.setContentsMargins(10, 6, 10, 6)
+            chip_lay.setSpacing(2)
+            val_lbl = QLabel("—")
+            val_lbl.setStyleSheet(
+                f"font-size:16px; font-weight:bold; color:{color};"
+                " background:transparent; border:none;"
+            )
+            name_lbl = QLabel()
+            name_lbl.setStyleSheet(
+                f"font-size:9px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+            chip_lay.addWidget(val_lbl)
+            chip_lay.addWidget(name_lbl)
+            return chip, val_lbl, name_lbl
+
+        _tw_c1, self._tw_alerts_val, self._tw_alerts_name = _tw_chip(AMBER)
+        _tw_c2, self._tw_devices_val, self._tw_devices_name = _tw_chip(ACCENT)
+        _tw_c3, self._tw_grade_val, self._tw_grade_name = _tw_chip(GREEN)
+        _tw_c4, self._tw_cve_val, self._tw_cve_name = _tw_chip(RED)
+
+        self._tw_alerts_name.setText("Alerts")
+        self._tw_devices_name.setText("New Devices")
+        self._tw_grade_name.setText("Grade Change")
+        self._tw_cve_name.setText("CVEs")
+
+        for _chip in (_tw_c1, _tw_c2, _tw_c3, _tw_c4):
+            _tw_chips_row.addWidget(_chip, 1)
+
+        _tw_outer.addLayout(_tw_chips_row)
+        lay.addWidget(self._this_week_card)
 
         # ── Hero card ─────────────────────────────────────────────────────────
         hero = QFrame()
@@ -1417,6 +1566,8 @@ class HomePage(QWidget):
         self._check_recurring_mode()
         if self._recurring_mode:
             self._update_recurring_scan_time()
+            self._update_this_week()
+            self._refresh_sparkline()
 
     def _open_dashboard(self) -> None:
         QDesktopServices.openUrl(QUrl(self._dashboard_url))
@@ -1509,6 +1660,7 @@ class HomePage(QWidget):
         self._recurring_mode = on
         # Recurring top section: prominent monitoring status + grade/rescan
         self._recurring_section.setVisible(on)
+        self._this_week_card.setVisible(on)
         # Big scan button → compact rescan link
         self._btn_scan.setVisible(not on)
         self._btn_rescan_compact.setVisible(on)
@@ -1521,6 +1673,7 @@ class HomePage(QWidget):
             # Refresh recurring section display
             self._update_recurring_grade_display()
             self._update_recurring_scan_time()
+            self._update_this_week()
 
     def _update_recurring_grade_display(self) -> None:
         if not hasattr(self, "_rec_grade_lbl"):
@@ -1553,6 +1706,37 @@ class HomePage(QWidget):
         else:
             hrs = mins // 60
             self._rec_scan_time_lbl.setText(f"Last scan: {hrs}h ago")
+
+    def _refresh_sparkline(self) -> None:
+        if hasattr(self, "_grade_sparkline"):
+            self._grade_sparkline.set_points(_load_grade_history())
+
+    def _update_this_week(self) -> None:
+        if not self._store:
+            return
+        try:
+            # Alerts this week
+            alerts = self._store.get_recent_alerts(hours=168, limit=500)
+            self._tw_alerts_val.setText(str(len(alerts)))
+
+            # New devices (joined events in last 7 days)
+            events = self._store.query_device_events(hours=168, event_types=["JOINED"])
+            self._tw_devices_val.setText(str(len(events)))
+
+            # CVE count
+            cves = self._store.list_cve_lifecycles() or []
+            self._tw_cve_val.setText(str(len(cves)))
+            self._tw_cve_val.setStyleSheet(
+                f"font-size:16px; font-weight:bold;"
+                f" color:{RED if cves else TEXT_MUTED};"
+                " background:transparent; border:none;"
+            )
+
+            # Grade change (current vs oldest snapshot)
+            grade_now = self._current_grade or "—"
+            self._tw_grade_val.setText(grade_now)
+        except Exception:
+            pass
 
     def _update_scan_button_label(self) -> None:
         label = "▶  Scan Network" if self._device_count == 0 else "▶  Rescan"
@@ -2213,7 +2397,7 @@ class HomePage(QWidget):
         self._suggestions_sec.setVisible(True)
         self._suggestions_card.setVisible(True)
 
-    def on_grade(self, grade: str, score: float) -> None:  # noqa: ARG002
+    def on_grade(self, grade: str, score: float) -> None:
         """Update the hero grade circle text and colour."""
         self._current_grade = grade
         if grade in ("A", "B"):
@@ -2228,6 +2412,8 @@ class HomePage(QWidget):
             f" border:3px solid {colour}; border-radius:34px;"
             f" background:{BG_CARD};"
         )
+        _append_grade_history(grade, score)
+        self._refresh_sparkline()
         if self._recurring_mode:
             self._update_recurring_grade_display()
 

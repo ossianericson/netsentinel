@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 import time
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, pyqtSignal
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QThread, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -133,6 +133,52 @@ def _rule_to_log_source(rule: str) -> str:
     return "net"
 
 
+# ── Evidence worker ───────────────────────────────────────────────────────────
+
+class _EvidenceWorker(QThread):
+    """Fetch device history, recent alerts, and CVE count for the alert host."""
+
+    done = pyqtSignal(dict)   # {events: int, last_event: str, alerts: int, cve_count: int}
+
+    def __init__(self, store, host: str, rule_name: str, parent=None):
+        super().__init__(parent)
+        self._store     = store
+        self._host      = host
+        self._rule_name = rule_name
+
+    def run(self) -> None:
+        result: dict = {"events": 0, "last_event": "", "alerts": 0, "cve_count": 0}
+        try:
+            if self._store is None:
+                self.done.emit(result)
+                return
+
+            # Device events in last 7 days
+            events = self._store.query_device_events(hours=168, ip=self._host)
+            result["events"] = len(events)
+            if events:
+                import time as _time
+                result["last_event"] = _time.strftime(
+                    "%Y-%m-%d %H:%M", _time.localtime(events[0].ts)
+                )
+
+            # Other alerts for same host in last 7 days
+            all_alerts = self._store.get_recent_alerts(hours=168, limit=500)
+            host_alerts = [
+                a for a in all_alerts
+                if (a.get("host") == self._host or a.get("ip") == self._host)
+            ]
+            result["alerts"] = len(host_alerts)
+
+            # CVE count (all CVEs — no per-host filtering needed for context)
+            cves = self._store.list_cve_lifecycles() or []
+            result["cve_count"] = len(cves)
+
+        except Exception:
+            pass
+        self.done.emit(result)
+
+
 # ── Widget ────────────────────────────────────────────────────────────────────
 
 class AlertDrawer(QFrame):
@@ -160,6 +206,7 @@ class AlertDrawer(QFrame):
         self._store  = None
         self._router = None
         self._current_alert: dict | None = None
+        self._evidence_worker: "_EvidenceWorker | None" = None
 
         self._anim = QPropertyAnimation(self, b"maximumWidth")
         self._anim.setDuration(120)
@@ -180,6 +227,7 @@ class AlertDrawer(QFrame):
     def open(self, alert: dict) -> None:
         self._current_alert = alert
         self._populate(alert)
+        self._start_evidence_fetch(alert)
         self._anim.stop()
         self._anim.setStartValue(self.maximumWidth())
         self._anim.setEndValue(self.OPEN_WIDTH)
@@ -295,6 +343,27 @@ class AlertDrawer(QFrame):
             f" background:transparent; border:none;"
         )
         bl.addWidget(self._dev_lbl)
+
+        ev_sep = QFrame()
+        ev_sep.setFixedHeight(1)
+        ev_sep.setStyleSheet(f"background:{BORDER}; border:none;")
+        bl.addWidget(ev_sep)
+
+        ev_hdr = QLabel("EVIDENCE")
+        ev_hdr.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+            f" letter-spacing:1px; background:transparent; border:none;"
+        )
+        bl.addWidget(ev_hdr)
+
+        self._ev_events_lbl = QLabel("…")
+        self._ev_alerts_lbl = QLabel("…")
+        self._ev_cve_lbl    = QLabel("…")
+        for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
+            lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+            )
+            bl.addWidget(lbl)
 
         bl.addStretch()
         scroll.setWidget(body)
@@ -481,3 +550,54 @@ class AlertDrawer(QFrame):
         ts = float(alert.get("ts") or 0)
         source_key = _rule_to_log_source(alert.get("rule_name") or "")
         self.view_in_log_hub.emit(ts, source_key)
+
+    def _start_evidence_fetch(self, alert: dict) -> None:
+        if self._evidence_worker and self._evidence_worker.isRunning():
+            self._evidence_worker.done.disconnect()
+            self._evidence_worker.quit()
+        for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
+            lbl.setText("…")
+            lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+            )
+        if not self._store:
+            for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
+                lbl.setText("—")
+            return
+        host = alert.get("host") or alert.get("ip") or ""
+        rule  = alert.get("rule_name") or ""
+        self._evidence_worker = _EvidenceWorker(self._store, host, rule, parent=self)
+        self._evidence_worker.done.connect(self._on_evidence_done)
+        self._evidence_worker.start()
+
+    @pyqtSlot(dict)
+    def _on_evidence_done(self, data: dict) -> None:
+        ev_count   = data.get("events", 0)
+        last_event = data.get("last_event", "")
+        al_count   = data.get("alerts", 0)
+        cve_count  = data.get("cve_count", 0)
+
+        if ev_count:
+            self._ev_events_lbl.setText(
+                f"● {ev_count} device event{'s' if ev_count != 1 else ''} (last: {last_event})"
+            )
+        else:
+            self._ev_events_lbl.setText("● No device events in last 7 days")
+
+        if al_count:
+            self._ev_alerts_lbl.setText(
+                f"● {al_count} other alert{'s' if al_count != 1 else ''} for this host (7d)"
+            )
+        else:
+            self._ev_alerts_lbl.setText("● No other alerts for this host (7d)")
+
+        if cve_count:
+            self._ev_cve_lbl.setText(f"● {cve_count} CVE{'s' if cve_count != 1 else ''} tracked")
+        else:
+            self._ev_cve_lbl.setText("● No CVEs tracked")
+
+        for lbl in (self._ev_events_lbl, self._ev_alerts_lbl, self._ev_cve_lbl):
+            lbl.setStyleSheet(
+                f"color:{TEXT_SECONDARY}; font-size:10px;"
+                f" background:transparent; border:none;"
+            )
