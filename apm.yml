@@ -608,6 +608,27 @@ rules:
       _build_home_nav(), _build_standard_nav(), or any other mode-specific nav
       builder. All pages go into _build_pro_nav() only.
 
+  - id: RULE-NAV3
+    title: "Page-emitted navigate_to signals must route via _nav_rail_go_to, not _nav_goto_label"
+    severity: blocking
+    description: >
+      _nav_goto_label() is mode-aware: when _nav_mode == "home" (the default) it
+      searches _nav_item_labels, which is empty because _build_pro_nav() does NOT
+      populate it — only _nav_label_to_widget is populated. This means any
+      navigate_to emit from a page silently fails when the user has never changed
+      nav mode.
+
+      Root cause: _on_overview_navigate() used to delegate to _nav_goto_label().
+      Fixed in v1.9.24 by changing it to always call _nav_rail_go_to() directly.
+
+      Rule: whenever you wire a page's navigate_to signal to a dashboard handler,
+      the handler must call self._nav_rail_go_to(label), never
+      self._nav_goto_label(label). _nav_rail_go_to looks up _nav_label_to_widget
+      directly and works regardless of _nav_mode.
+
+      Do NOT add new callsites for _nav_goto_label — it exists only for legacy
+      reasons and should be considered deprecated.
+
   # ── Discoverability ───────────────────────────────────────────────────────
   - id: RULE-D1
     title: "Every new page must have a _PAGE_HELP entry in dashboard.py"
