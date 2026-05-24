@@ -216,7 +216,7 @@ No duplicate alert created.
 
 ## Polish items — fix the accumulated rough edges
 
-### POLISH-1 — Home page visual hierarchy
+### POLISH-1 — Home page visual hierarchy ✅
 
 **Problem**: The recurring-user Home layout now has: freshness strip + "This week" card
 (V4) + grade section + action needed card + alerts header + monitoring pills + setup checklist
@@ -241,7 +241,7 @@ non-empty, stats row, pills). Nothing competes for first-glance attention equall
 
 ---
 
-### POLISH-2 — Log Hub control bar
+### POLISH-2 — Log Hub control bar ✅
 
 **Problem**: Log Hub has three controls stacked or side-by-side: source chip bar, search
 bar, live/history toggle. On smaller windows they wrap or overlap. The source chip bar
@@ -303,7 +303,7 @@ border and tint applied only to running/active tiles.
 
 ---
 
-### POLISH-5 — Settings page: section jump navigation
+### POLISH-5 — Settings page: section jump navigation ✅
 
 **Problem**: Settings is a long single-scroll page with 8+ cards. Finding "SMTP port"
 or "Scheduled scan" requires scrolling past unrelated sections. The search bar (SETTINGS-1)
@@ -325,7 +325,7 @@ in view. No layout regression on resize.
 
 ---
 
-### POLISH-6 — Grade breakdown dialog: "How to improve" prominence
+### POLISH-6 — Grade breakdown dialog: "How to improve" prominence ✅
 
 **Problem**: The grade breakdown dialog (EXPLAIN-1) shows sub-score bars and a "How to
 improve" tip for the lowest-scoring item. The tip is rendered as regular body text and
@@ -348,7 +348,7 @@ CTA link navigates to the relevant page. Tip is above the score bars.
 
 ---
 
-### POLISH-7 — Command palette: discoverability and content
+### POLISH-7 — Command palette: discoverability and content ✅
 
 **Problem**: The command palette (`Ctrl+K`) is one of the best features but users
 don't know it exists. The placeholder text says something generic. The recent actions
@@ -369,7 +369,7 @@ Shortcuts shown for pages that have them. Ctrl+K in shortcut overlay.
 
 ---
 
-### POLISH-8 — Flyout panel: visual separation between sections
+### POLISH-8 — Flyout panel: visual separation between sections ✅
 
 **Problem**: The flyout nav panel has section headers (set to 9px TEXT_MUTED per VC5)
 and items below them. On dark backgrounds the header → item visual boundary is subtle.
@@ -388,7 +388,7 @@ Divider lines visible between sections.
 
 ---
 
-### POLISH-9 — Table row height and alternating row colour consistency
+### POLISH-9 — Table row height and alternating row colour consistency ✅
 
 **Problem**: Across the app, QTableWidget rows have inconsistent heights: some pages
 use 22px, some 26px, some let Qt pick. Alternating row colour (`BG_ALT_ROW`) is applied
@@ -409,7 +409,7 @@ consistency across pages.
 
 ---
 
-### POLISH-10 — Empty state warmth: add context line
+### POLISH-10 — Empty state warmth: add context line ✅
 
 **Problem**: Empty states across the app (added in V2 EMPTY-1) follow the pattern:
 icon + headline + CTA. They're correct but cold. "No traffic captured yet" with a

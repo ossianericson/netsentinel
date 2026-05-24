@@ -961,6 +961,7 @@ class NotificationsPage(QWidget):
         self._alert_history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._alert_history_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._alert_history_table.setAlternatingRowColors(True)
+        self._alert_history_table.verticalHeader().setDefaultSectionSize(26)
         self._alert_history_table.setFixedHeight(200)
         self._alert_history_table.setStyleSheet(_tbl_qss)
         for w, col in zip((100, 80, 100, 80), range(4)):
@@ -996,7 +997,7 @@ class NotificationsPage(QWidget):
         hist_lay.addLayout(hist_btn_row)
         tabs.addTab(hist_tab, "Alert History")
 
-        # ── Tab 2: Delivery Log ───────────────────────────────────────────────
+        # ── Tab 2: Delivery & Retry ──────────────────────────────────────────
         log_tab = QWidget()
         log_lay = QVBoxLayout(log_tab)
         log_lay.setContentsMargins(0, 6, 0, 0)
@@ -1014,6 +1015,7 @@ class NotificationsPage(QWidget):
         self._log_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._log_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._log_table.setAlternatingRowColors(True)
+        self._log_table.verticalHeader().setDefaultSectionSize(26)
         self._log_table.setFixedHeight(200)
         self._log_table.setStyleSheet(_tbl_qss)
         for w, col in zip((110, 90, 80, 120, 80), range(5)):
@@ -1090,7 +1092,7 @@ class NotificationsPage(QWidget):
         )
         cta.clicked.connect(lambda: self.navigate_to.emit("Custom Triggers"))
         log_lay.addWidget(cta)
-        tabs.addTab(log_tab, "Delivery Log")
+        tabs.addTab(log_tab, "Delivery & Retry")
 
         bl.addWidget(tabs)
         return card

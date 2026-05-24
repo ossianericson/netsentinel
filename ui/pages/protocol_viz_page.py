@@ -342,7 +342,7 @@ class ProtocolVizPage(QWidget):
             f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
             f" background:transparent; border:none;"
         )
-        _ph_sub = QLabel("Run a network scan to populate protocol diagrams with real device data.")
+        _ph_sub = QLabel("Animated diagram of the protocols your network is speaking right now.")
         _ph_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _ph_sub.setWordWrap(True)
         _ph_sub.setStyleSheet(

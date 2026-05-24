@@ -275,7 +275,7 @@ class CertPage(QWidget):
         )
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
-        self._table.verticalHeader().setDefaultSectionSize(24)
+        self._table.verticalHeader().setDefaultSectionSize(26)
         install_copy_menu(self._table)
         card_layout.addWidget(self._table)
         cl.addWidget(card, stretch=1)

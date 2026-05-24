@@ -190,10 +190,7 @@ class SnmpTrapPage(QWidget):
             f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
             f" background:transparent; border:none;"
         )
-        _es_sub = QLabel(
-            "Configure your router or switch to send SNMP traps\n"
-            "to this host on UDP port 162."
-        )
+        _es_sub = QLabel("Alerts sent by your routers and switches when something changes.")
         _es_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _es_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"

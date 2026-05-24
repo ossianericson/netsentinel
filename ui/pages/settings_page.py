@@ -254,10 +254,10 @@ class SettingsPage(QWidget):
         search_lay.addWidget(self._settings_search, 1)
         outer.addWidget(search_row)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background:transparent;")
+        self._settings_scroll = QScrollArea()
+        self._settings_scroll.setWidgetResizable(True)
+        self._settings_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._settings_scroll.setStyleSheet("background:transparent;")
 
         body = QWidget()
         body.setObjectName("contentArea")
@@ -283,8 +283,85 @@ class SettingsPage(QWidget):
             bl.addWidget(card)
         bl.addStretch()
 
-        scroll.setWidget(body)
-        outer.addWidget(scroll, 1)
+        self._settings_scroll.setWidget(body)
+
+        # Section anchor sidebar (POLISH-5)
+        _ANCHORS = [
+            ("Notifications", "Notifications & Tray"),
+            ("Schedule",      "Scheduled Full Scan"),
+            ("Scanning",      "Network Scanning"),
+            ("Appearance",    "Appearance — Colour Theme"),
+            ("Maintenance",   "Maintenance"),
+            ("About",         "App Health"),
+        ]
+        sidebar = QFrame()
+        sidebar.setFixedWidth(110)
+        sidebar.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border-right:1px solid {BORDER}; }}"
+        )
+        _sb_lay = QVBoxLayout(sidebar)
+        _sb_lay.setContentsMargins(0, 10, 0, 10)
+        _sb_lay.setSpacing(2)
+        self._anchor_btns: list[tuple[str, QPushButton]] = []
+        _btn_base = (
+            f"QPushButton {{ color:{TEXT_MUTED}; font-size:11px; text-align:left;"
+            f" padding:4px 12px; background:transparent; border:none; border-left:2px solid transparent; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        for short, full_title in _ANCHORS:
+            btn = QPushButton(short)
+            btn.setFlat(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(_btn_base)
+            for card, title in self._all_cards:
+                if title == full_title:
+                    btn.clicked.connect(
+                        lambda _, c=card: self._settings_scroll.ensureWidgetVisible(c)
+                    )
+                    break
+            _sb_lay.addWidget(btn)
+            self._anchor_btns.append((full_title, btn))
+        _sb_lay.addStretch()
+
+        self._settings_scroll.verticalScrollBar().valueChanged.connect(
+            self._update_settings_anchor
+        )
+
+        content_row = QHBoxLayout()
+        content_row.setSpacing(0)
+        content_row.setContentsMargins(0, 0, 0, 0)
+        content_row.addWidget(sidebar)
+        content_row.addWidget(self._settings_scroll, 1)
+        outer.addLayout(content_row, 1)
+
+    # ── Section anchor sidebar scroll-spy (POLISH-5) ─────────────────────────
+
+    def _update_settings_anchor(self) -> None:
+        """Highlight sidebar button for the section currently at the top of the scroll."""
+        if not hasattr(self, "_anchor_btns") or not hasattr(self, "_settings_scroll"):
+            return
+        scroll_y = self._settings_scroll.verticalScrollBar().value()
+        body = self._settings_scroll.widget()
+        _btn_active = (
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; text-align:left;"
+            f" padding:4px 12px; background:{ACCENT}15; border:none; border-left:2px solid {ACCENT}; }}"
+        )
+        _btn_inactive = (
+            f"QPushButton {{ color:{TEXT_MUTED}; font-size:11px; text-align:left;"
+            f" padding:4px 12px; background:transparent; border:none; border-left:2px solid transparent; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        active_title = ""
+        best_y = -1
+        for card, title in self._all_cards:
+            if not card.isVisible():
+                continue
+            card_y = card.mapTo(body, card.rect().topLeft()).y()
+            if card_y <= scroll_y + 10 and card_y >= best_y:
+                best_y = card_y
+                active_title = title
+        for full_title, btn in self._anchor_btns:
+            btn.setStyleSheet(_btn_active if full_title == active_title else _btn_inactive)
 
     # ── Search + dirty guard ─────────────────────────────────────────────────
 

@@ -155,6 +155,16 @@ class _StatusTile(QFrame):
         )
         lay.addWidget(self._age_lbl)
 
+    def set_active(self, active: bool) -> None:
+        if active:
+            self.setStyleSheet(
+                f"QFrame {{ background:{ACCENT}1A; border:1px solid {ACCENT}44;"
+                f" border-left:3px solid {ACCENT}; border-radius:{CARD_RADIUS}; }}"
+                f"QFrame:hover {{ border-color:{ACCENT}; border-left:3px solid {ACCENT}; }}"
+            )
+        else:
+            self.setStyleSheet(self._base_style)
+
     def update(self, value: str, sub: str, color: str) -> None:
         self._value_lbl.setText(value)
         self._value_lbl.setStyleSheet(
@@ -425,12 +435,14 @@ class MonitorOverviewPage(QWidget):
             self._tile_arp.update("On", "Monitoring",      GREEN)
         else:
             self._tile_arp.update("Off", "Not running",    TEXT_MUTED)
+        self._tile_arp.set_active(running or alerted)
 
     def set_dhcp_status(self, running: bool) -> None:
         if running:
             self._tile_dhcp.update("On",  "Monitoring",    GREEN)
         else:
             self._tile_dhcp.update("Off", "Not running",   TEXT_MUTED)
+        self._tile_dhcp.set_active(running)
 
     def set_storm_status(self, level: str) -> None:
         if level == "STORM":
@@ -439,12 +451,14 @@ class MonitorOverviewPage(QWidget):
             self._tile_storm.update("Warn",  "Elevated broadcast", AMBER)
         else:
             self._tile_storm.update("Clean", "No storm",           GREEN)
+        self._tile_storm.set_active(level in ("STORM", "WARNING"))
 
     def set_iot_anomaly_count(self, count: int) -> None:
         if count > 0:
             self._tile_iot.update(str(count), f"anomal{'y' if count == 1 else 'ies'}", AMBER)
         else:
             self._tile_iot.update("0", "No anomalies", GREEN)
+        self._tile_iot.set_active(count > 0)
 
     def set_open_port_count(self, count: int) -> None:
         if count > 0:
@@ -454,6 +468,7 @@ class MonitorOverviewPage(QWidget):
             self._tile_ports.update("0", "No open ports", GREEN)
         else:
             self._tile_ports.update("–", "No scan yet", TEXT_MUTED)
+        self._tile_ports.set_active(count >= 0)
 
     def set_cve_count(self, count: int) -> None:
         if count > 0:
@@ -462,6 +477,7 @@ class MonitorOverviewPage(QWidget):
             self._tile_cve.update("0", "No matches", GREEN)
         else:
             self._tile_cve.update("–", "No data yet", TEXT_MUTED)
+        self._tile_cve.set_active(count >= 0)
 
     def set_automation_status(self, rule_count: int, last_triggered_ts: float) -> None:
         import time as _time
@@ -472,6 +488,7 @@ class MonitorOverviewPage(QWidget):
             self._tile_auto.set_last_event_ts(last_triggered_ts)
         else:
             self._tile_auto.update(str(rule_count), f"rule{'s' if rule_count != 1 else ''} enabled", ACCENT)
+        self._tile_auto.set_active(rule_count > 0)
 
     def set_last_scan_time(self, ts: Optional[datetime.datetime]) -> None:
         self._last_scan_ts = ts

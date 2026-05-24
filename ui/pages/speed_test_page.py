@@ -591,7 +591,7 @@ class SpeedTestPage(QWidget):
         self._hist_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._hist_table.verticalHeader().setVisible(False)
         self._hist_table.setShowGrid(True)
-        self._hist_table.verticalHeader().setDefaultSectionSize(24)
+        self._hist_table.verticalHeader().setDefaultSectionSize(26)
         self._hist_table.setColumnWidth(0, 145)
         self._hist_table.setColumnWidth(3, 75)
         self._hist_table.setColumnWidth(4, 105)

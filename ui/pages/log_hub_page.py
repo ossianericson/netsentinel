@@ -104,7 +104,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
     t.setHorizontalHeaderLabels(headers)
     t.horizontalHeader().setStretchLastSection(False)
     t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
+    t.verticalHeader().setDefaultSectionSize(26)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     t.setAlternatingRowColors(True)
@@ -257,8 +257,7 @@ class LogHubPage(QWidget):
         inner_lay.setSpacing(8)
 
         inner_lay.addWidget(self._build_scan_config_panel())
-        inner_lay.addWidget(self._build_mode_bar())
-        inner_lay.addWidget(self._build_source_bar())
+        inner_lay.addWidget(self._build_control_bar())
         inner_lay.addWidget(self._build_logged_sources_bar())
 
         card = QFrame()
@@ -597,6 +596,147 @@ class LogHubPage(QWidget):
         toggle_btn.toggled.connect(_on_toggle)
         return outer
 
+    def _build_control_bar(self) -> QWidget:
+        """Unified filter row: search | source chips | + | stretch | live/history pill."""
+        bar = QFrame()
+        bar.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        lay = QHBoxLayout(bar)
+        lay.setContentsMargins(10, 6, 10, 6)
+        lay.setSpacing(6)
+
+        # Search input — leftmost
+        self._search_box = QLineEdit()
+        self._search_box.setPlaceholderText("Search…  (source:arp  ip:x  severity:critical)")
+        self._search_box.setMinimumWidth(150)
+        self._search_box.setMaximumWidth(230)
+        self._search_box.setFixedHeight(26)
+        self._search_box.setClearButtonEnabled(True)
+        self._search_box.setStyleSheet(
+            f"QLineEdit {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px;"
+            f" padding:1px 8px; font-size:11px; color:{TEXT_PRIMARY}; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        self._search_box.textChanged.connect(self._apply_filter)
+        lay.addWidget(self._search_box)
+
+        _div = QFrame()
+        _div.setFrameShape(QFrame.Shape.VLine)
+        _div.setFixedWidth(1)
+        _div.setStyleSheet(f"background:{BORDER}; border:none;")
+        lay.addWidget(_div)
+
+        # "All" button
+        all_btn = QPushButton("● All")
+        all_btn.setCheckable(True)
+        all_btn.setChecked(True)
+        all_btn.setFixedHeight(26)
+        self._style_toggle(all_btn, True, ACCENT)
+        all_btn.clicked.connect(self._on_all_toggled)
+        self._all_btn = all_btn
+        lay.addWidget(all_btn)
+
+        # Source chips — show only enabled sources; hidden ones accessible via "+"
+        s = QSettings()
+        for key, (label, color) in _SOURCES.items():
+            default_on = key in ("net", "syslog", "snmp")
+            enabled = s.value(f"logging/{key}_enabled", default_on, type=bool)
+            btn = QPushButton(f"{'●' if enabled else '○'}  {label}")
+            btn.setCheckable(True)
+            btn.setChecked(enabled)
+            btn.setFixedHeight(26)
+            self._style_toggle(btn, enabled, color)
+            btn.clicked.connect(lambda checked, k=key: self._on_source_toggled(k, checked))
+            self._toggle_btns[key] = btn
+            btn.setVisible(enabled and key != "plugin")
+            if key == "modem" and not enabled:
+                btn.setToolTip("Enable modem logging in Scan Configuration to show here.")
+            lay.addWidget(btn)
+
+        # "+" chip — opens source picker for disabled sources
+        self._source_plus_btn = QPushButton("+")
+        self._source_plus_btn.setFixedSize(26, 26)
+        self._source_plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._source_plus_btn.setToolTip("Add source filter")
+        self._source_plus_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:13px;"
+            f" font-weight:bold; border:1px solid {BORDER}; border-radius:4px; padding:0; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
+        )
+        self._source_plus_btn.clicked.connect(self._open_source_picker)
+        lay.addWidget(self._source_plus_btn)
+
+        lay.addStretch()
+
+        # Live / History pill toggle — rightmost
+        _pill = QFrame()
+        _pill.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:13px; }}"
+        )
+        _pill_lay = QHBoxLayout(_pill)
+        _pill_lay.setContentsMargins(2, 2, 2, 2)
+        _pill_lay.setSpacing(0)
+
+        _pill_seg_on = (
+            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+            f" border:none; border-radius:11px; padding:2px 12px; }}"
+        )
+        _pill_seg_off = (
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+            f" border:none; border-radius:11px; padding:2px 12px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._live_mode_btn = QPushButton("● Live")
+        self._live_mode_btn.setFixedHeight(24)
+        self._live_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._live_mode_btn.setStyleSheet(_pill_seg_on)
+        self._live_mode_btn.clicked.connect(self._on_mode_live)
+
+        self._hist_mode_btn = QPushButton("⊙ History")
+        self._hist_mode_btn.setFixedHeight(24)
+        self._hist_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._hist_mode_btn.setStyleSheet(_pill_seg_off)
+        self._hist_mode_btn.clicked.connect(self._on_mode_history)
+
+        _pill_lay.addWidget(self._live_mode_btn)
+        _pill_lay.addWidget(self._hist_mode_btn)
+        lay.addWidget(_pill)
+
+        return bar
+
+    def _open_source_picker(self) -> None:
+        """Popup menu for enabling hidden (disabled) source chips."""
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; padding:2px; }}"
+            f"QMenu::item {{ padding:5px 14px; color:{TEXT_PRIMARY}; font-size:11px; }}"
+            f"QMenu::item:selected {{ background:{ACCENT}22; }}"
+        )
+        has_hidden = False
+        for key, (label, _color) in _SOURCES.items():
+            btn = self._toggle_btns.get(key)
+            if btn and not btn.isVisible():
+                action = menu.addAction(f"+ {label}")
+                action.triggered.connect(lambda _, k=key: self._reveal_source_chip(k))
+                has_hidden = True
+        if not has_hidden:
+            return
+        pos = self._source_plus_btn.mapToGlobal(
+            self._source_plus_btn.rect().bottomLeft()
+        )
+        menu.exec(pos)
+
+    def _reveal_source_chip(self, key: str) -> None:
+        """Show a hidden source chip and enable it."""
+        btn = self._toggle_btns.get(key)
+        if btn:
+            btn.setVisible(True)
+            btn.setChecked(True)
+            self._on_source_toggled(key, True)
+
     def _build_source_bar(self) -> QWidget:
         bar = QFrame()
         bar.setStyleSheet(
@@ -813,10 +953,10 @@ class LogHubPage(QWidget):
     def _on_mode_live(self) -> None:
         self._is_history_mode = False
         _on  = (f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
-                f" border:none; border-radius:3px; padding:2px 14px; }}")
+                f" border:none; border-radius:11px; padding:2px 12px; }}")
         _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-                f" border:none; border-radius:3px; padding:2px 14px; }}"
-                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_HOVER}; }}")
+                f" border:none; border-radius:11px; padding:2px 12px; }}"
+                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}")
         self._live_mode_btn.setStyleSheet(_on)
         self._hist_mode_btn.setStyleSheet(_off)
         self._history_bar.setVisible(False)
@@ -825,10 +965,10 @@ class LogHubPage(QWidget):
     def _on_mode_history(self) -> None:
         self._is_history_mode = True
         _on  = (f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
-                f" border:none; border-radius:3px; padding:2px 14px; }}")
+                f" border:none; border-radius:11px; padding:2px 12px; }}")
         _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
-                f" border:none; border-radius:3px; padding:2px 14px; }}"
-                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BG_HOVER}; }}")
+                f" border:none; border-radius:11px; padding:2px 12px; }}"
+                f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}")
         self._hist_mode_btn.setStyleSheet(_on)
         self._live_mode_btn.setStyleSheet(_off)
         self._history_bar.setVisible(True)

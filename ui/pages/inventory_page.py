@@ -467,6 +467,7 @@ class InventoryPage(QWidget):
         self._table.setSelectionBehavior(ExpandingTable.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(ExpandingTable.SelectionMode.ExtendedSelection)
         self._table.setAlternatingRowColors(True)
+        self._table.verticalHeader().setDefaultSectionSize(26)
         self._table.setSortingEnabled(True)
         self._table.setShowGrid(False)
         self._table.setStyleSheet(

@@ -2313,6 +2313,14 @@ class Dashboard(QMainWindow):
         """Add a collapsible section header row."""
         from PyQt6.QtCore import QSize
         from PyQt6.QtGui import QColor, QFont as _QFont, QBrush
+        # Insert 8px air-gap + 1px divider before every non-first section
+        if self._nav.count() > 0:
+            _div = QListWidgetItem()
+            _div.setFlags(Qt.ItemFlag.NoItemFlags)
+            _div.setSizeHint(QSize(0, 9))
+            _div.setBackground(QBrush(QColor(BORDER)))
+            self._nav.addItem(_div)
+            self._nav_separators.add(self._nav.count() - 1)
         item = QListWidgetItem()
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)   # clickable but not selectable
         item.setSizeHint(QSize(0, 28))
@@ -4202,6 +4210,10 @@ class Dashboard(QMainWindow):
                 })
 
         # Pages (NAV-2: add monitoring state to monitor pages)
+        _PAGE_SHORTCUTS: dict[str, str] = {
+            "Log Hub":  "Ctrl+L",
+            "Settings": "Ctrl+,",
+        }
         seen: set = set()
         pages = []
         for sec in self._nav_sections:
@@ -4209,6 +4221,7 @@ class Dashboard(QMainWindow):
                 if entry.label and entry.label not in seen:
                     seen.add(entry.label)
                     worker_attr = self._MONITOR_PAGES.get(entry.label)
+                    sc = _PAGE_SHORTCUTS.get(entry.label, "")
                     if worker_attr:
                         running = self._is_monitor_running(worker_attr)
                         state = "● Monitoring" if running else "○ Not running"
@@ -4217,6 +4230,7 @@ class Dashboard(QMainWindow):
                             "label": f"{entry.label}  {state}",
                             "kind": "page",
                             "real_label": entry.label,
+                            "shortcut": sc,
                         })
                         if not running:
                             pages.append({
@@ -4225,7 +4239,7 @@ class Dashboard(QMainWindow):
                                 "kind": "action",
                             })
                     else:
-                        pages.append({"icon": "◎", "label": entry.label, "kind": "page"})
+                        pages.append({"icon": "◎", "label": entry.label, "kind": "page", "shortcut": sc})
 
         if recent_items:
             pages_section = [{"label": "Pages", "kind": "separator"}] + pages
@@ -8238,7 +8252,7 @@ class Dashboard(QMainWindow):
         self._arp_stack = _SW()
         self._arp_stack.addWidget(_empty_state_widget(
             "⊙", "ARP Watch not running",
-            "Monitor your network for ARP spoofing and man-in-the-middle attacks.",
+            "Real-time detection of devices impersonating your router.",
             "Start ARP Watch", self._start_arp_monitor,
         ))
         self._arp_stack.addWidget(self._arp_table)
@@ -8371,7 +8385,7 @@ class Dashboard(QMainWindow):
         self._bw_stack = _SW2()
         self._bw_stack.addWidget(_empty_state_widget(
             "▲", "No traffic captured yet",
-            "Start the bandwidth monitor to see per-device upload and download rates.",
+            "Live traffic by device, updated every second.",
             "Start Monitor", self._start_bandwidth_monitor,
         ))
         self._bw_stack.addWidget(self._bw_table)
@@ -8629,6 +8643,7 @@ class Dashboard(QMainWindow):
         ctrl.addWidget(btn_stop)
         ctrl.addStretch()
         self._recon_syn_table = _table(["Port", "State", "Protocol", "Service", "CVEs"])
+        self._recon_syn_table.verticalHeader().setDefaultSectionSize(26)
         self._recon_syn_table.setColumnWidth(0, 70)
         self._recon_syn_table.setColumnWidth(1, 90)
         self._recon_syn_table.setColumnWidth(2, 70)
@@ -8641,7 +8656,7 @@ class Dashboard(QMainWindow):
         self._syn_stack = _SW3()
         self._syn_stack.addWidget(_empty_state_widget(
             "🔎", "No scan run yet",
-            "Enter a target host above and click SYN Scan to discover open TCP ports.",
+            "Open ports on every device in your network, ranked by risk.",
             None, None,
         ))
         self._syn_stack.addWidget(self._recon_syn_table)

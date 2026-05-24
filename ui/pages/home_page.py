@@ -830,8 +830,6 @@ class HomePage(QWidget):
         _diag_row.addWidget(_diag_open)
         _rec_outer.addLayout(_diag_row)
 
-        lay.addWidget(self._recurring_section)
-
         # ── This Week card (DASH-2) ───────────────────────────────────────────
         self._this_week_card = QFrame()
         self._this_week_card.setStyleSheet(
@@ -889,7 +887,13 @@ class HomePage(QWidget):
             _tw_chips_row.addWidget(_chip, 1)
 
         _tw_outer.addLayout(_tw_chips_row)
-        lay.addWidget(self._this_week_card)
+
+        # Grade + This Week side-by-side (POLISH-1)
+        _stats_hbox = QHBoxLayout()
+        _stats_hbox.setSpacing(10)
+        _stats_hbox.addWidget(self._recurring_section, 3)
+        _stats_hbox.addWidget(self._this_week_card, 2)
+        lay.addLayout(_stats_hbox)
 
         # ── Hero card ─────────────────────────────────────────────────────────
         hero = QFrame()
@@ -2002,6 +2006,7 @@ class HomePage(QWidget):
             )
             if not self._setup_collapsed:
                 self._setup_toggle_collapse()
+            self._setup_card.setVisible(False)
         else:
             self._setup_hdr_lbl.setText("SETUP CHECKLIST")
             self._setup_hdr_lbl.setStyleSheet(
@@ -2524,6 +2529,56 @@ class _GradeBreakdownDialog:
         hdr_row.addWidget(hdr_text, 1)
         lay.addLayout(hdr_row)
 
+        # "Biggest improvement" tip — amber framed block at the top
+        _grade_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4, "N/A": 5}
+        worst_dim = max(dimensions, key=lambda d: _grade_rank.get(getattr(d, "grade", "N/A"), 5)) if dimensions else None
+        _DIM_NAV = {
+            "Connection Uptime":          "DNS & Stability",
+            "Average Latency":            "DNS & Stability",
+            "Jitter (Call Quality)":      "Bandwidth Usage",
+            "DNS Response Speed":         "DNS & Stability",
+            "Download Speed":             "Speed Test",
+            "Network Device Safety":      "Port Scan (TCP)",
+            "Spanning Tree (STP) Health": "Rogue Bridge (STP)",
+            "Broadcast Storm Level":      "Broadcast Storm",
+        }
+        if worst_dim and getattr(worst_dim, "tip", ""):
+            _tip_frame = QFrame()
+            _tip_frame.setStyleSheet(
+                f"QFrame {{ background:{AMBER}1A; border:1px solid {AMBER}44;"
+                f" border-left:3px solid {AMBER}; border-radius:4px; }}"
+            )
+            _tip_vlay = QVBoxLayout(_tip_frame)
+            _tip_vlay.setContentsMargins(12, 8, 10, 8)
+            _tip_vlay.setSpacing(4)
+            _tip_hdr = QLabel("Biggest improvement")
+            _tip_hdr.setStyleSheet(
+                f"font-size:11px; font-weight:bold; color:{AMBER};"
+                f" background:transparent; border:none;"
+            )
+            _tip_body = QLabel(worst_dim.tip)
+            _tip_body.setWordWrap(True)
+            _tip_body.setStyleSheet(
+                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            )
+            _tip_vlay.addWidget(_tip_hdr)
+            _tip_vlay.addWidget(_tip_body)
+            _nav_target = _DIM_NAV.get(getattr(worst_dim, "name", ""), "")
+            if _nav_target:
+                _tip_cta = QPushButton(f"Go to {_nav_target} →")
+                _tip_cta.setFlat(True)
+                _tip_cta.setCursor(Qt.CursorShape.PointingHandCursor)
+                _tip_cta.setStyleSheet(
+                    f"QPushButton {{ background:transparent; color:{AMBER}; border:none;"
+                    f" font-size:11px; font-weight:600; padding:0; text-align:left; }}"
+                    f"QPushButton:hover {{ color:#D97B00; }}"
+                )
+                _nav_sig = getattr(parent, "navigate_to", None)
+                if _nav_sig:
+                    _tip_cta.clicked.connect(lambda _, t=_nav_target: (dlg.accept(), _nav_sig.emit(t)))
+                _tip_vlay.addWidget(_tip_cta)
+            lay.addWidget(_tip_frame)
+
         # Separator
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
@@ -2540,11 +2595,6 @@ class _GradeBreakdownDialog:
         il = QVBoxLayout(inner)
         il.setContentsMargins(0, 0, 0, 0)
         il.setSpacing(4)
-
-        worst_dim = None
-        if dimensions:
-            _grade_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4, "N/A": 5}
-            worst_dim = max(dimensions, key=lambda d: _grade_rank.get(getattr(d, "grade", "N/A"), 5))
 
         for dim in dimensions:
             dg = getattr(dim, "grade", "N/A")
@@ -2586,30 +2636,6 @@ class _GradeBreakdownDialog:
         il.addStretch()
         scroll.setWidget(inner)
         lay.addWidget(scroll, 1)
-
-        # "How to improve" tip for worst dimension
-        if worst_dim and getattr(worst_dim, "tip", ""):
-            tip_frame = QFrame()
-            tip_frame.setStyleSheet(
-                f"QFrame {{ background:{ACCENT}22; border:1px solid {ACCENT}44; border-radius:4px; }}"
-            )
-            tip_lay = QHBoxLayout(tip_frame)
-            tip_lay.setContentsMargins(10, 8, 10, 8)
-            tip_icon = QLabel("ℹ")
-            tip_icon.setStyleSheet(
-                f"font-size:11px; color:{ACCENT}; background:transparent; border:none;"
-            )
-            tip_lbl = QLabel(
-                f"<b>How to improve:</b> {worst_dim.tip}"
-            )
-            tip_lbl.setWordWrap(True)
-            tip_lbl.setTextFormat(Qt.TextFormat.RichText)
-            tip_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-            )
-            tip_lay.addWidget(tip_icon)
-            tip_lay.addWidget(tip_lbl, 1)
-            lay.addWidget(tip_frame)
 
         # Close button
         close_btn = QPushButton("Close")

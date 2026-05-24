@@ -369,7 +369,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.28")
+    app.setApplicationVersion("1.9.29")
 
     # ── Splash screen ─────────────────────────────────────────────────────────
     # PERF-1: splash screen with progress messages

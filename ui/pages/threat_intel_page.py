@@ -97,7 +97,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
     t.horizontalHeader().setStretchLastSection(True)
     t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
     t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
+    t.verticalHeader().setDefaultSectionSize(26)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     t.setAlternatingRowColors(True)
@@ -280,7 +280,7 @@ class ThreatIntelPage(QWidget):
             f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
             f" background:transparent; border:none;"
         )
-        _el_sub = QLabel("Download the latest IP/domain blocklists to start screening your network.")
+        _el_sub = QLabel("IPs and domains on your network matched against live threat feeds.")
         _el_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _el_sub.setWordWrap(True)
         _el_sub.setStyleSheet(

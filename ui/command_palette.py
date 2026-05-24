@@ -1,11 +1,34 @@
 """Command palette — Ctrl+K fuzzy launcher for pages and actions."""
 
 from PyQt6.QtCore import Qt, QEvent, pyqtSignal
+from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QApplication, QDialog, QLineEdit, QListWidget, QListWidgetItem, QVBoxLayout, QWidget,
+    QApplication, QDialog, QLineEdit, QListWidget, QListWidgetItem, QStyle,
+    QStyledItemDelegate, QVBoxLayout, QWidget,
 )
 
 from ui.styles import ACCENT, BG_CARD, BG_HOVER, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE
+
+
+class _ShortcutDelegate(QStyledItemDelegate):
+    """Draws keyboard shortcut text right-aligned on palette items that have one."""
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        shortcut = index.data(Qt.ItemDataRole.UserRole + 1)
+        if shortcut:
+            painter.save()
+            is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
+            painter.setPen(QColor(WHITE if is_selected else TEXT_SECONDARY))
+            f = QFont()
+            f.setPointSize(9)
+            painter.setFont(f)
+            painter.drawText(
+                option.rect.adjusted(0, 0, -14, 0),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                shortcut,
+            )
+            painter.restore()
 
 
 class CommandPalette(QDialog):
@@ -40,7 +63,7 @@ class CommandPalette(QDialog):
         wl.setSpacing(0)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("  Go to page or run action…")
+        self._search.setPlaceholderText("  Search pages, devices, actions… (Ctrl+K)")
         self._search.setFixedHeight(42)
         self._search.setStyleSheet(
             f"QLineEdit {{"
@@ -70,13 +93,14 @@ class CommandPalette(QDialog):
             f"QListWidget::item:hover:!selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._list.setItemDelegate(_ShortcutDelegate(self._list))
         self._list.itemClicked.connect(self._activate)
         wl.addWidget(self._list)
 
         outer.addWidget(wrap)
         self._populate(self._all_items)
 
-    def _populate(self, items: list):
+    def _populate(self, items: list, show_tip: bool = False):
         self._list.clear()
         first_selectable = None
         for it in items:
@@ -86,7 +110,6 @@ class CommandPalette(QDialog):
             if kind == "separator":
                 row = QListWidgetItem(f"  {label.upper()}")
                 row.setFlags(Qt.ItemFlag.NoItemFlags)
-                from PyQt6.QtGui import QColor, QFont
                 row.setForeground(QColor(TEXT_SECONDARY))
                 f = QFont()
                 f.setPointSize(8)
@@ -95,12 +118,23 @@ class CommandPalette(QDialog):
             else:
                 row = QListWidgetItem(f"  {icon}  {label}")
                 row.setData(Qt.ItemDataRole.UserRole, it)
+                shortcut = it.get("shortcut", "")
+                if shortcut:
+                    row.setData(Qt.ItemDataRole.UserRole + 1, shortcut)
                 if kind in ("action", "recent"):
-                    from PyQt6.QtGui import QColor
                     row.setForeground(QColor(TEXT_SECONDARY))
                 if first_selectable is None:
                     first_selectable = self._list.count()
             self._list.addItem(row)
+        if show_tip:
+            _tip = QListWidgetItem("  💡  Tip: type an IP address to find a device")
+            _tip.setFlags(Qt.ItemFlag.NoItemFlags)
+            _f = QFont()
+            _f.setPointSize(9)
+            _f.setItalic(True)
+            _tip.setFont(_f)
+            _tip.setForeground(QColor(TEXT_SECONDARY))
+            self._list.addItem(_tip)
         if first_selectable is not None:
             self._list.setCurrentRow(first_selectable)
 
@@ -154,7 +188,7 @@ class CommandPalette(QDialog):
         text = text.strip()
         source = getattr(self, "_combined_items", self._all_items)
         if not text:
-            self._populate(source)
+            self._populate(source, show_tip=True)
             return
         q = text.lower()
         matched = []
@@ -226,7 +260,7 @@ class CommandPalette(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         self._search.clear()
-        self._populate(getattr(self, "_combined_items", self._all_items))
+        self._populate(getattr(self, "_combined_items", self._all_items), show_tip=True)
         if self.parent():
             pw  = self.parent()
             geo = pw.frameGeometry()
