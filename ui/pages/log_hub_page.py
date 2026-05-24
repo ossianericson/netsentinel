@@ -63,6 +63,15 @@ _SYSLOG_SEVERITY_COLOR = {
     "NOTICE": TEXT_PRIMARY, "INFO": TEXT_PRIMARY, "DEBUG": TEXT_MUTED,
 }
 
+_SOURCE_TIPS: dict[str, str] = {
+    "net":    "Network RTT — continuous latency measurements to gateway and DNS (higher is worse).",
+    "modem":  "5G Modem — periodic signal snapshots: RSRP, SINR, band. Set interval in Scan Config.",
+    "mesh":   "Mesh Router — periodic TP-Link Deco status snapshots. Set interval in Scan Config.",
+    "syslog": "Syslog — UDP messages received on port 514 from routers and managed switches.",
+    "snmp":   "SNMP Traps — trap PDUs received on port 162 from network devices.",
+    "plugin": "Plugin — log entries emitted by installed NetSentinel plugins.",
+}
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -220,6 +229,7 @@ class LogHubPage(QWidget):
         self._last_live_challenge: float      = 0.0
         self._challenge_banner_ts: float      = 0.0
         self._cap_shown:           bool       = False
+        self._anim_row_ts:         list[float] = []
         self._toggle_btns:    dict[str, QPushButton] = {}
         self._db_btns:        dict[str, QPushButton] = {}
         self._interval_combos: dict[str, QComboBox]  = {}
@@ -425,6 +435,12 @@ class LogHubPage(QWidget):
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
         card_lay.addWidget(self._table)
+        from ui.empty_state import EmptyStateOverlay
+        EmptyStateOverlay(
+            self._table, "≡",
+            "No log entries yet",
+            "Entries appear here as network events arrive. Enable sources above.",
+        )
 
         # ALERT-4: inline alert correlation panel (hidden until triggered)
         self._alert_corr_panel = QFrame()
@@ -651,6 +667,7 @@ class LogHubPage(QWidget):
             btn.clicked.connect(lambda checked, k=key: self._on_source_toggled(k, checked))
             self._toggle_btns[key] = btn
             btn.setVisible(enabled and key != "plugin")
+            btn.setToolTip(_SOURCE_TIPS.get(key, ""))
             if key == "modem" and not enabled:
                 btn.setToolTip("Enable modem logging in Scan Configuration to show here.")
             lay.addWidget(btn)
@@ -1299,8 +1316,47 @@ class LogHubPage(QWidget):
             return
         self._table.insertRow(0)
         self._set_table_row(0, e)
+        self._animate_row_fade()
         if self._table.rowCount() > _MAX_ROWS:
             self._table.setRowCount(_MAX_ROWS)
+
+    def _animate_row_fade(self) -> None:
+        """Fade row 0 in from 60% → 100% opacity over 300 ms (ANIM-4). Skipped at high velocity."""
+        from ui.theme import _reduce_motion
+        if _reduce_motion():
+            return
+        now = _t.time()
+        self._anim_row_ts = [ts for ts in self._anim_row_ts if now - ts < 1.0]
+        self._anim_row_ts.append(now)
+        if len(self._anim_row_ts) > 5:
+            return
+
+        from PyQt6.QtGui import QColor
+        from ui.styles import BG_CARD
+
+        n_cols = self._table.columnCount()
+        final_colors: list[tuple[int, QColor | None]] = []
+        for col in range(n_cols):
+            item = self._table.item(0, col)
+            final_colors.append((col, QColor(item.foreground().color()) if item else None))
+
+        bg = QColor(BG_CARD)
+
+        def _apply(weight: float) -> None:
+            for col, final in final_colors:
+                if final is None:
+                    continue
+                item = self._table.item(0, col)
+                if not item:
+                    continue
+                r = int(bg.red()   + (final.red()   - bg.red())   * weight)
+                g = int(bg.green() + (final.green() - bg.green()) * weight)
+                b = int(bg.blue()  + (final.blue()  - bg.blue())  * weight)
+                item.setForeground(QColor(r, g, b))
+
+        _apply(0.6)
+        QTimer.singleShot(100, lambda: _apply(0.8))
+        QTimer.singleShot(200, lambda: _apply(1.0))
 
     def _apply_filter(self) -> None:
         filt = self._search_box.text().strip().lower()

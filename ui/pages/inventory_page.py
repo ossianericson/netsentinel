@@ -20,6 +20,7 @@ import time as _time
 from PyQt6.QtCore import (
     QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer, pyqtSignal, pyqtSlot,
 )
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
@@ -326,6 +327,7 @@ class InventoryPage(QWidget):
         self._window_h = 24
         self._active_types: set[str] = set(_ALL_TYPES)
         self._rows: list = []
+        self._last_refresh_ts = 0.0
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
@@ -425,12 +427,21 @@ class InventoryPage(QWidget):
         filter_lbl = QLabel("Filter:")
         filter_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
         filter_row.addWidget(filter_lbl)
+        _event_tips = {
+            "JOINED":    "New device appeared on the network for the first time.",
+            "LEFT":      "Device stopped responding — may have disconnected or powered off.",
+            "DOWN":      "Device confirmed offline after multiple missed availability checks.",
+            "UP":        "A previously down device is reachable again.",
+            "DEGRADED":  "Device response time or signal quality has fallen below threshold.",
+            "RECOVERED": "Degraded device has returned to normal performance.",
+        }
         self._type_checks: dict[str, QCheckBox] = {}
         for et in _ALL_TYPES:
             color, label = _EVENT_STYLE[et]
             cb = QCheckBox(label)
             cb.setChecked(True)
             cb.setStyleSheet(f"QCheckBox {{ font-size:11px; color:{color}; font-weight:bold; }}")
+            cb.setToolTip(_event_tips.get(et, ""))
             cb.toggled.connect(lambda checked, t=et: self._toggle_type(t, checked))
             self._type_checks[et] = cb
             filter_row.addWidget(cb)
@@ -496,6 +507,20 @@ class InventoryPage(QWidget):
         hdr.resizeSection(4, 135)  # MAC
         hdr.resizeSection(5, 130)  # Vendor
         hdr.setStretchLastSection(True)
+        _header_tips = [
+            "Alert dot — red: critical alert active · amber: unacked alert · grey: clear",
+            "When the event was recorded",
+            "JOINED: first seen · LEFT: no response · DOWN: confirmed offline"
+            " · UP: back online · DEGRADED: quality drop · RECOVERED: back to normal",
+            "IP address, or custom label if one has been set for this device",
+            "Hardware (MAC) address — double-click a row to edit device details",
+            "NIC vendor identified from the MAC OUI prefix",
+            "Additional context recorded with the event",
+        ]
+        for _i, _tip in enumerate(_header_tips):
+            _hi = self._table.horizontalHeaderItem(_i)
+            if _hi:
+                _hi.setToolTip(_tip)
         self._table.cellDoubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_row_single_clicked)
         self._table.selectionModel().selectionChanged.connect(self._on_selection_changed)
@@ -635,6 +660,7 @@ class InventoryPage(QWidget):
         self._set_kpi(self._kpi_devices, str(known))
 
         # Table
+        prev_ts = self._last_refresh_ts
         clear_skeleton_rows(self._table)
         self._table.setSortingEnabled(False)
         self._table.clear_detail()
@@ -679,21 +705,24 @@ class InventoryPage(QWidget):
             color, _ = _EVENT_STYLE.get(evt.event_type, (TEXT_SECONDARY, evt.event_type))
             host_cell = custom_name or evt.ip or "—"
 
-            # DEVICE-2: alert status dot
+            # ANIM-1: alert status dot — PulsingDot widget, pulses on new online events
+            from ui.widgets.pulsing_dot import PulsingDot
             _keys = {k for k in (evt.ip, evt.mac) if k}
             if _keys & _crit_hosts:
-                _dot_color, _dot_tip = RED, "CRITICAL alert active"
+                _dot_hex, _dot_tip = RED, "CRITICAL alert active"
             elif _keys & _alert_hosts:
-                _dot_color, _dot_tip = AMBER, "Unacked alert active"
+                _dot_hex, _dot_tip = AMBER, "Unacked alert active"
             else:
-                _dot_color, _dot_tip = TEXT_MUTED, ""
-            from PyQt6.QtWidgets import QTableWidgetItem as _TWI
-            _dot_item = _TWI("●")
-            _dot_item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(_dot_color))
-            _dot_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            _dot_item.setToolTip(_dot_tip)
-            _dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
-            self._table.setItem(row, 0, _dot_item)
+                _dot_hex, _dot_tip = TEXT_MUTED, ""
+            _dot = PulsingDot()
+            _is_new = prev_ts > 0 and evt.ts > prev_ts
+            _dot.set_status(
+                QColor(_dot_hex),
+                animate=_is_new and evt.event_type in ("JOINED", "UP", "RECOVERED"),
+            )
+            if _dot_tip:
+                _dot.setToolTip(_dot_tip)
+            self._table.setCellWidget(row, 0, _dot)
 
             self._table.setItem(row, 1, _plain_item(dt_str))
             self._table.setItem(row, 2, _badge_item(evt.event_type, color))
@@ -704,6 +733,7 @@ class InventoryPage(QWidget):
             self._table.setRowHeight(row, 24)
 
         self._table.setSortingEnabled(True)
+        self._last_refresh_ts = _time.time()
 
     @pyqtSlot(dict)
     def on_cycle_done(self, _result: dict) -> None:
