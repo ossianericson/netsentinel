@@ -17,6 +17,7 @@ from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -25,6 +26,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -264,14 +266,17 @@ class SettingsPage(QWidget):
         bl.setSpacing(12)
 
         for builder, title in [
-            (self._build_integrations_card,       "Active Integrations"),
-            (self._build_appearance_card,         "Appearance — Colour Theme"),
-            (self._build_display_card,            "Display"),
-            (self._build_scanning_card,           "Network Scanning"),
-            (self._build_tray_card,               "Notifications & Tray"),
-            (self._build_plugin_marketplace_card, "Plugin Marketplace"),
-            (self._build_shortcuts_card,          "Keyboard Shortcuts"),
-            (self._build_maintenance_card,        "Maintenance"),
+            (self._build_config_completeness_card, "Configuration Status"),
+            (self._build_integrations_card,        "Active Integrations"),
+            (self._build_appearance_card,          "Appearance — Colour Theme"),
+            (self._build_display_card,             "Display"),
+            (self._build_scanning_card,            "Network Scanning"),
+            (self._build_sched_scan_card,          "Scheduled Full Scan"),
+            (self._build_tray_card,                "Notifications & Tray"),
+            (self._build_plugin_marketplace_card,  "Plugin Marketplace"),
+            (self._build_shortcuts_card,           "Keyboard Shortcuts"),
+            (self._build_health_card,              "App Health"),
+            (self._build_maintenance_card,         "Maintenance"),
         ]:
             card = builder()
             self._all_cards.append((card, title))
@@ -545,6 +550,123 @@ class SettingsPage(QWidget):
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("baseline/auto_snapshot", checked)
         self._mark_dirty()
+
+    # ── Scheduled Full Scan (SCHED-1) ─────────────────────────────────────────
+
+    def _build_sched_scan_card(self) -> QFrame:
+        card, bl = _card("Scheduled Full Scan")
+        qs = QSettings("NetSentinel", "NetSentinel")
+
+        self._chk_sched_scan = QCheckBox("Enable scheduled full network scan")
+        self._chk_sched_scan.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+        )
+        self._chk_sched_scan.setChecked(qs.value("sched_scan/enabled", False, bool))
+        bl.addWidget(self._chk_sched_scan)
+
+        # Recurrence row
+        rec_row = QHBoxLayout()
+        rec_row.setSpacing(8)
+        rec_lbl = QLabel("Run every")
+        rec_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        self._sched_scan_combo = QComboBox()
+        self._sched_scan_combo.addItems(["24 hours (daily)", "12 hours", "6 hours", "1 hour"])
+        _interval_map = {"24 hours (daily)": 24, "12 hours": 12, "6 hours": 6, "1 hour": 1}
+        _saved_hours = qs.value("sched_scan/interval_hours", 24, int)
+        _rev = {v: k for k, v in _interval_map.items()}
+        self._sched_scan_combo.setCurrentText(_rev.get(_saved_hours, "24 hours (daily)"))
+        self._sched_scan_combo.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        rec_row.addWidget(rec_lbl)
+        rec_row.addWidget(self._sched_scan_combo)
+        rec_row.addStretch()
+        bl.addLayout(rec_row)
+
+        # Next-run time
+        time_row = QHBoxLayout()
+        time_row.setSpacing(8)
+        time_lbl = QLabel("Start time (today)")
+        time_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        self._sched_hour_spin = QSpinBox()
+        self._sched_hour_spin.setRange(0, 23)
+        self._sched_hour_spin.setValue(qs.value("sched_scan/hour", 2, int))
+        self._sched_hour_spin.setFixedWidth(55)
+        self._sched_hour_spin.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        colon = QLabel(":")
+        colon.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        self._sched_min_spin = QSpinBox()
+        self._sched_min_spin.setRange(0, 59)
+        self._sched_min_spin.setValue(qs.value("sched_scan/minute", 0, int))
+        self._sched_min_spin.setFixedWidth(55)
+        self._sched_min_spin.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        time_row.addWidget(time_lbl)
+        time_row.addWidget(self._sched_hour_spin)
+        time_row.addWidget(colon)
+        time_row.addWidget(self._sched_min_spin)
+        time_row.addStretch()
+        bl.addLayout(time_row)
+
+        save_btn = QPushButton("Save Schedule")
+        save_btn.setFixedHeight(28)
+        save_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:white; border:none;"
+            f" font-size:11px; border-radius:4px; padding:0 14px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+        )
+        save_btn.clicked.connect(self._save_sched_scan)
+        bl.addWidget(save_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        self._sched_scan_next_lbl = QLabel("")
+        self._sched_scan_next_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent;"
+        )
+        bl.addWidget(self._sched_scan_next_lbl)
+        self._refresh_sched_scan_label()
+        return card
+
+    def _save_sched_scan(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("sched_scan/enabled", self._chk_sched_scan.isChecked())
+        _interval_map = {"24 hours (daily)": 24, "12 hours": 12, "6 hours": 6, "1 hour": 1}
+        hours = _interval_map.get(self._sched_scan_combo.currentText(), 24)
+        qs.setValue("sched_scan/interval_hours", hours)
+        qs.setValue("sched_scan/hour",   self._sched_hour_spin.value())
+        qs.setValue("sched_scan/minute", self._sched_min_spin.value())
+        import time as _t, datetime as _dt
+        now = _dt.datetime.now()
+        next_run = now.replace(
+            hour=self._sched_hour_spin.value(),
+            minute=self._sched_min_spin.value(),
+            second=0, microsecond=0
+        )
+        if next_run <= now:
+            next_run += _dt.timedelta(hours=hours)
+        qs.setValue("sched_scan/next_ts", next_run.timestamp())
+        self._refresh_sched_scan_label()
+        self._mark_dirty()
+
+    def _refresh_sched_scan_label(self) -> None:
+        if not hasattr(self, "_sched_scan_next_lbl"):
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("sched_scan/enabled", False, bool):
+            self._sched_scan_next_lbl.setText("Scheduled scan is disabled.")
+            return
+        import time as _t
+        next_ts = float(qs.value("sched_scan/next_ts", 0))
+        if next_ts > _t.time():
+            import datetime as _dt
+            nxt = _dt.datetime.fromtimestamp(next_ts)
+            self._sched_scan_next_lbl.setText(
+                f"Next scan: {nxt.strftime('%a %d %b at %H:%M')}"
+            )
+        else:
+            self._sched_scan_next_lbl.setText("Next scan: not yet scheduled — click Save.")
 
     # ── System Tray & Startup ─────────────────────────────────────────────────
 
@@ -973,3 +1095,150 @@ class SettingsPage(QWidget):
         bl.addWidget(setup_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         return card
+
+    # ── Config completeness (HEALTH-4) ────────────────────────────────────────
+
+    def _build_config_completeness_card(self) -> QFrame:
+        card, bl = _card("Configuration Status")
+
+        intro = QLabel(
+            "Features that need attention are highlighted. "
+            "Click a chip to jump to the relevant settings."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        bl.addWidget(intro)
+
+        from PyQt6.QtWidgets import QHBoxLayout as _HBox
+        chips_row = _HBox()
+        chips_row.setSpacing(8)
+
+        self._cfg_chips: dict[str, QLabel] = {}
+        for key, label in [
+            ("notifications",   "Notifications"),
+            ("sched_scan",      "Scheduled Scan"),
+            ("monitor_resume",  "Monitor Resume"),
+            ("digest",          "Weekly Digest"),
+            ("cve_tracking",    "CVE Tracking"),
+            ("automation",      "Automation"),
+        ]:
+            chip = QLabel(label)
+            chip.setFixedHeight(24)
+            chip.setStyleSheet(self._chip_style("grey"))
+            chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            chip.setContentsMargins(10, 0, 10, 0)
+            chips_row.addWidget(chip)
+            self._cfg_chips[key] = chip
+
+        chips_row.addStretch()
+        bl.addLayout(chips_row)
+        self.refresh_config_completeness()
+        return card
+
+    def _chip_style(self, state: str) -> str:
+        if state == "green":
+            return (
+                f"font-size:10px; font-weight:bold; color:#065F46;"
+                f" background:#D1FAE5; border:1px solid #10B981; border-radius:10px;"
+                f" padding:0 10px;"
+            )
+        if state == "amber":
+            return (
+                f"font-size:10px; font-weight:bold; color:#92400E;"
+                f" background:#FEF3C7; border:1px solid #F59E0B; border-radius:10px;"
+                f" padding:0 10px;"
+            )
+        return (
+            f"font-size:10px; font-weight:bold; color:#6B7280;"
+            f" background:#F3F4F6; border:1px solid #D1D5DB; border-radius:10px;"
+            f" padding:0 10px;"
+        )
+
+    def refresh_config_completeness(self, cve_count: int = 0, rule_count: int = 0) -> None:
+        if not hasattr(self, "_cfg_chips"):
+            return
+        s = QSettings("NetSentinel", "NetSentinel")
+
+        def _set(key: str, state: str) -> None:
+            self._cfg_chips[key].setStyleSheet(self._chip_style(state))
+
+        # Notifications — tray alerts on
+        _set("notifications", "green" if s.value("tray/alerts_enabled", True, bool) else "grey")
+        # Scheduled scan
+        _set("sched_scan", "green" if s.value("sched_scan/enabled", False, bool) else "grey")
+        # Monitor auto-resume — any monitor was persisted
+        any_monitor = (
+            s.value("monitor_persist/arp_running", False, bool)
+            or s.value("monitor_persist/bandwidth_running", False, bool)
+        )
+        _set("monitor_resume", "green" if any_monitor else "grey")
+        # Weekly digest
+        email = s.value("digest/email", "", str)
+        digest_on = s.value("digest/enabled", False, bool)
+        if digest_on and email:
+            _set("digest", "green")
+        elif digest_on or email:
+            _set("digest", "amber")
+        else:
+            _set("digest", "grey")
+        # CVE tracking
+        _set("cve_tracking", "green" if cve_count > 0 else "grey")
+        # Automation rules
+        _set("automation", "green" if rule_count > 0 else "grey")
+
+    # ── App Health (HEALTH-1) ─────────────────────────────────────────────────
+
+    def _build_health_card(self) -> QFrame:
+        card, bl = _card("App Health")
+
+        tbl = QTableWidget(6, 2)
+        tbl.setHorizontalHeaderLabels(["Component", "Status"])
+        tbl.horizontalHeader().setStretchLastSection(True)
+        tbl.horizontalHeader().setStyleSheet(
+            f"QHeaderView::section {{ background:{NAV_BAR}; color:white;"
+            f" font-size:10px; font-weight:bold; padding:4px 8px; border:none; }}"
+        )
+        tbl.verticalHeader().setVisible(False)
+        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tbl.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        tbl.setAlternatingRowColors(True)
+        tbl.setStyleSheet(
+            f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
+            f" background:{BG_CARD}; alternate-background-color:{BG_ALT_ROW}; gridline-color:{BORDER}; }}"
+            f"QTableWidget::item {{ padding:4px 8px; }}"
+        )
+        tbl.setFixedHeight(168)
+
+        _components = [
+            "Scheduler",
+            "ARP Monitor",
+            "Bandwidth Monitor",
+            "Report Scheduler",
+            "Database",
+            "Logger",
+        ]
+        for row, name in enumerate(_components):
+            tbl.setItem(row, 0, QTableWidgetItem(name))
+            tbl.setItem(row, 1, QTableWidgetItem("—"))
+            tbl.setRowHeight(row, 24)
+
+        bl.addWidget(tbl)
+        self._health_table = tbl
+        return card
+
+    def refresh_health_status(self, statuses: dict) -> None:
+        """Update the App Health table. statuses maps component name → (status_str, color_hint)."""
+        if not hasattr(self, "_health_table"):
+            return
+        tbl = self._health_table
+        for row in range(tbl.rowCount()):
+            name_item = tbl.item(row, 0)
+            if name_item is None:
+                continue
+            name = name_item.text()
+            if name in statuses:
+                status_str, ok = statuses[name]
+                item = QTableWidgetItem(status_str)
+                from PyQt6.QtGui import QColor
+                item.setForeground(QColor(GREEN if ok else RED))
+                tbl.setItem(row, 1, item)

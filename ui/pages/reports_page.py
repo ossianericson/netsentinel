@@ -16,7 +16,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore    import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore    import Qt, QTimer, QUrl, pyqtSlot
+from PyQt6.QtGui     import QDesktopServices
 from PyQt6.QtWidgets import (
     QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMessageBox, QPushButton, QSizePolicy, QSpinBox,
@@ -210,10 +211,18 @@ class ReportsPage(QWidget):
             f" border:1px solid {BORDER}; padding:0 14px; border-radius:4px;"
         )
         self._btn_copy.clicked.connect(self._copy_summary)
+        self._btn_open_folder = QPushButton("Open Folder ›")
+        self._btn_open_folder.setFixedHeight(34)
+        self._btn_open_folder.setStyleSheet(
+            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
+            f" border:1px solid {BORDER}; padding:0 14px; border-radius:4px;"
+        )
+        self._btn_open_folder.clicked.connect(self._open_output_folder)
         btn_row.addWidget(self._btn_apply)
         btn_row.addWidget(self._btn_now)
         btn_row.addWidget(self._btn_pdf)
         btn_row.addWidget(self._btn_copy)
+        btn_row.addWidget(self._btn_open_folder)
         btn_row.addStretch()
         cfg_lay.addLayout(btn_row)
 
@@ -311,6 +320,11 @@ class ReportsPage(QWidget):
                 subprocess.Popen(["open", path])
             else:
                 subprocess.Popen(["xdg-open", path])
+
+    def _open_output_folder(self) -> None:
+        folder = Path(self._txt_dir.text())
+        folder.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     def _export_pdf(self) -> None:
         """Generate a PDF report and prompt the user where to save it."""

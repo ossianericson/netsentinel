@@ -430,6 +430,18 @@ class HomePage(QWidget):
         for pill in (self._fs_pill_arp, self._fs_pill_dhcp, self._fs_pill_storm, self._fs_pill_log):
             row.addWidget(pill)
 
+        _sep2 = QLabel("|")
+        _sep2.setStyleSheet(f"font-size:11px; color:{BORDER}; background:transparent; border:none;")
+        row.addWidget(_sep2)
+
+        # SCHED-2: next scheduled scan label
+        self._fs_next_scan_lbl = QLabel("")
+        self._fs_next_scan_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        row.addWidget(self._fs_next_scan_lbl)
+        self._refresh_next_scan_label()
+
         row.addStretch()
 
         # SCAN-2: per-host scan progress label (hidden when idle)
@@ -505,6 +517,30 @@ class HomePage(QWidget):
         _set_pill(self._fs_pill_dhcp,  dhcp,   "DHCP")
         _set_pill(self._fs_pill_storm, storm,  "Storm")
         _set_pill(self._fs_pill_log,   logger, "Logger")
+
+    def _refresh_next_scan_label(self) -> None:
+        """SCHED-2: update the 'Next scan' label in the freshness strip."""
+        if not hasattr(self, "_fs_next_scan_lbl"):
+            return
+        from PyQt6.QtCore import QSettings
+        import time as _t, datetime as _dt
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("sched_scan/enabled", False, bool):
+            self._fs_next_scan_lbl.setVisible(False)
+            return
+        next_ts = float(qs.value("sched_scan/next_ts", 0))
+        self._fs_next_scan_lbl.setVisible(True)
+        if next_ts > _t.time():
+            nxt = _dt.datetime.fromtimestamp(next_ts)
+            now = _dt.datetime.now()
+            if nxt.date() == now.date():
+                self._fs_next_scan_lbl.setText(f"Next scan: today {nxt.strftime('%H:%M')}")
+            elif (nxt.date() - now.date()).days == 1:
+                self._fs_next_scan_lbl.setText(f"Next scan: tomorrow {nxt.strftime('%H:%M')}")
+            else:
+                self._fs_next_scan_lbl.setText(f"Next scan: {nxt.strftime('%a %H:%M')}")
+        else:
+            self._fs_next_scan_lbl.setText("Next scan: pending")
 
     # ── UI build ──────────────────────────────────────────────────────────────
 

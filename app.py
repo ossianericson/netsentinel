@@ -157,6 +157,8 @@ def _smoke_test() -> None:
         "ui.pages.baseline_page",
         "ui.pages.automation_page",
         "ui.pages.settings_page",
+        "ui.pages.timeline_page",
+        "modules.digest_builder",
         "ui.pages.trend_page",
         "ui.pages.mesh_router_page",
         "ui.pages.modem_page",
@@ -367,28 +369,47 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.25")
+    app.setApplicationVersion("1.9.26")
 
     # ── Splash screen ─────────────────────────────────────────────────────────
-    _px = QPixmap(460, 260)
-    _px.fill(QColor("#0D1117"))
-    _sp = QPainter(_px)
-    _sp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-    _sp.setPen(QColor("#E6EDF3"))
-    _f = QFont("Segoe UI", 26, QFont.Weight.Bold)
-    _sp.setFont(_f)
-    _sp.drawText(QRect(0, 70, 460, 50), Qt.AlignmentFlag.AlignCenter, "NetSentinel")
-    _sp.setPen(QColor("#8B949E"))
-    _sp.setFont(QFont("Segoe UI", 11))
-    _sp.drawText(QRect(0, 130, 460, 30), Qt.AlignmentFlag.AlignCenter,
-                 "Network Security Scanner")
-    _sp.setPen(QColor("#484F58"))
-    _sp.setFont(QFont("Segoe UI", 9))
-    _sp.drawText(QRect(0, 220, 460, 28), Qt.AlignmentFlag.AlignCenter, "Starting…")
-    _sp.end()
-    _splash = QSplashScreen(_px, Qt.WindowType.WindowStaysOnTopHint)
+    # PERF-1: splash screen with progress messages
+    _SPLASH_W, _SPLASH_H = 480, 280
+    _splash_base = QPixmap(_SPLASH_W, _SPLASH_H)
+    _splash_base.fill(QColor("#0D1117"))
+    _spp = QPainter(_splash_base)
+    _spp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    # Title
+    _spp.setPen(QColor("#E6EDF3"))
+    _spp.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
+    _spp.drawText(QRect(0, 60, _SPLASH_W, 55), Qt.AlignmentFlag.AlignCenter, "NetSentinel")
+    # Subtitle
+    _spp.setPen(QColor("#8B949E"))
+    _spp.setFont(QFont("Segoe UI", 11))
+    _spp.drawText(QRect(0, 120, _SPLASH_W, 30), Qt.AlignmentFlag.AlignCenter,
+                  "Network Security Scanner")
+    # Version
+    _spp.setPen(QColor("#30363D"))
+    _spp.setFont(QFont("Segoe UI", 9))
+    _spp.drawText(QRect(0, 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.25")
+    _spp.end()
+
+    _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
     _splash.show()
     app.processEvents()
+
+    def _splash_msg(msg: str) -> None:
+        """Overlay a progress message on the splash without redrawing the base."""
+        _px = _splash_base.copy()
+        _p = QPainter(_px)
+        _p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        # Clear previous message area
+        _p.fillRect(QRect(0, 175, _SPLASH_W, 28), QColor("#0D1117"))
+        _p.setPen(QColor("#484F58"))
+        _p.setFont(QFont("Segoe UI", 9))
+        _p.drawText(QRect(0, 177, _SPLASH_W, 24), Qt.AlignmentFlag.AlignCenter, msg)
+        _p.end()
+        _splash.setPixmap(_px)
+        app.processEvents()
     # ─────────────────────────────────────────────────────────────────────────
     app.setOrganizationName("netsentinel")
 
@@ -452,6 +473,7 @@ def main():
             app.setWindowIcon(QIcon(str(ico_path)))
             break
 
+    _splash_msg("Initialising database…")
     from modules.metric_store import MetricStore
     from modules.alert_engine import AlertEngine
     from workers.availability_worker import AvailabilityWorker
@@ -483,6 +505,7 @@ def main():
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
 
+    _splash_msg("Starting background workers…")
     avail_worker = AvailabilityWorker(store=store, interval_s=60)
     avail_worker.start()
 
@@ -517,6 +540,7 @@ def main():
         _ensure_key()  # generate and persist key on first enable
         rest_api_worker.start()
 
+    _splash_msg("Loading interface…")
     from ui.dashboard import Dashboard
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
                        maint_manager=maint_manager)
@@ -608,6 +632,7 @@ def main():
     window._inventory_page.scan_requested.connect(window._start_full_scan)
 
     # ── Show window after all wiring is complete (prevents startup flash) ─────
+    _splash_msg("Ready.")
     window.show()
     _splash.finish(window)
 

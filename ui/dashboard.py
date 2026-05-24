@@ -1474,6 +1474,22 @@ class Dashboard(QMainWindow):
         self._digest_timer.start()
         QTimer.singleShot(5000, self._check_weekly_digest)
 
+        # HEALTH-2: offline/no-LAN detection — 3 consecutive failures show amber banner
+        self._lan_fail_count: int = 0
+        self._lan_check_worker = None
+        self._lan_check_timer = QTimer()
+        self._lan_check_timer.setInterval(30_000)   # 30 s
+        self._lan_check_timer.timeout.connect(self._check_lan_connectivity)
+        self._lan_check_timer.start()
+        QTimer.singleShot(8000, self._check_lan_connectivity)
+
+        # SCHED-1: scheduled full scan — 60s polling timer checks if next_ts has passed
+        self._sched_scan_timer = QTimer()
+        self._sched_scan_timer.setInterval(60_000)  # check every minute
+        self._sched_scan_timer.timeout.connect(self._check_scheduled_scan)
+        self._sched_scan_timer.start()
+        QTimer.singleShot(10_000, self._check_scheduled_scan)
+
         # System tray guardian
         self._tray_quit = False   # set True when quitting via tray menu
         from ui.system_tray import SystemTrayManager
@@ -2593,6 +2609,9 @@ class Dashboard(QMainWindow):
         from ui.pages.reports_page import ReportsPage
         self._reports_page = ReportsPage(store=self._store)
 
+        from ui.pages.timeline_page import TimelinePage
+        self._timeline_page = TimelinePage(store=self._store)
+
         from ui.pages.notifications_page import NotificationsPage
         self._notifications_page = NotificationsPage(router=None, parent=None)
         self._notifications_page.navigate_to.connect(self._nav_rail_go_to)
@@ -3023,6 +3042,7 @@ class Dashboard(QMainWindow):
         self._nav_add_subgroup("Reports & Alerts", icon="🔔")
         self._nav_add_page("◟", "Notifications",        self._notifications_page)
         self._nav_add_page("⊟", "Auto Reports",         self._reports_page)
+        self._nav_add_page("⊡", "Network Timeline",     self._timeline_page)
         self._nav_add_page("⊛", "Config Snapshots",     self._baseline_page)
         self._nav_add_page("⚙", "Maintenance Windows",  self._maintenance_page)
         self._nav_add_page("△", "Custom Triggers",      self._trigger_page)
@@ -3339,6 +3359,37 @@ class Dashboard(QMainWindow):
         hp_lay.addWidget(self._help_shortcuts_lbl)
 
         cw_lay.addWidget(self._help_panel)
+
+        # HEALTH-2: offline/no-LAN amber banner (hidden until 3 consecutive ping failures)
+        self._lan_banner = QFrame()
+        self._lan_banner.setStyleSheet(
+            f"QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER};"
+            f" border-radius:4px; }}"
+        )
+        self._lan_banner.setFixedHeight(32)
+        self._lan_banner.setVisible(False)
+        _lbb = QHBoxLayout(self._lan_banner)
+        _lbb.setContentsMargins(10, 0, 10, 0)
+        _lbb.setSpacing(8)
+        _lan_icon = QLabel("⚠")
+        _lan_icon.setStyleSheet(f"font-size:13px; color:{AMBER}; border:none; background:transparent;")
+        _lan_lbl = QLabel("No internet connection detected — operating in offline mode.")
+        _lan_lbl.setStyleSheet(f"font-size:11px; color:#92400E; border:none; background:transparent;")
+        _lan_dismiss = QPushButton("Dismiss")
+        _lan_dismiss.setFixedHeight(22)
+        _lan_dismiss.setStyleSheet(
+            f"QPushButton {{ font-size:10px; color:#92400E; background:transparent;"
+            f" border:1px solid #F59E0B; border-radius:3px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:#FEF3C7; }}"
+        )
+        _lan_dismiss.clicked.connect(lambda: (
+            self._lan_banner.setVisible(False),
+            setattr(self, "_lan_fail_count", 0),
+        ))
+        _lbb.addWidget(_lan_icon)
+        _lbb.addWidget(_lan_lbl, 1)
+        _lbb.addWidget(_lan_dismiss)
+        cw_lay.addWidget(self._lan_banner)
 
         cw_lay.setSpacing(6)
         cw_lay.addWidget(self._stack)
@@ -10759,6 +10810,71 @@ class Dashboard(QMainWindow):
             else:
                 base_btn.set_badge(0)
 
+    def _check_scheduled_scan(self) -> None:
+        """SCHED-1: fire a full scan if enabled and next_ts has passed."""
+        import time as _t, datetime as _dt
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("sched_scan/enabled", False, bool):
+            return
+        next_ts = float(qs.value("sched_scan/next_ts", 0))
+        if next_ts <= 0 or _t.time() < next_ts:
+            return
+        # Compute next run
+        hours = int(qs.value("sched_scan/interval_hours", 24))
+        hour  = int(qs.value("sched_scan/hour",   2))
+        minute = int(qs.value("sched_scan/minute", 0))
+        nxt = _dt.datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+        while nxt.timestamp() <= _t.time():
+            nxt += _dt.timedelta(hours=hours)
+        qs.setValue("sched_scan/next_ts", nxt.timestamp())
+        # Refresh the settings label if page is visible
+        if hasattr(self, "_settings_page"):
+            try:
+                self._settings_page._refresh_sched_scan_label()
+            except Exception:
+                pass
+        # Fire the scan (reuse the existing full-scan trigger)
+        try:
+            self._start_scan()
+        except Exception:
+            pass
+
+    def _check_lan_connectivity(self) -> None:
+        """HEALTH-2: async socket probe; 3 failures → show amber offline banner."""
+        from PyQt6.QtCore import QThread, pyqtSignal as _sig
+
+        class _LanProbe(QThread):
+            result = _sig(bool)
+
+            def run(self) -> None:
+                import socket
+                try:
+                    socket.setdefaulttimeout(3)
+                    socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(
+                        ("1.1.1.1", 53)
+                    )
+                    self.result.emit(True)
+                except OSError:
+                    self.result.emit(False)
+
+        if getattr(self, "_lan_check_worker", None) and self._lan_check_worker.isRunning():
+            return
+        probe = _LanProbe(self)
+        self._lan_check_worker = probe
+
+        def _on_result(ok: bool) -> None:
+            if ok:
+                self._lan_fail_count = 0
+                if hasattr(self, "_lan_banner"):
+                    self._lan_banner.setVisible(False)
+            else:
+                self._lan_fail_count = getattr(self, "_lan_fail_count", 0) + 1
+                if self._lan_fail_count >= 3 and hasattr(self, "_lan_banner"):
+                    self._lan_banner.setVisible(True)
+
+        probe.result.connect(_on_result)
+        probe.start()
+
     def _check_weekly_digest(self) -> None:
         """Fire a weekly digest notification if conditions are met (RECUR-2)."""
         qs = QSettings("NetSentinel", "NetSentinel")
@@ -10778,10 +10894,15 @@ class Dashboard(QMainWindow):
         if now.timestamp() - last_ts < 6 * 86400:
             return
         qs.setValue("notif/weekly_digest_last_ts", now.timestamp())
-        if hasattr(self, "_notifications_page"):
-            body = self._notifications_page._generate_weekly_summary()
-        else:
-            body = "NetSentinel weekly digest"
+        # SCHED-4: use digest_builder for full HTML digest
+        try:
+            from modules.digest_builder import build_digest_html
+            body = build_digest_html(self._store) if self._store else "NetSentinel weekly digest"
+        except Exception:
+            if hasattr(self, "_notifications_page"):
+                body = self._notifications_page._generate_weekly_summary()
+            else:
+                body = "NetSentinel weekly digest"
         if self._notif_router:
             try:
                 from modules.notification_router import Alert as _Alert
@@ -10849,6 +10970,42 @@ class Dashboard(QMainWindow):
                 )
         except Exception:
             pass
+        # HEALTH-1/4: push health + config completeness to Settings page
+        if hasattr(self, "_settings_page"):
+            try:
+                import time as _t2
+                bw_running = bool(
+                    getattr(self, "_bandwidth_worker", None)
+                    and self._bandwidth_worker.isRunning()
+                )
+                sched_running = bool(
+                    getattr(self, "_report_scheduler_worker", None)
+                    and self._report_scheduler_worker.isRunning()
+                )
+                db_ok = self._store is not None
+                self._settings_page.refresh_health_status({
+                    "Scheduler":           ("Running" if sched_running else "Stopped", sched_running),
+                    "ARP Monitor":         ("Running" if arp           else "Stopped", arp),
+                    "Bandwidth Monitor":   ("Running" if bw_running     else "Stopped", bw_running),
+                    "Report Scheduler":    ("Running" if sched_running  else "Stopped", sched_running),
+                    "Database":            ("OK"      if db_ok          else "Error",   db_ok),
+                    "Logger":              ("Active"  if logger          else "Inactive", logger),
+                })
+                cve_count = 0
+                rule_count = 0
+                try:
+                    from modules.automation_hooks import get_engine as _gae
+                    rule_count = len(_gae().get_rules())
+                except Exception:
+                    pass
+                try:
+                    if self._store:
+                        cve_count = len(self._store.list_cve_lifecycles() or [])
+                except Exception:
+                    pass
+                self._settings_page.refresh_config_completeness(cve_count, rule_count)
+            except Exception:
+                pass
         # Section button badges
         self._refresh_section_badges(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
         # Push to Monitor Overview page

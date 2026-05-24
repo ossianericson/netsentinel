@@ -320,6 +320,19 @@ _FEATURES: list[dict] = [
     },
     {
         "group": "Diagnostics",
+        "icon": "⊡",
+        "name": "Network Timeline",
+        "desc": (
+            "Reverse-chronological unified event feed — device joins/leaves, fired alerts, "
+            "CVE discoveries, and speed tests in a single scrollable view. "
+            "Filter by source with one click."
+        ),
+        "page": "Network Timeline",
+        "requires": None,
+        "tags": ["timeline", "events", "history", "alerts", "devices", "cve", "feed"],
+    },
+    {
+        "group": "Diagnostics",
         "icon": "◔",
         "name": "DNS & Stability",
         "desc": (
