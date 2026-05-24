@@ -188,6 +188,7 @@ class ConnectionsPage(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
+        self._popover = None
         self._connections: list = []
         self._displayed_conns: list = []
         self._blocked_rules: list[str] = []
@@ -197,6 +198,11 @@ class ConnectionsPage(QWidget):
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(5000)
         self._auto_timer.timeout.connect(self._refresh)
+
+        self._undo_exe: str = ""
+        self._undo_timer = QTimer(self)
+        self._undo_timer.setSingleShot(True)
+        self._undo_timer.timeout.connect(self._hide_undo_bar)
 
         self._setup_ui()
         self._refresh()  # load immediately on open
@@ -303,6 +309,36 @@ class ConnectionsPage(QWidget):
             f" background:transparent; border:none;"
         )
         root.addWidget(self._status_lbl)
+
+        # Undo bar — appears for 10 s after a successful block action
+        self._undo_bar = QFrame()
+        self._undo_bar.setFixedHeight(32)
+        self._undo_bar.setStyleSheet(
+            f"background:{BG_CARD}; border:none;"
+            f" border-left:3px solid {GREEN}; border-radius:0;"
+        )
+        _ub_lay = QHBoxLayout(self._undo_bar)
+        _ub_lay.setContentsMargins(10, 0, 8, 0)
+        _ub_lay.setSpacing(8)
+        self._undo_lbl = QLabel()
+        self._undo_lbl.setStyleSheet(
+            f"color:{GREEN}; font-size:11px; font-weight:bold;"
+            f" background:transparent; border:none;"
+        )
+        _ub_lay.addWidget(self._undo_lbl)
+        _ub_lay.addStretch()
+        self._undo_btn = QPushButton("Undo")
+        self._undo_btn.setFixedSize(52, 22)
+        self._undo_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._undo_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+        )
+        self._undo_btn.clicked.connect(self._do_undo_block)
+        _ub_lay.addWidget(self._undo_btn)
+        self._undo_bar.setVisible(False)
+        root.addWidget(self._undo_bar)
 
         # Connections table
         self._tbl = ExpandingTable(
@@ -590,6 +626,9 @@ class ConnectionsPage(QWidget):
 
         return outer
 
+    def set_popover(self, popover) -> None:
+        self._popover = popover
+
     # ── Context menu ──────────────────────────────────────────────────────────
 
     def _context_menu(self, pos) -> None:
@@ -618,6 +657,11 @@ class ConnectionsPage(QWidget):
         else:
             act_fw = menu.addAction(f"🔒  Block {c.exe_name} (add firewall rule)")
 
+        act_device = None
+        if c.remote_ip and self._popover:
+            menu.addSeparator()
+            act_device = menu.addAction(f"Device Info — {c.remote_ip}")
+
         menu.addSeparator()
         act_copy_ip  = menu.addAction("Copy Remote IP")
         act_copy_exe = menu.addAction("Copy Process Name")
@@ -626,6 +670,9 @@ class ConnectionsPage(QWidget):
         action = menu.exec(self._tbl.viewport().mapToGlobal(pos))
         if action == act_fw:
             self._toggle_block(c, is_blocked)
+        elif act_device and action == act_device:
+            from PyQt6.QtGui import QCursor
+            self._popover.show_for(c.remote_ip, QCursor.pos())
         elif action == act_copy_ip:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(c.remote_ip or "")
@@ -662,51 +709,74 @@ class ConnectionsPage(QWidget):
     def _toggle_block(self, conn, currently_blocked: bool) -> None:
         if currently_blocked:
             ok, msg = _unblock_process(conn.exe_name)
-        else:
-            # Confirmation dialog
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Confirm Firewall Block")
-            dlg.setMinimumWidth(420)
-            dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
-            lay = QVBoxLayout(dlg)
-            lay.setSpacing(12)
-            lay.setContentsMargins(16, 16, 16, 12)
+            self._status_lbl.setText(f"{'✓' if ok else '⚠'}  {msg}")
+            self._load_blocked_rules()
+            self._apply_filters()
+            return
 
-            msg_lbl = QLabel(
-                f"Add an outbound-deny Windows Firewall rule for:\n\n"
-                f"  Process:  {conn.exe_name}\n"
-                f"  Path:     {conn.exe_path or 'unknown'}\n\n"
-                f"This will block ALL outbound traffic from this process.\n"
-                f"You can remove the rule at any time via the Unblock action."
-            )
-            msg_lbl.setWordWrap(True)
-            msg_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
-            )
-            lay.addWidget(msg_lbl)
+        # Block path — confirmation dialog
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Confirm Firewall Block")
+        dlg.setMinimumWidth(420)
+        dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(12)
+        lay.setContentsMargins(16, 16, 16, 12)
 
-            btns = QDialogButtonBox(
-                QDialogButtonBox.StandardButton.Ok |
-                QDialogButtonBox.StandardButton.Cancel
-            )
-            btns.button(QDialogButtonBox.StandardButton.Ok).setText("Block Process")
-            btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
-                f"background:{RED}; color:white; border:none;"
-                f" border-radius:3px; padding:5px 14px; font-size:11px; font-weight:bold;"
-            )
-            btns.accepted.connect(dlg.accept)
-            btns.rejected.connect(dlg.reject)
-            lay.addWidget(btns)
-
-            if dlg.exec() != QDialog.DialogCode.Accepted:
-                return
-            ok, msg = _block_process(conn.exe_path, conn.exe_name)
-
-        self._status_lbl.setText(
-            f"{'✓' if ok else '⚠'}  {msg}"
+        msg_lbl = QLabel(
+            f"Add an outbound-deny Windows Firewall rule for:\n\n"
+            f"  Process:  {conn.exe_name}\n"
+            f"  Path:     {conn.exe_path or 'unknown'}\n\n"
+            f"This will block ALL outbound traffic from this process.\n"
+            f"You can remove the rule at any time via the Unblock action."
         )
+        msg_lbl.setWordWrap(True)
+        msg_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+        )
+        lay.addWidget(msg_lbl)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText("Block Process")
+        btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
+            f"background:{RED}; color:white; border:none;"
+            f" border-radius:3px; padding:5px 14px; font-size:11px; font-weight:bold;"
+        )
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        ok, msg = _block_process(conn.exe_path, conn.exe_name)
+        if ok:
+            self._undo_exe = conn.exe_name
+            self._undo_lbl.setText(f"✓  Blocked {conn.exe_name}")
+            self._undo_bar.setVisible(True)
+            self._undo_timer.start(10_000)
+        else:
+            self._status_lbl.setText(f"⚠  {msg}")
         self._load_blocked_rules()
         self._apply_filters()
+
+    def _do_undo_block(self) -> None:
+        """Undo the most recent block action within the 10-second window."""
+        if not self._undo_exe:
+            return
+        exe = self._undo_exe
+        ok, msg = _unblock_process(exe)
+        self._hide_undo_bar()
+        self._status_lbl.setText(f"{'✓' if ok else '⚠'}  Undo: {msg}")
+        self._load_blocked_rules()
+        self._apply_filters()
+
+    def _hide_undo_bar(self) -> None:
+        self._undo_timer.stop()
+        self._undo_bar.setVisible(False)
+        self._undo_exe = ""
 
     # ── Blocked rules panel ───────────────────────────────────────────────────
 

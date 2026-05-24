@@ -214,6 +214,7 @@ class LogHubPage(QWidget):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._store = store
+        self._popover = None
         self._entries:             list[dict] = []
         self._consecutive_fails:   int        = 0
         self._last_live_challenge: float      = 0.0
@@ -230,6 +231,9 @@ class LogHubPage(QWidget):
 
         self._setup_ui()
         QTimer.singleShot(300, self._load_history)
+
+    def set_popover(self, popover) -> None:
+        self._popover = popover
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -418,7 +422,39 @@ class LogHubPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(
             4, self._table.horizontalHeader().ResizeMode.Stretch
         )
+        # Context menu always available (Device Info only when popover set)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_table_context_menu)
         card_lay.addWidget(self._table)
+
+        # ALERT-4: inline alert correlation panel (hidden until triggered)
+        self._alert_corr_panel = QFrame()
+        self._alert_corr_panel.setVisible(False)
+        self._alert_corr_panel.setStyleSheet(
+            f"QFrame {{ background:{BG_HOVER}; border-top:1px solid {BORDER}; }}"
+        )
+        _acp_lay = QVBoxLayout(self._alert_corr_panel)
+        _acp_lay.setContentsMargins(12, 8, 12, 8)
+        _acp_lay.setSpacing(4)
+        _acp_hdr = QHBoxLayout()
+        _acp_title = QLabel("Alerts near this time (±10 min)")
+        _acp_title.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _acp_close = QPushButton("×")
+        _acp_close.setFixedSize(18, 18)
+        _acp_close.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        _acp_close.clicked.connect(lambda: self._alert_corr_panel.setVisible(False))
+        _acp_hdr.addWidget(_acp_title, 1)
+        _acp_hdr.addWidget(_acp_close)
+        _acp_lay.addLayout(_acp_hdr)
+        self._alert_corr_rows_lay = QVBoxLayout()
+        self._alert_corr_rows_lay.setSpacing(2)
+        _acp_lay.addLayout(self._alert_corr_rows_lay)
+        card_lay.addWidget(self._alert_corr_panel)
         inner_lay.addWidget(card, 1)
 
         scroll = QScrollArea()
@@ -1145,6 +1181,7 @@ class LogHubPage(QWidget):
         row = e["row"]
         _, src_color = _SOURCES.get(e["source_key"], ("", TEXT_PRIMARY))
         sc = _status_color(row[5]) if row[5] else TEXT_SECONDARY
+        raw_ts = e.get("ts")
 
         for col, val in enumerate(row):
             # ARP animate button in Event column for RTT entries
@@ -1162,6 +1199,8 @@ class LogHubPage(QWidget):
                 self._table.setCellWidget(idx, col, btn)
             else:
                 item = QTableWidgetItem(str(val))
+                if col == 0 and raw_ts is not None:
+                    item.setData(Qt.ItemDataRole.UserRole, raw_ts)
                 if col == 1:
                     item.setForeground(QColor(src_color))
                     item.setFont(self._src_bold_font)
@@ -1390,3 +1429,107 @@ class LogHubPage(QWidget):
             btn.setChecked(True)
             self._on_source_toggled("net", True)
         self._table.scrollToTop()
+
+    def _on_table_context_menu(self, pos) -> None:
+        import re
+        from PyQt6.QtWidgets import QMenu
+        from PyQt6.QtGui import QCursor
+
+        item = self._table.itemAt(pos)
+        if item is None:
+            return
+
+        row = item.row()
+
+        ts_item = self._table.item(row, 0)
+        row_ts = ts_item.data(Qt.ItemDataRole.UserRole) if ts_item else None
+
+        host_item = self._table.item(row, 2)
+        host_text = (host_item.text() if host_item else "").strip()
+        ip_match = re.search(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b", host_text)
+        ip = ip_match.group(1) if ip_match else None
+
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
+            f"QMenu::item:selected {{ background:{TABLE_SEL}; }}"
+        )
+
+        corr_act = None
+        if row_ts is not None:
+            corr_act = menu.addAction("Show alerts near this time (±10 min)")
+
+        device_act = None
+        if ip and self._popover is not None:
+            device_act = menu.addAction(f"Device Info — {ip}")
+
+        if menu.isEmpty():
+            return
+
+        chosen = menu.exec(QCursor.pos())
+        if chosen is None:
+            return
+        if corr_act and chosen == corr_act:
+            self._show_alert_correlation(float(row_ts))
+        elif device_act and chosen == device_act:
+            self._popover.show_for(ip, QCursor.pos())
+
+    def _show_alert_correlation(self, ts: float) -> None:
+        if self._store is None:
+            return
+
+        alerts = self._store.get_recent_alerts(hours=1)
+        nearby = sorted(
+            [a for a in alerts if abs(a.get("ts", 0) - ts) <= 600],
+            key=lambda a: (
+                0 if a.get("severity", "").lower() == "critical" else
+                1 if a.get("severity", "").lower() == "warning" else 2
+            ),
+        )[:5]
+
+        while self._alert_corr_rows_lay.count():
+            child = self._alert_corr_rows_lay.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        if not nearby:
+            lbl = QLabel("No alerts in this ±10 min window")
+            lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;")
+            self._alert_corr_rows_lay.addWidget(lbl)
+        else:
+            sev_color = {"critical": RED, "warning": AMBER}
+            for a in nearby:
+                sev = a.get("severity", "info").lower()
+                color = sev_color.get(sev, TEXT_MUTED)
+                ts_str = _fmt_ts(a.get("ts", ts))
+                rule = a.get("rule", a.get("message", "Alert"))
+                host = a.get("host", a.get("ip", ""))
+                text = f"{ts_str}  {rule}" + (f"  — {host}" if host else "")
+                row_lbl = QLabel(text)
+                row_lbl.setStyleSheet(
+                    f"color:{color}; font-size:11px; background:transparent; border:none;"
+                )
+                self._alert_corr_rows_lay.addWidget(row_lbl)
+
+        self._alert_corr_panel.setVisible(True)
+
+    def jump_to_alert_time(self, alert_ts: float, source_key: str) -> None:
+        """TIME-2: Switch to history mode centred ±30 min on alert_ts, with source enabled."""
+        from PyQt6.QtCore import QDate, QTime
+
+        dt_before = _dt.datetime.fromtimestamp(max(0.0, alert_ts - 1800))
+        dt_after  = _dt.datetime.fromtimestamp(alert_ts + 1800)
+
+        self._hist_from_date.setDate(QDate(dt_before.year, dt_before.month, dt_before.day))
+        self._hist_from_time.setTime(QTime(dt_before.hour, dt_before.minute))
+        self._hist_to_date.setDate(QDate(dt_after.year, dt_after.month, dt_after.day))
+        self._hist_to_time.setTime(QTime(dt_after.hour, dt_after.minute))
+
+        # Force-enable the relevant source toggle
+        key = source_key if source_key in self._toggle_btns else "net"
+        btn = self._toggle_btns.get(key)
+        if btn and not btn.isChecked():
+            btn.setChecked(True)
+            self._on_source_toggled(key, True)
+
+        self._on_mode_history()

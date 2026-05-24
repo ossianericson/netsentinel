@@ -157,6 +157,26 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     return card, bl
 
 
+def _integr_cert_count(qs: QSettings) -> tuple[bool, str]:
+    try:
+        import json as _json
+        targets = _json.loads(qs.value("cert/targets", "[]"))
+        n = len(targets) if isinstance(targets, list) else 0
+    except Exception:
+        n = 0
+    return (n > 0, f"{n} target{'s' if n != 1 else ''} configured")
+
+
+def _integr_svc_count(qs: QSettings) -> tuple[bool, str]:
+    try:
+        import json as _json
+        targets = _json.loads(qs.value("service_monitor/targets", "[]"))
+        n = len(targets) if isinstance(targets, list) else 0
+    except Exception:
+        n = 0
+    return (n > 0, f"{n} target{'s' if n != 1 else ''} configured")
+
+
 class SettingsPage(QWidget):
     """
     Dedicated settings and customisation page shown in the sidebar.
@@ -167,6 +187,8 @@ class SettingsPage(QWidget):
     reload_oui_requested = pyqtSignal()
     #: Emitted when the user clicks "Reset all dismissed notices".
     reset_dismissed_requested = pyqtSignal()
+    #: Emitted when "Configure →" is clicked in the integrations card.
+    navigate_to = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -238,8 +260,10 @@ class SettingsPage(QWidget):
         bl.setSpacing(12)
 
         for builder, title in [
+            (self._build_integrations_card,       "Active Integrations"),
             (self._build_appearance_card,         "Appearance — Colour Theme"),
             (self._build_display_card,            "Display"),
+            (self._build_scanning_card,           "Network Scanning"),
             (self._build_tray_card,               "Notifications & Tray"),
             (self._build_plugin_marketplace_card, "Plugin Marketplace"),
             (self._build_shortcuts_card,          "Keyboard Shortcuts"),
@@ -290,6 +314,89 @@ class SettingsPage(QWidget):
             self.clear_dirty()
             return True
         return False
+
+    # ── Active Integrations ───────────────────────────────────────────────────
+
+    def _build_integrations_card(self) -> QFrame:
+        card, bl = _card("Active Integrations")
+
+        qs = QSettings("NetSentinel", "NetSentinel")
+
+        def _row(label: str, status_fn, nav_target: str) -> None:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            lbl = QLabel(label)
+            lbl.setFixedWidth(190)
+            lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;")
+            status_val = status_fn()
+            ok = status_val[0]
+            status_txt = status_val[1]
+            s_lbl = QLabel(status_txt)
+            s_color = GREEN if ok else TEXT_MUTED
+            s_lbl.setStyleSheet(
+                f"font-size:11px;color:{s_color};background:transparent;"
+            )
+            cfg_btn = QPushButton("Configure →")
+            cfg_btn.setFlat(True)
+            cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            cfg_btn.setStyleSheet(
+                f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
+                f"border:none;padding:0;}}"
+                f"QPushButton:hover{{color:{ACCENT_DARK};}}"
+            )
+            cfg_btn.clicked.connect(lambda _=False, t=nav_target: self.navigate_to.emit(t))
+            row.addWidget(lbl)
+            row.addWidget(s_lbl, 1)
+            row.addWidget(cfg_btn)
+            bl.addLayout(row)
+
+        _row("Email notifications",
+             lambda: (bool(qs.value("notifications/email_address", "")),
+                      ("✓ " + str(qs.value("notifications/email_address", ""))[:30])
+                      if qs.value("notifications/email_address", "") else "✗ Not configured"),
+             "Notifications")
+
+        _row("Webhook",
+             lambda: (bool(qs.value("notifications/webhook_url", "")),
+                      ("✓ Configured" if qs.value("notifications/webhook_url", "") else "✗ Not set")),
+             "Notifications")
+
+        _row("Pushover",
+             lambda: (bool(qs.value("notifications/pushover_user_key", "")),
+                      ("✓ Configured" if qs.value("notifications/pushover_user_key", "") else "✗ Not set")),
+             "Notifications")
+
+        _row("5G Modem logging",
+             lambda: (qs.value("logging/modem_enabled", False, type=bool),
+                      (f"● Logging · every {qs.value('logging/modem_interval_min', 5, type=int)} min"
+                       if qs.value("logging/modem_enabled", False, type=bool) else "● Not enabled")),
+             "Logs")
+
+        _row("Mesh Router logging",
+             lambda: (qs.value("logging/mesh_enabled", False, type=bool),
+                      (f"● Logging · every {qs.value('logging/mesh_interval_min', 5, type=int)} min"
+                       if qs.value("logging/mesh_enabled", False, type=bool) else "● Not enabled")),
+             "Logs")
+
+        _row("Syslog receiver",
+             lambda: (qs.value("logging/syslog_enabled", True, type=bool),
+                      ("● Listening" if qs.value("logging/syslog_enabled", True, type=bool) else "● Disabled")),
+             "Logs")
+
+        _row("SNMP traps",
+             lambda: (qs.value("logging/snmp_enabled", True, type=bool),
+                      ("● Listening" if qs.value("logging/snmp_enabled", True, type=bool) else "● Disabled")),
+             "Logs")
+
+        _row("TLS cert targets",
+             lambda: _integr_cert_count(qs),
+             "TLS & Exposure")
+
+        _row("Service monitor targets",
+             lambda: _integr_svc_count(qs),
+             "Service Monitor")
+
+        return card
 
     # ── Appearance ────────────────────────────────────────────────────────────
 
@@ -397,6 +504,42 @@ class SettingsPage(QWidget):
     def _on_tooltip_toggled(self, checked: bool):
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("display/tooltips_enabled", checked)
+        self._mark_dirty()
+
+    # ── Network Scanning ──────────────────────────────────────────────────────
+
+    def _build_scanning_card(self) -> QFrame:
+        card, bl = _card("Network Scanning")
+
+        qs = QSettings("NetSentinel", "NetSentinel")
+
+        self._chk_auto_snap = QCheckBox(
+            "Auto-snapshot after every scan (keeps last 10) — Config Snapshots"
+        )
+        self._chk_auto_snap.setStyleSheet(
+            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+        )
+        self._chk_auto_snap.setChecked(
+            qs.value("baseline/auto_snapshot", False, type=bool)
+        )
+        self._chk_auto_snap.toggled.connect(self._on_auto_snap_toggled)
+        bl.addWidget(self._chk_auto_snap)
+
+        note = QLabel(
+            "When enabled, a Config Snapshot is silently saved after each device scan. "
+            "If any change is detected versus the previous snapshot, a toast and a rail "
+            "badge appear on Config Snapshots."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(
+            f"font-size:10px;color:{TEXT_SECONDARY};background:transparent;"
+        )
+        bl.addWidget(note)
+        return card
+
+    def _on_auto_snap_toggled(self, checked: bool):
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("baseline/auto_snapshot", checked)
         self._mark_dirty()
 
     # ── System Tray & Startup ─────────────────────────────────────────────────

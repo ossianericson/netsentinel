@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from modules.metric_store import MetricStore, ServiceCheckPoint
@@ -72,6 +73,7 @@ class ServicePage(QWidget):
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store = store
+        self._query_hours = 24.0
         self._rows: list[ServiceCheckPoint] = []
         self._configured: list[dict] = self._load_targets()
         self._setup_ui()
@@ -304,6 +306,7 @@ class ServicePage(QWidget):
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
+        install_copy_menu(self._table)
         card_layout.addWidget(self._table)
         cl.addWidget(card, stretch=1)
         self._content_stack.addWidget(content)
@@ -341,8 +344,12 @@ class ServicePage(QWidget):
     def _refresh(self) -> None:
         if not self._store:
             return
-        rows = self._store.query_service_status(hours=24.0)
+        rows = self._store.query_service_status(hours=self._query_hours)
         self._populate(rows)
+
+    def set_global_hours(self, hours: float) -> None:
+        self._query_hours = hours
+        self._refresh()
 
     def on_check_done(self, results: list) -> None:
         """Slot — connected to ServiceWorker.check_done."""

@@ -42,32 +42,32 @@ This requires coherent data flow between Notifications → Alert Detail → Log 
 
 ## Backlog — all 24 items
 
-| # | Item | Title | Epic | Priority | Size | Sprint |
-|---|------|-------|------|----------|------|--------|
-| 1 | TIME-1 | Global time range picker — sync all pages | Coherent Time | P1 | L | 1 |
-| 2 | TIME-2 | "Jump to this time" — alert row opens Log Hub pre-filtered | Coherent Time | P1 | M | 1 |
-| 3 | TIME-3 | History page: per-host filter (see one device's RTT trend) | Coherent Time | P2 | M | 2 |
-| 4 | ALERT-1 | Alert detail panel — full context in a side drawer | Alert Intelligence | P0 | L | 1 |
-| 5 | ALERT-2 | Alert source enrichment — contextual data per rule type | Alert Intelligence | P1 | M | 1 |
-| 6 | ALERT-3 | One-click acknowledge from the Home action-needed card | Alert Intelligence | P2 | XS | 2 |
-| 7 | ALERT-4 | Log Hub: "Show alerts near this entry" — ±5min correlation | Alert Intelligence | P2 | S | 3 |
-| 8 | DEVICE-1 | Device quick-profile popover — right-click any MAC/IP in the app | Device Intelligence | P1 | L | 2 |
-| 9 | DEVICE-2 | Inventory: live alert dot per device row | Device Intelligence | P2 | S | 2 |
-| 10 | DEVICE-3 | CVE tracker: affected device count — link to filtered Inventory | Device Intelligence | P2 | M | 2 |
-| 11 | DEVICE-4 | Connections: block/unblock with confirmation + undo toast | Device Intelligence | P0 | S | 1 |
-| 12 | DEVICE-5 | Baseline: auto-snapshot on scan complete (opt-in in Settings) | Device Intelligence | P2 | M | 3 |
-| 13 | OUTPUT-1 | Diagnosis history — last 5 results stored, accessible from Home | Actions & Output | P2 | M | 2 |
-| 14 | OUTPUT-2 | Export from 5 pages: inventory (CSV), CVEs, baseline diff, alert history, diagnosis report | Actions & Output | P2 | L | 3 |
-| 15 | OUTPUT-3 | Command palette upgrade: search recent alerts + known devices, not just pages | Actions & Output | P2 | M | 3 |
-| 16 | OUTPUT-4 | Post-scan summary sheet: "3 new, 1 drift, 2 alerts" — one-card action hub after every scan | Actions & Output | P1 | M | 2 |
-| 17 | OUTPUT-5 | Bulk device actions: multi-select in Inventory → tag / snooze alerts / export selection | Actions & Output | P2 | M | 3 |
-| 18 | POLISH-1 | Rail live status dots for active monitors | Navigation & Polish | P1 | S | 1 |
-| 19 | POLISH-2 | Section badge counts: CVE open, cert expiring, baseline drift | Navigation & Polish | P2 | M | 2 |
-| 20 | POLISH-3 | Toast notification system — replace all status-bar label feedback | Navigation & Polish | P3 | M | 2 |
-| 21 | POLISH-4 | Smooth page transition — 140ms crossfade between stack pages | Navigation & Polish | P3 | S | 4 |
-| 22 | POLISH-5 | Theme toggle in title bar — one click, not buried in Settings | Navigation & Polish | P3 | XS | 4 |
-| 23 | POLISH-6 | Right-click standardization: shared base menu across all tables | Navigation & Polish | P3 | M | 4 |
-| 24 | SETTINGS-1 | Unified integrations status card in Settings | Settings Coherence | P2 | M | 3 |
+| # | Item | Title | Epic | Priority | Size | Sprint | Status |
+|---|------|-------|------|----------|------|--------|--------|
+| 1 | TIME-1 | Global time range picker — sync all pages | Coherent Time | P1 | L | 1 | ✅ Done — `global_time_range_changed` signal in `dashboard.py`; combo in title bar; `set_global_hours()` wired to history, cert, service, speed_test, notifications pages |
+| 2 | TIME-2 | "Jump to this time" — alert row opens Log Hub pre-filtered | Coherent Time | P1 | M | 1 | ✅ Done — "Log Hub →" button in `alert_drawer.py`; `view_in_log_hub` signal chain; `LogHubPage.jump_to_alert_time()` sets ±30min window + force-enables source |
+| 3 | TIME-3 | History page: per-host filter (see one device's RTT trend) | Coherent Time | P2 | M | 2 | ✅ Done — host combo above RTT chart in `history_page.py`; combo populated from MetricStore hosts; chart re-renders on change |
+| 4 | ALERT-1 | Alert detail panel — full context in a side drawer | Alert Intelligence | P0 | L | 1 | ✅ Done — `ui/widgets/alert_drawer.py` + wired in `notifications_page.py` |
+| 5 | ALERT-2 | Alert source enrichment — contextual data per rule type | Alert Intelligence | P1 | M | 1 | ✅ Done — two-line rule cell with live sub-labels in `notifications_page.py` |
+| 6 | ALERT-3 | One-click acknowledge from the Home action-needed card | Alert Intelligence | P2 | XS | 2 | ✅ Done — per-alert rows with "✓" ack buttons in `home_page.py`; `set_pending_alert_rows()` + 30s pulse in `dashboard.py` |
+| 7 | ALERT-4 | Log Hub: "Show alerts near this entry" — ±5min correlation | Alert Intelligence | P2 | S | 3 | ✅ Done — right-click context menu in `log_hub_page.py`; inline `_alert_corr_panel` below table; ts stored as UserRole on col 0; ±10 min window |
+| 8 | DEVICE-1 | Device quick-profile popover — right-click any MAC/IP in the app | Device Intelligence | P1 | L | 2 | ✅ Done — `ui/widgets/device_popover.py`; context menus in Connections, Threat Intel, CVE, Log Hub; `select_device()` in Inventory; nav wired in `dashboard.py` |
+| 9 | DEVICE-2 | Inventory: live alert dot per device row | Device Intelligence | P2 | S | 2 | ✅ Done — col 0 alert dot in `inventory_page.py`; RED=CRITICAL, AMBER=WARNING, muted=clean; tooltip with rule/time |
+| 10 | DEVICE-3 | CVE tracker: affected device count — link to filtered Inventory | Device Intelligence | P2 | M | 2 | ✅ Done — device count chip in Devices col of `cve_page.py`; click navigates to Inventory via `device_selected` signal chain |
+| 11 | DEVICE-4 | Connections: block/unblock with confirmation + undo toast | Device Intelligence | P0 | S | 1 | ✅ Done — inline undo bar in `connections_page.py` |
+| 12 | DEVICE-5 | Baseline: auto-snapshot on scan complete (opt-in in Settings) | Device Intelligence | P2 | M | 3 | ✅ Done — toggle in `settings_page.py`; auto-snapshot + drift toast + rail badge update in `dashboard.py._on_m1_result()`; keeps last 10 |
+| 13 | OUTPUT-1 | Diagnosis history — last 5 results stored, accessible from Home | Actions & Output | P2 | M | 2 | ✅ Done — QSettings JSON store in `diagnosis_page.py`; "Last diagnosis" row + `refresh_diag_summary()` on Home; history dialog |
+| 14 | OUTPUT-2 | Export from 5 pages: inventory (CSV), CVEs, baseline diff, alert history, diagnosis report | Actions & Output | P2 | L | 3 | ✅ Done — ↓ Export on Inventory, CVE, Baseline (HTML diff), Notifications alert history, Diagnosis report |
+| 15 | OUTPUT-3 | Command palette upgrade: search recent alerts + known devices, not just pages | Actions & Output | P2 | M | 3 | ✅ Done — `load_recent_data()` in `command_palette.py`; device+alert result sections; fuzzy-match on search field; `__device__`/`__alert__` dispatch in dashboard |
+| 16 | OUTPUT-4 | Post-scan summary sheet: "3 new, 1 drift, 2 alerts" — one-card action hub after every scan | Actions & Output | P1 | M | 2 | ✅ Done — `ui/widgets/scan_summary_sheet.py`; 4-section slide-up sheet; 30s countdown bar; Don't show again; wired in `dashboard._on_m1_result()` |
+| 17 | OUTPUT-5 | Bulk device actions: multi-select in Inventory → tag / snooze alerts / export selection | Actions & Output | P2 | M | 3 | ✅ Done — ExtendedSelection + bulk bar in `inventory_page.py`; export/snooze 1h/8h/deselect implemented |
+| 18 | POLISH-1 | Rail live status dots for active monitors | Navigation & Polish | P1 | S | 1 | ✅ Done — left-edge dot on Monitor/Analysis rail buttons in `dashboard.py` |
+| 19 | POLISH-2 | Section badge counts: CVE open, cert expiring, baseline drift | Navigation & Polish | P2 | M | 2 | ✅ Done — CVE open count, cert expiring/expired count, baseline "≠" drift indicator in `dashboard._refresh_section_badges()` |
+| 20 | POLISH-3 | Toast notification system — replace all status-bar label feedback | Navigation & Polish | P3 | M | 2 | ✅ Done — `ui/widgets/toast.py`; stacking toasts bottom-right; success/error/info/action kinds; wired to 5+ pages |
+| 21 | POLISH-4 | Smooth page transition — 140ms crossfade between stack pages | Navigation & Polish | P3 | S | 4 | ✅ Done — `_nav_crossfade_to()` in `dashboard.py`; 80ms fade-out → swap → 80ms fade-in via QGraphicsOpacityEffect |
+| 22 | POLISH-5 | Theme toggle in title bar — one click, not buried in Settings | Navigation & Polish | P3 | XS | 4 | ✅ Done — 🌙/☀ button in title bar; cycles themes in QSettings; toast prompts restart |
+| 23 | POLISH-6 | Right-click standardization: shared base menu across all tables | Navigation & Polish | P3 | M | 4 | ✅ Done — `ui/widgets/context_menu.py`; install_copy_menu() wired to cert, service, baseline, notifications, CVE tables |
+| 24 | SETTINGS-1 | Unified integrations status card in Settings | Settings Coherence | P2 | M | 3 | ✅ Done — integrations card + scanning card in `settings_page.py`; 9 integration rows + "Configure →" nav signal |
 
 ---
 

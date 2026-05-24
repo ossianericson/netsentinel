@@ -414,6 +414,7 @@ class SpeedTestPage(QWidget):
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._store = store  # MetricStore | None
+        self._history_hours = 168 * 4  # ~28 days default
         self._servers: List[dict] = []
         self._selected_server_id: Optional[str] = None
         self._fetch_worker  = None
@@ -1198,12 +1199,17 @@ class SpeedTestPage(QWidget):
             "lte_earfcn":    getattr(p, "lte_earfcn", None),
         }
 
+    def set_global_hours(self, hours: float) -> None:
+        self._history_hours = max(1.0, hours)
+        self._hist_table.setRowCount(0)
+        self._load_history_from_db()
+
     def _load_history_from_db(self) -> None:
         """Populate history table from MetricStore on page load."""
         if not self._store:
             return
         try:
-            points = self._store.query_speed_test_history(hours=168 * 4)  # ~28 days
+            points = self._store.query_speed_test_history(hours=self._history_hours)
             for p in points:
                 import datetime as _dt
                 ts_str = _dt.datetime.fromtimestamp(p.ts).strftime("%Y-%m-%d  %H:%M:%S")

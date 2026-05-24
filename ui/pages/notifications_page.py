@@ -23,7 +23,60 @@ Architecture rules observed:
 from __future__ import annotations
 
 import json
+import re
 import time
+
+# ── ALERT-2: sub-label enrichment helpers ─────────────────────────────────────
+
+def _fmt_elapsed(seconds: int) -> str:
+    """Format a duration in seconds into a human-readable string."""
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    h, rem = divmod(seconds, 3600)
+    m = rem // 60
+    return f"{h}h {m:02d}m" if m else f"{h}h"
+
+
+def _enrich_alert_sublabel(alert: dict) -> str:
+    """Return a short contextual sub-label for the given alert dict, or '' if not applicable."""
+    rule    = (alert.get("rule_name") or "").upper()
+    msg     = alert.get("message") or ""
+    elapsed = max(0, int(time.time()) - int(alert.get("ts") or 0))
+
+    if "RTT_THRESHOLD" in rule or "HIGH_RTT" in rule:
+        m = re.search(r":\s*([\d.]+)\s*ms", msg)
+        return f"RTT: {float(m.group(1)):.0f} ms at alert time" if m else ""
+
+    if "HOST_DOWN" in rule:
+        return f"Down for {_fmt_elapsed(elapsed)}"
+
+    if "DEVICE_GONE" in rule:
+        return f"Last seen {_fmt_elapsed(elapsed)} ago"
+
+    if "SERVICE_DOWN" in rule:
+        m = re.search(r"\((.+):(\d+)\)$", msg)
+        prefix = f"Port {m.group(2)} · " if m else ""
+        return f"{prefix}down for {_fmt_elapsed(elapsed)}"
+
+    if "CERT_EXPIRY" in rule and "EXPIRED" not in rule:
+        m = re.search(r"(\d+)\s+day", msg)
+        if m:
+            d = int(m.group(1))
+            return f"Expires in {d} day{'s' if d != 1 else ''}"
+        return ""
+
+    if "CERT_EXPIRED" in rule:
+        d = elapsed // 86400
+        return f"Expired {max(d, 0)} day{'s' if d != 1 else ''} ago"
+
+    if "THREAT_INTEL" in rule:
+        m = re.search(r"score[:\s]+([\d.]+)", msg, re.IGNORECASE)
+        return f"Abuse score: {float(m.group(1)):.0f}/100" if m else ""
+
+    return ""
+
 
 # ── Keyring helpers (RULE 22-A) ───────────────────────────────────────────────
 _KR_SERVICE = "NetSentinel"
@@ -87,6 +140,8 @@ from ui.styles import (
 )
 
 from modules.alert_engine import rule_settings_key as _rule_key
+from ui.widgets.alert_drawer import AlertDrawer
+from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 
@@ -235,8 +290,9 @@ _ALERT_RULE_DEFS = [
 class NotificationsPage(QWidget):
     """Notification routing configuration and delivery log page."""
 
-    navigate_to = pyqtSignal(str)
-    _test_done  = pyqtSignal(str, str)   # (channel_key, html_result)
+    navigate_to     = pyqtSignal(str)
+    view_in_log_hub = pyqtSignal(float, str)  # (alert_ts, source_key) — TIME-2 passthrough
+    _test_done      = pyqtSignal(str, str)   # (channel_key, html_result)
 
     def __init__(self, router=None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -284,7 +340,19 @@ class NotificationsPage(QWidget):
         il.addStretch()
 
         scroll.setWidget(inner)
-        outer.addWidget(scroll, 1)
+
+        # ALERT-1: alert drawer sits to the right of the main scroll area
+        self._alert_drawer = AlertDrawer(self)
+        self._alert_drawer.acknowledged.connect(self._on_drawer_acknowledged)
+        self._alert_drawer.navigate_to.connect(self.navigate_to)
+        self._alert_drawer.view_in_log_hub.connect(self.view_in_log_hub)
+
+        body_row = QHBoxLayout()
+        body_row.setContentsMargins(0, 0, 0, 0)
+        body_row.setSpacing(0)
+        body_row.addWidget(scroll, 1)
+        body_row.addWidget(self._alert_drawer)
+        outer.addLayout(body_row, 1)
 
         self._restore()
 
@@ -894,6 +962,7 @@ class NotificationsPage(QWidget):
         self._alert_history_table.setStyleSheet(_tbl_qss)
         for w, col in zip((100, 80, 100, 80), range(4)):
             self._alert_history_table.setColumnWidth(col, w)
+        self._alert_history_table.itemClicked.connect(self._on_alert_row_single_click)
         self._alert_history_table.itemDoubleClicked.connect(self._on_alert_history_row_clicked)
         self._alert_history_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._alert_history_table.customContextMenuRequested.connect(self._on_alert_history_context_menu)
@@ -910,7 +979,16 @@ class NotificationsPage(QWidget):
             f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
         )
         btn_hist_refresh.clicked.connect(self._refresh_alert_history)
+        btn_hist_export = QPushButton("↓ Export CSV")
+        btn_hist_export.setFixedHeight(24)
+        btn_hist_export.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
+            f"border-radius:2px;padding:0 12px;font-size:11px;}}"
+            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+        )
+        btn_hist_export.clicked.connect(self._export_alert_history_csv)
         hist_btn_row.addWidget(btn_hist_refresh)
+        hist_btn_row.addWidget(btn_hist_export)
         hist_btn_row.addStretch()
         hist_lay.addLayout(hist_btn_row)
         tabs.addTab(hist_tab, "Alert History")
@@ -1257,6 +1335,8 @@ class NotificationsPage(QWidget):
     def set_router(self, router) -> None:
         self._router = router
         self._apply_to_router()
+        if hasattr(self, "_alert_drawer"):
+            self._alert_drawer.set_router(router)
 
     # ── Alert engine injection ────────────────────────────────────────────────
 
@@ -1274,6 +1354,12 @@ class NotificationsPage(QWidget):
 
     def set_store(self, store) -> None:
         self._store = store
+        if hasattr(self, "_alert_drawer"):
+            self._alert_drawer.set_store(store)
+
+    def set_global_hours(self, hours: float) -> None:
+        self._hist_hours = hours
+        self._refresh_alert_history()
 
     # ── Weekly digest (RECUR-2) ───────────────────────────────────────────────
 
@@ -1554,6 +1640,42 @@ class NotificationsPage(QWidget):
                 Qt.ItemDataRole.UserRole, alert
             )
 
+            # ALERT-2: overlay rule column with a two-line widget (rule name + live sub-label)
+            sub_label = _enrich_alert_sublabel(alert)
+            _cw = QWidget()
+            _cw.setAutoFillBackground(False)
+            _cl = QVBoxLayout(_cw)
+            _cl.setContentsMargins(4, 2, 4, 1)
+            _cl.setSpacing(0)
+            _lr = QLabel(rule_disp)
+            _lr.setStyleSheet(
+                f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
+            )
+            _cl.addWidget(_lr)
+            if sub_label:
+                _ls = QLabel(sub_label)
+                _ls.setStyleSheet(
+                    f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+                )
+                _cl.addWidget(_ls)
+            _cl.addStretch()
+            self._alert_history_table.setCellWidget(row, 1, _cw)
+            if sub_label:
+                self._alert_history_table.setRowHeight(row, 36)
+
+    def _on_alert_row_single_click(self, item: "QTableWidgetItem") -> None:
+        """ALERT-1: single-click opens the alert detail drawer."""
+        first = self._alert_history_table.item(item.row(), 0)
+        if first is None:
+            return
+        alert = first.data(Qt.ItemDataRole.UserRole)
+        if isinstance(alert, dict):
+            self._alert_drawer.open(alert)
+
+    def _on_drawer_acknowledged(self, alert_id: int) -> None:
+        """ALERT-1: refresh alert history after the drawer acks an alert."""
+        self._refresh_alert_history()
+
     def _on_alert_history_row_clicked(self, item: "QTableWidgetItem") -> None:
         """NOTIF-6: double-click an alert row to navigate to the relevant page."""
         first = self._alert_history_table.item(item.row(), 0)
@@ -1598,6 +1720,10 @@ class NotificationsPage(QWidget):
             f" font-size:11px; }}"
             f"QMenu::item:selected {{ background:{ACCENT}; color:#fff; }}"
         )
+        _col = self._alert_history_table.currentColumn()
+        act_copy_cell = menu.addAction("Copy cell")
+        act_copy_row  = menu.addAction("Copy row")
+        menu.addSeparator()
         expiry = self._router.get_snooze_expiry(rule_name)
         if expiry is not None:
             label = "Snoozed ∞" if expiry == 0 else time.strftime("Snoozed until %H:%M", time.localtime(expiry))
@@ -1618,7 +1744,44 @@ class NotificationsPage(QWidget):
             menu.addAction("Snooze forever").triggered.connect(
                 lambda: self._apply_snooze(rule_name, 0)
             )
-        menu.exec(self._alert_history_table.viewport().mapToGlobal(pos))
+        chosen = menu.exec(self._alert_history_table.viewport().mapToGlobal(pos))
+        if chosen == act_copy_cell:
+            from PyQt6.QtWidgets import QApplication as _QApp
+            it = self._alert_history_table.item(row, _col) if _col >= 0 else None
+            _QApp.clipboard().setText(it.text() if it else "")
+        elif chosen == act_copy_row:
+            from PyQt6.QtWidgets import QApplication as _QApp
+            parts = [
+                (self._alert_history_table.item(row, c).text()
+                 if self._alert_history_table.item(row, c) else "")
+                for c in range(self._alert_history_table.columnCount())
+            ]
+            _QApp.clipboard().setText("\t".join(parts))
+
+    def _export_alert_history_csv(self) -> None:
+        import csv as _csv
+        from PyQt6.QtWidgets import QFileDialog
+        from ui.widgets.toast import ToastManager
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Alert History", "alert_history.csv", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+        tbl = self._alert_history_table
+        cols = [tbl.horizontalHeaderItem(c).text() for c in range(tbl.columnCount())]
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f)
+                w.writerow(cols)
+                for r in range(tbl.rowCount()):
+                    w.writerow([
+                        (tbl.item(r, c).text() if tbl.item(r, c) else "")
+                        for c in range(tbl.columnCount())
+                    ])
+            import os
+            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
+        except Exception as exc:
+            ToastManager.show(f"Export failed: {exc}", "error")
 
     def _apply_snooze(self, rule_name: str, until_ts) -> None:
         if not self._router:

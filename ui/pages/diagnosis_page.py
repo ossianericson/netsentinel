@@ -9,14 +9,17 @@ Three internal states managed via a QStackedWidget:
 
 from __future__ import annotations
 
+import json as _json
+import time as _t
 from typing import Optional
 
 import datetime as _dt
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtWidgets import (
-    QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel, QProgressBar,
-    QPushButton, QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
+    QApplication, QButtonGroup, QDialog, QDialogButtonBox, QFrame,
+    QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
+    QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore
@@ -112,9 +115,35 @@ _RUNNING = 1
 _DONE    = 2
 
 
+def _save_diag_history(result) -> None:
+    findings = getattr(result, "findings", [])
+    entry = {
+        "ts":       _t.time(),
+        "severity": getattr(result, "global_severity", "INFO"),
+        "summary":  getattr(result, "plain_summary",   "") or "",
+        "findings": [
+            {
+                "severity":    getattr(f, "severity",    "INFO"),
+                "headline":    getattr(f, "headline",    ""),
+                "remediation": getattr(f, "remediation", ""),
+                "category":    getattr(f, "category",    ""),
+            }
+            for f in findings[:5]
+        ],
+    }
+    s = QSettings("NetSentinel", "NetSentinel")
+    try:
+        history = _json.loads(s.value("diagnosis/history", "[]"))
+    except Exception:
+        history = []
+    history.insert(0, entry)
+    s.setValue("diagnosis/history", _json.dumps(history[:5]))
+
+
 class DiagnosisPage(QWidget):
 
-    navigate_to = pyqtSignal(str)  # emits "Overview" when back link is clicked
+    navigate_to     = pyqtSignal(str)  # emits "Overview" when back link is clicked
+    diagnosis_saved = pyqtSignal()     # emitted after each completed run
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -401,6 +430,19 @@ class DiagnosisPage(QWidget):
         self._copy_btn.setStyleSheet(_btn_qss)
         self._copy_btn.clicked.connect(self._copy_report)
         btn_row.addWidget(self._copy_btn)
+
+        self._history_btn = QPushButton("History")
+        self._history_btn.setFixedWidth(80)
+        self._history_btn.setStyleSheet(_btn_qss)
+        self._history_btn.clicked.connect(self._show_history_dialog)
+        btn_row.addWidget(self._history_btn)
+
+        self._export_btn = QPushButton("Export…")
+        self._export_btn.setFixedWidth(80)
+        self._export_btn.setStyleSheet(_btn_qss)
+        self._export_btn.clicked.connect(self._export_report)
+        btn_row.addWidget(self._export_btn)
+
         btn_row.addStretch()
         outer.addLayout(btn_row)
 
@@ -585,6 +627,43 @@ class DiagnosisPage(QWidget):
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(2000, lambda: self._copy_btn.setText("Copy report"))
 
+    def _export_report(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+        from ui.widgets.toast import ToastManager
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Diagnosis Report", "diagnosis_report.txt", "Text files (*.txt)"
+        )
+        if not path:
+            return
+        date_str = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+        verdict = self._verdict_title.text()
+        summary = self._verdict_text.text()
+        lines = [
+            f"NetSentinel Diagnosis Report — {date_str}",
+            f"Verdict: {verdict}",
+            f"Summary: {summary}",
+        ]
+        if self._last_findings:
+            lines.append("")
+            lines.append("Findings:")
+            for f in self._last_findings:
+                h = getattr(f, "headline", "")
+                if h:
+                    lines.append(f"  [{getattr(f, 'severity', '')}] {h}")
+            lines.append("")
+            lines.append("Recommended actions:")
+            for f in self._last_findings:
+                r = getattr(f, "remediation", "")
+                if r:
+                    lines.append(f"  • {r}")
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("\n".join(lines))
+            import os
+            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
+        except Exception as exc:
+            ToastManager.show(f"Export failed: {exc}", "error")
+
     def _on_progress(self, pct: int, msg: str) -> None:
         self._progress_bar.setValue(pct)
         self._step_lbl.setText(msg)
@@ -600,6 +679,8 @@ class DiagnosisPage(QWidget):
         summary  = getattr(result, "plain_summary",   "") or "No issues detected."
         findings = getattr(result, "findings",        [])
         self._last_findings = list(findings)
+        _save_diag_history(result)
+        self.diagnosis_saved.emit()
 
         prev_headlines = self._prev_finding_headlines.copy()
 
@@ -698,3 +779,93 @@ class DiagnosisPage(QWidget):
         self._prev_finding_headlines = current_headlines
 
         self._stack.setCurrentIndex(_DONE)
+
+    def _show_history_dialog(self) -> None:
+        dlg = _DiagHistoryDialog(self)
+        dlg.exec()
+
+
+class _DiagHistoryDialog(QDialog):
+    """Shows the last 5 diagnosis results stored in QSettings."""
+
+    _SEV_COLOR = {
+        "CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN, "INFO": ACCENT,
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Diagnosis History")
+        self.setMinimumWidth(480)
+        self.setStyleSheet(f"QDialog {{ background:{BG_DARK}; }} QLabel {{ background:transparent; border:none; }}")
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 16, 16, 12)
+        lay.setSpacing(10)
+
+        try:
+            s = QSettings("NetSentinel", "NetSentinel")
+            history = _json.loads(s.value("diagnosis/history", "[]"))
+        except Exception:
+            history = []
+
+        if not history:
+            lbl = QLabel("No diagnosis runs recorded yet.")
+            lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:12px;")
+            lay.addWidget(lbl)
+        else:
+            for entry in history:
+                sev = entry.get("severity", "INFO")
+                color = self._SEV_COLOR.get(sev, ACCENT)
+                ts = entry.get("ts", 0)
+                dt_str = _dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "–"
+                findings = entry.get("findings", [])
+                summary = entry.get("summary", "")
+
+                card = QFrame()
+                card.setStyleSheet(
+                    f"QFrame {{ background:{BG_CARD}; border-left:3px solid {color};"
+                    f" border-top:1px solid {BORDER}; border-right:1px solid {BORDER};"
+                    f" border-bottom:1px solid {BORDER}; border-radius:3px; }}"
+                )
+                c_lay = QVBoxLayout(card)
+                c_lay.setContentsMargins(12, 8, 12, 8)
+                c_lay.setSpacing(4)
+
+                hdr_row = QHBoxLayout()
+                sev_lbl = QLabel(sev)
+                sev_lbl.setStyleSheet(
+                    f"color:{color}; font-weight:bold; font-size:11px;"
+                    f" border:1px solid {color}; border-radius:3px; padding:1px 6px;"
+                )
+                time_lbl = QLabel(dt_str)
+                time_lbl.setStyleSheet(f"color:{TEXT_MUTED}; font-size:11px;")
+                n_lbl = QLabel(f"{len(findings)} finding{'s' if len(findings) != 1 else ''}")
+                n_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
+                hdr_row.addWidget(sev_lbl)
+                hdr_row.addWidget(time_lbl)
+                hdr_row.addStretch()
+                hdr_row.addWidget(n_lbl)
+                c_lay.addLayout(hdr_row)
+
+                if summary:
+                    sum_lbl = QLabel(summary)
+                    sum_lbl.setWordWrap(True)
+                    sum_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+                    c_lay.addWidget(sum_lbl)
+
+                for f in findings[:3]:
+                    hl = f.get("headline", "")
+                    if hl:
+                        f_lbl = QLabel(f"  • {hl}")
+                        f_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+                        c_lay.addWidget(f_lbl)
+
+                lay.addWidget(card)
+
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        bb.rejected.connect(self.reject)
+        bb.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:4px 16px; }}"
+        )
+        lay.addWidget(bb)

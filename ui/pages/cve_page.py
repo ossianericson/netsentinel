@@ -15,7 +15,7 @@ from __future__ import annotations
 import time
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui  import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox,
@@ -217,13 +217,19 @@ class _ImportDialog(QDialog):
 class CvePage(QWidget):
     """CVE lifecycle tracker page — Security Audit section."""
 
+    navigate_to_inventory = pyqtSignal(str)   # DEVICE-3: carries IP/host filter string
+
     def __init__(self, store: MetricStore, parent=None):
         super().__init__(parent)
         self._store = store
+        self._popover = None
         self._rows: list[dict] = []          # all rows (post-filter)
         self._displayed_rows: list[dict] = [] # rows currently in table
         self._setup_ui()
         self._refresh()
+
+    def set_popover(self, popover) -> None:
+        self._popover = popover
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -319,11 +325,20 @@ class CvePage(QWidget):
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
 
+        btn_export = QPushButton("↓ Export")
+        btn_export.setFixedHeight(34)
+        btn_export.setStyleSheet(
+            f"font-size:12px; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+            f" background:transparent; padding:0 12px; border-radius:4px;"
+        )
+        btn_export.clicked.connect(self._export_csv)
+
         toolbar.addWidget(QLabel("Filter:"))
         toolbar.addWidget(self._filter_combo)
         toolbar.addWidget(self._search_box)
         toolbar.addStretch()
         toolbar.addWidget(self._status_lbl)
+        toolbar.addWidget(btn_export)
         toolbar.addWidget(btn_refresh)
         toolbar.addWidget(btn_import)
         root.addLayout(toolbar)
@@ -333,7 +348,7 @@ class CvePage(QWidget):
         card_lay.setContentsMargins(0, 0, 0, 0)
 
         _cols = ["CVE ID", "CVSS", "Severity", "Service", "Host",
-                 "State", "Owner", "Days Open", "Description"]
+                 "Devices", "State", "Owner", "Days Open", "Description"]
         self._table = ExpandingTable(
             0, len(_cols),
             detail_builder=lambda r: self._build_cve_detail(r),
@@ -360,11 +375,13 @@ class CvePage(QWidget):
         self._table.setColumnWidth(2, 75)
         self._table.setColumnWidth(3, 140)
         self._table.setColumnWidth(4, 115)
-        self._table.setColumnWidth(5, 110)
-        self._table.setColumnWidth(6, 100)
-        self._table.setColumnWidth(7, 75)
+        self._table.setColumnWidth(5, 90)   # Devices
+        self._table.setColumnWidth(6, 110)
+        self._table.setColumnWidth(7, 100)
+        self._table.setColumnWidth(8, 75)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._context_menu)
+        self._table.cellClicked.connect(self._on_cell_clicked)
         card_lay.addWidget(self._table)
 
         self._lbl_empty = QLabel(
@@ -461,20 +478,43 @@ class CvePage(QWidget):
             self._table.setItem(row_idx, 3, _item(r["service"]))
             self._table.setItem(row_idx, 4, _item(r["host"]))
 
+            # DEVICE-3: Devices column — count known devices matching this CVE's host
+            _host = (r.get("host") or "").strip()
+            _dev_item = _item("")
+            if _host and self._store:
+                try:
+                    _known = self._store.get_known_devices()
+                    _matched = [
+                        d for d in _known.values()
+                        if getattr(d, "ip", None) == _host or getattr(d, "mac", None) == _host
+                    ]
+                    if _matched:
+                        _dev_item.setText(f"1 — {_host}")
+                        _dev_item.setForeground(QColor(ACCENT))
+                        _dev_item.setToolTip("Click to open in Inventory Changes")
+                    else:
+                        _dev_item.setText("0 devices")
+                        _dev_item.setForeground(QColor(TEXT_MUTED))
+                except Exception:
+                    _dev_item.setText("—")
+            else:
+                _dev_item.setText("—")
+            self._table.setItem(row_idx, 5, _dev_item)
+
             state_item = _item(state)
             state_item.setForeground(QColor(_STATE_COLORS.get(state, TEXT_PRIMARY)))
-            self._table.setItem(row_idx, 5, state_item)
+            self._table.setItem(row_idx, 6, state_item)
 
-            self._table.setItem(row_idx, 6, _item(r["owner"]))
+            self._table.setItem(row_idx, 7, _item(r["owner"]))
 
             days_item = _item(str(days_open))
             if state != "Remediated" and days_open > 30:
                 days_item.setForeground(QColor(RED))
             elif state != "Remediated" and days_open > 7:
                 days_item.setForeground(QColor(AMBER))
-            self._table.setItem(row_idx, 7, days_item)
+            self._table.setItem(row_idx, 8, days_item)
 
-            self._table.setItem(row_idx, 8, _item(r["description"]))
+            self._table.setItem(row_idx, 9, _item(r["description"]))
 
         visible = self._table.rowCount() > 0
         self._table.setVisible(visible)
@@ -495,26 +535,64 @@ class CvePage(QWidget):
                 return r
         return None
 
+    def _on_cell_clicked(self, row: int, col: int) -> None:
+        """DEVICE-3: clicking the Devices column (col 5) navigates to Inventory."""
+        if col != 5:
+            return
+        item = self._table.item(row, 4)  # Host column
+        host = (item.text() if item else "").strip()
+        if host and host not in ("—", ""):
+            self.navigate_to_inventory.emit(host)
+
     # ── Context menu ──────────────────────────────────────────────────────────
 
     def _context_menu(self, pos) -> None:
         row_data = self._selected_row_data()
+        item_at = self._table.itemAt(pos)
         if not row_data:
             return
+        row = item_at.row() if item_at else -1
         menu = QMenu(self)
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; font-size:11px; }}"
             f"QMenu::item {{ padding:4px 20px; }}"
             f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
+        act_copy_cell = menu.addAction("Copy cell")
+        act_copy_row  = menu.addAction("Copy row")
+        menu.addSeparator()
         act_state  = menu.addAction("Change State…")
         menu.addSeparator()
         act_copy   = menu.addAction("Copy CVE ID")
         act_nvd    = menu.addAction("Open in NVD Browser")
+
+        act_device = None
+        host = row_data.get("host") or ""
+        if host and self._popover:
+            menu.addSeparator()
+            act_device = menu.addAction(f"Device Info — {host}")
+
         menu.addSeparator()
         act_delete = menu.addAction("Delete Entry")
 
         chosen = menu.exec(self._table.viewport().mapToGlobal(pos))
+        if chosen == act_copy_cell:
+            from PyQt6.QtWidgets import QApplication as _QApp
+            it = self._table.item(row, self._table.currentColumn()) if row >= 0 else None
+            _QApp.clipboard().setText(it.text() if it else "")
+            return
+        if chosen == act_copy_row:
+            from PyQt6.QtWidgets import QApplication as _QApp
+            parts = [
+                (self._table.item(row, c).text() if self._table.item(row, c) else "")
+                for c in range(self._table.columnCount())
+            ] if row >= 0 else []
+            _QApp.clipboard().setText("\t".join(parts))
+            return
+        if act_device and chosen == act_device:
+            from PyQt6.QtGui import QCursor
+            self._popover.show_for(host, QCursor.pos())
+            return
         if chosen == act_state:
             self._change_state(row_data)
         elif chosen == act_copy:
@@ -652,6 +730,36 @@ class CvePage(QWidget):
         lay.addLayout(actions)
 
         return outer
+
+    # ── Export ────────────────────────────────────────────────────────────────
+
+    def _export_csv(self) -> None:
+        import csv as _csv
+        from PyQt6.QtWidgets import QFileDialog
+        from ui.widgets.toast import ToastManager
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export CVE Tracker", "cve_tracker.csv", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+        cols = ["CVE ID", "CVSS", "Severity", "Service", "Host",
+                "State", "Owner", "Days Open", "Description"]
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f)
+                w.writerow(cols)
+                for r in self._rows:
+                    w.writerow([
+                        r.get("cve_id", ""), r.get("score", ""),
+                        r.get("severity", ""), r.get("service", ""),
+                        r.get("host", ""), r.get("state", ""),
+                        r.get("owner", ""), r.get("days_open", ""),
+                        r.get("description", ""),
+                    ])
+            import os
+            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
+        except Exception as exc:
+            ToastManager.show(f"Export failed: {exc}", "error")
 
     # ── Import dialog ─────────────────────────────────────────────────────────
 

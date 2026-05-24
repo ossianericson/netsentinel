@@ -524,6 +524,7 @@ class _RailButton(QPushButton):
         self._short_label = (tooltip.split()[0]) if tooltip else ""
         self._badge_color: str = ""
         self._badge_count: str = ""   # non-empty → numeric red pill overrides dot
+        self._left_dot: str = ""      # POLISH-1: monitor state dot on left edge
         self.setCheckable(True)
         self.setFixedSize(56, 58)
         self.setToolTip(tooltip)
@@ -561,6 +562,14 @@ class _RailButton(QPushButton):
             self._badge_count = ""
         self.update()
 
+    def set_left_dot(self, color: str) -> None:
+        """POLISH-1: set or clear the monitor-state dot on the left edge.
+
+        Pass a hex colour to show; pass empty string to clear.
+        """
+        self._left_dot = color or ""
+        self.update()
+
     def paintEvent(self, event):
         from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen
         from PyQt6.QtCore import QRect, QRectF
@@ -575,6 +584,13 @@ class _RailButton(QPushButton):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(ACCENT))
             p.drawRect(0, 10, 3, 38)   # spans the 48px icon zone, inset 10px top/bottom
+
+        # POLISH-1: left-edge monitor state dot — 6px, flush left, icon-zone centre
+        # Positioned at x=4 to clear the 3px accent bar; y=22 centres it in the icon zone
+        if self._left_dot:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(self._left_dot))
+            p.drawEllipse(QRectF(4, 22, 6, 6))
 
         # Numeric red pill badge — top-right corner
         if self._badge_count:
@@ -1328,7 +1344,8 @@ def _make_chart_window(fig) -> "QMainWindow":
 # ─── Main Window ─────────────────────────────────────────────────────────────
 
 class Dashboard(QMainWindow):
-    _update_available = pyqtSignal(str)
+    _update_available         = pyqtSignal(str)
+    global_time_range_changed = pyqtSignal(float)  # hours: float
 
     def __init__(self, store=None, alert_engine=None, notif_router=None, maint_manager=None):
         super().__init__()
@@ -1336,6 +1353,7 @@ class Dashboard(QMainWindow):
         self._alert_engine = alert_engine   # AlertEngine | None
         self._notif_router = notif_router   # NotificationRouter | None
         self._maint_manager = maint_manager # MaintenanceWindowManager | None
+        self._global_hours = 24.0
         self.setWindowTitle("NetSentinel  —  Network Security Scanner & Monitor")
         self.setMinimumSize(900, 600)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
@@ -1755,6 +1773,26 @@ class Dashboard(QMainWindow):
         lay.addSpacing(4)
         lay.addWidget(_btn_settings)
 
+        # ── Global time range picker (TIME-1) ────────────────────────────────
+        _time_combo_qss = (
+            f"QComboBox {{ background:transparent; color:{TEXT_MUTED};"
+            f" border:1px solid {SIDEBAR_SECTION_BG}; border-radius:5px;"
+            f" font-size:11px; padding:0 6px;"
+            f" min-height:26px; max-height:26px; min-width:52px; }}"
+            f"QComboBox:hover {{ border-color:{ACCENT}; color:{WHITE}; }}"
+            f"QComboBox::drop-down {{ border:none; width:16px; }}"
+            f"QComboBox QAbstractItemView {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; selection-background-color:{ACCENT}; }}"
+        )
+        self._time_range_combo = QComboBox()
+        self._time_range_combo.addItems(["1h", "6h", "24h", "7d", "30d"])
+        self._time_range_combo.setCurrentText("24h")
+        self._time_range_combo.setToolTip("Global time window — applies to all data pages")
+        self._time_range_combo.setStyleSheet(_time_combo_qss)
+        self._time_range_combo.currentTextChanged.connect(self._on_global_time_changed)
+        lay.addSpacing(4)
+        lay.addWidget(self._time_range_combo)
+
         # ── Scan button — persistent trigger visible from every page ─────────
         self._header_scan_btn = QToolButton()
         self._header_scan_btn.setText("▶  Scan")
@@ -1762,6 +1800,37 @@ class Dashboard(QMainWindow):
         self._header_scan_btn.setStyleSheet(_icon_btn_qss)
         self._header_scan_btn.clicked.connect(self._start_full_scan)
         lay.addWidget(self._header_scan_btn)
+
+        # ── POLISH-5: Theme toggle — cycles through all 3 themes, toast + restart ──
+        from ui.styles import THEMES, get_active_theme_name, set_active_theme_name
+        _theme_names = list(THEMES.keys())
+        _theme_icons = {"Arctic Clean": "☀", "Midnight Pro": "🌙", "Obsidian Neon": "✦"}
+        _current_theme = get_active_theme_name()
+        _theme_btn = QPushButton(_theme_icons.get(_current_theme, "☀"))
+        _theme_btn.setObjectName("themeToggleBtn")
+        _theme_btn.setFixedSize(30, 28)
+        _theme_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        _theme_btn.setToolTip(f"Theme: {_current_theme} — click to cycle")
+        _theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _theme_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{WHITE}; border:none;"
+            f" font-size:13px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:rgba(255,255,255,0.10); }}"
+        )
+
+        def _on_theme_toggle():
+            from ui.styles import THEMES, get_active_theme_name, set_active_theme_name
+            from ui.widgets.toast import ToastManager
+            _names = list(THEMES.keys())
+            _cur = get_active_theme_name()
+            _next = _names[(_names.index(_cur) + 1) % len(_names)] if _cur in _names else _names[0]
+            set_active_theme_name(_next)
+            _theme_btn.setToolTip(f"Theme: {_next} — restart to apply")
+            ToastManager.show(f"Theme set to {_next} — restart to apply", "info")
+
+        _theme_btn.clicked.connect(_on_theme_toggle)
+        lay.addSpacing(4)
+        lay.addWidget(_theme_btn)
 
         # ── Window controls ───────────────────────────────────────────────────
         # Segoe MDL2 Assets: the exact font Windows uses for its own title bar
@@ -1877,6 +1946,14 @@ class Dashboard(QMainWindow):
         if not getattr(self, "_snap_subclass_installed", False):
             self._install_snap_subclass()
             self._snap_subclass_installed = True
+        # Attach toast manager once window is visible
+        from ui.widgets.toast import ToastManager
+        ToastManager.instance().attach(self)
+        # OUTPUT-4: scan summary sheet (lazy init, parented to main window)
+        if not hasattr(self, "_scan_sheet"):
+            from ui.widgets.scan_summary_sheet import ScanSummarySheet
+            self._scan_sheet = ScanSummarySheet(self)
+            self._scan_sheet.navigate_requested.connect(self._nav_rail_go_to)
 
     def _install_snap_subclass(self):
         """Subclass the Win32 HWND so WM_NCHITTEST returns HTMAXBUTTON over our
@@ -2279,6 +2356,52 @@ class Dashboard(QMainWindow):
         if label:
             self.setWindowTitle(f"NetSentinel — {label}")
 
+    def _nav_crossfade_to(self, target_widget) -> None:
+        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+
+        if self._fade_anim is not None and self._fade_anim.state() == QPropertyAnimation.State.Running:
+            self._fade_anim.stop()
+            cur = self._stack.currentWidget()
+            if cur:
+                cur.setGraphicsEffect(None)
+            self._fade_anim = None
+
+        if self._stack.currentWidget() is target_widget:
+            return
+
+        cur = self._stack.currentWidget()
+        if cur is None:
+            self._stack.setCurrentWidget(target_widget)
+            return
+
+        effect = QGraphicsOpacityEffect(cur)
+        cur.setGraphicsEffect(effect)
+
+        fade_out = QPropertyAnimation(effect, b"opacity", cur)
+        fade_out.setDuration(80)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.Type.InQuad)
+        self._fade_anim = fade_out
+
+        def _on_fade_out_done():
+            cur.setGraphicsEffect(None)
+            self._stack.setCurrentWidget(target_widget)
+            in_effect = QGraphicsOpacityEffect(target_widget)
+            target_widget.setGraphicsEffect(in_effect)
+            fade_in = QPropertyAnimation(in_effect, b"opacity", target_widget)
+            fade_in.setDuration(80)
+            fade_in.setStartValue(0.0)
+            fade_in.setEndValue(1.0)
+            fade_in.setEasingCurve(QEasingCurve.Type.OutQuad)
+            fade_in.finished.connect(lambda: target_widget.setGraphicsEffect(None))
+            self._fade_anim = fade_in
+            fade_in.start()
+
+        fade_out.finished.connect(_on_fade_out_done)
+        fade_out.start()
+
     def _nav_refresh_item_text(self, row: int):
         """Rewrite displayed text for a nav row based on collapsed/expanded mode."""
         item = self._nav.item(row)
@@ -2404,6 +2527,7 @@ class Dashboard(QMainWindow):
 
         from ui.pages.history_page import HistoryPage
         self._history_page = HistoryPage(store=self._store)
+        self.global_time_range_changed.connect(self._history_page.set_global_hours)
 
         from ui.pages.inventory_page import InventoryPage
         self._inventory_page = InventoryPage(store=self._store)
@@ -2414,12 +2538,14 @@ class Dashboard(QMainWindow):
 
         from ui.pages.cert_page import CertPage
         self._cert_page = CertPage(store=self._store)
+        self.global_time_range_changed.connect(self._cert_page.set_global_hours)
 
         from ui.pages.uptime_page import UptimePage
         self._uptime_page = UptimePage(store=self._store)
 
         from ui.pages.service_page import ServicePage
         self._service_page = ServicePage(store=self._store)
+        self.global_time_range_changed.connect(self._service_page.set_global_hours)
 
         from ui.pages.reports_page import ReportsPage
         self._reports_page = ReportsPage(store=self._store)
@@ -2427,7 +2553,9 @@ class Dashboard(QMainWindow):
         from ui.pages.notifications_page import NotificationsPage
         self._notifications_page = NotificationsPage(router=None, parent=None)
         self._notifications_page.navigate_to.connect(self._nav_rail_go_to)
+        self._notifications_page.view_in_log_hub.connect(self._on_view_alert_in_log_hub)
         self._notifications_page.set_store(self._store)
+        self.global_time_range_changed.connect(self._notifications_page.set_global_hours)
 
         from ui.pages.baseline_page import BaselinePage
         self._baseline_page = BaselinePage(store=self._store, parent=None)
@@ -2468,11 +2596,13 @@ class Dashboard(QMainWindow):
         self._settings_page = SettingsPage(parent=None)
         self._settings_page.reload_oui_requested.connect(self._reload_oui_db)
         self._settings_page.reset_dismissed_requested.connect(self._reset_dismissed_notices)
+        self._settings_page.navigate_to.connect(self._nav_rail_go_to)
 
         from ui.pages.speed_test_page import SpeedTestPage
         self._speed_test_page = SpeedTestPage(store=self._store, parent=None)
         self._speed_test_page.modem_pause_requested.connect(self._on_modem_disconnect)
         self._speed_test_page.modem_resume_requested.connect(self._resume_modem_worker)
+        self.global_time_range_changed.connect(self._speed_test_page.set_global_hours)
 
         from ui.pages.home_automation_page import HomeAutomationPage
         self._ha_page = HomeAutomationPage(store=self._store, parent=None)
@@ -2502,6 +2632,22 @@ class Dashboard(QMainWindow):
 
         from ui.pages.cve_page import CvePage
         self._cve_page = CvePage(self._store, parent=None)
+        self._cve_page.navigate_to_inventory.connect(
+            lambda ip: (self._nav_rail_go_to("Inventory Changes"), self._inventory_page.select_device(ip))
+        )
+
+        # ── DEVICE-1: device quick-profile popover ────────────────────────────
+        from ui.widgets.device_popover import DevicePopover
+        self._device_popover = DevicePopover(parent=self)
+        self._device_popover.set_store(self._store)
+        self._device_popover.navigate_to_inventory.connect(self._on_popover_open_inventory)
+        self._device_popover.navigate_to_threat_intel.connect(self._on_popover_open_threat_intel)
+
+        # Inject popover into pages that need it
+        for _p in (self._connections_page, self._threat_intel_page,
+                   self._cve_page, self._log_hub_page):
+            if hasattr(_p, "set_popover"):
+                _p.set_popover(self._device_popover)
 
         from ui.pages.automation_page import AutomationPage
         self._automation_page = AutomationPage(parent=None)
@@ -2728,6 +2874,7 @@ class Dashboard(QMainWindow):
         self._overview_page.modem_tile_clicked.connect(self._on_modem_tile_clicked)
         self._active_modem_plugin_label: str = ""
         self._diagnosis_page.navigate_to.connect(self._on_overview_navigate)
+        self._diagnosis_page.diagnosis_saved.connect(self._home_page.refresh_diag_summary)
 
         # Populate home page suggestions on first build (deferred so _home_page exists)
         from PyQt6.QtCore import QTimer as _QTr
@@ -3532,7 +3679,7 @@ class Dashboard(QMainWindow):
         ):
             return
         self._nav_current_page_label = label
-        self._stack.setCurrentWidget(widget)
+        self._nav_crossfade_to(widget)
         self._nav_flyout.set_active(label)
         section = self._nav_page_to_section.get(label, "")
         if hasattr(self, "_breadcrumb_lbl"):
@@ -3584,6 +3731,8 @@ class Dashboard(QMainWindow):
     @pyqtSlot(str)
     def _on_config_drift_detected(self, message: str) -> None:
         """Show a status-bar and tray notification when snapshot comparison finds drift."""
+        self._baseline_has_drift = True
+        self._refresh_section_badges()
         self._set_status(f"⚠ {message}")
         if self._tray_manager.is_available():
             self._tray_manager.show_notification(
@@ -3946,6 +4095,7 @@ class Dashboard(QMainWindow):
     def _open_command_palette(self) -> None:
         items = self._build_palette_items()
         pal = CommandPalette(items, parent=self)
+        pal.load_recent_data(self._store)
         pal.page_requested.connect(self._nav_rail_go_to)
         pal.action_requested.connect(self._on_palette_action)
         pal.exec()
@@ -4008,7 +4158,21 @@ class Dashboard(QMainWindow):
         dlg.exec()
 
     def _on_palette_action(self, action: str) -> None:
-        if action.startswith("__recent__"):
+        if action.startswith("__device__"):
+            ip_or_mac = action[len("__device__"):]
+            self._nav_rail_go_to("Inventory Changes")
+            if hasattr(self, "_inventory_page"):
+                self._inventory_page.select_device(ip_or_mac)
+        elif action.startswith("__alert__"):
+            import json as _json
+            try:
+                alert_dict = _json.loads(action[len("__alert__"):])
+                if hasattr(self, "_notifications_page"):
+                    self._nav_rail_go_to("Notifications")
+                    self._notifications_page._alert_drawer.open(alert_dict)
+            except Exception:
+                pass
+        elif action.startswith("__recent__"):
             self._replay_recent_action(action[len("__recent__"):])
         elif action == "Run Full Scan":
             self._start_full_scan()
@@ -7520,6 +7684,42 @@ class Dashboard(QMainWindow):
 
 
 
+    # ── Global time range (TIME-1) ────────────────────────────────────────────
+
+    def _on_global_time_changed(self, text: str) -> None:
+        mapping = {"1h": 1.0, "6h": 6.0, "24h": 24.0, "7d": 168.0, "30d": 720.0}
+        hours = mapping.get(text, 24.0)
+        self._global_hours = hours
+        self.global_time_range_changed.emit(hours)
+
+    def _set_global_time_combo(self, hours: float) -> None:
+        """Sync the title bar combo to a given hours value (used by TIME-2 jump)."""
+        reverse = {1.0: "1h", 6.0: "6h", 24.0: "24h", 168.0: "7d", 720.0: "30d"}
+        text = reverse.get(hours)
+        if text and hasattr(self, "_time_range_combo"):
+            self._time_range_combo.blockSignals(True)
+            self._time_range_combo.setCurrentText(text)
+            self._time_range_combo.blockSignals(False)
+
+    # ── DEVICE-1: popover navigation handlers ────────────────────────────────
+
+    def _on_popover_open_inventory(self, ip_or_mac: str) -> None:
+        self._nav_rail_go_to("Inventory Changes")
+        if hasattr(self, "_inventory_page"):
+            self._inventory_page.select_device(ip_or_mac)
+
+    def _on_popover_open_threat_intel(self, ip: str) -> None:
+        self._nav_rail_go_to("Threat Intelligence")
+        if hasattr(self, "_threat_intel_page") and ip:
+            self._threat_intel_page.check_ip(ip)
+
+    # ── TIME-2: View in Log Hub from alert drawer ─────────────────────────────
+
+    def _on_view_alert_in_log_hub(self, alert_ts: float, source_key: str) -> None:
+        self._nav_rail_go_to("Network Logger")
+        if hasattr(self, "_log_hub_page"):
+            self._log_hub_page.jump_to_alert_time(alert_ts, source_key)
+
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
         if hasattr(self, "_header_scan_btn"):
@@ -9677,6 +9877,8 @@ class Dashboard(QMainWindow):
                 if not hasattr(self, "_device_tracker"):
                     self._device_tracker = DeviceTracker(self._store)
                 tr = self._device_tracker.process_scan(data.get("devices", []))
+                self._last_scan_new  = len(tr.new_devices)
+                self._last_scan_gone = len(tr.gone_devices)
                 if tr.new_devices:
                     msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})"
                             for d in tr.new_devices[:3]]
@@ -9791,6 +9993,60 @@ class Dashboard(QMainWindow):
 
         self._compute_suggestions()
 
+        # DEVICE-5: auto-snapshot when setting is on
+        try:
+            _qs_d5 = QSettings("NetSentinel", "NetSentinel")
+            if _qs_d5.value("baseline/auto_snapshot", False, type=bool) and self._store is not None:
+                from modules.config_baseline import (
+                    build_snapshot_from_scan,
+                    diff_snapshots,
+                    list_snapshots as _ls,
+                    store_snapshot as _ss,
+                    delete_snapshot as _ds,
+                )
+                import datetime as _dt_d5
+                _label = f"Auto · {_dt_d5.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                _dev_dicts = []
+                for _d in data.get("devices", []):
+                    _dev_dicts.append({
+                        "mac":      (_d.mac      if not isinstance(_d, dict) else _d.get("mac", "")),
+                        "ip":       (_d.ip       if not isinstance(_d, dict) else _d.get("ip", "")),
+                        "hostname": (_d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")),
+                        "vendor":   (_d.vendor   if not isinstance(_d, dict) else _d.get("vendor", "")),
+                        "open_ports": (list(getattr(_d, "open_ports", [])) if not isinstance(_d, dict) else _d.get("open_ports", [])),
+                    })
+                _new_snap = build_snapshot_from_scan(_dev_dicts, label=_label)
+
+                # Load previous auto-snapshots for drift check
+                _all_snaps = _ls(self._store, limit=200)
+                _auto_snaps = [s for s in _all_snaps if (s.label or "").startswith("Auto ·")]
+
+                _prev = _auto_snaps[0] if _auto_snaps else None
+                if _prev:
+                    _diff = diff_snapshots(_prev, _new_snap)
+                    if _diff.has_drift:
+                        self._baseline_has_drift = True
+                        self._refresh_section_badges()
+                        from ui.widgets.toast import ToastManager
+                        ToastManager.show(
+                            f"Baseline drift: {_diff.summary()} — Config Snapshots",
+                            "info",
+                        )
+
+                _ss(self._store, _new_snap)
+
+                # Keep only last 10 auto-snapshots; never touch manually-labelled ones
+                _all_snaps2 = _ls(self._store, limit=200)
+                _auto_only = [s for s in _all_snaps2 if (s.label or "").startswith("Auto ·")]
+                for _old in _auto_only[10:]:
+                    try:
+                        _ds(self._store, _old.id)
+                    except Exception:
+                        pass
+        except Exception:
+            pass  # auto-snapshot errors must never break the scan result handler
+
+
         # Auto-navigate to Overview on the very first scan only (home page onboarding).
         # After that the user knows the app — leave them where they are.
         _qs = QSettings("NetSentinel", "NetSentinel")
@@ -9822,6 +10078,25 @@ class Dashboard(QMainWindow):
         # Integration discovery banner — show when scanned devices match a
         # bundled plugin gateway that isn't already imported
         self._check_integration_banner(devices)
+
+        # OUTPUT-4: post-scan summary sheet
+        if hasattr(self, "_scan_sheet") and self._store is not None:
+            try:
+                import time as _t_o4
+                _pending = [
+                    a for a in self._store.get_recent_alerts(hours=24)
+                    if not a.get("acked_ts")
+                ]
+                self._scan_sheet.show_sheet(
+                    total_devices=len(devices),
+                    new_devices=getattr(self, "_last_scan_new", 0),
+                    missing_devices=getattr(self, "_last_scan_gone", 0),
+                    pending_alerts=len(_pending),
+                    baseline_diffs=1 if getattr(self, "_baseline_has_drift", False) else 0,
+                    new_cves=0,
+                )
+            except Exception:
+                pass
 
     def _fetch_wan_ip(self) -> None:
         """Fetch the public WAN IP once per session in a background thread."""
@@ -10210,14 +10485,16 @@ class Dashboard(QMainWindow):
                 for k in qs.allKeys()
                 if k.startswith("logging/") and k.endswith("_enabled")
             )
-        # Monitor — green when any log source is writing to DB
+        # Monitor — left dot: green when any log source is active, muted when idle
         mon_btn = self._nav_rail_buttons.get("Monitor")
         if mon_btn:
-            mon_btn.set_badge(GREEN if logger else "")
-        # Analysis — green when ARP watch or scan workers are running
+            mon_btn.set_badge("")   # top-right badge not used for Monitor
+            mon_btn.set_left_dot(GREEN if logger else TEXT_MUTED)
+        # Analysis — left dot: green when ARP watch or broadcast storm is running
         ana_btn = self._nav_rail_buttons.get("Analysis")
         if ana_btn:
-            ana_btn.set_badge(GREEN if (arp or storm) else "")
+            ana_btn.set_badge("")   # top-right badge not used for Analysis
+            ana_btn.set_left_dot(GREEN if (arp or storm) else TEXT_MUTED)
         # Security Audit — numeric red pill when unacked alerts exist, green dot when DHCP running
         sec_btn = self._nav_rail_buttons.get("Security Audit")
         if sec_btn:
@@ -10234,6 +10511,49 @@ class Dashboard(QMainWindow):
             else:
                 sec_btn.set_badge(0)
                 sec_btn.setToolTip("Security Audit")
+
+        # POLISH-2: CVE Tracker — count of Open-state CVEs
+        cve_btn = self._nav_rail_buttons.get("CVE Tracker")
+        if cve_btn and self._store:
+            try:
+                open_cves = len(self._store.list_cve_lifecycles(state_filter="Open"))
+            except Exception:
+                open_cves = 0
+            cve_btn.set_badge(open_cves if open_cves > 0 else 0)
+            if open_cves:
+                cve_btn.setToolTip(f"CVE Tracker — {open_cves} open CVE{'s' if open_cves != 1 else ''}")
+
+        # POLISH-2: TLS & Exposure — count of expiring / expired certs
+        tls_btn = self._nav_rail_buttons.get("TLS & Exposure")
+        if tls_btn and self._store:
+            try:
+                certs = self._store.query_cert_status(hours=168)
+                expired  = sum(1 for c in certs if getattr(c, "is_expired", False))
+                expiring = sum(
+                    1 for c in certs
+                    if not getattr(c, "is_expired", False)
+                    and 0 <= (getattr(c, "days_remaining", 999) or 999) <= 30
+                )
+            except Exception:
+                expired = expiring = 0
+            cert_total = expired + expiring
+            if cert_total > 0:
+                tls_btn.set_badge(RED if expired > 0 else AMBER)
+                tls_btn.setToolTip(
+                    f"TLS & Exposure — {expired} expired, {expiring} expiring soon"
+                    if expired else f"TLS & Exposure — {expiring} cert{'s' if expiring != 1 else ''} expiring soon"
+                )
+            else:
+                tls_btn.set_badge(0)
+
+        # POLISH-2: Config Snapshots — drift indicator "≠" when auto-snapshot drifted
+        base_btn = self._nav_rail_buttons.get("Config Snapshots")
+        if base_btn:
+            if getattr(self, "_baseline_has_drift", False):
+                base_btn.set_badge(AMBER)
+                base_btn.setToolTip("Config Snapshots — baseline drift detected")
+            else:
+                base_btn.set_badge(0)
 
     def _check_weekly_digest(self) -> None:
         """Fire a weekly digest notification if conditions are met (RECUR-2)."""
@@ -10295,13 +10615,14 @@ class Dashboard(QMainWindow):
             self._home_page.set_monitor_pills(arp, dhcp, storm, logger)
             if self._store is not None:
                 try:
-                    pending = len(self._store.get_unacked_alerts())
+                    unacked = self._store.get_unacked_alerts()
                     offline = sum(
                         1 for d in self._store.get_known_devices().values()
                         if getattr(d, "last_seen", 0) and
                         (__import__("time").time() - d.last_seen) > 1800
                     )
-                    self._home_page.set_action_needed(pending, offline)
+                    self._home_page.set_action_needed(len(unacked), offline)
+                    self._home_page.set_pending_alert_rows(unacked)
                 except Exception:
                     pass
         # Flyout item dots — always reflect current state

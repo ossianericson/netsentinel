@@ -9,14 +9,15 @@ from ui.styles import ACCENT, BG_CARD, BG_HOVER, BORDER, TEXT_PRIMARY, TEXT_SECO
 
 
 class CommandPalette(QDialog):
-    page_requested   = pyqtSignal(str)  # emits page label
-    action_requested = pyqtSignal(str)  # emits action key
+    page_requested   = pyqtSignal(str)   # emits page label
+    action_requested = pyqtSignal(str)   # emits action key or "__device__IP" or "__alert__ID"
 
     def __init__(self, items: list, parent=None):
         """items: list of {'icon': str, 'label': str, 'kind': 'page'|'action'}"""
         super().__init__(parent, Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._all_items = items
+        self._data_items: list[dict] = []  # pre-loaded device + alert items
         self._build()
 
     def _build(self):
@@ -103,16 +104,66 @@ class CommandPalette(QDialog):
         if first_selectable is not None:
             self._list.setCurrentRow(first_selectable)
 
+    def load_recent_data(self, store) -> None:
+        """Pre-load known devices + recent alerts from MetricStore."""
+        self._data_items = []
+        if store is None:
+            return
+        try:
+            import time as _t
+            devices = list(store.get_known_devices().values())[:10]
+            for d in devices:
+                ip = d.ip or ""
+                mac = d.mac or ""
+                vendor = d.vendor or ""
+                name = d.custom_name or d.hostname or ""
+                label = f"Device — {ip}" + (f" · {name}" if name else "") + (f" · {vendor}" if vendor else "")
+                self._data_items.append({
+                    "icon": "💻", "label": label, "kind": "device",
+                    "ip": ip, "mac": mac, "search": f"{ip} {mac} {vendor} {name}".lower(),
+                })
+            alerts = store.get_recent_alerts(hours=72)[:5]
+            for a in alerts:
+                ts = a.get("ts", 0)
+                ago_s = _t.time() - ts
+                if ago_s < 3600:
+                    ago = f"{int(ago_s // 60)}m ago"
+                elif ago_s < 86400:
+                    ago = f"{int(ago_s // 3600)}h ago"
+                else:
+                    ago = f"{int(ago_s // 86400)}d ago"
+                rule = a.get("rule_name", a.get("rule", "Alert"))
+                host = a.get("host", "")
+                label = f"Alert — {rule}" + (f" · {host}" if host else "") + f" · {ago}"
+                self._data_items.append({
+                    "icon": "⚠", "label": label, "kind": "alert",
+                    "alert": a, "search": f"{rule} {host}".lower(),
+                })
+        except Exception:
+            pass
+
+        if self._data_items:
+            all_with_data = list(self._all_items) + [
+                {"kind": "separator", "label": "Recent data"},
+            ] + self._data_items
+        else:
+            all_with_data = self._all_items
+        self._combined_items = all_with_data
+
     def _filter(self, text: str):
         text = text.strip()
+        source = getattr(self, "_combined_items", self._all_items)
         if not text:
-            self._populate(self._all_items)
+            self._populate(source)
             return
-        matched = [
-            it for it in self._all_items
-            if it.get("kind") != "separator"
-            and text.lower() in it["label"].lower()
-        ]
+        q = text.lower()
+        matched = []
+        for it in source:
+            if it.get("kind") == "separator":
+                continue
+            search_in = it.get("search") or it["label"].lower()
+            if q in search_in or q in it["label"].lower():
+                matched.append(it)
         self._populate(matched)
 
     def _activate(self, item: QListWidgetItem):
@@ -122,6 +173,11 @@ class CommandPalette(QDialog):
         kind = data.get("kind", "page")
         if kind == "page":
             self.page_requested.emit(data.get("real_label") or data["label"])
+        elif kind == "device":
+            self.action_requested.emit(f"__device__{data.get('ip') or data.get('mac', '')}")
+        elif kind == "alert":
+            import json as _json
+            self.action_requested.emit(f"__alert__{_json.dumps(data.get('alert', {}))}")
         elif kind == "recent":
             self.action_requested.emit(f"__recent__{data.get('id', data['label'])}")
         else:
@@ -170,6 +226,7 @@ class CommandPalette(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         self._search.clear()
+        self._populate(getattr(self, "_combined_items", self._all_items))
         if self.parent():
             pw  = self.parent()
             geo = pw.frameGeometry()

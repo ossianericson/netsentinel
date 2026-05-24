@@ -209,6 +209,7 @@ class HomePage(QWidget):
         super().__init__(parent)
         self._store = store
         self._alert_count = 0
+        self._ac_offline_count = 0
         self._device_count: int = 0
         self._signals_connected: bool = False
         self._first_run_mode: bool = False
@@ -537,21 +538,31 @@ class HomePage(QWidget):
         _ac_hdr_row.addWidget(_ac_hdr_lbl)
         _ac_hdr_row.addStretch()
         _ac_outer.addLayout(_ac_hdr_row)
-        _ac_items_row = QHBoxLayout()
-        _ac_items_row.setSpacing(16)
-        self._ac_alerts_lbl = QLabel("")
-        self._ac_alerts_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+
+        # ── ALERT-3: per-alert rows with inline ack ───────────────────────────
+        self._ac_alert_rows_widget = QWidget()
+        self._ac_alert_rows_widget.setStyleSheet("background:transparent;")
+        self._ac_alert_rows_lay = QVBoxLayout(self._ac_alert_rows_widget)
+        self._ac_alert_rows_lay.setContentsMargins(0, 0, 0, 0)
+        self._ac_alert_rows_lay.setSpacing(2)
+        self._ac_alert_rows_widget.setVisible(False)
+        _ac_outer.addWidget(self._ac_alert_rows_widget)
+
+        self._ac_view_all_btn = QPushButton("View all alerts →")
+        self._ac_view_all_btn.setFixedHeight(22)
+        self._ac_view_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._ac_view_all_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{AMBER}; border:none;"
+            f" font-size:10px; padding:0; text-align:left; }}"
+            f"QPushButton:hover {{ color:{RED}; }}"
         )
-        _ac_alerts_btn = QPushButton("View Alerts →")
-        _ac_alerts_btn.setFixedHeight(24)
-        _ac_alerts_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _ac_alerts_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
-            f" border-radius:3px; font-size:11px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{AMBER}22; }}"
-        )
-        _ac_alerts_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
+        self._ac_view_all_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
+        self._ac_view_all_btn.setVisible(False)
+        _ac_outer.addWidget(self._ac_view_all_btn)
+
+        # ── Offline devices row (separate concern, unchanged) ─────────────────
+        _ac_devices_row = QHBoxLayout()
+        _ac_devices_row.setSpacing(8)
         self._ac_devices_lbl = QLabel("")
         self._ac_devices_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
@@ -565,12 +576,12 @@ class HomePage(QWidget):
             f"QPushButton:hover {{ background:{RED}22; }}"
         )
         _ac_devices_btn.clicked.connect(lambda: self.navigate_to.emit("Inventory"))
-        _ac_items_row.addWidget(self._ac_alerts_lbl)
-        _ac_items_row.addWidget(_ac_alerts_btn)
-        _ac_items_row.addWidget(self._ac_devices_lbl)
-        _ac_items_row.addWidget(_ac_devices_btn)
-        _ac_items_row.addStretch()
-        _ac_outer.addLayout(_ac_items_row)
+        _ac_devices_row.addWidget(self._ac_devices_lbl)
+        _ac_devices_row.addWidget(_ac_devices_btn)
+        _ac_devices_row.addStretch()
+        _ac_outer.addLayout(_ac_devices_row)
+
+        self._ac_offline_count = 0  # track so ack-all can decide whether to hide card
         lay.addWidget(self._action_card)
 
         # ── Post-scan delta banner (hidden until 2nd+ scan) ───────────────────
@@ -671,6 +682,27 @@ class HomePage(QWidget):
         _rec_status_row.addStretch()
         _rec_status_row.addWidget(self._btn_rescan_compact)
         _rec_outer.addLayout(_rec_status_row)
+
+        # Last diagnosis summary row
+        _diag_row = QHBoxLayout()
+        _diag_row.setSpacing(8)
+        self._rec_diag_lbl = QLabel("Last diagnosis:  none yet")
+        self._rec_diag_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        _diag_open = QPushButton("What's Wrong? →")
+        _diag_open.setFlat(True)
+        _diag_open.setCursor(Qt.CursorShape.PointingHandCursor)
+        _diag_open.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:#005A9E; }}"
+        )
+        _diag_open.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
+        _diag_row.addWidget(self._rec_diag_lbl)
+        _diag_row.addStretch()
+        _diag_row.addWidget(_diag_open)
+        _rec_outer.addLayout(_diag_row)
 
         lay.addWidget(self._recurring_section)
 
@@ -1381,6 +1413,7 @@ class HomePage(QWidget):
         else:
             self._tips_card.setVisible(False)
         self.refresh_checklist()
+        self.refresh_diag_summary()
         self._check_recurring_mode()
         if self._recurring_mode:
             self._update_recurring_scan_time()
@@ -1579,23 +1612,117 @@ class HomePage(QWidget):
                 )
 
     def set_action_needed(self, pending_alerts: int, offline_devices: int) -> None:
-        """Show or hide the 'Action needed' card (DASH-1)."""
-        if pending_alerts == 0 and offline_devices == 0:
-            self._action_card.setVisible(False)
-            return
-        if pending_alerts > 0:
-            self._ac_alerts_lbl.setText(
-                f"{pending_alerts} unacked alert{'s' if pending_alerts != 1 else ''}"
-            )
-        else:
-            self._ac_alerts_lbl.setText("")
+        """Update the offline-devices portion of the Action Needed card (DASH-1).
+        Alert rows are now driven by set_pending_alert_rows().
+        """
+        self._ac_offline_count = offline_devices
         if offline_devices > 0:
             self._ac_devices_lbl.setText(
                 f"{offline_devices} device{'s' if offline_devices != 1 else ''} offline"
             )
         else:
             self._ac_devices_lbl.setText("")
-        self._action_card.setVisible(True)
+        # Card visibility is managed by set_pending_alert_rows; only show here for
+        # the offline-devices-only case when there are no pending alerts.
+        if pending_alerts == 0:
+            has_alert_rows = self._ac_alert_rows_lay.count() > 0
+            if not has_alert_rows:
+                self._action_card.setVisible(offline_devices > 0)
+
+    def set_pending_alert_rows(self, alerts: list) -> None:
+        """ALERT-3: Populate the action-needed card with per-alert rows + inline ack."""
+        import time as _time
+
+        # Clear existing rows
+        while self._ac_alert_rows_lay.count():
+            item = self._ac_alert_rows_lay.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+
+        alerts = alerts[:5]  # cap at 5 rows
+
+        for alert in alerts:
+            alert_id   = alert.get("id")
+            severity   = alert.get("severity", "WARNING")
+            rule       = alert.get("rule_name", "Alert")
+            msg        = alert.get("message", "")
+            ts         = float(alert.get("ts") or 0)
+            elapsed    = max(0, int(_time.time()) - int(ts))
+            if elapsed < 60:
+                time_str = f"{elapsed}s ago"
+            elif elapsed < 3600:
+                time_str = f"{elapsed // 60}m ago"
+            else:
+                time_str = f"{elapsed // 3600}h ago"
+
+            dot_color  = RED if severity == "CRITICAL" else AMBER
+            label_text = f"{rule} · {msg[:50]}" if msg else rule
+
+            row_w = QWidget()
+            row_w.setStyleSheet("background:transparent;")
+            row_lay = QHBoxLayout(row_w)
+            row_lay.setContentsMargins(0, 1, 0, 1)
+            row_lay.setSpacing(6)
+
+            dot = QLabel("●")
+            dot.setFixedWidth(12)
+            dot.setStyleSheet(
+                f"font-size:8px; color:{dot_color}; background:transparent; border:none;"
+            )
+
+            msg_lbl = QLabel(label_text)
+            msg_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            )
+            msg_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+            time_lbl = QLabel(time_str)
+            time_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+
+            ack_btn = QPushButton("✓")
+            ack_btn.setFixedSize(22, 18)
+            ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            ack_btn.setToolTip("Acknowledge this alert")
+            ack_btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
+                f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
+                f"QPushButton:hover {{ color:{GREEN}; border-color:{GREEN}; }}"
+            )
+            ack_btn.clicked.connect(lambda _=False, aid=alert_id, w=row_w: self._ack_alert_row(aid, w))
+
+            row_lay.addWidget(dot)
+            row_lay.addWidget(msg_lbl, 1)
+            row_lay.addWidget(time_lbl)
+            row_lay.addWidget(ack_btn)
+            self._ac_alert_rows_lay.addWidget(row_w)
+
+        has_alerts = len(alerts) > 0
+        self._ac_alert_rows_widget.setVisible(has_alerts)
+        self._ac_view_all_btn.setVisible(has_alerts)
+        self._action_card.setVisible(has_alerts or self._ac_offline_count > 0)
+
+    def _ack_alert_row(self, alert_id, row_widget) -> None:
+        if self._store and alert_id is not None:
+            try:
+                self._store.acknowledge_alert(int(alert_id))
+            except Exception:
+                pass
+        row_widget.setVisible(False)
+        row_widget.deleteLater()
+        # Check if any rows remain
+        remaining = sum(
+            1 for i in range(self._ac_alert_rows_lay.count())
+            if self._ac_alert_rows_lay.itemAt(i) and
+               self._ac_alert_rows_lay.itemAt(i).widget() and
+               self._ac_alert_rows_lay.itemAt(i).widget().isVisible()
+        )
+        if remaining == 0:
+            self._ac_alert_rows_widget.setVisible(False)
+            self._ac_view_all_btn.setVisible(False)
+            if self._ac_offline_count == 0:
+                self._action_card.setVisible(False)
 
     def _scroll_to_setup_card(self) -> None:
         """Scroll to / expand the setup checklist card (NUX-4)."""
@@ -1658,6 +1785,45 @@ class HomePage(QWidget):
                 f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
                 " border:none; letter-spacing:1px;"
             )
+
+    def refresh_diag_summary(self) -> None:
+        import json as _json_mod
+        if not hasattr(self, "_rec_diag_lbl"):
+            return
+        s = QSettings("NetSentinel", "NetSentinel")
+        try:
+            history = _json_mod.loads(s.value("diagnosis/history", "[]"))
+        except Exception:
+            history = []
+        if not history:
+            self._rec_diag_lbl.setText("Last diagnosis:  none yet")
+            self._rec_diag_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+            return
+        e = history[0]
+        ts = e.get("ts", 0)
+        if ts:
+            secs = datetime.datetime.now().timestamp() - ts
+            if secs < 60:
+                ago = "just now"
+            elif secs < 3600:
+                ago = f"{int(secs // 60)}m ago"
+            elif secs < 86400:
+                ago = f"{int(secs // 3600)}h ago"
+            else:
+                ago = f"{int(secs // 86400)}d ago"
+        else:
+            ago = "–"
+        sev = e.get("severity", "INFO")
+        n = len(e.get("findings", []))
+        sev_colors = {"CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN, "INFO": ACCENT}
+        color = sev_colors.get(sev, TEXT_MUTED)
+        txt = f"Last diagnosis:  {sev} · {n} finding{'s' if n != 1 else ''} · {ago}"
+        self._rec_diag_lbl.setText(txt)
+        self._rec_diag_lbl.setStyleSheet(
+            f"font-size:11px; color:{color}; background:transparent; border:none;"
+        )
 
     def set_scanning(self, running: bool) -> None:
         self._btn_scan.setEnabled(not running)

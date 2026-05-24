@@ -194,10 +194,14 @@ class ThreatIntelPage(QWidget):
         self._refresh_worker: Optional[ThreatFeedRefreshWorker] = None
         self._abuse_worker:   Optional[AbuseIpDbWorker]          = None
         self._last_updated = ""
+        self._popover = None
         self._setup_ui()
         self._restore_settings()
         # Try to load from local cache on startup (non-blocking — happens immediately)
         self._load_cache()
+
+    def set_popover(self, popover) -> None:
+        self._popover = popover
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -423,6 +427,11 @@ class ThreatIntelPage(QWidget):
         if itype == "ip":
             act_map = menu.addAction("🌍  Show on Geolocation Map")
             act_map.triggered.connect(lambda: self.show_on_map.emit(indicator))
+            if self._popover:
+                act_device = menu.addAction(f"Device Info — {indicator}")
+                act_device.triggered.connect(
+                    lambda _=False, ip=indicator: self._show_device_info(ip)
+                )
             menu.addSeparator()
 
         act_copy = menu.addAction("📋  Copy Indicator")
@@ -437,6 +446,11 @@ class ThreatIntelPage(QWidget):
         act_export.triggered.connect(lambda: self._export_row(row))
 
         menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _show_device_info(self, ip: str) -> None:
+        if self._popover:
+            from PyQt6.QtGui import QCursor
+            self._popover.show_for(ip, QCursor.pos())
 
     def _check_ip_from_menu(self, ip: str) -> None:
         self._lookup_field.setText(ip)

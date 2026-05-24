@@ -334,6 +334,16 @@ class HistoryPage(QWidget):
             btn.setStyleSheet(self._zoom_btn_style(active))
         self._refresh()
 
+    def set_global_hours(self, hours: float) -> None:
+        """TIME-1: map global hours to the nearest zoom level and refresh."""
+        sorted_windows = sorted(_WINDOWS.items(), key=lambda x: x[1])
+        best = sorted_windows[-1][0]
+        for label, h in sorted_windows:
+            if hours <= h:
+                best = label
+                break
+        self._set_window(best)
+
     @staticmethod
     def _zoom_btn_style(active: bool) -> str:
         if active:

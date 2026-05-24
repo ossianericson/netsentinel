@@ -47,6 +47,7 @@ from ui.styles import (
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
+from ui.widgets.context_menu import install_copy_menu
 from modules.config_baseline import (
     ConfigSnapshot, SnapshotDiff,
     build_snapshot_from_scan, diff_snapshots,
@@ -259,6 +260,7 @@ class BaselinePage(QWidget):
         for w, col in zip((140, 0, 70, 80), range(4)):
             if w:
                 self._snap_table.setColumnWidth(col, w)
+        install_copy_menu(self._snap_table)
         bl.addWidget(self._snap_table)
 
         self._empty_lbl = QLabel(
@@ -335,7 +337,16 @@ class BaselinePage(QWidget):
         )
         for w, col in zip((130, 100), range(2)):
             self._diff_table.setColumnWidth(col, w)
+        install_copy_menu(self._diff_table)
         bl.addWidget(self._diff_table)
+
+        btn_export_diff = _btn("↓ Export HTML")
+        btn_export_diff.clicked.connect(self._export_diff_html)
+        diff_btn_row = QHBoxLayout()
+        diff_btn_row.addWidget(btn_export_diff)
+        diff_btn_row.addStretch()
+        bl.addLayout(diff_btn_row)
+
         return card
 
     # ── Data loading ──────────────────────────────────────────────────────────
@@ -514,3 +525,45 @@ class BaselinePage(QWidget):
             _add_row("—", "—", "No changes detected between these snapshots", GREEN)
 
         self._diff_card_widget.setVisible(True)
+        self._last_diff_summary = self._diff_summary.text()
+
+    def _export_diff_html(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+        from ui.widgets.toast import ToastManager
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Drift Report", "baseline_diff.html", "HTML files (*.html)"
+        )
+        if not path:
+            return
+        tbl = self._diff_table
+        rows_html = ""
+        colors = {GREEN: "#27ae60", RED: "#e74c3c", AMBER: "#f39c12", TEXT_PRIMARY: "#333"}
+        for r in range(tbl.rowCount()):
+            cells = ""
+            for c in range(tbl.columnCount()):
+                it = tbl.item(r, c)
+                txt = it.text() if it else ""
+                fg = it.foreground().color().name() if it else "#333"
+                cells += f'<td style="padding:4px 8px;color:{fg}">{txt}</td>'
+            rows_html += f"<tr>{cells}</tr>\n"
+        summary_txt = getattr(self, "_last_diff_summary", "")
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>NetSentinel Baseline Diff</title>
+<style>body{{font-family:sans-serif;background:#f5f5f5;padding:16px}}
+table{{border-collapse:collapse;width:100%;background:#fff;box-shadow:0 1px 3px #ccc}}
+th{{background:#0078d4;color:#fff;padding:6px 8px;text-align:left}}
+tr:nth-child(even){{background:#f9f9f9}}
+</style></head><body>
+<h2>NetSentinel — Baseline Drift Report</h2>
+<p>{summary_txt}</p>
+<table><tr><th>Host (IP)</th><th>Category</th><th>Change</th></tr>
+{rows_html}</table>
+</body></html>"""
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(html)
+            import os
+            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
+        except Exception as exc:
+            ToastManager.show(f"Export failed: {exc}", "error")
+

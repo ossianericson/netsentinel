@@ -435,6 +435,17 @@ class InventoryPage(QWidget):
             self._type_checks[et] = cb
             filter_row.addWidget(cb)
         filter_row.addStretch()
+
+        btn_export_inv = QPushButton("↓ Export")
+        btn_export_inv.setFixedHeight(24)
+        btn_export_inv.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_export_inv.setStyleSheet(
+            f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+            f" background:transparent; padding:0 10px; border-radius:3px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        btn_export_inv.clicked.connect(self._export_csv)
+        filter_row.addWidget(btn_export_inv)
         cl.addLayout(filter_row)
 
         card = QFrame()
@@ -444,7 +455,7 @@ class InventoryPage(QWidget):
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(0, 0, 0, 0)
         card_lay.setSpacing(0)
-        cols = ["Time", "Event", "IP / Host", "MAC", "Vendor", "Detail"]
+        cols = ["●", "Time", "Event", "IP / Host", "MAC", "Vendor", "Detail"]
         self._table = ExpandingTable(
             0, len(cols),
             detail_builder=lambda r: self._build_event_detail(r),
@@ -454,6 +465,7 @@ class InventoryPage(QWidget):
         self._table.verticalHeader().setVisible(False)
         self._table.setEditTriggers(ExpandingTable.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(ExpandingTable.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(ExpandingTable.SelectionMode.ExtendedSelection)
         self._table.setAlternatingRowColors(True)
         self._table.setSortingEnabled(True)
         self._table.setShowGrid(False)
@@ -476,15 +488,50 @@ class InventoryPage(QWidget):
             """
         )
         hdr = self._table.horizontalHeader()
-        hdr.resizeSection(0, 140)
-        hdr.resizeSection(1, 90)
-        hdr.resizeSection(2, 130)
-        hdr.resizeSection(3, 135)
-        hdr.resizeSection(4, 130)
+        hdr.resizeSection(0, 22)   # ● status dot
+        hdr.resizeSection(1, 140)  # Time
+        hdr.resizeSection(2, 90)   # Event
+        hdr.resizeSection(3, 130)  # IP / Host
+        hdr.resizeSection(4, 135)  # MAC
+        hdr.resizeSection(5, 130)  # Vendor
         hdr.setStretchLastSection(True)
         self._table.cellDoubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_row_single_clicked)
+        self._table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         card_lay.addWidget(self._table)
+
+        # OUTPUT-5: bulk action bar (hidden until ≥2 rows selected)
+        self._bulk_bar = QFrame()
+        self._bulk_bar.setVisible(False)
+        self._bulk_bar.setStyleSheet(
+            f"QFrame {{ background:{BG_HOVER}; border-top:2px solid {ACCENT}; }}"
+        )
+        _bb_lay = QHBoxLayout(self._bulk_bar)
+        _bb_lay.setContentsMargins(12, 6, 12, 6)
+        _bb_lay.setSpacing(10)
+        self._bulk_count_lbl = QLabel("0 rows selected")
+        self._bulk_count_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _bb_lay.addWidget(self._bulk_count_lbl)
+        _bb_lay.addStretch()
+        for _lbl, _slot in [
+            ("Export selection", "_bulk_export"),
+            ("Snooze alerts 1h", "_bulk_snooze_1h"),
+            ("Snooze alerts 8h", "_bulk_snooze_8h"),
+            ("Deselect",         "_bulk_deselect"),
+        ]:
+            _b = QPushButton(_lbl)
+            _b.setFixedHeight(24)
+            _b.setCursor(Qt.CursorShape.PointingHandCursor)
+            _b.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+                f" border-radius:3px; font-size:11px; padding:0 10px; }}"
+                f"QPushButton:hover {{ background:{ACCENT}22; }}"
+            )
+            _b.clicked.connect(getattr(self, _slot))
+            _bb_lay.addWidget(_b)
+        card_lay.addWidget(self._bulk_bar)
         cl.addWidget(card, 1)
         self._content_stack.addWidget(content)
 
@@ -599,6 +646,22 @@ class InventoryPage(QWidget):
         if self._content_stack.currentIndex() == 0:
             self._content_stack.setCurrentIndex(1)
 
+        # DEVICE-2: build alert host set for dot lookup (one query, reused per row)
+        try:
+            _recent_alerts = self._store.get_recent_alerts(hours=24) if self._store else []
+        except Exception:
+            _recent_alerts = []
+        _alert_hosts: set[str] = set()
+        _crit_hosts:  set[str] = set()
+        for _a in _recent_alerts:
+            if _a.get("acked_ts"):
+                continue
+            _h = _a.get("host", "")
+            if _h:
+                _alert_hosts.add(_h)
+                if _a.get("severity", "") == "CRITICAL":
+                    _crit_hosts.add(_h)
+
         known_devices = self._store.get_known_devices()
         for evt in events:
             vendor = ""
@@ -614,12 +677,29 @@ class InventoryPage(QWidget):
             dt_str = datetime.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
             color, _ = _EVENT_STYLE.get(evt.event_type, (TEXT_SECONDARY, evt.event_type))
             host_cell = custom_name or evt.ip or "—"
-            self._table.setItem(row, 0, _plain_item(dt_str))
-            self._table.setItem(row, 1, _badge_item(evt.event_type, color))
-            self._table.setItem(row, 2, _plain_item(host_cell))
-            self._table.setItem(row, 3, _plain_item(evt.mac or "—"))
-            self._table.setItem(row, 4, _plain_item(vendor or "—"))
-            self._table.setItem(row, 5, _plain_item(evt.detail or ""))
+
+            # DEVICE-2: alert status dot
+            _keys = {k for k in (evt.ip, evt.mac) if k}
+            if _keys & _crit_hosts:
+                _dot_color, _dot_tip = RED, "CRITICAL alert active"
+            elif _keys & _alert_hosts:
+                _dot_color, _dot_tip = AMBER, "Unacked alert active"
+            else:
+                _dot_color, _dot_tip = TEXT_MUTED, ""
+            from PyQt6.QtWidgets import QTableWidgetItem as _TWI
+            _dot_item = _TWI("●")
+            _dot_item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(_dot_color))
+            _dot_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            _dot_item.setToolTip(_dot_tip)
+            _dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            self._table.setItem(row, 0, _dot_item)
+
+            self._table.setItem(row, 1, _plain_item(dt_str))
+            self._table.setItem(row, 2, _badge_item(evt.event_type, color))
+            self._table.setItem(row, 3, _plain_item(host_cell))
+            self._table.setItem(row, 4, _plain_item(evt.mac or "—"))
+            self._table.setItem(row, 5, _plain_item(vendor or "—"))
+            self._table.setItem(row, 6, _plain_item(evt.detail or ""))
             self._table.setRowHeight(row, 24)
 
         self._table.setSortingEnabled(True)
@@ -693,7 +773,7 @@ class InventoryPage(QWidget):
 
     @pyqtSlot(int, int)
     def _on_row_single_clicked(self, row: int, _col: int) -> None:
-        item = self._table.item(row, 3)  # MAC column
+        item = self._table.item(row, 4)  # MAC column (shifted by DEVICE-2 dot col)
         if not item:
             return
         mac = item.text().strip()
@@ -705,7 +785,7 @@ class InventoryPage(QWidget):
 
     @pyqtSlot(int, int)
     def _on_row_double_clicked(self, row: int, _col: int) -> None:
-        item = self._table.item(row, 3)  # MAC column
+        item = self._table.item(row, 4)  # MAC column (shifted by DEVICE-2 dot col)
         if not item:
             return
         mac = item.text().strip()
@@ -717,3 +797,116 @@ class InventoryPage(QWidget):
                 self._refresh()
         else:
             self.device_selected.emit(mac)
+
+    def _export_csv(self) -> None:
+        import csv as _csv
+        import datetime as _dt2
+        from PyQt6.QtWidgets import QFileDialog
+        from ui.widgets.toast import ToastManager
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Inventory Events", "inventory_events.csv", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+        cols = ["Time", "Event", "IP / Host", "MAC", "Vendor", "Detail"]
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f)
+                w.writerow(cols)
+                for evt, vendor in self._rows:
+                    dt_str = _dt2.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
+                    w.writerow([dt_str, evt.event_type, evt.ip or "—",
+                                evt.mac or "—", vendor or "—", evt.detail or ""])
+            import os
+            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
+        except Exception as exc:
+            ToastManager.show(f"Export failed: {exc}", "error")
+
+    def select_device(self, ip_or_mac: str) -> None:
+        """DEVICE-1: Navigate to and select the row matching ip_or_mac (IP or MAC address)."""
+        needle = ip_or_mac.strip().lower()
+        for row in range(self._table.rowCount()):
+            ip_item  = self._table.item(row, 3)  # "IP / Host" (shifted by DEVICE-2 dot col)
+            mac_item = self._table.item(row, 4)  # "MAC"
+            ip_text  = (ip_item.text()  if ip_item  else "").strip().lower()
+            mac_text = (mac_item.text() if mac_item else "").strip().lower()
+            if needle in (ip_text, mac_text):
+                self._table.selectRow(row)
+                self._table.scrollToItem(self._table.item(row, 1))  # scroll to Time col
+                mac = mac_item.text().strip() if mac_item else ""
+                if mac and mac != "—":
+                    self._device_drawer.load(mac, self._store)
+                    if not self._device_drawer.isVisible():
+                        self._device_drawer.open_drawer()
+                return
+
+    # ── OUTPUT-5: bulk selection actions ──────────────────────────────────────
+
+    def _on_selection_changed(self, selected, deselected) -> None:
+        n = len(self._table.selectionModel().selectedRows())
+        if n >= 2:
+            self._bulk_count_lbl.setText(f"{n} devices selected")
+            self._bulk_bar.setVisible(True)
+        else:
+            self._bulk_bar.setVisible(False)
+
+    def _bulk_export(self) -> None:
+        import csv as _csv
+        import datetime as _dt2
+        from PyQt6.QtWidgets import QFileDialog
+        from ui.widgets.toast import ToastManager
+
+        rows = sorted(set(idx.row() for idx in self._table.selectionModel().selectedIndexes()))
+        if not rows:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Selected Devices", "inventory_selection.csv", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                w = _csv.writer(f)
+                w.writerow(["Time", "Event", "IP / Host", "MAC", "Vendor", "Detail"])
+                for row in rows:
+                    def _t(col):
+                        it = self._table.item(row, col)
+                        return it.text() if it else ""
+                    w.writerow([_t(1), _t(2), _t(3), _t(4), _t(5), _t(6)])
+            import os
+            ToastManager.show(f"✓ Exported {len(rows)} rows to {os.path.basename(path)}", "success")
+        except Exception as exc:
+            ToastManager.show(f"Export failed: {exc}", "error")
+
+    def _bulk_snooze(self, hours: int) -> None:
+        import time as _t
+        from PyQt6.QtCore import QSettings
+        from ui.widgets.toast import ToastManager
+
+        rows = sorted(set(idx.row() for idx in self._table.selectionModel().selectedIndexes()))
+        if not rows:
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        expiry = _t.time() + hours * 3600
+        snoozed: list[str] = []
+        for row in rows:
+            for col in (3, 4):  # IP/Host, MAC
+                it = self._table.item(row, col)
+                key = (it.text() if it else "").strip()
+                if key and key != "—":
+                    qs.setValue(f"alerts/snooze/{key}", expiry)
+                    if col == 3:
+                        snoozed.append(key)
+        ToastManager.show(
+            f"Snoozed alerts for {len(snoozed)} device(s) for {hours}h", "success"
+        )
+        self._table.clearSelection()
+
+    def _bulk_snooze_1h(self) -> None:
+        self._bulk_snooze(1)
+
+    def _bulk_snooze_8h(self) -> None:
+        self._bulk_snooze(8)
+
+    def _bulk_deselect(self) -> None:
+        self._table.clearSelection()
