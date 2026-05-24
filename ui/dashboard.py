@@ -7248,6 +7248,10 @@ class Dashboard(QMainWindow):
                     self._iot_status.setText(
                         f"⚠ Alert: {alert.alert_type} on {alert.device_label}"
                     )
+                    if hasattr(self, "_monitor_overview_page"):
+                        self._monitor_overview_page.set_iot_anomaly_count(
+                            self._iot_alert_table.rowCount()
+                        )
 
                 self._iot_monitor_obj = IoTMonitor(
                     baselines=baselines,
@@ -8165,6 +8169,8 @@ class Dashboard(QMainWindow):
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("home/checklist_done", False)
         qs.setValue("home/scan_count", 0)
+        # Reset post-scan sheet so it fires again on the next scan
+        qs.setValue("home/post_scan_sheet_dismissed", False)
         self._nav_rail_go_to("Home")
         if hasattr(self, "_home_page"):
             self._home_page._recurring_mode = False

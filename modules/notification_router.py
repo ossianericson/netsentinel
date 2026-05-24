@@ -368,17 +368,55 @@ class NotificationRouter:
 
         # Snooze registry: rule_name → expiry Unix timestamp (float); 0 = forever
         self._snooze: Dict[str, float] = {}
+        self._restore_snoozes()
 
     # ── Snooze management ─────────────────────────────────────────────────────
+
+    _SNOOZE_PREFIX = "notif/snooze/"
+
+    def _restore_snoozes(self) -> None:
+        """Restore persisted snooze state from QSettings on startup."""
+        try:
+            from PyQt6.QtCore import QSettings
+            qs = QSettings("NetSentinel", "NetSentinel")
+            now = time.time()
+            for key in qs.allKeys():
+                if key.startswith(self._SNOOZE_PREFIX):
+                    rule_name = key[len(self._SNOOZE_PREFIX):]
+                    try:
+                        expiry = float(qs.value(key, 0))
+                    except (TypeError, ValueError):
+                        continue
+                    # Drop expired snoozes immediately on restore
+                    if expiry == 0 or expiry > now:
+                        self._snooze[rule_name] = expiry
+                    else:
+                        qs.remove(key)
+        except Exception:
+            pass
 
     def set_snooze(self, rule_name: str, until_ts: float) -> None:
         """Snooze rule_name until until_ts (Unix seconds). Pass 0 for 'forever'."""
         with self._lock:
             self._snooze[rule_name] = until_ts
+        try:
+            from PyQt6.QtCore import QSettings
+            QSettings("NetSentinel", "NetSentinel").setValue(
+                f"{self._SNOOZE_PREFIX}{rule_name}", until_ts
+            )
+        except Exception:
+            pass
 
     def clear_snooze(self, rule_name: str) -> None:
         with self._lock:
             self._snooze.pop(rule_name, None)
+        try:
+            from PyQt6.QtCore import QSettings
+            QSettings("NetSentinel", "NetSentinel").remove(
+                f"{self._SNOOZE_PREFIX}{rule_name}"
+            )
+        except Exception:
+            pass
 
     def get_snooze_expiry(self, rule_name: str) -> Optional[float]:
         """Return expiry ts for snoozed rule, 0 if forever, None if not snoozed."""

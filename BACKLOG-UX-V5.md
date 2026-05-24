@@ -24,7 +24,7 @@ Items are ordered by impact. Work top to bottom. Do not skip audit items to do p
 
 ## Audit items — verify these actually work
 
-### AUDIT-1 — First-run flow, complete end-to-end
+### AUDIT-1 — First-run flow, complete end-to-end ✅
 
 **What to verify**: On a fresh `QSettings` state (or after ONBOARD-1 reset), the full
 first-run sequence fires correctly:
@@ -45,7 +45,7 @@ Recurring layout appears at the right threshold.
 
 ---
 
-### AUDIT-2 — Alert snooze actually suppresses notifications
+### AUDIT-2 — Alert snooze actually suppresses notifications ✅
 
 **What to verify**: Right-click snooze on an alert rule sets a QSettings expiry key.
 Confirm `notification_router.py` checks that key before firing. Test: snooze a rule,
@@ -61,7 +61,7 @@ after expiry. Clock icon visible on snoozed rule row.
 
 ---
 
-### AUDIT-3 — Alert drawer → Log Hub signal chain
+### AUDIT-3 — Alert drawer → Log Hub signal chain ✅
 
 **What to verify**: The "Log Hub →" button in `alert_drawer.py` emits `view_in_log_hub(ts, source_key)`.
 Trace the full chain:
@@ -83,7 +83,7 @@ entries from ±30 minutes around the alert timestamp with the correct source sel
 
 ---
 
-### AUDIT-4 — Global time range reaches all wired pages
+### AUDIT-4 — Global time range reaches all wired pages ✅
 
 **What to verify**: Changing the global time range `QComboBox` in the title bar emits
 `global_time_range_changed(float)`. Confirm the signal is connected at init time to
@@ -101,7 +101,7 @@ do not respond. No page silently swallows the signal without updating.
 
 ---
 
-### AUDIT-5 — Monitor Overview receives all its data pushes
+### AUDIT-5 — Monitor Overview receives all its data pushes ✅
 
 **What to verify**: `MonitorOverviewPage` is supposed to show state from multiple sources.
 Confirm each of the following is actually wired and reaches the page:

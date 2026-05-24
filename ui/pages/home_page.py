@@ -2115,6 +2115,11 @@ class HomePage(QWidget):
             pass
         if self._device_count == 0:
             self._set_first_run_mode(True)
+        else:
+            # Returning user: device count now known — check if recurring layout should activate.
+            # showEvent may have fired before _preload_from_store, leaving _device_count == 0
+            # which caused _checklist_states() scan_done = False → recurring never activated.
+            self._check_recurring_mode()
 
     # ── Public slots ──────────────────────────────────────────────────────────
 
