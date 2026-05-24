@@ -4216,7 +4216,7 @@ class Dashboard(QMainWindow):
         if label == "Diagnose Network":
             self._open_diagnosis()
         else:
-            self._nav_goto_label(label)
+            self._nav_rail_go_to(label)
 
     def _open_diagnosis(self) -> None:
         self._nav_rail_go_to("What's Wrong?")
