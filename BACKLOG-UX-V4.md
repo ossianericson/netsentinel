@@ -37,31 +37,31 @@ exactly what happened, what needs attention, and that the app was working the wh
 |---|------|-------|----------|--------|--------|
 | 1 | SCHED-1 | Scheduled scan (daily / weekly / on-open) | P1 | 1 | ⬜ |
 | 2 | SCHED-2 | Schedule status on Home freshness strip | P1 | 1 | ⬜ |
-| 3 | SCHED-3 | Monitor auto-resume on launch (on by default) | P1 | 1 | ⬜ |
+| 3 | SCHED-3 | Monitor auto-resume on launch (on by default) | P1 | 1 | ✅ |
 | 4 | SCHED-4 | Weekly digest upgrade — full HTML email report | P2 | 1 | ⬜ |
-| 5 | INTEL-1 | Alert drawer auto-investigation (eager async + skeletons) | P1 | 2 | ⬜ |
-| 6 | INTEL-2 | CVE → Inventory device count cross-link | P1 | 2 | ⬜ |
-| 7 | INTEL-3 | Port scan open port → CVE count badge | P2 | 2 | ⬜ |
-| 8 | INTEL-4 | Alert row → "Create automation rule" CTA | P2 | 2 | ⬜ |
-| 9 | HEALTH-3 | Consistent error state widget for all async-loading pages | P1 | 2 | ⬜ |
-| 10 | TOAST-1 | Toast notification system (bottom-right, 4s, stacked, undo) | P1 | 2 | ⬜ |
-| 11 | DASH-2 | "This week" summary card on Home | P1 | 3 | ⬜ |
-| 12 | DASH-3 | 7-day grade sparkline on Home | P2 | 3 | ⬜ |
+| 5 | INTEL-1 | Alert drawer auto-investigation (eager async + skeletons) | P1 | 2 | ✅ |
+| 6 | INTEL-2 | CVE → Inventory device count cross-link | P1 | 2 | ✅ |
+| 7 | INTEL-3 | Port scan open port → CVE count badge | P2 | 2 | ✅ |
+| 8 | INTEL-4 | Alert row → "Create automation rule" CTA | P2 | 2 | ✅ |
+| 9 | HEALTH-3 | Consistent error state widget for all async-loading pages | P1 | 2 | ✅ |
+| 10 | TOAST-1 | Toast notification system (bottom-right, 4s, stacked, undo) | P1 | 2 | ✅ |
+| 11 | DASH-2 | "This week" summary card on Home | P1 | 3 | ✅ |
+| 12 | DASH-3 | 7-day grade sparkline on Home | P2 | 3 | ✅ |
 | 13 | TIMELINE-1 | Activity timeline page (primary nav under Analysis) | P2 | 3 | ⬜ |
 | 14 | TIMELINE-2 | "Today at a glance" header on timeline | P2 | 3 | ⬜ |
 | 15 | HEALTH-1 | App health panel in Settings | P1 | 4 | ⬜ |
 | 16 | HEALTH-2 | Offline / no-LAN detection banner | P1 | 4 | ⬜ |
 | 17 | HEALTH-4 | Config completeness card in Settings | P2 | 4 | ⬜ |
-| 18 | AUTO-1 | Automation page in nav + running-rule health dot | P2 | 5 | ⬜ |
-| 19 | AUTO-2 | Automation health tile in Monitor Overview | P2 | 5 | ⬜ |
+| 18 | AUTO-1 | Automation page in nav + running-rule health dot | P2 | 5 | ✅ |
+| 19 | AUTO-2 | Automation health tile in Monitor Overview | P2 | 5 | ✅ |
 | 20 | REPORT-1 | Reports page in nav, schedule + generate end-to-end | P2 | 5 | ⬜ |
-| 21 | REPORT-2 | "Generate Now" → structured clipboard report | P3 | 5 | ⬜ |
-| 22 | POWER-1 | Log Hub structured search (field:value syntax) | P3 | 6 | ⬜ |
-| 23 | POWER-2 | Export all — ZIP of all CSVs from Settings | P2 | 6 | ⬜ |
-| 24 | POWER-3 | Command palette content search (device names / IPs) | P3 | 6 | ⬜ |
+| 21 | REPORT-2 | "Generate Now" → structured clipboard report | P3 | 5 | ✅ |
+| 22 | POWER-1 | Log Hub structured search (field:value syntax) | P3 | 6 | ✅ |
+| 23 | POWER-2 | Export all — ZIP of all CSVs from Settings | P2 | 6 | ✅ |
+| 24 | POWER-3 | Command palette content search (device names / IPs) | P3 | 6 | ✅ |
 | 25 | PERF-1 | Lazy page instantiation + startup splash | P2 | 6 | ⬜ |
-| 26 | NAV-5 | Back breadcrumb on pages opened from alerts / popovers | P3 | 6 | ⬜ |
-| 27 | ONBOARD-1 | "Run first-time setup again" in Settings | P3 | 6 | ⬜ |
+| 26 | NAV-5 | Back breadcrumb on pages opened from alerts / popovers | P3 | 6 | ✅ |
+| 27 | ONBOARD-1 | "Run first-time setup again" in Settings | P3 | 6 | ✅ |
 
 ---
 
