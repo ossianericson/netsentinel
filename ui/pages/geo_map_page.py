@@ -270,9 +270,9 @@ class GeoMapPage(QWidget):
         self._dl_worker: Optional[_DownloadWorker] = None
         self._selected_ip: Optional[str] = None
 
-        # Zoom state (longitude/latitude bounds of current view)
-        self._xlim: list = [-180.0, 180.0]
-        self._ylim: list = [-90.0, 90.0]
+        # Zoom state — stores intended view center/span; max zoom-out is ±180/±90
+        self._xlim: list = [-155.0, 155.0]
+        self._ylim: list = [-55.0, 78.0]
         # Home coordinates for threat arc lines (set via set_home_ip)
         self._home_ll: Optional[Tuple[float, float]] = None
 
@@ -427,7 +427,7 @@ class GeoMapPage(QWidget):
         lay.setContentsMargins(0, 0, 4, 0)
         lay.setSpacing(0)
 
-        self._fig = Figure(facecolor=CHART_BG, dpi=96)
+        self._fig = Figure(facecolor=CHART_PLOT_BG, dpi=96)
         self._ax  = self._fig.add_subplot(111)
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
@@ -436,6 +436,7 @@ class GeoMapPage(QWidget):
 
         self._canvas.mpl_connect("button_press_event", self._on_map_click)
         self._canvas.mpl_connect("scroll_event", self._on_scroll)
+        self._canvas.mpl_connect("resize_event", lambda e: self._redraw_map())
         self._draw_base_map()
         self._canvas.draw()
         return panel
@@ -480,14 +481,44 @@ class GeoMapPage(QWidget):
 
     # ── Map rendering ─────────────────────────────────────────────────────────
 
+    def _screen_limits(self):
+        """Compute xlim/ylim that fill the canvas at equirectangular proportions.
+
+        Replaces set_aspect so limits are not double-expanded on figure resize.
+        Returns the stored limits unchanged if the canvas isn't laid out yet.
+        """
+        w = self._canvas.width()
+        h = self._canvas.height()
+        if w <= 0 or h <= 0:
+            return list(self._xlim), list(self._ylim)
+
+        widget_ratio = w / h
+        lon_span = self._xlim[1] - self._xlim[0]
+        lat_span = self._ylim[1] - self._ylim[0]
+        cx = (self._xlim[0] + self._xlim[1]) / 2
+        cy = (self._ylim[0] + self._ylim[1]) / 2
+        data_ratio = lon_span / lat_span
+
+        # Expand whichever dimension is "too small" to fill the canvas
+        if data_ratio > widget_ratio:
+            lat_span = lon_span / widget_ratio
+        else:
+            lon_span = lat_span * widget_ratio
+
+        lon_span = min(lon_span, 360.0)
+        lat_span = min(lat_span, 180.0)
+        cx = max(-180.0 + lon_span / 2, min(180.0 - lon_span / 2, cx))
+        cy = max(-90.0 + lat_span / 2, min(90.0 - lat_span / 2, cy))
+        return [cx - lon_span / 2, cx + lon_span / 2], [cy - lat_span / 2, cy + lat_span / 2]
+
     def _draw_base_map(self) -> None:
         """Clear axes and redraw world outline using stored zoom limits."""
         ax = self._ax
         ax.cla()
         ax.set_facecolor(CHART_PLOT_BG)
-        ax.set_xlim(self._xlim)
-        ax.set_ylim(self._ylim)
-        ax.set_aspect("equal", adjustable="datalim")
+        xlim, ylim = self._screen_limits()
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         ax.axis("off")
 
         # Grid lines
@@ -504,7 +535,7 @@ class GeoMapPage(QWidget):
                     ha="center", va="center", color=TEXT_MUTED,
                     fontsize=8, transform=ax.transData)
 
-        self._fig.subplots_adjust(left=0.01, right=0.99, top=0.99, bottom=0.01)
+        self._fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
     def _draw_country_borders(self) -> None:
         patches = _load_country_patches(CHART_GRID, alpha=1.0)
@@ -584,7 +615,7 @@ class GeoMapPage(QWidget):
         if event.inaxes != self._ax:
             return
         if event.dblclick:
-            self._xlim = [-180.0, 180.0]
+            self._xlim = [-180.0, 180.0]   # full world; set_aspect fills screen
             self._ylim = [-90.0, 90.0]
             self._redraw_map()
             return
@@ -689,16 +720,28 @@ class GeoMapPage(QWidget):
     def _on_scroll(self, event) -> None:
         if event.inaxes != self._ax or event.xdata is None:
             return
-        factor = 0.70 if event.button == "up" else 1.43   # zoom in / out ~30%
+        factor = 0.80 if event.button == "up" else 1.25   # zoom in / out ~20%
         cx, cy = event.xdata, event.ydata
-        xl, xr = self._xlim
-        yb, yt = self._ylim
-        self._xlim = [cx + (xl - cx) * factor, cx + (xr - cx) * factor]
-        self._ylim = [cy + (yb - cy) * factor, cy + (yt - cy) * factor]
-        self._xlim[0] = max(-180.0, self._xlim[0])
-        self._xlim[1] = min(180.0, self._xlim[1])
-        self._ylim[0] = max(-90.0, self._ylim[0])
-        self._ylim[1] = min(90.0, self._ylim[1])
+
+        # Zoom from the currently displayed limits (already aspect-corrected)
+        # so the cursor stays anchored to the same map position.
+        xl, xr = self._ax.get_xlim()
+        yb, yt = self._ax.get_ylim()
+        new_xl = cx + (xl - cx) * factor
+        new_xr = cx + (xr - cx) * factor
+        new_yb = cy + (yb - cy) * factor
+        new_yt = cy + (yt - cy) * factor
+
+        lon_span = min(new_xr - new_xl, 360.0)
+        lat_span = min(new_yt - new_yb, 180.0)
+        lon_span = max(lon_span, 2.0)
+        lat_span = max(lat_span, 1.0)
+        new_cx = (new_xl + new_xr) / 2
+        new_cy = (new_yb + new_yt) / 2
+        new_cx = max(-180.0 + lon_span / 2, min(180.0 - lon_span / 2, new_cx))
+        new_cy = max(-90.0 + lat_span / 2, min(90.0 - lat_span / 2, new_cy))
+        self._xlim = [new_cx - lon_span / 2, new_cx + lon_span / 2]
+        self._ylim = [new_cy - lat_span / 2, new_cy + lat_span / 2]
         self._redraw_map()
 
     # ── Clustering ────────────────────────────────────────────────────────────
