@@ -370,7 +370,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.34")
+    app.setApplicationVersion("1.9.35")
 
     _start_minimised = "--minimised" in sys.argv
 

@@ -320,7 +320,7 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
-### v1.9.34
+### v1.9.35
 
 - **Hardware plugin protocol** — open integration standard for any router, modem, or AP; import a `.py` file that implements `get_info()`, `get_status()`, and optionally `get_clients()` and it becomes a testable integration; validation uses AST only (no untrusted code executed at import time); Test button runs the script in a sandboxed subprocess so a buggy plugin cannot crash the app; **Integrate Hardware** page (new Extend nav section) walks through finding your device's local API, writing the script with AI assistance (three copy-ready AI prompts included), testing locally, and submitting to the community library; plugin data flowing into the Devices table and Overview tiles is the next development milestone
 - Mesh router integration — live client data pulled directly from TP-Link Deco via its local API (no cloud, no account); Deco-assigned device names replace reverse-DNS hostnames in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download KB/s shown as a tooltip; credentials saved to OS keychain and the scan re-runs silently on every subsequent app start; Network Map upgrades to a three-tier mesh tree (Gateway → Satellites → Clients) when mesh data is present; WiFi Networks page gains real band-usage KPI chips (2.4 GHz / 5 GHz / 6 GHz / Wired client counts from the router) and a "Connected?" column; architecture supports adding Eero, Google Nest, Asus ZenWiFi, and Netgear Orbi via the same `MeshWorker` provider key
