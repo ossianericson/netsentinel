@@ -64,31 +64,7 @@ from ui.styles import (
     TH_BG,
     TH_TEXT,
 )
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _kpi_tile(label: str, color: str = ACCENT) -> tuple[QFrame, QLabel]:
-    tile = QFrame()
-    tile.setStyleSheet(
-        f"background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {color}; border-radius:0;"
-    )
-    lay = QVBoxLayout(tile)
-    lay.setContentsMargins(12, 8, 12, 8)
-    lay.setSpacing(2)
-    lbl = QLabel(label.upper())
-    lbl.setStyleSheet(
-        f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
-        f" letter-spacing:0.5px; border:none; background:transparent;"
-    )
-    val = QLabel("—")
-    val.setStyleSheet(
-        f"color:{TEXT_PRIMARY}; font-size:22px; font-weight:bold;"
-        f" border:none; background:transparent;"
-    )
-    lay.addWidget(lbl)
-    lay.addWidget(val)
-    return tile, val
+from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 
 
 _TABLE_HEADERS = [
@@ -222,12 +198,11 @@ class ConnectionsPage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_total,    self._lbl_total    = _kpi_tile("Total",       ACCENT)
-        self._kpi_estab,    self._lbl_estab    = _kpi_tile("Established", GREEN)
-        self._kpi_external, self._lbl_external = _kpi_tile("External",    AMBER)
-        self._kpi_blocked,  self._lbl_blocked  = _kpi_tile("FW Blocked",  RED)
-        for t in (self._kpi_total, self._kpi_estab,
-                  self._kpi_external, self._kpi_blocked):
+        _kt, self._lbl_total    = _shared_kpi_tile("Total",       "—", ACCENT)
+        _ke, self._lbl_estab    = _shared_kpi_tile("Established", "—", GREEN)
+        _kx, self._lbl_external = _shared_kpi_tile("External",    "—", AMBER)
+        _kb, self._lbl_blocked  = _shared_kpi_tile("FW Blocked",  "—", RED)
+        for t in (_kt, _ke, _kx, _kb):
             kpi_row.addWidget(t, 1)
         root.addLayout(kpi_row)
 
@@ -377,6 +352,9 @@ class ConnectionsPage(QWidget):
         root.addLayout(_dt_row)
 
         root.addWidget(self._tbl, 3)
+        self._tbl.horizontalHeader().sectionResized.connect(
+            lambda _l, _o, _n: save_column_widths(self._tbl, "connections")
+        )
 
         # Blocked rules panel
         blocked_frame = QFrame()
@@ -443,10 +421,10 @@ class ConnectionsPage(QWidget):
         external = sum(1 for c in self._connections
                        if c.remote_ip and not c.is_local)
         blocked  = len(self._blocked_rules)
-        self._lbl_total.setText(str(total))
-        self._lbl_estab.setText(str(estab))
-        self._lbl_external.setText(str(external))
-        self._lbl_blocked.setText(str(blocked))
+        self._lbl_total.set_value(total)
+        self._lbl_estab.set_value(estab)
+        self._lbl_external.set_value(external)
+        self._lbl_blocked.set_value(blocked)
         self._status_lbl.setText(
             f"{total} connection(s)  |  {estab} established  |  {external} external"
         )
@@ -480,6 +458,15 @@ class ConnectionsPage(QWidget):
         self._tbl.clear_detail()
         self._displayed_conns = conns
         self._tbl.setRowCount(0)
+
+        # Precompute per-process stats for ACT-1 tooltips
+        _proc_total: dict[str, int] = {}
+        _proc_external: dict[str, int] = {}
+        for _c in self._connections:
+            _proc_total[_c.exe_name] = _proc_total.get(_c.exe_name, 0) + 1
+            if _c.remote_ip and not _c.is_local:
+                _proc_external[_c.exe_name] = _proc_external.get(_c.exe_name, 0) + 1
+
         for c in conns:
             row = self._tbl.rowCount()
             self._tbl.insertRow(row)
@@ -526,8 +513,16 @@ class ConnectionsPage(QWidget):
                 item = QTableWidgetItem(text)
                 item.setForeground(QColor(color))
                 if col == 0:
-                    # Store connection index in UserRole for context menu
                     item.setData(Qt.ItemDataRole.UserRole, conns.index(c))
+                    # ACT-1: rich process tooltip
+                    _total_conn = _proc_total.get(c.exe_name, 1)
+                    _ext_conn   = _proc_external.get(c.exe_name, 0)
+                    _tip = (
+                        f"{c.exe_name}\n"
+                        f"{c.exe_path or 'path unknown'}\n"
+                        f"PID {c.pid or '—'} · {_total_conn} connection(s) · {_ext_conn} external"
+                    )
+                    item.setToolTip(_tip)
                 self._tbl.setItem(row, col, item)
 
     # ── Inline detail panel ───────────────────────────────────────────────────
@@ -621,6 +616,10 @@ class ConnectionsPage(QWidget):
         lay.addLayout(actions)
 
         return outer
+
+    def showEvent(self, event) -> None:
+        restore_column_widths(self._tbl, "connections")
+        super().showEvent(event)
 
     def set_popover(self, popover) -> None:
         self._popover = popover
@@ -785,7 +784,7 @@ class ConnectionsPage(QWidget):
             )
         else:
             self._blocked_lbl.setText("No active blocks")
-        self._lbl_blocked.setText(str(count))
+        self._lbl_blocked.set_value(count)
         # Repaint action column
         self._apply_filters()
 

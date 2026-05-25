@@ -7,6 +7,8 @@ filterable by name, description, group, page label, or synonym tag.
 """
 from __future__ import annotations
 
+import datetime
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
@@ -234,6 +236,7 @@ _FEATURES: list[dict] = [
         "page": "Active Connections",
         "requires": None,
         "tags": ["connections", "sockets", "tcp", "udp", "process", "firewall", "block", "network", "ports"],
+        "badge": "updated", "badge_until": "2026-07-24",
     },
     {
         "group": "Monitoring",
@@ -246,6 +249,7 @@ _FEATURES: list[dict] = [
         "page": "Availability History",
         "requires": None,
         "tags": ["uptime", "history", "availability", "device", "rtt", "chart", "down", "degraded"],
+        "badge": "updated", "badge_until": "2026-07-24",
     },
     {
         "group": "Monitoring",
@@ -371,6 +375,7 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["speed", "bandwidth", "download", "upload", "ookla", "mbps", "test", "internet",
                  "signal", "rsrp", "band", "modem", "5g", "lte", "enrichment"],
+        "badge": "updated", "badge_until": "2026-07-24",
     },
     {
         "group": "Diagnostics",
@@ -485,6 +490,7 @@ _FEATURES: list[dict] = [
         "page": "DHCP Leases",
         "requires": None,
         "tags": ["dhcp", "lease", "rogue", "server", "gateway", "dns", "intercept", "mitm"],
+        "badge": "updated", "badge_until": "2026-07-24",
     },
     {
         "group": "Security",
@@ -511,6 +517,7 @@ _FEATURES: list[dict] = [
         "page": "Monitor Overview",
         "requires": None,
         "tags": ["overview", "status", "dashboard", "monitor", "arp", "dhcp", "storm", "iot", "cve", "ports", "security"],
+        "badge": "updated", "badge_until": "2026-07-24",
     },
     {
         "group": "Security",
@@ -523,6 +530,7 @@ _FEATURES: list[dict] = [
         "page": "CVE Lookup",
         "requires": None,
         "tags": ["cve", "vulnerability", "nvd", "cvss", "exploit", "patch", "security", "version"],
+        "badge": "updated", "badge_until": "2026-07-24",
     },
     {
         "group": "Security",
@@ -980,6 +988,24 @@ class FeatureGuidePage(QWidget):
                 f" border-radius:3px; padding:0 4px;"
             )
             name_row.addWidget(req_lbl)
+
+        badge = feat.get("badge")
+        if badge:
+            until_str = feat.get("badge_until")
+            badge_active = True
+            if until_str:
+                try:
+                    badge_active = datetime.date.today() <= datetime.date.fromisoformat(until_str)
+                except ValueError:
+                    badge_active = False
+            if badge_active:
+                badge_color = GREEN if badge == "new" else AMBER
+                badge_lbl = QLabel("New" if badge == "new" else "Updated")
+                badge_lbl.setStyleSheet(
+                    f"font-size:9px; font-weight:bold; color:#fff;"
+                    f" background:{badge_color}; border-radius:3px; padding:0 5px;"
+                )
+                name_row.addWidget(badge_lbl)
 
         name_row.addStretch()
         text_col.addLayout(name_row)

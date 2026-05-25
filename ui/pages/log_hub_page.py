@@ -242,6 +242,11 @@ class LogHubPage(QWidget):
         self._setup_ui()
         QTimer.singleShot(300, self._load_history)
 
+    def showEvent(self, event) -> None:
+        from ui.table_utils import restore_column_widths
+        restore_column_widths(self._table, "log_hub")
+        super().showEvent(event)
+
     def set_popover(self, popover) -> None:
         self._popover = popover
 
@@ -442,6 +447,10 @@ class LogHubPage(QWidget):
         _dt_row.addWidget(DensityToggle("log_hub", self._table))
         card_lay.addLayout(_dt_row)
         card_lay.addWidget(self._table)
+        from ui.table_utils import save_column_widths
+        self._table.horizontalHeader().sectionResized.connect(
+            lambda _l, _o, _n: save_column_widths(self._table, "log_hub")
+        )
         from ui.empty_state import EmptyStateOverlay
         EmptyStateOverlay(
             self._table, "≡",

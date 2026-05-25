@@ -23,6 +23,7 @@ from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt, QEasingCurve, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -414,7 +415,7 @@ class SpeedTestPage(QWidget):
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._store = store  # MetricStore | None
-        self._history_hours = 168 * 4  # ~28 days default
+        self._history_hours = 720.0  # 30-day default (FILTER-13)
         self._servers: List[dict] = []
         self._selected_server_id: Optional[str] = None
         self._fetch_worker  = None
@@ -605,6 +606,10 @@ class SpeedTestPage(QWidget):
         )
 
         self._hist_table.itemSelectionChanged.connect(self._on_history_row_selected)
+        from ui.table_utils import save_column_widths
+        self._hist_table.horizontalHeader().sectionResized.connect(
+            lambda _l, _o, _n: save_column_widths(self._hist_table, "speed_test")
+        )
 
         # Empty state — shown when no history exists yet
         _hist_empty = QLabel("No tests recorded yet.\nRun a speed test to start building history.")
@@ -612,6 +617,25 @@ class SpeedTestPage(QWidget):
         _hist_empty.setStyleSheet(
             f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;"
         )
+        # Date-range filter (FILTER-13)
+        _date_row = QHBoxLayout()
+        _date_row.setSpacing(6)
+        _date_row.addWidget(QLabel("Show:"))
+        self._date_filter_combo = QComboBox()
+        self._date_filter_combo.addItems(["Last 7 days", "Last 30 days", "Last 90 days", "All"])
+        self._date_filter_combo.setCurrentIndex(1)  # default: Last 30 days
+        self._date_filter_combo.setFixedWidth(140)
+        self._date_filter_combo.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        _date_hours = [168.0, 720.0, 2160.0, 999_999.0]
+        self._date_filter_combo.currentIndexChanged.connect(
+            lambda i: self.set_global_hours(_date_hours[i])
+        )
+        _date_row.addWidget(self._date_filter_combo)
+        _date_row.addStretch()
+        hist_body.addLayout(_date_row)
+
         self._hist_stack = QStackedWidget()
         self._hist_stack.addWidget(_hist_empty)   # index 0 — empty state
         self._hist_stack.addWidget(self._hist_table)  # index 1 — data
@@ -856,6 +880,8 @@ class SpeedTestPage(QWidget):
     def showEvent(self, event) -> None:  # type: ignore[override]
         """Auto-refresh server list if it is more than 30 minutes old."""
         super().showEvent(event)
+        from ui.table_utils import restore_column_widths
+        restore_column_widths(self._hist_table, "speed_test")
         import time
         if time.time() - self._last_fetch_ts > 1800:
             self._fetch_servers()

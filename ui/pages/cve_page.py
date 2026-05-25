@@ -30,6 +30,7 @@ from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, CRITICAL, GREEN, RED, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
+from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 
 # ── CVE state definitions ─────────────────────────────────────────────────────
 
@@ -231,6 +232,10 @@ class CvePage(QWidget):
     def set_popover(self, popover) -> None:
         self._popover = popover
 
+    def showEvent(self, event) -> None:
+        restore_column_widths(self._table, "cve")
+        super().showEvent(event)
+
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
@@ -248,36 +253,16 @@ class CvePage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)
-        _, self._kpi_total   = _kpi_tile("Total CVEs",      "0", ACCENT)
-        _, self._kpi_open    = _kpi_tile("Open",             "0", RED)
-        _, self._kpi_ack     = _kpi_tile("Acknowledged",     "0", AMBER)
-        _, self._kpi_risk    = _kpi_tile("Accepted Risk",    "0", TEXT_SECONDARY)
-        _, self._kpi_fixed   = _kpi_tile("Remediated",       "0", GREEN)
-        _, self._kpi_crit    = _kpi_tile("Critical/High",    "0", CRITICAL)
-        for tile, _ in [
-            _kpi_tile("Total CVEs", "0", ACCENT),
-            _kpi_tile("Open", "0", RED),
-            _kpi_tile("Acknowledged", "0", AMBER),
-            _kpi_tile("Accepted Risk", "0", TEXT_SECONDARY),
-            _kpi_tile("Remediated", "0", GREEN),
-            _kpi_tile("Critical/High", "0", CRITICAL),
-        ]:
-            kpi_row.addWidget(tile)
-        kpi_row.addStretch()
-
-        # Re-build properly (tiles are created as pairs, we need the labels)
-        kpi_row2 = QHBoxLayout()
-        kpi_row2.setSpacing(10)
-        t1, self._kpi_total = _kpi_tile("Total CVEs",   "0", ACCENT)
-        t2, self._kpi_open  = _kpi_tile("Open",         "0", RED)
-        t3, self._kpi_ack   = _kpi_tile("Acknowledged", "0", AMBER)
-        t4, self._kpi_risk  = _kpi_tile("Accepted Risk","0", TEXT_SECONDARY)
-        t5, self._kpi_fixed = _kpi_tile("Remediated",   "0", GREEN)
-        t6, self._kpi_crit  = _kpi_tile("Critical/High","0", CRITICAL)
+        t1, self._kpi_total = _shared_kpi_tile("Total CVEs",    "0", ACCENT)
+        t2, self._kpi_open  = _shared_kpi_tile("Open",          "0", RED)
+        t3, self._kpi_ack   = _shared_kpi_tile("Acknowledged",  "0", AMBER)
+        t4, self._kpi_risk  = _shared_kpi_tile("Accepted Risk", "0", TEXT_SECONDARY)
+        t5, self._kpi_fixed = _shared_kpi_tile("Remediated",    "0", GREEN)
+        t6, self._kpi_crit  = _shared_kpi_tile("Critical/High", "0", CRITICAL)
         for t in (t1, t2, t3, t4, t5, t6):
-            kpi_row2.addWidget(t)
-        kpi_row2.addStretch()
-        root.addLayout(kpi_row2)
+            kpi_row.addWidget(t)
+        kpi_row.addStretch()
+        root.addLayout(kpi_row)
 
         # Toolbar
         toolbar = QHBoxLayout()
@@ -296,8 +281,13 @@ class CvePage(QWidget):
         self._search_box.setFixedWidth(240)
         self._search_box.setStyleSheet(
             f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
-        self._search_box.textChanged.connect(self._apply_filter)
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(200)
+        self._search_box.textChanged.connect(self._search_timer.start)
+        self._search_timer.timeout.connect(lambda: self._apply_filter(self._search_box.text()))
 
         btn_import = QPushButton("Import from Scan")
         btn_import.setFixedHeight(34)
@@ -375,6 +365,9 @@ class CvePage(QWidget):
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._context_menu)
         self._table.cellClicked.connect(self._on_cell_clicked)
+        self._table.horizontalHeader().sectionResized.connect(
+            lambda _l, _o, _n: save_column_widths(self._table, "cve")
+        )
 
         from ui.widgets.density_toggle import DensityToggle
         _dt_row = QHBoxLayout()
@@ -416,12 +409,12 @@ class CvePage(QWidget):
         risk   = sum(1 for r in all_rows if r["state"] == "Accepted Risk")
         fixed  = sum(1 for r in all_rows if r["state"] == "Remediated")
         crit   = sum(1 for r in all_rows if r["severity"] in ("CRITICAL", "HIGH"))
-        self._kpi_total.setText(str(total))
-        self._kpi_open.setText(str(open_))
-        self._kpi_ack.setText(str(ack))
-        self._kpi_risk.setText(str(risk))
-        self._kpi_fixed.setText(str(fixed))
-        self._kpi_crit.setText(str(crit))
+        self._kpi_total.set_value(total)
+        self._kpi_open.set_value(open_)
+        self._kpi_ack.set_value(ack)
+        self._kpi_risk.set_value(risk)
+        self._kpi_fixed.set_value(fixed)
+        self._kpi_crit.set_value(crit)
 
     def _apply_filter(self, text: str = "") -> None:
         query = text.strip().lower()

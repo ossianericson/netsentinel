@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSizePolicy,
     QTableWidget,
@@ -45,6 +46,7 @@ from ui.styles import (
     TH_BG,
     TH_TEXT,
 )
+from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -91,24 +93,6 @@ def _expires_label(ts: int) -> str:
         return str(ts)
 
 
-def _make_kpi(label: str, value: str, accent_color: str = ACCENT) -> QFrame:
-    frame = QFrame()
-    frame.setFixedHeight(60)
-    frame.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        f" border-left:3px solid {accent_color}; }}"
-    )
-    lay = QVBoxLayout(frame)
-    lay.setContentsMargins(10, 6, 10, 6)
-    lay.setSpacing(2)
-    lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;")
-    val = QLabel(value)
-    val.setObjectName("kpi_value")
-    val.setStyleSheet(f"font-size:22px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;")
-    lay.addWidget(lbl)
-    lay.addWidget(val)
-    return frame
 
 
 # ── Page ─────────────────────────────────────────────────────────────────────
@@ -128,6 +112,10 @@ class DhcpLeasePage(QWidget):
         # Initial load
         self._run_scan()
 
+    def showEvent(self, event) -> None:
+        restore_column_widths(self._table, "dhcp")
+        super().showEvent(event)
+
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _setup_ui(self) -> None:
@@ -142,11 +130,11 @@ class DhcpLeasePage(QWidget):
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        self._kpi_total   = _make_kpi("Total Leases", "—")
-        self._kpi_active  = _make_kpi("Active",       "—", GREEN)
-        self._kpi_expired = _make_kpi("Expired",      "—", AMBER)
-        self._kpi_sources = _make_kpi("Sources",      "—", ACCENT)
-        for w in (self._kpi_total, self._kpi_active, self._kpi_expired, self._kpi_sources):
+        t1, self._kpi_total_lbl   = _shared_kpi_tile("Total Leases", "—")
+        t2, self._kpi_active_lbl  = _shared_kpi_tile("Active",       "—", GREEN)
+        t3, self._kpi_expired_lbl = _shared_kpi_tile("Expired",      "—", AMBER)
+        t4, self._kpi_sources_lbl = _shared_kpi_tile("Sources",      "—", ACCENT)
+        for w in (t1, t2, t3, t4):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
         root.addLayout(kpi_row)
@@ -163,9 +151,26 @@ class DhcpLeasePage(QWidget):
             f"QPushButton:disabled {{ background:#B0C4D8; color:#9BA8B4; }}"
         )
         self._refresh_btn.clicked.connect(self._run_scan)
+
+        self._search_box = QLineEdit()
+        self._search_box.setPlaceholderText("Filter by IP, MAC, or hostname…")
+        self._search_box.setFixedWidth(240)
+        self._search_box.setFixedHeight(30)
+        self._search_box.setStyleSheet(
+            f"QLineEdit {{ font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f" border-radius:3px; padding:0 8px; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(200)
+        self._search_box.textChanged.connect(self._search_timer.start)
+        self._search_timer.timeout.connect(self._apply_filter)
+
         self._status_lbl = QLabel("Click Refresh to load leases.")
         self._status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
         tb.addWidget(self._refresh_btn)
+        tb.addWidget(self._search_box)
         tb.addWidget(self._status_lbl)
         tb.addStretch()
         root.addLayout(tb)
@@ -200,6 +205,9 @@ class DhcpLeasePage(QWidget):
         card_lay.addLayout(_dt_row)
         card_lay.addWidget(self._table)
         root.addWidget(card, stretch=1)
+        self._table.horizontalHeader().sectionResized.connect(
+            lambda _l, _o, _n: save_column_widths(self._table, "dhcp")
+        )
 
         # Empty state placeholder
         self._empty_widget = QWidget()
@@ -242,7 +250,7 @@ class DhcpLeasePage(QWidget):
     def _on_result(self, leases: List[DhcpLease]) -> None:
         self._leases = leases
         self._refresh_btn.setEnabled(True)
-        self._populate(leases)
+        self._apply_filter()
 
     def _on_error(self, msg: str) -> None:
         self._refresh_btn.setEnabled(True)
@@ -250,21 +258,34 @@ class DhcpLeasePage(QWidget):
 
     # ── Table population ──────────────────────────────────────────────────────
 
+    def _apply_filter(self) -> None:
+        """Filter self._leases by search text and repopulate the table."""
+        query = self._search_box.text().strip().lower()
+        if query:
+            filtered = [
+                l for l in self._leases
+                if query in l.ip.lower()
+                or query in (l.mac or "").lower()
+                or query in (l.hostname or "").lower()
+            ]
+        else:
+            filtered = self._leases
+        self._populate(filtered)
+
     def _populate(self, leases: List[DhcpLease]) -> None:
         now = int(time.time())
-        active  = [l for l in leases if l.expires == 0 or l.expires > now]
-        expired = [l for l in leases if l.expires != 0 and l.expires <= now]
-        sources = len({l.source for l in leases if l.source})
+        all_leases = self._leases
+        active  = [l for l in all_leases if l.expires == 0 or l.expires > now]
+        expired = [l for l in all_leases if l.expires != 0 and l.expires <= now]
+        sources = len({l.source for l in all_leases if l.source})
 
-        # Update KPIs
-        def _set_kpi(frame: QFrame, value: str) -> None:
-            frame.findChild(QLabel, "kpi_value").setText(value)
+        self._kpi_total_lbl.set_value(len(all_leases))
+        self._kpi_active_lbl.set_value(len(active))
+        self._kpi_expired_lbl.set_value(len(expired))
+        self._kpi_sources_lbl.set_value(sources)
 
-        _set_kpi(self._kpi_total,   str(len(leases)))
-        _set_kpi(self._kpi_active,  str(len(active)))
-        _set_kpi(self._kpi_expired, str(len(expired)))
-        _set_kpi(self._kpi_sources, str(sources))
-
+        visible = len(leases)
+        total = len(all_leases)
         if not leases:
             self._table.setRowCount(0)
             self._empty_widget.show()
@@ -299,7 +320,7 @@ class DhcpLeasePage(QWidget):
 
         self._table.setSortingEnabled(True)
         self._table.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        suffix = f" · showing {visible} of {total}" if visible != total else f" · {total} lease(s)"
         self._status_lbl.setText(
-            f"Loaded {len(leases)} lease(s). "
-            f"Last refreshed {datetime.now().strftime('%H:%M:%S')}."
+            f"Last refreshed {datetime.now().strftime('%H:%M:%S')}{suffix}."
         )

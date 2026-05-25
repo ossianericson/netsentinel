@@ -65,26 +65,26 @@ class _KpiTile(QFrame):
     def __init__(self, label: str, value: str = "—", accent: str = ACCENT, parent=None):
         super().__init__(parent)
         self.setObjectName("kpiTile")
+        self.setFixedHeight(56)
         self.setStyleSheet(
             f"QFrame#kpiTile {{"
             f"  background:{BG_CARD}; border:1px solid {BORDER};"
-            f"  border-left:3px solid {accent};"
-            f"  min-width:110px; max-width:200px;"
+            f"  border-left:3px solid {accent}; border-radius:0;"
             f"}}"
         )
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(1)
+        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setSpacing(2)
 
         self._lbl = QLabel(label.upper())
         self._lbl.setStyleSheet(
-            f"font-size:9px; font-weight:bold; color:{TEXT_SECONDARY};"
-            f"background:transparent; border:none;"
+            f"font-size:9px; font-weight:600; color:{TEXT_SECONDARY};"
+            f" letter-spacing:0.5px; background:transparent; border:none;"
         )
         self._val = QLabel(value)
         self._val.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f"background:transparent; border:none;"
+            f"font-size:22px; font-weight:700; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
         )
         layout.addWidget(self._lbl)
         layout.addWidget(self._val)

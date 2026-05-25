@@ -34,6 +34,7 @@ from ui.styles import (
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, RED_BG,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
+from ui.table_utils import kpi_tile as _shared_kpi_tile
 from modules.trend_analyser import TrendResult, TrendReport, run_full_trend_report
 
 
@@ -112,23 +113,6 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     return card, bl
 
 
-def _kpi_tile(label: str, value: str, accent: str = ACCENT) -> QWidget:
-    w = QFrame()
-    w.setStyleSheet(
-        f"QFrame{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-left:3px solid {accent};min-width:110px;}}"
-    )
-    vl = QVBoxLayout(w)
-    vl.setContentsMargins(10, 8, 10, 8)
-    vl.setSpacing(2)
-    lbl = QLabel(label.upper())
-    lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:9px;font-weight:bold;")
-    val = QLabel(value)
-    val.setStyleSheet(f"color:{TEXT_PRIMARY};font-size:22px;font-weight:bold;")
-    val.setObjectName("kpi_val")
-    vl.addWidget(lbl)
-    vl.addWidget(val)
-    return w
 
 
 _SEV_COLOR = {"CRITICAL": RED, "WARNING": AMBER, "INFO": ACCENT, "CLEAN": GREEN}
@@ -156,13 +140,13 @@ class TrendPage(QWidget):
         outer.addWidget(PageHeaderBar("Predictive Trend Alerting"))
 
         # KPI row
-        self._kpi_hosts    = _kpi_tile("Hosts Analysed", "—")
-        self._kpi_critical = _kpi_tile("Critical",        "—", RED)
-        self._kpi_warnings = _kpi_tile("Warnings",        "—", AMBER)
-        self._kpi_clean    = _kpi_tile("Clean",           "—", GREEN)
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
-        for w in (self._kpi_hosts, self._kpi_critical, self._kpi_warnings, self._kpi_clean):
+        _kh, self._kpi_hosts_lbl    = _shared_kpi_tile("Hosts Analysed", "—")
+        _kc, self._kpi_critical_lbl = _shared_kpi_tile("Critical",        "—", RED)
+        _kw, self._kpi_warnings_lbl = _shared_kpi_tile("Warnings",        "—", AMBER)
+        _kl, self._kpi_clean_lbl    = _shared_kpi_tile("Clean",           "—", GREEN)
+        for w in (_kh, _kc, _kw, _kl):
             kpi_row.addWidget(w)
         kpi_row.addStretch()
         outer.addLayout(kpi_row)
@@ -456,13 +440,17 @@ class TrendPage(QWidget):
         crit  = len(report.critical)
         warn  = len(report.warnings)
         clean = len([r for r in report.results if r.severity == "CLEAN"])
-        for tile, val, col in [
-            (self._kpi_hosts,    str(hosts), ACCENT),
-            (self._kpi_critical, str(crit),  RED if crit else TEXT_SECONDARY),
-            (self._kpi_warnings, str(warn),  AMBER if warn else TEXT_SECONDARY),
-            (self._kpi_clean,    str(clean), GREEN),
-        ]:
-            lbl = tile.findChild(QLabel, "kpi_val")
-            if lbl:
-                lbl.setText(val)
-                lbl.setStyleSheet(f"color:{col};font-size:22px;font-weight:bold;")
+        self._kpi_hosts_lbl.set_value(hosts)
+        self._kpi_critical_lbl.set_value(crit)
+        self._kpi_warnings_lbl.set_value(warn)
+        self._kpi_clean_lbl.set_value(clean)
+        crit_color = RED if crit else TEXT_SECONDARY
+        warn_color = AMBER if warn else TEXT_SECONDARY
+        self._kpi_critical_lbl.setStyleSheet(
+            f"font-size:22px; font-weight:700; color:{crit_color};"
+            " border:none; background:transparent;"
+        )
+        self._kpi_warnings_lbl.setStyleSheet(
+            f"font-size:22px; font-weight:700; color:{warn_color};"
+            " border:none; background:transparent;"
+        )

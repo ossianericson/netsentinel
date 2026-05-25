@@ -42,6 +42,7 @@ from ui.styles import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
+from ui.widgets.animated_kpi import AnimatedKpi
 
 
 def _status_tile(
@@ -136,7 +137,7 @@ class _StatusTile(QFrame):
         title_row.addWidget(self._dot_lbl)
         lay.addLayout(title_row)
 
-        self._value_lbl = QLabel(value)
+        self._value_lbl = AnimatedKpi(value)
         self._value_lbl.setStyleSheet(
             f"font-size:22px; font-weight:bold; color:{color};"
             " background:transparent; border:none;"
@@ -166,11 +167,14 @@ class _StatusTile(QFrame):
             self.setStyleSheet(self._base_style)
 
     def update(self, value: str, sub: str, color: str) -> None:
-        self._value_lbl.setText(value)
         self._value_lbl.setStyleSheet(
             f"font-size:22px; font-weight:bold; color:{color};"
             " background:transparent; border:none;"
         )
+        try:
+            self._value_lbl.set_value(int(value))
+        except (ValueError, TypeError):
+            self._value_lbl.setText(value)
         self._icon_lbl.setStyleSheet(
             f"font-size:13px; color:{color}; background:transparent; border:none;"
         )

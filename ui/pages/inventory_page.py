@@ -340,6 +340,8 @@ class InventoryPage(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        from ui.table_utils import restore_column_widths
+        restore_column_widths(self._table, "devices")
         if self._table.rowCount() == 0:
             insert_skeleton_rows(self._table, count=6)
 
@@ -525,6 +527,10 @@ class InventoryPage(QWidget):
         self._table.cellClicked.connect(self._on_row_single_clicked)
         self._table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         card_lay.addWidget(self._table)
+        from ui.table_utils import save_column_widths
+        self._table.horizontalHeader().sectionResized.connect(
+            lambda _l, _o, _n: save_column_widths(self._table, "devices")
+        )
 
         # OUTPUT-5: bulk action bar (hidden until ≥2 rows selected)
         self._bulk_bar = QFrame()
