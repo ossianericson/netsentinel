@@ -148,6 +148,12 @@ For every shipped feature or fix:
 - **21-F**: Register new pages in `_build_pro_nav()` + README
 - **21-G**: Add new modules to architecture.instructions.md layout table
 - **21-H**: Commit message format: `feat: <description>  vX.Y.Z`
+- **21-I**: Push branch to origin BEFORE tagging: `git push origin main` then `git tag vX.Y.Z` then `git push origin vX.Y.Z`
+
+**CRITICAL — branch push must precede the tag push.**
+`codeql.yml` and `docs.yml` trigger on `push: branches: [main]`. If only the tag is
+pushed, those workflows never fire. Always push the branch first so CI runs on the
+commit, then push the tag to trigger the release build.
 
 **Self-verification checklist before presenting to user:**
 - [ ] Version bumped in all 9 files; consistency test passes
@@ -156,6 +162,7 @@ For every shipped feature or fix:
 - [ ] BACKLOG.md: completed items removed, date updated
 - [ ] All new modules have tests; full suite passes
 - [ ] New pages registered in `_build_pro_nav()` and listed in README
+- [ ] `git push origin main` done before `git push origin vX.Y.Z`
 
 ### RULE 22-A: Secrets in OS keychain
 API keys, passwords, SMTP credentials, SNMP community strings, and tokens must be stored via `keyring`. Never write secrets to `QSettings`, `NetSentinel.ini`, or any file.
