@@ -891,6 +891,15 @@ string). If no `badge_until` is set, badges display indefinitely.
 | ✅ OVERVIEW-1 — Tile click-to-expand | Overview | High | Med | 2 · v1.9.37 |
 | ✅ OVERVIEW-5 — Tile data-age indicator | Overview | Med | Low | 2 · v1.9.37 |
 | ✅ ACT-2 — CVE export CSV | Actions | Med | Low | 2 · v1.9.37 |
+| ✅ HOME-1 — Grade ring + sweep animation | Home | High | Med | 3 · v1.9.38 |
+| ✅ OVERVIEW-2 — Top Talkers tile | Overview | High | Med | 3 · v1.9.38 |
+| ✅ OVERVIEW-3 — Recent Events tile | Overview | High | Med | 3 · v1.9.38 |
+| ✅ OVERVIEW-4 — Trend Status tile | Overview | Med | Low | 3 · v1.9.38 |
+| ✅ HOME-3 — Live events ticker | Home | Med | Low | 3 · v1.9.38 |
+| ✅ HOME-4 — Speed mini-card sparkline | Home | Med | Low | 3 · v1.9.38 |
+| ✅ ANIM-7 — Tile hover lift | Animations | Med | Low | 3 · v1.9.38 |
+| ✅ ANIM-8 — Smooth progress bar | Animations | Low | Low | 3 · v1.9.38 |
+| ✅ VIZ-6 — Monitor Overview sparklines | Viz | Med | Low | 3 · v1.9.38 |
 | OVERVIEW-2 — Top Talkers tile | Overview | High | Med | 3 |
 | OVERVIEW-3 — Recent Events tile | Overview | High | Med | 3 |
 | OVERVIEW-4 — Trend Status tile | Overview | Med | Med | 3 |
@@ -959,20 +968,20 @@ Chart upgrades and home page improvements. Medium effort, high impact.
 
 ---
 
-### Sprint 3 — New tiles + home depth (target: v1.9.38)
+### Sprint 3 — New tiles + home depth ✅ SHIPPED v1.9.38
 
 Overview becomes a configurable dashboard. Home is worth opening every morning.
 
-1. HOME-1 — Grade ring upgrade + sweep animation + score count-up *(deferred from Sprint 2)*
-2. OVERVIEW-2 — Top Talkers tile
-3. OVERVIEW-3 — Recent Events tile
-4. OVERVIEW-4 — Trend Status tile
-5. HOME-3 — Live events ticker
-6. HOME-4 — Speed mini-card sparkline
-7. HOME-5 — Diagnosis verdict summary row
-8. ANIM-7 — Overview tile hover lift
-9. ANIM-8 — Scan progress smooth easing
-10. VIZ-6 — Monitor Overview event-count sparklines
+1. ✅ HOME-1 — Grade ring upgrade + sweep animation + score count-up
+2. ✅ OVERVIEW-2 — Top Talkers tile
+3. ✅ OVERVIEW-3 — Recent Events tile
+4. ✅ OVERVIEW-4 — Trend Status tile
+5. ✅ HOME-3 — Live events ticker
+6. ✅ HOME-4 — Speed mini-card sparkline
+7. ✅ HOME-5 — Diagnosis verdict summary row *(was already shipped in v1.9.37)*
+8. ✅ ANIM-7 — Overview tile hover lift
+9. ✅ ANIM-8 — Scan progress smooth easing
+10. ✅ VIZ-6 — Monitor Overview event-count sparklines
 
 ---
 

@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.9.37
+version: 1.9.38
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -1350,3 +1350,5 @@ rules:
         □ project-vision.instructions.md version and Implemented Features are current
         □ apm install --target all && apm compile --all completed without errors
         □ python -m pytest tests/test_apm_rules_coverage.py passes
+
+

@@ -2,7 +2,7 @@
 set -e
 
 echo "================================================"
-echo " NetSentinel v1.9.37 — macOS / Linux Build"
+echo " NetSentinel v1.9.38 — macOS / Linux Build"
 echo "================================================"
 echo ""
 echo "Usage:"
@@ -120,3 +120,5 @@ fi
 echo ""
 echo "  Windows service: run build.bat on Windows"
 echo "================================================"
+
+

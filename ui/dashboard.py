@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt, QByteArray, QEasingCurve, QObject, QPoint, QPropertyAnimation, QRect, QSettings, QSize, QTimer, pyqtProperty, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QByteArray, QEasingCurve, QObject, QPoint, QPropertyAnimation, QRect, QSettings, QSize, QTimer, QVariantAnimation, pyqtProperty, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -927,6 +927,35 @@ class _ClickLabel(QLabel):
         super().mousePressEvent(ev)
 
 
+class _SmoothProgressBar(QProgressBar):
+    """
+    ANIM-8: QProgressBar subclass with smooth-eased value transitions.
+
+    Call set_smooth_value(n) to animate from current value to n (250ms InOutSine).
+    In indeterminate mode (range 0,0) behaves identically to QProgressBar.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._anim: QVariantAnimation | None = None
+
+    def set_smooth_value(self, target: int) -> None:
+        from ui.theme import _reduce_motion
+        if _reduce_motion() or self.maximum() == 0:
+            self.setValue(target)
+            return
+        if self._anim is not None:
+            self._anim.stop()
+        anim = QVariantAnimation(self)
+        anim.setStartValue(float(self.value()))
+        anim.setEndValue(float(target))
+        anim.setDuration(250)
+        anim.setEasingCurve(QEasingCurve.Type.InOutSine)
+        anim.valueChanged.connect(lambda v: self.setValue(int(v)))
+        anim.start()
+        self._anim = anim
+
+
 # ── Per-page contextual help content ─────────────────────────────────────────
 # Shown in the "?" strip below the breadcrumb.
 # Keys are exact nav page labels. "what" = 1-2 sentences. "hidden" = bullet list.
@@ -1619,7 +1648,7 @@ class Dashboard(QMainWindow):
 
         # Status bar
         self._status_bar = QStatusBar()
-        self._progress = QProgressBar()
+        self._progress = _SmoothProgressBar()
         self._progress.setRange(0, 0)  # indeterminate
         self._progress.setFixedHeight(4)
         self._progress.setVisible(False)
@@ -2706,6 +2735,8 @@ class Dashboard(QMainWindow):
 
         from ui.pages.overview_page import OverviewPage
         self._overview_page = OverviewPage(store=self._store, parent=None)
+        # Wire trend results to overview tile (OVERVIEW-4; trend_page created earlier)
+        self._trend_page.report_ready.connect(self._overview_page.on_trend_result)
 
         from ui.pages.diagnosis_page import DiagnosisPage
         self._diagnosis_page = DiagnosisPage(store=self._store, parent=None)
@@ -2939,6 +2970,8 @@ class Dashboard(QMainWindow):
         from ui.pages.monitor_overview_page import MonitorOverviewPage
         self._monitor_overview_page = MonitorOverviewPage(parent=None)
         self._monitor_overview_page.navigate_to.connect(self._nav_rail_go_to)
+        if self._store is not None:
+            self._monitor_overview_page.set_store(self._store)
 
         self._help_tab_widget            = self._build_help_tab()
 
@@ -9566,18 +9599,15 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Protocol Visualizer",         "Animated step-by-step diagrams of ARP, DNS, TCP, DHCP, and STP using real scan data"),
-            ("'Since you were last here'",  "Home screen shows new devices joined and outages recorded since your last session"),
-            ("Next-step suggestion cards",  "After a scan the Home screen surfaces the most useful action (run speed test, fix CVEs, etc.)"),
-            ("Weekly digest notification",  "Tray notification on startup summarises speed, new devices, and grade once per week"),
-            ("Web dashboard",               "Read-only browser view at http://localhost:8765/dashboard — LAN access from phone or tablet"),
-            ("Page transitions",            "120 ms opacity fade when switching between pages — smoother navigation"),
-            ("Collapsible row detail",       "Click any device, service, or uptime row to expand an inline detail panel"),
-            ("WiFi Heatmap",               "Floor plan import + signal-strength sampling + IDW heatmap overlay per AP"),
-            ("Geolocation Map",            "MaxMind GeoLite2 local DB; world-map plot of IPs; integrates with Threat Intel"),
-            ("Custom Triggers",            "avg(rtt[\"ip\"], 5m) > 80 — expression builder, test against live data, cooldown"),
-            ("Automation Hooks",           "Event-driven webhook / script rules — device-down, high RTT, new device"),
-            ("Alert rules opt-in only",    "All alert rules default off — enable individually in Settings → Notifications"),
+            ("Grade Ring",                 "Animated arc ring replaces the grade circle — sweeps 600 ms on new grade, score counts up"),
+            ("Top Talkers tile",           "Overview tile showing top-3 interfaces by session bandwidth — click to open Live Bandwidth"),
+            ("Recent Events tile",         "Overview tile showing last 5 device-state events — click to open Timeline"),
+            ("Trend Forecast tile",        "Overview tile showing critical / warning / clean counts from the latest trend report"),
+            ("Events ticker",              "Slim bar in the home recurring section shows last 3 events from the past 24 h"),
+            ("Speed mini-sparkline",       "Speed card on the home page shows a 10-reading bar sparkline below the value"),
+            ("Tile hover lift",            "Overview tiles rise 2 px on hover (120 ms) — respects OS reduce-motion setting"),
+            ("Monitor Overview sparklines","Each status tile shows a 6-bar hourly event-count sparkline, updated every 5 min"),
+            ("Smooth progress bar",        "Scan progress indicator uses 250 ms eased transitions between values"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────

@@ -35,7 +35,7 @@ from pathlib import Path
 # Allow running from the project root without installation.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-_VERSION = "1.9.37"
+_VERSION = "1.9.38"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -569,3 +569,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

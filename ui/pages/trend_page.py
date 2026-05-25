@@ -165,7 +165,8 @@ _METRIC_LABEL = {"rtt_ms": "RTT (ms)", "loss_pct": "Loss (%)", "jitter_ms": "Jit
 class TrendPage(QWidget):
     """Predictive trend alerting page."""
 
-    navigate_to = pyqtSignal(str)
+    navigate_to  = pyqtSignal(str)
+    report_ready = pyqtSignal(object)  # TrendReport — for OverviewPage.on_trend_result()
 
     def __init__(self, store=None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -349,6 +350,7 @@ class TrendPage(QWidget):
     @pyqtSlot(object)
     def _on_result(self, report: TrendReport):
         self._last_report = report
+        self.report_ready.emit(report)
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶  Run Analysis")
         self._populate_table(report)

@@ -17,6 +17,7 @@ import time
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -43,6 +44,46 @@ from ui.styles import (
     TEXT_SECONDARY,
 )
 from ui.widgets.animated_kpi import AnimatedKpi
+
+
+class _EventSparkline(QWidget):
+    """
+    VIZ-6: 80×16 QPainter bar chart showing event counts for the last 6 hours.
+
+    Each bar = 1 hour (oldest left, newest right).
+    Call set_counts(list[int]) with 6 integer values to update.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(80, 16)
+        self._counts: list = []
+
+    def set_counts(self, counts: list) -> None:
+        self._counts = list(counts[-6:])
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        counts = self._counts or [0] * 6
+        w, h = self.width(), self.height()
+        n = len(counts)
+        if n == 0:
+            p.end()
+            return
+        mx = max(counts) or 1
+        bar_w = max(1, w // n - 1)
+        gap = (w - bar_w * n) // max(n - 1, 1)
+        for i, v in enumerate(counts):
+            bh = max(2, int((v / mx) * (h - 2)))
+            x = i * (bar_w + gap)
+            alpha = "CC" if i == n - 1 else "66"
+            color_hex = ACCENT + alpha
+            p.setBrush(QColor(color_hex))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRect(x, h - bh, bar_w, bh)
+        p.end()
 
 
 def _status_tile(
@@ -155,6 +196,14 @@ class _StatusTile(QFrame):
             f"font-size:9px; color:{TEXT_MUTED}; background:transparent; border:none;"
         )
         lay.addWidget(self._age_lbl)
+
+        # VIZ-6: hourly event sparkline
+        self._evtsparkline = _EventSparkline(self)
+        lay.addWidget(self._evtsparkline)
+
+    def set_hourly_counts(self, counts: list) -> None:
+        """Push 6-hourly event counts to the sparkline."""
+        self._evtsparkline.set_counts(counts)
 
     def set_active(self, active: bool) -> None:
         if active:
@@ -289,11 +338,22 @@ class MonitorOverviewPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._last_scan_ts: Optional[datetime.datetime] = None
+        self._store = None
         self._build_ui()
         self._age_timer = QTimer(self)
         self._age_timer.setInterval(60_000)
         self._age_timer.timeout.connect(self._refresh_ages)
         self._age_timer.start()
+        # VIZ-6: refresh sparklines every 5 minutes
+        self._sparkline_timer = QTimer(self)
+        self._sparkline_timer.setInterval(300_000)
+        self._sparkline_timer.timeout.connect(self._refresh_event_sparklines)
+
+    def set_store(self, store) -> None:
+        """Inject MetricStore for VIZ-6 sparkline queries."""
+        self._store = store
+        self._sparkline_timer.start()
+        self._refresh_event_sparklines()
 
     def _build_ui(self) -> None:
         self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
@@ -398,6 +458,25 @@ class MonitorOverviewPage(QWidget):
                      self._tile_iot, self._tile_ports, self._tile_cve,
                      self._tile_auto):
             tile.refresh_age()
+
+    def _refresh_event_sparklines(self) -> None:
+        """VIZ-6: Query per-hour event counts and push to each tile sparkline."""
+        if self._store is None:
+            return
+        try:
+            events = self._store.query_device_events(hours=6.0)
+        except Exception:
+            return
+        now = time.time()
+        counts = [0] * 6
+        for evt in events:
+            bucket = int((now - evt.ts) / 3600)
+            if 0 <= bucket < 6:
+                counts[5 - bucket] += 1
+        for tile in (self._tile_arp, self._tile_dhcp, self._tile_storm,
+                     self._tile_iot, self._tile_ports, self._tile_cve,
+                     self._tile_auto):
+            tile.set_hourly_counts(counts)
 
     def set_monitor_event_times(
         self,

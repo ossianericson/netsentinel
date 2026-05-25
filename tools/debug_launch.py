@@ -56,7 +56,7 @@ try:
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.37")
+    app.setApplicationVersion("1.9.38")
     app.setOrganizationName("netsentinel")
 
     _w("QApplication created OK")
@@ -86,3 +86,5 @@ except Exception:
     _log.close()
     print(f"\nFull log: {LOG_PATH}")
     sys.exit(1)
+
+

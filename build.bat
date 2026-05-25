@@ -1,6 +1,6 @@
 ﻿@echo off
 echo ================================================
-echo  NetSentinel v1.9.37 — Windows Build Script
+echo  NetSentinel v1.9.38 — Windows Build Script
 echo ================================================
 echo.
 echo Usage:
@@ -200,3 +200,5 @@ echo   dist\NetSentinel-svc.exe start
 echo ================================================
 echo.
 pause
+
+

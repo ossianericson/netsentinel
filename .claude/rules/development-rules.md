@@ -100,23 +100,26 @@ ax.tick_params(colors="#5A6A7A", labelsize=9)
 ax.grid(True, color="#E8EDF2", linewidth=0.8, linestyle="-")
 ```
 
-### RULE 11: Version bump checklist
-When bumping the application version, update **ALL** of the following:
+### RULE 11: Version bump — ALWAYS use bump_version.py (BLOCKING)
+**NEVER manually edit version strings in individual files.** The project has a canonical bump script:
 
-| File | What to change |
-|---|---|
-| `app.py` | `app.setApplicationVersion("X.Y.Z")` |
-| `cli.py` | `_VERSION = "X.Y.Z"` |
-| `apm.yml` | `version: X.Y.Z` |
-| `installer.iss` | `#define MyAppVersion "X.Y.Z"` |
-| `build.bat` | echo version string |
-| `build.sh` | echo version string |
-| `README.md` | badge/link + `### vX.Y.Z (current)` changelog entry |
-| `modules/rest_api.py` | `"version"` in `/health` endpoint |
-| `tools/debug_launch.py` | `app.setApplicationVersion("X.Y.Z")` |
-| `.github/winget/NetSentinel.NetSentinel.yaml` | `PackageVersion: X.Y.Z` |
-| `.github/winget/NetSentinel.NetSentinel.installer.yaml` | `PackageVersion:` + installer URL |
-| `.github/winget/NetSentinel.NetSentinel.locale.en-US.yaml` | `PackageVersion: X.Y.Z` |
+```powershell
+# Step 1 — add a changelog entry to README.md first (RULE-R1b)
+# Step 2 — run the bump script
+python bump_version.py X.Y.Z
+# Step 3 — verify
+python -m pytest tests/test_version_consistency.py -v
+```
+
+`bump_version.py` at the project root updates ALL tracked version files atomically:
+`app.py`, `cli.py`, `apm.yml`, `installer.iss`, `build.bat`, `build.sh`, `README.md`,
+`modules/rest_api.py`, `tools/debug_launch.py`, `CLAUDE.md`,
+`packaging/AppxManifest.xml`, and all three `.github/winget/` manifests.
+
+**Do NOT:**
+- Call `bump_version.py --help` (there is no --help flag; it treats the argument as the target version)
+- Use PowerShell `-replace` or `sed` to patch individual files
+- Pass any string other than a valid semver (e.g. `X.Y.Z`) as the argument
 
 `tests/test_version_consistency.py` enforces this. Never bypass it.
 

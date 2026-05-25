@@ -30,7 +30,7 @@ from __future__ import annotations
 import datetime
 from typing import Callable, Dict, List, Optional
 
-from PyQt6.QtCore    import QEasingCurve, QMimeData, QPoint, QSettings, QSize, Qt, QThread, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
+from PyQt6.QtCore    import QEasingCurve, QMimeData, QPoint, QPropertyAnimation, QSettings, QSize, Qt, QThread, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QCursor, QDrag, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QFileDialog, QMenu,
@@ -42,7 +42,7 @@ from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY,
+    GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
 )
 
 _MIME_TYPE    = "application/x-netsentinel-tile"
@@ -50,7 +50,7 @@ _COLS         = 3
 _SETTINGS_KEY = "overview/tile_order"
 _TILE_HEIGHT      = 175   # uniform fixed height for every tile
 _EXPANDED_HEIGHT  = 280   # height when tile is expanded (OVERVIEW-1)
-_LAYOUT_VER   = 2     # bump when _DEFAULT_ORDER changes; triggers a one-time reset
+_LAYOUT_VER   = 3     # bump when _DEFAULT_ORDER changes; triggers a one-time reset
 
 
 # ── Animated count label ──────────────────────────────────────────────────────
@@ -127,6 +127,8 @@ class _BaseTile(QFrame):
         self._expanded:       bool                  = False
         self._detail_widget:  Optional[QWidget]     = None
         self._expand_anim:    Optional[QVariantAnimation] = None
+        self._hover_anim:     Optional[QPropertyAnimation] = None
+        self._base_pos:       Optional[QPoint]             = None
 
         self.setObjectName("overviewTile")
         self.setFixedHeight(_TILE_HEIGHT)
@@ -304,6 +306,39 @@ class _BaseTile(QFrame):
             f"QFrame#overviewTile {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
             f"QFrame#overviewTile:hover {{ border-color:{ACCENT}; }}"
         )
+
+    # ── ANIM-7: hover lift ────────────────────────────────────────────────────
+
+    def enterEvent(self, event) -> None:
+        super().enterEvent(event)
+        from ui.theme import _reduce_motion
+        if _reduce_motion() or self._edit_mode:
+            return
+        self._base_pos = self.pos()
+        if self._hover_anim is not None:
+            self._hover_anim.stop()
+        anim = QPropertyAnimation(self, b"pos", self)
+        anim.setDuration(120)
+        anim.setEasingCurve(QEasingCurve.Type.OutQuart)
+        anim.setStartValue(self.pos())
+        anim.setEndValue(QPoint(self.pos().x(), self.pos().y() - 2))
+        anim.start()
+        self._hover_anim = anim
+
+    def leaveEvent(self, event) -> None:
+        super().leaveEvent(event)
+        from ui.theme import _reduce_motion
+        if _reduce_motion() or self._base_pos is None:
+            return
+        if self._hover_anim is not None:
+            self._hover_anim.stop()
+        anim = QPropertyAnimation(self, b"pos", self)
+        anim.setDuration(80)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.setStartValue(self.pos())
+        anim.setEndValue(self._base_pos)
+        anim.start()
+        self._hover_anim = anim
 
     def mark_scanned(self) -> None:
         """Record current time as last-scan timestamp and show the ts/rerun controls."""
@@ -1374,6 +1409,305 @@ def _rsrp_colour(rsrp: float) -> str:
     return RED
 
 
+# ── Top Talkers tile (OVERVIEW-2) ─────────────────────────────────────────────
+
+class TopTalkersTile(_BaseTile):
+    """
+    Shows the top-3 network interfaces by cumulative session bandwidth.
+    Accumulates IfaceBwPoller stats while visible; empty state until first sample.
+    """
+    TILE_ID    = "top_talkers"
+    TILE_LABEL = "Top Talkers"
+    TILE_ICON  = "▲"
+    _NAV_LABEL = "Live Bandwidth"
+
+    def _build_body(self) -> None:
+        self._totals: dict = {}   # iface -> {"down_mb": float, "up_mb": float}
+        self._worker = None
+        self._row_widgets: list = []
+
+        self._empty_lbl = QLabel("Start Live Bandwidth to see top talkers.")
+        self._empty_lbl.setWordWrap(True)
+        self._empty_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;"
+        )
+        self._body_layout.addWidget(self._empty_lbl)
+        self._body_layout.addStretch()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._worker is None:
+            self._start_worker()
+
+    def hideEvent(self, event) -> None:
+        self._stop_worker()
+        super().hideEvent(event)
+
+    def _start_worker(self) -> None:
+        try:
+            from workers.iface_bw_worker import IfaceBwPoller
+            self._worker = IfaceBwPoller(interval_s=2.0, parent=self)
+            self._worker.stats_ready.connect(self._on_stats)
+            self._worker.start()
+        except Exception:
+            pass
+
+    def _stop_worker(self) -> None:
+        w = getattr(self, "_worker", None)
+        if w is not None:
+            try:
+                w.stop(); w.quit(); w.wait(2000)
+            except Exception:
+                pass
+            self._worker = None
+
+    def _on_stats(self, stats: dict) -> None:
+        for iface, d in stats.items():
+            if iface not in self._totals:
+                self._totals[iface] = {"down_mb": 0.0, "up_mb": 0.0}
+            self._totals[iface]["down_mb"] += d.get("down_mbps", 0.0) * 2.0 / 8.0
+            self._totals[iface]["up_mb"]   += d.get("up_mbps",   0.0) * 2.0 / 8.0
+        self._refresh_rows()
+
+    def _refresh_rows(self) -> None:
+        ranked = sorted(
+            self._totals.items(),
+            key=lambda x: x[1]["down_mb"] + x[1]["up_mb"],
+            reverse=True,
+        )[:3]
+
+        for w in self._row_widgets:
+            w.deleteLater()
+        self._row_widgets.clear()
+
+        if not ranked:
+            self._empty_lbl.show()
+            return
+        self._empty_lbl.hide()
+
+        for iface, d in ranked:
+            total_mb = d["down_mb"] + d["up_mb"]
+            label_text = (
+                f"{iface[:18]}  ↓{d['down_mb']:.1f} MB  ↑{d['up_mb']:.1f} MB"
+            )
+            row_lbl = QLabel(label_text)
+            row_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_PRIMARY}; border:none; border-bottom:1px solid {BORDER};"
+                f" padding:2px 0;"
+            )
+            self._body_layout.insertWidget(
+                self._body_layout.count() - 1, row_lbl
+            )
+            self._row_widgets.append(row_lbl)
+        self._set_health(ACCENT)
+
+    def refresh(self, store=None) -> None:
+        pass  # live accumulation only
+
+
+# ── Recent Events tile (OVERVIEW-3) ──────────────────────────────────────────
+
+class RecentEventsTile(_BaseTile):
+    """
+    Shows the 5 most recent device-state events from MetricStore.
+    Clicking the tile navigates to the Timeline page.
+    """
+    TILE_ID    = "recent_events"
+    TILE_LABEL = "Recent Events"
+    TILE_ICON  = "◷"
+    _NAV_LABEL = "Timeline"
+
+    _EVENT_ICONS = {
+        "NEW":     ("◆", ACCENT),
+        "GONE":    ("◇", AMBER),
+        "ROGUE":   ("▲", RED),
+        "CHANGE":  ("●", AMBER),
+        "UP":      ("●", GREEN),
+        "DOWN":    ("●", RED),
+    }
+
+    def _build_body(self) -> None:
+        self._row_labels: list = []
+        self._empty_lbl = QLabel("No device events in the last 24 h.")
+        self._empty_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;"
+        )
+        self._body_layout.addWidget(self._empty_lbl)
+        self._body_layout.addStretch()
+
+        self._link_btn = QPushButton("View all →")
+        self._link_btn.setFlat(True)
+        self._link_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._link_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
+            f" background:transparent; text-align:left; padding:0; }}"
+            f"QPushButton:hover {{ text-decoration:underline; }}"
+        )
+        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Timeline"))
+        self._link_btn.hide()
+        self._body_layout.addWidget(self._link_btn)
+
+    def mousePressEvent(self, event) -> None:
+        if (not self._edit_mode
+                and event.button() == Qt.MouseButton.LeftButton
+                and self._row_labels):
+            self.navigate_requested.emit("Timeline")
+        else:
+            super().mousePressEvent(event)
+
+    def refresh(self, store=None) -> None:
+        s = store or self._store
+        if s is None:
+            return
+        import time as _t
+        try:
+            events = s.query_device_events(hours=24.0)[:5]
+        except Exception:
+            return
+
+        for w in self._row_labels:
+            w.deleteLater()
+        self._row_labels.clear()
+
+        if not events:
+            self._empty_lbl.show()
+            self._link_btn.hide()
+            return
+        self._empty_lbl.hide()
+        self._link_btn.show()
+
+        now = _t.time()
+        for evt in events:
+            icon, color = self._EVENT_ICONS.get(
+                evt.event_type.upper(), ("●", TEXT_SECONDARY)
+            )
+            delta = int(now - evt.ts)
+            if delta < 60:
+                elapsed = "just now"
+            elif delta < 3600:
+                elapsed = f"{delta // 60} min ago"
+            else:
+                elapsed = f"{delta // 3600} h ago"
+
+            ip_short = (evt.ip or "?")[:15]
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            icon_lbl = QLabel(icon)
+            icon_lbl.setFixedWidth(12)
+            icon_lbl.setStyleSheet(f"color:{color}; font-size:10px; border:none;")
+            desc_lbl = QLabel(f"{ip_short}  {evt.event_type}")
+            desc_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY}; border:none;")
+            time_lbl = QLabel(elapsed)
+            time_lbl.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED}; border:none;")
+            row.addWidget(icon_lbl)
+            row.addWidget(desc_lbl, 1)
+            row.addWidget(time_lbl)
+
+            container = QWidget()
+            container.setStyleSheet("background:transparent; border:none;")
+            container.setLayout(row)
+            self._body_layout.insertWidget(
+                self._body_layout.count() - 2, container
+            )
+            self._row_labels.append(container)
+
+        self._set_health(GREEN if events else BORDER)
+        self.mark_scanned()
+
+
+# ── Trend Status tile (OVERVIEW-4) ────────────────────────────────────────────
+
+class TrendStatusTile(_BaseTile):
+    """
+    Shows a summary of the latest TrendReport: X critical · Y warning · Z clean.
+    Data is pushed by OverviewPage.on_trend_result().
+    """
+    TILE_ID    = "trend_status"
+    TILE_LABEL = "Trend Forecast"
+    TILE_ICON  = "↗"
+    _NAV_LABEL = "Trend Forecasts"
+
+    def _build_body(self) -> None:
+        self._summary_lbl = QLabel("No trend data yet.")
+        self._summary_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; border:none; font-style:italic;"
+        )
+        self._body_layout.addWidget(self._summary_lbl)
+
+        row = QHBoxLayout()
+        row.setSpacing(20)
+
+        crit_col = QVBoxLayout()
+        crit_col.setSpacing(0)
+        self._crit_num = QLabel("–")
+        self._crit_num.setStyleSheet(
+            f"font-size:28px; font-weight:bold; color:{RED}; border:none;"
+        )
+        self._crit_sub = QLabel("Critical")
+        self._crit_sub.setStyleSheet(
+            f"font-size:9px; font-weight:bold; color:{RED}; border:none;"
+        )
+        crit_col.addWidget(self._crit_num)
+        crit_col.addWidget(self._crit_sub)
+
+        warn_col = QVBoxLayout()
+        warn_col.setSpacing(0)
+        self._warn_num = QLabel("–")
+        self._warn_num.setStyleSheet(
+            f"font-size:28px; font-weight:bold; color:{AMBER}; border:none;"
+        )
+        self._warn_sub = QLabel("Warning")
+        self._warn_sub.setStyleSheet(
+            f"font-size:9px; font-weight:bold; color:{AMBER}; border:none;"
+        )
+        warn_col.addWidget(self._warn_num)
+        warn_col.addWidget(self._warn_sub)
+
+        clean_col = QVBoxLayout()
+        clean_col.setSpacing(0)
+        self._clean_num = QLabel("–")
+        self._clean_num.setStyleSheet(
+            f"font-size:28px; font-weight:bold; color:{GREEN}; border:none;"
+        )
+        self._clean_sub = QLabel("Clean")
+        self._clean_sub.setStyleSheet(
+            f"font-size:9px; font-weight:bold; color:{GREEN}; border:none;"
+        )
+        clean_col.addWidget(self._clean_num)
+        clean_col.addWidget(self._clean_sub)
+
+        row.addLayout(crit_col)
+        row.addLayout(warn_col)
+        row.addLayout(clean_col)
+        row.addStretch()
+        self._body_layout.addLayout(row)
+        self._body_layout.addStretch()
+
+        # Hide number columns until data arrives
+        self._numbers_row_widget = None
+
+    def on_trend_result(self, report) -> None:
+        """Receive a TrendReport from the dashboard."""
+        self._summary_lbl.hide()
+        n_crit  = len(report.critical)
+        n_warn  = len(report.warnings)
+        n_clean = len([r for r in report.results
+                       if r.severity not in ("CRITICAL", "WARNING")])
+        self._crit_num.setText(str(n_crit))
+        self._warn_num.setText(str(n_warn))
+        self._clean_num.setText(str(n_clean))
+        if n_crit:
+            self._set_health(RED)
+        elif n_warn:
+            self._set_health(AMBER)
+        else:
+            self._set_health(GREEN)
+        self.mark_scanned()
+
+    def refresh(self, store=None) -> None:
+        pass  # pushed data only
+
+
 # ── Security scan panel ───────────────────────────────────────────────────────
 
 class _SecurityScanPanel(QWidget):
@@ -1517,7 +1851,7 @@ _TILE_CLASSES: Dict[str, type] = {
         DeviceCountTile, ServiceStatusTile, TlsStatusTile,
         RttSummaryTile, NetworkGradeTile, AlertFeedTile, EventFeedTile,
         HaDevicesTile, LiveBandwidthTile, DnsStabilityTile,
-        ModemSignalTile,
+        ModemSignalTile, TopTalkersTile, RecentEventsTile, TrendStatusTile,
     ]
 }
 
@@ -1533,6 +1867,9 @@ _DEFAULT_ORDER: List[str] = [
     "event_feed",
     "service_status",
     "ha_devices",
+    "top_talkers",
+    "recent_events",
+    "trend_status",
 ]
 
 
@@ -2066,6 +2403,12 @@ class OverviewPage(QWidget):
         )
         self._hero_grade.setText(f"◈  Grade: {letter}")
 
+    def on_trend_result(self, report) -> None:
+        """Receive a TrendReport from the dashboard and push to TrendStatusTile."""
+        t = self._tiles.get("trend_status")
+        if t:
+            t.on_trend_result(report)
+
     # ── Persistence ───────────────────────────────────────────────────────────
 
     def _load_order(self) -> List[str]:
@@ -2164,7 +2507,7 @@ class OverviewPage(QWidget):
             self.objectName()   # raises RuntimeError if C++ object already deleted
         except RuntimeError:
             return
-        for tid in ("tls_status", "event_feed"):
+        for tid in ("tls_status", "event_feed", "recent_events"):
             t = self._tiles.get(tid)
             if t:
                 t.refresh(self._store)

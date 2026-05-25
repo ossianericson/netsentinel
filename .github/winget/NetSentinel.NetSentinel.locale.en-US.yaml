@@ -1,7 +1,7 @@
 ﻿# NetSentinel winget manifest — default locale (en-US)
 
 PackageIdentifier: NetSentinel.NetSentinel
-PackageVersion: 1.9.37
+PackageVersion: 1.9.38
 PackageLocale: en-US
 Publisher: NetSentinel Project
 PublisherUrl: https://github.com/ossianericson/netsentinel
@@ -57,3 +57,5 @@ Tags:
 ReleaseNotesUrl: https://github.com/ossianericson/netsentinel/releases
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
+
+

@@ -370,7 +370,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.37")
+    app.setApplicationVersion("1.9.38")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -399,7 +399,7 @@ def main():
     # Version
     _spp.setPen(QColor("#30363D"))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.37")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.38")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -776,3 +776,5 @@ if __name__ == "__main__":
     except Exception as exc:  # noqa: BLE001
         import traceback
         _fatal("Unexpected error", traceback.format_exc())
+
+
