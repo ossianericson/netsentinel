@@ -152,10 +152,8 @@ class TrendPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(10)
 
-        outer.addWidget(_page_header(
-            "Predictive Trend Alerting",
-            "Linear regression forecasts — projected time until monitored metrics breach thresholds",
-        ))
+        from ui.widgets.page_header import PageHeaderBar
+        outer.addWidget(PageHeaderBar("Predictive Trend Alerting"))
 
         # KPI row
         self._kpi_hosts    = _kpi_tile("Hosts Analysed", "—")

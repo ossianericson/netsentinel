@@ -197,20 +197,8 @@ class ModemPage(QWidget):
         root.setSpacing(12)
 
         # ── header ────────────────────────────────────────────────────────────
-        title = QLabel("Modem")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; border:none;"
-            " background:transparent;"
-        )
-        sub = QLabel(
-            "Live 5G / LTE signal metrics from your WAN modem  "
-            "(ZTE MC889 · more models coming)"
-        )
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; border:none; background:transparent;"
-        )
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("Modem"))
 
         compat = QFrame()
         compat.setStyleSheet(

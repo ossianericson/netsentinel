@@ -131,14 +131,8 @@ class SnmpTrapPage(QWidget):
         root.setSpacing(10)
 
         # Page title
-        title = QLabel("SNMP Trap Receiver")
-        title.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
-        sub = QLabel("Passive UDP listener — receives SNMPv1 and SNMPv2c traps from routers and switches.")
-        sub.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("SNMP Trap Receiver"))
 
         # Status bar
         self._status_lbl = QLabel("Not listening.")

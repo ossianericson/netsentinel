@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt, QByteArray, QEasingCurve, QObject, QPoint, QPropertyAnimation, QRect, QSettings, QSize, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QByteArray, QEasingCurve, QObject, QPoint, QPropertyAnimation, QRect, QSettings, QSize, QTimer, pyqtProperty, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -562,6 +562,11 @@ class _RailButton(QPushButton):
         self._badge_color: str = ""
         self._badge_count: str = ""   # non-empty → numeric red pill overrides dot
         self._left_dot: str = ""      # POLISH-1: monitor state dot on left edge
+        # ANIM-3: badge thump — scale 1.25→1.0 on count increase
+        self._badge_scale: float = 1.0
+        self._badge_anim = QPropertyAnimation(self, b"badgeScale", self)
+        self._badge_anim.setDuration(250)
+        self._badge_anim.setEasingCurve(QEasingCurve.Type.OutBack)
         self.setCheckable(True)
         self.setFixedSize(56, 58)
         self.setToolTip(tooltip)
@@ -581,6 +586,15 @@ class _RailButton(QPushButton):
             f"}}"
         )
 
+    @pyqtProperty(float)
+    def badgeScale(self) -> float:
+        return self._badge_scale
+
+    @badgeScale.setter
+    def badgeScale(self, value: float) -> None:
+        self._badge_scale = value
+        self.update()
+
     def set_badge(self, value) -> None:
         """Set or clear the badge.
 
@@ -589,8 +603,18 @@ class _RailButton(QPushButton):
         Pass 0, empty string, or None to clear.
         """
         if value and str(value).isdigit() and int(value) > 0:
+            new_count = int(value)
+            old_count = int(self._badge_count) if self._badge_count else 0
             self._badge_count = str(value)
             self._badge_color = ""
+            # ANIM-3: thump on count increase only
+            if new_count > old_count:
+                from ui.theme import _reduce_motion
+                if not _reduce_motion():
+                    self._badge_anim.stop()
+                    self._badge_anim.setStartValue(1.25)
+                    self._badge_anim.setEndValue(1.0)
+                    self._badge_anim.start()
         elif value and not str(value).isdigit():
             self._badge_color = str(value)
             self._badge_count = ""
@@ -629,7 +653,7 @@ class _RailButton(QPushButton):
             p.setBrush(QColor(self._left_dot))
             p.drawEllipse(QRectF(4, 22, 6, 6))
 
-        # Numeric red pill badge — top-right corner
+        # Numeric red pill badge — top-right corner (ANIM-3: scaled during thump)
         if self._badge_count:
             badge_font = QFont("Segoe UI", 7)
             badge_font.setBold(True)
@@ -640,6 +664,12 @@ class _RailButton(QPushButton):
             pill_h = 14
             pill_x = self.width() - pill_w - 2
             pill_y = 2
+            cx = pill_x + pill_w / 2
+            cy = pill_y + pill_h / 2
+            p.save()
+            p.translate(cx, cy)
+            p.scale(self._badge_scale, self._badge_scale)
+            p.translate(-cx, -cy)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(RED))
             p.drawRoundedRect(QRectF(pill_x, pill_y, pill_w, pill_h), 7, 7)
@@ -647,6 +677,7 @@ class _RailButton(QPushButton):
             p.drawText(QRect(pill_x, pill_y, pill_w, pill_h),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
                        self._badge_count)
+            p.restore()
         # Plain colour dot badge — top-right corner
         elif self._badge_color:
             p.setPen(Qt.PenStyle.NoPen)
@@ -1987,6 +2018,15 @@ class Dashboard(QMainWindow):
                     self._pre_maximize_geo = None
                 if hasattr(self, "_edge_grips"):
                     self._place_edge_grips()
+        # Minimize-to-tray opt-in — uses cached _minimize_to_tray to avoid QSettings I/O
+        from PyQt6.QtCore import QEvent, Qt
+        if (event.type() == QEvent.Type.WindowStateChange
+                and bool(self.windowState() & Qt.WindowState.WindowMinimized)
+                and getattr(self, "_tray_manager", None) is not None
+                and self._tray_manager.is_available()
+                and getattr(self, "_minimize_to_tray", False)):
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(0, self._tray_manager._hide_window)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -2013,6 +2053,11 @@ class Dashboard(QMainWindow):
             self._monitors_restored = True
             from PyQt6.QtCore import QTimer as _QT3
             _QT3.singleShot(3000, self._restore_running_monitors)
+        # POLISH-5: first-run coach marks (fires once, keyed to onboarding_v6_done)
+        if not getattr(self, "_coach_marks_shown", False):
+            self._coach_marks_shown = True
+            from PyQt6.QtCore import QTimer as _QT4
+            _QT4.singleShot(800, self._maybe_show_coach_marks)
 
     def _install_snap_subclass(self):
         """Subclass the Win32 HWND so WM_NCHITTEST returns HTMAXBUTTON over our
@@ -7668,11 +7713,15 @@ class Dashboard(QMainWindow):
                 and self._tray_manager.minimize_to_tray_enabled()):
             event.ignore()
             self._tray_manager._hide_window()
-            self._tray_manager.show_notification(
-                "NetSentinel",
-                "Still monitoring in the system tray — use ⚙ › Quit to exit.",
-                "INFO",
-            )
+            from PyQt6.QtCore import QSettings as _QS
+            _qs = _QS("NetSentinel", "NetSentinel")
+            if not _qs.value("tray/hide_hint_shown", False, type=bool):
+                self._tray_manager.show_notification(
+                    "NetSentinel",
+                    "Still monitoring in the system tray — use ⚙ › Quit to exit.",
+                    "INFO",
+                )
+                _qs.setValue("tray/hide_hint_shown", True)
             return
 
         # ── Real shutdown path ────────────────────────────────────────────────
@@ -7723,7 +7772,18 @@ class Dashboard(QMainWindow):
         # can still trigger QThread destructor crashes (STATUS_STACK_BUFFER_OVERRUN)
         # if a thread's OS handle is not yet released. os._exit(0) skips all
         # C++/Qt destructors and exits the process cleanly at the OS level.
-        import os as _os
+        import os as _os, sys as _sys
+        # PyInstaller onefile extracts to a _MEI* temp dir and registers an atexit
+        # handler to clean it up. os._exit() bypasses atexit, leaving the dir behind
+        # and causing a "Failed to remove temporary directory" warning on the next
+        # launch. Delete it explicitly before exiting since nothing will use it after
+        # this point.
+        if getattr(_sys, "frozen", False) and hasattr(_sys, "_MEIPASS"):
+            try:
+                import shutil as _shutil
+                _shutil.rmtree(_sys._MEIPASS, ignore_errors=True)
+            except Exception:
+                pass
         _os._exit(0)
 
     # ── Verdict area ─────────────────────────────────────────────────────────
@@ -7930,6 +7990,45 @@ class Dashboard(QMainWindow):
         if "scheduler" in keys and not (self._sched_worker and self._sched_worker.isRunning()):
             self._start_scheduler()
 
+    # POLISH-5 — first-run coach marks ─────────────────────────────────────────
+
+    def _maybe_show_coach_marks(self) -> None:
+        """Show 3 sequential coach marks on first ever launch (onboarding_v6_done gate)."""
+        _qs = QSettings("NetSentinel", "NetSentinel")
+        if _qs.value("onboarding_v6_done", False, type=bool):
+            return
+        # Mark done immediately — dismissing early (× or outside click) must not re-show.
+        _qs.setValue("onboarding_v6_done", True)
+        from ui.widgets.coach_mark import CoachMarkChain
+        marks = [
+            {
+                "target": lambda: getattr(self, "_home_page", None),
+                "title":  "Your network, on a map.",
+                "body":   (
+                    "After a scan, NetSentinel plots every device "
+                    "on the world map with location, vendor and status."
+                ),
+            },
+            {
+                "target": lambda: self._nav_rail_buttons.get("Discover"),
+                "title":  "Start here — scan your network.",
+                "body":   (
+                    "Open Discover → Devices and hit Scan "
+                    "to map everything on your local network."
+                ),
+            },
+            {
+                "target": lambda: self._nav_rail_buttons.get("Security Audit"),
+                "title":  "Alerts live here.",
+                "body":   (
+                    "NetSentinel raises alerts for new devices, "
+                    "port scans and cert expiry — all in Security Audit."
+                ),
+            },
+        ]
+        self._coach_mark_chain = CoachMarkChain(self, marks)
+        self._coach_mark_chain.start()
+
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
         if hasattr(self, "_header_scan_btn"):
@@ -8054,6 +8153,9 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_udp_host"):
             s.setValue("scan/last_udp_host", self._udp_host.text())
         s.sync()
+        # Refresh cache so changeEvent() picks up any settings change without a restart
+        self._minimize_to_tray = QSettings("NetSentinel", "NetSentinel").value(
+            "tray/minimize_window_to_tray", False, type=bool)
 
     def _restore_settings(self):
         from PyQt6.QtCore import QSettings
@@ -8065,23 +8167,30 @@ class Dashboard(QMainWindow):
         # Fresh-install fallback — prevents starting maximized with no saved geometry.
         self.resize(1280, 800)
         if was_maximized:
-            # Do NOT call restoreGeometry() here — when saved while maximized the
-            # geometry bytes represent the full-screen rect, which would become
-            # Qt's internal "restore geometry."  showNormal() would then restore
-            # to a full-screen-sized-but-not-maximised window (the reported bug).
-            # Instead, set a sensible normal size first so showNormal() snaps back
-            # to something reasonable, then enter the maximised state.
             nx = s.value("window/normal_x")
             ny = s.value("window/normal_y")
             nw = s.value("window/normal_width", "1280")
             nh = s.value("window/normal_height", "800")
             try:
-                if nx is not None and ny is not None:
-                    self.setGeometry(int(nx), int(ny), int(nw), int(nh))
-                else:
-                    self.resize(int(nw), int(nh))
+                nw_i, nh_i = int(nw), int(nh)
             except (ValueError, TypeError):
-                self.resize(1280, 800)
+                nw_i, nh_i = 1280, 800
+            self.resize(nw_i, nh_i)
+            # Store for SetWindowPlacement in app.py (fixes showNormal() restore position).
+            try:
+                self._pending_normal_geo = (
+                    (int(nx), int(ny), nw_i, nh_i)
+                    if nx is not None and ny is not None else None
+                )
+            except (ValueError, TypeError):
+                self._pending_normal_geo = None
+            # Show maximized HERE during construction, with no prior setGeometry().
+            # The HWND is created with Qt's default position — there is no
+            # "animate-from-normal" rect for the maximize transition, so Windows
+            # cannot animate from the saved off-screen-left position through the splash.
+            # The backbuffer stays unpainted until _splash.close() fires in app.py,
+            # giving an atomic transition (same DWM frame) from splash to app.
+            # This is the same pattern that worked in v1.9.17.
             self.showMaximized()
         elif geom_b64:
             try:
@@ -8153,6 +8262,10 @@ class Dashboard(QMainWindow):
         from PyQt6.QtCore import QTimer as _QT2
         _QT2.singleShot(2000, self._compute_last_visit_summary)
         _QT2.singleShot(4000, self._maybe_send_weekly_digest)
+
+        # Cache minimize-to-tray setting once so changeEvent() has no QSettings I/O
+        self._minimize_to_tray = QSettings("NetSentinel", "NetSentinel").value(
+            "tray/minimize_window_to_tray", False, type=bool)
 
     # Keep old names as aliases so any external code still works
     def _save_window_state(self):

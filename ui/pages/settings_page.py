@@ -767,6 +767,20 @@ class SettingsPage(QWidget):
         self._chk_tray.toggled.connect(self._on_tray_toggled)
         bl.addWidget(self._chk_tray)
 
+        # Minimize button → tray (opt-in)
+        self._chk_minimize_tray = QCheckBox(
+            "Minimize button also hides to tray  "
+            "(default is minimize to taskbar)"
+        )
+        self._chk_minimize_tray.setStyleSheet(
+            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+        )
+        self._chk_minimize_tray.setChecked(
+            qs.value("tray/minimize_window_to_tray", False, type=bool)
+        )
+        self._chk_minimize_tray.toggled.connect(self._on_minimize_tray_toggled)
+        bl.addWidget(self._chk_minimize_tray)
+
         # Run on startup (Windows only)
         self._chk_startup = QCheckBox(
             "Start NetSentinel automatically when Windows starts  "
@@ -858,6 +872,10 @@ class SettingsPage(QWidget):
                 win._tray_manager.set_minimize_to_tray(checked)
         except Exception:
             pass
+
+    def _on_minimize_tray_toggled(self, checked: bool) -> None:
+        self._mark_dirty()
+        QSettings("NetSentinel", "NetSentinel").setValue("tray/minimize_window_to_tray", checked)
 
     def _on_startup_toggled(self, checked: bool) -> None:
         self._mark_dirty()

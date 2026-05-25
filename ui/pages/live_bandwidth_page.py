@@ -119,18 +119,8 @@ class LiveBandwidthPage(QWidget):
         root.setSpacing(8)
 
         # Header
-        title = QLabel("Live Bandwidth")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
-        sub = QLabel("Real-time upload and download Mbps per network interface (1-second resolution)")
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none; padding:0 0 4px 0;"
-        )
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("Live Bandwidth"))
 
         # KPI row
         kpi_row = QHBoxLayout()

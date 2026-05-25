@@ -195,18 +195,11 @@ class HistoryPage(QWidget):
         root.setSpacing(8)
 
         # ── Page title row ────────────────────────────────────────────────────
+        from ui.widgets.page_header import PageHeaderBar as _PHB
+        _title_hdr = _PHB("Availability History")
+        # Title bar integrates with zoom buttons below; add header then controls row
+        root.addWidget(_title_hdr)
         title_row = QHBoxLayout()
-        title_lbl = QLabel("Availability History")
-        title_lbl.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
-        )
-        sub_lbl = QLabel("Persistent RTT & device state from local SQLite database")
-        sub_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
-        left_col = QVBoxLayout()
-        left_col.setSpacing(0)
-        left_col.addWidget(title_lbl)
-        left_col.addWidget(sub_lbl)
-        title_row.addLayout(left_col)
         title_row.addStretch()
 
         # Zoom buttons

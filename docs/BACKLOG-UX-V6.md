@@ -13,7 +13,7 @@ Non-negotiables:
 - No clutter
 - Respect "Reduce Motion" OS setting
 - Animations short, subtle, fast
-- Must stay maintainable in Qt/Python
+- Must stay maintainable in Qt/Pythondo all 
 
 ---
 
@@ -228,12 +228,12 @@ Goal: Give the team a clear sprint path that delivers visible wins fast.
 | POLISH-4 — Tooltip quality pass | High | Low | ✅ v1.9.31 | inventory column headers + filter checkboxes; log hub source chips |
 | ANIM-1 — Device pulse | High | Med | ✅ v1.9.31 | `PulsingDot` widget; pulses on new JOINED/UP/RECOVERED in inventory |
 | ANIM-4 — Log Hub row fade | Low | Low | ✅ v1.9.31 | 60→100% over 300 ms; skipped at >5 rows/sec or reduce-motion |
-| POLISH-6 — Value-density header | Med | Low | — | Good visual payoff; requires layout refactor per page |
-| ANIM-5 — Speed test count-up | Med | Low | — | Contained to one page; delightful |
-| POLISH-5 — First-run coach marks | High | Med | — | Critical for new users; needs design polish |
+| POLISH-6 — Value-density header | Med | Low | ✅ v1.9.32 | `PageHeaderBar` widget; 17 pages updated; 40px bar replaces title+subtitle |
+| ANIM-5 — Speed test count-up | Med | Low | ✅ v1.9.32 | `_start_tile_count_up`; 600 ms OutExpo; skips at reduce-motion |
+| POLISH-5 — First-run coach marks | High | Med | ✅ v1.9.32 | `CoachMarkChain`; 3 marks; keyed to `onboarding_v6_done` |
+| ANIM-3 — Alert badge thump | Low | Low | ✅ v1.9.32 | `_RailButton.badgeScale` pyqtProperty; 250 ms OutBack; on count increase only |
 | POLISH-2 — Table density toggle | Med | Med | — | Power-user feature; correct but not urgent |
 | ANIM-2 — Bandwidth sparkline slide | Med | Med | — | Requires custom painter change |
-| ANIM-3 — Alert badge thump | Low | Low | — | Nice; do it when touching the nav rail anyway |
 
 ### Sprint 1 — shipped v1.9.31
 
@@ -243,12 +243,17 @@ Goal: Give the team a clear sprint path that delivers visible wins fast.
 4. ✅ ANIM-1 — Device pulse
 5. ✅ ANIM-4 — Log Hub row fade (added to sprint)
 
-### Sprint 2 — next up
+### Sprint 2 — shipped v1.9.32
 
-1. POLISH-6 — Value-density header bar — slim 40px bar with live summary chips
-2. ANIM-5 — Speed test count-up — synchronized with progress arc
-3. POLISH-5 — First-run coach marks — 3 overlays keyed to `onboarding_v6_done`
-4. ANIM-3 — Alert badge thump — single scale-up when badge increments
+1. ✅ POLISH-6 — Value-density header bar — `PageHeaderBar` widget; 17 pages
+2. ✅ ANIM-5 — Speed test count-up — `QVariantAnimation` on download + upload tiles
+3. ✅ POLISH-5 — First-run coach marks — `CoachMarkChain`; 3 overlays
+4. ✅ ANIM-3 — Alert badge thump — `_RailButton.badgeScale` on count increase
+
+### Sprint 3 — next up
+
+1. POLISH-2 — Table density toggle — compact/comfortable toggle per table, persisted in QSettings
+2. ANIM-2 — Bandwidth sparkline slide — custom painter change on bandwidth graph widget
 
 ---
 

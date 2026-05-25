@@ -204,15 +204,9 @@ class LabModePage(QWidget):
         outer.setContentsMargins(32, 28, 32, 24)
         outer.setSpacing(6)
 
-        title = QLabel("Lab Mode")
-        title.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
-        sub = QLabel("Structured exercises using your live network")
-        sub.setStyleSheet(f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;")
-        outer.addWidget(title)
-        outer.addWidget(sub)
-        outer.addSpacing(16)
+        from ui.widgets.page_header import PageHeaderBar
+        outer.addWidget(PageHeaderBar("Lab Mode"))
+        outer.addSpacing(8)
 
         grid = QGridLayout()
         grid.setSpacing(12)

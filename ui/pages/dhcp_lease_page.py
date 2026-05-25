@@ -136,17 +136,8 @@ class DhcpLeasePage(QWidget):
         root.setSpacing(8)
 
         # Page title
-        title = QLabel("DHCP Lease Inventory")
-        title.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
-        )
-        root.addWidget(title)
-
-        subtitle = QLabel(
-            "DHCP leases visible from this machine — parsed from local lease files and ARP cache."
-        )
-        subtitle.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
-        root.addWidget(subtitle)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("DHCP Lease Inventory"))
 
         # KPI row
         kpi_row = QHBoxLayout()

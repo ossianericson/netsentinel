@@ -20,7 +20,7 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QEasingCurve, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QFrame,
@@ -429,6 +429,9 @@ class SpeedTestPage(QWidget):
         self._anim_target  = 0.0
         self._anim_current = 0.0
         self._anim_phase   = "download"
+        # ANIM-5: count-up animations for download/upload stat tiles
+        self._down_count_anim: QVariantAnimation | None = None
+        self._up_count_anim:   QVariantAnimation | None = None
 
         self._setup_ui()
         self._fetch_servers()
@@ -441,21 +444,9 @@ class SpeedTestPage(QWidget):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
 
-        # Page title
-        title = QLabel("Speed Test")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
-        sub = QLabel(
-            "Measure download, upload and ping using Ookla-compatible servers"
-        )
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none; padding:0 0 4px 0;"
-        )
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        hdr = PageHeaderBar("Speed Test")
+        root.addWidget(hdr)
 
         # ── Ookla CLI install banner (hidden if CLI already present) ──────────
         self._ookla_banner = OoklaCliBanner(parent=self)
@@ -1045,8 +1036,7 @@ class SpeedTestPage(QWidget):
         self._btn_run.setText("▶   Run Speed Test")
         self.test_completed.emit(result)
         self._lbl_ping.setText(f"{result.ping_ms:.0f}")
-        self._lbl_down.setText(f"{result.download_mbps:.1f}")
-        self._lbl_up.setText(f"{result.upload_mbps:.1f}")
+        self._start_tile_count_up(result.download_mbps, result.upload_mbps)
 
         # Animate gauge to final download value, then hold
         self._anim_phase   = "download"
@@ -1097,6 +1087,33 @@ class SpeedTestPage(QWidget):
 
         # Add to history
         self._add_history_row(result)
+
+    def _start_tile_count_up(self, download_mbps: float, upload_mbps: float) -> None:
+        """ANIM-5: Tween the download/upload stat tiles from 0 → final value (600 ms, OutExpo)."""
+        from ui.theme import _reduce_motion
+        if _reduce_motion():
+            self._lbl_down.setText(f"{download_mbps:.1f}")
+            self._lbl_up.setText(f"{upload_mbps:.1f}")
+            return
+
+        def _make_anim(target: float, label) -> QVariantAnimation:
+            anim = QVariantAnimation(self)
+            anim.setDuration(600)
+            anim.setEasingCurve(QEasingCurve.Type.OutExpo)
+            anim.setStartValue(0.0)
+            anim.setEndValue(float(target))
+            anim.valueChanged.connect(lambda v, lbl=label: lbl.setText(f"{v:.1f}"))
+            anim.start()
+            return anim
+
+        # Stop any in-flight animations from a previous test run
+        if self._down_count_anim:
+            self._down_count_anim.stop()
+        if self._up_count_anim:
+            self._up_count_anim.stop()
+
+        self._down_count_anim = _make_anim(download_mbps, self._lbl_down)
+        self._up_count_anim   = _make_anim(upload_mbps,   self._lbl_up)
 
     @pyqtSlot(str)
     def _on_test_error(self, msg: str) -> None:

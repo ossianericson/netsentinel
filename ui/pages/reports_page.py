@@ -113,12 +113,8 @@ class ReportsPage(QWidget):
         root.setSpacing(10)
 
         # Page title
-        title = QLabel("Auto-Report Generation")
-        title.setStyleSheet(f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};")
-        sub = QLabel("Generate status reports on a schedule and save them to disk.")
-        sub.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("Auto-Report Generation"))
 
         # KPI row
         kpi_row = QHBoxLayout()

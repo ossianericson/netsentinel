@@ -216,20 +216,8 @@ class ConnectionsPage(QWidget):
         root.setSpacing(8)
 
         # Header
-        title = QLabel("Active Connections")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
-        sub = QLabel(
-            "Every active TCP/UDP socket on this machine mapped to its owning process"
-        )
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none; padding:0 0 4px 0;"
-        )
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("Active Connections"))
 
         # KPI row
         kpi_row = QHBoxLayout()

@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.9.31
+version: 1.9.34
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -1238,3 +1238,56 @@ rules:
       Never conclude "works in release, broken locally = local environment issue"
       without first ruling out QSettings divergence. It is the most common cause
       of this symptom in NetSentinel and requires only a registry clear to confirm.
+
+  # ── Startup / DWM Compositing ─────────────────────────────────────────────
+  - id: RULE-STARTUP1
+    title: "Startup show sequence — off-screen move (non-maximized) then geometry restore"
+    severity: blocking
+    description: >
+      The correct startup sequence in app.py is:
+
+        _splash_msg("Ready.", process_events=False)
+        if getattr(window, '_pending_show_maximized', False):
+            window.showMaximized()
+            _splash.close()
+        else:
+            _saved_rect = window.geometry()
+            window.move(-_saved_rect.width() - 200, -_saved_rect.height() - 200)
+            window.show()
+            _splash.close()
+            window.setGeometry(_saved_rect)
+
+      WHY THE NON-MAXIMIZED CASE NEEDS OFF-SCREEN MOVE:
+        _restore_settings() applies the saved window geometry during __init__.
+        On first launch there is no saved geometry so Qt centers the window — under
+        the splash, no flash. On second launch the saved geometry is off-center
+        (user's last position). window.show() then makes the HWND visible at that
+        off-center position, sticking out from behind the 480x280 splash — a flash.
+
+        Root cause confirmed 2026-05-25: first launch OK, second launch flashes.
+        Fix: move HWND off-screen before show() so it is never on-screen during the
+        splash phase. After _splash.close(), restore the saved geometry immediately.
+
+      WHY THE MAXIMIZED CASE DOES NOT NEED THIS:
+        showMaximized() fills the entire screen. The splash is always smaller.
+        One DWM frame with both visible: splash (WindowStaysOnTopHint) covers the gap.
+
+      _pending_show_maximized pattern (required):
+        In Dashboard._restore_settings(), when the saved state is maximized, set:
+          self._pending_show_maximized = True
+        Do NOT call self.showMaximized() inside _restore_settings(). Construction
+        spans multiple DWM frames; calling showMaximized() there causes the window to
+        be composited behind the splash before splash.close() is reached.
+
+      WHAT DOES NOT WORK — do not revert to any of these:
+        - window.show() at saved off-center position then _splash.close() — window
+          appears at saved position for one DWM frame before splash closes (the flash)
+        - _splash.finish(window) — calls window.show() internally at unpredictable time
+        - _splash.close() THEN processEvents() THEN window.show() — processEvents()
+          is not VSync-gated; unreliable across runs
+        - window.setWindowOpacity(0.0) — WS_EX_LAYERED not atomic on WS_POPUP windows
+        - int(window.winId()) before show — partially effective, top still flashes
+        - showMaximized() inside _restore_settings() during __init__ — multiple DWM frames
+
+      This rule was established after many sessions of investigation.
+      Root cause confirmed 2026-05-25: QSettings saved geometry causes flash on 2nd+ launch.

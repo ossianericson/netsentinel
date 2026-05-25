@@ -170,15 +170,8 @@ class DnsZonePage(QWidget):
         root.setSpacing(8)
 
         # Title
-        title = QLabel("DNS Zone Mapping")
-        title.setStyleSheet(f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};")
-        root.addWidget(title)
-
-        sub = QLabel(
-            "AXFR zone transfer from an internal DNS server + mDNS Bonjour/Avahi service discovery on the LAN."
-        )
-        sub.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("DNS Zone Mapping"))
 
         # KPI row
         kpi_row = QHBoxLayout()

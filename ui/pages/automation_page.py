@@ -265,20 +265,8 @@ class AutomationPage(QWidget):
         root.setSpacing(8)
 
         # Page header
-        title = QLabel("Automation Hooks")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold;"
-            f" background:transparent; border:none;"
-        )
-        sub = QLabel(
-            "Trigger a local script when a device joins / leaves or an alert fires"
-        )
-        sub.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px;"
-            f" background:transparent; border:none; padding:0 0 4px 0;"
-        )
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("Automation Hooks"))
 
         splitter = QSplitter(Qt.Orientation.Vertical)
 

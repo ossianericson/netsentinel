@@ -114,14 +114,8 @@ class TimelinePage(QWidget):
         outer.setSpacing(10)
 
         # Title
-        title = QLabel("Network Timeline")
-        title.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
-        sub = QLabel("Unified reverse-chronological feed of network events.")
-        sub.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
-        outer.addWidget(title)
-        outer.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        outer.addWidget(PageHeaderBar("Network Timeline"))
 
         # ── TIMELINE-2: Today at a glance ─────────────────────────────────────
         self._glance = QFrame()

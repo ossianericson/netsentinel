@@ -368,48 +368,59 @@ def main():
         pass
 
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.31")
+    app.setApplicationVersion("1.9.34")
+
+    _start_minimised = "--minimised" in sys.argv
 
     # ── Splash screen ─────────────────────────────────────────────────────────
-    # PERF-1: splash screen with progress messages
-    _SPLASH_W, _SPLASH_H = 480, 280
-    _splash_base = QPixmap(_SPLASH_W, _SPLASH_H)
+    # PERF-1: splash screen with progress messages.
+    # 800×500 canvas with the 480×280 design centred inside it — covers the
+    # area around the content card so small amounts of background bleed are hidden.
+    _SPLASH_W, _SPLASH_H = 480, 280          # logical size of the centred card
+    _CANVAS_W, _CANVAS_H = 800, 500         # outer canvas (covers extra area)
+    _SOX = (_CANVAS_W - _SPLASH_W) // 2     # card x-offset on the canvas
+    _SOY = (_CANVAS_H - _SPLASH_H) // 2     # card y-offset on the canvas
+
+    _splash_base = QPixmap(_CANVAS_W, _CANVAS_H)
     _splash_base.fill(QColor("#0D1117"))
     _spp = QPainter(_splash_base)
     _spp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
     # Title
     _spp.setPen(QColor("#E6EDF3"))
     _spp.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
-    _spp.drawText(QRect(0, 60, _SPLASH_W, 55), Qt.AlignmentFlag.AlignCenter, "NetSentinel")
+    _spp.drawText(QRect(_SOX, _SOY + 60, _SPLASH_W, 55), Qt.AlignmentFlag.AlignCenter, "NetSentinel")
     # Subtitle
     _spp.setPen(QColor("#8B949E"))
     _spp.setFont(QFont("Segoe UI", 11))
-    _spp.drawText(QRect(0, 120, _SPLASH_W, 30), Qt.AlignmentFlag.AlignCenter,
+    _spp.drawText(QRect(_SOX, _SOY + 120, _SPLASH_W, 30), Qt.AlignmentFlag.AlignCenter,
                   "Network Security Scanner")
     # Version
     _spp.setPen(QColor("#30363D"))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(0, 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.25")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.25")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
-    _splash.show()
-    app.processEvents()
+    if not _start_minimised:
+        _splash.show()
+        app.processEvents()
 
-    def _splash_msg(msg: str) -> None:
+    def _splash_msg(msg: str, process_events: bool = True) -> None:
         """Overlay a progress message on the splash without redrawing the base."""
         _px = _splash_base.copy()
         _p = QPainter(_px)
         _p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        # Clear previous message area
-        _p.fillRect(QRect(0, 175, _SPLASH_W, 28), QColor("#0D1117"))
+        # Clear previous message area (positioned relative to the centred card)
+        _p.fillRect(QRect(_SOX, _SOY + 175, _SPLASH_W, 28), QColor("#0D1117"))
         _p.setPen(QColor("#484F58"))
         _p.setFont(QFont("Segoe UI", 9))
-        _p.drawText(QRect(0, 177, _SPLASH_W, 24), Qt.AlignmentFlag.AlignCenter, msg)
+        _p.drawText(QRect(_SOX, _SOY + 177, _SPLASH_W, 24), Qt.AlignmentFlag.AlignCenter, msg)
         _p.end()
         _splash.setPixmap(_px)
-        app.processEvents()
+        if process_events:
+            app.processEvents()
     # ─────────────────────────────────────────────────────────────────────────
     app.setOrganizationName("netsentinel")
 
@@ -473,6 +484,13 @@ def main():
             app.setWindowIcon(QIcon(str(ico_path)))
             break
 
+    import time as _time; _T0 = _time.perf_counter()
+    _log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "startup_log.txt")
+    open(_log_path, "w").close()  # clear from last run
+    def _log(msg):
+        line = f"[NS +{_time.perf_counter()-_T0:.3f}s] {msg}\n"
+        with open(_log_path, "a") as _f: _f.write(line)
+    _log("splash shown")
     _splash_msg("Initialising database…")
     from modules.metric_store import MetricStore
     from modules.alert_engine import AlertEngine
@@ -505,6 +523,7 @@ def main():
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
 
+    _log("database init done")
     _splash_msg("Starting background workers…")
     avail_worker = AvailabilityWorker(store=store, interval_s=60)
     avail_worker.start()
@@ -540,10 +559,13 @@ def main():
         _ensure_key()  # generate and persist key on first enable
         rest_api_worker.start()
 
+    _log("workers started")
     _splash_msg("Loading interface…")
+    _log("Dashboard construction start")
     from ui.dashboard import Dashboard
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
                        maint_manager=maint_manager)
+    _log(f"Dashboard construction done  isVisible={window.isVisible()}")
 
     # Wire notification router → toast callback + notifications page
     notif_router.set_toast_callback(window._show_alert_toast)
@@ -631,10 +653,57 @@ def main():
     window._uptime_page.scan_requested.connect(window._start_full_scan)
     window._inventory_page.scan_requested.connect(window._start_full_scan)
 
-    # ── Show window after all wiring is complete (prevents startup flash) ─────
-    _splash_msg("Ready.")
-    window.show()
-    _splash.finish(window)
+    # ── Show window / close splash ────────────────────────────────────────────
+    if not _start_minimised:
+        _splash_msg("Ready.", process_events=False)
+        _log(f"show sequence  isVisible={window.isVisible()}")
+        if not window.isVisible():
+            # Non-maximized path: window was not shown during _restore_settings().
+            _log("calling window.show()")
+            window.show()
+        # _splash.close() fires the Qt event loop which delivers the first WM_PAINT
+        # to the main window and hides the splash in the same DWM compositing frame.
+        _log("calling _splash.close()")
+        _splash.close()
+        _log("_splash.close() returned")
+        # Fix restore geometry: showMaximized() in _restore_settings() used Qt's
+        # default HWND position; apply the saved normal geometry via SetWindowPlacement
+        # so showNormal() restores to the correct location.
+        _png = getattr(window, '_pending_normal_geo', None)
+        if _png and sys.platform == "win32":
+            _nx, _ny, _nw, _nh = _png
+            from PyQt6.QtCore import QTimer as _QTimer
+            def _fix_geo(_nx=_nx, _ny=_ny, _nw=_nw, _nh=_nh):
+                try:
+                    import ctypes as _ct
+                    class _P(_ct.Structure):
+                        _fields_ = [("x", _ct.c_long), ("y", _ct.c_long)]
+                    class _R(_ct.Structure):
+                        _fields_ = [("l", _ct.c_long), ("t", _ct.c_long),
+                                    ("r", _ct.c_long), ("b", _ct.c_long)]
+                    class _WP(_ct.Structure):
+                        _fields_ = [("length", _ct.c_uint), ("flags", _ct.c_uint),
+                                    ("showCmd", _ct.c_uint), ("ptMin", _P),
+                                    ("ptMax", _P), ("rcNormal", _R)]
+                    wp = _WP()
+                    wp.length = _ct.sizeof(_WP)
+                    _hwnd = int(window.winId())
+                    _ct.windll.user32.GetWindowPlacement(_hwnd, _ct.byref(wp))
+                    wp.rcNormal.l = _nx; wp.rcNormal.t = _ny
+                    wp.rcNormal.r = _nx + _nw; wp.rcNormal.b = _ny + _nh
+                    _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(wp))
+                except Exception:
+                    pass
+            _QTimer.singleShot(0, _fix_geo)
+    else:
+        _splash.close()
+
+    # Windows logoff/shutdown — save state before the session ends.
+    # commitDataRequest fires before WM_ENDSESSION; no unsafe MSG casting needed.
+    def _on_commit_data(manager) -> None:
+        window._save_window_state()
+        manager.release()
+    app.commitDataRequest.connect(_on_commit_data)
 
     # Second-instance → raise this window to the front
     def _on_second_instance() -> None:

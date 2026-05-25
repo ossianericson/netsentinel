@@ -173,17 +173,8 @@ class MeshRouterPage(QWidget):
         root.setSpacing(12)
 
         # ── header ────────────────────────────────────────────────────────────
-        title = QLabel("Mesh & Router")
-        title.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; border:none;"
-        )
-        sub = QLabel(
-            "Live client data from your gateway and mesh nodes  "
-            "(TP-Link Deco · more manufacturers coming)"
-        )
-        sub.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px; border:none;")
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("Mesh & Router"))
 
         compat = QFrame()
         compat.setStyleSheet(

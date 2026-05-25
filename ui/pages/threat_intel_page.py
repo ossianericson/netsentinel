@@ -211,17 +211,8 @@ class ThreatIntelPage(QWidget):
         root.setSpacing(8)
 
         # Title
-        title = QLabel("Threat Intelligence")
-        title.setStyleSheet(f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};")
-        root.addWidget(title)
-
-        sub = QLabel(
-            "IP and domain reputation data from public OSINT feeds (Feodo Tracker, Emerging Threats). "
-            "Optionally enrich with real-time AbuseIPDB lookups."
-        )
-        sub.setWordWrap(True)
-        sub.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("Threat Intelligence"))
 
         # KPI row
         kpi_row = QHBoxLayout()

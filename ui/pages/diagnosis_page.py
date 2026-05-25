@@ -184,18 +184,8 @@ class DiagnosisPage(QWidget):
         back_btn.clicked.connect(lambda: self.navigate_to.emit("Overview"))
         root.addWidget(back_btn)
 
-        title = QLabel("What's Wrong?")
-        title.setStyleSheet(
-            f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY}; background:transparent;"
-        )
-        sub = QLabel(
-            "Runs all detection modules and produces a plain-English diagnosis of your network."
-        )
-        sub.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
-        root.addWidget(title)
-        root.addWidget(sub)
+        from ui.widgets.page_header import PageHeaderBar
+        root.addWidget(PageHeaderBar("What's Wrong?"))
 
         self._stack = QStackedWidget()
         self._stack.addWidget(self._build_idle())    # 0
