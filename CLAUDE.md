@@ -44,9 +44,9 @@ python -m pytest tests/test_version_consistency.py -v   # verify
 
 Never pass flags like `--current` to bump_version.py — it has no flags; the first positional arg is the new version string.
 
-Current version: **v1.9.36**
+Current version: **v1.9.37**
 
-Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10 → v1.7.0 → v1.7.1 → v1.7.2 → v1.7.3 → v1.7.4 → v1.7.5 → v1.7.6 → v1.7.7 → v1.7.8 → v1.7.9 → v1.8.0 → v1.9.0 → v1.9.1 → v1.9.2 → v1.9.3 → v1.9.4 → v1.9.5 → v1.9.6 → v1.9.7 → v1.9.8 → v1.9.9 → v1.9.10 → v1.9.11 → v1.9.12 → v1.9.13 → v1.9.14 → v1.9.15 → v1.9.16 → v1.9.17 → v1.9.18 → v1.9.19 → v1.9.20 → v1.9.21 → v1.9.22 → v1.9.23 → v1.9.24 → v1.9.25 → v1.9.26 → v1.9.27 → v1.9.28 → v1.9.29 → v1.9.30 → v1.9.31 → v1.9.32 → v1.9.33 → v1.9.34 → v1.9.35 → v1.9.36
+Version history (condensed): v1.4.0 → v1.5.0 → v1.5.1 → v1.5.5 → v1.5.6 → v1.5.7 → v1.6.2 → v1.6.4 → v1.6.6 → v1.6.7 → v1.6.8 → v1.6.9 → v1.6.10 → v1.7.0 → v1.7.1 → v1.7.2 → v1.7.3 → v1.7.4 → v1.7.5 → v1.7.6 → v1.7.7 → v1.7.8 → v1.7.9 → v1.8.0 → v1.9.0 → v1.9.1 → v1.9.2 → v1.9.3 → v1.9.4 → v1.9.5 → v1.9.6 → v1.9.7 → v1.9.8 → v1.9.9 → v1.9.10 → v1.9.11 → v1.9.12 → v1.9.13 → v1.9.14 → v1.9.15 → v1.9.16 → v1.9.17 → v1.9.18 → v1.9.19 → v1.9.20 → v1.9.21 → v1.9.22 → v1.9.23 → v1.9.24 → v1.9.25 → v1.9.26 → v1.9.27 → v1.9.28 → v1.9.29 → v1.9.30 → v1.9.31 → v1.9.32 → v1.9.33 → v1.9.34 → v1.9.35 → v1.9.36 → v1.9.37
 Note: tags v1.55 and v1.56 were published as two-part (missing dot); treat as v1.5.5/v1.5.6.
 
 ## Releasing
