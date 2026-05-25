@@ -15,8 +15,8 @@ import datetime
 
 import json
 
-from PyQt6.QtCore import QPointF, Qt, QSettings, QUrl, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QDesktopServices, QPainter, QPainterPath, QPen
+from PyQt6.QtCore import QEasingCurve, QPointF, QRect, QRectF, Qt, QSettings, QUrl, QVariantAnimation, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -930,10 +930,19 @@ class HomePage(QWidget):
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
         )
         self._grade_details_btn.clicked.connect(self._show_grade_breakdown)
+        # HOME-2: week-over-week grade delta chip
+        self._grade_delta_lbl = QLabel("")
+        self._grade_delta_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._grade_delta_lbl.setVisible(False)
+        self._grade_delta_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+
         _grade_col = QVBoxLayout()
         _grade_col.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         _grade_col.setSpacing(2)
         _grade_col.addWidget(self._grade_circle)
+        _grade_col.addWidget(self._grade_delta_lbl, 0, Qt.AlignmentFlag.AlignHCenter)
         _grade_col.addWidget(self._grade_details_btn, 0, Qt.AlignmentFlag.AlignHCenter)
         hero_lay.addLayout(_grade_col)
 
@@ -2443,6 +2452,41 @@ class HomePage(QWidget):
         self._suggestions_sec.setVisible(True)
         self._suggestions_card.setVisible(True)
 
+    def _update_grade_delta(self, current_score: float) -> None:
+        """HOME-2: show week-over-week grade delta chip beside the grade ring."""
+        import time as _t
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            history: list = json.loads(qs.value(_GRADE_HISTORY_KEY, "[]", type=str))
+        except Exception:
+            history = []
+        now = _t.time()
+        week_ago = now - 7 * 86400
+        two_weeks_ago = now - 14 * 86400
+        this_week  = [e["score"] for e in history if e.get("ts", 0) >= week_ago and "score" in e]
+        last_week  = [e["score"] for e in history
+                      if two_weeks_ago <= e.get("ts", 0) < week_ago and "score" in e]
+        if len(this_week) < 2 or not last_week:
+            self._grade_delta_lbl.setVisible(False)
+            return
+        this_avg = sum(this_week) / len(this_week)
+        last_avg = sum(last_week) / len(last_week)
+        delta = this_avg - last_avg
+        if abs(delta) < 1:
+            text  = "— no change"
+            color = TEXT_SECONDARY
+        elif delta > 0:
+            text  = f"↑ +{delta:.0f} vs last week"
+            color = GREEN
+        else:
+            text  = f"↓ {delta:.0f} vs last week"
+            color = RED
+        self._grade_delta_lbl.setText(text)
+        self._grade_delta_lbl.setStyleSheet(
+            f"font-size:10px; color:{color}; background:transparent; border:none;"
+        )
+        self._grade_delta_lbl.setVisible(True)
+
     def on_grade(self, grade: str, score: float) -> None:
         """Update the hero grade circle text and colour."""
         self._current_grade = grade
@@ -2459,6 +2503,7 @@ class HomePage(QWidget):
             f" background:{BG_CARD};"
         )
         _append_grade_history(grade, score)
+        self._update_grade_delta(score)
         self._refresh_sparkline()
         if self._recurring_mode:
             self._update_recurring_grade_display()

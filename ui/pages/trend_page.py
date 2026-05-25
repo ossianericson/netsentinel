@@ -16,6 +16,7 @@ import time
 from typing import List, Optional
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -36,6 +37,47 @@ from ui.styles import (
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile
 from modules.trend_analyser import TrendResult, TrendReport, run_full_trend_report
+
+
+# ── Mini sparkline widget (VIZ-3) ─────────────────────────────────────────────
+
+class _MiniSparkline(QWidget):
+    """80×18 QPainter sparkline for use in the trend table Trend column."""
+
+    def __init__(self, points: list, color: str, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(80, 18)
+        self._points = list(points)
+        self._color  = color
+
+    def paintEvent(self, event) -> None:
+        pts = self._points
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor("transparent"))
+        if len(pts) < 2:
+            painter.end()
+            return
+        w, h   = self.width(), self.height()
+        pad    = 2
+        uw, uh = w - 2 * pad, h - 2 * pad
+        mn, mx = min(pts), max(pts)
+        span   = mx - mn if mx != mn else 1.0
+
+        def _x(i):  return pad + (i / (len(pts) - 1)) * uw
+        def _y(v):  return pad + (1.0 - (v - mn) / span) * uh
+
+        from PyQt6.QtCore import QPointF
+        path = QPainterPath()
+        path.moveTo(QPointF(_x(0), _y(pts[0])))
+        for i, v in enumerate(pts[1:], 1):
+            path.lineTo(QPointF(_x(i), _y(v)))
+        pen = QPen(QColor(self._color), 1.5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.drawPath(path)
+        painter.end()
 
 
 # ── Background worker ─────────────────────────────────────────────────────────
@@ -239,9 +281,9 @@ class TrendPage(QWidget):
     def _build_results_card(self) -> QWidget:
         card, bl = _card("Trend Forecast — All Hosts")
 
-        self._table = QTableWidget(0, 7)
+        self._table = QTableWidget(0, 8)
         self._table.setHorizontalHeaderLabels(
-            ["Host", "Metric", "Current", "Trend/h", "Threshold", "ETA", "Verdict"]
+            ["Host", "Metric", "Current", "Trend/h", "Threshold", "ETA", "Verdict", "Trend"]
         )
         _hdr_tips = {
             1: "Metric being tracked: RTT (round-trip time), Loss (packet loss %), or Jitter (variation in RTT).",
@@ -258,10 +300,11 @@ class TrendPage(QWidget):
             item = self._table.horizontalHeaderItem(col)
             if item:
                 item.setToolTip(tip)
-        self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.horizontalHeader().setStretchLastSection(False)
         self._table.horizontalHeader().setSectionResizeMode(
             0, __import__("PyQt6.QtWidgets", fromlist=["QHeaderView"]).QHeaderView.ResizeMode.Stretch
         )
+        self._table.setColumnWidth(7, 90)
         self._table.verticalHeader().setVisible(False)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -434,6 +477,14 @@ class TrendPage(QWidget):
                 eta_item = self._table.item(row, 5)
                 if eta_item:
                     eta_item.setForeground(QColor(sev_color))
+
+            # VIZ-3: sparkline widget in col 7
+            if r.points:
+                spark_color = GREEN if r.direction in ("STABLE", "FALLING") else RED
+                sparkline = _MiniSparkline(r.points, spark_color)
+                self._table.setCellWidget(row, 7, sparkline)
+            else:
+                self._table.setItem(row, 7, QTableWidgetItem("—"))
 
     def _update_kpis(self, report: TrendReport):
         hosts = len({r.host for r in report.results})

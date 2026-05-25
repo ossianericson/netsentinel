@@ -433,6 +433,10 @@ class SpeedTestPage(QWidget):
         # ANIM-5: count-up animations for download/upload stat tiles
         self._down_count_anim: QVariantAnimation | None = None
         self._up_count_anim:   QVariantAnimation | None = None
+        # VIZ-5: history chart hover state
+        self._hist_chart_cid:   object = None
+        self._hist_chart_annot: object = None
+        self._hist_chart_pts:   list   = []
 
         self._setup_ui()
         self._fetch_servers()
@@ -635,6 +639,15 @@ class SpeedTestPage(QWidget):
         _date_row.addWidget(self._date_filter_combo)
         _date_row.addStretch()
         hist_body.addLayout(_date_row)
+
+        # ── History trend chart (VIZ-5) ───────────────────────────────────────
+        self._hist_chart_fig = Figure(figsize=(1, 1.4), facecolor=BG_CARD)
+        self._hist_chart_canvas = FigureCanvas(self._hist_chart_fig)
+        self._hist_chart_canvas.setFixedHeight(140)
+        self._hist_chart_canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        hist_body.addWidget(self._hist_chart_canvas)
 
         self._hist_stack = QStackedWidget()
         self._hist_stack.addWidget(_hist_empty)   # index 0 — empty state
@@ -1211,6 +1224,7 @@ class SpeedTestPage(QWidget):
             self._hist_table.setItem(0, col, item)
 
         self._hist_table.scrollToTop()
+        self._refresh_history_chart()
 
     # ── Status helper ─────────────────────────────────────────────────────────
     @staticmethod
@@ -1294,6 +1308,108 @@ class SpeedTestPage(QWidget):
                 self._hist_stack.setCurrentIndex(1)
         except Exception:
             pass  # DB not available yet is fine
+        self._refresh_history_chart()
+
+    def _disconnect_hist_hover(self) -> None:
+        if self._hist_chart_cid is not None:
+            try:
+                self._hist_chart_canvas.mpl_disconnect(self._hist_chart_cid)
+            except Exception:
+                pass
+            self._hist_chart_cid = None
+
+    def hideEvent(self, event) -> None:
+        self._disconnect_hist_hover()
+        super().hideEvent(event)
+
+    def _refresh_history_chart(self) -> None:
+        """VIZ-5: Rebuild the download/upload history line chart."""
+        import datetime as _dt
+        import matplotlib.dates as _mdates
+
+        self._disconnect_hist_hover()
+        fig = self._hist_chart_fig
+        fig.clear()
+        ax = fig.add_subplot(111)
+        ax.set_facecolor("#FAFBFC")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["bottom"].set_color("#D4D4D4")
+        ax.spines["left"].set_color("#D4D4D4")
+        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color="#E8EDF2", linewidth=0.8, linestyle="-")
+        ax.set_ylabel("Mbps", fontsize=8, color=TEXT_SECONDARY)
+
+        if not self._store:
+            fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.22)
+            self._hist_chart_canvas.draw_idle()
+            return
+
+        try:
+            points = self._store.query_speed_test_history(hours=self._history_hours)
+        except Exception:
+            points = []
+
+        if len(points) < 2:
+            ax.text(0.5, 0.5, "Not enough data yet — run more speed tests",
+                    ha="center", va="center", transform=ax.transAxes,
+                    color=TEXT_SECONDARY, fontsize=9)
+            fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.22)
+            self._hist_chart_canvas.draw_idle()
+            return
+
+        pts_sorted = sorted(points, key=lambda p: p.ts)
+        dates = [_dt.datetime.fromtimestamp(p.ts) for p in pts_sorted]
+        dl    = [p.download_mbps for p in pts_sorted]
+        ul    = [p.upload_mbps   for p in pts_sorted]
+
+        ax.plot(dates, dl, color=_COLOR_DOWNLOAD, linewidth=1.5,
+                marker="o", markersize=3.5, label="↓ Download", zorder=3)
+        ax.plot(dates, ul, color=_COLOR_UPLOAD, linewidth=1.5,
+                marker="o", markersize=3.5, label="↑ Upload", zorder=3)
+
+        ax.xaxis.set_major_formatter(_mdates.DateFormatter("%m/%d"))
+        ax.xaxis.set_major_locator(_mdates.AutoDateLocator(maxticks=6))
+        ax.legend(loc="upper left", fontsize=8, frameon=False)
+
+        fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.25)
+        self._hist_chart_canvas.draw_idle()
+
+        self._hist_chart_pts = list(zip(dates, dl, ul, pts_sorted))
+
+        annot = ax.annotate(
+            "", xy=(0, 0), xytext=(8, 8), textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=BORDER, lw=0.8),
+            fontsize=8, color=TEXT_PRIMARY,
+            arrowprops=dict(arrowstyle="->", color=TEXT_SECONDARY, lw=0.8),
+        )
+        annot.set_visible(False)
+        self._hist_chart_annot = annot
+
+        def _on_hover(event):
+            if event.inaxes != ax or not self._hist_chart_pts:
+                annot.set_visible(False)
+                self._hist_chart_canvas.draw_idle()
+                return
+            x_cur = event.xdata
+            best_i, best_d = 0, float("inf")
+            for i, (d, _dl, _ul, _p) in enumerate(self._hist_chart_pts):
+                dist = abs(_mdates.date2num(d) - x_cur)
+                if dist < best_d:
+                    best_d, best_i = dist, i
+            d, dl_v, ul_v, p = self._hist_chart_pts[best_i]
+            ts_str = d.strftime("%Y-%m-%d %H:%M")
+            annot.set_text(
+                f"{ts_str}\n↓ {dl_v:.1f} Mbps  ↑ {ul_v:.1f} Mbps\n"
+                f"Ping: {p.ping_ms:.0f} ms"
+            )
+            annot.xy = (_mdates.date2num(d), dl_v)
+            annot.set_visible(True)
+            self._hist_chart_canvas.draw_idle()
+
+        self._hist_chart_cid = self._hist_chart_canvas.mpl_connect(
+            "motion_notify_event", _on_hover
+        )
 
     @pyqtSlot()
     def _on_history_row_selected(self) -> None:

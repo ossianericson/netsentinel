@@ -180,12 +180,88 @@ class HistoryPage(QWidget):
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
+        self._hover_cid: "Optional[int]" = None
+        self._hover_annot = None
+        self._hover_pts: list = []   # list of (datetime, rtt, jitter, loss) per plotted point
 
         self._build_ui()
 
         if store:
             self._refresh()
             self._auto_timer.start()
+
+    def hideEvent(self, event) -> None:
+        self._disconnect_hover()
+        super().hideEvent(event)
+
+    def _disconnect_hover(self) -> None:
+        if self._hover_cid is not None:
+            try:
+                self._rtt_card.canvas.mpl_disconnect(self._hover_cid)
+            except Exception:
+                pass
+            self._hover_cid = None
+
+    def _setup_rtt_hover(self, hosts: list) -> None:
+        """VIZ-4: connect motion_notify_event for hover tooltip on RTT chart."""
+        import datetime
+        self._disconnect_hover()
+        if not self._store or not hosts:
+            return
+        # Rebuild flat point list for nearest-point lookup
+        pts_data = []
+        for host in hosts[:6]:
+            rows = self._store.query_rtt_history(host, hours=self._window_h)
+            for p in rows:
+                if p.rtt_ms >= 0:
+                    pts_data.append((
+                        datetime.datetime.fromtimestamp(p.ts),
+                        p.rtt_ms,
+                        getattr(p, "jitter_ms", None),
+                        getattr(p, "loss_pct", None),
+                        host,
+                    ))
+        if not pts_data:
+            return
+        self._hover_pts = pts_data
+        # Create persistent annotation (hidden initially)
+        ax = self._rtt_card.ax
+        self._hover_annot = ax.annotate(
+            "", xy=(0, 0), xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.4", fc=BG_CARD, ec=BORDER, alpha=0.9),
+            fontsize=9,
+            color=TEXT_PRIMARY,
+        )
+        self._hover_annot.set_visible(False)
+
+        def _on_move(event):
+            if event.inaxes != ax or not self._hover_pts:
+                if self._hover_annot:
+                    self._hover_annot.set_visible(False)
+                    self._rtt_card.canvas.draw_idle()
+                return
+            import datetime as _dt
+            ex, ey = event.xdata, event.ydata
+            if ex is None or ey is None:
+                return
+            # Find nearest point (by x distance in days float)
+            best = min(self._hover_pts, key=lambda p: abs(
+                _dt.datetime.toordinal(p[0]) + p[0].hour / 24.0 - ex
+            ))
+            jit_str = f"{best[2]:.1f} ms" if best[2] is not None else "—"
+            loss_str = f"{best[3]:.1f}%" if best[3] is not None else "—"
+            label = (
+                f"{best[4]}\n"
+                f"RTT: {best[1]:.1f} ms\n"
+                f"Jitter: {jit_str}  Loss: {loss_str}"
+            )
+            self._hover_annot.xy = (best[0], best[1])
+            self._hover_annot.set_text(label)
+            self._hover_annot.set_visible(True)
+            self._rtt_card.canvas.draw_idle()
+
+        self._hover_cid = self._rtt_card.canvas.mpl_connect("motion_notify_event", _on_move)
 
     # ── Build ─────────────────────────────────────────────────────────────────
 
@@ -425,9 +501,14 @@ class HistoryPage(QWidget):
             ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
             if len(hosts) > 1:
                 ax.legend(fontsize=8, framealpha=0.9, loc="upper right")
+            # VIZ-4: dashed threshold reference line at 100 ms
+            ax.axhline(100, color=AMBER, linewidth=1.0, linestyle="--", alpha=0.7, zorder=2)
+            ax.text(1.0, 100, " 100ms threshold", color=AMBER, fontsize=8,
+                    va="bottom", ha="right", transform=ax.get_yaxis_transform(), alpha=0.8)
 
         self._rtt_card.fig.tight_layout(pad=0.8)
         self._rtt_card.canvas.draw_idle()
+        self._setup_rtt_hover(hosts)
 
     def _draw_availability(self) -> None:
         import datetime

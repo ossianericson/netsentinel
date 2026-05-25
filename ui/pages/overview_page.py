@@ -30,7 +30,7 @@ from __future__ import annotations
 import datetime
 from typing import Callable, Dict, List, Optional
 
-from PyQt6.QtCore    import QMimeData, QPoint, QSettings, QSize, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore    import QEasingCurve, QMimeData, QPoint, QSettings, QSize, Qt, QThread, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QCursor, QDrag, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QFileDialog, QMenu,
@@ -48,7 +48,8 @@ from ui.styles import (
 _MIME_TYPE    = "application/x-netsentinel-tile"
 _COLS         = 3
 _SETTINGS_KEY = "overview/tile_order"
-_TILE_HEIGHT  = 175   # uniform fixed height for every tile
+_TILE_HEIGHT      = 175   # uniform fixed height for every tile
+_EXPANDED_HEIGHT  = 280   # height when tile is expanded (OVERVIEW-1)
 _LAYOUT_VER   = 2     # bump when _DEFAULT_ORDER changes; triggers a one-time reset
 
 
@@ -101,6 +102,10 @@ class _BaseTile(QFrame):
     TILE_LABEL = "Tile"
     TILE_ICON  = "◈"
     MIN_HEIGHT = 140
+    _NAV_LABEL = ""   # nav page to open with "View full →" (empty = no link)
+
+    expand_toggled    = pyqtSignal(object)  # emits self when expanding
+    navigate_requested = pyqtSignal(str)   # emits nav label for "View full →"
 
     def __init__(
         self,
@@ -119,6 +124,9 @@ class _BaseTile(QFrame):
         self._drag_start: Optional[QPoint] = None
         self._scanned_at: Optional[float]  = None
         self._ts_timer:   Optional[QTimer] = None
+        self._expanded:       bool                  = False
+        self._detail_widget:  Optional[QWidget]     = None
+        self._expand_anim:    Optional[QVariantAnimation] = None
 
         self.setObjectName("overviewTile")
         self.setFixedHeight(_TILE_HEIGHT)
@@ -236,7 +244,7 @@ class _BaseTile(QFrame):
         self._drag_handle.setVisible(enabled)
         self._remove_btn.setVisible(enabled)
         if self._scanned_at is not None:
-            self._ts_lbl.setVisible(not enabled)
+            self._ts_lbl.setVisible(True)
             self._rerun_btn.setVisible(not enabled and bool(self._rerun_cb))
         self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor if enabled
                                else Qt.CursorShape.ArrowCursor))
@@ -246,6 +254,8 @@ class _BaseTile(QFrame):
     def mousePressEvent(self, event):
         if self._edit_mode and event.button() == Qt.MouseButton.LeftButton:
             self._drag_start = event.pos()
+        elif not self._edit_mode and event.button() == Qt.MouseButton.LeftButton:
+            self.toggle_expand()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -314,6 +324,7 @@ class _BaseTile(QFrame):
         if self._scanned_at is None:
             return
         import time as _t
+        from ui.styles import AMBER, RED, TEXT_SECONDARY
         delta = int(_t.time() - self._scanned_at)
         if delta < 60:
             text = "Just now"
@@ -322,9 +333,79 @@ class _BaseTile(QFrame):
         else:
             text = f"{delta // 3600} h ago"
         self._ts_lbl.setText(text)
+        if delta >= 7200:
+            color = RED
+        elif delta >= 1800:
+            color = AMBER
+        else:
+            color = TEXT_SECONDARY
+        self._ts_lbl.setStyleSheet(
+            f"font-size:9px; color:{color}; border:none; background:transparent;"
+        )
 
     def _set_health(self, color: str) -> None:
         self._health_bar.setStyleSheet(f"background:{color}; border:none;")
+
+    # ── Expand / collapse (OVERVIEW-1) ────────────────────────────────────────
+
+    def _build_detail(self) -> Optional[QWidget]:
+        """Return a detail sub-panel widget, or None if no detail is available."""
+        if not self._NAV_LABEL:
+            return None
+        w = QWidget()
+        w.setStyleSheet("background:transparent; border:none;")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 4, 12, 6)
+        btn = QPushButton(f"View full  {self._NAV_LABEL} →")
+        btn.setFlat(True)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
+            f" background:transparent; text-align:left; padding:0; }}"
+            f"QPushButton:hover {{ text-decoration:underline; }}"
+        )
+        btn.clicked.connect(lambda: self.navigate_requested.emit(self._NAV_LABEL))
+        lay.addWidget(btn)
+        lay.addStretch()
+        return w
+
+    def toggle_expand(self) -> None:
+        """Expand or collapse this tile (OVERVIEW-1)."""
+        from ui.theme import _reduce_motion
+        going_expanded = not self._expanded
+
+        if going_expanded:
+            if self._detail_widget is None:
+                self._detail_widget = self._build_detail()
+                if self._detail_widget is not None:
+                    # Insert before health bar (last item in outer layout)
+                    outer = self.layout()
+                    outer.insertWidget(outer.count() - 1, self._detail_widget)
+            if self._detail_widget is not None:
+                self._detail_widget.setVisible(True)
+            self._expanded = True
+            self.expand_toggled.emit(self)
+            target_h = _EXPANDED_HEIGHT
+        else:
+            self._expanded = False
+            if self._detail_widget is not None:
+                self._detail_widget.setVisible(False)
+            target_h = _TILE_HEIGHT
+
+        if _reduce_motion():
+            self.setFixedHeight(target_h)
+            return
+
+        if self._expand_anim is not None:
+            self._expand_anim.stop()
+        anim = QVariantAnimation(self)
+        anim.setStartValue(self.height())
+        anim.setEndValue(target_h)
+        anim.setDuration(280)
+        anim.setEasingCurve(QEasingCurve.Type.OutQuart)
+        anim.valueChanged.connect(lambda v: self.setFixedHeight(int(v)))
+        anim.start()
+        self._expand_anim = anim
 
 
 # ── Concrete tiles ────────────────────────────────────────────────────────────
@@ -333,6 +414,7 @@ class DeviceCountTile(_BaseTile):
     TILE_ID    = "device_count"
     TILE_LABEL = "Devices on Network"
     TILE_ICON  = "⬡"
+    _NAV_LABEL = "Availability History"
 
     def _build_body(self) -> None:
         self._count_lbl = _AnimatedNumberLabel("–", parent=self)
@@ -346,11 +428,13 @@ class DeviceCountTile(_BaseTile):
         self._body_layout.addWidget(self._count_lbl)
         self._body_layout.addWidget(self._sub_lbl)
         self._body_layout.addStretch()
+        self._last_states: dict = {}
 
     def update_cycle(self, states: dict) -> None:
         total = len(states)
         up    = sum(1 for s in states.values() if s == "UP")
         down  = sum(1 for s in states.values() if s == "DOWN")
+        self._last_states = dict(states)
         self._count_lbl.animate_to(total)
         parts = []
         if up:   parts.append(f"{up} up")
@@ -358,6 +442,40 @@ class DeviceCountTile(_BaseTile):
         self._sub_lbl.setText("  ·  ".join(parts) if parts else "No devices monitored")
         colour = RED if down else (AMBER if total == 0 else GREEN)
         self._set_health(colour)
+
+    def _build_detail(self) -> Optional[QWidget]:
+        w = QWidget()
+        w.setStyleSheet("background:transparent; border:none;")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 2, 12, 4)
+        lay.setSpacing(2)
+        items = list(self._last_states.items())[:5]
+        if not items:
+            lbl = QLabel("No devices monitored yet")
+            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none;")
+            lay.addWidget(lbl)
+        else:
+            for ip, state in items:
+                row = QHBoxLayout()
+                row.setSpacing(6)
+                color = GREEN if state == "UP" else RED
+                dot = QLabel("●")
+                dot.setFixedWidth(12)
+                dot.setStyleSheet(f"color:{color}; font-size:9px; border:none;")
+                ip_lbl = QLabel(ip)
+                ip_lbl.setStyleSheet(
+                    f"color:{TEXT_PRIMARY}; font-size:10px; border:none;"
+                )
+                st_lbl = QLabel(state)
+                st_lbl.setStyleSheet(
+                    f"color:{color}; font-size:10px; font-weight:bold; border:none;"
+                )
+                row.addWidget(dot)
+                row.addWidget(ip_lbl, 1)
+                row.addWidget(st_lbl)
+                lay.addLayout(row)
+        lay.addStretch()
+        return w
 
 
 
@@ -468,6 +586,7 @@ class RttSummaryTile(_BaseTile):
     TILE_ID    = "rtt_summary"
     TILE_LABEL = "Network Latency"
     TILE_ICON  = "◷"
+    _NAV_LABEL = "DNS & Stability"
 
     def _build_body(self) -> None:
         row = QHBoxLayout()
@@ -498,8 +617,10 @@ class RttSummaryTile(_BaseTile):
         row.addStretch()
         self._body_layout.addLayout(row)
         self._body_layout.addStretch()
+        self._last_rtts: dict = {}
 
     def update_cycle(self, rtts: dict) -> None:
+        self._last_rtts = dict(rtts)
         valid = [v for v in rtts.values() if v is not None and v >= 0]
         total = len(rtts)
         lost  = sum(1 for v in rtts.values() if v is None or v < 0)
@@ -519,6 +640,45 @@ class RttSummaryTile(_BaseTile):
             self._loss_lbl.setStyleSheet(
                 f"font-size:30px; font-weight:bold; color:{colour}; border:none;"
             )
+
+    def _build_detail(self) -> Optional[QWidget]:
+        w = QWidget()
+        w.setStyleSheet("background:transparent; border:none;")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 2, 12, 4)
+        lay.setSpacing(3)
+        valid = {ip: v for ip, v in self._last_rtts.items() if v is not None and v >= 0}
+        top3 = sorted(valid.items(), key=lambda x: x[1], reverse=True)[:3]
+        if not top3:
+            lbl = QLabel("No RTT data yet")
+            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none;")
+            lay.addWidget(lbl)
+        else:
+            mx = max(v for _, v in top3)
+            for ip, rtt in top3:
+                color = GREEN if rtt < 50 else AMBER if rtt < 150 else RED
+                row = QHBoxLayout()
+                row.setSpacing(6)
+                ip_lbl = QLabel(ip)
+                ip_lbl.setStyleSheet(
+                    f"color:{TEXT_PRIMARY}; font-size:10px; border:none;"
+                )
+                ip_lbl.setMinimumWidth(110)
+                bar = QFrame()
+                bar_w = max(4, int((rtt / mx) * 60)) if mx > 0 else 4
+                bar.setFixedSize(bar_w, 8)
+                bar.setStyleSheet(f"background:{color}; border:none; border-radius:2px;")
+                rtt_lbl = QLabel(f"{rtt:.0f} ms")
+                rtt_lbl.setStyleSheet(
+                    f"color:{color}; font-size:10px; font-weight:bold; border:none;"
+                )
+                row.addWidget(ip_lbl)
+                row.addWidget(bar)
+                row.addWidget(rtt_lbl)
+                row.addStretch()
+                lay.addLayout(row)
+        lay.addStretch()
+        return w
 
 
 class NetworkGradeTile(_BaseTile):
@@ -672,6 +832,38 @@ class AlertFeedTile(_BaseTile):
                 row.msg.setText("–")
                 row.msg.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
                 row.set_active(False)
+
+    def _build_detail(self) -> Optional[QWidget]:
+        w = QWidget()
+        w.setStyleSheet("background:transparent; border:none;")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 2, 12, 4)
+        lay.setSpacing(2)
+        if not self._alerts:
+            lbl = QLabel("No recent alerts")
+            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none;")
+            lay.addWidget(lbl)
+        else:
+            import datetime as _dt
+            for a in self._alerts:
+                ts = a.get("ts", 0)
+                ts_str = _dt.datetime.fromtimestamp(ts).strftime("%H:%M:%S") if ts else "–"
+                sev = (a.get("severity") or "INFO").upper()
+                color = self._SEV_COLOUR.get(sev, TEXT_SECONDARY)
+                row_lay = QHBoxLayout()
+                row_lay.setSpacing(6)
+                ts_lbl = QLabel(ts_str)
+                ts_lbl.setFixedWidth(54)
+                ts_lbl.setStyleSheet(
+                    f"color:{TEXT_SECONDARY}; font-size:9px; border:none;"
+                )
+                msg_lbl = QLabel(a.get("message", "")[:45])
+                msg_lbl.setStyleSheet(f"color:{color}; font-size:9px; border:none;")
+                row_lay.addWidget(ts_lbl)
+                row_lay.addWidget(msg_lbl, 1)
+                lay.addLayout(row_lay)
+        lay.addStretch()
+        return w
 
 
 class EventFeedTile(_BaseTile):
@@ -1390,6 +1582,11 @@ class OverviewPage(QWidget):
         _t.setSingleShot(True)
         _t.timeout.connect(self._refresh_store_tiles)
         _t.start(1500)
+        # OVERVIEW-5: refresh all tile age labels every 60 s
+        self._age_timer = QTimer(self)
+        self._age_timer.setInterval(60_000)
+        self._age_timer.timeout.connect(self._refresh_tile_ages)
+        self._age_timer.start()
 
     # ── UI shell ──────────────────────────────────────────────────────────────
 
@@ -1602,6 +1799,9 @@ class OverviewPage(QWidget):
                     parent=self._grid_container,
                 )
                 self._tiles[tile_id] = tile
+        for tile in self._tiles.values():
+            tile.expand_toggled.connect(self._on_tile_expand_toggled)
+            tile.navigate_requested.connect(self.navigate_to)
         alert_tile = self._tiles.get("alert_feed")
         if alert_tile is not None:
             alert_tile.alert_clicked.connect(self._on_alert_navigate)
@@ -1614,6 +1814,12 @@ class OverviewPage(QWidget):
         if modem_tile is not None:
             modem_tile.clicked.connect(self.modem_tile_clicked.emit)
         self._reflow()
+
+    def _on_tile_expand_toggled(self, expanding_tile) -> None:
+        """Collapse all other tiles when one expands (OVERVIEW-1)."""
+        for tile in self._tiles.values():
+            if tile is not expanding_tile and tile._expanded:
+                tile.toggle_expand()
 
     def _on_scan_clicked(self) -> None:
         if not self._scanning:
@@ -1947,6 +2153,11 @@ class OverviewPage(QWidget):
             )
 
         self._add_strip.show()
+
+    def _refresh_tile_ages(self) -> None:
+        """OVERVIEW-5: refresh the data-age label on every scanned tile."""
+        for tile in self._tiles.values():
+            tile._update_ts_display()
 
     def _refresh_store_tiles(self) -> None:
         try:

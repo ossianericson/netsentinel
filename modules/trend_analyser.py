@@ -126,6 +126,7 @@ class TrendResult:
     direction:      str
     severity:       str
     summary:        str
+    points:         List[float] = field(default_factory=list)
 
 
 @dataclass
@@ -286,6 +287,7 @@ def analyse_host_rtt(
             direction=direction,
             severity=severity,
             summary=summary,
+            points=list(py),
         ))
 
     return results

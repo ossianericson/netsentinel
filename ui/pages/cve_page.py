@@ -728,29 +728,35 @@ class CvePage(QWidget):
 
     def _export_csv(self) -> None:
         import csv as _csv
+        import os
+        import time as _t
         from PyQt6.QtWidgets import QFileDialog
         from ui.widgets.toast import ToastManager
+        ts = _t.strftime("%Y%m%d_%H%M%S")
+        rows = getattr(self, "_displayed_rows", self._rows)
+        default_name = f"cve_export_{ts}.csv"
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export CVE Tracker", "cve_tracker.csv", "CSV files (*.csv)"
+            self, "Export CVE Tracker", default_name, "CSV files (*.csv)"
         )
         if not path:
             return
         cols = ["CVE ID", "CVSS", "Severity", "Service", "Host",
-                "State", "Owner", "Days Open", "Description"]
+                "State", "Owner", "Days Open", "Notes", "Description"]
         try:
             with open(path, "w", newline="", encoding="utf-8") as f:
                 w = _csv.writer(f)
                 w.writerow(cols)
-                for r in self._rows:
+                now = int(_t.time())
+                for r in rows:
+                    days_open = max(0, (now - r.get("opened_ts", now)) // 86400)
                     w.writerow([
-                        r.get("cve_id", ""), r.get("score", ""),
+                        r.get("cve_id", ""), r.get("cvss_score", ""),
                         r.get("severity", ""), r.get("service", ""),
                         r.get("host", ""), r.get("state", ""),
-                        r.get("owner", ""), r.get("days_open", ""),
-                        r.get("description", ""),
+                        r.get("owner", ""), days_open,
+                        r.get("notes", ""), r.get("description", ""),
                     ])
-            import os
-            ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
+            ToastManager.show(f"✓ Exported {len(rows)} row(s) to {os.path.basename(path)}", "success")
         except Exception as exc:
             ToastManager.show(f"Export failed: {exc}", "error")
 
