@@ -883,14 +883,14 @@ string). If no `badge_until` is set, badges display indefinitely.
 | ✅ ACT-1 — Connections process tooltip | Actions | Med | Low | 1 · v1.9.36 |
 | ✅ EDU-3 — Feature Guide badges | Education | Low | Low | 1 · v1.9.36 |
 | ✅ FILTER-13 — Speed test date filter | Filters | Med | Low | 1 · v1.9.36 |
-| HOME-1 — Grade ring upgrade + animation | Home | High | Med | 2 |
-| HOME-2 — Week-over-week delta chip | Home | Med | Low | 2 |
-| VIZ-3 — Trend sparklines | Viz | High | Med | 2 |
-| VIZ-4 — History RTT chart enhancements | Viz | High | Med | 2 |
-| VIZ-5 — Speed test history line chart | Viz | High | Med | 2 |
-| OVERVIEW-1 — Tile click-to-expand | Overview | High | Med | 2 |
-| OVERVIEW-5 — Tile data-age indicator | Overview | Med | Low | 2 |
-| ACT-2 — CVE export CSV | Actions | Med | Low | 2 |
+| HOME-1 — Grade ring upgrade + animation | Home | High | Med | 3 |
+| ✅ HOME-2 — Week-over-week delta chip | Home | Med | Low | 2 · v1.9.37 |
+| ✅ VIZ-3 — Trend sparklines | Viz | High | Med | 2 · v1.9.37 |
+| ✅ VIZ-4 — History RTT chart enhancements | Viz | High | Med | 2 · v1.9.37 |
+| ✅ VIZ-5 — Speed test history line chart | Viz | High | Med | 2 · v1.9.37 |
+| ✅ OVERVIEW-1 — Tile click-to-expand | Overview | High | Med | 2 · v1.9.37 |
+| ✅ OVERVIEW-5 — Tile data-age indicator | Overview | Med | Low | 2 · v1.9.37 |
+| ✅ ACT-2 — CVE export CSV | Actions | Med | Low | 2 · v1.9.37 |
 | OVERVIEW-2 — Top Talkers tile | Overview | High | Med | 3 |
 | OVERVIEW-3 — Recent Events tile | Overview | High | Med | 3 |
 | OVERVIEW-4 — Trend Status tile | Overview | Med | Med | 3 |
@@ -944,18 +944,18 @@ Low effort, immediately visible. Every item is a targeted addition to one file.
 
 ---
 
-### Sprint 2 — Visual data depth (target: v1.9.37)
+### Sprint 2 — Visual data depth ✅ SHIPPED v1.9.37 (HOME-1 deferred)
 
 Chart upgrades and home page improvements. Medium effort, high impact.
 
-1. HOME-1 — Grade ring upgrade + sweep animation + score count-up
-2. HOME-2 — Week-over-week grade delta chip
-3. VIZ-3 — Trend page per-host mini-sparklines
-4. VIZ-4 — History page RTT chart enhancements
-5. VIZ-5 — Speed Test history line chart
-6. OVERVIEW-1 — Tile click-to-expand micro-detail
-7. OVERVIEW-5 — Tile data-age indicator (unhide `_ts_lbl`, add color logic)
-8. ACT-2 — CVE filtered CSV export
+1. HOME-1 — Grade ring upgrade + sweep animation + score count-up *(deferred to Sprint 3)*
+2. ✅ HOME-2 — Week-over-week grade delta chip
+3. ✅ VIZ-3 — Trend page per-host mini-sparklines (`_MiniSparkline` QPainter; `TrendResult.points` field added)
+4. ✅ VIZ-4 — History page RTT chart enhancements (dashed 100 ms threshold line + hover tooltip; `hideEvent` lifecycle)
+5. ✅ VIZ-5 — Speed Test history line chart (140 px FigureCanvas above table; download/upload lines; hover annotation)
+6. ✅ OVERVIEW-1 — Tile click-to-expand micro-detail (175→280 px, 280 ms OutQuart; DeviceCountTile top-5 hosts; RttSummaryTile top-3 with bar; AlertFeedTile with timestamps; "View full →" fallback; one-at-a-time collapse)
+7. ✅ OVERVIEW-5 — Tile data-age indicator (grey/amber/red at 30 min/2 h; 60 s page-level refresh timer)
+8. ✅ ACT-2 — CVE filtered CSV export (respects active text/state filter; timestamped filename; Days Open + Notes columns)
 
 ---
 
@@ -963,15 +963,16 @@ Chart upgrades and home page improvements. Medium effort, high impact.
 
 Overview becomes a configurable dashboard. Home is worth opening every morning.
 
-1. OVERVIEW-2 — Top Talkers tile
-2. OVERVIEW-3 — Recent Events tile
-3. OVERVIEW-4 — Trend Status tile
-4. HOME-3 — Live events ticker
-5. HOME-4 — Speed mini-card sparkline
-6. HOME-5 — Diagnosis verdict summary row
-7. ANIM-7 — Overview tile hover lift
-8. ANIM-8 — Scan progress smooth easing
-9. VIZ-6 — Monitor Overview event-count sparklines
+1. HOME-1 — Grade ring upgrade + sweep animation + score count-up *(deferred from Sprint 2)*
+2. OVERVIEW-2 — Top Talkers tile
+3. OVERVIEW-3 — Recent Events tile
+4. OVERVIEW-4 — Trend Status tile
+5. HOME-3 — Live events ticker
+6. HOME-4 — Speed mini-card sparkline
+7. HOME-5 — Diagnosis verdict summary row
+8. ANIM-7 — Overview tile hover lift
+9. ANIM-8 — Scan progress smooth easing
+10. VIZ-6 — Monitor Overview event-count sparklines
 
 ---
 
