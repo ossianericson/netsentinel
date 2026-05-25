@@ -875,14 +875,14 @@ string). If no `badge_until` is set, badges display indefinitely.
 
 | Item | Section | Impact | Effort | Sprint |
 |---|---|---|---|---|
-| FILTER-4 — CVE text search | Filters | High | Low | 1 |
-| FILTER-5 — DHCP text search | Filters | High | Low | 1 |
-| FILTER-6 — Column width persistence | Filters | Med | Low | 1 |
-| ANIM-6 — KPI count-up system-wide | Animations | Med | Low | 1 |
-| POLISH-13 — KPI tile consistency | Polish | Med | Low | 1 |
-| ACT-1 — Connections process tooltip | Actions | Med | Low | 1 |
-| EDU-3 — Feature Guide badges | Education | Low | Low | 1 |
-| FILTER-13 — Speed test date filter | Filters | Med | Low | 1 |
+| ✅ FILTER-4 — CVE text search | Filters | High | Low | 1 · v1.9.36 |
+| ✅ FILTER-5 — DHCP text search | Filters | High | Low | 1 · v1.9.36 |
+| ✅ FILTER-6 — Column width persistence | Filters | Med | Low | 1 · v1.9.36 |
+| ✅ ANIM-6 — KPI count-up system-wide | Animations | Med | Low | 1 · v1.9.36 |
+| ✅ POLISH-13 — KPI tile consistency | Polish | Med | Low | 1 · v1.9.36 |
+| ✅ ACT-1 — Connections process tooltip | Actions | Med | Low | 1 · v1.9.36 |
+| ✅ EDU-3 — Feature Guide badges | Education | Low | Low | 1 · v1.9.36 |
+| ✅ FILTER-13 — Speed test date filter | Filters | Med | Low | 1 · v1.9.36 |
 | HOME-1 — Grade ring upgrade + animation | Home | High | Med | 2 |
 | HOME-2 — Week-over-week delta chip | Home | Med | Low | 2 |
 | VIZ-3 — Trend sparklines | Viz | High | Med | 2 |
@@ -929,18 +929,18 @@ string). If no `badge_until` is set, badges display indefinitely.
 
 ## Section 8 — Sprint Plan
 
-### Sprint 1 — Quick wins (target: v1.9.36)
+### Sprint 1 — Quick wins ✅ SHIPPED v1.9.36
 
 Low effort, immediately visible. Every item is a targeted addition to one file.
 
-1. FILTER-4 — CVE text search
-2. FILTER-5 — DHCP text search
-3. FILTER-6 — Column width persistence (shared `ui/table_utils.py` + 5 pages)
-4. FILTER-13 — Speed test history date filter
-5. ANIM-6 — KPI count-up system-wide (new `animated_kpi.py` + wire 4 pages)
-6. POLISH-13 — KPI tile visual consistency pass
-7. ACT-1 — Connections process-path rich tooltip
-8. EDU-3 — Feature Guide "new/updated" badges
+1. ✅ FILTER-4 — CVE text search (200 ms debounce, match-count chip)
+2. ✅ FILTER-5 — DHCP text search (IP/MAC/hostname filter)
+3. ✅ FILTER-6 — Column width persistence (`ui/table_utils.py` + 6 tables: Devices, Connections, CVE, Log Hub, DHCP, Speed Test)
+4. ✅ FILTER-13 — Speed test history date filter (7d/30d/90d/All, default 30d)
+5. ✅ ANIM-6 — KPI count-up system-wide (`ui/widgets/animated_kpi.py` + Connections, CVE, DHCP, Monitor Overview)
+6. ✅ POLISH-13 — KPI tile visual consistency pass (`kpi_tile()` in `ui/table_utils.py`, 56px/22px standard)
+7. ✅ ACT-1 — Connections process-path rich tooltip (exe_name + full_path + PID · N conn · N external)
+8. ✅ EDU-3 — Feature Guide "new/updated" badges (badge chip renderer, "Updated" badges expire 2026-07-24)
 
 ---
 
