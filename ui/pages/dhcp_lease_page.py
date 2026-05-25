@@ -190,6 +190,14 @@ class DhcpLeasePage(QWidget):
         self._table = _make_table(
             ["IP Address", "MAC Address", "Hostname", "Expires", "DHCP Server", "Source"]
         )
+
+        from ui.widgets.density_toggle import DensityToggle
+        from PyQt6.QtWidgets import QHBoxLayout as _QHL
+        _dt_row = _QHL()
+        _dt_row.setContentsMargins(8, 4, 8, 0)
+        _dt_row.addStretch()
+        _dt_row.addWidget(DensityToggle("dhcp_leases", self._table))
+        card_lay.addLayout(_dt_row)
         card_lay.addWidget(self._table)
         root.addWidget(card, stretch=1)
 

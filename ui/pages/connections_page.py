@@ -368,6 +368,14 @@ class ConnectionsPage(QWidget):
         )
         self._tbl.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tbl.customContextMenuRequested.connect(self._context_menu)
+
+        from ui.widgets.density_toggle import DensityToggle
+        _dt_row = QHBoxLayout()
+        _dt_row.setContentsMargins(0, 2, 0, 2)
+        _dt_row.addStretch()
+        _dt_row.addWidget(DensityToggle("connections", self._tbl))
+        root.addLayout(_dt_row)
+
         root.addWidget(self._tbl, 3)
 
         # Blocked rules panel

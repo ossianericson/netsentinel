@@ -375,6 +375,13 @@ class CvePage(QWidget):
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._context_menu)
         self._table.cellClicked.connect(self._on_cell_clicked)
+
+        from ui.widgets.density_toggle import DensityToggle
+        _dt_row = QHBoxLayout()
+        _dt_row.setContentsMargins(8, 4, 8, 0)
+        _dt_row.addStretch()
+        _dt_row.addWidget(DensityToggle("cve", self._table))
+        card_lay.addLayout(_dt_row)
         card_lay.addWidget(self._table)
 
         self._lbl_empty = QLabel(

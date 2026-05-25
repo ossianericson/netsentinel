@@ -4750,6 +4750,10 @@ class Dashboard(QMainWindow):
             self._m1_chip_btns[_ckey] = _cbtn
             _frow.addWidget(_cbtn)
 
+        from ui.widgets.density_toggle import DensityToggle
+        _frow.addSpacing(4)
+        _frow.addWidget(DensityToggle("m1_devices", self._m1_table))
+
         m1_body.addWidget(_frow_w)
 
         # Stack: table on top, empty label behind — we toggle visibility

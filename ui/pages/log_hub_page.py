@@ -434,6 +434,13 @@ class LogHubPage(QWidget):
         # Context menu always available (Device Info only when popover set)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
+
+        from ui.widgets.density_toggle import DensityToggle
+        _dt_row = QHBoxLayout()
+        _dt_row.setContentsMargins(8, 2, 8, 0)
+        _dt_row.addStretch()
+        _dt_row.addWidget(DensityToggle("log_hub", self._table))
+        card_lay.addLayout(_dt_row)
         card_lay.addWidget(self._table)
         from ui.empty_state import EmptyStateOverlay
         EmptyStateOverlay(

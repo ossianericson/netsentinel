@@ -232,8 +232,8 @@ Goal: Give the team a clear sprint path that delivers visible wins fast.
 | ANIM-5 — Speed test count-up | Med | Low | ✅ v1.9.34 | `_start_tile_count_up`; 600 ms OutExpo; skips at reduce-motion |
 | POLISH-5 — First-run coach marks | High | Med | ✅ v1.9.34 | `CoachMarkChain`; 3 marks; keyed to `onboarding_v6_done` |
 | ANIM-3 — Alert badge thump | Low | Low | ✅ v1.9.34 | `_RailButton.badgeScale` pyqtProperty; 250 ms OutBack; on count increase only |
-| POLISH-2 — Table density toggle | Med | Med | — | Power-user feature; correct but not urgent |
-| ANIM-2 — Bandwidth sparkline slide | Med | Med | — | Requires custom painter change |
+| POLISH-2 — Table density toggle | Med | Med | ✅ v1.9.35 | `DensityToggle` widget; 5 tables: Devices, Connections, CVE, Log Hub, DHCP |
+| ANIM-2 — Bandwidth sparkline slide | Med | Med | ✅ v1.9.35 | 4-frame 200 ms xlim slide via QTimer; reduce-motion gate |
 
 ### Sprint 1 — shipped v1.9.31
 
@@ -250,10 +250,12 @@ Goal: Give the team a clear sprint path that delivers visible wins fast.
 3. ✅ POLISH-5 — First-run coach marks — `CoachMarkChain`; 3 overlays
 4. ✅ ANIM-3 — Alert badge thump — `_RailButton.badgeScale` on count increase
 
-### Sprint 3 — next up
+### Sprint 3 — shipped v1.9.35
 
-1. POLISH-2 — Table density toggle — compact/comfortable toggle per table, persisted in QSettings
-2. ANIM-2 — Bandwidth sparkline slide — custom painter change on bandwidth graph widget
+1. ✅ POLISH-2 — Table density toggle — `DensityToggle` widget; 5 tables (Devices, Connections, CVE, Log Hub, DHCP); compact=24px / comfortable=36px; persisted per-table in QSettings
+2. ✅ ANIM-2 — Bandwidth sparkline slide — 4-frame 200 ms xlim animation via QTimer; fires on live `_on_stats` only; reduce-motion gate
+
+**BACKLOG-UX-V6 COMPLETE — all 11 items shipped**
 
 ---
 

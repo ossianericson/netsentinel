@@ -22,7 +22,7 @@ matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -108,6 +108,11 @@ class LiveBandwidthPage(QWidget):
         self._session: Dict[str, Dict[str, float]] = {}   # up_mb, down_mb
 
         self._worker = None
+        # ANIM-2: slide animation state
+        self._slide_offset = 0.0
+        self._slide_timer = QTimer(self)
+        self._slide_timer.setInterval(50)   # 4 × 50 ms = 200 ms total
+        self._slide_timer.timeout.connect(self._slide_tick)
         self._setup_ui()
         self._start_worker()
 
@@ -278,6 +283,7 @@ class LiveBandwidthPage(QWidget):
 
         self._redraw_chart()
         self._update_table()
+        self._start_slide()
 
     def _get_chart_data(self) -> tuple[list, list]:
         """Return (up_series, down_series) for the selected interface."""
@@ -369,6 +375,26 @@ class LiveBandwidthPage(QWidget):
                 item = QTableWidgetItem(text)
                 item.setForeground(QColor(color))
                 self._tbl.setItem(row, col, item)
+
+    # ── Slide animation (ANIM-2) ──────────────────────────────────────────────
+
+    def _start_slide(self) -> None:
+        """Kick off a 200 ms / 4-frame leftward slide after new data arrives."""
+        from ui.theme import _reduce_motion
+        if _reduce_motion():
+            return
+        self._slide_timer.stop()
+        self._slide_offset = -1.0   # chart appears shifted right; slides to 0
+        self._slide_timer.start()
+
+    @pyqtSlot()
+    def _slide_tick(self) -> None:
+        self._slide_offset += 0.25
+        self._ax.set_xlim(self._slide_offset, _HISTORY_LEN + self._slide_offset)
+        self._canvas.draw_idle()
+        if self._slide_offset >= 0.0:
+            self._slide_timer.stop()
+            self._slide_offset = 0.0
 
     # ── Reset peaks ───────────────────────────────────────────────────────────
 
