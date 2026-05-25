@@ -1,5 +1,7 @@
 # Claude Code session memory (local AI assistant state — not project code)
-.claude/
+.claude/settings.local.json
+.claude/todos/
+.claude/*.md
 
 # Python
 __pycache__/

@@ -2,10 +2,16 @@ lockfile_version: '1'
 generated_at: '2026-04-30T00:00:00.000000+00:00'
 dependencies: []
 local_deployed_files:
+- .claude/rules/architecture.md
+- .claude/rules/development-rules.md
+- .claude/rules/project-vision.md
 - .github/instructions/architecture.instructions.md
 - .github/instructions/development-rules.instructions.md
 - .github/instructions/project-vision.instructions.md
 local_deployed_file_hashes:
-  .github/instructions/architecture.instructions.md: sha256:f76dbc5d542e06438453029f331428062f6ba7ea7ed9a6e339e397a3c002625b
-  .github/instructions/development-rules.instructions.md: sha256:7caf09e50b6b19031298ad40c541f1a56e129e2cba1c18b96beff87f47cd1d71
-  .github/instructions/project-vision.instructions.md: sha256:3c9472bb38817c852f092d2ac763c5bf0ba221d5e43475900602996f2dbf0c99
+  .claude/rules/architecture.md: sha256:297dadacd13f5a9fe6129cbe483060ecdfd89841458011613362b4e4b5227a74
+  .claude/rules/development-rules.md: sha256:2f12bab5a0687136ee3fa5a464a482354104a32df4bbc60cc8eb56c20faf0343
+  .claude/rules/project-vision.md: sha256:b08f57ace9afda166f42b0042c397d87a80b87849a41d5ad0b856b08c2e4102a
+  .github/instructions/architecture.instructions.md: sha256:a8473ddfb99907ed0da4f045a67ff39af415b55bb62d0c23ac773f7c3857a5b5
+  .github/instructions/development-rules.instructions.md: sha256:160980bed10d88ce6f69dd950e08e13f5fdfa17872ace9ab72f7028c7ff3f127
+  .github/instructions/project-vision.instructions.md: sha256:5ae961c692c4bc6f5132112ec9274b34b47d0e16c0c9bff58f0348e8b412ad49

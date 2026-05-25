@@ -132,6 +132,11 @@ changelog:
       - Schema v4 → Stable
       - Test suite hardened to 988 passing
 
+targets:
+  - claude
+  - copilot
+  - gemini
+
 dependencies:
   apm: []
 

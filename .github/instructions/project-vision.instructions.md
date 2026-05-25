@@ -1,23 +1,132 @@
 ---
 applyTo: "**"
+description: "NetSentinel project vision, strategic goals, implemented features (v1.9.36), roadmap, and core product values."
 ---
 
 # NetSentinel — Project Vision & Purpose
 
+## Strategic Goals (from BACKLOG.md)
+
+NetSentinel has two parallel strategic goals:
+
+1. **De-facto home network standard** — become the first tool recommended when anyone says "my network is broken". The tool must show what is happening on the real network, in plain English, without requiring the user to already know what STP, ARP, or DNS are.
+
+2. **Educational standard** — become the natural starting point for anyone learning how networks actually work. Every feature should produce output that maps directly to a textbook concept or exam objective and can be submitted as evidence of work.
+
+Both goals are served by the same core property: zero prior knowledge required. Everything on the backlog either lowers the barrier for non-technical users or makes the tool usable in structured learning contexts.
+
+---
+
 ## What This Product Is
 
-NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, and security-aware home lab users who need an enterprise-quality tool — not a toy.
+NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-The tool performs:
+**Current version: 1.6.10**
+
+---
+
+## Implemented Features (as of v1.6.10)
+
+### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection
 - **Broadcast storm analysis** — real-time packet capture and storm level measurement
 - **WiFi network enumeration** — rogue SSIDs, co-channel interference
 - **DNS & connectivity monitoring** — latency graphing, outage detection, DNS leak testing
 - **Active security audit** — SYN/UDP port scanning, OS fingerprinting, CVE lookup, credential testing (requires admin)
-- **Background network logging** — continuous ping/RTT/jitter/DNS logging with analysis
+- **Background network logging** — continuous ping/RTT/jitter/DNS logging with file rotation
 - **Network topology visualisation** — live matplotlib graph showing device relationships
 - **IoT behaviour baselining** — detect devices going outside their normal behaviour
 - **Internet speed test** — Ookla CLI (1 Gbps+) → speedtest-cli (8 threads) → pure-Python (16 TCP streams)
+
+### Monitoring & Alerting
+- **Active Connections** — process-to-socket map with firewall block/unblock
+- **Live Bandwidth** — 60-second rolling per-interface chart
+- **Threat Intelligence** — ThreatIntelDB, AbuseIPDB v2 lookup (consent-gated)
+- **DHCP Lease Inventory** — rogue DHCP server detection
+- **DNS Zone Mapping** — AXFR + mDNS
+- **CVE lifecycle tracker** — per-device CVE tracking with metric_store schema v8
+- **Alert pipeline** — AlertEngine + NotificationRouter with Toast/Webhook/Email/Pushover/Ntfy/Telegram channels
+- **Maintenance windows** — alert suppression per device or fleet-wide
+- **Predictive trend alerting** — OLS regression over RTT/loss/jitter with ETA-to-threshold
+
+### Navigation & UI
+- **VSCode-style activity rail navigation** — permanent 48 px icon rail + 280 px animated flyout; full feature set always visible; last-open section restored via QSettings; mode switcher removed
+- **Rail icon labels** — 9 px section name drawn below each rail icon (58 px button height); sections legible without hovering
+- **Persistent search button** — magnifier at the top of the rail, always visible; opens Ctrl+K on click
+- **Breadcrumb strip** — `"Section  ›  Page"` label above the content area; updated on every navigation
+- **Pinned section** — right-click any flyout item to pin it; a "Pinned" rail section appears immediately at the top of the rail; persists via QSettings
+- **Command palette (Ctrl+K)** — fuzzy-match any page or action; arrow keys + Enter; Esc to dismiss
+- **Sidebar search (Ctrl+F)** — focuses sidebar search from anywhere in the app
+- **Geometric Unicode sidebar icons** — RULE 25 compliance; no photo-emoji
+- **Three colour themes** — Arctic Clean, Midnight Pro, Obsidian Neon; all values in `ui/styles.py`
+- **Configurable Overview tile dashboard** — drag to reorder, layout persists
+
+### Home Page
+- **"Since you were last here" banner** — new devices and outages since last session
+- **"What to do next" suggestions strip** — up to four colour-coded action cards after each scan
+- **Weekly digest tray notification** — 7-day summary on startup if 7+ days elapsed
+- **Dismissible browser dashboard strip** — shown when REST API is enabled; links to `/dashboard`
+- **Dismissible Quick Tips card** — Ctrl+K, right-click pin, right-click device rows, REST API hint
+
+### Diagnosis & Root Cause
+- **One-click "What's Wrong?" diagnosis** — `DiagnosisPage`; symptom tiles → sequenced scan → plain-English findings; accessible from Home page button and Ctrl+K
+- **Root Cause Correlator** — `modules/root_cause_correlator.py`; prioritised findings and global verdict
+- **Health Check** — on-demand ping, DNS speed test, traceroute, HTTP check, DNS leak test
+
+### Data & Reporting
+- **PDF report export** — `save_pdf_report()`
+- **Config baseline snapshots and diff viewer** — structured diff: added/removed/changed devices
+- **REST API** — read-only Flask, 127.0.0.1 default, OS-keychain API key; `/dashboard` HTML endpoint
+- **Browser dashboard** — self-contained dark HTML page at `/dashboard`; auto-refreshes every 30 s
+- **Wi-Fi signal-strength heatmap** — floor plan import, per-BSSID IDW interpolation, PNG export
+- **Geolocation map** — offline MaxMind GeoLite2-City, no API key, no external calls
+- **Network documentation generator** — one-click HTML/Markdown network snapshot
+- **Shareable diagnostic card** — PNG/HTML export: grade circle, ISP, top 3 findings, attribution
+- **MQTT / Home Assistant publisher** — Discovery payloads, configurable broker, OS keychain credentials
+
+### Education
+- **Interactive protocol visualizer** — animated ARP/DNS/TCP/DHCP/STP diagrams using real scan data (`ui/pages/protocol_viz_page.py`, `modules/protocol_animator.py`)
+- **Lab / scenario mode** — four exercises with hints, solution reveals, exportable HTML results (`ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`)
+
+### Security & Plumbing
+- **AppData path hardening** — `get_app_data_dir()` prevents PermissionError in `C:\Program Files\`
+- **OS keychain for all secrets** — SMTP, SNMP, API keys via `keyring`; never QSettings
+- **Winget E_ABORT fix** — three-layer defence for Ookla CLI install edge cases
+- **Plugin system** — drop Python scripts into `plugins/`; exposed via Security Audit sidebar
+
+---
+
+## Roadmap (open items from BACKLOG.md)
+
+### Priority 1 — De-facto Home Standard
+
+1. **Anonymous opt-in ISP comparison** — opt-in only; submits ISP name, country, anonymised speed/latency/uptime once per day; shows comparison against ISP+country median. Requires a backend endpoint. New: `modules/isp_telemetry.py`. Effort: L.
+
+### Priority 2 — Educational Standard
+
+1. **"What just happened?" contextual explanations** — collapsible plain-English panel at the bottom of each detection page after every scan result. New: `ui/widgets/explainer_panel.py`. Effort: M.
+2. **CompTIA Network+ / CCNA curriculum alignment** — compact exam-objective badge per page; exportable study-session checklist. New: `data/curriculum_map.json`, `ui/widgets/objective_badge.py`. Effort: S.
+3. **Classroom export** — signed JSON+HTML scan report with machine fingerprint; instructor aggregation view. New: `modules/classroom_export.py`, `ui/pages/classroom_page.py`. Effort: M.
+
+### Priority 3 — Polish and Retention
+
+- **Skeleton loading rows** — placeholder rows while scan workers run; swap to real data on result
+- **"Abyss" WCAG AA high-contrast theme** — fourth theme; true black, no low-opacity elements
+- **Keyboard shortcut reference card** — in Help panel
+- **Per-page documentation link** — `?` link on each page header → relevant wiki section
+- **Passive 802.11 monitor mode capture** — raw 802.11 frame capture via Npcap; Pro-tier, falls back silently
+
+---
+
+## Target Users
+
+- **IT administrators** managing SMB/enterprise networks
+- **Security engineers** doing periodic audits
+- **Home lab enthusiasts** who want a real tool, not a script
+- **Students and educators** using the tool in networking courses (CompTIA Network+, CCNA lab contexts)
+- **Non-technical home users** who need actionable answers without needing to understand the underlying protocols
+
+---
 
 ## Core Product Values
 
@@ -26,16 +135,14 @@ The tool performs:
 3. **Actionable output** — every scan result must include a clear severity indicator and remediation path
 4. **Zero unnecessary friction** — one click to run, right-click to act, keyboard shortcuts everywhere
 5. **Least privilege** — all file writes go to `%LOCALAPPDATA%\NetSentinel\` via `get_app_data_dir()`; no writes to the exe directory or `Program Files`
+6. **Plain English first** — technical detail is always available, but never the only presentation
 
-## Target Users
-
-- IT administrators managing SMB/enterprise networks
-- Security engineers doing periodic audits
-- Home lab enthusiasts who want a real tool, not a script
+---
 
 ## Non-Goals
 
 - Do not add consumer-style gamification (glow effects, neon colours, oversized animations)
 - Do not abstract away technical detail — show MAC addresses, full IP ranges, exact RTTs
-- Do not add cloud sync, accounts, or telemetry
-- Do not bundle third-party binaries that have their own licences (Ookla CLI, Npcap)
+- Do not add cloud sync, accounts, or telemetry without explicit opt-in
+- Do not bundle third-party binaries with their own licences (Ookla CLI, Npcap)
+- Do not use photo-emoji in the sidebar — geometric Unicode symbols only (RULE 25)

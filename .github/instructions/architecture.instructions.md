@@ -1,5 +1,6 @@
 ---
 applyTo: "**"
+description: "NetSentinel architecture reference — tech stack, repository layout, key patterns, and data contracts."
 ---
 
 # NetSentinel — Architecture & Codebase Reference
@@ -14,7 +15,7 @@ applyTo: "**"
 | Packaging | PyInstaller (produces single-exe builds) |
 | Distribution | Inno Setup installer + WinGet (Ookla.Speedtest.CLI as PackageDependency) |
 | Config persistence | QSettings / INI file (NetSentinel.ini) |
-| Data persistence | SQLite via MetricStore (WAL mode, schema v7) |
+| Data persistence | SQLite via MetricStore (WAL mode, schema v8) |
 | Secrets | OS keychain via `keyring` (RULE 22-A) |
 | Logging | Python `logging` module + custom CSV logger |
 
@@ -58,7 +59,12 @@ netsentinel/
 │   ├── rest_api.py             # Read-only Flask API (127.0.0.1, API key in keychain)
 │   ├── risk_scorer.py
 │   ├── rogue_device.py
-│   ├── root_cause_correlator.py
+│   ├── root_cause_correlator.py    # Prioritised plain-English findings from scan data
+│   ├── diagnostic_card.py          # Shareable PNG/HTML card (grade, ISP, top 3 findings)
+│   ├── lab_scenarios.py            # Lab exercise definitions and result dataclasses
+│   ├── protocol_animator.py        # AnimNode/AnimStep scene builders for protocol viz
+│   ├── report_exporter.py          # generate_card_html(), generate_lab_html(), save_*()
+│   ├── web_dashboard.py            # build_html() — self-contained /dashboard HTML page
 │   ├── scheduler.py
 │   ├── snmp_poller.py
 │   ├── snmp_trap_receiver.py
@@ -72,7 +78,7 @@ netsentinel/
 │   └── utils.py                # get_app_data_dir(), is_admin(), ping_sweep, etc.
 ├── ui/
 │   ├── styles.py               # SINGLE SOURCE OF TRUTH for all colours and QSS
-│   ├── dashboard.py            # Main window + sidebar nav (_nav_add_page pattern)
+│   ├── dashboard.py            # Main window + activity-rail nav (_nav_add_rail_item pattern)
 │   ├── live_graph.py           # Matplotlib RTT line chart
 │   ├── topology_widget.py      # Matplotlib network topology map
 │   ├── system_tray.py
@@ -82,15 +88,21 @@ netsentinel/
 │       ├── connections_page.py
 │       ├── cve_page.py
 │       ├── dhcp_lease_page.py
+│       ├── diagnosis_page.py       # "What's Wrong?" DiagnosisPage — symptom tiles → scan → findings
 │       ├── dns_zone_page.py
+│       ├── geo_map_page.py         # Offline MaxMind geolocation map
 │       ├── history_page.py
 │       ├── home_automation_page.py
+│       ├── home_page.py            # Landing page — hero, suggestions, tips, dashboard strip
 │       ├── inventory_page.py
+│       ├── ip_calc_page.py
+│       ├── lab_mode_page.py        # LabModePage — four guided exercises
 │       ├── live_bandwidth_page.py
 │       ├── maintenance_page.py
 │       ├── notifications_page.py
 │       ├── ookla_cli_banner.py     # Dismissible install banner for Ookla CLI
 │       ├── overview_page.py
+│       ├── protocol_viz_page.py    # Interactive ARP/DNS/TCP/DHCP/STP animation
 │       ├── reports_page.py
 │       ├── service_page.py
 │       ├── settings_page.py
@@ -99,7 +111,8 @@ netsentinel/
 │       ├── syslog_page.py
 │       ├── threat_intel_page.py
 │       ├── trend_page.py
-│       └── uptime_page.py
+│       ├── uptime_page.py
+│       └── wifi_heatmap_page.py    # Floor plan import + IDW interpolation + PNG export
 ├── workers/                    # QThread wrappers (signals only, no logic)
 │   ├── availability_worker.py
 │   ├── cert_worker.py
@@ -157,17 +170,20 @@ Never construct it inside a page widget or module.
 Frontend (`SpeedTestResult` dataclass) is identical regardless of backend.
 
 ### Dashboard navigation model
-Main window: `QListWidget` sidebar (`objectName="sideNav"`) + `QStackedWidget`.
-Pages registered via `_nav_add_page(icon, label, widget)`.
-Section headers via `_nav_add_section(label)`.
-Subgroups via `_nav_add_subgroup(label)`.
-Ctrl+F focuses the sidebar search box from anywhere.
+Main window: permanent 48 px activity rail (`_nav_rail`) + 280 px animated flyout (`_FlyoutPanel`) + `QStackedWidget` (`_stack`).
 
-### Sidebar icon standard
-Icons in `_nav_add_page()` must be geometric Unicode symbols (not photo-emoji):
-- Consistent at 12px in the collapsed 48px icon rail
-- One unique symbol per conceptual domain
-- Safe fallback set: `■ □ ▪ ● ○ ◆ ▲ △ ▶ → ← ↑ ↓ ⚡ ⚙ ✓ ✚ ℹ ⊞ ⊙ ⊕`
+- **Sections** declared with `_nav_begin_section(name, lucide_icon_name)` inside `_build_pro_nav()`
+- **Pages** registered with `_nav_add_rail_item(label, widget, admin_required, audit_item)`
+- `_nav_finalize_rail()` builds `_RailButton` widgets from `_nav_sections` and inserts them into the rail layout
+- `_nav_rail_toggle(section_name)` opens/closes the flyout for a section; persists last-open section to `QSettings("nav/last_section")`
+- `_nav_rail_go_to(label)` switches the stack and updates the breadcrumb strip
+- If `_nav_pinned_labels` is non-empty, a "Pinned" section is injected at index 0 of `_nav_sections` before `_nav_finalize_rail()`
+- Ctrl+F focuses the sidebar search box; Ctrl+K opens the command palette; Esc closes the flyout
+
+### Rail icon standard
+Rail section buttons use **Lucide SVG icons** (MIT) defined in the `_LUCIDE` dict in `dashboard.py`. Available names: `home activity grid monitor shield bar-chart book-open settings search wifi network zap server map-pin terminal layers globe log alert-triangle eye pin x chevron-right scan lock tool bell cpu`.
+
+Add new icons to `_LUCIDE` before using them in `_nav_begin_section()`. Do not use Unicode symbols or photo-emoji as rail section icons.
 
 ### Scan workers
 All network operations run in `workers/` (QThread subclasses). Emit `result_ready` and `error` signals. **Never** do blocking I/O on the main thread.

@@ -1,6 +1,6 @@
 ---
-applyTo: "**"
-description: "NetSentinel architecture reference — tech stack, repository layout, key patterns, and data contracts."
+paths:
+  - "**"
 ---
 
 # NetSentinel — Architecture & Codebase Reference

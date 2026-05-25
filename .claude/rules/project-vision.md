@@ -1,6 +1,6 @@
 ---
-applyTo: "**"
-description: "NetSentinel project vision, strategic goals, implemented features (v1.9.36), roadmap, and core product values."
+paths:
+  - "**"
 ---
 
 # NetSentinel — Project Vision & Purpose

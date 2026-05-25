@@ -1,6 +1,6 @@
 ---
-applyTo: "**/*.py"
-description: "Development rules, commit gates, and architectural constraints for NetSentinel. All RULE-* entries are blocking unless marked 'required'."
+paths:
+  - "**/*.py"
 ---
 
 # NetSentinel — Development Rules for AI Agents

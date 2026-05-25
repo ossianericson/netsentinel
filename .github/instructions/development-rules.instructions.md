@@ -1,5 +1,6 @@
 ---
 applyTo: "**/*.py"
+description: "Development rules, commit gates, and architectural constraints for NetSentinel. All RULE-* entries are blocking unless marked 'required'."
 ---
 
 # NetSentinel — Development Rules for AI Agents
@@ -60,7 +61,7 @@ label.setStyleSheet(f"color: {RED};")
 ```
 
 ### RULE 2: No QTabWidget for primary navigation
-The application uses `QListWidget` (sidebar) + `QStackedWidget` (content). Do not add new `QTabWidget` instances to the main navigation flow.
+The application uses a permanent 48 px activity rail + 280 px animated flyout (`_FlyoutPanel`) + `QStackedWidget` (`_stack`). Do not add new `QTabWidget` instances to the main navigation flow.
 
 ### RULE 3: Table row height is 24px
 All tables must keep `verticalHeader().setDefaultSectionSize(24)`. Information density is a design value.
@@ -74,12 +75,16 @@ Any new page must wrap content in at least one card widget (white background, `1
 ### RULE 6: Status indicators must be coloured circles, not just text
 Status columns use coloured `●` labels. Never use text-only status.
 
-### RULE 9: New pages register in the correct sidebar section
-- Regular monitoring → "Standard" section
-- Advanced/optional → "Advanced" section
-- Offensive/elevated-privilege → "Security Audit" section
+### RULE 9: New pages register in the correct rail section
+- Discovery / inventory → "Discover" section
+- Real-time monitoring → "Monitor" section
+- Reports / export → "Reports" section
+- Protocol analysis / deep-dive tools → "Analysis" section
+- Scheduling / automation → "Automation" section
+- Active probes / elevated-privilege → "Security Audit" section (`audit_item=True`; `admin_required=True` if root/admin needed)
+- Student-facing educational tools → "Education" section
 
-Use `self._nav_add_page(icon, label, widget)` after the correct `self._nav_add_section()` call.
+Use `self._nav_add_rail_item(label, widget)` (or with `admin_required`/`audit_item` kwargs) inside `_build_pro_nav()` after the correct `_nav_begin_section()` call. Do not call `_nav_add_page()` — that method is for the legacy flat nav only.
 
 ### RULE 10: matplotlib charts follow the light theme
 ```python
@@ -108,12 +113,8 @@ When bumping the application version, update **ALL** of the following:
 | `README.md` | badge/link + `### vX.Y.Z (current)` changelog entry |
 | `ui/dashboard.py` | `_build_help_tab()` — "What's New" content |
 | `tools/debug_launch.py` | `app.setApplicationVersion("X.Y.Z")` |
-| `modules/rest_api.py` | `"version": "X.Y.Z"` in `/health` endpoint |
-| `.github/winget/NetSentinel.NetSentinel.yaml` | `PackageVersion: X.Y.Z` |
-| `.github/winget/NetSentinel.NetSentinel.installer.yaml` | `PackageVersion: X.Y.Z` |
-| `.github/winget/NetSentinel.NetSentinel.locale.en-US.yaml` | `PackageVersion: X.Y.Z` |
 
-`tests/test_version_consistency.py` enforces the Python-side files. Never bypass it.
+`tests/test_version_consistency.py` enforces this. Never bypass it.
 
 ### RULE 12: No Unicode replacement characters in README
 Never paste text containing `?` (U+FFFD). Use actual Unicode: `—` not `-`, `→` not `->`.
@@ -140,7 +141,7 @@ For every shipped feature or fix:
 - **21-C**: Update in-app Help "What's New" to match changelog
 - **21-D**: Update BACKLOG.md (remove completed items, add date)
 - **21-E**: Add test file `tests/test_<module>.py` for every new module
-- **21-F**: Register new pages in sidebar + README
+- **21-F**: Register new pages in `_build_pro_nav()` + README
 - **21-G**: Add new modules to architecture.instructions.md layout table
 - **21-H**: Commit message format: `feat: <description>  vX.Y.Z`
 
@@ -150,7 +151,7 @@ For every shipped feature or fix:
 - [ ] In-app Help "What's New" matches changelog
 - [ ] BACKLOG.md: completed items removed, date updated
 - [ ] All new modules have tests; full suite passes
-- [ ] New pages registered in sidebar and listed in README
+- [ ] New pages registered in `_build_pro_nav()` and listed in README
 
 ### RULE 22-A: Secrets in OS keychain
 API keys, passwords, SMTP credentials, SNMP community strings, and tokens must be stored via `keyring`. Never write secrets to `QSettings`, `NetSentinel.ini`, or any file.
@@ -231,15 +232,13 @@ Rule: after **any** UI change — including single-line layout tweaks — run
 `python tools/debug_launch.py` and verify `window.show() called OK` before
 declaring the work done. This is COMMIT GATE Step 2 and is a hard gate.
 
-### RULE 25: Sidebar icon standard
-All icons in `_nav_add_page()` must be geometric Unicode symbols — not photo-emoji.
+### RULE 25: Rail section icon standard
+Rail section icons must be **Lucide SVG names** from the `_LUCIDE` dict in `dashboard.py` — not Unicode symbols or photo-emoji.
 
-✓ Acceptable: `⬡ ▲ ⚡ ⚙ ⊞ ⊙ ⊕ ◉ ◈ ⇄ ◎ ✓ ✚ ℹ ≡ ≣ ↗ ⊳ ⊲ ⌂ ⤳ ⏱`
-✗ Forbidden: `🏠 📊 🔍 📡 🖥 🗺 💊 📋 🌪 🤖 👁 📟 📥 📜`
+✓ Correct: `_nav_begin_section("Monitor", "monitor")`
+✗ Wrong:   `_nav_begin_section("Monitor", "📊")` or `_nav_begin_section("Monitor", "◉")`
 
-Rationale: geometric symbols render consistently at 12px in the collapsed 48px rail; emoji rendering varies by OS and looks chaotic at small sizes.
-
-Section header icons (in `_nav_add_section()`) may use emoji since they are never shown in collapsed mode.
+If no existing Lucide name fits, add a new SVG entry to `_LUCIDE` before using it. Available names are listed in `architecture.instructions.md` under "Rail icon standard". Lucide icons render as clean SVG at any size and colour; Unicode and emoji do not.
 
 ---
 
@@ -248,7 +247,7 @@ Section header icons (in `_nav_add_section()`) may use emoji since they are neve
 1. Create `modules/<name>.py` — pure Python, no PyQt imports
 2. Create `workers/<name>_worker.py` — QThread, emits `result_ready(object)` and `error(str)`
 3. Create `ui/pages/<name>_page.py` — receives `store: MetricStore` as constructor parameter
-4. Register in `dashboard._build_tabs()` via `_nav_add_page(icon, label, widget)`
+4. Register in `dashboard._build_pro_nav()` via `_nav_add_rail_item(label, widget)` inside the correct section block
 5. Add result cache `self._<name>_result = None` in Dashboard `__init__`
 6. Wire `result_ready` signal to a `_on_<name>_result()` slot
 7. All colours must come from `ui/styles.py`
@@ -266,283 +265,316 @@ Section header icons (in `_nav_add_section()`) may use emoji since they are neve
 | Status label | `self._<module>_status` |
 | Worker reference | `self._<module>_worker` |
 | Result cache | `self._<module>_result` |
-| Nav row index | `self._nav_<module>_row` |
+| Nav label (rail) | string passed to `_nav_add_rail_item(label, ...)` |
 
 ---
 
-## Testing Enforcement (RULES T1–T4) — BLOCKING
+## Testing Enforcement
 
-These are not optional. A PR is not complete without them.
+### RULE-T1 (blocking): Every new module must have a test file
+Every new file under `modules/` must have a corresponding `tests/test_<name>.py` in the same PR, with at minimum one import test and one behavioural test.
 
-### RULE T1: Every new module file needs a test file
-Every new `modules/<name>.py` must have a corresponding `tests/test_<name>.py`
-in the same PR. Minimum coverage: one import test + one behavioural test for
-the primary function or class.
+### RULE-T2 (blocking): Every new worker must have a start/stop lifecycle test
+Every new file under `workers/` must have a test that (1) imports the worker, (2) instantiates it, (3) calls `start()`, waits briefly, calls `stop()`, and asserts `isRunning()` is `False`.
 
-### RULE T2: Every new worker needs a start/stop lifecycle test
-Every new `workers/<name>_worker.py` must have at minimum:
-1. An import test
-2. An instantiation test
-3. A `start()` → brief wait → `stop()` → assert `not w.isRunning()` test
+### RULE-T3 (blocking): Every bug fix must include a regression test
+Every bug fix PR must include a new test that reproduces the original failure and passes after the fix.
 
-Rationale: catches hidden import errors that only surface inside a PyInstaller bundle.
-
-### RULE T3: Every bug fix needs a regression test
-Every bug fix must include a new `tests/test_*.py` entry that:
-- Fails on the pre-fix code
-- Passes on the fixed code
-
-### RULE T4: _smoke_test() in app.py must stay current
-Add every new module and worker to `_smoke_test()` in `app.py` whenever one is
-created. The smoke test must import the module and verify it doesn't crash on import.
+### RULE-T4 (blocking): Smoke test list must stay current
+`app.py _smoke_test()` must be updated whenever a new module or worker is added.
 
 ---
 
-## Release Integrity (RULES R1–R3) — BLOCKING
+## Release Integrity
 
-### RULE R1: installer.iss version matches app.py before tagging
-Before pushing any git tag, `installer.iss` `MyAppVersion` must already equal the
-version in `app.py`. The CI patch step is a safety net, not the process.
-Run `tests/test_version_consistency.py` locally before tagging.
+### RULE-R1b (blocking): Every version bump needs a README changelog entry
+Add a `### vX.Y.Z` entry at the top of `## Changelog` in README.md *before* running `bump_version.py`. The script promotes the topmost header.
 
-### RULE R2: Winget locale manifest must always be the full version
-Both the static `.github/winget/NetSentinel.NetSentinel.locale.en-US.yaml` and the
-CI-generated copy must contain all fields: `Description`, `Tags`, `Moniker`,
-`PublisherUrl`, `PublisherSupportUrl`, `PackageUrl`, `LicenseUrl`, `ReleaseNotesUrl`.
-The minimal skeleton loses community repo metadata on every release.
+### RULE-R2 (blocking): Winget locale manifest must be full — never minimal
+Every winget submission must include all locale fields: Description, Tags, Moniker, PublisherUrl, PublisherSupportUrl, PackageUrl, LicenseUrl, ReleaseNotesUrl.
 
-### RULE R3: Ookla.Speedtest.CLI is ExternalDependencies, never PackageDependencies
-In all winget manifests. `PackageDependencies` blocks the install if the package
-is absent from the index. A broken install is the highest-severity user-facing bug.
+### RULE-R3 (blocking): Ookla.Speedtest.CLI must be ExternalDependencies, not PackageDependencies
+Using `PackageDependencies` blocks install when the package is not in the official winget index.
 
----
+### RULE-R4 (blocking): MSIX Version format must be exactly 4 parts (X.Y.Z.0)
+`AppxManifest.xml` Version must be `X.Y.Z.0`. `bump_version.py` generates this automatically. `test_version_consistency.py::test_appxmanifest_msix_version_format()` validates it.
 
-## UX Baseline (RULES UX1–UX4)
-
-### RULE UX1: New pages must show content within 200 ms
-Use MetricStore cached data for the initial render. Start the worker after the
-page is visible and update via signal. Never show a blank panel on navigation.
-
-### RULE UX2: Slow and destructive actions must have a visible loading state
-Any action > 500 ms must show a spinner, progress bar, or `"Running…"` button
-state before the operation starts. Never leave the UI silently waiting.
-
-### RULE UX3: Every scan result table must have a right-click context menu
-Minimum items: **Copy** (copies row as text) and **How to Fix** (opens a
-plain-English remediation panel). Use `customContextMenuRequested` signal.
-
-### RULE UX4: Ctrl+F always focuses the sidebar search
-New pages must not intercept or consume Ctrl+F. The global shortcut bound to
-`Dashboard._focus_nav_search()` must remain effective from every page.
-
-### RULE UX5: Never use setFixedHeight on widgets that contain text
-Do not call `setFixedHeight()` on any widget whose content is text or contains
-child text labels. Fixed heights cause text to overflow or be clipped when the
-font size or number of lines changes.
-
-**WRONG:**
-```python
-card.setFixedHeight(90)   # clips text if value label is large
-```
-
-**CORRECT:**
-```python
-card.setMinimumHeight(100)   # allows the widget to grow with its content
-card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-```
-
-This applies to: cards, status bars, table headers, banner strips, dialog rows,
-and any layout item that renders a `QLabel`. Use `setFixedHeight` only for purely
-graphic widgets (icon buttons, coloured separators, chart canvases) where height
-is controlled by the drawing surface, not by text content.
-
-### RULE UX6: Always use parented QTimer — never QTimer.singleShot(delay, slot)
-`QTimer.singleShot(0, self._method)` creates an **unparented** timer. On Linux,
-Qt's event loop may process the widget's `DeferredDelete` before the timer fires,
-leaving a dangling pointer that corrupts the heap (SIGABRT ~30 tests later).
-Windows is more forgiving, so this bug only manifests in CI or on Linux/macOS.
-
-**WRONG:**
-```python
-QTimer.singleShot(0, self._preload)   # unparented — can fire after widget deleted
-```
-
-**CORRECT:**
-```python
-_t = QTimer(self)          # parented — destroyed automatically with the widget
-_t.setSingleShot(True)
-_t.timeout.connect(self._preload)
-_t.start(0)
-```
-
-Additionally, add a `RuntimeError` guard at the top of any deferred slot:
-```python
-def _preload(self) -> None:
-    try:
-        self.objectName()   # raises RuntimeError if C++ object already deleted
-    except RuntimeError:
-        return
-    ...
-```
-
----
-
-## Dual Audience — Home User and Professional (RULES A1–A3)
-
-### RULE A1: Plain-English summary + technical detail view for every feature
-Scan results must have two levels: a plain-English summary visible by default,
-and full technical detail (MACs, RTTs, OIDs, raw values) behind a collapsible
-section or "Details" button. Never hide data entirely.
-
-### RULE A2: Error messages must be translated — no raw exceptions in the UI
-All worker `error` signals must be caught and rendered as actionable text: what
-failed, why, and what the user should try. No raw tracebacks, `AttributeError`,
-or Python internals may appear in any QLabel, QMessageBox, or status bar.
-
-### RULE A3: Severity labels use the canonical four only
-All risk/severity strings visible in the UI must be one of: **Info, Warning,
-High, Critical**. Map any non-standard string to the canonical set. Do not
-invent new labels (`SEVERE`, `NOTICE`, `ALERT`, etc.).
-
----
-
-## Long-Term Architecture Health (RULES AH1–AH4)
-
-### RULE AH1: Module files must not exceed 600 lines
-If a file under `modules/` reaches 600 lines, split it. Large files indicate
-mixed concerns. Measure with `(Get-Content modules\<name>.py).Count` on Windows.
-
-### RULE AH2: Workers must not block for more than 5 seconds without a progress signal
-Any operation expected to take > 5 seconds must emit `progress(str)` or `status(str)`
-at least once every 5 seconds. Long polling loops must use `msleep()` and check
-a `_running` flag on each iteration.
-
-### RULE AH3: Zero raw hex strings outside ui/styles.py and modules/colours.py — CI enforced
-```
-# This must return 0 matches before any commit:
-grep -rP '"#[0-9a-fA-F]{6}"' modules/ ui/ --include="*.py" \
-  --exclude="styles.py" --exclude="colours.py"
-```
-UI colours → `ui/styles.py`. Export/chart/HTML colours → `modules/colours.py`.
-Add the colour to the appropriate file first if it does not exist.
-
-### RULE AH4: Optional dependencies must be lazy-imported with a graceful fallback
-Do not import optional packages (`nmap`, `scapy`, `speedtest`, npcap-dependent
-libs) at module level. Lazy-import inside the function that needs them:
-
-```python
-def _run_nmap_scan(host):
-    try:
-        import nmap
-    except ImportError:
-        return []   # graceful fallback — caller handles empty result
-    ...
-```
-The fallback must degrade gracefully (empty results, error signal, or install
-banner) — never crash on import.
-
----
-
-## UI Wiring Completeness (RULES W1–W6)
-
-These rules prevent silent dead code — buttons that do nothing, signals that fire
-into the void, and nav items that are unreachable.
-
-### RULE W1: Every QPushButton must have a `.clicked.connect()` within the same init block
-**Exception:** buttons that are explicitly disabled until a precondition is met, which
-must have a `# WIRED LATER:` comment with the reason.
-
-**Checklist when adding a button:**
-- [ ] `btn.clicked.connect(...)` exists in the same `__init__` or `_setup_ui` scope
-- [ ] Target method exists in the same or parent class
-- [ ] If the target is in a different class, the wiring goes in the constructor of the
-  outermost class (e.g. `dashboard.py` wires `home_page._btn_scan.clicked.connect(...)`)
-
-```python
-# WRONG — silent dead button
-self._btn_scan = QPushButton("Scan now")
-
-# CORRECT — wired immediately
-self._btn_scan = QPushButton("Scan now")
-self._btn_scan.clicked.connect(self._start_full_scan)
-
-# ALSO CORRECT — wired by parent class, documented
-self._btn_scan = QPushButton("Scan now")
-# WIRED BY PARENT: Dashboard.__init__ connects _btn_scan → _start_full_scan
-```
-
-### RULE W2: Every pyqtSignal must have at least one .connect() in the codebase
-Before adding a new `pyqtSignal`, search the codebase for where it will be connected.
-A signal with no connections is dead code.
-
-**Audit command (run before commit):**
+### RULE-R5 (blocking): MSIX staging must copy the onefile exe — never glob a directory
 ```powershell
-# Find signals that are emitted but never connected:
-# 1. List all emit() call sites
-# 2. Verify each has a matching .connect() somewhere
-grep -rn "\.emit(" ui/ workers/ --include="*.py" | sed 's/\.emit(.*//' | sort -u
+# CORRECT
+Copy-Item "dist\NetSentinel.exe" "$stage\NetSentinel\NetSentinel.exe"
+# WRONG — dist\NetSentinel\ does not exist
+Copy-Item -Recurse "dist\NetSentinel\*" "$stage\NetSentinel\"
 ```
 
-### RULE W3: Every new UI page must be reachable from at least one nav mode
-When creating a new page (`ui/pages/<name>_page.py`):
-- Add it to `_build_tabs()` via `_nav_add_page(icon, label, widget)`
-- Verify it appears in Home, Standard, or Pro nav (at minimum one)
-- Verify `_nav_go_to("Label")` can find it
+---
 
-Pages registered only in `_build_tabs()` but not in any `_build_*_nav()` are
-**invisible** — the user can never reach them.
+## Winget Submission
 
-### RULE W4: Nav mode content must match the mockup exactly
-The three nav modes are defined by `ui/dashboard.py` `_build_home_nav()`,
-`_build_standard_nav()`, `_build_pro_nav()`. Each mode's content is frozen:
+### RULE-W1 (blocking): Silent installs must never run nested winget calls
+Winget validation sandboxes run with `/VERYSILENT`; a nested `winget install` hangs → E_ABORT. Three-layer defence must remain:
+1. `installer.iss` `[Run]` Ookla entry: `Check: ShouldInstallOokla;` where `ShouldInstallOokla()` returns `not WizardSilent()`.
+2. `installer.iss` `[Setup]`: `PrivilegesRequiredOverridesAllowed = dialog commandline`.
+3. All winget manifests: Silent/SilentWithProgress switches include `/TASKS="!installookla"`.
 
-| Mode | Nav items | Home page |
-|---|---|---|
-| Home | Home · Speed Test · DNS & Stability · Devices · Reports | Hero card + 3 mini-cards + alerts |
-| Standard | Quick Access · Discover · Monitor · Reports & Export | "WHAT EACH SECTION GIVES YOU" feature grid |
-| Pro | Quick Access · Standard · ⚠ Security Audit (TCP/UDP scan, CVE, Threat Intel, TLS & exposure, Login Test) | "SECURITY AUDIT CAPABILITIES" 4-card grid |
+### RULE-W2 (blocking): PrivilegesRequiredOverridesAllowed must include `commandline`
+Without `commandline`, Inno Setup attempts `ShellExecuteEx "runas"` in headless environments → E_ABORT.
 
-**Pro mode must NOT contain ISP Report** — it is Standard-mode only.
-**Pro nav label for the cert/threat page is "TLS & exposure"** — not "TLS Certificates".
+---
 
-### RULE W5: Signal-to-slot cross-page connections must be made in app.py or dashboard.__init__
-Never connect a signal from PageA to a slot in PageB inside either page's own code.
-Cross-page wiring belongs at the top level:
+## PyInstaller Bundle
 
+### RULE-B1 (blocking): Every new ui/pages/, workers/, modules/ file must be added to hiddenimports in NetSentinel.spec
+```
+ui/pages/foo_page.py   → add "ui.pages.foo_page"   to hiddenimports
+workers/foo_worker.py  → add "workers.foo_worker"   to hiddenimports
+modules/foo.py         → add "modules.foo"          to hiddenimports
+```
+Omitting an entry produces a build that passes CI but crashes at runtime with `ModuleNotFoundError` — only reproducible from the installed package, not from source.
+
+---
+
+## UX Baseline
+
+### RULE-UX1 (required): New pages must show content within 200 ms
+Display cached data, last-known state, or a skeleton placeholder within 200 ms of navigation. Use MetricStore cache as initial render source.
+
+### RULE-UX2 (required): Destructive and slow actions must have a visible loading state
+Any action >500 ms must show a spinner, progress bar, or disabled "Running…" button before it starts.
+
+### RULE-UX3 (required): Every scan result row must have a right-click context menu
+Minimum: "Copy" and "How to Fix". Use `customContextMenuRequested` signal.
+
+### RULE-UX4 (required): Ctrl+F must always focus the sidebar search
+Never intercept or consume Ctrl+F in a page widget.
+
+### RULE-UX5 (blocking): Pages requiring scan data must show an empty state with an inline CTA
+Static "Run a scan first" text with no action button is a blocking UX violation.
+
+Required pattern:
+1. Add `scan_requested = pyqtSignal()` to the page.
+2. Build a `QStackedWidget`: page 0 = empty state + primary `QPushButton` emitting `scan_requested`; page 1 = normal content.
+3. Default to page 0. Switch to page 1 when data arrives.
+4. Wire signal in `app.py`: `window._my_page.scan_requested.connect(window._start_full_scan)`.
+
+Button label conventions: "Scan & Grade", "Scan & Document", "Start Monitoring", "Run Diagnostics", "Run Scan".
+DO NOT auto-trigger scans on navigation.
+
+### RULE-UX6 (blocking): Every `item:selected` and `QMenu::item:selected` QSS rule must set both background AND color using theme tokens
 ```python
-# In dashboard.__init__ — correct location
-self._speed_test_page.test_completed.connect(self._home_page.on_speed_result)
-self._home_page._btn_scan.clicked.connect(self._start_full_scan)
-
-# WRONG — PageA should not import or reference PageB
-class SpeedTestPage:
-    def _on_result_ready(self, r):
-        self._home_page.on_speed_result(r)  # ← PageA should not own PageB
+# WRONG — white-on-white on dark themes
+QTableWidget::item:selected { background: #CCE4F7; }
+# CORRECT
+QTableWidget::item:selected { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
+QMenu::item:selected        { background: {BG_HOVER};  color: {TEXT_PRIMARY}; }
 ```
 
-### RULE W6: Wiring audit — run before every commit
-Open `ui/dashboard.py` and `app.py`, then verify:
+---
 
-1. **Every `QPushButton` in `ui/pages/`** — grep: `QPushButton\(` — has a corresponding
-   `.clicked.connect(` in the same file OR a `# WIRED BY:` comment.
+## Dual-Audience Rules
 
-2. **Every `pyqtSignal` in `ui/pages/` and `workers/`** — grep: `pyqtSignal` — has a
-   `.connect(` somewhere in `dashboard.py` or `app.py`.
+### RULE-A1 (required): Every feature must have a plain-English summary and a technical detail view
+Plain-English summary visible by default; full technical detail accessible via collapsible section or "Details" button.
 
-3. **Every `_nav_ref` and `_nav_add_page` label** — the widget argument must already
-   be registered in `self._stack` (added via `_build_tabs()`). Grep for the widget name
-   and confirm `self._stack.addWidget(...)` exists.
+### RULE-A2 (required): Error messages must be translated — no raw exceptions shown to users
+Translate every worker error to: what failed, why it likely failed, what the user should try next.
 
-4. **Every slot listed in a page's public API** (methods starting with `on_`) must have
-   a corresponding `.connect(` somewhere. Slots with no connection are dead code.
+### RULE-A3 (required): Severity labels must use the canonical set only
+Only: `Info`, `Warning`, `High`, `Critical`. Never invent new severity strings.
 
-**Quick audit script:**
+---
+
+## Architecture Health
+
+### RULE-AH1 (required): Module files must not exceed 600 lines
+Split at 600 lines. Measure: `wc -l modules/<name>.py`.
+
+### RULE-AH2 (required): Workers must not block their thread >5 seconds without a progress signal
+Emit `progress(str)` or `status(str)` at least every 5 s. Use `msleep()` + `_running` flag check in loops.
+
+### RULE-AH3 (blocking): No raw hex colour strings outside ui/styles.py and modules/colours.py
+CI failure condition. All UI colours → `ui/styles.py`. Chart/report colours → `modules/colours.py`.
+
+### RULE-AH4 (required): Optional dependencies must be lazy-imported with a graceful fallback
+Wrap in `try/except ImportError` inside the function that needs them. Never at module level.
+
+### RULE-AH5 (blocking): User-visible names in code must match the names used in docs and UI
+Theme names, page labels, feature names must be identical in code, docstrings, README, BACKLOG, and apm.yml.
+
+---
+
+## Navigation Wiring
+
+### RULE-NAV1 (blocking): Every registered page must be reachable from _build_pro_nav()
+One nav builder: `_build_pro_nav()`. Do not recreate `_build_home_nav()` or `_build_standard_nav()`.
+- Add page widget in `_init_pages()`.
+- Add `_nav_add_rail_item("Label", self._new_page)` in `_build_pro_nav()` under the correct section.
+- Run `python -m pytest tests/test_nav_completeness.py -v` before merging.
+
+### RULE-NAV2 (blocking): There is one nav mode — do not add new nav builders
+All pages go into `_build_pro_nav()` only.
+
+### RULE-NAV3 (blocking): Page-emitted navigate_to signals must route via _nav_rail_go_to, not _nav_goto_label
+`_nav_goto_label()` silently fails when `_nav_mode == "home"` (the default). Always call `self._nav_rail_go_to(label)` in dashboard handlers.
+
+---
+
+## Discoverability
+
+### RULE-D1 (required): Every new page must have a _PAGE_HELP entry in dashboard.py
+```python
+_PAGE_HELP["My Page Label"] = (
+    "Short title (≤ 60 chars)",
+    "One or two sentences explaining what the page does and how to start."
+)
+```
+Add in the same commit that creates the page.
+
+### RULE-D2 (required): Every new page must have a _FEATURES entry in discover_page.py
+Required fields (all six mandatory — missing any crashes on startup):
+```python
+{"group": "Monitoring", "icon": "⬡", "name": "...", "desc": "...", "page": "Nav Label", "requires": None}
+```
+`group` must be one of: `"Monitoring"`, `"Diagnostics"`, `"Security"`, `"Learning"`, `"Hidden Features"`, `"Advanced"`.
+
+---
+
+## Dashboard Data Feed Wiring
+
+### RULE-DW1 (blocking): Every page data-feed method must be explicitly wired from the correct result handler
+Two canonical wiring locations:
+- `dashboard.py _on_*_result` handlers — for scan workers started by the user.
+- `app.py` closures after `window = Dashboard(...)` — for always-on background workers.
+
+Known feed points (May 2026): see `apm.yml` RULE-DW1 for the full map.
+
+### RULE-DW2 (blocking): Always-on worker signals must be wired in app.py, not inside Dashboard
+Workers started before Dashboard exists must be connected in `app.py` immediately after `window = Dashboard(...)`.
+
+### RULE-DW3 (blocking): Never call internal tile or subwidget methods directly on a page object
+Call the page's public proxy methods only:
+```python
+# WRONG
+window._overview_page.update_services(results)   # tile method, not on page
+# CORRECT
+window._overview_page.on_svc_done(results)        # proxy method
+```
+
+### RULE-DW4 (blocking): Post-scan enrichment must sync DeviceInfo objects and refresh all dependent views
+When mesh/mDNS/DHCP/NetBIOS enrichment updates hostnames: (1) update `DeviceInfo.hostname` in-place in `_m1_result["devices"]`, (2) rebuild `_net_devices_table`, (3) call `_avail_worker.set_targets()` with fresh labels, (4) re-render topology last.
+
+---
+
+## Feature Wiring
+
+### RULE-FW1 (blocking): Workers with set_targets() require inline target management UI, QSettings persistence, and app.py wiring
+1. Inline add/remove form on the page (RULE-UX5 stack pattern).
+2. Persist targets via QSettings key `"<feature>/targets"` as JSON array.
+3. `targets_changed = pyqtSignal(list)` on the page.
+4. In `app.py`: load saved targets on startup → `worker.set_targets()`; connect `targets_changed` → `worker.set_targets`.
+
+### RULE-FW2 (blocking): Every REST API route must appear in rest_api_page endpoint reference in the same session
+Add to `_ENDPOINTS` in `RestApiPage._update_endpoint_ref()` in the same session that adds the route to `modules/rest_api.py`.
+
+---
+
+## Debugging & Troubleshooting
+
+### RULE-DBG1 (blocking): Git Diff First — read the diff before writing any diagnostic plan
 ```powershell
-# Find on_* slots that are never connected
-$slots = Select-String -Path ui\pages\*.py -Pattern "def on_\w+" | ForEach-Object { $_.Matches[0].Value -replace "def ","" }
-foreach ($slot in $slots) {
-    $hits = Select-String -Path ui\dashboard.py,app.py -Pattern "\.connect.*$slot|$slot.*connect"
-    if (-not $hits) { Write-Warning "UNWIRED SLOT: $slot" }
-}
+git diff HEAD
+git status
+```
+A crash that references code in the diff is almost certainly caused by that change. Trust the diff over the narrative.
+
+### RULE-DBG2 (blocking): Plan Before Fix — state the hypothesis before changing any code
+Format:
+```
+Hypothesis: [specific change] causes [symptom] because [mechanism].
+Fix: [what we will change].
+Expected outcome: [crash gone / different crash / test passes].
 ```
 
+### RULE-DBG3 (blocking): Two-Attempt Isolation Rule — stop patching after two failed fixes
+After two failed attempts: revert all changes → confirm baseline is clean → re-apply one file at a time → binary-search the culprit block.
+
+### RULE-DBG4 (blocking): Anti-Loop Memory — never repeat a failed fix
+Before each attempt, review all previous attempts. If the proposed fix is materially the same as one already tried, it is blocked.
+
+### RULE-DBG5 (blocking): FOUC / ghost window diagnosis — inject a global Show event filter before guessing layout causes
+```python
+from PyQt6.QtCore import QObject, QEvent
+class _ShowTracker(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Show:
+            print(f"SHOW: {obj.metaObject().className()} name={obj.objectName()}")
+        return False
+_tracker = _ShowTracker()
+app.installEventFilter(_tracker)
+```
+Read terminal output. The widget that prints before the main window is the culprit. Remove the filter before committing.
+
+---
+
+## Windows Platform Rules
+
+### RULE-WIN1 (blocking): No subprocess with PIPE on Windows startup paths
+`subprocess.check_output()` / `capture_output=True` on startup causes `STATUS_ACCESS_VIOLATION` (Win32 HANDLE race in `_readerthread`).
+
+Required alternatives:
+- Local IPs/masks/speed → `psutil.net_if_addrs()` + `psutil.net_if_stats()`
+- Gateway/DNS/DHCP → `winreg HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{GUID}`
+- Gateway MAC → `ctypes.windll.iphlpapi.SendARP()`
+
+Never reintroduce subprocess PIPE in `get_network_info()`, `get_dhcp_info()`, or `get_interface_details()`.
+
+### RULE-WIN2 (blocking): nativeEvent HTMAXBUTTON requires full NC message interception on frameless windows
+Returning `HTMAXBUTTON` from `nativeEvent(WM_NCHITTEST)` on a frameless window crashes via `STATUS_ACCESS_VIOLATION`. Must also intercept `WM_NCMOUSEMOVE`, `WM_NCLBUTTONDOWN`, `WM_NCLBUTTONUP` with `wParam==HTMAXBUTTON`. Do not re-add a partial implementation covering only `WM_NCHITTEST`.
+
+---
+
+## QSettings State Hygiene
+
+### RULE-QS1 (blocking): Never gate data access on QSettings-persisted mode — use always-populated sources
+Code that branches on a QSettings-restored value to decide which data source to read silently misbehaves on fresh installs. Use `_nav_item_labels` (always populated) rather than `_nav_sections` (mode-dependent).
+
+### RULE-QS2 (required): Works in winget release but fails locally = QSettings state divergence
+Diagnostic: `Remove-Item "HKCU:\Software\NetSentinel" -Recurse -Force` to reproduce clean-install state. If bug disappears, apply RULE-QS1.
+
+---
+
+## Startup / DWM Compositing
+
+### RULE-STARTUP1 (blocking): Startup show sequence — off-screen move (non-maximized) then geometry restore
+```python
+if getattr(window, '_pending_show_maximized', False):
+    window.showMaximized()
+    _splash.close()
+else:
+    _saved_rect = window.geometry()
+    window.move(-_saved_rect.width() - 200, -_saved_rect.height() - 200)
+    window.show()
+    _splash.close()
+    window.setGeometry(_saved_rect)
+```
+WHY: on 2nd+ launch, saved geometry is off-center; `window.show()` at that position sticks out from behind the splash. Off-screen move hides it until the splash closes.
+`_pending_show_maximized` must be set in `_restore_settings()` — do NOT call `showMaximized()` inside `_restore_settings()` itself.
+
+---
+
+## Icon & Brand Assets
+
+### RULE-I1 (blocking): Never hand-edit PNG or ICO icon files — regenerate via generate_icons.py
+```powershell
+python generate_icons.py
+```
+All assets in `assets/icons/` are programmatically generated. Hand edits are overwritten on next build.
+
+### RULE-I2 (required): Icon design language must stay consistent — hexagon, shield, blue/cyan palette
+Pointy-top hexagon · white shield inside · `#0078D4` fill · `#005A9E` border · `#00B4D8` cyan ripples at ≥48 px · transparent background for tiles · no gradients, no shadows, no emoji.
+
+### RULE-I3 (required): Top-bar brand icon must use netsentinel.png — never a letter fallback in production
+Use PyInstaller-aware path: `Path(sys._MEIPASS) if frozen else Path(__file__).parent.parent`.
+
+### RULE-I4 (blocking): Sidebar nav icons must be geometric Unicode — never emoji
+Use: `■ □ ▲ △ ● ○ ◆ ◇ ▶ ▷ ⬡ ⬢ ≡ ⌕ ⊕` etc. Emoji render inconsistently across Windows versions.
