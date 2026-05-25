@@ -734,6 +734,10 @@ rules:
                                    (via _on_svc_check closure that also fires service alerts)
         snmp_trap_worker         → SnmpTrapPage.on_trap_received / on_status / on_error
         syslog_worker            → SyslogPage.on_message_received / on_status / on_error
+        mesh_worker              → MeshRouterPage (polls Deco XE75 signal/topology)
+        zte_worker               → ModemPage (polls ZTE MC889 5G modem stats)
+        hw_detect_worker         → HardwareIntegrationPage (scans for USB/serial/GPIO devices)
+        wifi_monitor_worker      → WifiMonitorPage (passive 802.11 capture — admin + Npcap required)
         threat_intel_page.entries_updated → GeoMapPage.set_threat_entries
 
       Symptoms of a broken wire: the page shows stale data or "—" tiles
@@ -1296,3 +1300,53 @@ rules:
 
       This rule was established after many sessions of investigation.
       Root cause confirmed 2026-05-25: QSettings saved geometry causes flash on 2nd+ launch.
+
+  # ── APM Rules Maintenance ─────────────────────────────────────────────────
+  - id: RULE-APM1
+    title: "Keep APM rules current — update .apm/instructions/ whenever the codebase structure changes"
+    severity: blocking
+    description: >
+      The APM instruction files are the source of truth for all AI agents and
+      IDE copilots. They drift when files are added, renamed, or deleted without
+      a matching update. RULE-APM1 defines exactly when each file must change
+      and how to deploy afterwards.
+
+      TRIGGER CONDITIONS — update the named file whenever:
+
+        architecture.instructions.md:
+          • Any .py file is added, renamed, or deleted under modules/, workers/,
+            ui/pages/, or ui/widgets/ — add/update the layout tree entry with a
+            one-line description.
+          • A new nav section is added to _build_pro_nav() — add it to the
+            "Nav section placement guide" in the Dashboard navigation model section.
+          • A new architectural pattern or invariant is established.
+
+        project-vision.instructions.md:
+          • A version bump occurs — update "Current version: **vX.Y.Z**".
+          • A feature ships — add a bullet to the matching "Implemented Features"
+            subsection.
+          • A roadmap item is completed — remove it from the Roadmap section.
+
+        development-rules.instructions.md:
+          • A new coding rule is established (add a new RULE-XX block).
+          • An existing rule references dead code or a renamed method — fix it.
+          • A new nav section exists — add it to the RULE-9 section placement list.
+
+      DEPLOY COMMAND — mandatory after every edit to any .apm/instructions/ file:
+        apm install --target all
+        apm compile --all
+
+      The PostToolUse hook in .claude/settings.json runs these automatically when
+      Claude edits .apm/instructions/ or apm.yml. For manual edits, run them
+      explicitly from the project root.
+
+      AUTOMATED ENFORCEMENT:
+        tests/test_apm_rules_coverage.py — parametrized test that fails for every
+        .py file in modules/, workers/, ui/pages/, ui/widgets/ that is absent from
+        architecture.instructions.md. Runs as part of the standard pytest suite.
+
+      ANTI-DRIFT CHECKLIST (run before closing any session that added files):
+        □ Every new .py file appears in the architecture.instructions.md layout tree
+        □ project-vision.instructions.md version and Implemented Features are current
+        □ apm install --target all && apm compile --all completed without errors
+        □ python -m pytest tests/test_apm_rules_coverage.py passes

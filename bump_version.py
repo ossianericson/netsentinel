@@ -77,6 +77,11 @@ def bump(ver: str) -> None:
          rf'(setApplicationVersion\("){_VER}("\))',
          rf'\g<1>{ver}\g<2>')
 
+    # app.py  ── splash screen version label (drawText "vX.Y.Z")
+    _sub(ROOT / "app.py",
+         rf'(AlignmentFlag\.AlignCenter,\s*"v){_VER}(")',
+         rf'\g<1>{ver}\g<2>')
+
     # packaging/AppxManifest.xml  — 4-part MSIX version (Major.Minor.Patch.0)
     # CRITICAL: Must be exactly 4 parts. makeappx.exe rejects 5-part versions.
     _sub(ROOT / "packaging" / "AppxManifest.xml",
@@ -115,6 +120,21 @@ def bump(ver: str) -> None:
          rf'(Version history \(condensed\):.*→ v)({_VER})$',
          rf'\g<1>\g<2> → v{ver}',
          re.MULTILINE)
+
+    # .apm/instructions/project-vision.instructions.md  ── "Current version:" line
+    _sub(ROOT / ".apm" / "instructions" / "project-vision.instructions.md",
+         rf'(Current version:\s*\*\*v){_VER}(\*\*)',
+         rf'\g<1>{ver}\g<2>')
+
+    # ── redeploy APM rules to all targets (RULE-APM1) ─────────────────────────
+    import shutil
+    _apm = shutil.which("apm") or shutil.which("apm.cmd")
+    if _apm:
+        print("\nDeploying APM rules…")
+        subprocess.run([_apm, "install", "--target", "all"], cwd=ROOT, check=False)
+        subprocess.run([_apm, "compile", "--all"], cwd=ROOT, check=False)
+    else:
+        print("\n  WARN  apm CLI not found — run 'apm install --target all && apm compile --all' manually")
 
     # ── verify ────────────────────────────────────────────────────────────────
     print("\nRunning version consistency tests…")

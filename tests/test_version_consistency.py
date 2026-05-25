@@ -132,3 +132,12 @@ def test_appxmanifest_msix_version_format(canonical):
         f"AppxManifest.xml Version={msix_version!r} does not match "
         f"expected {expected_msix!r} (canonical={canonical!r})"
     )
+
+
+def test_splash_screen_version(canonical):
+    text = (ROOT / "app.py").read_text(encoding="utf-8")
+    m = re.search(r'AlignmentFlag\.AlignCenter,\s*"v([^"]+)"', text)
+    assert m, "Could not find splash screen version drawText in app.py"
+    assert m.group(1) == canonical, (
+        f"Splash screen version={m.group(1)!r} does not match app.py {canonical!r}"
+    )

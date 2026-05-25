@@ -83,8 +83,9 @@ Status columns use coloured `●` labels. Never use text-only status.
 - Scheduling / automation → "Automation" section
 - Active probes / elevated-privilege → "Security Audit" section (`audit_item=True`; `admin_required=True` if root/admin needed)
 - Student-facing educational tools → "Education" section
+- Hardware integrations / physical device management → "Extend" section
 
-Use `self._nav_add_rail_item(label, widget)` (or with `admin_required`/`audit_item` kwargs) inside `_build_pro_nav()` after the correct `_nav_begin_section()` call. Do not call `_nav_add_page()` — that method is for the legacy flat nav only.
+Use `self._nav_add_rail_item(label, widget)` (or with `admin_required`/`audit_item` kwargs) inside `_build_pro_nav()` after the correct `_nav_begin_section()` call. Do not call `_nav_add_page()` — that method is legacy dead code.
 
 ### RULE 10: matplotlib charts follow the light theme
 ```python
@@ -111,8 +112,11 @@ When bumping the application version, update **ALL** of the following:
 | `build.bat` | echo version string |
 | `build.sh` | echo version string |
 | `README.md` | badge/link + `### vX.Y.Z (current)` changelog entry |
-| `ui/dashboard.py` | `_build_help_tab()` — "What's New" content |
+| `modules/rest_api.py` | `"version"` in `/health` endpoint |
 | `tools/debug_launch.py` | `app.setApplicationVersion("X.Y.Z")` |
+| `.github/winget/NetSentinel.NetSentinel.yaml` | `PackageVersion: X.Y.Z` |
+| `.github/winget/NetSentinel.NetSentinel.installer.yaml` | `PackageVersion:` + installer URL |
+| `.github/winget/NetSentinel.NetSentinel.locale.en-US.yaml` | `PackageVersion: X.Y.Z` |
 
 `tests/test_version_consistency.py` enforces this. Never bypass it.
 
@@ -233,12 +237,14 @@ Rule: after **any** UI change — including single-line layout tweaks — run
 declaring the work done. This is COMMIT GATE Step 2 and is a hard gate.
 
 ### RULE 25: Rail section icon standard
-Rail section icons must be **Lucide SVG names** from the `_LUCIDE` dict in `dashboard.py` — not Unicode symbols or photo-emoji.
+Rail section icons (the 48 px icon on the permanent left rail, set via `_nav_begin_section()`) must be **Lucide SVG names** from the `_LUCIDE` dict in `dashboard.py` — not Unicode symbols or photo-emoji.
 
 ✓ Correct: `_nav_begin_section("Monitor", "monitor")`
 ✗ Wrong:   `_nav_begin_section("Monitor", "📊")` or `_nav_begin_section("Monitor", "◉")`
 
 If no existing Lucide name fits, add a new SVG entry to `_LUCIDE` before using it. Available names are listed in `architecture.instructions.md` under "Rail icon standard". Lucide icons render as clean SVG at any size and colour; Unicode and emoji do not.
+
+This rule covers **rail section buttons only**. Flyout item prefix characters are governed by RULE-I4 (geometric Unicode).
 
 ---
 
@@ -576,5 +582,9 @@ Pointy-top hexagon · white shield inside · `#0078D4` fill · `#005A9E` border 
 ### RULE-I3 (required): Top-bar brand icon must use netsentinel.png — never a letter fallback in production
 Use PyInstaller-aware path: `Path(sys._MEIPASS) if frozen else Path(__file__).parent.parent`.
 
-### RULE-I4 (blocking): Sidebar nav icons must be geometric Unicode — never emoji
-Use: `■ □ ▲ △ ● ○ ◆ ◇ ▶ ▷ ⬡ ⬢ ≡ ⌕ ⊕` etc. Emoji render inconsistently across Windows versions.
+### RULE-I4 (blocking): Flyout item prefix icons must be geometric Unicode — never emoji
+The prefix character in each flyout item label (the string passed to `_nav_add_rail_item()`) must be a geometric Unicode symbol. Emoji render inconsistently across Windows versions.
+
+Use: `■ □ ▲ △ ● ○ ◆ ◇ ▶ ▷ ⬡ ⬢ ≡ ⌕ ⊕` etc.
+
+This rule covers **flyout item labels only**. Rail section icons (the 48 px permanent-rail buttons) are governed by RULE-25 (Lucide SVG).
