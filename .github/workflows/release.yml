@@ -169,7 +169,7 @@ jobs:
         run: python -m pytest tests/ -v --tb=short --cov=. --cov-fail-under=60 --cov-report=html:htmlcov
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v8
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-macos
           path: htmlcov/
