@@ -249,7 +249,6 @@ def cmd_ports(args) -> None:
     result = ps_scan(
         host=args.host,
         mode=args.mode,
-        progress_cb=print if args.verbose else None,
     )
 
     if args.format == "json":

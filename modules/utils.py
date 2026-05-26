@@ -27,7 +27,10 @@ def is_admin() -> bool:
         return False
 
 
-def is_store_app(_cache: list = []) -> bool:  # noqa: B006
+_is_store_app_cache: list = []
+
+
+def is_store_app() -> bool:
     """Return True when running inside a Windows Store MSIX package (AppContainer).
 
     Uses GetPackageFamilyName(): returns ERROR_INSUFFICIENT_BUFFER (122) when
@@ -35,8 +38,8 @@ def is_store_app(_cache: list = []) -> bool:  # noqa: B006
     Cached after first call — the result never changes within a process lifetime.
     Always returns False on non-Windows platforms.
     """
-    if _cache:
-        return _cache[0]
+    if _is_store_app_cache:
+        return _is_store_app_cache[0]
     result = False
     if platform.system() == "Windows":
         try:
@@ -50,7 +53,7 @@ def is_store_app(_cache: list = []) -> bool:  # noqa: B006
             result = (ret == 122)  # ERROR_INSUFFICIENT_BUFFER → we are packaged
         except Exception:
             result = False
-    _cache.append(result)
+    _is_store_app_cache.append(result)
     return result
 
 
@@ -69,9 +72,12 @@ def is_npcap_available() -> bool:
     return _npcap_available()
 
 
-def _npcap_available(_cache: list = []) -> bool:   # noqa: B006
-    if _cache:
-        return _cache[0]
+_npcap_cache: list = []
+
+
+def _npcap_available() -> bool:
+    if _npcap_cache:
+        return _npcap_cache[0]
 
     system = platform.system()
     try:
@@ -104,7 +110,7 @@ def _npcap_available(_cache: list = []) -> bool:   # noqa: B006
     except Exception:
         result = False
 
-    _cache.append(result)
+    _npcap_cache.append(result)
     return result
 
 

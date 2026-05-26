@@ -184,7 +184,7 @@ def _run_ssh_paramiko(
     """Run a list of shell commands via paramiko SSH. Returns {cmd: output}."""
     results: dict[str, str] = {}
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.set_missing_host_key_policy(paramiko.WarningPolicy())
     try:
         connect_kwargs: dict = {"hostname": host, "port": port, "username": username,
                                 "timeout": timeout, "banner_timeout": timeout,

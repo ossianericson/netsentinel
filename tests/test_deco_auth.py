@@ -151,6 +151,7 @@ def main():
         if ok: login_body = res
 
     # C: Old-style form string inner payload (operation=login&password=...&confirm=true)
+    d_old = sig_old_l = sig_old_m = None
     if not login_body:
         payload_old = f"operation=login&password={pw_hex}&confirm=true"
         d_old, sig_old_l, sig_old_m = _build_variants(payload_old)

@@ -73,7 +73,7 @@ class _SnapshotWorker(QThread):
     def run(self):
         try:
             from modules.combined_discovery import discover
-            devices = discover(deep=False)
+            devices = discover()
             self.result_ready.emit(devices or [])
         except Exception as exc:  # noqa: BLE001
             self.error.emit(str(exc))
