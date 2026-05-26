@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import secrets
 import time
-from typing import Optional
 
 from modules.metric_store import MetricStore
 
