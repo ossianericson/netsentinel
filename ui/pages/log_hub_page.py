@@ -703,6 +703,19 @@ class LogHubPage(QWidget):
 
         lay.addStretch()
 
+        # Filtered export button
+        _export_btn = QPushButton("↓ Export")
+        _export_btn.setFixedHeight(26)
+        _export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _export_btn.setToolTip("Export currently visible (filtered) rows to CSV")
+        _export_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:11px;"
+            f" font-weight:600; border:1px solid {ACCENT}44; border-radius:4px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}11; border-color:{ACCENT}; }}"
+        )
+        _export_btn.clicked.connect(self._export_visible)
+        lay.addWidget(_export_btn)
+
         # Live / History pill toggle — rightmost
         _pill = QFrame()
         _pill.setStyleSheet(
@@ -1067,7 +1080,41 @@ class LogHubPage(QWidget):
             self._table.insertRow(i)
             self._set_table_row(i, e)
 
-    # ── LOG-4: export dialog ──────────────────────────────────────────────────
+    # ── LOG-4: export ─────────────────────────────────────────────────────────
+
+    def _export_visible(self) -> None:
+        """Export currently visible (search + source filtered) rows directly to CSV."""
+        filt = self._search_box.text().strip().lower()
+        visible = [
+            e for e in self._entries
+            if self._is_source_enabled(e["source_key"])
+            and self._entry_matches(e, filt)
+        ]
+        if not visible:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "Export", "No rows match the current filter.")
+            return
+        ts_label = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Filtered Log CSV",
+            f"netsentinel_log_filtered_{ts_label}.csv",
+            "CSV files (*.csv)",
+        )
+        if not path:
+            return
+        headers = [
+            self._table.horizontalHeaderItem(c).text()
+            for c in range(self._table.columnCount())
+        ]
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as fh:
+                w = _csv.writer(fh)
+                w.writerow(headers)
+                for e in visible:
+                    w.writerow(list(e["row"]))
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Export failed", str(exc))
 
     def _open_export_dialog(self) -> None:
         dlg = QDialog(self)

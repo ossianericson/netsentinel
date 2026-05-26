@@ -985,19 +985,19 @@ Overview becomes a configurable dashboard. Home is worth opening every morning.
 
 ---
 
-### Sprint 4 — Filters, actions, and education (target: v1.9.39)
+### Sprint 4 — Filters, actions, and education (shipped v1.9.39, 2026-05-26)
 
 Close every remaining filter gap. Wire timeline events. Add per-page help.
 
-1. FILTER-7 — Connections group-by-process toggle
-2. FILTER-8 — Threat Intel text search
-3. FILTER-9 — Timeline text search
-4. FILTER-10 — Log Hub filtered CSV export
-5. FILTER-11 — Inventory tag-chip filter
-6. FILTER-12 — Notifications bulk dismiss
-7. ACT-5 — Timeline click-event → jump to page
-8. ACT-6 — DHCP "Find in Inventory" per row
-9. EDU-1 — Per-page help panel (PageHeaderBar ? icon)
+1. ✅ FILTER-7 — Connections group-by-process toggle
+2. ✅ FILTER-8 — Threat Intel text search
+3. ✅ FILTER-9 — Timeline text search
+4. ✅ FILTER-10 — Log Hub filtered CSV export
+5. ✅ FILTER-11 — Inventory tag-chip filter
+6. ✅ FILTER-12 — Notifications bulk dismiss
+7. ✅ ACT-5 — Timeline click-event → jump to page
+8. ✅ ACT-6 — DHCP "Find in Inventory" per row
+9. ✅ EDU-1 — Per-page help panel (PageHeaderBar ? icon)
 
 ---
 

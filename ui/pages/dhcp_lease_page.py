@@ -13,13 +13,15 @@ import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QTableWidget,
@@ -99,6 +101,9 @@ def _expires_label(ts: int) -> str:
 
 class DhcpLeasePage(QWidget):
     """Displays DHCP lease inventory from local lease files / ARP cache."""
+
+    navigate_to   = pyqtSignal(str)  # page label
+    select_device = pyqtSignal(str)  # IP address
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -195,6 +200,8 @@ class DhcpLeasePage(QWidget):
         self._table = _make_table(
             ["IP Address", "MAC Address", "Hostname", "Expires", "DHCP Server", "Source"]
         )
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_table_context_menu)
 
         from ui.widgets.density_toggle import DensityToggle
         from PyQt6.QtWidgets import QHBoxLayout as _QHL
@@ -324,3 +331,40 @@ class DhcpLeasePage(QWidget):
         self._status_lbl.setText(
             f"Last refreshed {datetime.now().strftime('%H:%M:%S')}{suffix}."
         )
+
+    # ── Context menu ──────────────────────────────────────────────────────────
+
+    def _on_table_context_menu(self, pos) -> None:
+        row = self._table.rowAt(pos.y())
+        if row < 0:
+            return
+        ip_item = self._table.item(row, 0)
+        if not ip_item:
+            return
+        ip = ip_item.text()
+
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f" font-size:11px; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            f"QMenu::separator {{ height:1px; background:{BORDER}; margin:2px 0; }}"
+        )
+
+        act_inv = menu.addAction("▶  Find in Inventory →")
+        act_inv.triggered.connect(lambda: self._find_in_inventory(ip))
+        menu.addSeparator()
+        act_copy = menu.addAction("Copy IP")
+        act_copy.triggered.connect(lambda: QApplication.clipboard().setText(ip))
+        mac_item = self._table.item(row, 1)
+        if mac_item and mac_item.text() not in ("", "—"):
+            act_copy_mac = menu.addAction("Copy MAC")
+            act_copy_mac.triggered.connect(
+                lambda: QApplication.clipboard().setText(mac_item.text())
+            )
+
+        menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _find_in_inventory(self, ip: str) -> None:
+        self.select_device.emit(ip)
+        self.navigate_to.emit("Devices")

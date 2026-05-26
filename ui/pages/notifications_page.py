@@ -972,7 +972,55 @@ class NotificationsPage(QWidget):
         self._alert_history_table.customContextMenuRequested.connect(self._on_alert_history_context_menu)
         self._jk_filter_hist = _JKNavFilter(self._alert_history_table, self)
         self._alert_history_table.viewport().installEventFilter(self._jk_filter_hist)
+        self._alert_history_table.itemSelectionChanged.connect(self._on_hist_selection_changed)
         hist_lay.addWidget(self._alert_history_table)
+
+        # Bulk action bar — hidden until rows are selected
+        self._bulk_bar = QFrame()
+        self._bulk_bar.setVisible(False)
+        self._bulk_bar.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px; }}"
+        )
+        _bb_lay = QHBoxLayout(self._bulk_bar)
+        _bb_lay.setContentsMargins(8, 4, 8, 4)
+        _bb_lay.setSpacing(6)
+        self._bulk_lbl = QLabel("0 selected")
+        self._bulk_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; font-weight:600;")
+        _bb_lay.addWidget(self._bulk_lbl)
+        _bb_lay.addSpacing(6)
+        _bb_dismiss = QPushButton("Dismiss")
+        _bb_dismiss.setFixedHeight(22)
+        _bb_dismiss.setStyleSheet(
+            f"QPushButton{{background:{ACCENT};color:#fff;font-size:10px;font-weight:600;"
+            f"border:none;border-radius:3px;padding:0 10px;}}"
+            f"QPushButton:hover{{background:#006BBD;}}"
+        )
+        _bb_dismiss.clicked.connect(self._bulk_dismiss)
+        _bb_snooze1 = QPushButton("Snooze 1h")
+        _bb_snooze1.setFixedHeight(22)
+        _bb_snooze1.setStyleSheet(
+            f"QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};font-size:10px;"
+            f"border:1px solid {BORDER};border-radius:3px;padding:0 10px;}}"
+            f"QPushButton:hover{{border-color:{ACCENT};color:{ACCENT};}}"
+        )
+        _bb_snooze1.clicked.connect(lambda: self._bulk_snooze(3600))
+        _bb_snooze8 = QPushButton("Snooze 8h")
+        _bb_snooze8.setFixedHeight(22)
+        _bb_snooze8.setStyleSheet(_bb_snooze1.styleSheet())
+        _bb_snooze8.clicked.connect(lambda: self._bulk_snooze(28800))
+        _bb_deselect = QPushButton("Deselect all")
+        _bb_deselect.setFixedHeight(22)
+        _bb_deselect.setStyleSheet(
+            f"QPushButton{{background:transparent;color:{TEXT_MUTED};font-size:10px;"
+            f"border:none;padding:0 8px;}}"
+            f"QPushButton:hover{{color:{TEXT_PRIMARY};}}"
+        )
+        _bb_deselect.clicked.connect(self._alert_history_table.clearSelection)
+        for w in (_bb_dismiss, _bb_snooze1, _bb_snooze8):
+            _bb_lay.addWidget(w)
+        _bb_lay.addStretch()
+        _bb_lay.addWidget(_bb_deselect)
+        hist_lay.addWidget(self._bulk_bar)
 
         hist_btn_row = QHBoxLayout()
         btn_hist_refresh = QPushButton("Refresh")
@@ -1798,6 +1846,46 @@ class NotificationsPage(QWidget):
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
         except Exception as exc:
             ToastManager.show(f"Export failed: {exc}", "error")
+
+    def _on_hist_selection_changed(self) -> None:
+        rows = {idx.row() for idx in self._alert_history_table.selectedIndexes()}
+        n = len(rows)
+        self._bulk_bar.setVisible(n > 0)
+        if n > 0:
+            self._bulk_lbl.setText(f"{n} selected")
+
+    def _selected_alerts(self) -> list[dict]:
+        rows = sorted({idx.row() for idx in self._alert_history_table.selectedIndexes()})
+        alerts = []
+        for r in rows:
+            item = self._alert_history_table.item(r, 0)
+            if item:
+                data = item.data(Qt.ItemDataRole.UserRole)
+                if isinstance(data, dict):
+                    alerts.append(data)
+        return alerts
+
+    def _bulk_dismiss(self) -> None:
+        for alert in self._selected_alerts():
+            alert_id = alert.get("id") or alert.get("alert_id")
+            if alert_id and self._store:
+                try:
+                    self._store.acknowledge_alert(int(alert_id))
+                except Exception:
+                    pass
+        self._alert_history_table.clearSelection()
+        self._refresh_alert_history()
+        self.alert_acknowledged.emit()
+
+    def _bulk_snooze(self, seconds: int) -> None:
+        until_ts = time.time() + seconds
+        rule_names: set[str] = set()
+        for alert in self._selected_alerts():
+            rn = alert.get("rule_name", "")
+            if rn and rn not in rule_names:
+                rule_names.add(rn)
+                self._apply_snooze(rn, until_ts)
+        self._alert_history_table.clearSelection()
 
     def _apply_snooze(self, rule_name: str, until_ts) -> None:
         if not self._router:

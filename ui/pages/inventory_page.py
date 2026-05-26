@@ -326,6 +326,7 @@ class InventoryPage(QWidget):
         self._store    = store
         self._window_h = 24
         self._active_types: set[str] = set(_ALL_TYPES)
+        self._active_tags: set[str] = set()
         self._rows: list = []
         self._last_refresh_ts = 0.0
         self._auto_timer = QTimer(self)
@@ -461,6 +462,19 @@ class InventoryPage(QWidget):
         filter_row.addWidget(btn_export_inv)
         cl.addLayout(filter_row)
 
+        # Tag-chip filter row (FILTER-11)
+        tag_row_lay = QHBoxLayout()
+        tag_row_lay.setSpacing(4)
+        _tag_lbl = QLabel("Tags:")
+        _tag_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        tag_row_lay.addWidget(_tag_lbl)
+        self._tag_chip_area = QHBoxLayout()
+        self._tag_chip_area.setSpacing(4)
+        tag_row_lay.addLayout(self._tag_chip_area)
+        tag_row_lay.addStretch()
+        self._tag_chips: dict[str, QPushButton] = {}
+        cl.addLayout(tag_row_lay)
+
         card = QFrame()
         card.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
@@ -591,6 +605,59 @@ class InventoryPage(QWidget):
             self._active_types.discard(event_type)
         self._refresh()
 
+    def _toggle_tag(self, tag: str, active: bool) -> None:
+        if active:
+            self._active_tags.add(tag)
+        else:
+            self._active_tags.discard(tag)
+        self._refresh()
+
+    def _refresh_tag_chips(self, known_devices: dict) -> None:
+        """Rebuild the tag-chip row from current known devices."""
+        all_tags: set[str] = set()
+        for kd in known_devices.values():
+            if kd.tags:
+                for t in (t.strip() for t in kd.tags.split(",") if t.strip()):
+                    all_tags.add(t)
+
+        current_tags = set(self._tag_chips.keys())
+        if all_tags == current_tags:
+            return  # No change — avoid flicker
+
+        # Remove old chips
+        while self._tag_chip_area.count():
+            item = self._tag_chip_area.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._tag_chips.clear()
+
+        for tag in sorted(all_tags):
+            active = tag in self._active_tags
+            btn = QPushButton(tag)
+            btn.setCheckable(True)
+            btn.setChecked(active)
+            btn.setFixedHeight(22)
+            btn.setStyleSheet(self._tag_chip_style(active))
+            btn.toggled.connect(lambda checked, t=tag: self._toggle_tag(t, checked))
+            self._tag_chip_area.addWidget(btn)
+            self._tag_chips[tag] = btn
+
+    @staticmethod
+    def _tag_chip_style(active: bool) -> str:
+        if active:
+            return (
+                f"QPushButton {{ font-size:10px; font-weight:bold; color:{ACCENT};"
+                f" background:{ACCENT}18; border:1px solid {ACCENT}; border-radius:10px;"
+                f" padding:1px 8px; }}"
+                f"QPushButton:hover {{ background:{ACCENT}30; }}"
+            )
+        return (
+            f"QPushButton {{ font-size:10px; color:{TEXT_MUTED};"
+            f" background:transparent; border:1px solid {BORDER}; border-radius:10px;"
+            f" padding:1px 8px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+        )
+
     @staticmethod
     def _zoom_style(active: bool) -> str:
         if active:
@@ -696,6 +763,8 @@ class InventoryPage(QWidget):
                     _crit_hosts.add(_h)
 
         known_devices = self._store.get_known_devices()
+        self._refresh_tag_chips(known_devices)
+
         for evt in events:
             vendor = ""
             custom_name = ""
@@ -703,6 +772,15 @@ class InventoryPage(QWidget):
             if kd:
                 vendor = kd.vendor or ""
                 custom_name = kd.custom_name or ""
+
+            # FILTER-11: tag filter (OR — show event if device has any active tag)
+            if self._active_tags and kd:
+                device_tags = {t.strip() for t in (kd.tags or "").split(",") if t.strip()}
+                if not self._active_tags.intersection(device_tags):
+                    continue
+            elif self._active_tags and not kd:
+                continue  # unknown device, no tags → skip when tag filter active
+
             self._rows.append((evt, vendor))
 
             row = self._table.rowCount()

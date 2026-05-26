@@ -170,6 +170,7 @@ class ConnectionsPage(QWidget):
         self._blocked_rules: list[str] = []
         self._worker = None
         self._poller = None
+        self._group_by_proc: bool = False
 
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(5000)
@@ -257,12 +258,24 @@ class ConnectionsPage(QWidget):
         )
         self._chk_auto.toggled.connect(self._on_auto_toggled)
 
+        self._btn_group = QPushButton("⊞ Group by Process")
+        self._btn_group.setCheckable(True)
+        self._btn_group.setFixedHeight(28)
+        self._btn_group.setStyleSheet(
+            f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
+            f"QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; background:{BG_HOVER}; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+        )
+        self._btn_group.toggled.connect(self._on_group_toggled)
+
         filter_row.addWidget(self._search, 2)
         filter_row.addWidget(self._proto_filter)
         filter_row.addWidget(self._chk_listen)
         filter_row.addWidget(self._chk_local)
         filter_row.addWidget(btn_refresh)
         filter_row.addWidget(self._chk_auto)
+        filter_row.addWidget(self._btn_group)
         root.addLayout(filter_row)
 
         # Status label
@@ -452,7 +465,67 @@ class ConnectionsPage(QWidget):
                     continue
             visible.append(c)
 
-        self._populate_table(visible)
+        if self._group_by_proc:
+            self._populate_grouped_table(visible)
+        else:
+            self._populate_table(visible)
+
+    def _on_group_toggled(self, checked: bool) -> None:
+        self._group_by_proc = checked
+        self._apply_filters()
+
+    def _populate_grouped_table(self, conns: list) -> None:
+        from collections import defaultdict
+        self._tbl.clear_detail()
+        self._tbl.setRowCount(0)
+
+        groups: dict[str, list] = defaultdict(list)
+        for c in conns:
+            groups[c.exe_name].append(c)
+
+        _STATUS_RANK = {"ESTABLISHED": 3, "LISTEN": 2, "TIME_WAIT": 1}
+        groups_sorted = sorted(
+            groups.items(),
+            key=lambda kv: (
+                -max(_STATUS_RANK.get(c.status, 0) for c in kv[1]),
+                -sum(1 for c in kv[1] if c.remote_ip and not c.is_local),
+            ),
+        )
+
+        self._displayed_conns = []
+        for exe_name, grp_conns in groups_sorted:
+            external = sum(1 for c in grp_conns if c.remote_ip and not c.is_local)
+            worst = max(grp_conns, key=lambda c: _STATUS_RANK.get(c.status, 0))
+            is_blocked = exe_name in self._blocked_rules
+            self._displayed_conns.append(("group", exe_name, grp_conns))
+
+            row = self._tbl.rowCount()
+            self._tbl.insertRow(row)
+
+            row_color = TEXT_PRIMARY if external else TEXT_SECONDARY
+            status_color = _STATUS_COLOR.get(worst.status, TEXT_MUTED)
+
+            cells = [
+                (exe_name,            row_color),
+                (str(len(grp_conns)), TEXT_MUTED),
+                ("—",                 TEXT_MUTED),
+                ("—",                 TEXT_MUTED),
+                (f"{external} ext",   AMBER if external else TEXT_MUTED),
+                ("—",                 TEXT_MUTED),
+                (worst.status,        status_color),
+                ("—",                 TEXT_MUTED),
+                (worst.exe_path or "—", TEXT_MUTED),
+                ("🔓 Unblock" if is_blocked else "🔒 Block",
+                 RED if not is_blocked else AMBER),
+            ]
+            for col, (text, color) in enumerate(cells):
+                item = QTableWidgetItem(text)
+                item.setForeground(QColor(color))
+                if col == 0:
+                    item.setToolTip(
+                        f"{exe_name}\n{len(grp_conns)} connection(s) · {external} external"
+                    )
+                self._tbl.setItem(row, col, item)
 
     def _populate_table(self, conns: list) -> None:
         self._tbl.clear_detail()
@@ -527,10 +600,61 @@ class ConnectionsPage(QWidget):
 
     # ── Inline detail panel ───────────────────────────────────────────────────
 
+    def _build_group_detail(self, exe_name: str, grp_conns: list) -> QWidget:
+        """Compact table of individual connections within a process group."""
+        outer = QWidget()
+        outer.setStyleSheet(
+            f"QWidget {{ background:{BG_HOVER}; border:none; border-left:3px solid {ACCENT}; }}"
+        )
+        lay = QVBoxLayout(outer)
+        lay.setContentsMargins(16, 8, 16, 8)
+        lay.setSpacing(4)
+
+        hdr_lbl = QLabel(f"{exe_name}  —  {len(grp_conns)} connection(s)")
+        hdr_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
+        )
+        lay.addWidget(hdr_lbl)
+
+        sub_tbl = QTableWidget(0, 5)
+        sub_tbl.setHorizontalHeaderLabels(["Local", "Remote IP", "Port", "Status", "Country"])
+        sub_tbl.verticalHeader().setVisible(False)
+        sub_tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        sub_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        sub_tbl.verticalHeader().setDefaultSectionSize(22)
+        sub_tbl.setFixedHeight(min(22 * len(grp_conns) + 26, 120))
+        sub_tbl.setStyleSheet(
+            f"QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
+            f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"
+            f" font-weight:bold; padding:2px 4px; border:none; }}"
+            f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
+        )
+        sub_tbl.horizontalHeader().setStretchLastSection(True)
+        for c in grp_conns:
+            r = sub_tbl.rowCount()
+            sub_tbl.insertRow(r)
+            country_str = f"{c.flag}  {c.country}" if c.flag else (c.country or "")
+            for col, (val, color) in enumerate([
+                (c.local_addr, TEXT_MUTED),
+                (c.remote_ip or "—", TEXT_PRIMARY),
+                (str(c.remote_port) if c.remote_port else "—", TEXT_MUTED),
+                (c.status, _STATUS_COLOR.get(c.status, TEXT_MUTED)),
+                (country_str, TEXT_SECONDARY),
+            ]):
+                item = QTableWidgetItem(val)
+                item.setForeground(QColor(color))
+                sub_tbl.setItem(r, col, item)
+        lay.addWidget(sub_tbl)
+        return outer
+
     def _build_connection_detail(self, logical_row: int) -> QWidget:
         if logical_row >= len(self._displayed_conns):
             return QWidget()
-        c = self._displayed_conns[logical_row]
+        entry = self._displayed_conns[logical_row]
+        if isinstance(entry, tuple) and entry[0] == "group":
+            return self._build_group_detail(entry[1], entry[2])
+        c = entry
 
         status_color = _STATUS_COLOR.get(c.status, TEXT_MUTED)
         is_blocked = c.exe_name in self._blocked_rules

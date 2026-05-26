@@ -18,10 +18,13 @@ Usage::
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PyQt6.QtCore import QPoint, Qt
+from PyQt6.QtGui import QCursor
+from PyQt6.QtWidgets import (
+    QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
+)
 
-from ui.styles import BORDER, TEXT_MUTED, TEXT_PRIMARY
+from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY
 
 
 class PageHeaderBar(QWidget):
@@ -89,3 +92,77 @@ class PageHeaderBar(QWidget):
     def set_chip_by_key(self, key: str, text: str) -> None:
         if key in self._chip_keys:
             self._chip_keys[key].setText(text)
+
+    def set_help(self, title: str, body: str) -> None:
+        """Add a ? button that shows a floating help panel on click."""
+        if hasattr(self, "_help_btn"):
+            return  # already set
+
+        self._help_popover = _HelpPopover(title, body)
+
+        self._help_btn = QPushButton("?")
+        self._help_btn.setFixedSize(22, 22)
+        self._help_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._help_btn.setToolTip("Page help")
+        self._help_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
+            f" font-weight:bold; border:1px solid {BORDER}; border-radius:11px; padding:0; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; background:transparent; }}"
+            f"QPushButton:checked {{ background:{ACCENT}; color:#fff; border-color:{ACCENT}; }}"
+        )
+        self._help_btn.setCheckable(True)
+        self._help_btn.toggled.connect(self._toggle_help)
+        self._chip_area.addSpacing(8)
+        self._chip_area.addWidget(self._help_btn)
+
+    def _toggle_help(self, checked: bool) -> None:
+        if not checked:
+            self._help_popover.hide()
+            return
+        btn_global = self._help_btn.mapToGlobal(
+            QPoint(self._help_btn.width() // 2, self._help_btn.height())
+        )
+        self._help_popover.show_at(btn_global)
+
+    def _close_help(self) -> None:
+        self._help_popover.hide()
+        if hasattr(self, "_help_btn"):
+            self._help_btn.setChecked(False)
+
+
+class _HelpPopover(QFrame):
+    """Floating 280px help panel shown below the ? button."""
+
+    def __init__(self, title: str, body: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        self.setFixedWidth(280)
+        self.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:4px; }}"
+        )
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 10, 12, 12)
+        lay.setSpacing(6)
+
+        title_lbl = QLabel(title)
+        title_lbl.setWordWrap(True)
+        title_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
+        )
+        lay.addWidget(title_lbl)
+
+        body_lbl = QLabel(body)
+        body_lbl.setWordWrap(True)
+        body_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        lay.addWidget(body_lbl)
+
+    def show_at(self, global_pos: QPoint) -> None:
+        self.adjustSize()
+        x = global_pos.x() - self.width() // 2
+        y = global_pos.y() + 4
+        self.move(x, y)
+        self.show()
+        self.raise_()

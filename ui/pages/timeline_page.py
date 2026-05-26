@@ -16,10 +16,10 @@ import datetime
 import time
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore    import Qt, QSettings, QTimer, pyqtSlot
+from PyQt6.QtCore    import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QFont
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+    QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
     QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -27,6 +27,13 @@ from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, GREEN, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
+
+_SOURCE_PAGE_MAP = {
+    "Devices":     "Devices",
+    "Alerts":      "Notifications",
+    "CVEs":        "CVE Tracker",
+    "Speed Tests": "Speed Test",
+}
 
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
@@ -88,6 +95,8 @@ class _Ev:
 # ── Page ──────────────────────────────────────────────────────────────────────
 
 class TimelinePage(QWidget):
+    navigate_to = pyqtSignal(str)
+
     def __init__(self, store: "MetricStore", parent=None):
         super().__init__(parent)
         self._store   = store
@@ -95,6 +104,10 @@ class TimelinePage(QWidget):
             _SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED
         }
         self._events: list[_Ev] = []
+        self._tl_search_timer = QTimer(self)
+        self._tl_search_timer.setSingleShot(True)
+        self._tl_search_timer.setInterval(200)
+        self._tl_search_timer.timeout.connect(self._render)
         self._setup_ui()
 
         # Auto-refresh every 60 s
@@ -168,6 +181,23 @@ class TimelinePage(QWidget):
             self._chip_btns[src] = btn
 
         chip_row.addStretch()
+
+        self._tl_search = QLineEdit()
+        self._tl_search.setPlaceholderText("Search events…")
+        self._tl_search.setFixedHeight(24)
+        self._tl_search.setFixedWidth(180)
+        self._tl_search.setStyleSheet(
+            f"QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
+            f" font-size:10px; color:{TEXT_PRIMARY}; background:#fff; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        self._tl_search.textChanged.connect(lambda: self._tl_search_timer.start())
+        chip_row.addWidget(self._tl_search)
+
+        self._tl_match_lbl = QLabel("")
+        self._tl_match_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; background:transparent;")
+        chip_row.addWidget(self._tl_match_lbl)
+
         outer.addLayout(chip_row)
 
         # ── Scrollable event feed ─────────────────────────────────────────────
@@ -281,8 +311,21 @@ class TimelinePage(QWidget):
 
         visible = [e for e in self._events if e.source in self._active_sources]
 
+        q = self._tl_search.text().strip().lower() if hasattr(self, "_tl_search") else ""
+        if q:
+            visible = [
+                e for e in visible
+                if q in e.title.lower() or q in e.detail.lower()
+            ]
+            total = sum(1 for e in self._events if e.source in self._active_sources)
+            self._tl_match_lbl.setText(f"{len(visible)} / {total}")
+        else:
+            if hasattr(self, "_tl_match_lbl"):
+                self._tl_match_lbl.setText("")
+
         if not visible:
-            empty = QLabel("No events in the last 7 days.")
+            msg = "No events match your search." if q else "No events in the last 7 days."
+            empty = QLabel(msg)
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty.setStyleSheet(
                 f"font-size:12px; color:{TEXT_MUTED}; padding:40px; background:transparent;"
@@ -306,12 +349,16 @@ class TimelinePage(QWidget):
             self._feed_layout.insertWidget(self._feed_layout.count() - 1, row)
 
     def _make_event_row(self, ev: _Ev) -> QFrame:
+        dest = _SOURCE_PAGE_MAP.get(ev.source, "")
         row = QFrame()
         row.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:none;"
             f" border-bottom:1px solid {BORDER}; }}"
             f"QFrame:hover {{ background:{BG_HOVER}; }}"
         )
+        if dest:
+            row.setCursor(Qt.CursorShape.PointingHandCursor)
+            row.mousePressEvent = lambda _ev, d=dest: self.navigate_to.emit(d)
         lay = QHBoxLayout(row)
         lay.setContentsMargins(0, 0, 12, 0)
         lay.setSpacing(0)

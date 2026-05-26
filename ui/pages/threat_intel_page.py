@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QApplication,
@@ -195,6 +195,11 @@ class ThreatIntelPage(QWidget):
         self._abuse_worker:   Optional[AbuseIpDbWorker]          = None
         self._last_updated = ""
         self._popover = None
+        self._threat_entries: list = []
+        self._threat_timer = QTimer(self)
+        self._threat_timer.setSingleShot(True)
+        self._threat_timer.setInterval(200)
+        self._threat_timer.timeout.connect(self._apply_threat_filter)
         self._setup_ui()
         self._restore_settings()
         # Try to load from local cache on startup (non-blocking — happens immediately)
@@ -241,10 +246,27 @@ class ThreatIntelPage(QWidget):
         self._cache_btn.clicked.connect(self._load_cache)
         self._status_lbl  = QLabel("Loading from local cache…")
         self._status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+
+        self._threat_search = QLineEdit()
+        self._threat_search.setPlaceholderText("Filter by IP, category or feed…")
+        self._threat_search.setFixedHeight(28)
+        self._threat_search.setFixedWidth(220)
+        self._threat_search.setStyleSheet(
+            f"QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
+            f" font-size:11px; color:{TEXT_PRIMARY}; background:#fff; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        self._threat_search.textChanged.connect(lambda: self._threat_timer.start())
+
+        self._threat_match_lbl = QLabel("")
+        self._threat_match_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
+
         tb.addWidget(self._refresh_btn)
         tb.addWidget(self._cache_btn)
         tb.addWidget(self._status_lbl)
         tb.addStretch()
+        tb.addWidget(self._threat_search)
+        tb.addWidget(self._threat_match_lbl)
         root.addLayout(tb)
 
         # Blocklist table card
@@ -498,18 +520,19 @@ class ThreatIntelPage(QWidget):
     def _on_db_ready(self, db: ThreatIntelDB, from_cache: bool = False) -> None:
         self._db = db
         self._last_updated = datetime.now().strftime("%H:%M:%S")
-        self._populate(db)
+        self._threat_entries = db.all_entries()
+        self._populate_kpis(self._threat_entries)
+        self._apply_threat_filter()
         source_label = "cache" if from_cache else "feeds"
         self._status_lbl.setText(
             f"{len(db)} indicator(s) loaded from {source_label}. "
             f"Last updated {self._last_updated}."
         )
-        self.entries_updated.emit(db.all_entries())
+        self.entries_updated.emit(self._threat_entries)
 
     # ── Table population ──────────────────────────────────────────────────────
 
-    def _populate(self, db: ThreatIntelDB) -> None:
-        entries = db.all_entries()
+    def _populate_kpis(self, entries: list) -> None:
         ip_count     = sum(1 for e in entries if e.itype == "ip")
         domain_count = sum(1 for e in entries if e.itype == "domain")
 
@@ -521,11 +544,32 @@ class ThreatIntelPage(QWidget):
         _set_kpi(self._kpi_domains, str(domain_count))
         _set_kpi(self._kpi_updated, self._last_updated or "—")
 
+    def _apply_threat_filter(self) -> None:
+        q = self._threat_search.text().strip().lower()
+        if q:
+            visible = [
+                e for e in self._threat_entries
+                if q in e.indicator.lower()
+                or q in ", ".join(e.categories).lower()
+                or q in e.source.lower()
+            ]
+        else:
+            visible = self._threat_entries
+
+        total = len(self._threat_entries)
+        if q:
+            self._threat_match_lbl.setText(f"{len(visible)} / {total}")
+        else:
+            self._threat_match_lbl.setText("")
+
+        self._fill_table(visible)
+
+    def _fill_table(self, entries: list) -> None:
         clear_skeleton_rows(self._table)
         self._table.setRowCount(0)
         self._table.setSortingEnabled(False)
 
-        if not entries:
+        if not entries and not self._threat_entries:
             self._empty_lbl.show()
             return
 

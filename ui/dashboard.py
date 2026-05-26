@@ -2693,6 +2693,7 @@ class Dashboard(QMainWindow):
 
         from ui.pages.timeline_page import TimelinePage
         self._timeline_page = TimelinePage(store=self._store)
+        self._timeline_page.navigate_to.connect(self._nav_rail_go_to)
 
         from ui.pages.notifications_page import NotificationsPage
         self._notifications_page = NotificationsPage(router=None, parent=None)
@@ -2767,6 +2768,8 @@ class Dashboard(QMainWindow):
 
         from ui.pages.dhcp_lease_page import DhcpLeasePage
         self._dhcp_lease_page = DhcpLeasePage(parent=None)
+        self._dhcp_lease_page.navigate_to.connect(self._nav_rail_go_to)
+        self._dhcp_lease_page.select_device.connect(self._inventory_page.select_device)
 
         from ui.pages.dns_zone_page import DnsZonePage
         self._dns_zone_page = DnsZonePage(parent=None)
@@ -3973,6 +3976,19 @@ class Dashboard(QMainWindow):
                 "Config Drift Detected", message, "WARNING"
             )
 
+    def _wire_page_help_btn(self, label: str, info: dict) -> None:
+        """EDU-1: attach ? help button to the current page's PageHeaderBar (once)."""
+        from ui.widgets.page_header import PageHeaderBar
+        page = self._stack.currentWidget()
+        if page is None:
+            return
+        hdr = page.findChild(PageHeaderBar)
+        if hdr is None or hasattr(hdr, "_help_btn"):
+            return
+        what = info.get("what", "")
+        if what:
+            hdr.set_help(label, what)
+
     def _update_help_panel(self, label: str) -> None:
         """Refresh tip bar text and collapse the help panel when the page changes."""
         info = _PAGE_HELP.get(label, {})
@@ -4009,6 +4025,8 @@ class Dashboard(QMainWindow):
                 self._help_hidden_lbl.setVisible(True)
             else:
                 self._help_hidden_lbl.setVisible(False)
+
+        self._wire_page_help_btn(label, info)
 
     def _toggle_help_panel(self, checked: bool) -> None:
         # Panel always opens — shortcuts are useful on every page
@@ -9599,15 +9617,15 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Grade Ring",                 "Animated arc ring replaces the grade circle — sweeps 600 ms on new grade, score counts up"),
-            ("Top Talkers tile",           "Overview tile showing top-3 interfaces by session bandwidth — click to open Live Bandwidth"),
-            ("Recent Events tile",         "Overview tile showing last 5 device-state events — click to open Timeline"),
-            ("Trend Forecast tile",        "Overview tile showing critical / warning / clean counts from the latest trend report"),
-            ("Events ticker",              "Slim bar in the home recurring section shows last 3 events from the past 24 h"),
-            ("Speed mini-sparkline",       "Speed card on the home page shows a 10-reading bar sparkline below the value"),
-            ("Tile hover lift",            "Overview tiles rise 2 px on hover (120 ms) — respects OS reduce-motion setting"),
-            ("Monitor Overview sparklines","Each status tile shows a 6-bar hourly event-count sparkline, updated every 5 min"),
-            ("Smooth progress bar",        "Scan progress indicator uses 250 ms eased transitions between values"),
+            ("Group by Process",           "Connections page: toggle collapses rows into per-executable aggregates; click to expand"),
+            ("Threat Intel search",        "Live filter bar on Threat Intel searches indicator, category, and feed with match count"),
+            ("Timeline search",            "Text search in the Timeline filters event title and detail with 200 ms debounce"),
+            ("Log Hub CSV export",         "'Down Export' button exports only the currently visible filtered log entries to CSV"),
+            ("Inventory tag chips",        "Device tags appear as toggleable chips; clicking a chip filters to devices with that tag"),
+            ("Notifications bulk actions", "Select multiple alerts to get Dismiss, Snooze 1 h, and Snooze 8 h bulk actions"),
+            ("Timeline click-to-navigate", "Clicking a Timeline event row jumps directly to the relevant page (Devices, Alerts, CVE...)"),
+            ("DHCP Find in Inventory",     "Right-click a DHCP lease to 'Find in Inventory' — selects the device and navigates"),
+            ("Per-page help panel",        "Every page header supports a ? button that opens a plain-English description popover"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
