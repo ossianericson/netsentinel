@@ -610,6 +610,8 @@ class SpeedTestPage(QWidget):
         )
 
         self._hist_table.itemSelectionChanged.connect(self._on_history_row_selected)
+        self._hist_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._hist_table.customContextMenuRequested.connect(self._on_hist_context_menu)
         from ui.table_utils import save_column_widths
         self._hist_table.horizontalHeader().sectionResized.connect(
             lambda _l, _o, _n: save_column_widths(self._hist_table, "speed_test")
@@ -1221,9 +1223,12 @@ class SpeedTestPage(QWidget):
                 item.setForeground(QColor(col_color))
             if col == 0:
                 item.setData(Qt.ItemDataRole.UserRole, sig)
+            if col == 4 and result:
+                item.setData(Qt.ItemDataRole.UserRole, result.download_mbps)
             self._hist_table.setItem(0, col, item)
 
         self._hist_table.scrollToTop()
+        self._apply_baseline_markers()
         self._refresh_history_chart()
 
     # ── Status helper ─────────────────────────────────────────────────────────
@@ -1303,11 +1308,14 @@ class SpeedTestPage(QWidget):
                         item.setForeground(QColor(col_color))
                     if col == 0:
                         item.setData(Qt.ItemDataRole.UserRole, sig)
+                    if col == 4:
+                        item.setData(Qt.ItemDataRole.UserRole, p.download_mbps)
                     self._hist_table.setItem(row, col, item)
             if self._hist_table.rowCount() > 0:
                 self._hist_stack.setCurrentIndex(1)
         except Exception:
             pass  # DB not available yet is fine
+        self._apply_baseline_markers()
         self._refresh_history_chart()
 
     def _disconnect_hist_hover(self) -> None:
@@ -1427,3 +1435,102 @@ class SpeedTestPage(QWidget):
 
     def _set_status(self, text: str) -> None:
         self._status_lbl.setText(text)
+
+    # ── ACT-4: speed test baseline ────────────────────────────────────────────
+
+    def _on_hist_context_menu(self, pos) -> None:
+        from PyQt6.QtCore import QSettings
+        from PyQt6.QtWidgets import QMenu
+        row = self._hist_table.rowAt(pos.y())
+        if row < 0:
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        baseline_ts = str(qs.value("speed_test/baseline_ts", "") or "")
+        it0 = self._hist_table.item(row, 0)
+        if it0 is None:
+            return
+        row_ts = it0.text().lstrip("★ ").strip()
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
+            f" border:1px solid {BORDER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        )
+        if row_ts == baseline_ts:
+            act = menu.addAction("✕  Clear baseline")
+            act.triggered.connect(self._clear_baseline)
+        else:
+            act = menu.addAction("★  Set as baseline")
+            act.triggered.connect(lambda: self._set_baseline(row))
+        menu.exec(self._hist_table.viewport().mapToGlobal(pos))
+
+    def _set_baseline(self, row: int) -> None:
+        from PyQt6.QtCore import QSettings
+        it0 = self._hist_table.item(row, 0)
+        if it0 is None:
+            return
+        ts_str = it0.text().lstrip("★ ").strip()
+        QSettings("NetSentinel", "NetSentinel").setValue("speed_test/baseline_ts", ts_str)
+        self._apply_baseline_markers()
+
+    def _clear_baseline(self) -> None:
+        from PyQt6.QtCore import QSettings
+        QSettings("NetSentinel", "NetSentinel").remove("speed_test/baseline_ts")
+        self._apply_baseline_markers()
+
+    def _apply_baseline_markers(self) -> None:
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        baseline_ts_str = str(qs.value("speed_test/baseline_ts", "") or "")
+
+        baseline_row = -1
+        baseline_dl = 0.0
+        for r in range(self._hist_table.rowCount()):
+            it = self._hist_table.item(r, 0)
+            if it is None:
+                continue
+            raw = it.text().lstrip("★ ").strip()
+            if baseline_ts_str and raw == baseline_ts_str:
+                baseline_row = r
+                dl_it = self._hist_table.item(r, 4)
+                if dl_it is not None:
+                    v = dl_it.data(Qt.ItemDataRole.UserRole)
+                    if v is not None:
+                        try:
+                            baseline_dl = float(v)
+                        except (TypeError, ValueError):
+                            pass
+                break
+
+        for r in range(self._hist_table.rowCount()):
+            it0 = self._hist_table.item(r, 0)
+            if it0 is None:
+                continue
+            raw_ts = it0.text().lstrip("★ ").strip()
+            if r == baseline_row:
+                it0.setText(f"★  {raw_ts}")
+                it0.setForeground(QColor(ACCENT))
+            else:
+                it0.setText(raw_ts)
+                it0.setForeground(QColor(TEXT_PRIMARY))
+
+            dl_it = self._hist_table.item(r, 4)
+            if dl_it is None:
+                continue
+            raw_dl = dl_it.data(Qt.ItemDataRole.UserRole)
+            if raw_dl is None:
+                continue
+            try:
+                dl = float(raw_dl)
+            except (TypeError, ValueError):
+                continue
+
+            if baseline_dl > 0 and r != baseline_row:
+                delta = dl - baseline_dl
+                sign = "↑" if delta >= 0 else "↓"
+                c = GREEN if delta >= 0 else RED
+                dl_it.setText(f"{dl:.1f}  {delta:+.0f} {sign}")
+                dl_it.setForeground(QColor(c))
+            else:
+                dl_it.setText(f"{dl:.1f} Mbps")
+                dl_it.setForeground(QColor(GREEN if dl >= 25 else AMBER))

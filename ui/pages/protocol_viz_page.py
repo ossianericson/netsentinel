@@ -8,7 +8,10 @@ Auto-plays on protocol selection with play/pause, reset, and manual step control
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional
+import re as _re
+from typing import Any, Dict, List, Optional
+
+_IP_RE = _re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -497,16 +500,52 @@ class ProtocolVizPage(QWidget):
 
     def _build_scene(self, key: str) -> ProtocolSceneData:
         if key == "ARP":
-            return build_arp_scene(self._net_info, self._devices)
-        if key == "DNS":
-            return build_dns_scene(self._net_info, self._diag_result)
-        if key == "TCP":
-            return build_tcp_scene(self._net_info, self._devices)
-        if key == "DHCP":
-            return build_dhcp_scene(self._net_info)
-        if key == "STP":
-            return build_stp_scene(self._m2_result)
-        return build_arp_scene(self._net_info, self._devices)
+            scene = build_arp_scene(self._net_info, self._devices)
+        elif key == "DNS":
+            scene = build_dns_scene(self._net_info, self._diag_result)
+        elif key == "TCP":
+            scene = build_tcp_scene(self._net_info, self._devices)
+        elif key == "DHCP":
+            scene = build_dhcp_scene(self._net_info)
+        elif key == "STP":
+            scene = build_stp_scene(self._m2_result)
+        else:
+            scene = build_arp_scene(self._net_info, self._devices)
+        self._enrich_scene_nodes(scene)
+        return scene
+
+    # ── Inventory name overlay (VIZ-7) ────────────────────────────────────────
+
+    def _build_ip_name_map(self) -> Dict[str, str]:
+        """Return ip → best-known hostname from last scan device list."""
+        result: Dict[str, str] = {}
+        for d in self._devices:
+            if isinstance(d, dict):
+                ip   = d.get("ip", "") or ""
+                name = d.get("hostname", "") or d.get("vendor", "") or ""
+            else:
+                ip   = getattr(d, "ip",       "") or ""
+                name = (getattr(d, "hostname", "") or
+                        getattr(d, "vendor",   "") or "")
+            if ip and name and name != ip:
+                result[ip] = name
+        return result
+
+    def _enrich_scene_nodes(self, scene: ProtocolSceneData) -> None:
+        """Overlay scan hostnames onto node labels where the IP is known (in-place)."""
+        name_map = self._build_ip_name_map()
+        if not name_map:
+            return
+        for node in scene.nodes:
+            m = _IP_RE.search(node.label)
+            if not m:
+                continue
+            ip = m.group(1)
+            hostname = name_map.get(ip, "")
+            if not hostname:
+                continue
+            # Replace node label: hostname on line 1, IP on line 2
+            node.label = f"{hostname}\n{ip}"
 
     # ── Playback controls ──────────────────────────────────────────────────────
 

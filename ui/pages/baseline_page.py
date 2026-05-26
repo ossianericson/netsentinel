@@ -24,7 +24,7 @@ import json
 import time
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QSizePolicy,
     QSplitter,
     QTableWidget,
@@ -44,8 +45,8 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.context_menu import install_copy_menu
 from modules.config_baseline import (
@@ -195,6 +196,9 @@ class BaselinePage(QWidget):
             "Configuration Baseline Snapshots",
             "Capture network state and compare snapshots to detect configuration drift",
         ))
+
+        # ACT-7: auto-snapshot schedule strip
+        outer.addWidget(self._build_schedule_strip())
 
         # KPI row
         self._kpi_count   = _kpi_tile("Snapshots",    "—")
@@ -566,4 +570,113 @@ tr:nth-child(even){{background:#f9f9f9}}
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
         except Exception as exc:
             ToastManager.show(f"Export failed: {exc}", "error")
+
+    # ── ACT-7: schedule strip ─────────────────────────────────────────────────
+
+    def _build_schedule_strip(self) -> QFrame:
+        strip = QFrame()
+        strip.setStyleSheet(
+            f"QFrame {{ background:{BG_HOVER}; border:none;"
+            f" border-bottom:1px solid {BORDER}; }}"
+        )
+        lay = QHBoxLayout(strip)
+        lay.setContentsMargins(16, 6, 16, 6)
+        lay.setSpacing(8)
+
+        self._sched_lbl = QLabel()
+        self._sched_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        lay.addWidget(self._sched_lbl)
+        lay.addStretch()
+
+        # Inline edit widget (hidden until [Edit] clicked)
+        self._sched_edit_widget = QFrame()
+        self._sched_edit_widget.setStyleSheet("QFrame { background:transparent; border:none; }")
+        edit_lay = QHBoxLayout(self._sched_edit_widget)
+        edit_lay.setContentsMargins(0, 0, 0, 0)
+        edit_lay.setSpacing(6)
+        _every_lbl = QLabel("every")
+        _every_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
+        self._sched_spin = QSpinBox()
+        self._sched_spin.setRange(1, 10)
+        self._sched_spin.setValue(3)
+        self._sched_spin.setFixedWidth(55)
+        self._sched_spin.setFixedHeight(24)
+        self._sched_spin.setStyleSheet(
+            f"font-size:11px; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        _scans_lbl = QLabel("scans")
+        _scans_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;")
+        btn_save = QPushButton("Save")
+        btn_save.setFixedHeight(24)
+        btn_save.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:3px; padding:0 10px; font-size:11px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+        )
+        btn_save.clicked.connect(self._save_schedule)
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setFixedHeight(24)
+        btn_cancel.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            f" border-radius:3px; padding:0 8px; font-size:11px; }}"
+        )
+        btn_cancel.clicked.connect(self._cancel_schedule_edit)
+        edit_lay.addWidget(_every_lbl)
+        edit_lay.addWidget(self._sched_spin)
+        edit_lay.addWidget(_scans_lbl)
+        edit_lay.addWidget(btn_save)
+        edit_lay.addWidget(btn_cancel)
+        self._sched_edit_widget.setVisible(False)
+        lay.addWidget(self._sched_edit_widget)
+
+        self._sched_btn = QPushButton()
+        self._sched_btn.setFixedHeight(24)
+        self._sched_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+            f" border-radius:3px; padding:0 10px; font-size:11px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}18; }}"
+        )
+        self._sched_btn.clicked.connect(self._toggle_schedule_edit)
+        lay.addWidget(self._sched_btn)
+
+        self._refresh_schedule_strip()
+        return strip
+
+    def _refresh_schedule_strip(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        enabled = qs.value("baseline/auto_snapshot", False, type=bool)
+        every = int(qs.value("baseline/auto_snapshot_every", 3) or 3)
+        if enabled:
+            self._sched_lbl.setText(
+                f"Auto-snapshot: every {every} scan{'s' if every != 1 else ''}"
+            )
+            self._sched_btn.setText("Edit")
+        else:
+            self._sched_lbl.setText("Auto-snapshot: off")
+            self._sched_btn.setText("Enable")
+
+    def _toggle_schedule_edit(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        enabled = qs.value("baseline/auto_snapshot", False, type=bool)
+        if not enabled:
+            # Enable immediately with default interval
+            qs.setValue("baseline/auto_snapshot", True)
+        every = int(qs.value("baseline/auto_snapshot_every", 3) or 3)
+        self._sched_spin.setValue(every)
+        self._sched_edit_widget.setVisible(True)
+        self._sched_btn.setVisible(False)
+
+    def _save_schedule(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("baseline/auto_snapshot", True)
+        qs.setValue("baseline/auto_snapshot_every", self._sched_spin.value())
+        self._sched_edit_widget.setVisible(False)
+        self._sched_btn.setVisible(True)
+        self._refresh_schedule_strip()
+
+    def _cancel_schedule_edit(self) -> None:
+        self._sched_edit_widget.setVisible(False)
+        self._sched_btn.setVisible(True)
 

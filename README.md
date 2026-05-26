@@ -320,6 +320,17 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.40
+
+- **Geo map enriched detail panel** (VIZ-1) — clicking a mapped IP now shows a full enriched panel: flag + country/city, ASN/org, threat-intel risk chip, up to three TI indicator rows, alert count from the last 24 h, and a "View in Threat Intel →" button that navigates directly to the Threat Intel page
+- **Bandwidth event annotations** (VIZ-2) — rate-spike and new-device events are now annotated directly on the Live Bandwidth chart with a dashed vertical line and a rotated label; annotations age across the 60-second rolling window
+- **Protocol visualizer name overlay** (VIZ-7) — AnimNodes whose labels contain an IP address are automatically enriched with the device hostname from the last inventory scan, displayed as two-line "hostname / IP" labels in the protocol animation
+- **Alert badge decay** (ANIM-9) — when a rail-section badge is cleared, it fades out over 400 ms (OutCubic easing) rather than disappearing instantly; reduce-motion preference bypasses the animation
+- **Inventory scan comparison** (ACT-3) — Inventory page gains a "⊞ Compare" toolbar button that opens a modal diff dialog showing added, removed, and changed devices between any two saved baseline snapshots
+- **Speed test baseline** (ACT-4) — right-click any Speed Test history row to "★ Set as Baseline"; starred row shows a ★ marker in column 0 and subsequent rows display download/upload delta arrows (↑/↓) relative to the baseline
+- **Baseline schedule strip** (ACT-7) — Config Baseline page gains an "Auto-snapshot every N days" strip; setting is persisted to QSettings and drives the existing scheduler
+- **Certificate snooze** (ACT-8) — right-click any certificate row to snooze its expiry warning for 7, 30, or 90 days; snoozed certs are greyed out with the snooze expiry shown in the Status column
+
 ### v1.9.39
 
 - **Group-by-process toggle** (FILTER-7) — Connections page gains a "⊞ Group by Process" button; when active, rows collapse into per-executable aggregates showing port range, external-IP count, and dominant status; click any group row to expand an inline sub-table of individual connections

@@ -567,6 +567,12 @@ class _RailButton(QPushButton):
         self._badge_anim = QPropertyAnimation(self, b"badgeScale", self)
         self._badge_anim.setDuration(250)
         self._badge_anim.setEasingCurve(QEasingCurve.Type.OutBack)
+        # ANIM-9: badge fade-out — opacity 1.0→0.0 when count drops to zero
+        self._badge_opacity: float = 1.0
+        self._badge_fade_anim = QPropertyAnimation(self, b"badgeOpacity", self)
+        self._badge_fade_anim.setDuration(400)
+        self._badge_fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._badge_fade_anim.finished.connect(self._on_badge_fade_done)
         self.setCheckable(True)
         self.setFixedSize(56, 58)
         self.setToolTip(tooltip)
@@ -595,6 +601,21 @@ class _RailButton(QPushButton):
         self._badge_scale = value
         self.update()
 
+    @pyqtProperty(float)
+    def badgeOpacity(self) -> float:
+        return self._badge_opacity
+
+    @badgeOpacity.setter
+    def badgeOpacity(self, value: float) -> None:
+        self._badge_opacity = value
+        self.update()
+
+    def _on_badge_fade_done(self) -> None:
+        self._badge_color = ""
+        self._badge_count = ""
+        self._badge_opacity = 1.0
+        self.update()
+
     def set_badge(self, value) -> None:
         """Set or clear the badge.
 
@@ -616,11 +637,24 @@ class _RailButton(QPushButton):
                     self._badge_anim.setEndValue(1.0)
                     self._badge_anim.start()
         elif value and not str(value).isdigit():
+            self._badge_fade_anim.stop()
+            self._badge_opacity = 1.0
             self._badge_color = str(value)
             self._badge_count = ""
         else:
+            # ANIM-9: fade out rather than immediate hide when a badge was showing
+            if self._badge_count or self._badge_color:
+                from ui.theme import _reduce_motion
+                if not _reduce_motion():
+                    self._badge_fade_anim.stop()
+                    self._badge_opacity = 1.0
+                    self._badge_fade_anim.setStartValue(1.0)
+                    self._badge_fade_anim.setEndValue(0.0)
+                    self._badge_fade_anim.start()
+                    return   # _on_badge_fade_done will clear after 400 ms
             self._badge_color = ""
             self._badge_count = ""
+            self._badge_opacity = 1.0
         self.update()
 
     def set_left_dot(self, color: str) -> None:
@@ -670,6 +704,7 @@ class _RailButton(QPushButton):
             p.translate(cx, cy)
             p.scale(self._badge_scale, self._badge_scale)
             p.translate(-cx, -cy)
+            p.setOpacity(self._badge_opacity)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(RED))
             p.drawRoundedRect(QRectF(pill_x, pill_y, pill_w, pill_h), 7, 7)
@@ -680,9 +715,12 @@ class _RailButton(QPushButton):
             p.restore()
         # Plain colour dot badge — top-right corner
         elif self._badge_color:
+            p.save()
+            p.setOpacity(self._badge_opacity)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(self._badge_color))
             p.drawEllipse(self.width() - 11, 3, 7, 7)
+            p.restore()
 
         # Short label below the icon
         font = QFont("Segoe UI", 7)
@@ -2819,7 +2857,8 @@ class Dashboard(QMainWindow):
         self._wifi_heatmap_page = WifiHeatmapPage(parent=None)
 
         from ui.pages.geo_map_page import GeoMapPage
-        self._geo_map_page = GeoMapPage(parent=None)
+        self._geo_map_page = GeoMapPage(store=self._store, parent=None)
+        self._geo_map_page.navigate_requested.connect(self._nav_rail_go_to)
 
         from ui.pages.trigger_builder_page import TriggerBuilderPage
         self._trigger_page = TriggerBuilderPage(store=self._store, parent=None)
@@ -6480,6 +6519,8 @@ class Dashboard(QMainWindow):
                 self._threat_intel_page.check_ip(host)
             self._nav_rail_go_to("Threat Intelligence")
         elif rule_type == "RATE_SPIKE" and host:
+            if hasattr(self, "_live_bandwidth_page"):
+                self._live_bandwidth_page.annotate_event("Rate spike", RED)
             self._nav_rail_go_to("Live Bandwidth")
         elif host:
             self._on_inventory_device_selected(host)
@@ -9617,15 +9658,14 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Group by Process",           "Connections page: toggle collapses rows into per-executable aggregates; click to expand"),
-            ("Threat Intel search",        "Live filter bar on Threat Intel searches indicator, category, and feed with match count"),
-            ("Timeline search",            "Text search in the Timeline filters event title and detail with 200 ms debounce"),
-            ("Log Hub CSV export",         "'Down Export' button exports only the currently visible filtered log entries to CSV"),
-            ("Inventory tag chips",        "Device tags appear as toggleable chips; clicking a chip filters to devices with that tag"),
-            ("Notifications bulk actions", "Select multiple alerts to get Dismiss, Snooze 1 h, and Snooze 8 h bulk actions"),
-            ("Timeline click-to-navigate", "Clicking a Timeline event row jumps directly to the relevant page (Devices, Alerts, CVE...)"),
-            ("DHCP Find in Inventory",     "Right-click a DHCP lease to 'Find in Inventory' — selects the device and navigates"),
-            ("Per-page help panel",        "Every page header supports a ? button that opens a plain-English description popover"),
+            ("Geo map enriched detail",    "Clicking a mapped IP shows flag, country/city, ASN/org, threat-intel risk, alerts, and a link to Threat Intel"),
+            ("Bandwidth event annotations","Rate-spike and new-device events appear as annotated dashed lines on the Live Bandwidth rolling chart"),
+            ("Protocol viz name overlay",  "AnimNodes are enriched with device hostnames from the last inventory scan (two-line hostname/IP labels)"),
+            ("Alert badge decay",          "Rail-section badges fade out over 400 ms when cleared (respects reduce-motion preference)"),
+            ("Inventory scan comparison",  "Toolbar Compare button opens a diff dialog: added, removed, and changed devices between two baseline snapshots"),
+            ("Speed test baseline",        "Right-click any history row to set it as the baseline; subsequent rows show download/upload deltas"),
+            ("Baseline schedule strip",    "Config Baseline page: set an auto-snapshot interval in days, persisted to QSettings"),
+            ("Certificate snooze",         "Right-click a cert row to snooze its expiry warning for 7, 30, or 90 days"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -10323,6 +10363,8 @@ class Dashboard(QMainWindow):
                 self._last_scan_new  = len(tr.new_devices)
                 self._last_scan_gone = len(tr.gone_devices)
                 if tr.new_devices:
+                    if hasattr(self, "_live_bandwidth_page"):
+                        self._live_bandwidth_page.annotate_event("Device joined", GREEN)
                     msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})"
                             for d in tr.new_devices[:3]]
                     extra = f" +{len(tr.new_devices)-3} more" if len(tr.new_devices) > 3 else ""

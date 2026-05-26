@@ -258,11 +258,25 @@ _MARKER_COLOR = {
 
 # ── Main page ─────────────────────────────────────────────────────────────────
 
+def _country_flag(code: str) -> str:
+    """Convert a 2-letter ISO country code to a flag emoji."""
+    if not code or len(code) != 2:
+        return ""
+    code = code.upper()
+    try:
+        return chr(0x1F1E6 + ord(code[0]) - ord("A")) + chr(0x1F1E6 + ord(code[1]) - ord("A"))
+    except Exception:
+        return ""
+
+
 class GeoMapPage(QWidget):
     """World-map geolocation of internet-facing IPs."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    navigate_requested = pyqtSignal(str)   # page label — emitted by "View in Threat Intel →"
+
+    def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._store = store
         self._locator: GeoLocator = get_locator()
         # ip → (GeoResult, category, [linked labels])
         self._points: Dict[str, Tuple[GeoResult, str, List[str]]] = {}
@@ -443,22 +457,80 @@ class GeoMapPage(QWidget):
 
     def _build_detail_panel(self) -> QWidget:
         card, layout = _card("Selected IP — Details")
-        self._detail_ip    = QLabel("—")
+
+        self._detail_ip = QLabel("—")
         self._detail_ip.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self._detail_ip.setStyleSheet(f"color:{TEXT_PRIMARY};")
-        self._detail_body  = QLabel("Click a dot on the map to see details.")
+
+        # Placeholder — shown when no dot is selected (or while resolving)
+        self._detail_body = QLabel("Click a dot on the map to see details.")
         self._detail_body.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
         self._detail_body.setWordWrap(True)
+
+        # Enriched widgets — hidden until an IP is selected
+        self._detail_location = QLabel("")
+        self._detail_location.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:10px;")
+        self._detail_location.setWordWrap(True)
+        self._detail_location.setVisible(False)
+
+        self._detail_org = QLabel("")
+        self._detail_org.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        self._detail_org.setWordWrap(True)
+        self._detail_org.setVisible(False)
+
+        self._detail_cat = QLabel("")
+        self._detail_cat.setStyleSheet(f"font-size:10px;")
+        self._detail_cat.setVisible(False)
+
+        self._detail_risk = QLabel("")
+        self._detail_risk.setStyleSheet(f"font-size:10px;")
+        self._detail_risk.setVisible(False)
+
+        self._detail_sep = QFrame()
+        self._detail_sep.setFrameShape(QFrame.Shape.HLine)
+        self._detail_sep.setStyleSheet(f"color:{BORDER}; margin:2px 0;")
+        self._detail_sep.setVisible(False)
+
+        self._detail_ti_hdr = QLabel("Related threat intel:")
+        self._detail_ti_hdr.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:9px; font-weight:600;")
+        self._detail_ti_hdr.setVisible(False)
+
+        self._detail_ti_text = QLabel("")
+        self._detail_ti_text.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+        self._detail_ti_text.setWordWrap(True)
+        self._detail_ti_text.setVisible(False)
+
+        self._detail_view_ti = QPushButton("View in Threat Intel →")
+        self._detail_view_ti.setFlat(True)
+        self._detail_view_ti.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:9px; border:none;"
+            f"  padding:0; text-align:left; }}"
+            f"QPushButton:hover {{ color:{TH_BG}; }}"
+        )
+        self._detail_view_ti.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._detail_view_ti.clicked.connect(
+            lambda: self.navigate_requested.emit("Threat Intel"))
+        self._detail_view_ti.setVisible(False)
+
+        self._detail_alerts = QLabel("")
+        self._detail_alerts.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
+        self._detail_alerts.setVisible(False)
+
         self._detail_links = QLabel("")
         self._detail_links.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
         self._detail_links.setWordWrap(True)
 
-        layout.addWidget(self._detail_ip)
-        layout.addWidget(self._detail_body)
-        layout.addWidget(self._detail_links)
+        for w in (self._detail_ip, self._detail_body,
+                  self._detail_location, self._detail_org,
+                  self._detail_cat, self._detail_risk,
+                  self._detail_sep,
+                  self._detail_ti_hdr, self._detail_ti_text,
+                  self._detail_view_ti, self._detail_alerts,
+                  self._detail_links):
+            layout.addWidget(w)
         layout.addStretch()
 
-        # Wrap in scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(card)
@@ -644,17 +716,98 @@ class GeoMapPage(QWidget):
         result, category, links = self._points[ip]
         self._detail_ip.setText(ip)
 
-        lines = [
-            f"Country:  {result.country_name or result.country or '—'}",
-            f"City:     {result.city or '—'}",
-            f"Lat/Lon:  {result.latitude:.3f}, {result.longitude:.3f}",
-            f"Category: {category}",
-        ]
-        self._detail_body.setText("\n".join(lines))
+        # -- Location ---
+        flag = _country_flag(result.country)
+        country = result.country_name or result.country or "—"
+        loc = f"{flag} {country}".strip() if flag else country
+        if result.city:
+            loc += f"  ·  {result.city}"
+        self._detail_location.setText(loc)
+        self._detail_location.setVisible(True)
+
+        # -- Org / ASN ---
+        org_parts = [p for p in (result.asn, result.org) if p]
+        if org_parts:
+            self._detail_org.setText("  ·  ".join(org_parts))
+            self._detail_org.setVisible(True)
+        else:
+            self._detail_org.setVisible(False)
+
+        # -- Category chip ---
+        cat_color = _MARKER_COLOR.get(category, ACCENT)
+        self._detail_cat.setText(f"Category:  ● {category}")
+        self._detail_cat.setStyleSheet(f"color:{cat_color}; font-size:10px;")
+        self._detail_cat.setVisible(True)
+
+        # -- Threat intel: risk chip + related entries ---
+        ti_entries: list = []
+        try:
+            from modules.threat_intel import load_from_cache
+            ti_entries = [
+                e for e in load_from_cache()
+                if getattr(e, "itype", "") == "ip" and e.indicator == ip
+            ]
+        except Exception:
+            pass
+
+        if ti_entries:
+            best = max(ti_entries, key=lambda e: e.confidence)
+            conf = best.confidence
+            if conf >= 90:
+                risk_color, risk_label = RED, "CRITICAL"
+            elif conf >= 70:
+                risk_color, risk_label = RED, "HIGH"
+            elif conf >= 50:
+                risk_color, risk_label = AMBER, "MEDIUM"
+            else:
+                risk_color, risk_label = TEXT_SECONDARY, "LOW"
+            self._detail_risk.setText(f"Risk:  ● {risk_label}  (confidence {conf}%)")
+            self._detail_risk.setStyleSheet(f"font-size:10px; color:{risk_color};")
+            self._detail_risk.setVisible(True)
+
+            lines = []
+            for e in ti_entries[:3]:
+                cats = ", ".join(e.categories[:2]) if e.categories else e.source
+                suffix = f"  [{e.last_seen}]" if getattr(e, "last_seen", "") else ""
+                lines.append(f"  • {e.source}: {cats}{suffix}")
+            self._detail_ti_hdr.setVisible(True)
+            self._detail_ti_text.setText("\n".join(lines))
+            self._detail_ti_text.setVisible(True)
+            self._detail_view_ti.setVisible(True)
+        else:
+            self._detail_risk.setVisible(False)
+            self._detail_ti_hdr.setVisible(False)
+            self._detail_ti_text.setVisible(False)
+            self._detail_view_ti.setVisible(False)
+
+        # -- Alert count from MetricStore ---
+        has_extra = bool(ti_entries)
+        if self._store is not None:
+            try:
+                recent = self._store.get_recent_alerts(hours=24)
+                count = sum(1 for a in recent if a.get("host", "") == ip)
+                self._detail_alerts.setText(f"Alerts in last 24 h:  {count}")
+                self._detail_alerts.setStyleSheet(
+                    f"color:{RED}; font-size:9px;" if count > 0
+                    else f"color:{TEXT_MUTED}; font-size:9px;"
+                )
+                self._detail_alerts.setVisible(True)
+                has_extra = True
+            except Exception:
+                self._detail_alerts.setVisible(False)
+        else:
+            self._detail_alerts.setVisible(False)
+
+        self._detail_sep.setVisible(has_extra)
+
+        # -- Linked labels ---
         if links:
             self._detail_links.setText("Linked:\n" + "\n".join(f"  • {l}" for l in links))
         else:
             self._detail_links.setText("")
+
+        # Hide placeholder, show enriched panel
+        self._detail_body.setVisible(False)
 
         # Highlight matching row in table
         for row in range(self._ip_table.rowCount()):
@@ -707,13 +860,18 @@ class GeoMapPage(QWidget):
     @pyqtSlot(list)
     def _on_results(self, results: List[GeoResult], category: str,
                     link_map: Dict[str, object]) -> None:
+        resolved_ips = set()
         for r in results:
             links = link_map.get(r.ip, [])
             if isinstance(links, str):
                 links = [links]
             self._points[r.ip] = (r, category, list(links))
+            resolved_ips.add(r.ip)
         self._refresh_table()
         self._redraw_map()
+        # If the selected IP just resolved, populate the enriched detail panel
+        if self._selected_ip and self._selected_ip in resolved_ips:
+            self._select_ip(self._selected_ip)
 
     # ── Scroll zoom ───────────────────────────────────────────────────────────
 
@@ -817,7 +975,12 @@ class GeoMapPage(QWidget):
         self._ip_table.setRowCount(0)
         self._detail_ip.setText("—")
         self._detail_body.setText("Click a dot on the map to see details.")
+        self._detail_body.setVisible(True)
         self._detail_links.setText("")
+        for w in (self._detail_location, self._detail_org, self._detail_cat,
+                  self._detail_risk, self._detail_sep, self._detail_ti_hdr,
+                  self._detail_ti_text, self._detail_view_ti, self._detail_alerts):
+            w.setVisible(False)
         self._redraw_map()
 
     def _on_reload_db(self) -> None:

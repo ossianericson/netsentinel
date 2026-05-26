@@ -22,9 +22,10 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
-    QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
+    QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy,
+    QStackedWidget, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
+    QWidget,
 )
 
 from ui.expanding_table import ExpandingTable
@@ -304,6 +305,90 @@ def _plain_item(text: str) -> QTableWidgetItem:
     return item
 
 
+# ── Scan comparison dialog (ACT-3) ────────────────────────────────────────────
+
+class _ScanCompareDialog(QDialog):
+    """Pick two scan sessions to compare."""
+
+    def __init__(self, sessions: list, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Compare Scans")
+        self.setMinimumWidth(400)
+        self.setModal(True)
+        self._sessions = sessions  # list of (ts, label)
+        self._ts_a = 0
+        self._ts_b = 0
+        self.setStyleSheet(
+            f"QDialog {{ background:{BG_CARD}; }}"
+            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; padding:3px 6px; font-size:11px; }}"
+        )
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 16, 20, 16)
+        lay.setSpacing(12)
+
+        hdr = QLabel("Compare two scan sessions")
+        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        lay.addWidget(hdr)
+
+        desc = QLabel(
+            "Scan A is the earlier baseline.  Scan B is the later snapshot.  "
+            "New devices appear green; devices that disappeared appear red."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        lay.addWidget(desc)
+
+        labels = [s[1] for s in sessions]
+
+        form = QFormLayout()
+        form.setSpacing(8)
+        form.setHorizontalSpacing(12)
+
+        def _lbl(t):
+            l = QLabel(t)
+            l.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            return l
+
+        self._combo_a = QComboBox()
+        self._combo_a.addItems(labels)
+        if len(labels) > 1:
+            self._combo_a.setCurrentIndex(len(labels) - 2)  # second-to-last = older
+        self._combo_b = QComboBox()
+        self._combo_b.addItems(labels)
+        self._combo_b.setCurrentIndex(len(labels) - 1)   # last = newer
+
+        form.addRow(_lbl("Scan A (baseline)"), self._combo_a)
+        form.addRow(_lbl("Scan B (compare to)"), self._combo_b)
+        lay.addLayout(form)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText("Compare")
+        btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}dd; }}"
+        )
+        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:4px 14px; }}"
+        )
+        btns.accepted.connect(self._on_accept)
+        btns.rejected.connect(self.reject)
+        lay.addWidget(btns)
+
+    def _on_accept(self) -> None:
+        self._ts_a = self._sessions[self._combo_a.currentIndex()][0]
+        self._ts_b = self._sessions[self._combo_b.currentIndex()][0]
+        self.accept()
+
+    def result_timestamps(self) -> tuple:
+        return self._ts_a, self._ts_b
+
+
 # ── Main page ────────────────────────────────────────────────────────────────
 
 class InventoryPage(QWidget):
@@ -329,6 +414,7 @@ class InventoryPage(QWidget):
         self._active_tags: set[str] = set()
         self._rows: list = []
         self._last_refresh_ts = 0.0
+        self._compare_mode = False
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
@@ -410,7 +496,42 @@ class InventoryPage(QWidget):
         )
         rb.clicked.connect(self._refresh)
         ctrl_row.addWidget(rb)
+        btn_compare = QPushButton("⊞ Compare Scans")
+        btn_compare.setFixedHeight(26)
+        btn_compare.setStyleSheet(
+            f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
+        )
+        btn_compare.clicked.connect(self._open_compare_dialog)
+        ctrl_row.addWidget(btn_compare)
         cl.addLayout(ctrl_row)
+
+        # ACT-3: compare mode banner (hidden when in live view)
+        self._compare_banner = QFrame()
+        self._compare_banner.setVisible(False)
+        self._compare_banner.setStyleSheet(
+            f"QFrame {{ background:{ACCENT}18; border:1px solid {ACCENT}44;"
+            f" border-radius:3px; }}"
+        )
+        _cb_lay = QHBoxLayout(self._compare_banner)
+        _cb_lay.setContentsMargins(10, 5, 10, 5)
+        _cb_lay.setSpacing(10)
+        self._compare_banner_lbl = QLabel("")
+        self._compare_banner_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{ACCENT}; background:transparent; border:none;"
+        )
+        _cb_lay.addWidget(self._compare_banner_lbl, 1)
+        _back_btn = QPushButton("← Back to live view")
+        _back_btn.setFixedHeight(24)
+        _back_btn.setStyleSheet(
+            f"QPushButton {{ font-size:11px; color:{ACCENT}; background:transparent;"
+            f" border:1px solid {ACCENT}; border-radius:3px; padding:0 10px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}22; }}"
+        )
+        _back_btn.clicked.connect(self._exit_compare_mode)
+        _cb_lay.addWidget(_back_btn)
+        cl.addWidget(self._compare_banner)
 
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
@@ -580,6 +701,57 @@ class InventoryPage(QWidget):
         card_lay.addWidget(self._bulk_bar)
         cl.addWidget(card, 1)
         self._content_stack.addWidget(content)
+
+        # ── Page 2: scan comparison view ──────────────────────────────────────
+        compare_page = QWidget()
+        cmp_lay = QVBoxLayout(compare_page)
+        cmp_lay.setContentsMargins(0, 0, 0, 0)
+        cmp_lay.setSpacing(0)
+        cmp_card = QFrame()
+        cmp_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
+        )
+        cmp_card_lay = QVBoxLayout(cmp_card)
+        cmp_card_lay.setContentsMargins(0, 0, 0, 0)
+        cmp_card_lay.setSpacing(0)
+        self._cmp_table = QTableWidget(0, 6)
+        self._cmp_table.setHorizontalHeaderLabels(
+            ["●", "Status", "IP / Host", "MAC", "Vendor", "First Seen"]
+        )
+        self._cmp_table.verticalHeader().setVisible(False)
+        self._cmp_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._cmp_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._cmp_table.setAlternatingRowColors(False)
+        self._cmp_table.verticalHeader().setDefaultSectionSize(24)
+        self._cmp_table.setShowGrid(False)
+        _cmp_hdr = self._cmp_table.horizontalHeader()
+        _cmp_hdr.resizeSection(0, 22)
+        _cmp_hdr.resizeSection(1, 100)
+        _cmp_hdr.resizeSection(3, 140)
+        _cmp_hdr.resizeSection(4, 130)
+        _cmp_hdr.resizeSection(5, 130)
+        _cmp_hdr.setStretchLastSection(False)
+        _cmp_hdr.setSectionResizeMode(2, _cmp_hdr.ResizeMode.Stretch)
+        self._cmp_table.setStyleSheet(
+            f"""
+            QTableWidget {{
+                font-size:11px; color:{TEXT_PRIMARY};
+                background:{BG_CARD}; border:none; outline:none;
+                gridline-color:{BORDER};
+            }}
+            QTableWidget::item {{ padding:3px 5px; border-bottom:1px solid #EAEAEA; }}
+            QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}
+            QHeaderView::section {{
+                background:{TH_BG}; color:{TH_TEXT};
+                font-size:11px; font-weight:bold;
+                padding:4px 5px; border:none;
+                border-right:1px solid #2A4A6A;
+            }}
+            """
+        )
+        cmp_card_lay.addWidget(self._cmp_table)
+        cmp_lay.addWidget(cmp_card, 1)
+        self._content_stack.addWidget(compare_page)
 
         root.addWidget(self._content_stack, 1)
         self._set_window("24h")
@@ -1025,3 +1197,128 @@ class InventoryPage(QWidget):
 
     def _bulk_deselect(self) -> None:
         self._table.clearSelection()
+
+    # ── ACT-3: scan comparison ────────────────────────────────────────────────
+
+    def _build_scan_sessions(self) -> list:
+        """Group device events into scan sessions (30-minute windows).
+
+        Returns list of (ts, label) sorted oldest→newest, up to 20 entries.
+        """
+        if not self._store:
+            return []
+        try:
+            events = self._store.query_device_events(hours=8760)  # up to 1 year
+        except Exception:
+            return []
+
+        if not events:
+            return []
+
+        sorted_events = sorted(events, key=lambda e: e.ts)
+        sessions: list = []
+        last_ts = 0
+        for evt in sorted_events:
+            if evt.ts - last_ts > 1800:  # 30-minute gap = new session
+                sessions.append(evt.ts)
+            last_ts = evt.ts
+
+        # Format labels
+        result = []
+        for ts in sessions:
+            dt = datetime.datetime.fromtimestamp(ts)
+            label = dt.strftime("%Y-%m-%d %H:%M")
+            result.append((ts, label))
+
+        return result[-20:]  # most recent 20
+
+    def _open_compare_dialog(self) -> None:
+        sessions = self._build_scan_sessions()
+        if len(sessions) < 2:
+            from ui.widgets.toast import ToastManager
+            ToastManager.show(
+                "Need at least 2 scan sessions in history to compare. "
+                "Run more scans first.",
+                "warning",
+            )
+            return
+        dlg = _ScanCompareDialog(sessions, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            ts_a, ts_b = dlg.result_timestamps()
+            self._start_compare_mode(ts_a, ts_b)
+
+    def _start_compare_mode(self, ts_a: int, ts_b: int) -> None:
+        if not self._store:
+            return
+        self._compare_mode = True
+
+        # Collect MACs active in each session window (±15 min around session ts)
+        try:
+            all_events = self._store.query_device_events(hours=8760)
+        except Exception:
+            return
+
+        def _macs_in_window(pivot: int) -> set:
+            window = 900  # 15 minutes
+            return {
+                e.mac for e in all_events
+                if e.mac and abs(e.ts - pivot) <= window
+            }
+
+        macs_a = _macs_in_window(ts_a)
+        macs_b = _macs_in_window(ts_b)
+        new_macs  = macs_b - macs_a
+        gone_macs = macs_a - macs_b
+        both_macs = macs_a & macs_b
+
+        known = self._store.get_known_devices() if self._store else {}
+
+        # Build table rows: (sort_key, mac, status, color, bg)
+        table_rows = []
+        for mac in new_macs:
+            table_rows.append((0, mac, "NEW", GREEN, f"{GREEN}18"))
+        for mac in gone_macs:
+            table_rows.append((1, mac, "GONE", RED, f"{RED}18"))
+        for mac in both_macs:
+            table_rows.append((2, mac, "UNCHANGED", TEXT_MUTED, BG_CARD))
+
+        self._cmp_table.setRowCount(0)
+        for _sort, mac, status, color, bg in sorted(table_rows, key=lambda x: x[0]):
+            kd = known.get(mac.lower()) or known.get(mac)
+            vendor = (kd.vendor or "—") if kd else "—"
+            host   = (kd.custom_name or kd.ip or kd.hostname or mac) if kd else mac
+            first  = (
+                datetime.datetime.fromtimestamp(kd.first_seen).strftime("%Y-%m-%d %H:%M")
+                if kd and kd.first_seen else "—"
+            )
+            row = self._cmp_table.rowCount()
+            self._cmp_table.insertRow(row)
+
+            dot = QTableWidgetItem("●")
+            dot.setForeground(QColor(color))
+            dot.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self._cmp_table.setItem(row, 0, dot)
+
+            for col, text in enumerate([status, host, mac, vendor, first], start=1):
+                item = QTableWidgetItem(text)
+                item.setForeground(QColor(color if col == 1 else TEXT_PRIMARY))
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                self._cmp_table.setItem(row, col, item)
+
+            self._cmp_table.setRowHeight(row, 24)
+
+        # Update banner
+        dt_a = datetime.datetime.fromtimestamp(ts_a).strftime("%Y-%m-%d %H:%M")
+        dt_b = datetime.datetime.fromtimestamp(ts_b).strftime("%Y-%m-%d %H:%M")
+        self._compare_banner_lbl.setText(
+            f"Compare: {dt_a}  →  {dt_b}  ·  "
+            f"{len(new_macs)} new  ·  {len(gone_macs)} gone  ·  {len(both_macs)} unchanged"
+        )
+        self._compare_banner.setVisible(True)
+        self._content_stack.setCurrentIndex(2)
+
+    def _exit_compare_mode(self) -> None:
+        self._compare_mode = False
+        self._compare_banner.setVisible(False)
+        idx = 1 if self._rows else 0
+        self._content_stack.setCurrentIndex(idx)

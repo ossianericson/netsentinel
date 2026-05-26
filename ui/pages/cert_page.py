@@ -32,6 +32,8 @@ from PyQt6.QtWidgets import (
 from modules.cert_monitor import CertTarget
 from modules.metric_store import CertCheckPoint, MetricStore
 from ui.widgets.context_menu import install_copy_menu
+from PyQt6.QtWidgets import QMenu
+
 from ui.styles import (
     ACCENT,
     AMBER,
@@ -276,6 +278,8 @@ class CertPage(QWidget):
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(26)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_cert_context_menu)
         install_copy_menu(self._table)
         card_layout.addWidget(self._table)
         cl.addWidget(card, stretch=1)
@@ -355,21 +359,41 @@ class CertPage(QWidget):
             days_str    = str(r.days_remaining) if r.days_remaining is not None else "—"
             expires_str = r.not_after or "—"
 
+            # ACT-8: check snooze state for expiring/expired certs
+            import time as _t
+            snoozed = False
+            snooze_chip = ""
+            if status_text in ("EXPIRING", "EXPIRED"):
+                snooze_key = f"cert/snooze/{r.host}:{r.port}"
+                snooze_until = float(
+                    QSettings("NetSentinel", "NetSentinel").value(snooze_key, 0) or 0
+                )
+                if snooze_until > _t.time():
+                    snoozed = True
+                    snooze_chip = "  z"
+                else:
+                    QSettings("NetSentinel", "NetSentinel").remove(snooze_key)
+
+            effective_color = TEXT_MUTED if snoozed else status_color
+
             self._table.setItem(row_idx, 0, self._cell(r.host))
             self._table.setItem(row_idx, 1, self._cell(str(r.port)))
 
-            dot = QLabel(f"  {status_text}")
+            dot = QLabel(f"  {status_text}{snooze_chip}")
             dot.setStyleSheet(
-                f"color: {status_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
+                f"color: {effective_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
             )
             dot.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
             self._table.setCellWidget(row_idx, 2, dot)
 
             days_item = self._cell(days_str)
-            if r.is_expired:
-                days_item.setForeground(QColor(RED))
-            elif r.days_remaining is not None and r.days_remaining < 30:
-                days_item.setForeground(QColor(AMBER))
+            if not snoozed:
+                if r.is_expired:
+                    days_item.setForeground(QColor(RED))
+                elif r.days_remaining is not None and r.days_remaining < 30:
+                    days_item.setForeground(QColor(AMBER))
+            else:
+                days_item.setForeground(QColor(TEXT_MUTED))
             self._table.setItem(row_idx, 3, days_item)
             self._table.setItem(row_idx, 4, self._cell(expires_str))
             self._table.setItem(row_idx, 5, self._cell(r.subject or "—"))
@@ -393,3 +417,57 @@ class CertPage(QWidget):
         item = QTableWidgetItem(text)
         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         return item
+
+    # ── ACT-8: snooze reminder ────────────────────────────────────────────────
+
+    def _on_cert_context_menu(self, pos) -> None:
+        import time as _t
+        row = self._table.rowAt(pos.y())
+        if row < 0:
+            return
+        host_item = self._table.item(row, 0)
+        port_item = self._table.item(row, 1)
+        if host_item is None or port_item is None:
+            return
+        host = host_item.text().strip()
+        port = port_item.text().strip()
+        if not host:
+            return
+
+        snooze_key = f"cert/snooze/{host}:{port}"
+        snooze_until = float(
+            QSettings("NetSentinel", "NetSentinel").value(snooze_key, 0) or 0
+        )
+        is_snoozed = snooze_until > _t.time()
+
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; font-size:11px;"
+            f" border:1px solid {BORDER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        )
+
+        snooze_menu = menu.addMenu("Snooze reminder")
+        snooze_menu.setStyleSheet(menu.styleSheet())
+        act_7d = snooze_menu.addAction("Snooze 7 days")
+        act_30d = snooze_menu.addAction("Snooze 30 days")
+        act_7d.triggered.connect(lambda: self._snooze_cert(host, port, days=7))
+        act_30d.triggered.connect(lambda: self._snooze_cert(host, port, days=30))
+
+        if is_snoozed:
+            act_clear = menu.addAction("Clear snooze")
+            act_clear.triggered.connect(lambda: self._clear_cert_snooze(host, port))
+
+        menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _snooze_cert(self, host: str, port: str, days: int) -> None:
+        import time as _t
+        expiry = _t.time() + days * 86400
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            f"cert/snooze/{host}:{port}", expiry
+        )
+        self._refresh()
+
+    def _clear_cert_snooze(self, host: str, port: str) -> None:
+        QSettings("NetSentinel", "NetSentinel").remove(f"cert/snooze/{host}:{port}")
+        self._refresh()

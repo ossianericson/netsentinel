@@ -918,14 +918,14 @@ string). If no `badge_until` is set, badges display indefinitely.
 | ACT-5 — Timeline jump to page | Actions | High | Med | 4 |
 | ACT-6 — DHCP find-in-inventory | Actions | Med | Low | 4 |
 | EDU-1 — Per-page help panel | Education | High | Med | 4 |
-| ACT-3 — Inventory scan comparison | Actions | High | High | 5 |
-| ACT-4 — Speed test baseline | Actions | Med | Med | 5 |
-| ACT-7 — Baseline auto-snapshot strip | Actions | Med | Low | 5 |
-| ACT-8 — Cert snooze | Actions | Med | Low | 5 |
-| VIZ-1 — Geo Map click-to-investigate | Viz | Med | Med | 5 |
-| VIZ-2 — Bandwidth event annotations | Viz | Med | Med | 5 |
-| VIZ-7 — Protocol Viz node labels | Viz | Med | Med | 5 |
-| ANIM-9 — Alert badge decay | Animations | Low | Low | 5 |
+| ✅ ACT-3 — Inventory scan comparison | Actions | High | High | 5 · v1.9.40 |
+| ✅ ACT-4 — Speed test baseline | Actions | Med | Med | 5 · v1.9.40 |
+| ✅ ACT-7 — Baseline auto-snapshot strip | Actions | Med | Low | 5 · v1.9.40 |
+| ✅ ACT-8 — Cert snooze | Actions | Med | Low | 5 · v1.9.40 |
+| ✅ VIZ-1 — Geo Map click-to-investigate | Viz | Med | Med | 5 · v1.9.40 |
+| ✅ VIZ-2 — Bandwidth event annotations | Viz | Med | Med | 5 · v1.9.40 |
+| ✅ VIZ-7 — Protocol Viz node labels | Viz | Med | Med | 5 · v1.9.40 |
+| ✅ ANIM-9 — Alert badge decay | Animations | Low | Low | 5 · v1.9.40 |
 | SET-1 — Notification test buttons | Settings | High | Med | 6 |
 | SET-2 — Accent color picker | Settings | Med | Med | 6 |
 | SET-3 — Settings export/import | Settings | Med | Med | 6 |
@@ -1001,18 +1001,18 @@ Close every remaining filter gap. Wire timeline events. Add per-page help.
 
 ---
 
-### Sprint 5 — Power actions + advanced visualization (target: v1.9.40)
+### Sprint 5 — Power actions + advanced visualization ✅ SHIPPED v1.9.40
 
 Power user workflows: scan comparison, baseline, cert snooze. Bandwidth gets smarter.
 
-1. ACT-3 — Inventory scan comparison view
-2. ACT-4 — Speed Test set-as-baseline
-3. ACT-7 — Baseline page schedule strip
-4. ACT-8 — Cert page renew-reminder snooze
-5. VIZ-1 — Geo Map click-to-investigate (enriched detail panel)
-6. VIZ-2 — Bandwidth event annotations (device/alert ticks)
-7. VIZ-7 — Protocol Visualizer inventory name overlay
-8. ANIM-9 — Alert badge decay animation
+1. ✅ ACT-3 — Inventory scan comparison view
+2. ✅ ACT-4 — Speed Test set-as-baseline
+3. ✅ ACT-7 — Baseline page schedule strip
+4. ✅ ACT-8 — Cert page renew-reminder snooze
+5. ✅ VIZ-1 — Geo Map click-to-investigate (enriched detail panel)
+6. ✅ VIZ-2 — Bandwidth event annotations (device/alert ticks)
+7. ✅ VIZ-7 — Protocol Visualizer inventory name overlay
+8. ✅ ANIM-9 — Alert badge decay animation
 
 ---
 

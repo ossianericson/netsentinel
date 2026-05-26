@@ -598,3 +598,25 @@ The prefix character in each flyout item label (the string passed to `_nav_add_r
 Use: `■ □ ▲ △ ● ○ ◆ ◇ ▶ ▷ ⬡ ⬢ ≡ ⌕ ⊕` etc.
 
 This rule covers **flyout item labels only**. Rail section icons (the 48 px permanent-rail buttons) are governed by RULE-25 (Lucide SVG).
+
+---
+
+## Backlog Tracking
+
+### RULE-BACKLOG1 (required): Mark completed backlog items in BACKLOG-UX-V7.md immediately upon completion
+
+When any item from `docs/BACKLOG-UX-V7.md` is finished (all code written, tests pass, app starts):
+
+1. Add `✅ ` prefix to the item row in **Section 7 — Prioritization Table** and append the version: `| ✅ ITEM-ID — Description | ... | Sprint · vX.Y.Z |`
+2. Add `✅ ` prefix to the same item in the **Section 8 sprint list**.
+3. When all items in a sprint are done, update the sprint header line to: `### Sprint N — Title ✅ SHIPPED vX.Y.Z`
+
+Do this in the same session that the code is written — never defer to a follow-up commit.
+
+### RULE-BACKLOG2 (required): Confirm the target backlog item before starting work
+
+When the user asks to "work on" or "start" a sprint or backlog item, before writing any code:
+- State which exact item IDs you are about to implement (e.g. "Starting ACT-3, ACT-4, ACT-7, ACT-8, VIZ-1, VIZ-2, VIZ-7, ANIM-9").
+- If any item is ambiguous or has a dependency not yet shipped, say so and ask.
+
+This prevents working on the wrong scope in long sessions.

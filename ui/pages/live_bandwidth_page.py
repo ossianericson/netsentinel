@@ -14,15 +14,16 @@ Layout
 
 from __future__ import annotations
 
+import time
 from collections import deque
-from typing import Deque, Dict, Optional
+from typing import Deque, Dict, List, Optional, Tuple
 
 import matplotlib
 matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -108,6 +109,8 @@ class LiveBandwidthPage(QWidget):
         self._session: Dict[str, Dict[str, float]] = {}   # up_mb, down_mb
 
         self._worker = None
+        # Event annotation ticks: list of [age_ticks, label, color]
+        self._events: List[List] = []
         # ANIM-2: slide animation state
         self._slide_offset = 0.0
         self._slide_timer = QTimer(self)
@@ -281,6 +284,13 @@ class LiveBandwidthPage(QWidget):
         self._lbl_pkup.setText(f"{self._peak_up:.2f}")
         self._lbl_pkdn.setText(f"{self._peak_down:.2f}")
 
+        # Age event annotations; prune those that have scrolled off the chart
+        self._events = [
+            [age + 1, lbl, clr]
+            for age, lbl, clr in self._events
+            if age + 1 < _HISTORY_LEN
+        ]
+
         self._redraw_chart()
         self._update_table()
         self._start_slide()
@@ -348,6 +358,17 @@ class LiveBandwidthPage(QWidget):
         ax.legend(loc="upper left", fontsize=7, framealpha=0.7,
                   facecolor=CHART_BG, edgecolor=BORDER)
 
+        # Event annotation ticks (device join = green, rate spike = red)
+        y_top = ax.get_ylim()[1]
+        for age, lbl, clr in self._events:
+            x = _HISTORY_LEN - 1 - age
+            ax.axvline(x, color=clr, linewidth=1.0, alpha=0.55,
+                       linestyle="--", zorder=4)
+            if x > 3:
+                ax.text(x + 0.4, y_top * 0.88, lbl,
+                        fontsize=6, color=clr, ha="left", va="top",
+                        rotation=90, zorder=5)
+
         # Title shows current values
         sel = self._iface_combo.currentText()
         ax.set_title(
@@ -404,3 +425,10 @@ class LiveBandwidthPage(QWidget):
         self._peak_down = 0.0
         self._lbl_pkup.setText("—")
         self._lbl_pkdn.setText("—")
+
+    # ── Event annotations (VIZ-2) ─────────────────────────────────────────────
+
+    @pyqtSlot(str, str)
+    def annotate_event(self, label: str, color: str) -> None:
+        """Pin a labelled vertical tick at 'now' that scrolls left with the chart."""
+        self._events.append([0, label, color])
