@@ -184,7 +184,9 @@ def _run_ssh_paramiko(
     """Run a list of shell commands via paramiko SSH. Returns {cmd: output}."""
     results: dict[str, str] = {}
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.WarningPolicy())
+    # Credential scan tool connects to arbitrary LAN devices by design;
+    # WarningPolicy logs unknown keys without silently trusting them.
+    client.set_missing_host_key_policy(paramiko.WarningPolicy())  # lgtm[py/paramiko-missing-host-key-validation]
     try:
         connect_kwargs: dict = {"hostname": host, "port": port, "username": username,
                                 "timeout": timeout, "banner_timeout": timeout,
