@@ -203,7 +203,11 @@ class TopologyWidget(QWidget):
         # via ARP but already represented by the __gateway__ node).
         infra_ips: set[str] = {gateway_ip} if gateway_ip else set()
 
-        # Group ARP-scan devices by which mesh satellite they connect to
+        # Group ARP-scan devices by which mesh satellite they connect to.
+        # Only group when unit_name matches a known satellite name; devices whose
+        # unit_name is empty or refers to an unknown node fall through to unassigned
+        # rather than disappearing into a by_unit bucket that is never rendered.
+        known_unit_names = {getattr(u, "name", "") for u in satellites}
         by_unit: Dict[str, list] = defaultdict(list)
         unassigned: list = []
         for d in devices:
@@ -213,7 +217,7 @@ class TopologyWidget(QWidget):
                 continue
             mac = _norm_mac(_attr(d, "mac", ""))
             mc  = mesh_enrichment.get(mac)
-            if mc:
+            if mc and mc.unit_name in known_unit_names:
                 by_unit[mc.unit_name].append(d)
             else:
                 unassigned.append(d)

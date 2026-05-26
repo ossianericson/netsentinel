@@ -11484,10 +11484,15 @@ class Dashboard(QMainWindow):
                             mac=_norm_mac(_n.get("mac", "")), online=True,
                         ))
                 if _pnodes_flat:
-                    _eff_units  = _pnodes_flat
+                    _eff_units = _pnodes_flat
+                    # When there is exactly one AP node and plugins don't tag clients
+                    # with a "unit" field, default unit_name to that node's name so
+                    # _render_mesh can group clients under the satellite correctly.
+                    _single_node_name = _pnodes_flat[0].name if len(_pnodes_flat) == 1 else ""
                     _eff_enrich = {
                         mac: _SN(mac=mac, ip=c.get("ip", ""), name=c.get("hostname", ""),
-                                 band=c.get("band", ""), unit_name=c.get("unit", ""),
+                                 band=c.get("band", ""),
+                                 unit_name=c.get("unit", "") or _single_node_name,
                                  upload_kbps=0, download_kbps=0)
                         for mac, c in _all_plugin.items()
                     }
