@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"           # Recommended for this project
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "pip"
+    
+    # Group updates to avoid too many PRs
+    groups:
+      security-updates:
+        applies-to: security-updates
+        dependency-type: "production"
+      
+      minor-and-patch:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+
+    # Ignore packages that are better updated manually
+    ignore:
+      - dependency-name: "pyqt6"          # Heavy GUI library - update manually
+      - dependency-name: "pyinstaller"    # Build tool - update manually
+      - dependency-name: "matplotlib"     # Often causes issues when auto-updated
