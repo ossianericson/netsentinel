@@ -1,29 +1,29 @@
-﻿"""
-REST API â€” read-only local HTTP API for NetSentinel (Tier 2 item 5).
+"""
+REST API -- read-only local HTTP API for NetSentinel (Tier 2 item 5).
 
 Exposes network scan data to external tools (Grafana, Home Assistant,
 scripts) over a lightweight Flask server bound to 127.0.0.1 by default.
 
 Security design (mandatory constraints from architecture.instructions.md):
-  â€¢ Binds 127.0.0.1:8765 by default â€” never 0.0.0.0 without explicit opt-in
-  â€¢ Binding to 0.0.0.0 requires the user to toggle "Allow external access" in
+  --¢ Binds 127.0.0.1:8765 by default -- never 0.0.0.0 without explicit opt-in
+  --¢ Binding to 0.0.0.0 requires the user to toggle "Allow external access" in
     Settings AND acknowledge the warning label displayed there
-  â€¢ API key: secrets.token_hex(32), stored in OS keychain (RULE 22-A)
-  â€¢ Every request must present the key in the X-API-Key header or ?api_key=
-  â€¢ Disabled by default â€” user must explicitly enable in Settings
-  â€¢ Read-only: no POST/PUT/DELETE endpoints are exposed
+  --¢ API key: secrets.token_hex(32), stored in OS keychain (RULE 22-A)
+  --¢ Every request must present the key in the X-API-Key header (header-only)
+  --¢ Disabled by default -- user must explicitly enable in Settings
+  --¢ Read-only: no POST/PUT/DELETE endpoints are exposed
 
 Endpoints:
-  GET /health                    â€” server heartbeat + uptime
-  GET /dashboard                 â€” self-contained browser dashboard (no auth; key embedded)
-  GET /devices                   â€” current known device inventory
-  GET /alerts                    â€” recent fired alerts (last 24h)
-  GET /uptime/<ip>               â€” uptime stats for a specific host
-  GET /speed-history             â€” speed test history (last 7 days)
-  GET /grade                     â€” last network grade result
+  GET /health                    -- server heartbeat + uptime
+  GET /dashboard                 -- self-contained browser dashboard (no auth; key embedded)
+  GET /devices                   -- current known device inventory
+  GET /alerts                    -- recent fired alerts (last 24h)
+  GET /uptime/<ip>               -- uptime stats for a specific host
+  GET /speed-history             -- speed test history (last 7 days)
+  GET /grade                     -- last network grade result
 
 Flask is an optional dependency. If not installed the module still imports
-cleanly â€” the worker will surface the missing dependency gracefully.
+cleanly -- the worker will surface the missing dependency gracefully.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from typing import Optional
 
 from modules.metric_store import MetricStore
 
-# â”€â”€ Keyring helper (RULE 22-A) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Keyring helper (RULE 22-A) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 _KR_SERVICE     = "NetSentinel"
 _KR_API_KEY_KEY = "rest_api/api_key"
 
@@ -79,7 +79,7 @@ def get_stored_api_key() -> str:
         return ""
 
 
-# â”€â”€ Flask app factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Flask app factory â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 FLASK_AVAILABLE = False
 try:
@@ -94,7 +94,7 @@ _start_ts: float = time.time()
 def create_app(store: MetricStore) -> "Flask":
     """
     Build the Flask application.  store is the MetricStore singleton injected
-    from app.py â€” all endpoints are read-only queries against this store.
+    from app.py -- all endpoints are read-only queries against this store.
     """
     if not FLASK_AVAILABLE:
         raise ImportError(
@@ -105,25 +105,36 @@ def create_app(store: MetricStore) -> "Flask":
     app = Flask("netsentinel_api")
     app.config["JSON_SORT_KEYS"] = False
 
-    # â”€â”€ Auth middleware â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Auth middleware â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+
+    @app.after_request
+    def _cors(response):
+        origin = request.headers.get("Origin", "")
+        import re as _re
+        if _re.match(r'^https?://(127\.0\.0\.1|localhost)(:\d+)?$', origin):
+            response.headers["Access-Control-Allow-Origin"]  = origin
+            response.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type"
+            response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        return response
 
     @app.before_request
     def _auth():
-        # Health and dashboard HTML are public â€” key is embedded in the served page
-        if request.path in ("/health", "/dashboard"):
+        # /health is public; /dashboard is restricted to localhost requests only
+        if request.path == "/health":
+            return None
+        if request.path == "/dashboard":
+            if request.remote_addr not in ("127.0.0.1", "::1"):
+                abort(403, description="Dashboard is only accessible from localhost.")
             return None
         expected = get_stored_api_key()
         if not expected:
-            abort(503, description="API key not configured â€” enable the REST API in Settings first.")
-        provided = (
-            request.headers.get("X-API-Key", "")
-            or request.args.get("api_key", "")
-        )
+            abort(503, description="API key not configured -- enable the REST API in Settings first.")
+        provided = request.headers.get("X-API-Key", "")
         if not secrets.compare_digest(provided, expected):
             abort(401, description="Invalid or missing API key.")
         return None
 
-    # â”€â”€ Error handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Error handlers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     @app.errorhandler(401)
     def _err401(e):
@@ -137,14 +148,14 @@ def create_app(store: MetricStore) -> "Flask":
     def _err503(e):
         return jsonify({"error": str(e)}), 503
 
-    # â”€â”€ Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Endpoints â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
     @app.route("/health")
     def health():
         return jsonify({
             "status":     "ok",
             "uptime_s":   round(time.time() - _start_ts, 1),
-            "version":    "1.9.41",
+            "version":    "1.9.42",
         })
 
     @app.route("/devices")
@@ -159,13 +170,13 @@ def create_app(store: MetricStore) -> "Flask":
 
     @app.route("/alerts")
     def alerts():
-        hours = float(request.args.get("hours", 24))
+        hours = min(float(request.args.get("hours", 24)), 8760)
         rows = store.get_recent_alerts(hours=hours)
         return jsonify(rows)
 
     @app.route("/uptime/<ip>")
     def uptime(ip: str):
-        hours = float(request.args.get("hours", 24))
+        hours = min(float(request.args.get("hours", 24)), 8760)
         since = int(time.time()) - int(hours * 3600)
         rows = store._execute_read(
             "SELECT ts, state, rtt_ms FROM device_state "
@@ -220,7 +231,7 @@ def create_app(store: MetricStore) -> "Flask":
     return app
 
 
-# â”€â”€ Server runner (called from worker thread) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Server runner (called from worker thread) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def run_server(
     store: MetricStore,
@@ -228,15 +239,19 @@ def run_server(
     port: int = 8765,
 ) -> None:
     """
-    Start the Flask development server.  This is a blocking call â€” run it
-    from a daemon thread.  The server logs to stderr (suppressed by the worker).
+    Start the production WSGI server (waitress). Falls back to the Flask
+    development server if waitress is not installed. Blocking call -- run
+    from a daemon thread.
     """
     import logging
 
-    # Suppress werkzeug request logging (startup banner is suppressed by use_reloader=False)
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     app = create_app(store)
-    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
+    try:
+        from waitress import serve  # type: ignore
+        serve(app, host=host, port=port, threads=4)
+    except ImportError:
+        app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
 
 

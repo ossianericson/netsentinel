@@ -98,11 +98,12 @@ def test_windows_cmds_include_query_session():
 
 # ── _parse_windows: OS version ────────────────────────────────────────────────
 
-_WIN_OS = {"wmic os get Caption,Version,LastBootUpTime /value": (
-    "Caption=Microsoft Windows 11 Pro\r\n"
-    "Version=10.0.22621\r\n"
-    "LastBootUpTime=20240101000000.000000+000\r\n"
-)}
+_WIN_OS = {
+    "powershell -NoProfile -Command \"$o=Get-CimInstance Win32_OperatingSystem; Write-Output ('Caption='+$o.Caption); Write-Output ('Version='+$o.Version)\"": (
+        "Caption=Microsoft Windows 11 Pro\r\n"
+        "Version=10.0.22621\r\n"
+    )
+}
 
 def test_parse_windows_os_version():
     r = _parse_windows(_WIN_OS)
@@ -113,14 +114,20 @@ def test_parse_windows_os_version():
 # ── _parse_windows: serial number ────────────────────────────────────────────
 
 def test_parse_windows_serial_number():
-    outputs = {"wmic bios get SerialNumber /value": "SerialNumber=VMware-42 3a\r\n"}
+    outputs = {
+        "powershell -NoProfile -Command \"$b=Get-CimInstance Win32_BIOS; Write-Output ('SerialNumber='+$b.SerialNumber)\"":
+            "SerialNumber=VMware-42 3a\r\n"
+    }
     r = _parse_windows(outputs)
     assert r.serial_number == "VMware-42 3a"
 
 
 def test_parse_windows_serial_number_empty():
-    """Empty wmic output → serial_number stays blank, no crash."""
-    outputs = {"wmic bios get SerialNumber /value": "\r\n"}
+    """Empty CIM output → serial_number stays blank, no crash."""
+    outputs = {
+        "powershell -NoProfile -Command \"$b=Get-CimInstance Win32_BIOS; Write-Output ('SerialNumber='+$b.SerialNumber)\"":
+            "\r\n"
+    }
     r = _parse_windows(outputs)
     assert r.serial_number == ""
 
@@ -181,17 +188,19 @@ def test_parse_windows_sessions_empty_output():
 
 # ── _parse_windows: software ──────────────────────────────────────────────────
 
-_WIN_PRODUCT = {"wmic product get Name,Version /value": (
-    "Name=Python 3.11.0\r\nVersion=3.11.0\r\n\r\n"
-    "Name=Git\r\nVersion=2.43.0\r\n\r\n"
-)}
+_WIN_PRODUCT = {
+    "powershell -NoProfile -Command \"Get-CimInstance Win32_Product | ForEach-Object { Write-Output ('Name='+$_.Name); Write-Output ('Version='+$_.Version) }\"": (
+        "Name=Python 3.11.0\r\nVersion=3.11.0\r\n"
+        "Name=Git\r\nVersion=2.43.0\r\n"
+    )
+}
 
 def test_parse_windows_software():
     r = _parse_windows(_WIN_PRODUCT)
     names = [s.name for s in r.software]
     assert "Python 3.11.0" in names
     assert "Git" in names
-    assert all(s.source == "wmic" for s in r.software)
+    assert all(s.source == "cim" for s in r.software)
 
 
 # ── _parse_windows: services ──────────────────────────────────────────────────
@@ -215,10 +224,12 @@ def test_parse_windows_services():
 
 # ── _parse_windows: users ─────────────────────────────────────────────────────
 
-_WIN_USERS = {"wmic useraccount get Name,SID,Disabled /value": (
-    "Disabled=FALSE\r\nName=alice\r\nSID=S-1-5-21-1234-1001\r\n\r\n"
-    "Disabled=TRUE\r\nName=guest\r\nSID=S-1-5-21-1234-501\r\n\r\n"
-)}
+_WIN_USERS = {
+    "powershell -NoProfile -Command \"Get-CimInstance Win32_UserAccount | ForEach-Object { Write-Output ('Name='+$_.Name); Write-Output ('SID='+$_.SID); Write-Output ('Disabled='+$_.Disabled) }\"": (
+        "Name=alice\r\nSID=S-1-5-21-1234-1001\r\nDisabled=False\r\n"
+        "Name=guest\r\nSID=S-1-5-21-1234-501\r\nDisabled=True\r\n"
+    )
+}
 
 def test_parse_windows_users():
     r = _parse_windows(_WIN_USERS)

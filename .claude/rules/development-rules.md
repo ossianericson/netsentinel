@@ -300,6 +300,17 @@ Every bug fix PR must include a new test that reproduces the original failure an
 
 ## Release Integrity
 
+### RULE-BUMP1 (blocking): "version bump" always means run bump_version.py
+When the user says "version bump", "bump version", "bump to X.Y.Z", or any variation:
+
+1. Determine the target version — use the version the user specifies, or increment the patch digit (X.Y.Z+1) if none given.
+2. Add a `### vX.Y.Z` entry at the top of `## Changelog` in `README.md` listing changes from this session (RULE-R1b).
+3. Update "What's New" in `ui/dashboard.py` (`_section(f"What's New in v{app_ver}", [...])`) to match the changelog entry.
+4. Run `python bump_version.py X.Y.Z` — this updates all tracked version files and runs the consistency tests automatically. **Never edit version strings by hand across files.**
+5. If `bump_version.py` exits non-zero, fix the reported failures before continuing.
+
+Do NOT manually edit `app.py`, `cli.py`, `apm.yml`, `installer.iss`, winget manifests, etc. — `bump_version.py` handles all of them.
+
 ### RULE-R1b (blocking): Every version bump needs a README changelog entry
 Add a `### vX.Y.Z` entry at the top of `## Changelog` in README.md *before* running `bump_version.py`. The script promotes the topmost header.
 

@@ -57,6 +57,12 @@ NetSentinel.db-shm
 NetSentinel.db-wal
 NetSentinel.ini
 
+# Runtime log files written by the app — never commit
+startup_log.txt
+netsentinel_debug.log
+netsentinel_crash.log
+netsentinel_stderr.log
+
 # Generated output
 repomix-output.txt
 

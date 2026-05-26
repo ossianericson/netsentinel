@@ -13,8 +13,6 @@ jobs:
   # ── Windows ────────────────────────────────────────────────────────────────
   build-windows:
     runs-on: windows-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
 
@@ -58,7 +56,14 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short --cov=. --cov-fail-under=60 --cov-report=html:htmlcov
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-windows
+          path: htmlcov/
+          if-no-files-found: ignore
 
       - name: Exclude dist from Windows Defender
         shell: pwsh
@@ -145,8 +150,6 @@ jobs:
   # ── macOS ──────────────────────────────────────────────────────────────────
   build-macos:
     runs-on: macos-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
 
@@ -163,7 +166,14 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short --cov=. --cov-fail-under=60 --cov-report=html:htmlcov
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v8
+        with:
+          name: coverage-macos
+          path: htmlcov/
+          if-no-files-found: ignore
 
       - name: Build macOS app
         run: |
@@ -200,8 +210,6 @@ jobs:
   # ── Linux ──────────────────────────────────────────────────────────────────
   build-linux:
     runs-on: ubuntu-22.04
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
 
@@ -227,7 +235,14 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short --cov=. --cov-fail-under=60 --cov-report=html:htmlcov
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-linux
+          path: htmlcov/
+          if-no-files-found: ignore
 
       - name: Build Linux binary
         run: |
@@ -261,8 +276,6 @@ jobs:
   release:
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-22.04
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: write
       id-token: write   # Sigstore OIDC for keyless cosign signing
@@ -321,6 +334,20 @@ jobs:
             echo "Installer not found — skipping cosign"
           fi
 
+      - name: Sign MSIX artifact with cosign
+        run: |
+          VER="${{ steps.ver.outputs.VERSION }}"
+          MSIX="artifacts/windows-msix/NetSentinel-${VER}.msix"
+          if [ -f "$MSIX" ]; then
+            cosign sign-blob \
+              --yes \
+              --bundle "NetSentinel-${VER}.msix.bundle" \
+              "$MSIX"
+            echo "Signed: $MSIX"
+          else
+            echo "MSIX not found — skipping cosign"
+          fi
+
       - name: Create GitHub Release
         id: gh_release
         uses: softprops/action-gh-release@v3
@@ -375,6 +402,7 @@ jobs:
             artifacts/linux-cli/NetSentinel-cli-linux
             SHA256SUMS.txt
             NetSentinel-Setup-*.exe.bundle
+            NetSentinel-*.msix.bundle
 
       - name: Submit to VirusTotal
         id: vt
@@ -394,9 +422,10 @@ jobs:
           RELEASE_ID="${{ steps.gh_release.outputs.id }}"
           SHA256_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/SHA256SUMS.txt"
           BUNDLE="NetSentinel-Setup-${VER}.exe.bundle"
+          MSIX_BUNDLE="NetSentinel-${VER}.msix.bundle"
           VT_PERMALINK="${{ steps.vt.outputs.VT_PERMALINK }}"
 
-          ARGS="$RELEASE_ID $VER $SHA256_URL --bundle-name $BUNDLE"
+          ARGS="$RELEASE_ID $VER $SHA256_URL --bundle-name $BUNDLE --msix-bundle-name $MSIX_BUNDLE"
           if [ -n "$VT_PERMALINK" ]; then
             ARGS="$ARGS --vt-permalink $VT_PERMALINK"
           fi
@@ -409,9 +438,6 @@ jobs:
   submit-winget:
     needs: [release]
     runs-on: windows-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
     steps:
       - uses: actions/checkout@v6
 
@@ -512,6 +538,7 @@ jobs:
             "PackageUrl: https://github.com/ossianericson/netsentinel",
             "License: MIT",
             "LicenseUrl: https://raw.githubusercontent.com/ossianericson/netsentinel/main/LICENSE",
+            "PrivacyUrl: https://github.com/ossianericson/netsentinel/blob/main/PRIVACY.md",
             "ShortDescription: Network security scanner — rogue device detector, STP monitor, and connectivity analyser",
             "Description: |-",
             "  NetSentinel is a one-stop network diagnostic and security tool for Windows.",

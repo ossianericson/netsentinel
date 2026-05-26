@@ -165,9 +165,9 @@ def test_devices_with_valid_key(api_client):
 
 
 def test_devices_with_query_param(api_client):
-    """/devices also accepts api_key query parameter."""
+    """Query-param auth is not supported (header-only); must return 401."""
     resp = api_client.get(f"/devices?api_key={api_client._api_key}")
-    assert resp.status_code == 200
+    assert resp.status_code == 401
 
 
 def test_alerts_returns_list(api_client):

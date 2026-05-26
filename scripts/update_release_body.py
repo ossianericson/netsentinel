@@ -3,7 +3,7 @@ scripts/update_release_body.py — Prepend a security section to an existing Git
 
 Usage (called from release.yml):
     python scripts/update_release_body.py <release_id> <version> <sha256sums_url> \\
-        [--vt-permalink <url>] [--bundle-name <filename>]
+        [--vt-permalink <url>] [--bundle-name <filename>] [--msix-bundle-name <filename>]
 
 Requires:
     GITHUB_TOKEN environment variable (automatically provided by GitHub Actions)
@@ -44,6 +44,7 @@ def build_security_section(
     sha256sums_url: str,
     vt_permalink: str | None,
     bundle_name: str | None,
+    msix_bundle_name: str | None = None,
 ) -> str:
     lines = [
         "## Security & Verification",
@@ -78,13 +79,26 @@ def build_security_section(
 
     if bundle_name:
         lines += [
-            "**Verify the cosign signature:**",
+            "**Verify the cosign signature (Windows installer):**",
             "```bash",
             f"cosign verify-blob \\",
             f"  --bundle {bundle_name} \\",
             f'  --certificate-identity-regexp "https://github.com/ossianericson/netsentinel/.*" \\',
             f'  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \\',
             f"  NetSentinel-Setup-{version}.exe",
+            "```",
+            "",
+        ]
+
+    if msix_bundle_name:
+        lines += [
+            "**Verify the cosign signature (MSIX):**",
+            "```bash",
+            f"cosign verify-blob \\",
+            f"  --bundle {msix_bundle_name} \\",
+            f'  --certificate-identity-regexp "https://github.com/ossianericson/netsentinel/.*" \\',
+            f'  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \\',
+            f"  NetSentinel-{version}.msix",
             "```",
             "",
         ]
@@ -101,6 +115,7 @@ def main() -> None:
     p.add_argument("sha256sums_url")
     p.add_argument("--vt-permalink", default=None)
     p.add_argument("--bundle-name", default=None)
+    p.add_argument("--msix-bundle-name", default=None)
     args = p.parse_args()
 
     print(f"Fetching release {args.release_id}…", flush=True)
@@ -112,6 +127,7 @@ def main() -> None:
         sha256sums_url=args.sha256sums_url,
         vt_permalink=args.vt_permalink,
         bundle_name=args.bundle_name,
+        msix_bundle_name=args.msix_bundle_name,
     )
 
     new_body = security_section + existing_body

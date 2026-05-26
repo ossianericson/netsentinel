@@ -35,10 +35,30 @@ from pathlib import Path
 # Allow running from the project root without installation.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-_VERSION = "1.9.41"
+_VERSION = "1.9.42"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _resolve_output(path: str, default: str | None = None) -> Path:
+    """
+    Resolve an output file path, create parent directories, and validate it.
+
+    Exits with an error message if the path is empty, its parent cannot be
+    created, or the parent exists but is not a directory.
+    """
+    resolved = Path(path if path else (default or "output")).resolve()
+    parent = resolved.parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(f"Cannot create output directory '{parent}': {exc}", file=sys.stderr)
+        sys.exit(1)
+    if not parent.is_dir():
+        print(f"Output parent path is not a directory: {parent}", file=sys.stderr)
+        sys.exit(1)
+    return resolved
+
 
 def _print_devices(devices, verbose: bool = False) -> None:
     """Pretty-print DeviceInfo objects to stdout."""
@@ -99,18 +119,18 @@ def cmd_scan(args) -> None:
     _log(f"      {len(devices)} device(s) found, {high_risk} HIGH RISK")
 
     fmt = args.format.lower()
-    out = os.path.abspath(args.output or f"netsentinel_scan.{fmt}")
+    out = _resolve_output(args.output or f"netsentinel_scan.{fmt}")
 
     _log(f"[4/4] Writing {fmt.upper()} report…")
     if fmt == "html":
         content = generate_html(module1_data=data, overall_verdict=plain_verdict)
-        Path(out).write_text(content, encoding="utf-8")
+        out.write_text(content, encoding="utf-8")
     elif fmt == "json":
         content = generate_json(module1_data=data, overall_verdict=plain_verdict)
-        Path(out).write_text(content, encoding="utf-8")
+        out.write_text(content, encoding="utf-8")
     elif fmt == "csv":
         content = generate_csv_devices(data)
-        Path(out).write_text(content, encoding="utf-8")
+        out.write_text(content, encoding="utf-8")
     else:
         print(f"Unknown format: {fmt}", file=sys.stderr)
         sys.exit(1)
@@ -176,15 +196,15 @@ def cmd_diagnose(args) -> None:
 
     if args.output:
         fmt = args.format.lower()
-        out = os.path.abspath(args.output)
+        out = _resolve_output(args.output)
         if fmt == "html":
             from modules.report_exporter import generate_html
             content = generate_html(diagnostics_data=result)
-            Path(out).write_text(content, encoding="utf-8")
+            out.write_text(content, encoding="utf-8")
         elif fmt == "json":
             from modules.report_exporter import generate_json
             content = generate_json(diagnostics_data=result)
-            Path(out).write_text(content, encoding="utf-8")
+            out.write_text(content, encoding="utf-8")
         else:
             print(f"Unsupported format for diagnose: {fmt}", file=sys.stderr)
             sys.exit(1)
@@ -270,7 +290,7 @@ def cmd_ports(args) -> None:
         text = json.dumps(payload, indent=2)
         print(text)
         if args.output:
-            Path(os.path.abspath(args.output)).write_text(text, encoding="utf-8")
+            _resolve_output(args.output).write_text(text, encoding="utf-8")
     else:
         print(f"\nVerdict: {result.plain_verdict}")
         print(f"Scanned: {result.scanned} ports  |  {len(result.open_ports)} open\n")
@@ -329,7 +349,7 @@ def cmd_check_endpoints(args) -> None:
         text = json.dumps(payload, indent=2)
         print(text)
         if args.output:
-            Path(os.path.abspath(args.output)).write_text(text, encoding="utf-8")
+            _resolve_output(args.output).write_text(text, encoding="utf-8")
     else:
         for r in results:
             status_icon = "✔" if r.status == "PASS" else ("⚠" if r.status == "WARN" else "✘")
@@ -387,7 +407,7 @@ def cmd_cloud_metadata(args) -> None:
         text = json.dumps(payload, indent=2)
         print(text)
         if args.output:
-            Path(os.path.abspath(args.output)).write_text(text, encoding="utf-8")
+            _resolve_output(args.output).write_text(text, encoding="utf-8")
     else:
         risk_icon = {"NONE": "✔", "INFO": "ℹ", "HIGH": "⚠"}.get(result.risk_level, "?")
         print(f"\n{risk_icon} [{result.risk_level}]  {result.plain_verdict}")
@@ -435,7 +455,7 @@ def cmd_log_chart(args) -> None:
         print("No log entries found in the file.", file=sys.stderr)
         sys.exit(1)
 
-    out_path = Path(os.path.abspath(args.output)) if args.output else None
+    out_path = _resolve_output(args.output) if args.output else None
 
     if not args.quiet:
         print(f"Entries: {summary.total_pings}  |  "

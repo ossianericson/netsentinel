@@ -235,7 +235,9 @@ def _run_ssh_subprocess(
 
     base_args = [
         ssh_bin,
-        "-o", "StrictHostKeyChecking=no",
+        # accept-new: silently add unknown host keys but reject changed ones
+        # (prevents silent MITM against previously-seen hosts).
+        "-o", "StrictHostKeyChecking=accept-new",
         "-o", "BatchMode=no",
         "-o", f"ConnectTimeout={int(timeout)}",
         "-p", str(port),
@@ -243,13 +245,15 @@ def _run_ssh_subprocess(
     if key_path:
         base_args += ["-i", key_path]
 
+    # Pass password via SSHPASS env var (not CLI arg) to keep it out of
+    # process listings visible to other users via `ps aux` / Process Monitor.
     env_extra: dict = {}
     prefix: List[str] = []
     if password and not key_path:
         sshpass = shutil.which("sshpass")
         if sshpass:
-            prefix = [sshpass, "-p", password]
-        # If no sshpass we'll try anyway (may prompt — CI won't work but GUI use is fine)
+            prefix = [sshpass, "-e"]           # -e reads from $SSHPASS env var
+            env_extra["SSHPASS"] = password    # never appears in process args
 
     for cmd in commands:
         if stop.is_set():
@@ -258,9 +262,10 @@ def _run_ssh_subprocess(
             progress(f"→ {cmd[:60]}")
         try:
             full = prefix + base_args + [f"{username}@{host}", cmd]
+            run_env = {**__import__("os").environ, **env_extra} if env_extra else None
             proc = subprocess.run(
                 full, capture_output=True, text=True,
-                timeout=timeout + 5, env=None,
+                timeout=timeout + 5, env=run_env,
             )
             results[cmd] = proc.stdout if proc.stdout else proc.stderr
         except subprocess.TimeoutExpired:
@@ -406,20 +411,23 @@ def _parse_linux(outputs: dict[str, str]) -> CredScanResult:
 
 
 # ── Windows command set (via SSH to a Windows box with OpenSSH installed) ─────
+# wmic.exe was deprecated in Windows 11 22H2 and removed in some 24H2 builds.
+# All OS/hardware/user queries use Get-CimInstance (PowerShell 3+) instead.
 
 _WINDOWS_CMDS: List[str] = [
-    # OS version
-    "wmic os get Caption,Version,LastBootUpTime /value",
-    # Hardware serial number
-    "wmic bios get SerialNumber /value",
+    # OS version (replaces: wmic os get Caption,Version /value)
+    "powershell -NoProfile -Command \"$o=Get-CimInstance Win32_OperatingSystem; Write-Output ('Caption='+$o.Caption); Write-Output ('Version='+$o.Version)\"",
+    # Hardware serial number (replaces: wmic bios get SerialNumber /value)
+    "powershell -NoProfile -Command \"$b=Get-CimInstance Win32_BIOS; Write-Output ('SerialNumber='+$b.SerialNumber)\"",
     # Active interactive sessions (who is logged in right now)
     "query session",
-    # Installed software
-    "wmic product get Name,Version /value",
+    # Installed software (replaces: wmic product get Name,Version /value)
+    # Note: Win32_Product triggers MSI consistency checks — intentionally slow but thorough.
+    "powershell -NoProfile -Command \"Get-CimInstance Win32_Product | ForEach-Object { Write-Output ('Name='+$_.Name); Write-Output ('Version='+$_.Version) }\"",
     # Running services
     "sc query type= service state= running",
-    # Local users
-    "wmic useraccount get Name,SID,Disabled /value",
+    # Local users (replaces: wmic useraccount get Name,SID,Disabled /value)
+    "powershell -NoProfile -Command \"Get-CimInstance Win32_UserAccount | ForEach-Object { Write-Output ('Name='+$_.Name); Write-Output ('SID='+$_.SID); Write-Output ('Disabled='+$_.Disabled) }\"",
     # Listening ports + process
     "netstat -ano | findstr LISTENING",
     # Pending updates (Windows Update COM object via PowerShell)
@@ -433,7 +441,7 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
     result = CredScanResult(host="", os_type="windows")
 
     for key in outputs:
-        if "wmic os" in key:
+        if "Win32_OperatingSystem" in key:
             txt = outputs[key]
             m = re.search(r'Caption=(.+)', txt)
             if m:
@@ -444,7 +452,7 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
             break
 
     for key in outputs:
-        if "wmic product" in key:
+        if "Win32_Product" in key:
             name = ver = ""
             for line in outputs[key].splitlines():
                 m = re.match(r'Name=(.+)', line)
@@ -454,7 +462,7 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
                 if m:
                     ver = m.group(1).strip()
                 if name and ver:
-                    result.software.append(SoftwareEntry(name=name, version=ver, source="wmic"))
+                    result.software.append(SoftwareEntry(name=name, version=ver, source="cim"))
                     name = ver = ""
             break
 
@@ -471,7 +479,7 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
             break
 
     for key in outputs:
-        if "wmic bios" in key:
+        if "Win32_BIOS" in key:
             m = re.search(r'SerialNumber=(.+)', outputs[key])
             if m:
                 result.serial_number = m.group(1).strip()
@@ -504,7 +512,7 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
             break
 
     for key in outputs:
-        if "wmic useraccount" in key:
+        if "Win32_UserAccount" in key:
             name = sid = disabled = ""
             for line in outputs[key].splitlines():
                 m = re.match(r'Name=(.+)', line)

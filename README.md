@@ -320,6 +320,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.42
+
+- **wmic → CimInstance migration** — all credentialed-scan Windows commands ported from deprecated `wmic` to `powershell -NoProfile Get-CimInstance`; fully compatible with Windows 11 24H2 where wmic is removed
+- **REST API hardening** — CORS restricted to `localhost` origins only; query-parameter auth removed (header-only `X-API-Key`); switched from Flask dev server to waitress WSGI for production-grade serving
+- **CLI output path validation** — `cli.py` now resolves output paths with `Path.resolve()` and creates missing parent directories; exits cleanly with a user-readable error if the path is invalid
+- **GeoLite2-City onboarding hint** — first-run wizard gains a geo-map info banner explaining the MaxMind DB download step
+- **MSIX cosign signing in CI** — release workflow signs the MSIX artifact with `cosign sign-blob` (keyless OIDC) and uploads the `.bundle` file to the release; verification command included in release notes
+- **HTML coverage reports in CI** — pytest runs produce `htmlcov/` which is uploaded as a per-platform artifact (`coverage-windows`, `coverage-macos`, `coverage-linux`)
+- **FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 removed** — env var dropped from all 5 CI jobs now that the runner default is Node 24
+
 ### v1.9.41
 
 - **Notification channel test buttons** (SET-1) — Settings > Active Integrations now shows a "Send test" button next to Email, Webhook, and Pushover rows; each fires a live test message off the main thread and shows a toast with the result

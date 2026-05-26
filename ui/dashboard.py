@@ -9682,13 +9682,12 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Notification channel test",  "Settings > Active Integrations: Send test button fires a live test message for Email, Webhook, and Pushover channels"),
-            ("Accent colour picker",       "Settings > Appearance: 6 preset swatches + Custom colour dialog; override saved to QSettings, applied on next launch"),
-            ("Settings export / import",   "Settings > Maintenance: Export settings to JSON; import restores them — secrets (passwords, API keys) stay in OS keychain"),
-            ("Modem signal bars",          "Modem page: RSRP, RSRQ, SINR, SNR fields now show 5-bar phone-style signal-strength indicators with colour coding"),
-            ("Reports chart preview",      "Reports page: 7-day sparkline of device count and network grade shown above the schedule config"),
-            ("Geo Map risk heatmap",       "Geo Map: 'Show risk heatmap' toggle draws radial colour glow behind Threat Intel (red) and Exposed Service (amber) dots"),
-            ("Keyboard shortcut hints",    "Tooltips on Settings button (Ctrl+,), sidebar search (Ctrl+F), Monitor section (Ctrl+L), and scan button now show shortcut hints"),
+            ("wmic removed (Win 11 24H2)", "Credentialed scan now uses PowerShell Get-CimInstance; compatible with Windows 11 24H2 where wmic is absent"),
+            ("REST API hardening",         "CORS locked to localhost; query-param auth removed (X-API-Key header only); waitress WSGI replaces Flask dev server"),
+            ("CLI output path safety",     "Output paths are resolved and parent directories created automatically; invalid paths exit with a clear error message"),
+            ("GeoLite2 onboarding hint",   "First-run wizard now shows a banner explaining the MaxMind GeoLite2-City database download step for the Geo Map"),
+            ("MSIX cosign signing",        "CI signs the MSIX artifact with keyless cosign (OIDC); .bundle file attached to releases for offline verification"),
+            ("HTML coverage reports",      "pytest now produces htmlcov/ uploaded as per-platform CI artifacts (coverage-windows, coverage-macos, coverage-linux)"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────

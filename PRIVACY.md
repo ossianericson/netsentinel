@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: 2026-05-17**
+**Last updated: 2026-05-26**
 
 NetSentinel is a local desktop application. This document describes exactly what data the
 application reads, what it stores, and what it sends over the network.

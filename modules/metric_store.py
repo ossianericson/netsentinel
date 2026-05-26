@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 7
+_SCHEMA_VERSION = 8
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """

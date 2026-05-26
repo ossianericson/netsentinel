@@ -388,6 +388,15 @@ FONT_MD = "12px"      # default widget font (matches QSS base)
 FONT_LG = "14px"      # page titles, hero labels
 FONT_XL = "20px"      # large metric values (KPI tiles)
 
+# ── Splash screen colours (theme-independent — shown before theme loads) ─────
+# GitHub Dark palette. These constants are the single source of truth for all
+# hex colours used in app.py's splash screen painter.
+SPLASH_BG          = "#0D1117"   # canvas fill
+SPLASH_TITLE_FG    = "#E6EDF3"   # "NetSentinel" title text
+SPLASH_SUBTITLE_FG = "#8B949E"   # subtitle / version tagline
+SPLASH_VERSION_FG  = "#30363D"   # version number (bottom of card)
+SPLASH_MSG_FG      = "#484F58"   # loading progress messages
+
 # ── Computed colour maps (built after palette is applied) ─────────────────────
 
 RISK_COLORS = {

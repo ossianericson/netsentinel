@@ -29,7 +29,7 @@ def _sub(path: Path, pattern: str, replacement: str, flags: int = 0, count: int 
     text = path.read_text(encoding="utf-8")
     new_text, n = re.subn(pattern, replacement, text, count=count, flags=flags)
     if n == 0:
-        print(f"  WARN  no match — {path.relative_to(ROOT)}  ({pattern!r})")
+        print(f"  WARN  no match: {path.relative_to(ROOT)}")
         return
     path.write_text(new_text, encoding="utf-8")
     print(f"  ok    {path.relative_to(ROOT)}")

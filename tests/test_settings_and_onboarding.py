@@ -242,7 +242,7 @@ class TestFirstRunDialog:
 
     def test_fixed_size(self):
         assert self.dlg.width() == 560
-        assert self.dlg.height() == 500
+        assert self.dlg.height() == 545
 
     def test_is_modal(self):
         assert self.dlg.isModal()

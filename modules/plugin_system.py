@@ -36,6 +36,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 import sys
 
+try:
+    from modules.utils import is_store_app as _is_store_app
+except ImportError:
+    def _is_store_app() -> bool:  # type: ignore[misc]
+        return False
+
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
@@ -198,6 +204,14 @@ def load_plugins() -> List[PluginInfo]:
 
 def run_plugin(info: PluginInfo, devices: list, **kwargs) -> PluginResult:
     """Execute a loaded plugin against a device list."""
+    if _is_store_app():
+        return PluginResult(
+            plugin_name=info.name,
+            error=(
+                "Plugin execution is disabled in the Microsoft Store build. "
+                "Download the direct installer from GitHub to use the full plugin system."
+            ),
+        )
     if info._run_fn is None:
         return PluginResult(
             plugin_name=info.name,

@@ -29,7 +29,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 import urllib.error
+import urllib.parse
 import urllib.request
+
+_UA = "NetSentinel/1.9 (github.com/ossianericson/netsentinel)"
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -231,7 +234,7 @@ def refresh_from_feeds(
             _rate_wait("feodotracker.abuse.ch")
             req = urllib.request.Request(
                 feed["url"],
-                headers={"User-Agent": "NetSentinel/1.4 (threat intelligence updater)"},
+                headers={"User-Agent": _UA},
             )
             with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:
                 data = resp.read()
@@ -402,8 +405,9 @@ def lookup_abuseipdb(
     req = urllib.request.Request(
         url,
         headers={
-            "Key":    api_key,
-            "Accept": "application/json",
+            "Key":        api_key,
+            "Accept":     "application/json",
+            "User-Agent": _UA,
         },
     )
     try:
@@ -436,9 +440,3 @@ def lookup_abuseipdb(
     except Exception:
         return None
 
-
-# Avoid circular import when used as a library
-try:
-    import urllib.parse
-except ImportError:
-    pass

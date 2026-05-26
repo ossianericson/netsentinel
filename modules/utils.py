@@ -753,7 +753,7 @@ def send_wol(mac: str, broadcast: str = "255.255.255.255") -> bool:
 # ── Device baseline (new-device detection) ──────────────────────────────────
 
 def _baseline_path() -> Path:
-    p = Path.home() / "Documents" / "NetSentinel"
+    p = get_app_data_dir()
     p.mkdir(parents=True, exist_ok=True)
     return p / "device_baseline.json"
 

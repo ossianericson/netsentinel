@@ -28,8 +28,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, BG_CARD, BG_DARK, BORDER, GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
-    NAV_BAR, AMBER,
-    BG_HOVER,
+    NAV_BAR, AMBER, BG_HOVER,
 )
 
 _FIRST_RUN_KEY = "ui/first_run_done"
@@ -181,7 +180,7 @@ class FirstRunDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Get started with NetSentinel")
         self.setModal(True)
-        self.setFixedSize(560, 500)
+        self.setFixedSize(560, 545)
         self.setStyleSheet(
             f"QDialog {{ background:{BG_DARK}; border:1px solid {BORDER}; }}"
         )
@@ -222,6 +221,31 @@ class FirstRunDialog(QDialog):
             card.action_clicked.connect(self._on_action)
             self._cards.append(card)
             cards_lay.addWidget(card)
+
+        # GeoLite2 info note
+        geo_frame = QFrame()
+        geo_frame.setStyleSheet(
+            f"QFrame {{ background:{BG_HOVER}; border:1px solid {BORDER}; }}"
+        )
+        geo_lay = QHBoxLayout(geo_frame)
+        geo_lay.setContentsMargins(12, 8, 12, 8)
+        geo_lay.setSpacing(8)
+        geo_icon = QLabel("⬡")
+        geo_icon.setStyleSheet(
+            f"font-size:14px; color:{ACCENT}; background:transparent; border:none;"
+        )
+        geo_text = QLabel(
+            f"<b>Geo Map</b> &mdash; requires the free MaxMind GeoLite2-City database "
+            f"(<tt>GeoLite2-City.mmdb</tt>). "
+            f"A \"Download DB\" button on the Geo Map page will guide you through it."
+        )
+        geo_text.setWordWrap(True)
+        geo_text.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        geo_lay.addWidget(geo_icon)
+        geo_lay.addWidget(geo_text, 1)
+        cards_lay.addWidget(geo_frame)
 
         cards_lay.addStretch()
         outer.addWidget(cards_w, 1)

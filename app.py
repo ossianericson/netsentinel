@@ -25,12 +25,15 @@ if sys.platform == "win32" and getattr(sys, "frozen", False):
 
     class _SilentPopen(_OrigPopen):  # type: ignore[misc]
         def __init__(self, *args, **kwargs):
-            kwargs.setdefault("creationflags", 0)
-            kwargs["creationflags"] |= _CNW
-            si = kwargs.get("startupinfo") or _subprocess.STARTUPINFO()
-            si.dwFlags |= _subprocess.STARTF_USESHOWWINDOW
-            si.wShowWindow = 0  # SW_HIDE
-            kwargs["startupinfo"] = si
+            # Only suppress the console window when the caller hasn't explicitly
+            # set creationflags (e.g. Ookla CLI or other tools that manage their
+            # own flags must not be overridden).
+            if "creationflags" not in kwargs:
+                kwargs["creationflags"] = _CNW
+                si = kwargs.get("startupinfo") or _subprocess.STARTUPINFO()
+                si.dwFlags |= _subprocess.STARTF_USESHOWWINDOW
+                si.wShowWindow = 0  # SW_HIDE
+                kwargs["startupinfo"] = si
             super().__init__(*args, **kwargs)
 
     _subprocess.Popen = _SilentPopen  # type: ignore[misc]
@@ -370,7 +373,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.41")
+    app.setApplicationVersion("1.9.42")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -378,28 +381,32 @@ def main():
     # PERF-1: splash screen with progress messages.
     # 800×500 canvas with the 480×280 design centred inside it — covers the
     # area around the content card so small amounts of background bleed are hidden.
+    from ui.styles import (  # noqa: E402
+        SPLASH_BG, SPLASH_TITLE_FG, SPLASH_SUBTITLE_FG,
+        SPLASH_VERSION_FG, SPLASH_MSG_FG,
+    )
     _SPLASH_W, _SPLASH_H = 480, 280          # logical size of the centred card
     _CANVAS_W, _CANVAS_H = 800, 500         # outer canvas (covers extra area)
     _SOX = (_CANVAS_W - _SPLASH_W) // 2     # card x-offset on the canvas
     _SOY = (_CANVAS_H - _SPLASH_H) // 2     # card y-offset on the canvas
 
     _splash_base = QPixmap(_CANVAS_W, _CANVAS_H)
-    _splash_base.fill(QColor("#0D1117"))
+    _splash_base.fill(QColor(SPLASH_BG))
     _spp = QPainter(_splash_base)
     _spp.setRenderHint(QPainter.RenderHint.TextAntialiasing)
     # Title
-    _spp.setPen(QColor("#E6EDF3"))
+    _spp.setPen(QColor(SPLASH_TITLE_FG))
     _spp.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
     _spp.drawText(QRect(_SOX, _SOY + 60, _SPLASH_W, 55), Qt.AlignmentFlag.AlignCenter, "NetSentinel")
     # Subtitle
-    _spp.setPen(QColor("#8B949E"))
+    _spp.setPen(QColor(SPLASH_SUBTITLE_FG))
     _spp.setFont(QFont("Segoe UI", 11))
     _spp.drawText(QRect(_SOX, _SOY + 120, _SPLASH_W, 30), Qt.AlignmentFlag.AlignCenter,
                   "Network Security Scanner")
     # Version
-    _spp.setPen(QColor("#30363D"))
+    _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.41")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.42")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -413,8 +420,8 @@ def main():
         _p = QPainter(_px)
         _p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         # Clear previous message area (positioned relative to the centred card)
-        _p.fillRect(QRect(_SOX, _SOY + 175, _SPLASH_W, 28), QColor("#0D1117"))
-        _p.setPen(QColor("#484F58"))
+        _p.fillRect(QRect(_SOX, _SOY + 175, _SPLASH_W, 28), QColor(SPLASH_BG))
+        _p.setPen(QColor(SPLASH_MSG_FG))
         _p.setFont(QFont("Segoe UI", 9))
         _p.drawText(QRect(_SOX, _SOY + 177, _SPLASH_W, 24), Qt.AlignmentFlag.AlignCenter, msg)
         _p.end()
@@ -484,13 +491,6 @@ def main():
             app.setWindowIcon(QIcon(str(ico_path)))
             break
 
-    import time as _time; _T0 = _time.perf_counter()
-    _log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "startup_log.txt")
-    open(_log_path, "w").close()  # clear from last run
-    def _log(msg):
-        line = f"[NS +{_time.perf_counter()-_T0:.3f}s] {msg}\n"
-        with open(_log_path, "a") as _f: _f.write(line)
-    _log("splash shown")
     _splash_msg("Initialising database…")
     from modules.metric_store import MetricStore
     from modules.alert_engine import AlertEngine
@@ -523,7 +523,6 @@ def main():
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
 
-    _log("database init done")
     _splash_msg("Starting background workers…")
     avail_worker = AvailabilityWorker(store=store, interval_s=60)
     avail_worker.start()
@@ -559,13 +558,10 @@ def main():
         _ensure_key()  # generate and persist key on first enable
         rest_api_worker.start()
 
-    _log("workers started")
     _splash_msg("Loading interface…")
-    _log("Dashboard construction start")
     from ui.dashboard import Dashboard
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
                        maint_manager=maint_manager)
-    _log(f"Dashboard construction done  isVisible={window.isVisible()}")
 
     # Wire notification router → toast callback + notifications page
     notif_router.set_toast_callback(window._show_alert_toast)
@@ -656,16 +652,12 @@ def main():
     # ── Show window / close splash ────────────────────────────────────────────
     if not _start_minimised:
         _splash_msg("Ready.", process_events=False)
-        _log(f"show sequence  isVisible={window.isVisible()}")
         if not window.isVisible():
             # Non-maximized path: window was not shown during _restore_settings().
-            _log("calling window.show()")
             window.show()
         # _splash.close() fires the Qt event loop which delivers the first WM_PAINT
         # to the main window and hides the splash in the same DWM compositing frame.
-        _log("calling _splash.close()")
         _splash.close()
-        _log("_splash.close() returned")
         # Fix restore geometry: showMaximized() in _restore_settings() used Qt's
         # default HWND position; apply the saved normal geometry via SetWindowPlacement
         # so showNormal() restores to the correct location.
