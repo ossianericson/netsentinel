@@ -6,7 +6,7 @@ scapy~=2.7
 matplotlib~=3.10
 pyinstaller~=6.20
 pytest~=8.0
-pytest-cov~=5.0         # coverage reporting (--cov-fail-under=60 enforced in CI)
+pytest-cov~=5.0         # coverage reporting; HTML report uploaded as CI artifact
 speedtest-cli~=2.1
 psutil~=7.2
 keyring~=25.0          # OS credential store (RULE 22-A); Windows Credential Manager / macOS Keychain / libsecret

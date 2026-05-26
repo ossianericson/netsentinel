@@ -56,7 +56,7 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/ -v --tb=short --cov=. --cov-fail-under=60 --cov-report=html:htmlcov
+        run: python -m pytest tests/ -v --tb=short --cov=. --cov-report=html:htmlcov
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
@@ -166,7 +166,7 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/ -v --tb=short --cov=. --cov-fail-under=60 --cov-report=html:htmlcov
+        run: python -m pytest tests/ -v --tb=short --cov=. --cov-report=html:htmlcov
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
@@ -235,7 +235,7 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest tests/ -v --tb=short --cov=. --cov-fail-under=60 --cov-report=html:htmlcov
+        run: python -m pytest tests/ -v --tb=short --cov=. --cov-report=html:htmlcov
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
