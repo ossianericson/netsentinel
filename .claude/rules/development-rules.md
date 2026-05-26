@@ -100,26 +100,23 @@ ax.tick_params(colors="#5A6A7A", labelsize=9)
 ax.grid(True, color="#E8EDF2", linewidth=0.8, linestyle="-")
 ```
 
-### RULE 11: Version bump — ALWAYS use bump_version.py (BLOCKING)
-**NEVER manually edit version strings in individual files.** The project has a canonical bump script:
+### RULE 11: Version bump checklist
+When bumping the application version, update **ALL** of the following:
 
-```powershell
-# Step 1 — add a changelog entry to README.md first (RULE-R1b)
-# Step 2 — run the bump script
-python bump_version.py X.Y.Z
-# Step 3 — verify
-python -m pytest tests/test_version_consistency.py -v
-```
-
-`bump_version.py` at the project root updates ALL tracked version files atomically:
-`app.py`, `cli.py`, `apm.yml`, `installer.iss`, `build.bat`, `build.sh`, `README.md`,
-`modules/rest_api.py`, `tools/debug_launch.py`, `CLAUDE.md`,
-`packaging/AppxManifest.xml`, and all three `.github/winget/` manifests.
-
-**Do NOT:**
-- Call `bump_version.py --help` (there is no --help flag; it treats the argument as the target version)
-- Use PowerShell `-replace` or `sed` to patch individual files
-- Pass any string other than a valid semver (e.g. `X.Y.Z`) as the argument
+| File | What to change |
+|---|---|
+| `app.py` | `app.setApplicationVersion("X.Y.Z")` |
+| `cli.py` | `_VERSION = "X.Y.Z"` |
+| `apm.yml` | `version: X.Y.Z` |
+| `installer.iss` | `#define MyAppVersion "X.Y.Z"` |
+| `build.bat` | echo version string |
+| `build.sh` | echo version string |
+| `README.md` | badge/link + `### vX.Y.Z (current)` changelog entry |
+| `modules/rest_api.py` | `"version"` in `/health` endpoint |
+| `tools/debug_launch.py` | `app.setApplicationVersion("X.Y.Z")` |
+| `.github/winget/NetSentinel.NetSentinel.yaml` | `PackageVersion: X.Y.Z` |
+| `.github/winget/NetSentinel.NetSentinel.installer.yaml` | `PackageVersion:` + installer URL |
+| `.github/winget/NetSentinel.NetSentinel.locale.en-US.yaml` | `PackageVersion: X.Y.Z` |
 
 `tests/test_version_consistency.py` enforces this. Never bypass it.
 
@@ -385,6 +382,29 @@ QTableWidget::item:selected { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
 QMenu::item:selected        { background: {BG_HOVER};  color: {TEXT_PRIMARY}; }
 ```
 
+### RULE-AX1 (blocking): Inline QPushButton stylesheets with a base `color:` must declare explicit `:pressed` (and `:hover`) rules with `color:`
+In Qt, a widget's own `setStyleSheet()` overrides the application-level QSS entirely — including the global `QPushButton:pressed` fallback in `ui/styles.py`. If an inline stylesheet sets `color:` in the base rule but omits `:pressed`, Qt reuses the base foreground for the pressed state.
+
+Critical trap — Arctic Clean theme: `WHITE == BG_CARD == #FFFFFF`. Any button with `color:{WHITE}` in its base rule but no explicit `:pressed { color: ... }` renders invisible (white text on white background) when pressed.
+
+Required pattern:
+```python
+btn.setStyleSheet(
+    f"QPushButton {{ background:{ACCENT}; color:{WHITE}; ... }}"
+    f"QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+    f"QPushButton:pressed  {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+)
+```
+
+Rules:
+1. Every inline QPushButton stylesheet that sets `color:` in the base rule **MUST** also set `color:` in an explicit `QPushButton:pressed` rule.
+2. Every inline QPushButton stylesheet that sets `color:` in the base rule **SHOULD** also set `color:` in an explicit `QPushButton:hover` rule.
+3. All colour values must use tokens from `ui/styles.py` — never hardcoded hex (also enforced by RULE-AH3).
+
+Automated enforcement: `tests/test_interactive_states.py` performs static AST analysis across all `ui/**/*.py` files and fails on any violation. Run: `python -m pytest tests/test_interactive_states.py -v`
+
+Fix: add `QPushButton:pressed {{ background-color: {ACCENT_DARK}; color: {WHITE}; }}` using theme tokens from `ui/styles.py`.
+
 ---
 
 ## Dual-Audience Rules
@@ -598,25 +618,3 @@ The prefix character in each flyout item label (the string passed to `_nav_add_r
 Use: `■ □ ▲ △ ● ○ ◆ ◇ ▶ ▷ ⬡ ⬢ ≡ ⌕ ⊕` etc.
 
 This rule covers **flyout item labels only**. Rail section icons (the 48 px permanent-rail buttons) are governed by RULE-25 (Lucide SVG).
-
----
-
-## Backlog Tracking
-
-### RULE-BACKLOG1 (required): Mark completed backlog items in BACKLOG-UX-V7.md immediately upon completion
-
-When any item from `docs/BACKLOG-UX-V7.md` is finished (all code written, tests pass, app starts):
-
-1. Add `✅ ` prefix to the item row in **Section 7 — Prioritization Table** and append the version: `| ✅ ITEM-ID — Description | ... | Sprint · vX.Y.Z |`
-2. Add `✅ ` prefix to the same item in the **Section 8 sprint list**.
-3. When all items in a sprint are done, update the sprint header line to: `### Sprint N — Title ✅ SHIPPED vX.Y.Z`
-
-Do this in the same session that the code is written — never defer to a follow-up commit.
-
-### RULE-BACKLOG2 (required): Confirm the target backlog item before starting work
-
-When the user asks to "work on" or "start" a sprint or backlog item, before writing any code:
-- State which exact item IDs you are about to implement (e.g. "Starting ACT-3, ACT-4, ACT-7, ACT-8, VIZ-1, VIZ-2, VIZ-7, ANIM-9").
-- If any item is ambiguous or has a dependency not yet shipped, say so and ask.
-
-This prevents working on the wrong scope in long sessions.

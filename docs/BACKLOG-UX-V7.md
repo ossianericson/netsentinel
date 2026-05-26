@@ -926,13 +926,13 @@ string). If no `badge_until` is set, badges display indefinitely.
 | ✅ VIZ-2 — Bandwidth event annotations | Viz | Med | Med | 5 · v1.9.40 |
 | ✅ VIZ-7 — Protocol Viz node labels | Viz | Med | Med | 5 · v1.9.40 |
 | ✅ ANIM-9 — Alert badge decay | Animations | Low | Low | 5 · v1.9.40 |
-| SET-1 — Notification test buttons | Settings | High | Med | 6 |
-| SET-2 — Accent color picker | Settings | Med | Med | 6 |
-| SET-3 — Settings export/import | Settings | Med | Med | 6 |
-| POLISH-12 — Signal bar widgets | Polish | High | Med | 6 |
-| POLISH-14 — Reports chart preview | Polish | Med | Med | 6 |
-| VIZ-8 — Geo Map heatmap overlay | Viz | Low | Med | 6 |
-| EDU-2 — Shortcut hints in tooltips | Education | Med | Med | 6 |
+| ✅ SET-1 — Notification test buttons | Settings | High | Med | 6 · v1.9.41 |
+| ✅ SET-2 — Accent color picker | Settings | Med | Med | 6 · v1.9.41 |
+| ✅ SET-3 — Settings export/import | Settings | Med | Med | 6 · v1.9.41 |
+| ✅ POLISH-12 — Signal bar widgets | Polish | High | Med | 6 · v1.9.41 |
+| ✅ POLISH-14 — Reports chart preview | Polish | Med | Med | 6 · v1.9.41 |
+| ✅ VIZ-8 — Geo Map heatmap overlay | Viz | Low | Med | 6 · v1.9.41 |
+| ✅ EDU-2 — Shortcut hints in tooltips | Education | Med | Med | 6 · v1.9.41 |
 
 ---
 
@@ -1016,17 +1016,17 @@ Power user workflows: scan comparison, baseline, cert snooze. Bandwidth gets sma
 
 ---
 
-### Sprint 6 — Settings, polish, education (target: v1.9.41)
+### ✅ Sprint 6 — Settings, polish, education (v1.9.41 — complete)
 
 Final polish. Settings become a proper configuration hub. Every page teaches itself.
 
-1. SET-1 — Notification channel test buttons
-2. SET-2 — Appearance accent color picker
-3. SET-3 — Settings export / import
-4. POLISH-12 — Modem & Mesh signal bar widgets
-5. POLISH-14 — Reports page chart preview
-6. VIZ-8 — Geo Map risk heatmap toggle
-7. EDU-2 — Keyboard shortcut hints in tooltips
+1. ✅ SET-1 — Notification channel test buttons
+2. ✅ SET-2 — Appearance accent color picker
+3. ✅ SET-3 — Settings export / import
+4. ✅ POLISH-12 — Modem & Mesh signal bar widgets
+5. ✅ POLISH-14 — Reports page chart preview
+6. ✅ VIZ-8 — Geo Map risk heatmap toggle
+7. ✅ EDU-2 — Keyboard shortcut hints in tooltips
 
 ---
 

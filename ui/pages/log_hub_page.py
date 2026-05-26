@@ -333,6 +333,7 @@ class LogHubPage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:3px; padding:0 12px; font-size:11px; }}"
             f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _hb_load.clicked.connect(self._load_history_range)
         _hb_export = QPushButton("Export →")
@@ -342,6 +343,7 @@ class LogHubPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
             f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _hb_export.clicked.connect(self._open_export_dialog)
         _hb_lay.addWidget(_hb_from_lbl)
@@ -376,6 +378,7 @@ class LogHubPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
             f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _cb_view_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
         _cb_x = QPushButton("×")
@@ -385,6 +388,7 @@ class LogHubPage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:13px; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         _cb_x.clicked.connect(self._hide_challenge_banner)
         _cb_lay.addWidget(self._challenge_time_lbl, 1)
@@ -419,6 +423,7 @@ class LogHubPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
             f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _cap_export_btn.clicked.connect(self._open_export_dialog)
         _cap_lay.addWidget(_cap_lbl, 1)
@@ -477,6 +482,7 @@ class LogHubPage(QWidget):
         _acp_close.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:14px; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         _acp_close.clicked.connect(lambda: self._alert_corr_panel.setVisible(False))
         _acp_hdr.addWidget(_acp_title, 1)
@@ -697,6 +703,7 @@ class LogHubPage(QWidget):
             f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:13px;"
             f" font-weight:bold; border:1px solid {BORDER}; border-radius:4px; padding:0; }}"
             f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._source_plus_btn.clicked.connect(self._open_source_picker)
         lay.addWidget(self._source_plus_btn)
@@ -712,6 +719,7 @@ class LogHubPage(QWidget):
             f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:11px;"
             f" font-weight:600; border:1px solid {ACCENT}44; border-radius:4px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{ACCENT}11; border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _export_btn.clicked.connect(self._export_visible)
         lay.addWidget(_export_btn)
@@ -943,12 +951,14 @@ class LogHubPage(QWidget):
                 f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
                 f" padding:1px 10px; }}"
                 f"QPushButton:hover {{ background:{GREEN}44; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
         else:
             btn.setStyleSheet(
                 f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
                 f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
                 f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
 
     def _on_db_toggled(self, key: str, checked: bool, btn: QPushButton) -> None:
@@ -1295,12 +1305,14 @@ class LogHubPage(QWidget):
                 f" font-weight:bold; border:1px solid {color}; border-radius:12px;"
                 f" padding:1px 10px; }}"
                 f"QPushButton:hover {{ background:{color}44; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
         else:
             btn.setStyleSheet(
                 f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:11px;"
                 f" border:1px solid {BORDER}; border-radius:12px; padding:1px 10px; }}"
                 f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
 
     def _on_source_toggled(self, key: str, checked: bool) -> None:
@@ -1481,6 +1493,7 @@ class LogHubPage(QWidget):
                     f"QPushButton {{ background:transparent; border:none; color:{AMBER};"
                     f" font-size:10px; text-align:left; padding:0 4px; }}"
                     f"QPushButton:hover {{ color:{ACCENT}; text-decoration:underline; }}"
+                    f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
                 )
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
                 _raw = e["raw"]

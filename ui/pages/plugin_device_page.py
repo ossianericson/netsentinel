@@ -27,8 +27,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BORDER, BG_CARD, BG_DARK, BG_ALT_ROW,
+    ACCENT, ACCENT_DARK, AMBER, BORDER, BG_CARD, BG_DARK, BG_ALT_ROW,
     GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    BG_HOVER,
 )
 
 log = logging.getLogger(__name__)
@@ -303,7 +304,8 @@ class PluginDevicePage(QWidget):
         self._cred_test_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             " border-radius:3px; font-size:12px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:#005A9E; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
             f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
         )
         self._cred_test_btn.clicked.connect(self._on_test_clicked)
@@ -354,6 +356,7 @@ class PluginDevicePage(QWidget):
             " border-radius:3px; font-size:11px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:{AMBER}; color:#000; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )
         self._cred_forget_btn.clicked.connect(self._on_forget_clicked)
         row2_lay.addWidget(self._cred_forget_btn)

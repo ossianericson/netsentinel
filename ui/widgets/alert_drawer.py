@@ -34,6 +34,7 @@ from ui.styles import (
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    BG_HOVER,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -281,6 +282,7 @@ class AlertDrawer(QFrame):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:13px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         close_btn.clicked.connect(self.close_drawer)
 
@@ -388,6 +390,7 @@ class AlertDrawer(QFrame):
             f"QPushButton:hover {{ opacity:0.9; }}"
             f"QPushButton:disabled {{ background:{BG_DARK}; color:{TEXT_MUTED};"
             f" border:1px solid {BORDER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._ack_btn.clicked.connect(self._on_ack)
 
@@ -399,6 +402,7 @@ class AlertDrawer(QFrame):
             f" border:1px solid {AMBER}; border-radius:3px;"
             f" font-size:10px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{AMBER}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )
         self._snooze_btn.clicked.connect(self._on_snooze)
 
@@ -411,6 +415,7 @@ class AlertDrawer(QFrame):
             f" border:1px solid {ACCENT}; border-radius:3px;"
             f" font-size:10px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{ACCENT}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._log_btn.clicked.connect(self._on_view_log_hub)
 
@@ -422,6 +427,7 @@ class AlertDrawer(QFrame):
             f" border:1px solid {BORDER}; border-radius:3px;"
             f" font-size:10px; padding:0 8px; }}"
             f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._go_btn.clicked.connect(self._on_go)
         self._go_btn.setVisible(False)

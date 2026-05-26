@@ -128,6 +128,7 @@ def _btn(text: str, primary: bool = True) -> QPushButton:
             f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
             f"QPushButton:hover {{ background:#006BBD; }}"
             f"QPushButton:disabled {{ background:#B0C4D8; color:#9BA8B4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:
         b.setStyleSheet(
@@ -135,6 +136,7 @@ def _btn(text: str, primary: bool = True) -> QPushButton:
             f" border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:disabled {{ background:#F4F4F4; color:#9BA8B4; border-color:#B0C4D8; }}"
+            f"QPushButton:pressed {{ color:{ACCENT}; }}"
         )
     return b
 

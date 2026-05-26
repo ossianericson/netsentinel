@@ -108,10 +108,12 @@ class _DeviceLabelDialog(QDialog):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT}dd; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
             f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         btns.accepted.connect(self._save)
         btns.rejected.connect(self.reject)
@@ -161,6 +163,7 @@ class _DeviceDrawer(QFrame):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:15px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         close_btn.clicked.connect(self.close_drawer)
         hdr_row.addWidget(self._title_lbl, 1)
@@ -371,10 +374,12 @@ class _ScanCompareDialog(QDialog):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT}dd; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
             f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         btns.accepted.connect(self._on_accept)
         btns.rejected.connect(self.reject)
@@ -493,6 +498,7 @@ class InventoryPage(QWidget):
             f"QPushButton {{ font-size:11px; color:{ACCENT}; background:{BG_CARD};"
             f" border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         rb.clicked.connect(self._refresh)
         ctrl_row.addWidget(rb)
@@ -502,6 +508,7 @@ class InventoryPage(QWidget):
             f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; background:{BG_CARD};"
             f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         btn_compare.clicked.connect(self._open_compare_dialog)
         ctrl_row.addWidget(btn_compare)
@@ -528,6 +535,7 @@ class InventoryPage(QWidget):
             f"QPushButton {{ font-size:11px; color:{ACCENT}; background:transparent;"
             f" border:1px solid {ACCENT}; border-radius:3px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:{ACCENT}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _back_btn.clicked.connect(self._exit_compare_mode)
         _cb_lay.addWidget(_back_btn)
@@ -578,6 +586,7 @@ class InventoryPage(QWidget):
             f"QPushButton {{ font-size:11px; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
             f" background:transparent; padding:0 10px; border-radius:3px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         btn_export_inv.clicked.connect(self._export_csv)
         filter_row.addWidget(btn_export_inv)
@@ -695,6 +704,7 @@ class InventoryPage(QWidget):
                 f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
                 f" border-radius:3px; font-size:11px; padding:0 10px; }}"
                 f"QPushButton:hover {{ background:{ACCENT}22; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             _b.clicked.connect(getattr(self, _slot))
             _bb_lay.addWidget(_b)

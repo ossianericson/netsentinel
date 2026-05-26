@@ -196,6 +196,7 @@ class SnmpTrapPage(QWidget):
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _es_cta.clicked.connect(self.navigate_to_settings)
         _es_lay.addWidget(_es_icon)

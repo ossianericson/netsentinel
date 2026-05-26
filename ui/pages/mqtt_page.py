@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
     GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    BG_HOVER,
 )
 from modules.mqtt_publisher import MqttPublisher, get_publisher, _PAHO_AVAILABLE
 
@@ -223,6 +224,7 @@ class MqttPage(QWidget):
             f" border-radius:2px; padding:0 14px; font-size:11px; }}"
             f"QPushButton:hover {{ background:#005FA3; }}"
             f"QPushButton:disabled {{ background:{TEXT_MUTED}; color:white; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_connect.clicked.connect(self._connect)
 
@@ -234,6 +236,7 @@ class MqttPage(QWidget):
             f" border:1px solid {BORDER}; border-radius:2px; padding:0 12px; font-size:11px; }}"
             f"QPushButton:hover {{ background:{RED}; color:white; border-color:{RED}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_disconnect.clicked.connect(self._disconnect)
 
@@ -257,6 +260,7 @@ class MqttPage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
             f" border-radius:2px; padding:0 8px; font-size:11px; }}"
             f"QPushButton:hover {{ background:{BG_CARD}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         btn_clear.clicked.connect(self._log.clear if hasattr(self, "_log") else lambda: None)
         log_hdr_lay.addWidget(btn_clear)

@@ -16,6 +16,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("QtAgg")
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
 from PyQt6.QtCore    import Qt, QTimer, QUrl, pyqtSlot
 from PyQt6.QtGui     import QDesktopServices
 from PyQt6.QtWidgets import (
@@ -27,7 +32,8 @@ from PyQt6.QtWidgets import (
 from modules.metric_store      import MetricStore
 from modules.report_scheduler  import ReportConfig, ReportScheduler
 from ui.styles                 import (
-    ACCENT, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, GREEN, RED, TABLE_SEL, TEXT_PRIMARY,
+    ACCENT, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, CHART_BG, CHART_GRID,
+    CHART_PLOT_BG, GREEN, RED, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
@@ -127,6 +133,23 @@ class ReportsPage(QWidget):
         kpi_row.addWidget(tile_last)
         kpi_row.addStretch()
         root.addLayout(kpi_row)
+
+        # ── Sparkline preview chart (POLISH-14) ───────────────────────────────
+        preview_card, preview_lay = _card("Network Health — Last 7 Days")
+        self._preview_fig = Figure(facecolor=CHART_BG, figsize=(6, 1.4), dpi=96)
+        self._preview_ax = self._preview_fig.add_subplot(111)
+        self._preview_canvas = FigureCanvas(self._preview_fig)
+        self._preview_canvas.setFixedHeight(140)
+        self._preview_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        preview_lay.addWidget(self._preview_canvas)
+        self._preview_status = QLabel("Loading…")
+        self._preview_status.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent;"
+        )
+        self._preview_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        preview_lay.addWidget(self._preview_status)
+        root.addWidget(preview_card)
+        self._load_preview_chart()
 
         # Schedule config card
         cfg_card, cfg_lay = _card("Schedule Configuration")
@@ -266,6 +289,79 @@ class ReportsPage(QWidget):
     def on_worker_error(self, msg: str) -> None:
         self._error_count += 1
         self._kpi_errors.setText(str(self._error_count))
+
+    # ── Preview chart (POLISH-14) ─────────────────────────────────────────────
+
+    def _load_preview_chart(self) -> None:
+        """Render sparklines for device count and grade over the last 7 days."""
+        ax = self._preview_ax
+        ax.cla()
+        ax.set_facecolor(CHART_PLOT_BG)
+        self._preview_fig.set_facecolor(CHART_BG)
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        ax.spines["bottom"].set_color(CHART_GRID)
+        ax.spines["left"].set_color(CHART_GRID)
+        ax.tick_params(colors=TEXT_MUTED, labelsize=8)
+        ax.grid(True, color=CHART_GRID, linewidth=0.6, linestyle="-")
+
+        try:
+            device_dates, device_counts, grade_dates, grade_scores = (
+                self._query_preview_data()
+            )
+        except Exception:
+            device_dates = device_counts = grade_dates = grade_scores = []
+
+        if len(device_counts) >= 2 or len(grade_scores) >= 2:
+            if len(device_counts) >= 2:
+                ax.plot(device_dates, device_counts, color=ACCENT,
+                        linewidth=1.5, label="Devices", marker="o", markersize=3)
+            if len(grade_scores) >= 2:
+                ax2 = ax.twinx()
+                ax2.set_facecolor(CHART_PLOT_BG)
+                ax2.spines["top"].set_visible(False)
+                ax2.spines["right"].set_color(CHART_GRID)
+                ax2.tick_params(colors=TEXT_MUTED, labelsize=8)
+                ax2.plot(grade_dates, grade_scores, color=GREEN,
+                         linewidth=1.5, label="Grade", marker="s", markersize=3)
+                ax2.set_ylim(0, 100)
+                ax2.set_ylabel("Grade", color=GREEN, fontsize=8)
+            ax.set_ylabel("Devices", color=ACCENT, fontsize=8)
+            self._preview_status.setVisible(False)
+        else:
+            ax.text(0.5, 0.5, "No data yet — run a scan to populate.",
+                    ha="center", va="center", transform=ax.transAxes,
+                    color=TEXT_MUTED, fontsize=9)
+            self._preview_status.setVisible(False)
+
+        self._preview_fig.tight_layout(pad=0.4)
+        self._preview_canvas.draw()
+
+    def _query_preview_data(self):
+        """Query MetricStore for device counts and grades over 7 days."""
+        import datetime as _dt
+        device_dates, device_counts = [], []
+        grade_dates, grade_scores = [], []
+        if self._store is None:
+            return device_dates, device_counts, grade_dates, grade_scores
+        try:
+            cutoff = _dt.datetime.now() - _dt.timedelta(days=7)
+            rows = self._store.query_scan_history(since_ts=cutoff.timestamp())
+            for row in rows:
+                ts = row.get("ts") or row.get("timestamp")
+                if ts:
+                    dt = _dt.datetime.fromtimestamp(float(ts))
+                    cnt = row.get("device_count") or row.get("devices")
+                    if cnt is not None:
+                        device_dates.append(dt)
+                        device_counts.append(int(cnt))
+                    grade = row.get("grade_score") or row.get("grade")
+                    if grade is not None:
+                        grade_dates.append(dt)
+                        grade_scores.append(float(grade))
+        except Exception:
+            pass
+        return device_dates, device_counts, grade_dates, grade_scores
 
     # ── Actions ───────────────────────────────────────────────────────────────
 

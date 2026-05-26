@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     ACCENT, BG_CARD, BG_DARK, BORDER, GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
     NAV_BAR, AMBER,
+    BG_HOVER,
 )
 
 _FIRST_RUN_KEY = "ui/first_run_done"
@@ -143,6 +144,7 @@ class _StepCard(QFrame):
             f" border:none; border-radius:3px;"
             f" font-size:11px; font-weight:bold; padding:0 14px; }}"
             f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_SECONDARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn.clicked.connect(lambda: self.action_clicked.emit(self._key))
 
@@ -251,6 +253,7 @@ class FirstRunDialog(QDialog):
             f" border:1px solid {BORDER}; border-radius:3px;"
             f" font-size:11px; padding:0 12px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         btn_skip.clicked.connect(self._finish)
         foot_lay.addWidget(btn_skip)
@@ -261,6 +264,7 @@ class FirstRunDialog(QDialog):
             f"QPushButton {{ background:{ACCENT}; color:{BG_CARD};"
             f" border:none; border-radius:3px;"
             f" font-size:11px; font-weight:bold; padding:0 16px; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_finish.clicked.connect(self._finish)
         foot_lay.addWidget(btn_finish)

@@ -90,6 +90,7 @@ netsentinel/
 │   ├── rogue_device.py
 │   ├── root_cause_correlator.py    # Prioritised plain-English findings from scan data
 │   ├── scheduler.py
+│   ├── settings_io.py          # QSettings export/import to/from JSON (SET-3)
 │   ├── service_monitor.py      # Service heartbeat checker (TCP/HTTP/HTTPS probes)
 │   ├── smb_enumerator.py       # SMB/Windows Share enumeration
 │   ├── snmp_poller.py
@@ -180,6 +181,7 @@ netsentinel/
 │       ├── protocol_canvas.py      # QPainter animation engine for protocol diagrams
 │       ├── pulsing_dot.py          # Animated status indicator dot (live/offline)
 │       ├── scan_summary_sheet.py   # Bottom sheet showing scan summary stats
+│       ├── signal_bar.py           # 5-bar phone-style signal-strength indicator (POLISH-12)
 │       ├── skeleton.py             # Skeleton loading placeholder rows (widget variant)
 │       └── toast.py                # Non-blocking toast notification widget
 ├── workers/                    # QThread wrappers (signals only, no logic)

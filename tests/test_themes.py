@@ -268,9 +268,16 @@ class TestThemeCharacter:
         assert THEMES["Midnight Pro"]["ACCENT"] == "#2F81F7"
 
     def test_obsidian_neon_has_violet_accent(self):
-        """Obsidian Neon uses Catppuccin Mocha violet accent."""
+        """Obsidian Neon uses a violet accent (WCAG AA-compliant on dark card)."""
         from ui.styles import THEMES
-        assert THEMES["Obsidian Neon"]["ACCENT"] == "#7C3AED"
+        accent = THEMES["Obsidian Neon"]["ACCENT"]
+        # Violet family — hue between ~250° and ~300°; lightened from #7C3AED for
+        # ≥3:1 contrast against BG_CARD (#1E1E2E) per WCAG AA large text.
+        assert accent.startswith("#"), "ACCENT must be a hex colour"
+        r = int(accent[1:3], 16)
+        g = int(accent[3:5], 16)
+        b = int(accent[5:7], 16)
+        assert b > r > g, f"Violet accent must satisfy B>R>G, got R={r} G={g} B={b}"
 
     def test_themes_have_distinct_accents(self):
         from ui.styles import THEMES

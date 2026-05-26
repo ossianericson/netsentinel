@@ -567,6 +567,7 @@ class HomeAutomationPage(QWidget):
             f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
             f"border:none;padding:4px 0;}}"
             f"QPushButton:hover{{color:#005A9E;}}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _btn_mqtt.clicked.connect(
             lambda: self.navigate_to.emit("MQTT / Home Assistant")

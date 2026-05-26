@@ -189,6 +189,7 @@ class _BaseTile(QFrame):
             f" color:{ACCENT}; font-size:12px; font-weight:bold; padding:0;"
             f" border-radius:3px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._rerun_btn.hide()
         if self._rerun_cb:
@@ -212,6 +213,7 @@ class _BaseTile(QFrame):
             f" color:{RED}; font-size:13px; font-weight:bold; padding:0;"
             f" border-radius:3px; }}"
             f"QPushButton:hover {{ background:#fff0f0; border-color:{RED}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._remove_btn.setToolTip("Remove from overview")
@@ -398,6 +400,7 @@ class _BaseTile(QFrame):
             f"QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
             f" background:transparent; text-align:left; padding:0; }}"
             f"QPushButton:hover {{ text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         btn.clicked.connect(lambda: self.navigate_requested.emit(self._NAV_LABEL))
         lay.addWidget(btn)
@@ -738,6 +741,7 @@ class NetworkGradeTile(_BaseTile):
             f"QPushButton {{ font-size:10px; color:{ACCENT}; border:none;"
             f" background:transparent; padding:0; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sub_lbl.clicked.connect(lambda: self._rerun_cb() if self._rerun_cb else None)
         self._body_layout.addWidget(
@@ -760,6 +764,7 @@ class NetworkGradeTile(_BaseTile):
             self._sub_lbl.setStyleSheet(
                 f"QPushButton {{ font-size:10px; color:{TEXT_SECONDARY}; border:none;"
                 f" background:transparent; padding:0; cursor:default; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
             )
             self._sub_lbl.setEnabled(False)
         else:
@@ -768,6 +773,7 @@ class NetworkGradeTile(_BaseTile):
                 f"QPushButton {{ font-size:10px; color:{ACCENT}; border:none;"
                 f" background:transparent; padding:0; }}"
                 f"QPushButton:hover {{ color:#005A9E; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             self._sub_lbl.setEnabled(True)
 
@@ -951,6 +957,7 @@ class EventFeedTile(_BaseTile):
             f"QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
             f" background:transparent; text-align:left; padding:0; }}"
             f"QPushButton:hover {{ text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._viewall_btn.clicked.connect(self.viewall_clicked)
         self._body_layout.addWidget(self._viewall_btn)
@@ -1542,6 +1549,7 @@ class RecentEventsTile(_BaseTile):
             f"QPushButton {{ color:{ACCENT}; font-size:10px; border:none;"
             f" background:transparent; text-align:left; padding:0; }}"
             f"QPushButton:hover {{ text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Timeline"))
         self._link_btn.hide()
@@ -1745,6 +1753,7 @@ class _SecurityScanPanel(QWidget):
             f" border-radius:0px; text-align:left;"
             f" padding:0 12px; font-size:12px; font-weight:bold; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._toggle_btn.clicked.connect(self._toggle)
         outer.addWidget(self._toggle_btn)
@@ -1811,6 +1820,7 @@ class _SecurityScanPanel(QWidget):
             f" font-size:11px; font-weight:bold; padding:0 14px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
             f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:#fff; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._run_btn.clicked.connect(self._on_run)
         run_row.addWidget(self._status_lbl, 1)
@@ -1831,6 +1841,7 @@ class _SecurityScanPanel(QWidget):
             f" border-radius:0px; text-align:left;"
             f" padding:0 12px; font-size:12px; font-weight:bold; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
 
     def _on_check_changed(self) -> None:
@@ -1956,6 +1967,7 @@ class OverviewPage(QWidget):
             f" border:1px solid {ACCENT}; padding:4px 14px;"
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._diagnose_btn.setToolTip("Run a full diagnosis to find out what is wrong")
         self._diagnose_btn.clicked.connect(
@@ -1984,6 +1996,7 @@ class OverviewPage(QWidget):
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:checked {{ background:{ACCENT}; color:#fff; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._edit_btn.toggled.connect(self._on_edit_toggled)
         hdr.addWidget(self._edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
@@ -1995,6 +2008,7 @@ class OverviewPage(QWidget):
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._report_btn.setToolTip(
             "Run all modules + diagnostics and auto-open the full HTML report"
@@ -2009,6 +2023,7 @@ class OverviewPage(QWidget):
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:disabled {{ color:{TEXT_SECONDARY}; border-color:{TEXT_SECONDARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._export_btn.setToolTip("Export last scan results as HTML, JSON, or CSV")
         self._export_btn.setEnabled(False)
@@ -2087,6 +2102,7 @@ class OverviewPage(QWidget):
             f" font-size:12px; font-weight:bold; padding:0 18px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
             f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:#fff; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._scan_btn.clicked.connect(self._on_scan_clicked)
         _cta_lay.addLayout(_cta_text, 1)
@@ -2489,6 +2505,7 @@ class OverviewPage(QWidget):
                 f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
                 f" color:{ACCENT}; border-radius:4px; font-size:10px; padding:0 8px; }}"
                 f"QPushButton:hover {{ background:{ACCENT}; color:#fff; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
             btn.clicked.connect(lambda _checked, tid=tile_id: self._add_tile(tid))
             self._add_strip_layout.insertWidget(

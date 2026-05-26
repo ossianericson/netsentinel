@@ -180,6 +180,7 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
             f"  border-radius:3px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:#005A9E; }}"
             f"QPushButton:disabled {{ background:#9BA8B4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:
         b.setStyleSheet(
@@ -187,6 +188,7 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
             f"  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     return b
 
@@ -432,6 +434,14 @@ class GeoMapPage(QWidget):
         )
         self._chk_arcs.stateChanged.connect(self._redraw_map)
         legend_row.addWidget(self._chk_arcs)
+        self._chk_heatmap = QCheckBox("Show risk heatmap")
+        self._chk_heatmap.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+        self._chk_heatmap.setToolTip(
+            "Draws radial colour glow behind Threat Intel and Exposed Service dots\n"
+            "to highlight geographic risk concentrations."
+        )
+        self._chk_heatmap.stateChanged.connect(self._redraw_map)
+        legend_row.addWidget(self._chk_heatmap)
         legend_row.addStretch()
         self._import_layout.addLayout(legend_row)
 
@@ -507,6 +517,7 @@ class GeoMapPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:9px; border:none;"
             f"  padding:0; text-align:left; }}"
             f"QPushButton:hover {{ color:{TH_BG}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._detail_view_ti.setCursor(Qt.CursorShape.PointingHandCursor)
         self._detail_view_ti.clicked.connect(
@@ -659,6 +670,30 @@ class GeoMapPage(QWidget):
                         transform=self._ax.transData,
                     )
                     self._ax.add_patch(arrow)
+
+            # Risk heatmap glow (VIZ-8) — radial patches behind dots
+            show_heatmap = hasattr(self, "_chk_heatmap") and self._chk_heatmap.isChecked()
+            if show_heatmap:
+                import matplotlib.patches as _mpatches
+                _glow_cfg = {
+                    _CAT_THREAT:  (RED,   0.09, 8.0),
+                    _CAT_EXPOSED: (AMBER, 0.06, 6.0),
+                }
+                for _ip, result, cat in plottable:
+                    if cat not in _glow_cfg:
+                        continue
+                    glow_color, glow_alpha, glow_r = _glow_cfg[cat]
+                    for r_mult in (1.0, 0.6, 0.3):
+                        circle = _mpatches.Circle(
+                            (result.longitude, result.latitude),
+                            radius=glow_r * r_mult,
+                            color=glow_color,
+                            alpha=glow_alpha * r_mult,
+                            zorder=2,
+                            transform=self._ax.transData,
+                            linewidth=0,
+                        )
+                        self._ax.add_patch(circle)
 
             # Screen-space clustered dots
             for cluster in self._cluster_points(plottable):

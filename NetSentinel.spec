@@ -194,7 +194,9 @@ hiddenimports: list = [
     "ui.pages.wifi_heatmap_page",
     "ui.widgets.explainer_panel",
     "ui.widgets.protocol_canvas",
+    "ui.widgets.signal_bar",
     "modules.protocol_animator",
+    "modules.settings_io",
     # ── workers/ — all QThread workers ────────────────────────────────────────
     "workers.availability_worker",
     "workers.cert_worker",

@@ -152,6 +152,7 @@ class RuleEditorDialog(QDialog):
             f"QPushButton {{ background:{ACCENT}; color:white; border:none;"
             f" border-radius:2px; padding:3px 8px; font-size:11px; }}"
             f"QPushButton:hover {{ background:#005FA3; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_browse.clicked.connect(self._browse)
         script_row.addWidget(self._script_path, 1)
@@ -280,6 +281,7 @@ class AutomationPage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:white; border:none;"
             f" border-radius:2px; padding:0 10px; font-size:11px; }}"
             f"QPushButton:hover {{ background:#005FA3; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_add.clicked.connect(self._add_rule)
         self._btn_edit = QPushButton("Edit")
@@ -302,6 +304,7 @@ class AutomationPage(QWidget):
                 f" padding:0 8px; font-size:11px; }}"
                 f"QPushButton:hover {{ background:{BG_HOVER}; }}"
                 f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
         rules_hdr_lay.addWidget(btn_add)
         rules_hdr_lay.addSpacing(6)
@@ -323,6 +326,7 @@ class AutomationPage(QWidget):
                 f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
                 f" border-radius:2px; padding:0 8px; font-size:10px; }}"
                 f"QPushButton:hover {{ background:{ACCENT}; color:white; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             b.clicked.connect(lambda _, f=fn: self._add_template(f))
             tpl_row.addWidget(b)
@@ -361,6 +365,7 @@ class AutomationPage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
             f" border-radius:2px; padding:0 8px; font-size:11px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         btn_clear.clicked.connect(self._clear_log)
         log_hdr_lay.addWidget(btn_clear)

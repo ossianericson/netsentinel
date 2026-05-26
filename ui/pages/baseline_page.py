@@ -163,6 +163,7 @@ def _btn(text: str, primary: bool = False) -> QPushButton:
             f"border-radius:2px;padding:0 14px;font-size:11px;font-weight:bold;}}"
             f"QPushButton:hover{{background:{ACCENT_DARK};}}"
             f"QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:
         b.setStyleSheet(
@@ -170,6 +171,7 @@ def _btn(text: str, primary: bool = False) -> QPushButton:
             f"border-radius:2px;padding:0 12px;font-size:11px;}}"
             f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
             f"QPushButton:disabled{{color:{BORDER};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     return b
 
@@ -614,6 +616,7 @@ tr:nth-child(even){{background:#f9f9f9}}
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:3px; padding:0 10px; font-size:11px; }}"
             f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_save.clicked.connect(self._save_schedule)
         btn_cancel = QPushButton("Cancel")
@@ -621,6 +624,7 @@ tr:nth-child(even){{background:#f9f9f9}}
         btn_cancel.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
             f" border-radius:3px; padding:0 8px; font-size:11px; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         btn_cancel.clicked.connect(self._cancel_schedule_edit)
         edit_lay.addWidget(_every_lbl)
@@ -637,6 +641,7 @@ tr:nth-child(even){{background:#f9f9f9}}
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
             f" border-radius:3px; padding:0 10px; font-size:11px; }}"
             f"QPushButton:hover {{ background:{ACCENT}18; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sched_btn.clicked.connect(self._toggle_schedule_edit)
         lay.addWidget(self._sched_btn)

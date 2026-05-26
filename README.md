@@ -320,6 +320,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.41
+
+- **Notification channel test buttons** (SET-1) — Settings > Active Integrations now shows a "Send test" button next to Email, Webhook, and Pushover rows; each fires a live test message off the main thread and shows a toast with the result
+- **Accent colour picker** (SET-2) — Settings > Appearance gains a row of 6 preset accent swatches and a "Custom…" colour dialog; the override is saved to QSettings `ui/accent_override` and applied to `ACCENT`, `ACCENT_LITE`, `ACCENT_DARK` at next launch
+- **Settings export / import** (SET-3) — Settings > Maintenance gains "Export settings (JSON)" and "Import settings" buttons backed by the new `modules/settings_io.py`; secrets remain in the OS keychain and are never written to the export file
+- **Signal strength bar widget** (POLISH-12) — new `ui/widgets/signal_bar.py` QPainter widget draws 5 phone-style vertical bars for RSRP, RSRQ, SINR, SNR; wired into Modem page signal cards (5G NR and LTE sections)
+- **Reports chart preview** (POLISH-14) — Reports page shows a matplotlib sparkline of device count and network grade for the last 7 days above the schedule config
+- **Geo Map risk heatmap** (VIZ-8) — a "Show risk heatmap" toggle draws radial colour glow behind Threat Intel (red) and Exposed Service (amber) dots to highlight geographic risk concentrations
+- **Keyboard shortcut hints in tooltips** (EDU-2) — Settings button tooltip shows `Ctrl+,`, sidebar search shows `Ctrl+F`, Monitor section rail button shows `Ctrl+L → Network Logger`, scan button tooltip lists Ctrl+K and Ctrl+F hints
+
 ### v1.9.40
 
 - **Geo map enriched detail panel** (VIZ-1) — clicking a mapped IP now shows a full enriched panel: flag + country/city, ASN/org, threat-intel risk chip, up to three TI indicator rows, alert count from the last 24 h, and a "View in Threat Intel →" button that navigates directly to the Threat Intel page

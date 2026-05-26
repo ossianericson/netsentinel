@@ -110,6 +110,7 @@ def _btn(label: str, color: str = ACCENT) -> QPushButton:
         f"border:1px solid {color};border-radius:2px;"
         f"padding:0 10px;font-size:11px;}}"
         f"QPushButton:hover{{background:{BTN_HOVER_BG};}}"
+        f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
     )
     return b
 
@@ -245,6 +246,7 @@ class RestApiPage(QWidget):
             f"border:1px solid {RED};border-radius:2px;"
             f"padding:0 10px;font-size:11px;}}"
             f"QPushButton:hover{{background:#FFF0F0;}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_regen_key.clicked.connect(self._regen_api_key)
         key_row.addWidget(key_lbl)
@@ -279,6 +281,7 @@ class RestApiPage(QWidget):
             f"border:1px solid {ACCENT};border-radius:2px;"
             f"padding:0 12px;font-size:11px;font-weight:bold;}}"
             f"QPushButton:hover{{background:#005A9E;}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_action.clicked.connect(self._on_action)
         self._btn_action.setVisible(False)

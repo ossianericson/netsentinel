@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, BG_CARD, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
+    BG_HOVER,
 )
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ class _Toast(QFrame):
                 f" border:1px solid {ACCENT}; border-radius:3px;"
                 f" font-size:10px; padding:0 8px; }}"
                 f"QPushButton:hover {{ background:{ACCENT}22; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             act_btn.clicked.connect(action_callback)
             act_btn.clicked.connect(self._dismiss)
@@ -114,6 +116,7 @@ class _Toast(QFrame):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:13px; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         close_btn.clicked.connect(self._dismiss)
         root.addWidget(close_btn)

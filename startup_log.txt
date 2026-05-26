@@ -1,9 +1,9 @@
 [NS +0.000s] splash shown
-[NS +0.080s] database init done
-[NS +0.230s] workers started
-[NS +0.231s] Dashboard construction start
-[NS +4.581s] Dashboard construction done  isVisible=False
-[NS +4.873s] show sequence  isVisible=False
-[NS +4.873s] calling window.show()
-[NS +5.027s] calling _splash.close()
-[NS +5.030s] _splash.close() returned
+[NS +0.061s] database init done
+[NS +0.212s] workers started
+[NS +0.213s] Dashboard construction start
+[NS +4.476s] Dashboard construction done  isVisible=False
+[NS +4.664s] show sequence  isVisible=False
+[NS +4.664s] calling window.show()
+[NS +4.805s] calling _splash.close()
+[NS +4.806s] _splash.close() returned

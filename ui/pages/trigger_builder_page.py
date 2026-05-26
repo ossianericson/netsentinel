@@ -129,6 +129,7 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
             f"  border-radius:3px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:#005A9E; }}"
             f"QPushButton:disabled {{ background:#9BA8B4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:
         b.setStyleSheet(
@@ -136,6 +137,7 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
             f"  border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     return b
 
@@ -398,6 +400,7 @@ class TriggerBuilderPage(QWidget):
             f"QPushButton{{background:{ACCENT};color:#fff;border:none;"
             f"border-radius:3px;padding:0 10px;font-size:10px;font-weight:bold;}}"
             f"QPushButton:hover{{background:#005A9E;}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _btn_template.clicked.connect(self._on_add_template)
         _el.addWidget(_empty_desc)

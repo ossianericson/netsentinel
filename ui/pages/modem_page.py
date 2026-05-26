@@ -22,9 +22,12 @@ from PyQt6.QtWidgets import (
     QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
+from ui.widgets.signal_bar import SignalBar
+
 from ui.styles import (
     ACCENT, AMBER, BORDER, BG_CARD, BG_DARK, GREEN, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    BG_HOVER,
 )
 
 log = logging.getLogger(__name__)
@@ -127,6 +130,29 @@ def _row(label: str, parent_layout: QVBoxLayout) -> QLabel:
     h.addWidget(val, 1)
     parent_layout.addLayout(h)
     return val
+
+
+def _signal_row(label: str, metric: str, parent_layout: QVBoxLayout) -> tuple:
+    """Add a row with a SignalBar + text label; returns (SignalBar, QLabel)."""
+    h = QHBoxLayout()
+    h.setContentsMargins(0, 0, 0, 0)
+    lbl = QLabel(label)
+    lbl.setFixedWidth(160)
+    lbl.setStyleSheet(
+        f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;"
+    )
+    bar = SignalBar(metric=metric)
+    val = QLabel("—")
+    val.setStyleSheet(
+        f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+        " background:transparent; border:none;"
+    )
+    val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    h.addWidget(lbl)
+    h.addWidget(bar)
+    h.addWidget(val, 1)
+    parent_layout.addLayout(h)
+    return bar, val
 
 
 def _divider() -> QFrame:
@@ -273,6 +299,7 @@ class ModemPage(QWidget):
             " border-radius:3px; font-size:12px; padding:0 16px; }}"
             f"QPushButton:hover {{ background:#005A9E; }}"
             f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._connect_btn.clicked.connect(self._on_connect_clicked)
         row1_lay.addWidget(self._connect_btn)
@@ -310,6 +337,7 @@ class ModemPage(QWidget):
             f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
             " border-radius:3px; font-size:11px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:#FFF3E0; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )
         self._forget_btn.clicked.connect(self._on_forget_clicked)
         row2_lay.addWidget(self._forget_btn)
@@ -366,18 +394,18 @@ class ModemPage(QWidget):
 
         # 5G NR card
         nr5g_card, nr5g_body = _card("5G NR")
-        self._v_nr5g_rsrp  = _row("RSRP",  nr5g_body)
-        self._v_nr5g_rsrp.setToolTip(
+        self._b_nr5g_rsrp, self._v_nr5g_rsrp = _signal_row("RSRP", "rsrp", nr5g_body)
+        self._b_nr5g_rsrp.setToolTip(
             "Reference Signal Received Power — 5G NR signal strength from the tower.\n"
             "Good: ≥ −80 dBm   Acceptable: −80 to −100 dBm   Poor: < −100 dBm"
         )
-        self._v_nr5g_sinr  = _row("SINR",  nr5g_body)
-        self._v_nr5g_sinr.setToolTip(
+        self._b_nr5g_sinr, self._v_nr5g_sinr = _signal_row("SINR", "sinr", nr5g_body)
+        self._b_nr5g_sinr.setToolTip(
             "Signal-to-Interference-plus-Noise Ratio — signal clarity vs. interference.\n"
             "Good: ≥ 20 dB   Acceptable: 0–20 dB   Poor: < 0 dB"
         )
-        self._v_nr5g_rsrq  = _row("RSRQ",  nr5g_body)
-        self._v_nr5g_rsrq.setToolTip(
+        self._b_nr5g_rsrq, self._v_nr5g_rsrq = _signal_row("RSRQ", "rsrq", nr5g_body)
+        self._b_nr5g_rsrq.setToolTip(
             "Reference Signal Received Quality — signal quality factoring in cell load and interference.\n"
             "Good: ≥ −10 dB   Acceptable: −10 to −15 dB   Poor: < −15 dB"
         )
@@ -398,18 +426,18 @@ class ModemPage(QWidget):
 
         # LTE card
         lte_card, lte_body = _card("LTE Primary")
-        self._v_lte_rsrp  = _row("RSRP",   lte_body)
-        self._v_lte_rsrp.setToolTip(
+        self._b_lte_rsrp, self._v_lte_rsrp = _signal_row("RSRP", "rsrp", lte_body)
+        self._b_lte_rsrp.setToolTip(
             "Reference Signal Received Power — LTE signal strength from the tower.\n"
             "Good: ≥ −80 dBm   Acceptable: −80 to −100 dBm   Poor: < −100 dBm"
         )
-        self._v_lte_snr   = _row("SNR",    lte_body)
-        self._v_lte_snr.setToolTip(
+        self._b_lte_snr, self._v_lte_snr = _signal_row("SNR", "snr", lte_body)
+        self._b_lte_snr.setToolTip(
             "Signal-to-Noise Ratio — ratio of signal power to background noise on the LTE carrier.\n"
             "Good: ≥ 20 dB   Acceptable: 0–20 dB   Poor: < 0 dB"
         )
-        self._v_lte_rsrq  = _row("RSRQ",   lte_body)
-        self._v_lte_rsrq.setToolTip(
+        self._b_lte_rsrq, self._v_lte_rsrq = _signal_row("RSRQ", "rsrq", lte_body)
+        self._b_lte_rsrq.setToolTip(
             "Reference Signal Received Quality — LTE signal quality factoring in cell load and interference.\n"
             "Good: ≥ −10 dB   Acceptable: −10 to −15 dB   Poor: < −15 dB"
         )
@@ -504,28 +532,38 @@ class ModemPage(QWidget):
         mnc = data.get("mnc")
         self._v_operator.setText(f"{mcc}-{mnc}" if mcc and mnc else "—")
 
-        # 5G NR — color RSRP by quality
+        # 5G NR — bar + colored text for signal metrics
         nr_rsrp = data.get("nr5g_rsrp_dbm")
+        self._b_nr5g_rsrp.set_value(nr_rsrp, "dBm")
         self._v_nr5g_rsrp.setText(_fmt_dbm(nr_rsrp))
         self._v_nr5g_rsrp.setStyleSheet(
             f"color:{_quality_color(nr_rsrp)}; font-size:12px; font-weight:bold;"
             " background:transparent; border:none;"
         )
-        self._v_nr5g_sinr.setText(_fmt_db(data.get("nr5g_sinr_db")))
-        self._v_nr5g_rsrq.setText(_fmt_db(data.get("nr5g_rsrq_db")))
+        nr_sinr = data.get("nr5g_sinr_db")
+        self._b_nr5g_sinr.set_value(nr_sinr, "dB")
+        self._v_nr5g_sinr.setText(_fmt_db(nr_sinr))
+        nr_rsrq = data.get("nr5g_rsrq_db")
+        self._b_nr5g_rsrq.set_value(nr_rsrq, "dB")
+        self._v_nr5g_rsrq.setText(_fmt_db(nr_rsrq))
         self._v_nr5g_band.setText(_s(data.get("nr5g_band")))
         self._v_nr5g_pci.setText(_s(data.get("nr5g_pci")))
         self._v_nr5g_arfcn.setText(_s(data.get("nr5g_arfcn")))
 
-        # LTE
+        # LTE — bar + colored text for signal metrics
         lte_rsrp = data.get("lte_rsrp_dbm")
+        self._b_lte_rsrp.set_value(lte_rsrp, "dBm")
         self._v_lte_rsrp.setText(_fmt_dbm(lte_rsrp))
         self._v_lte_rsrp.setStyleSheet(
             f"color:{_quality_color(lte_rsrp)}; font-size:12px; font-weight:bold;"
             " background:transparent; border:none;"
         )
-        self._v_lte_snr.setText(_fmt_db(data.get("lte_snr_db")))
-        self._v_lte_rsrq.setText(_fmt_db(data.get("lte_rsrq_db")))
+        lte_snr = data.get("lte_snr_db")
+        self._b_lte_snr.set_value(lte_snr, "dB")
+        self._v_lte_snr.setText(_fmt_db(lte_snr))
+        lte_rsrq = data.get("lte_rsrq_db")
+        self._b_lte_rsrq.set_value(lte_rsrq, "dB")
+        self._v_lte_rsrq.setText(_fmt_db(lte_rsrq))
         self._v_lte_band.setText(_s(data.get("lte_band")))
         self._v_lte_pci.setText(_s(data.get("lte_pci")))
         self._v_lte_earfcn.setText(_s(data.get("lte_earfcn")))

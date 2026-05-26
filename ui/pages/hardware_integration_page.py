@@ -242,12 +242,14 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
             f" border-radius:3px; padding:0 12px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
             f"QPushButton:pressed {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:
         b.setStyleSheet(
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; border-radius:3px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     return b
 
@@ -623,6 +625,7 @@ class _RouterDetailPanel(QFrame):
             f"  border-radius:3px; font-size:9px; padding:0 6px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
             f"QPushButton:checked {{ background:{ACCENT}; color:#000; border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._toggle_btn.setCheckable(True)
         self._toggle_btn.toggled.connect(self._on_toggle)
@@ -1705,6 +1708,7 @@ class HardwareIntegrationPage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             " border-radius:3px; font-size:11px; padding:0 12px; }}"
             f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         add_btn.clicked.connect(lambda _, p=path: self._import_bundled(p))
         lay.addWidget(add_btn)

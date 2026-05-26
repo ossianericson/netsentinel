@@ -174,7 +174,8 @@ class IpCalculatorPage(QWidget):
             f"QPushButton{{background:{ACCENT};color:{WHITE};"
             f"border:none;border-radius:3px;padding:5px 12px;"
             f"font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
+            f"QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
         )
         btn.clicked.connect(self._calculate)
         ir.addWidget(btn)

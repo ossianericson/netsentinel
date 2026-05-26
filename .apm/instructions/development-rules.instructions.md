@@ -382,6 +382,29 @@ QTableWidget::item:selected { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
 QMenu::item:selected        { background: {BG_HOVER};  color: {TEXT_PRIMARY}; }
 ```
 
+### RULE-AX1 (blocking): Inline QPushButton stylesheets with a base `color:` must declare explicit `:pressed` (and `:hover`) rules with `color:`
+In Qt, a widget's own `setStyleSheet()` overrides the application-level QSS entirely — including the global `QPushButton:pressed` fallback in `ui/styles.py`. If an inline stylesheet sets `color:` in the base rule but omits `:pressed`, Qt reuses the base foreground for the pressed state.
+
+Critical trap — Arctic Clean theme: `WHITE == BG_CARD == #FFFFFF`. Any button with `color:{WHITE}` in its base rule but no explicit `:pressed { color: ... }` renders invisible (white text on white background) when pressed.
+
+Required pattern:
+```python
+btn.setStyleSheet(
+    f"QPushButton {{ background:{ACCENT}; color:{WHITE}; ... }}"
+    f"QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+    f"QPushButton:pressed  {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+)
+```
+
+Rules:
+1. Every inline QPushButton stylesheet that sets `color:` in the base rule **MUST** also set `color:` in an explicit `QPushButton:pressed` rule.
+2. Every inline QPushButton stylesheet that sets `color:` in the base rule **SHOULD** also set `color:` in an explicit `QPushButton:hover` rule.
+3. All colour values must use tokens from `ui/styles.py` — never hardcoded hex (also enforced by RULE-AH3).
+
+Automated enforcement: `tests/test_interactive_states.py` performs static AST analysis across all `ui/**/*.py` files and fails on any violation. Run: `python -m pytest tests/test_interactive_states.py -v`
+
+Fix: add `QPushButton:pressed {{ background-color: {ACCENT_DARK}; color: {WHITE}; }}` using theme tokens from `ui/styles.py`.
+
 ---
 
 ## Dual-Audience Rules

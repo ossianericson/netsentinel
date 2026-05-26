@@ -307,6 +307,7 @@ class HistoryPage(QWidget):
             f"QPushButton {{ font-size:11px; color:{ACCENT};"
             f" background:{BG_CARD}; border:1px solid {ACCENT}; border-radius:3px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         refresh_btn.clicked.connect(self._refresh)
         title_row.addWidget(refresh_btn)

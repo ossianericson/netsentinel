@@ -1026,6 +1026,7 @@ class FeatureGuidePage(QWidget):
                 f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
                 f" color:{ACCENT}; border-radius:4px; font-size:11px; }}"
                 f"QPushButton:hover {{ background:{ACCENT}; color:#FFFFFF; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             _page = feat["page"]

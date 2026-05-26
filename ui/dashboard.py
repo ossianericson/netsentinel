@@ -197,6 +197,7 @@ def _empty_state_widget(icon: str, headline: str, body: str,
             f"QPushButton {{ background:{_AC}; color:#fff; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
             f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn.clicked.connect(cta_action)
         hl = _HL()
@@ -234,6 +235,7 @@ def _error_state_widget(message: str, retry_fn: "callable") -> "QWidget":
             f"QPushButton {{ background:transparent; color:{_AM}; border:1px solid {_AM};"
             f" border-radius:4px; font-size:11px; padding:0 16px; }}"
             f"QPushButton:hover {{ background:{_AM}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{_AM}; }}"
         )
         btn.clicked.connect(retry_fn)
         hl = _HL()
@@ -770,6 +772,7 @@ class _FlyoutItem(QPushButton):
             f"}}"
             f"QPushButton:hover {{ background: {SIDEBAR_HOVER}; color: {WHITE}; }}"
             f"QPushButton:checked {{ background: {SIDEBAR_SEL_BG}; color: {WHITE}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{_fg}; }}"
         )
 
     def set_dot(self, color: str) -> None:
@@ -846,6 +849,7 @@ class _FlyoutPanel(QWidget):
             f" color: {TEXT_SECONDARY}; font-size: 14px; }}"
             f"QPushButton:hover {{ color: {WHITE}; }}"
             f"QPushButton:checked {{ color: {ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         hlay.addWidget(self._title_lbl, 1)
         hlay.addWidget(self._pin_btn)
@@ -1920,7 +1924,7 @@ class Dashboard(QMainWindow):
         _btn_settings.setText("⚙︎")
         _btn_settings.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         _btn_settings.setMenu(_menu_s)
-        _btn_settings.setToolTip("Scan Settings — module toggles, durations, and app preferences")
+        _btn_settings.setToolTip("Scan Settings — module toggles, durations, and app preferences  (Ctrl+,)")
         _btn_settings.setStyleSheet(_icon_btn_qss)
         lay.addSpacing(4)
         lay.addWidget(_btn_settings)
@@ -1948,7 +1952,10 @@ class Dashboard(QMainWindow):
         # ── Scan button — persistent trigger visible from every page ─────────
         self._header_scan_btn = QToolButton()
         self._header_scan_btn.setText("▶  Scan")
-        self._header_scan_btn.setToolTip("Run full network scan (ARP + WiFi + DNS + port discovery)")
+        self._header_scan_btn.setToolTip(
+            "Run full network scan (ARP + WiFi + DNS + port discovery)\n"
+            "Tip: Ctrl+K to search pages · Ctrl+F to filter sidebar · Ctrl+, for Settings"
+        )
         self._header_scan_btn.setStyleSheet(_icon_btn_qss)
         self._header_scan_btn.clicked.connect(self._start_full_scan)
         lay.addWidget(self._header_scan_btn)
@@ -1968,6 +1975,7 @@ class Dashboard(QMainWindow):
             f"QPushButton {{ background:transparent; color:{WHITE}; border:none;"
             f" font-size:13px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:rgba(255,255,255,0.10); }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
 
         def _on_theme_toggle():
@@ -2301,6 +2309,7 @@ class Dashboard(QMainWindow):
         btn_dismiss.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none; font-size:12px; }}"
             f"QPushButton:hover {{ color:{UPDATE_BAR_FG}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         btn_dismiss.clicked.connect(container.hide)
         row.addWidget(btn_dismiss)
@@ -3285,6 +3294,7 @@ class Dashboard(QMainWindow):
         self._nav_search = QLineEdit()
         self._nav_search.setObjectName("navSearch")
         self._nav_search.setPlaceholderText("  Filter…")
+        self._nav_search.setToolTip("Filter sidebar pages  (Ctrl+F)")
         self._nav_search.setFixedHeight(28)
         self._nav_search.setStyleSheet(
             f"QLineEdit#navSearch {{"
@@ -3303,6 +3313,7 @@ class Dashboard(QMainWindow):
             f"QPushButton {{ background:{SIDEBAR_SECTION_BG}; color:{SIDEBAR_SECTION_FG};"
             f" border:none; border-top:1px solid {NAV_DIVIDER}; font-size:11px; }}"
             f"QPushButton:hover {{ color:{WHITE}; background:{SIDEBAR_HOVER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._sidebar_toggle_btn.clicked.connect(self._toggle_sidebar)
 
@@ -3337,6 +3348,7 @@ class Dashboard(QMainWindow):
             f"QPushButton {{ background: transparent; border: none;"
             f" color: {ACCENT}; font-size: 10px; }}"
             f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._rail_mode_btn.setVisible(False)  # mode switcher removed
 
@@ -3412,6 +3424,7 @@ class Dashboard(QMainWindow):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0 4px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._back_btn.setVisible(False)
         self._back_btn.clicked.connect(self._nav_go_back)
@@ -3438,6 +3451,7 @@ class Dashboard(QMainWindow):
             f"QPushButton:hover {{ color:{WHITE}; }}"
             f"QPushButton:checked {{ color:{WHITE}; font-weight:bold;"
             f" border-bottom:1px solid {ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._tip_bar.toggled.connect(self._toggle_help_panel)
         cw_lay.addWidget(self._tip_bar)
@@ -3511,6 +3525,7 @@ class Dashboard(QMainWindow):
             f"QPushButton {{ font-size:10px; color:#92400E; background:transparent;"
             f" border:1px solid #F59E0B; border-radius:3px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:#FEF3C7; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         _lan_dismiss.clicked.connect(lambda: (
             self._lan_banner.setVisible(False),
@@ -3606,6 +3621,7 @@ class Dashboard(QMainWindow):
                 f"QPushButton {{ background: transparent; border: none;"
                 f" color: {_accent}; font-size: 11px; font-weight: bold; }}"
                 f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{_accent}; }}"
             )
 
     def _cycle_mode(self) -> None:
@@ -3856,15 +3872,19 @@ class Dashboard(QMainWindow):
                 self._nav_rail_lay.insertWidget(insert_at, pin_btn)
                 self._nav_rail_pin_buttons[lbl] = pin_btn
 
+        _SECTION_HINTS: dict = {
+            "Monitor":        "Monitor  ·  Ctrl+L → Network Logger",
+            "Security Audit": (
+                "Security Audit\n"
+                "Items shown in red require admin rights or run\n"
+                "active probes against devices on your network."
+            ),
+        }
         for sec in self._nav_sections:
             btn = _RailButton(sec["icon"], sec["name"])
             btn.clicked.connect(lambda _c, s=sec["name"]: self._nav_rail_toggle(s))
-            if sec["name"] == "Security Audit":
-                btn.setToolTip(
-                    "Security Audit\n"
-                    "Items shown in red require admin rights or run\n"
-                    "active probes against devices on your network."
-                )
+            if sec["name"] in _SECTION_HINTS:
+                btn.setToolTip(_SECTION_HINTS[sec["name"]])
             # Insert before the stretch (index = count - 2: stretch + settings)
             insert_at = self._nav_rail_lay.count() - 2
             self._nav_rail_lay.insertWidget(insert_at, btn)
@@ -4449,6 +4469,7 @@ class Dashboard(QMainWindow):
         btns.button(QDialogButtonBox.StandardButton.Close).setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         vlay.addSpacing(4)
         vlay.addWidget(btns)
@@ -4663,6 +4684,7 @@ class Dashboard(QMainWindow):
             f"QPushButton{{background:{BG_DARK};color:{TEXT_MUTED};border:1px solid {BORDER};"
             f"border-radius:3px;padding:0 8px;font-size:10px;}}"
             f"QPushButton:hover{{background:{BG_HOVER};color:{TEXT_PRIMARY};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._m1_group_btn.setVisible(False)
         self._m1_group_btn.clicked.connect(self._m1_toggle_all_groups)
@@ -4743,6 +4765,7 @@ class Dashboard(QMainWindow):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             " border-radius:3px; font-size:10px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:#005A9E; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _int_cfg_btn.clicked.connect(
             lambda: self._nav_rail_go_to("Hardware")
@@ -7659,6 +7682,7 @@ class Dashboard(QMainWindow):
                             f"QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
                             f"border:none;text-align:left;padding:0 4px;}}"
                             f"QPushButton:hover{{color:{ACCENT_DARK};}}"
+                            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
                         )
                         fix_btn.clicked.connect(
                             lambda _checked, t=target: self._nav_rail_go_to(t)
@@ -9658,14 +9682,13 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Geo map enriched detail",    "Clicking a mapped IP shows flag, country/city, ASN/org, threat-intel risk, alerts, and a link to Threat Intel"),
-            ("Bandwidth event annotations","Rate-spike and new-device events appear as annotated dashed lines on the Live Bandwidth rolling chart"),
-            ("Protocol viz name overlay",  "AnimNodes are enriched with device hostnames from the last inventory scan (two-line hostname/IP labels)"),
-            ("Alert badge decay",          "Rail-section badges fade out over 400 ms when cleared (respects reduce-motion preference)"),
-            ("Inventory scan comparison",  "Toolbar Compare button opens a diff dialog: added, removed, and changed devices between two baseline snapshots"),
-            ("Speed test baseline",        "Right-click any history row to set it as the baseline; subsequent rows show download/upload deltas"),
-            ("Baseline schedule strip",    "Config Baseline page: set an auto-snapshot interval in days, persisted to QSettings"),
-            ("Certificate snooze",         "Right-click a cert row to snooze its expiry warning for 7, 30, or 90 days"),
+            ("Notification channel test",  "Settings > Active Integrations: Send test button fires a live test message for Email, Webhook, and Pushover channels"),
+            ("Accent colour picker",       "Settings > Appearance: 6 preset swatches + Custom colour dialog; override saved to QSettings, applied on next launch"),
+            ("Settings export / import",   "Settings > Maintenance: Export settings to JSON; import restores them — secrets (passwords, API keys) stay in OS keychain"),
+            ("Modem signal bars",          "Modem page: RSRP, RSRQ, SINR, SNR fields now show 5-bar phone-style signal-strength indicators with colour coding"),
+            ("Reports chart preview",      "Reports page: 7-day sparkline of device count and network grade shown above the schedule config"),
+            ("Geo Map risk heatmap",       "Geo Map: 'Show risk heatmap' toggle draws radial colour glow behind Threat Intel (red) and Exposed Service (amber) dots"),
+            ("Keyboard shortcut hints",    "Tooltips on Settings button (Ctrl+,), sidebar search (Ctrl+F), Monitor section (Ctrl+L), and scan button now show shortcut hints"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -9925,6 +9948,7 @@ class Dashboard(QMainWindow):
             f"QPushButton{{background:{ACCENT};color:{NAV_BAR};"
             f"border:1px solid {ACCENT};border-radius:4px;"
             f"padding:5px 14px;font-size:11px;font-weight:bold;}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_go_settings.clicked.connect(
             lambda: self._open_settings_dialog()

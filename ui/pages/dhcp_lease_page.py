@@ -154,6 +154,7 @@ class DhcpLeasePage(QWidget):
             f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
             f"QPushButton:hover {{ background:#006BBD; }}"
             f"QPushButton:disabled {{ background:#B0C4D8; color:#9BA8B4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._refresh_btn.clicked.connect(self._run_scan)
 
@@ -236,6 +237,7 @@ class DhcpLeasePage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:12px;"
             f" font-weight:bold; border:none; border-radius:4px; padding:0 16px; }}"
             f"QPushButton:hover {{ background:#006BBD; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _btn_empty_scan.clicked.connect(self._run_scan)
         _el.addWidget(_btn_empty_scan, alignment=Qt.AlignmentFlag.AlignCenter)

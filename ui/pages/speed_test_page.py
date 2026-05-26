@@ -499,6 +499,7 @@ class SpeedTestPage(QWidget):
             f"QPushButton {{ background:transparent; color:{ACCENT};"
             f" border:none; font-size:11px; padding:2px 4px; }}"
             f"QPushButton:hover {{ text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         btn_refresh.clicked.connect(self._fetch_servers)
         footer_row.addWidget(btn_refresh)

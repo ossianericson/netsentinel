@@ -38,6 +38,7 @@ from ui.styles import (
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    BG_HOVER,
 )
 
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -176,6 +177,7 @@ class DevicePopover(QFrame):
             f"QPushButton {{ background:{ACCENT}; color:white; border:none;"
             f" border-radius:3px; font-size:10px; padding:0 8px; }}"
             f"QPushButton:hover {{ opacity:0.9; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._inv_btn.clicked.connect(self._on_open_inventory)
 
@@ -186,6 +188,7 @@ class DevicePopover(QFrame):
             f"QPushButton {{ background:transparent; color:{ACCENT};"
             f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; padding:0 8px; }}"
             f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._ti_btn.clicked.connect(self._on_open_threat_intel)
 

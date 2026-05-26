@@ -1,5 +1,5 @@
 ﻿name: netsentinel
-version: 1.9.40
+version: 1.9.41
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
@@ -907,6 +907,48 @@ rules:
 
       Apply to: any new page, any widget stylesheet set via setStyleSheet().
       Do NOT audit unchanged files as a standalone task.
+
+  - id: RULE-AX1
+    title: "Inline QPushButton stylesheets with a base color: must declare explicit :pressed (and :hover) rules with color:"
+    severity: blocking
+    description: >
+      In Qt, a widget's own setStyleSheet() overrides the application-level QSS
+      entirely — including the global QPushButton:pressed fallback in ui/styles.py.
+      If an inline stylesheet declares a base QPushButton { color: ... } rule but
+      omits :pressed, Qt uses the local base rule for the pressed state, keeping
+      the same foreground colour regardless of background changes.
+
+      Critical trap — Arctic Clean theme: WHITE == BG_CARD == #FFFFFF.
+      Any button that sets color:{WHITE} in its base rule but omits an explicit
+      :pressed { color: ... } will render white text on a white/transparent
+      background when pressed — completely invisible.
+
+      Required pattern for every setStyleSheet() call that sets color: in a
+      QPushButton base rule:
+
+        btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; ... }}"
+            f"QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed  {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+
+      Rules:
+        1. Every inline QPushButton stylesheet that sets color: in the base rule
+           MUST also set color: in an explicit QPushButton:pressed rule.
+        2. Every inline QPushButton stylesheet that sets color: in the base rule
+           SHOULD also set color: in an explicit QPushButton:hover rule.
+        3. All colour values must use tokens imported from ui/styles.py — never
+           hardcoded hex strings (also enforced by RULE-AH3).
+
+      Automated enforcement:
+        tests/test_interactive_states.py performs static AST analysis across all
+        ui/**/*.py files. It fails for any setStyleSheet() call whose QPushButton
+        base rule contains color: but lacks a QPushButton:pressed rule with color:.
+        Run: python -m pytest tests/test_interactive_states.py -v
+
+      Fix: add QPushButton:pressed {{ background-color: {ACCENT_DARK}; color: {WHITE}; }}
+      (or the appropriate tokens) to the inline stylesheet. Use ui/styles.py token
+      imports — never hardcode hex.
 
   - id: RULE-FW2
     title: "Every REST API route must appear in rest_api_page endpoint reference in the same session"

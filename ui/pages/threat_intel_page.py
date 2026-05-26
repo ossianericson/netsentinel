@@ -164,6 +164,7 @@ def _primary_btn(text: str) -> QPushButton:
         f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
         f"QPushButton:hover {{ background:#006BBD; }}"
         f"QPushButton:disabled {{ background:#B0C4D8; color:#9BA8B4; }}"
+        f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
     )
     return b
 
@@ -176,6 +177,7 @@ def _secondary_btn(text: str) -> QPushButton:
         f" border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
         f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         f"QPushButton:disabled {{ background:#F4F4F4; color:#9BA8B4; border-color:#B0C4D8; }}"
+        f"QPushButton:pressed {{ color:{ACCENT}; }}"
     )
     return b
 
@@ -306,6 +308,7 @@ class ThreatIntelPage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
             f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _el_cta.clicked.connect(self._run_refresh)
         _el_lay.addWidget(_el_icon)

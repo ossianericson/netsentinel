@@ -31,6 +31,8 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT,
+    ACCENT_DARK,
+    ACCENT_LITE,
     AMBER,
     BG_CARD,
     BG_DARK,
@@ -46,6 +48,7 @@ from ui.styles import (
     UPDATE_BAR_BG,
     UPDATE_BAR_BORDER,
     UPDATE_BAR_FG,
+    WHITE,
 )
 import ui.styles as _styles
 
@@ -637,8 +640,10 @@ class HomePage(QWidget):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             if theme_name == active:
                 btn.setStyleSheet(
-                    f"QPushButton {{ background:{ACCENT}; color:#ffffff;"
+                    f"QPushButton {{ background:{ACCENT}; color:{WHITE};"
                     f" border:none; border-radius:3px; font-size:11px; padding:0 10px; }}"
+                    f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+                    f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
                 )
             else:
                 btn.setStyleSheet(
@@ -646,6 +651,7 @@ class HomePage(QWidget):
                     f" border:1px solid {UPDATE_BAR_BORDER}; border-radius:3px;"
                     f" font-size:11px; padding:0 10px; }}"
                     f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+                    f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
                 )
                 _name = theme_name
                 btn.clicked.connect(lambda _checked, n=_name: _dismiss(n))
@@ -661,7 +667,8 @@ class HomePage(QWidget):
         close_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:15px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
         )
         close_btn.clicked.connect(lambda: _dismiss(None))
         row.addWidget(close_btn)
@@ -730,6 +737,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
             f" font-size:14px; border-radius:3px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
         )
         self._fs_refresh_btn.clicked.connect(self.rescan_requested)
         row.addWidget(self._fs_refresh_btn)
@@ -871,6 +879,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
             f" border-radius:3px; font-size:11px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _ds_open.clicked.connect(self._open_dashboard)
         _ds_dismiss = QPushButton("×")
@@ -880,6 +889,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{UPDATE_BAR_FG}; border:none;"
             f" font-size:14px; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{UPDATE_BAR_FG}; }}"
         )
         _ds_dismiss.clicked.connect(self._dismiss_dashboard_strip)
         _ds_lay.addWidget(_ds_icon)
@@ -948,6 +958,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{AMBER}; border:none;"
             f" font-size:10px; padding:0; text-align:left; }}"
             f"QPushButton:hover {{ color:{RED}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )
         self._ac_view_all_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
         self._ac_view_all_btn.setVisible(False)
@@ -967,6 +978,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{RED}; border:1px solid {RED};"
             f" border-radius:3px; font-size:11px; padding:0 8px; }}"
             f"QPushButton:hover {{ background:{RED}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{RED}; }}"
         )
         _ac_devices_btn.clicked.connect(lambda: self.navigate_to.emit("Inventory Changes"))
         _ac_devices_row.addWidget(self._ac_devices_lbl)
@@ -998,6 +1010,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:14px; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         _db_dismiss.clicked.connect(lambda: self._delta_banner.setVisible(False))
         _db_lay.addWidget(self._delta_chips_lbl, 1)
@@ -1035,6 +1048,7 @@ class HomePage(QWidget):
                 f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:10px;"
                 f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
                 f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
             b.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
             return b
@@ -1070,6 +1084,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 10px; }}"
             f"QPushButton:hover {{ background:{ACCENT}22; border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _rec_status_row.addWidget(self._rec_grade_lbl)
         _rec_status_row.addWidget(self._grade_sparkline)
@@ -1092,6 +1107,7 @@ class HomePage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _diag_open.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
         _diag_row.addWidget(self._rec_diag_lbl)
@@ -1195,6 +1211,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
             f" font-size:10px; border-radius:3px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         self._grade_details_btn.clicked.connect(self._show_grade_breakdown)
         # HOME-2: week-over-week grade delta chip
@@ -1244,6 +1261,7 @@ class HomePage(QWidget):
             f" background: {ACCENT}; color: #ffffff;"
             f" border: none; border-radius: 4px; padding: 0 14px; }}"
             f"QPushButton:hover {{ background: #005A9E; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_row.addWidget(self._btn_scan)
         btn_row.addWidget(self._btn_diagnose)
@@ -1259,6 +1277,7 @@ class HomePage(QWidget):
             f" background: transparent; color: {TEXT_MUTED};"
             f" border: none; padding: 0; text-decoration: underline; }}"
             f"QPushButton:hover {{ color: {ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         isp_row.addWidget(self._btn_isp)
         isp_row.addStretch()
@@ -1331,6 +1350,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:14px; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         _sheet_x.clicked.connect(self._dismiss_post_scan_sheet)
         _sheet_hdr.addWidget(_sheet_x)
@@ -1350,6 +1370,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
             f" font-size:11px; padding:0; }}"
             f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sheet_grade_btn.clicked.connect(
             lambda: self.navigate_to.emit("Network Grade")
@@ -1361,6 +1382,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
             f" font-size:11px; padding:0; }}"
             f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sheet_action_btn.clicked.connect(
             lambda: self.navigate_to.emit(self._sheet_action_target)
@@ -1420,6 +1442,7 @@ class HomePage(QWidget):
                 f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
                 f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
                 f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
             b.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
             return b
@@ -1483,6 +1506,7 @@ class HomePage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
             f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_mon_start.clicked.connect(self.start_monitoring_requested)
 
@@ -1493,6 +1517,7 @@ class HomePage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px;"
             f" background:transparent; border:none; padding:0; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._btn_mon_view.clicked.connect(lambda: self.navigate_to.emit("Network Logger"))
 
@@ -1542,7 +1567,8 @@ class HomePage(QWidget):
             btn.setStyleSheet(
                 f"QPushButton {{ color:{ACCENT}; font-size:11px;"
                 f" background:transparent; border:none; padding:0; }}"
-                f"QPushButton:hover {{ color:#005A9E; }}"
+                f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+                f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
             )
             btn.clicked.connect(lambda: self.navigate_to.emit(target))
             rl.addWidget(dot)
@@ -1600,7 +1626,8 @@ class HomePage(QWidget):
         self._btn_view_all_alerts.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
             f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:#1a6fc4; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
         )
         self._btn_view_all_alerts.clicked.connect(
             lambda: self.navigate_to.emit("Notifications")
@@ -1665,7 +1692,8 @@ class HomePage(QWidget):
         _sc_collapse_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:10px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
         )
         self._setup_collapse_btn = _sc_collapse_btn
         _sc_collapse_btn.clicked.connect(self._setup_toggle_collapse)
@@ -1712,7 +1740,8 @@ class HomePage(QWidget):
             _nav_btn.setStyleSheet(
                 f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
                 f" border:none; padding:0; }}"
-                f"QPushButton:hover {{ color:#1a6fc4; }}"
+                f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+                f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
             )
             _nav_btn.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
             _rl.addWidget(_chk)
@@ -1748,7 +1777,8 @@ class HomePage(QWidget):
         _tips_x.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
             f" font-size:13px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
         )
         _tips_x.clicked.connect(self._dismiss_tips)
         _tips_hdr_row.addWidget(_tips_hdr)
@@ -1845,6 +1875,7 @@ class HomePage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px;"
             f" background:transparent; border:none; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         target = feat.get("page") or "Feature Guide"
         btn.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
@@ -2076,6 +2107,7 @@ class HomePage(QWidget):
                     f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
                     f" padding:1px 10px; }}"
                     f"QPushButton:hover {{ background:{GREEN}44; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
             else:
                 btn.setText(f"○  {label}")
@@ -2083,6 +2115,7 @@ class HomePage(QWidget):
                     f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
                     f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
                     f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
         if any([arp, dhcp, storm, logger]):
             self._monitoring_nudge.setVisible(False)
@@ -2102,6 +2135,7 @@ class HomePage(QWidget):
                     f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
                     f" padding:1px 10px; }}"
                     f"QPushButton:hover {{ background:{GREEN}44; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
             else:
                 rbtn.setText(f"○  {rlabel}")
@@ -2109,6 +2143,7 @@ class HomePage(QWidget):
                     f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:10px;"
                     f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
                     f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
 
     def set_action_needed(self, pending_alerts: int, offline_devices: int) -> None:
@@ -2192,6 +2227,7 @@ class HomePage(QWidget):
                 f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
                 f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
                 f"QPushButton:hover {{ color:{GREEN}; border-color:{GREEN}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
             )
             ack_btn.clicked.connect(lambda _=False, aid=alert_id, w=row_w: self._ack_alert_row(aid, w))
 
@@ -2633,6 +2669,7 @@ class HomePage(QWidget):
                 f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
                 f" border-radius:4px; font-size:11px; padding:0 12px; }}"
                 f"QPushButton:hover {{ background:{BORDER}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
             )
         else:
             self._mon_status_lbl.setText(
@@ -2649,6 +2686,7 @@ class HomePage(QWidget):
                 f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
                 f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
                 f"QPushButton:hover {{ background:#1a6fc4; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
 
     def set_last_visit_summary(
@@ -2712,6 +2750,7 @@ class HomePage(QWidget):
                 f"QPushButton {{ color:{ACCENT}; font-size:11px;"
                 f" background:transparent; border:none; padding:0; }}"
                 f"QPushButton:hover {{ color:#005A9E; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             if target == "__live__":
                 btn.clicked.connect(self.investigate_live_requested)
@@ -2882,6 +2921,7 @@ class _GradeBreakdownDialog:
                     f"QPushButton {{ background:transparent; color:{AMBER}; border:none;"
                     f" font-size:11px; font-weight:600; padding:0; text-align:left; }}"
                     f"QPushButton:hover {{ color:#D97B00; }}"
+                    f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
                 )
                 _nav_sig = getattr(parent, "navigate_to", None)
                 if _nav_sig:
@@ -2955,6 +2995,7 @@ class _GradeBreakdownDialog:
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
             f" border-radius:4px; font-size:11px; padding:0 16px; }}"
             f"QPushButton:hover {{ background:{ACCENT}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         close_btn.clicked.connect(dlg.accept)
         btn_row = QHBoxLayout()

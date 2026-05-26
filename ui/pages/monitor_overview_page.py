@@ -42,6 +42,7 @@ from ui.styles import (
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
+    BG_HOVER,
 )
 from ui.widgets.animated_kpi import AnimatedKpi
 
@@ -293,6 +294,7 @@ class _GradeTile(QFrame):
             f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
             f" font-size:9px; border-radius:3px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         self._details_btn.clicked.connect(self._on_details_clicked)
         title_row.addWidget(title)

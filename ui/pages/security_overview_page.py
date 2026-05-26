@@ -238,6 +238,7 @@ class SecurityOverviewPage(QWidget):
             f" font-size:13px; font-weight:bold; padding:0 22px; border-radius:5px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
             f"QPushButton:pressed {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._scan_btn.clicked.connect(self.scan_requested.emit)
 

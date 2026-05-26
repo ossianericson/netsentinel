@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY
+from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
 
 
 class PageHeaderBar(QWidget):
@@ -109,6 +109,7 @@ class PageHeaderBar(QWidget):
             f" font-weight:bold; border:1px solid {BORDER}; border-radius:11px; padding:0; }}"
             f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; background:transparent; }}"
             f"QPushButton:checked {{ background:{ACCENT}; color:#fff; border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         self._help_btn.setCheckable(True)
         self._help_btn.toggled.connect(self._toggle_help)

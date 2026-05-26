@@ -34,7 +34,7 @@ _ARCTIC_CLEAN = {
     # Text
     "TEXT_PRIMARY":       "#1A1A2E",
     "TEXT_SECONDARY":     "#5A6A7A",
-    "TEXT_MUTED":         "#9BA8B4",
+    "TEXT_MUTED":         "#6D7A88",
     # Table headers
     "TH_BG":              "#1A3A5C",
     "TH_TEXT":            "#FFFFFF",
@@ -207,7 +207,7 @@ _OBSIDIAN_NEON = {
     "BG_HOVER":           "#2A2A3F",
     "BG_ALT_ROW":         "#181825",
     # Accent
-    "ACCENT":             "#7C3AED",
+    "ACCENT":             "#8042ED",
     "ACCENT_LITE":        "#9D5CF6",
     "ACCENT_DARK":        "#5B21B6",
     # Text
@@ -319,10 +319,57 @@ def set_active_theme_name(name: str) -> None:
         pass
 
 
+# ── Accent colour override (SET-2) ────────────────────────────────────────────
+
+def get_accent_override() -> "str | None":
+    """Return a persisted hex accent colour override, or None if not set."""
+    try:
+        from PyQt6.QtCore import QSettings
+        qs  = QSettings("NetSentinel", "NetSentinel")
+        val = qs.value("ui/accent_override", "")
+        return val if val and val.startswith("#") and len(val) in (7, 9) else None
+    except Exception:
+        return None
+
+
+def set_accent_override(hex_color: "str | None") -> None:
+    """Persist or clear the accent colour override.  Takes effect on next launch."""
+    try:
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if hex_color:
+            qs.setValue("ui/accent_override", hex_color)
+        else:
+            qs.remove("ui/accent_override")
+    except Exception:
+        pass
+
+
+def _compute_accent_variants(hex_color: str) -> "tuple[str, str, str]":
+    """Return (ACCENT, ACCENT_LITE, ACCENT_DARK) derived from a base hex colour."""
+    import colorsys
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    hue, lig, sat = colorsys.rgb_to_hls(r, g, b)
+    lite_l = min(1.0, lig * 1.40)
+    dark_l = max(0.0, lig * 0.68)
+    def _to_hex(rv: float, gv: float, bv: float) -> str:
+        return f"#{int(rv * 255):02X}{int(gv * 255):02X}{int(bv * 255):02X}"
+    lite = _to_hex(*colorsys.hls_to_rgb(hue, lite_l, sat))
+    dark = _to_hex(*colorsys.hls_to_rgb(hue, dark_l, sat))
+    return hex_color, lite, dark
+
+
 # ── Apply active theme — injects all palette keys into this module's globals ──
 
 _ACTIVE_THEME: str = get_active_theme_name()
 globals().update(THEMES[_ACTIVE_THEME])
+
+# Apply accent override if the user has saved a custom accent colour
+_accent_override = get_accent_override()
+if _accent_override:
+    _a, _al, _ad = _compute_accent_variants(_accent_override)
+    globals().update({"ACCENT": _a, "ACCENT_LITE": _al, "ACCENT_DARK": _ad})
 
 # ── Theme-independent chart constants ──────────────────────────────────────────────
 # These represent fixed semantic data dimensions, not UI chrome, so they
@@ -488,6 +535,7 @@ QHeaderView::section:last {{
 }}
 QHeaderView::section:hover {{
     background-color: {SIDEBAR_HOVER};
+    color: {TH_TEXT};
     cursor: pointer;
 }}
 QHeaderView::sort-indicator {{
@@ -523,9 +571,11 @@ QPushButton#btnScan {{
 }}
 QPushButton#btnScan:hover {{
     background-color: {ACCENT_LITE};
+    color: {WHITE};
 }}
 QPushButton#btnScan:pressed {{
     background-color: {ACCENT_DARK};
+    color: {WHITE};
 }}
 QPushButton#btnScan:disabled {{
     background-color: {BTN_DISABLED_BORDER};
@@ -545,9 +595,11 @@ QPushButton#btnScanHero {{
 }}
 QPushButton#btnScanHero:hover {{
     background-color: {ACCENT_LITE};
+    color: {WHITE};
 }}
 QPushButton#btnScanHero:pressed {{
     background-color: {ACCENT_DARK};
+    color: {WHITE};
 }}
 QPushButton#btnScanHero:disabled {{
     background-color: {BTN_DISABLED_BORDER};
@@ -591,6 +643,11 @@ QPushButton#btnExport {{
 }}
 QPushButton#btnExport:hover {{
     background-color: {BTN_EXPORT_HOVER};
+    color: {GREEN};
+}}
+QPushButton#btnExport:pressed {{
+    background-color: {BTN_EXPORT_HOVER};
+    color: {GREEN};
 }}
 QPushButton#btnExport:disabled {{
     color: {TEXT_MUTED};
@@ -609,6 +666,11 @@ QPushButton#btnDiag {{
 }}
 QPushButton#btnDiag:hover {{
     background-color: {ACCENT_LITE};
+    color: {WHITE};
+}}
+QPushButton#btnDiag:pressed {{
+    background-color: {ACCENT_DARK};
+    color: {WHITE};
 }}
 QPushButton#btnDiag:disabled {{
     background-color: {BTN_DISABLED_BORDER};
@@ -631,6 +693,11 @@ QPushButton#btnNetRefresh:hover {{
     border-color: {ACCENT};
     color: {ACCENT};
 }}
+QPushButton#btnNetRefresh:pressed {{
+    background-color: {ACCENT};
+    color: {WHITE};
+    border-color: {ACCENT_DARK};
+}}
 
 /* ── Router link buttons ── */
 QPushButton#btnRouterLink {{
@@ -643,6 +710,9 @@ QPushButton#btnRouterLink {{
 }}
 QPushButton#btnRouterLink:hover {{
     color: {ACCENT_LITE};
+}}
+QPushButton#btnRouterLink:pressed {{
+    color: {ACCENT_DARK};
 }}
 
 /* ── Checkable mode toggles ── */
@@ -748,6 +818,7 @@ QComboBox QAbstractItemView {{
     background: {BG_CARD};
     border: 1px solid {BORDER};
     selection-background-color: {BG_HOVER};
+    selection-color: {TEXT_PRIMARY};
     color: {TEXT_PRIMARY};
 }}
 QSpinBox::up-button, QSpinBox::down-button {{

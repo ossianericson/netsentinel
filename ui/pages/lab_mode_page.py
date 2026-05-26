@@ -26,6 +26,7 @@ from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY,
+    BG_HOVER,
 )
 
 _PICKER  = 0
@@ -258,6 +259,7 @@ class LabModePage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:4px; font-size:11px; }}"
             f"QPushButton:hover {{ background:{ACCENT}cc; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn.clicked.connect(lambda _, s=scenario: self._start_scenario(s))
         lay.addWidget(btn)
@@ -277,6 +279,7 @@ class LabModePage(QWidget):
         self._runner_back.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; text-align:left; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._runner_back.clicked.connect(self._go_picker)
         outer.addWidget(self._runner_back)
@@ -374,6 +377,7 @@ class LabModePage(QWidget):
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
             f"QPushButton:hover:!disabled {{ background:{ACCENT}cc; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._run_btn.clicked.connect(self._run_check)
 
@@ -384,6 +388,7 @@ class LabModePage(QWidget):
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._hint_btn.toggled.connect(self._toggle_hint)
 
@@ -393,6 +398,7 @@ class LabModePage(QWidget):
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._solution_btn.clicked.connect(self._reveal_solution)
 
@@ -404,6 +410,7 @@ class LabModePage(QWidget):
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
             f"QPushButton:hover:!disabled {{ opacity:0.9; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._next_btn.clicked.connect(self._next_step)
 
@@ -494,6 +501,7 @@ class LabModePage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT}cc; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         export_btn.clicked.connect(self._export_report)
 
@@ -503,6 +511,7 @@ class LabModePage(QWidget):
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
             f" border:1px solid {BORDER}; border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         again_btn.clicked.connect(lambda: self._start_scenario(self._scenario) if self._scenario else None)
 
@@ -511,6 +520,7 @@ class LabModePage(QWidget):
         back_btn.setFlat(True)
         back_btn.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent; border:none; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         back_btn.clicked.connect(self._go_picker)
 

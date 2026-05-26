@@ -136,7 +136,8 @@ def _btn(text: str, primary: bool = False, danger: bool = False) -> QPushButton:
         b.setStyleSheet(
             f"QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
             f"border-radius:2px;padding:0 14px;font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
+            f"QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
             f"QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
         )
     elif danger:
@@ -144,12 +145,14 @@ def _btn(text: str, primary: bool = False, danger: bool = False) -> QPushButton:
             f"QPushButton{{background:{BG_CARD};color:{RED};border:1px solid {RED};"
             f"border-radius:2px;padding:0 12px;font-size:11px;}}"
             f"QPushButton:hover{{background:{RED};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{RED};color:{WHITE};}}"
         )
     else:
         b.setStyleSheet(
             f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
             f"border-radius:2px;padding:0 12px;font-size:11px;}}"
-            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+            f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};background:{BG_CARD};}}"
+            f"QPushButton:pressed{{color:{ACCENT};border-color:{ACCENT};background:{BG_CARD};}}"
             f"QPushButton:disabled{{color:{BORDER};}}"
         )
     return b

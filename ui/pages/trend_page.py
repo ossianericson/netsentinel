@@ -34,6 +34,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, RED_BG,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    BG_HOVER,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile
 from modules.trend_analyser import TrendResult, TrendReport, run_full_trend_report
@@ -254,6 +255,7 @@ class TrendPage(QWidget):
             f"border-radius:2px;padding:0 16px;font-size:11px;font-weight:bold;}}"
             f"QPushButton:hover{{background:{ACCENT_DARK};}}"
             f"QPushButton:disabled{{background:{BORDER};color:{TEXT_SECONDARY};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_run.clicked.connect(self._run_analysis)
         hl.addWidget(self._btn_run)
@@ -271,6 +273,7 @@ class TrendPage(QWidget):
             f"QPushButton{{color:{ACCENT};font-size:10px;background:transparent;"
             f"border:none;padding:0 0 0 4px;}}"
             f"QPushButton:hover{{color:{ACCENT_DARK};}}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._btn_log_hub.clicked.connect(lambda: self.navigate_to.emit("Network Logger"))
         hl.addWidget(self._btn_log_hub)

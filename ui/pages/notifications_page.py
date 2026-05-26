@@ -137,6 +137,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
     BORDER, BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    BG_HOVER,
 )
 
 from modules.alert_engine import rule_settings_key as _rule_key
@@ -380,6 +381,7 @@ class NotificationsPage(QWidget):
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
             f" font-size:10px; padding:0; }}"
             f"QPushButton:hover {{ text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         change_btn.setVisible(False)
         change_btn.clicked.connect(
@@ -463,6 +465,7 @@ class NotificationsPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
             f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         rec_btn.clicked.connect(self._enable_recommended_rules)
         banner_lay.addWidget(rec_btn)
@@ -547,6 +550,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
             f"border-radius:2px;padding:0 14px;font-size:11px;}}"
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_webhook)
         btn_test.setToolTip("Sends a test alert through the configured webhook")
@@ -613,6 +617,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
             f"border-radius:2px;padding:0 14px;font-size:11px;}}"
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_email)
         self._test_btns["email"] = btn_test
@@ -664,6 +669,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
             f"border-radius:2px;padding:0 14px;font-size:11px;}}"
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_pushover)
         self._test_btns["pushover"] = btn_test
@@ -714,6 +720,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
             f"border-radius:2px;padding:0 14px;font-size:11px;}}"
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_ntfy)
         self._test_btns["ntfy"] = btn_test
@@ -764,6 +771,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {ACCENT};"
             f"border-radius:2px;padding:0 14px;font-size:11px;}}"
             f"QPushButton:hover{{background:{ACCENT};color:{WHITE};}}"
+            f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
         )
         btn_test.clicked.connect(self._test_telegram)
         self._test_btns["telegram"] = btn_test
@@ -789,6 +797,7 @@ class NotificationsPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; font-weight:bold;"
             f" background:transparent; border:none; padding:2px 0; text-align:left; }}"
             f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         bl.addWidget(self._escalation_expand_btn)
 
@@ -928,6 +937,7 @@ class NotificationsPage(QWidget):
                 f" border-radius:3px; padding:0 6px; color:{col}; background:transparent; }}"
                 f"QPushButton:checked {{ background:{col}; color:#fff; }}"
                 f"QPushButton:unchecked {{ background:transparent; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
             btn.toggled.connect(lambda checked, s=sev: self._toggle_hist_sev(s, checked))
             self._hist_sev_btns[sev] = btn
@@ -994,6 +1004,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{ACCENT};color:#fff;font-size:10px;font-weight:600;"
             f"border:none;border-radius:3px;padding:0 10px;}}"
             f"QPushButton:hover{{background:#006BBD;}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _bb_dismiss.clicked.connect(self._bulk_dismiss)
         _bb_snooze1 = QPushButton("Snooze 1h")
@@ -1002,6 +1013,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};font-size:10px;"
             f"border:1px solid {BORDER};border-radius:3px;padding:0 10px;}}"
             f"QPushButton:hover{{border-color:{ACCENT};color:{ACCENT};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _bb_snooze1.clicked.connect(lambda: self._bulk_snooze(3600))
         _bb_snooze8 = QPushButton("Snooze 8h")
@@ -1014,6 +1026,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:transparent;color:{TEXT_MUTED};font-size:10px;"
             f"border:none;padding:0 8px;}}"
             f"QPushButton:hover{{color:{TEXT_PRIMARY};}}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         _bb_deselect.clicked.connect(self._alert_history_table.clearSelection)
         for w in (_bb_dismiss, _bb_snooze1, _bb_snooze8):
@@ -1029,6 +1042,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
             f"border-radius:2px;padding:0 12px;font-size:11px;}}"
             f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_hist_refresh.clicked.connect(self._refresh_alert_history)
         btn_hist_export = QPushButton("↓ Export CSV")
@@ -1037,6 +1051,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
             f"border-radius:2px;padding:0 12px;font-size:11px;}}"
             f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_hist_export.clicked.connect(self._export_alert_history_csv)
         hist_btn_row.addWidget(btn_hist_refresh)
@@ -1095,6 +1110,7 @@ class NotificationsPage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" border-radius:4px; padding:0 12px; font-size:11px; }}"
             f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _det_close_btn = QPushButton("Close")
         _det_close_btn.setFixedHeight(24)
@@ -1102,6 +1118,7 @@ class NotificationsPage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:11px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         _det_close_btn.clicked.connect(lambda: self._log_detail.setVisible(False))
         _det_btn_row.addWidget(self._log_detail_retry_btn)
@@ -1119,6 +1136,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{TEXT_SECONDARY};border:1px solid {BORDER};"
             f"border-radius:2px;padding:0 12px;font-size:11px;}}"
             f"QPushButton:hover{{color:{ACCENT};border-color:{ACCENT};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_refresh.clicked.connect(self.refresh_log)
         btn_clear = QPushButton("Clear Log")
@@ -1137,6 +1155,7 @@ class NotificationsPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:4px 0; text-align:left; }}"
             f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         cta.clicked.connect(lambda: self.navigate_to.emit("Custom Triggers"))
         log_lay.addWidget(cta)
@@ -1465,6 +1484,7 @@ class NotificationsPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{ACCENT};border:1px solid {BORDER};"
             f"border-radius:2px;padding:0 12px;font-size:11px;}}"
             f"QPushButton:hover{{border-color:{ACCENT};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_gen.clicked.connect(self._on_generate_digest)
         bl.addWidget(btn_gen)

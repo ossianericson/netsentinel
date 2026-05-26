@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, AMBER, BG_CARD, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY
+from ui.styles import ACCENT, AMBER, BG_CARD, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
 
 _HEIGHT = 240
 _DISMISS_S = 30
@@ -76,6 +76,7 @@ class ScanSummarySheet(QFrame):
         close_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none; font-size:17px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         close_btn.clicked.connect(self._dismiss)
         hdr_row.addWidget(hdr_lbl, 1)
@@ -116,6 +117,7 @@ class ScanSummarySheet(QFrame):
             f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
             f" font-size:10px; text-decoration:underline; padding:0; }}"
             f"QPushButton:hover {{ color:{TEXT_SECONDARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
         dns_btn.clicked.connect(self._dont_show)
         dns_row.addStretch()
@@ -153,6 +155,7 @@ class ScanSummarySheet(QFrame):
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
             f" font-size:10px; padding:0; text-align:left; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         lay.addWidget(title_lbl)
         lay.addWidget(val_lbl)

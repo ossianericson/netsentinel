@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QWidget,
 )
+from ui.styles import BG_HOVER, TEXT_PRIMARY
 
 # Self-contained colours (no ui.styles import needed — banner is standalone)
 _BLUE_BG   = "#EBF4FF"
@@ -135,6 +136,7 @@ class OoklaCliBanner(QFrame):
             f"}}"
             f"QPushButton:hover {{ background:{_BTN_HOVER}; }}"
             f"QPushButton:disabled {{ background:#B0C4D8; color:#FFFFFF; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_install.setFixedHeight(28)
         self._btn_install.clicked.connect(self._on_install_clicked)
@@ -155,6 +157,7 @@ class OoklaCliBanner(QFrame):
             f"  border:none; font-size:16px; padding:0 4px;"
             f"}}"
             f"QPushButton:hover {{ color:{_BLUE_TEXT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{_DIM_TEXT}; }}"
         )
         self._btn_dismiss.setFixedSize(24, 24)
         self._btn_dismiss.setToolTip("Dismiss")

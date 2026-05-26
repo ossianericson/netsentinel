@@ -179,6 +179,7 @@ class DiagnosisPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; text-align:left; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         back_btn.clicked.connect(lambda: self.navigate_to.emit("Overview"))
@@ -257,6 +258,7 @@ class DiagnosisPage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" font-size:13px; font-weight:bold; border-radius:6px; }}"
             f"QPushButton:hover {{ background:#005A9E; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         run_btn.clicked.connect(self._start)
         lay.addWidget(run_btn, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -300,6 +302,7 @@ class DiagnosisPage(QWidget):
             f" border:1px solid {BORDER}; padding:4px 14px; font-size:11px;"
             f" border-radius:4px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._cancel_btn.clicked.connect(self._cancel)
 
@@ -365,6 +368,7 @@ class DiagnosisPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:4px 0; text-align:left; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._other_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self._other_toggle.clicked.connect(self._toggle_other_findings)
@@ -395,6 +399,7 @@ class DiagnosisPage(QWidget):
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:2px 0; text-align:left; }}"
             f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._grade_cta.setCursor(Qt.CursorShape.PointingHandCursor)
         self._grade_cta.clicked.connect(lambda: self.navigate_to.emit("Network Grade"))
@@ -514,6 +519,7 @@ class DiagnosisPage(QWidget):
                 f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
                 f" border:none; padding:2px 0; text-align:left; }}"
                 f"QPushButton:hover {{ color:{color}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             steps_widget = QFrame()
             steps_widget.setStyleSheet(
@@ -551,6 +557,7 @@ class DiagnosisPage(QWidget):
                 f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
                 f" border:none; padding:2px 0; text-align:left; }}"
                 f"QPushButton:hover {{ color:#005A9E; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             cta_btn.clicked.connect(
                 lambda _=False, t=cta_target: self.navigate_to.emit(t)
@@ -857,5 +864,6 @@ class _DiagHistoryDialog(QDialog):
         bb.setStyleSheet(
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
             f" border-radius:4px; padding:4px 16px; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         lay.addWidget(bb)

@@ -34,6 +34,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
+from ui.styles import ACCENT_DARK, BG_HOVER, TEXT_PRIMARY, WHITE
 
 
 # ── Single overlay ────────────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ class CoachMarkOverlay(QWidget):
             "QPushButton { background: transparent; border: none;"
             " color: #636366; font-size: 16px; }"
             "QPushButton:hover { color: #FFFFFF; }"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         close_btn.clicked.connect(self.dismissed)
 
@@ -118,6 +120,7 @@ class CoachMarkOverlay(QWidget):
             "QPushButton { background: #0A84FF; border: none; border-radius: 6px;"
             " color: #FFFFFF; font-size: 12px; font-weight: 600; }"
             "QPushButton:hover { background: #409CFF; }"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         if is_last:
             action_btn.clicked.connect(self.dismissed)

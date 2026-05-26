@@ -266,6 +266,7 @@ class ConnectionsPage(QWidget):
             f" border:1px solid {BORDER}; border-radius:3px; padding:0 8px; }}"
             f"QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; background:{BG_HOVER}; }}"
             f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         self._btn_group.toggled.connect(self._on_group_toggled)
 
@@ -310,6 +311,7 @@ class ConnectionsPage(QWidget):
             f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
             f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
             f"QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
         self._undo_btn.clicked.connect(self._do_undo_block)
         _ub_lay.addWidget(self._undo_btn)

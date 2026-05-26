@@ -13,6 +13,8 @@ Architecture rules observed:
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -38,7 +40,124 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, BG_ALT_ROW, BG_CARD, BG_DARK, BORDER,
     BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN, NAV_BAR, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    BG_HOVER,
 )
+
+
+# ── Notification test worker (SET-1) ─────────────────────────────────────────
+
+class _NotifTestWorker(QThread):
+    """Send a test message through one notification channel off the main thread."""
+    done  = pyqtSignal(str)   # success message
+    error = pyqtSignal(str)   # error message
+
+    def __init__(self, channel_type: str, parent=None):
+        super().__init__(parent)
+        self._channel_type = channel_type
+
+    def run(self) -> None:
+        import socket, time as _t
+        host = socket.gethostname()
+        ts   = _t.strftime("%Y-%m-%d %H:%M:%S")
+        subj = "NetSentinel test message"
+        body = f"This is a test from NetSentinel on {host} at {ts}."
+        try:
+            qs = __import__("PyQt6.QtCore", fromlist=["QSettings"]).QSettings(
+                "NetSentinel", "NetSentinel")
+            ct = self._channel_type
+
+            if ct == "email":
+                self._test_email(qs, subj, body)
+            elif ct == "webhook":
+                self._test_webhook(qs, subj, body)
+            elif ct == "pushover":
+                self._test_pushover(qs, subj, body)
+            elif ct == "telegram":
+                self._test_telegram(qs, body)
+            elif ct == "ntfy":
+                self._test_ntfy(qs, body)
+            else:
+                raise ValueError(f"Unknown channel: {ct}")
+            self.done.emit("Test sent ✓")
+        except Exception as exc:
+            self.error.emit(f"Failed: {exc}")
+
+    def _test_email(self, qs, subj: str, body: str) -> None:
+        import smtplib, ssl
+        smtp_host = qs.value("notifications/smtp_host", "")
+        smtp_port = qs.value("notifications/smtp_port", 587, int)
+        username  = qs.value("notifications/smtp_user", "")
+        to_addr   = qs.value("notifications/email_address", "")
+        if not smtp_host or not to_addr:
+            raise ValueError("SMTP host or recipient not configured — open Notifications settings")
+        try:
+            import keyring
+            password = keyring.get_password("NetSentinel", "notifications/smtp_password") or ""
+        except Exception:
+            password = ""
+        from email.mime.text import MIMEText
+        msg = MIMEText(body)
+        msg["Subject"] = subj
+        msg["From"] = username or to_addr
+        msg["To"]   = to_addr
+        ctx = ssl.create_default_context()
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+            s.ehlo(); s.starttls(context=ctx)
+            if username:
+                s.login(username, password)
+            s.sendmail(msg["From"], [to_addr], msg.as_string())
+
+    def _test_webhook(self, qs, subj: str, body: str) -> None:
+        import urllib.request, json
+        url = qs.value("notifications/webhook_url", "")
+        if not url:
+            raise ValueError("Webhook URL not configured — open Notifications settings")
+        payload = json.dumps({"subject": subj, "body": body, "source": "NetSentinel"}).encode()
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=8)
+
+    def _test_pushover(self, qs, subj: str, body: str) -> None:
+        import urllib.request, urllib.parse
+        try:
+            import keyring
+            api_token = keyring.get_password("NetSentinel", "notifications/pushover_token") or ""
+        except Exception:
+            api_token = ""
+        user_key = qs.value("notifications/pushover_user_key", "")
+        if not api_token or not user_key:
+            raise ValueError("Pushover API token or user key not configured — open Notifications settings")
+        data = urllib.parse.urlencode({
+            "token": api_token, "user": user_key,
+            "title": subj, "message": body,
+        }).encode()
+        urllib.request.urlopen(
+            "https://api.pushover.net/1/messages.json", data=data, timeout=8)
+
+    def _test_telegram(self, qs, body: str) -> None:
+        import urllib.request
+        try:
+            import keyring
+            bot_token = keyring.get_password("NetSentinel", "notifications/telegram_token") or ""
+        except Exception:
+            bot_token = ""
+        chat_id = qs.value("notifications/telegram_chat_id", "")
+        if not bot_token or not chat_id:
+            raise ValueError("Telegram bot token or chat ID not configured — open Notifications settings")
+        import urllib.parse
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = urllib.parse.urlencode({"chat_id": chat_id, "text": body}).encode()
+        urllib.request.urlopen(url, data=data, timeout=8)
+
+    def _test_ntfy(self, qs, body: str) -> None:
+        import urllib.request
+        topic_url = qs.value("notifications/ntfy_topic_url", "")
+        if not topic_url:
+            raise ValueError("ntfy topic URL not configured — open Notifications settings")
+        urllib.request.urlopen(
+            urllib.request.Request(topic_url, data=body.encode(),
+                                   headers={"Title": "NetSentinel Test"},
+                                   method="POST"), timeout=8)
 
 
 # ── Background workers for plugin marketplace ─────────────────────────────────
@@ -201,6 +320,7 @@ class SettingsPage(QWidget):
         self.setObjectName("contentArea")
         self._dirty = False
         self._all_cards: list[tuple[QFrame, str]] = []
+        self._notif_test_workers: list[_NotifTestWorker] = []  # prevent GC
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -429,6 +549,7 @@ class SettingsPage(QWidget):
                 f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
                 f"border:none;padding:0;}}"
                 f"QPushButton:hover{{color:{ACCENT_DARK};}}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             cfg_btn.clicked.connect(lambda _=False, t=nav_target: self.navigate_to.emit(t))
             row.addWidget(lbl)
@@ -436,21 +557,87 @@ class SettingsPage(QWidget):
             row.addWidget(cfg_btn)
             bl.addLayout(row)
 
-        _row("Email notifications",
+        def _notif_row(label: str, status_fn, nav_target: str, channel_type: str) -> None:
+            """Like _row() but adds a 'Send test' button for notification channels."""
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            lbl = QLabel(label)
+            lbl.setFixedWidth(190)
+            lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;")
+            status_val = status_fn()
+            ok = status_val[0]
+            status_txt = status_val[1]
+            s_lbl = QLabel(status_txt)
+            s_color = GREEN if ok else TEXT_MUTED
+            s_lbl.setStyleSheet(
+                f"font-size:11px;color:{s_color};background:transparent;"
+            )
+            test_btn = QPushButton("Send test")
+            test_btn.setFlat(True)
+            test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            test_btn.setStyleSheet(
+                f"QPushButton{{color:{TEXT_SECONDARY};font-size:11px;background:transparent;"
+                f"border:1px solid {BORDER};border-radius:3px;padding:1px 8px;}}"
+                f"QPushButton:hover{{color:{TEXT_PRIMARY};border-color:{ACCENT};}}"
+                f"QPushButton:disabled{{color:{TEXT_MUTED};}}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+            )
+            cfg_btn = QPushButton("Configure →")
+            cfg_btn.setFlat(True)
+            cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            cfg_btn.setStyleSheet(
+                f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
+                f"border:none;padding:0;}}"
+                f"QPushButton:hover{{color:{ACCENT_DARK};}}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            )
+            cfg_btn.clicked.connect(lambda _=False, t=nav_target: self.navigate_to.emit(t))
+
+            def _run_test(ct=channel_type, btn=test_btn):
+                btn.setEnabled(False)
+                btn.setText("Sending…")
+                w = _NotifTestWorker(ct, parent=self)
+                self._notif_test_workers.append(w)
+                def _on_done(msg, b=btn, worker=w):
+                    b.setEnabled(True)
+                    b.setText("Send test")
+                    from ui.widgets.toast import ToastManager
+                    ToastManager.show(msg, kind="info")
+                    if worker in self._notif_test_workers:
+                        self._notif_test_workers.remove(worker)
+                def _on_err(msg, b=btn, worker=w):
+                    b.setEnabled(True)
+                    b.setText("Send test")
+                    from ui.widgets.toast import ToastManager
+                    ToastManager.show(msg, kind="warning")
+                    if worker in self._notif_test_workers:
+                        self._notif_test_workers.remove(worker)
+                w.done.connect(_on_done)
+                w.error.connect(_on_err)
+                w.start()
+
+            test_btn.clicked.connect(_run_test)
+            row.addWidget(lbl)
+            row.addWidget(s_lbl, 1)
+            row.addWidget(test_btn)
+            row.addWidget(cfg_btn)
+            bl.addLayout(row)
+
+        _notif_row("Email notifications",
              lambda: (bool(qs.value("notifications/email_address", "")),
                       ("✓ " + str(qs.value("notifications/email_address", ""))[:30])
                       if qs.value("notifications/email_address", "") else "✗ Not configured"),
-             "Notifications")
+             "Notifications", "email")
 
-        _row("Webhook",
+        _notif_row("Webhook",
              lambda: (bool(qs.value("notifications/webhook_url", "")),
                       ("✓ Configured" if qs.value("notifications/webhook_url", "") else "✗ Not set")),
-             "Notifications")
+             "Notifications", "webhook")
 
-        _row("Pushover",
+        _notif_row("Pushover",
              lambda: (bool(qs.value("notifications/pushover_user_key", "")),
                       ("✓ Configured" if qs.value("notifications/pushover_user_key", "") else "✗ Not set")),
-             "Notifications")
+             "Notifications", "pushover")
 
         _row("5G Modem logging",
              lambda: (qs.value("logging/modem_enabled", False, type=bool),
@@ -519,7 +706,108 @@ class SettingsPage(QWidget):
         bl.addWidget(self._theme_status_lbl)
 
         self._refresh_theme_buttons()
+
+        # ── Accent colour picker (SET-2) ──────────────────────────────────────
+        bl.addSpacing(10)
+        accent_hdr = QLabel("Accent Colour")
+        accent_hdr.setStyleSheet(
+            f"font-size:11px;font-weight:bold;color:{TEXT_PRIMARY};background:transparent;"
+        )
+        bl.addWidget(accent_hdr)
+        accent_desc = QLabel(
+            "Override the active theme's accent colour. Takes effect on next launch."
+        )
+        accent_desc.setWordWrap(True)
+        accent_desc.setStyleSheet(
+            f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;"
+        )
+        bl.addWidget(accent_desc)
+
+        _ACCENT_PRESETS = [
+            ("#0078D4", "Blue"),
+            ("#7C3AED", "Purple"),
+            ("#2E7D32", "Green"),
+            ("#00897B", "Teal"),
+            ("#D93025", "Red"),
+            ("#E65100", "Orange"),
+        ]
+
+        swatch_row = QHBoxLayout()
+        swatch_row.setSpacing(6)
+        self._accent_status_lbl = QLabel("")
+        self._accent_status_lbl.setStyleSheet(
+            f"font-size:11px;color:{ACCENT};background:transparent;"
+        )
+
+        current_override = _styles.get_accent_override()
+
+        for hex_val, name in _ACCENT_PRESETS:
+            sw = QPushButton()
+            sw.setFixedSize(28, 28)
+            sw.setToolTip(f"{name} ({hex_val})")
+            sw.setCursor(Qt.CursorShape.PointingHandCursor)
+            active = (current_override == hex_val)
+            border = ACCENT if active else BORDER
+            sw.setStyleSheet(
+                f"QPushButton{{background:{hex_val};border:2px solid {border};"
+                f"border-radius:4px;}}"
+                f"QPushButton:hover{{border-color:{hex_val};}}"
+            )
+            sw.clicked.connect(
+                lambda _=False, hx=hex_val, nm=name: self._on_accent_swatch(hx, nm)
+            )
+            swatch_row.addWidget(sw)
+
+        custom_btn = QPushButton("Custom…")
+        custom_btn.setFlat(True)
+        custom_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        custom_btn.setStyleSheet(
+            f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
+            f"border:1px solid {BORDER};border-radius:4px;padding:3px 10px;}}"
+            f"QPushButton:hover{{border-color:{ACCENT};}}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+        )
+        custom_btn.clicked.connect(self._on_accent_custom)
+        swatch_row.addWidget(custom_btn)
+
+        reset_btn = QPushButton("Reset")
+        reset_btn.setFlat(True)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.setStyleSheet(
+            f"QPushButton{{color:{TEXT_SECONDARY};font-size:11px;background:transparent;"
+            f"border:1px solid {BORDER};border-radius:4px;padding:3px 10px;}}"
+            f"QPushButton:hover{{border-color:{ACCENT};}}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+        )
+        reset_btn.clicked.connect(self._on_accent_reset)
+        swatch_row.addWidget(reset_btn)
+        swatch_row.addStretch()
+        bl.addLayout(swatch_row)
+        bl.addWidget(self._accent_status_lbl)
+
         return card
+
+    def _on_accent_swatch(self, hex_val: str, name: str) -> None:
+        _styles.set_accent_override(hex_val)
+        self._accent_status_lbl.setText(
+            f"Accent set to {name} ({hex_val}) — restart to apply."
+        )
+
+    def _on_accent_custom(self) -> None:
+        from PyQt6.QtWidgets import QColorDialog
+        from PyQt6.QtGui import QColor
+        current = _styles.get_accent_override() or ACCENT
+        chosen = QColorDialog.getColor(QColor(current), self, "Choose Accent Colour")
+        if chosen.isValid():
+            hex_val = chosen.name().upper()
+            _styles.set_accent_override(hex_val)
+            self._accent_status_lbl.setText(
+                f"Custom accent ({hex_val}) saved — restart to apply."
+            )
+
+    def _on_accent_reset(self) -> None:
+        _styles.set_accent_override(None)
+        self._accent_status_lbl.setText("Accent reset to theme default — restart to apply.")
 
     def _refresh_theme_buttons(self):
         active = _styles.get_active_theme_name()
@@ -529,6 +817,7 @@ class SettingsPage(QWidget):
                     f"QPushButton{{background:{ACCENT};color:{NAV_BAR};"
                     f"border:1px solid {ACCENT};border-radius:4px;"
                     f"padding:5px 14px;font-size:11px;font-weight:bold;}}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
             else:
                 btn.setStyleSheet(
@@ -536,6 +825,7 @@ class SettingsPage(QWidget):
                     f"border:1px solid {ACCENT};border-radius:4px;"
                     f"padding:5px 14px;font-size:11px;}}"
                     f"QPushButton:hover{{background:{BTN_HOVER_BG};}}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
 
     def _on_theme(self, name: str):
@@ -694,6 +984,7 @@ class SettingsPage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:white; border:none;"
             f" font-size:11px; border-radius:4px; padding:0 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         save_btn.clicked.connect(self._save_sched_scan)
         bl.addWidget(save_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -937,6 +1228,7 @@ class SettingsPage(QWidget):
             f"padding:0 12px;font-size:11px;height:26px;}}"
             f"QPushButton:hover{{background:#FFF0F0;}}"
             f"QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._pm_btn_uninstall.setEnabled(False)
         self._pm_btn_uninstall.clicked.connect(self._pm_uninstall_selected)
@@ -1152,6 +1444,7 @@ class SettingsPage(QWidget):
             f" border:1px solid {ACCENT}; padding:4px 14px;"
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BTN_HOVER_BG}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn.clicked.connect(self.reload_oui_requested.emit)
         bl.addWidget(btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1163,6 +1456,7 @@ class SettingsPage(QWidget):
             f" border:1px solid {BORDER}; padding:4px 14px;"
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         reset_btn.clicked.connect(self.reset_dismissed_requested.emit)
         bl.addWidget(reset_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1174,9 +1468,63 @@ class SettingsPage(QWidget):
             f" border:1px solid {BORDER}; padding:4px 14px;"
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         export_btn.clicked.connect(self.export_all_requested.emit)
         bl.addWidget(export_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        # ── Settings export / import (SET-3) ─────────────────────────────────
+        bl.addSpacing(6)
+        settings_hdr = QLabel("Settings Export / Import")
+        settings_hdr.setStyleSheet(
+            f"font-size:11px;font-weight:bold;color:{TEXT_PRIMARY};background:transparent;"
+        )
+        bl.addWidget(settings_hdr)
+        settings_desc = QLabel(
+            "Export all settings to a JSON file for backup or migration. "
+            "Secrets (passwords, API keys) are stored in the OS keychain and are "
+            "NOT included in the export."
+        )
+        settings_desc.setWordWrap(True)
+        settings_desc.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
+        bl.addWidget(settings_desc)
+
+        self._settings_io_status = QLabel("")
+        self._settings_io_status.setStyleSheet(
+            f"font-size:11px;color:{ACCENT};background:transparent;"
+        )
+
+        io_row = QHBoxLayout()
+        io_row.setSpacing(8)
+
+        exp_btn = QPushButton("Export settings (JSON)")
+        exp_btn.setFixedWidth(190)
+        exp_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        exp_btn.clicked.connect(self._on_export_settings)
+
+        imp_btn = QPushButton("Import settings")
+        imp_btn.setFixedWidth(140)
+        imp_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        imp_btn.clicked.connect(self._on_import_settings)
+
+        io_row.addWidget(exp_btn)
+        io_row.addWidget(imp_btn)
+        io_row.addStretch()
+        bl.addLayout(io_row)
+        bl.addWidget(self._settings_io_status)
+        bl.addSpacing(6)
 
         setup_btn = QPushButton("Run first-time setup")
         setup_btn.setFixedWidth(220)
@@ -1185,11 +1533,54 @@ class SettingsPage(QWidget):
             f" border:1px solid {BORDER}; padding:4px 14px;"
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BTN_HOVER_BG}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         setup_btn.clicked.connect(self.run_setup_requested.emit)
         bl.addWidget(setup_btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
         return card
+
+    def _on_export_settings(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+        from modules.utils import get_app_data_dir
+        default_path = str(get_app_data_dir() / "netsentinel_settings.json")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Settings", default_path, "JSON files (*.json)"
+        )
+        if not path:
+            return
+        try:
+            from modules.settings_io import export_settings
+            export_settings(Path(path))
+            self._settings_io_status.setText(f"Settings exported to {Path(path).name}")
+        except Exception as exc:
+            self._settings_io_status.setText(f"Export failed: {exc}")
+
+    def _on_import_settings(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import Settings", "", "JSON files (*.json)"
+        )
+        if not path:
+            return
+        confirm = QMessageBox.question(
+            self,
+            "Import Settings",
+            "This will overwrite your current settings.\n"
+            "Secrets (passwords, API keys) will not be affected.\n\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            from modules.settings_io import import_settings
+            count = import_settings(Path(path))
+            self._settings_io_status.setText(
+                f"Imported {count} settings from {Path(path).name} — restart to apply."
+            )
+        except Exception as exc:
+            self._settings_io_status.setText(f"Import failed: {exc}")
 
     # ── Config completeness (HEALTH-4) ────────────────────────────────────────
 

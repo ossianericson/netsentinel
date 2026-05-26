@@ -23,8 +23,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BORDER, BG_CARD, GREEN,
+    ACCENT, ACCENT_DARK, AMBER, BORDER, BG_CARD, GREEN,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    BG_HOVER,
 )
 
 log = logging.getLogger(__name__)
@@ -243,7 +244,8 @@ class MeshRouterPage(QWidget):
         self._scan_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             " border-radius:3px; font-size:12px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:#005A9E; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
             f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
         )
         self._scan_btn.clicked.connect(self._on_scan_clicked)
@@ -288,6 +290,7 @@ class MeshRouterPage(QWidget):
             " border-radius:3px; font-size:11px; padding:0 10px; }}"
             f"QPushButton:hover {{ background:{AMBER}; color:#000; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )
         self._forget_btn.clicked.connect(self._on_forget_clicked)
         row2_lay.addWidget(self._forget_btn)

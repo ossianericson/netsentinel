@@ -244,6 +244,7 @@ class NetworkDocPage(QWidget):
             f" border:1px solid {BORDER}; border-radius:2px; padding:0 16px; font-size:12px; }}"
             f"QPushButton:hover {{ background:{ACCENT}; color:white; border-color:{ACCENT}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_save_as = QPushButton("Save As…")
         self._btn_save_as.setFixedHeight(34)

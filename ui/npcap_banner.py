@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolic
 from modules.utils   import is_npcap_available, is_store_app
 from ui.styles       import (
     ADMIN_WARN_BG, ADMIN_WARN_BORDER, ADMIN_WARN_FG, ADMIN_WARN_HOVER,
+    BG_HOVER,
 )
 
 _NPCAP_URL = "https://npcap.com/#download"
@@ -96,6 +97,7 @@ class NpcapMissingBanner(QFrame):
             f"QPushButton {{ border:none; background:transparent; font-size:11px;"
             f" font-weight:bold; color:{ADMIN_WARN_FG}; text-decoration:underline; }}"
             f"QPushButton:hover {{ color:{ADMIN_WARN_HOVER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ADMIN_WARN_FG}; }}"
         )
         btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(_NPCAP_URL)))
 

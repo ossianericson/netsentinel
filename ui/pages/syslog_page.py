@@ -161,6 +161,7 @@ class _MsgDetailDialog(QDialog):
         close_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
             f" padding:4px 16px; font-size:11px; border-radius:4px; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         close_btn.clicked.connect(self.accept)
         lay.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignRight)
@@ -255,6 +256,7 @@ class SyslogPage(QWidget):
         clear_btn.setStyleSheet(
             f"QPushButton {{ font-size:11px; border:1px solid {BORDER};"
             f" background:{BG_CARD}; color:{TEXT_PRIMARY}; padding:2px 12px; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         clear_btn.clicked.connect(self._clear)
 
