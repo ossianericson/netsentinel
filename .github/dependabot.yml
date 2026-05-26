@@ -3,26 +3,32 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"           # Recommended for this project
-    open-pull-requests-limit: 10
+      interval: "weekly"
+    open-pull-requests-limit: 8          # Limit simultaneous PRs
     labels:
       - "dependencies"
       - "pip"
     
-    # Group updates to avoid too many PRs
+    # Better grouping to reduce PR spam
     groups:
       security-updates:
         applies-to: security-updates
         dependency-type: "production"
       
-      minor-and-patch:
+      minor-patch-updates:
         dependency-type: "production"
         update-types:
           - "minor"
           - "patch"
 
-    # Ignore packages that are better updated manually
+    commit-message:
+      prefix: "chore(deps)"
+
+    # Ignore noisy or risky packages
     ignore:
-      - dependency-name: "pyqt6"          # Heavy GUI library - update manually
-      - dependency-name: "pyinstaller"    # Build tool - update manually
-      - dependency-name: "matplotlib"     # Often causes issues when auto-updated
+      - dependency-name: "pyqt6"
+      - dependency-name: "pyinstaller"
+      - dependency-name: "matplotlib"
+      - dependency-name: "pytest"           # Major version jumps break test suite assumptions
+      - dependency-name: "keyring"          # OS keychain behaviour varies; test before bumping
+      - dependency-name: "cryptography"     # Scapy compatibility; 44→48 spans 4 major versions
