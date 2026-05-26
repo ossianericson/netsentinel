@@ -1,0 +1,14 @@
+[tool.pytest.ini_options]
+# Skip live (real network) and benchmark tests by default.
+# To run them explicitly: pytest -m live   or   pytest -m benchmark
+addopts = "-m 'not benchmark and not live'"
+
+markers = [
+    "live: requires live network access or a real device (skipped in CI)",
+    "benchmark: performance regression / scaling tests (slow; skipped in CI)",
+    "slow: takes longer than a few seconds (skipped in time-constrained runs)",
+    "integration: exercises multiple modules end-to-end",
+]
+
+# Do NOT set fail_under here — headless CI coverage for a GUI app is ~35%.
+# Coverage discipline is managed via the ratchet rule in .claude/rules/tests.instructions.md.
