@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 HARDWARE_NAME      = "AVM FRITZ!Box"
 HARDWARE_TYPE      = "router"
 HARDWARE_IP        = "192.168.178.1"   # default FRITZ!Box LAN address
+PYPI_PACKAGE       = "fritzconnection"
 DESCRIPTION        = "AVM FRITZ!Box routers — all models; requires pip install fritzconnection"
 CREDENTIAL_LABEL   = "Password"
 

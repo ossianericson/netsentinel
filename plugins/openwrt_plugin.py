@@ -23,6 +23,7 @@ HARDWARE_NAME    = "OpenWrt Router"
 HARDWARE_TYPE    = "router"
 HARDWARE_IP      = "192.168.1.1"
 USERNAME         = "root"
+PYPI_PACKAGE     = "openwrt-luci-rpc"
 DESCRIPTION      = "OpenWrt / LEDE routers with LuCI web interface — requires pip install openwrt-luci-rpc"
 CREDENTIAL_LABEL = "Password"
 

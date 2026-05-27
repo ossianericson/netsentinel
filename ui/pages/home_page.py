@@ -898,6 +898,116 @@ class HomePage(QWidget):
         _ds_lay.addWidget(_ds_dismiss)
         lay.addWidget(self._dashboard_strip)
 
+        # ── Hardware setup strip (shown until dismissed) ──────────────────────
+        _hw_dismissed = QSettings("NetSentinel", "NetSentinel").value(
+            "home/hw_setup_dismissed", False, type=bool
+        )
+        self._hw_setup_strip = QFrame()
+        self._hw_setup_strip.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._hw_setup_strip.setVisible(not _hw_dismissed)
+        _hw_outer = QVBoxLayout(self._hw_setup_strip)
+        _hw_outer.setContentsMargins(12, 10, 12, 10)
+        _hw_outer.setSpacing(8)
+
+        _hw_hdr_row = QHBoxLayout()
+        _hw_hdr_row.setSpacing(6)
+        _hw_hdr_lbl = QLabel("◆  Get more from NetSentinel — connect your hardware")
+        _hw_hdr_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:600; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
+        )
+        _hw_hdr_sub = QLabel(
+            "These integrations enrich your Devices table and Network Map with real hostnames,"
+            " signal data, and mesh topology — the rest of the app gets better."
+        )
+        _hw_hdr_sub.setWordWrap(True)
+        _hw_hdr_sub.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _hw_dismiss = QPushButton("×")
+        _hw_dismiss.setFixedSize(20, 20)
+        _hw_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _hw_dismiss.setToolTip("Dismiss — you can find these pages in the Monitor and Extend sections")
+        _hw_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+        )
+        _hw_dismiss.clicked.connect(self._dismiss_hw_setup_strip)
+        _hw_hdr_row.addWidget(_hw_hdr_lbl)
+        _hw_hdr_row.addStretch()
+        _hw_hdr_row.addWidget(_hw_dismiss)
+        _hw_outer.addLayout(_hw_hdr_row)
+        _hw_outer.addWidget(_hw_hdr_sub)
+
+        _hw_cards_row = QHBoxLayout()
+        _hw_cards_row.setSpacing(8)
+        _HW_SETUP_ITEMS = [
+            (
+                "▶  5G Modem",
+                "ZTE MC889",
+                "Live SINR, RSRP, band & cell ID logged alongside every speed test.",
+                "Modem",
+            ),
+            (
+                "▶  Mesh Router",
+                "TP-Link Deco XE75",
+                "Real hostnames and mesh topology — makes Devices & Network Map accurate.",
+                "Mesh & Router",
+            ),
+            (
+                "▶  Hardware Devices",
+                "USB · Serial · GPIO",
+                "Connect physical sensors and network hardware to extend NetSentinel.",
+                "Hardware",
+            ),
+        ]
+        for _hw_title, _hw_sub, _hw_desc, _hw_nav in _HW_SETUP_ITEMS:
+            _card = QFrame()
+            _card.setStyleSheet(
+                f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER};"
+                f" border-radius:4px; }}"
+            )
+            _card_lay = QVBoxLayout(_card)
+            _card_lay.setContentsMargins(10, 8, 10, 8)
+            _card_lay.setSpacing(3)
+            _ct = QLabel(_hw_title)
+            _ct.setStyleSheet(
+                f"font-size:11px; font-weight:600; color:{TEXT_PRIMARY};"
+                f" background:transparent; border:none;"
+            )
+            _cs = QLabel(_hw_sub)
+            _cs.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            _cd = QLabel(_hw_desc)
+            _cd.setWordWrap(True)
+            _cd.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            _cb = QPushButton("Set up →")
+            _cb.setFixedHeight(22)
+            _cb.setCursor(Qt.CursorShape.PointingHandCursor)
+            _cb.setStyleSheet(
+                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+                f" border-radius:3px; font-size:10px; padding:0 8px; }}"
+                f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+                f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            )
+            _cb.clicked.connect(lambda _=False, t=_hw_nav: self.navigate_to.emit(t))
+            _card_lay.addWidget(_ct)
+            _card_lay.addWidget(_cs)
+            _card_lay.addWidget(_cd)
+            _card_lay.addStretch()
+            _card_lay.addWidget(_cb)
+            _hw_cards_row.addWidget(_card)
+        _hw_outer.addLayout(_hw_cards_row)
+        lay.addWidget(self._hw_setup_strip)
+
         # ── Since you were last here (hidden until data loaded) ───────────────
         self._last_visit_card = QFrame()
         self._last_visit_card.setStyleSheet(
@@ -1924,6 +2034,12 @@ class HomePage(QWidget):
             "home/dashboard_strip_dismissed", True
         )
         self._dashboard_strip.setVisible(False)
+
+    def _dismiss_hw_setup_strip(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            "home/hw_setup_dismissed", True
+        )
+        self._hw_setup_strip.setVisible(False)
 
     def _dismiss_tips(self) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("home/tips_dismissed", True)

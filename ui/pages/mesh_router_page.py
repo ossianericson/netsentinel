@@ -110,8 +110,9 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     outer.setSpacing(0)
 
     hdr = QFrame()
+    hdr.setObjectName("meshCardHdr")
     hdr.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:none;"
+        f"QFrame#meshCardHdr {{ background:{BG_CARD}; border:none;"
         f" border-bottom:1px solid {BORDER}; }}"
     )
     hdr_lay = QHBoxLayout(hdr)
@@ -178,8 +179,9 @@ class MeshRouterPage(QWidget):
         root.addWidget(PageHeaderBar("Mesh & Router"))
 
         compat = QFrame()
+        compat.setObjectName("meshCompatBanner")
         compat.setStyleSheet(
-            f"QFrame {{ background:#1A2A3A; border:1px solid #2A4A6A;"
+            f"QFrame#meshCompatBanner {{ background:#1A2A3A; border:1px solid #2A4A6A;"
             f" border-left:3px solid {ACCENT}; border-radius:0px; }}"
         )
         compat_lay = QHBoxLayout(compat)
@@ -200,8 +202,7 @@ class MeshRouterPage(QWidget):
         # ── config card (two rows) ────────────────────────────────────────────
         cfg_card = QFrame()
         cfg_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:0px; padding:0px; }}"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px; padding:0px;"
         )
         cfg_card_lay = QVBoxLayout(cfg_card)
         cfg_card_lay.setContentsMargins(0, 0, 0, 0)
@@ -209,7 +210,7 @@ class MeshRouterPage(QWidget):
 
         # Row 1 — connection inputs
         row1 = QFrame()
-        row1.setStyleSheet("QFrame { border:none; background:transparent; }")
+        row1.setStyleSheet("border:none; background:transparent;")
         row1_lay = QHBoxLayout(row1)
         row1_lay.setContentsMargins(12, 8, 12, 8)
         row1_lay.setSpacing(8)
@@ -268,7 +269,7 @@ class MeshRouterPage(QWidget):
 
         # Row 2 — keyring controls
         row2 = QFrame()
-        row2.setStyleSheet("QFrame { border:none; background:transparent; }")
+        row2.setStyleSheet("border:none; background:transparent;")
         row2_lay = QHBoxLayout(row2)
         row2_lay.setContentsMargins(12, 6, 12, 6)
         row2_lay.setSpacing(12)
@@ -309,8 +310,9 @@ class MeshRouterPage(QWidget):
         if not self._keyring_ok and not MeshRouterPage._keyring_warned:
             MeshRouterPage._keyring_warned = True
             warn = QFrame()
+            warn.setObjectName("meshWarnBanner")
             warn.setStyleSheet(
-                f"QFrame {{ background:#3a2800; border:1px solid {AMBER};"
+                f"QFrame#meshWarnBanner {{ background:#3a2800; border:1px solid {AMBER};"
                 " border-radius:0px; padding:0px; }}"
             )
             warn_lay = QHBoxLayout(warn)

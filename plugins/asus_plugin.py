@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 HARDWARE_NAME    = "ASUS Router"
 HARDWARE_TYPE    = "router"
 HARDWARE_IP      = "192.168.50.1"   # default ASUS LAN address
+PYPI_PACKAGE     = "asusrouter"
 USERNAME         = "admin"
 DESCRIPTION      = "ASUS routers and ZenWiFi — ASUSWRT & Merlin firmware; requires pip install asusrouter"
 CREDENTIAL_LABEL = "Password"

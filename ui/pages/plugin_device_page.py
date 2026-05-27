@@ -90,8 +90,9 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     outer.setSpacing(0)
 
     hdr = QFrame()
+    hdr.setObjectName("pluginCardHdr")
     hdr.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:none;"
+        f"QFrame#pluginCardHdr {{ background:{BG_CARD}; border:none;"
         f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
     )
     hdr_lay = QHBoxLayout(hdr)
@@ -252,8 +253,9 @@ class PluginDevicePage(QWidget):
         cred_outer.setSpacing(0)
 
         hdr = QFrame()
+        hdr.setObjectName("pluginCardHdr")
         hdr.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f"QFrame#pluginCardHdr {{ background:{BG_CARD}; border:none;"
             f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
         )
         hdr_lay = QHBoxLayout(hdr)
@@ -368,8 +370,9 @@ class PluginDevicePage(QWidget):
         if not self._keyring_ok and not PluginDevicePage._keyring_warned:
             PluginDevicePage._keyring_warned = True
             warn = QFrame()
+            warn.setObjectName("pluginWarnBanner")
             warn.setStyleSheet(
-                f"QFrame {{ background:#3a2800; border:1px solid {AMBER}; border-radius:0px; }}"
+                f"QFrame#pluginWarnBanner {{ background:#3a2800; border:1px solid {AMBER}; border-radius:0px; }}"
             )
             warn_lay = QHBoxLayout(warn)
             warn_lay.setContentsMargins(12, 8, 12, 8)
@@ -480,8 +483,9 @@ class PluginDevicePage(QWidget):
         card2_outer.setSpacing(0)
 
         hdr2 = QFrame()
+        hdr2.setObjectName("pluginMeshHdr")
         hdr2.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f"QFrame#pluginMeshHdr {{ background:{BG_CARD}; border:none;"
             f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
         )
         hdr2_lay = QHBoxLayout(hdr2)
@@ -524,8 +528,9 @@ class PluginDevicePage(QWidget):
         card3_outer.setSpacing(0)
 
         hdr3 = QFrame()
+        hdr3.setObjectName("pluginClientHdr")
         hdr3.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f"QFrame#pluginClientHdr {{ background:{BG_CARD}; border:none;"
             f" border-bottom:1px solid {BORDER}; border-radius:4px 4px 0 0; }}"
         )
         hdr3_lay = QHBoxLayout(hdr3)

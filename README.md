@@ -320,6 +320,21 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.43
+
+**Added**
+- `tests/test_hardware_integration.py` — 35 tests covering `HardwareIntegrationPage` crash scenarios (startup, delete-while-timer-pending, password save/forget, plugin import lifecycle)
+- Hardware plugin dependency auto-install: `PYPI_PACKAGE` constant added to 6 bundled plugins (asus, fritzbox, mikrotik, netgear, openwrt, unifi); clicking "＋ Add" now opens `PipInstallDialog` automatically if the library is missing
+- `HubCard` inline install button: missing-dependency errors now show a blue "⬇ Install X" button instead of raw "run: pip install X" text; clicking installs the library and re-polls immediately
+
+**Fixed**
+- `hardware_integration_page.py`: `RecursionError` crash — `on_native_modem_data` was emitting `plugin_result`, creating an infinite signal loop via `_on_hardware_plugin_result` → `_on_modem_signal` → `on_native_modem_data`
+- `hardware_integration_page.py`: `AttributeError: 'NoneType' has no attribute 'upper'` in `on_modem_card_data` when `network_type` key is present but `None`
+- `hardware_integration_page.py`: startup crash `AttributeError: 'str' object has no attribute 'get'` in `_display_name` when QSettings data is corrupt or a plain string
+- `hardware_integration_page.py`: `RuntimeError: wrapped C/C++ object deleted` when a `HubCard` was removed while its 3-second refresh `QTimer` was still pending
+- Bundled ZTE/Deco plugin password not propagating to the card after a QSettings wipe; cards now auto-import bundled plugins on first launch
+- Qt stylesheet parse warnings reduced across `modem_page.py`, `mesh_router_page.py`, `plugin_device_page.py`, and `hardware_integration_page.py`
+
 ### v1.9.42
 
 - **wmic → CimInstance migration** — all credentialed-scan Windows commands ported from deprecated `wmic` to `powershell -NoProfile Get-CimInstance`; fully compatible with Windows 11 24H2 where wmic is removed

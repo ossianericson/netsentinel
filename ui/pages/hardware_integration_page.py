@@ -289,6 +289,7 @@ def _validate_script(path: str) -> tuple[bool, str, dict]:
         "ip":               str(top_names.get("HARDWARE_IP", "")),
         "description":      str(top_names.get("DESCRIPTION", "")),
         "credential_label": str(top_names.get("CREDENTIAL_LABEL", "Password")),
+        "pypi_package":     str(top_names.get("PYPI_PACKAGE", "")),
     }
 
 
@@ -320,6 +321,13 @@ def _save_last_result(path: str, data: dict) -> None:
     try:
         s.setValue(_SETTINGS_RESULT.format(_path_hash(path)), json.dumps(data, default=str))
     except Exception:
+        pass
+
+
+def _safe_set_text(lbl: "QLabel", text: str) -> None:
+    try:
+        lbl.setText(text)
+    except RuntimeError:
         pass
 
 
@@ -371,8 +379,9 @@ class _ModemDetailPanel(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("modemDetailPanel")
         self.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:none;"
+            f"QFrame#modemDetailPanel {{ background:{BG_DARK}; border:none;"
             f" border-top:1px solid {BORDER}; }}"
         )
         root = QHBoxLayout(self)
@@ -420,7 +429,7 @@ class _ModemDetailPanel(QFrame):
         # Connection strip
         conn = QFrame()
         conn.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:none; border-bottom:1px solid {BORDER}; }}"
+            f"background:{BG_DARK}; border:none; border-bottom:1px solid {BORDER};"
         )
         cl = QHBoxLayout(conn)
         cl.setContentsMargins(12, 4, 12, 4)
@@ -448,7 +457,7 @@ class _ModemDetailPanel(QFrame):
         outer.addWidget(conn)
 
         body = QFrame()
-        body.setStyleSheet(f"QFrame {{ background:{BG_DARK}; border:none; }}")
+        body.setStyleSheet(f"background:{BG_DARK}; border:none;")
         body.setLayout(root)
         outer.addWidget(body)
 
@@ -457,7 +466,7 @@ class _ModemDetailPanel(QFrame):
     def _make_col(self, title: str, color: str, border_right: bool):
         col = QFrame()
         border = f"border-right:1px solid {BORDER};" if border_right else ""
-        col.setStyleSheet(f"QFrame {{ background:{BG_DARK}; border:none; {border} }}")
+        col.setStyleSheet(f"background:{BG_DARK}; border:none; {border}")
         lay = QVBoxLayout(col)
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(2)
@@ -577,8 +586,9 @@ class _RouterDetailPanel(QFrame):
         self._last_clients: list = []
         self._last_nodes: list = []
 
+        self.setObjectName("routerDetailPanel")
         self.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:none;"
+            f"QFrame#routerDetailPanel {{ background:{BG_DARK}; border:none;"
             f" border-top:1px solid {BORDER}; }}"
         )
         lay = QVBoxLayout(self)
@@ -714,7 +724,10 @@ class _RouterDetailPanel(QFrame):
             return ""
 
     def update(self, status: dict, clients: list) -> None:
-        nodes = status.get("extra", {}).get("nodes", [])
+        if not isinstance(status, dict):
+            status = {}
+        nodes   = [n for n in (status.get("extra", {}).get("nodes") or []) if isinstance(n, dict)]
+        clients = [c for c in (clients or []) if isinstance(c, dict)]
         n_cli = status.get("connected_clients") or len(clients)
 
         self._last_clients = clients
@@ -957,14 +970,16 @@ class HubCard(QFrame):
 
     def __init__(self, path: str, meta: dict, last_result: Optional[dict], parent=None):
         super().__init__(parent)
-        self._path       = path
-        self._meta       = meta
-        self._last_ts    = last_result.get("_ts", 0.0) if last_result else 0.0
+        self._path          = path
+        self._meta          = meta
+        self._pending_pkg   = ""   # pypi package to install when dep error shown
+        self._last_ts    = last_result.get("_ts", 0.0) if isinstance(last_result, dict) else 0.0
         self._hw_type    = meta.get("type", "unknown")
         self._detail_visible = False
 
+        self.setObjectName("hubCard")
         self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#hubCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         outer = QVBoxLayout(self)
@@ -973,8 +988,9 @@ class HubCard(QFrame):
 
         # ── Header row ────────────────────────────────────────────────────────
         hdr = QFrame()
+        hdr.setObjectName("hubCardHdr")
         hdr.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f"QFrame#hubCardHdr {{ background:{BG_CARD}; border:none;"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         hdr_lay = QHBoxLayout(hdr)
@@ -1023,6 +1039,14 @@ class HubCard(QFrame):
         )
         hdr_lay.addWidget(self._ts_lbl)
 
+        # Install dependency button — hidden until a dep error is detected
+        self._btn_install = _btn("⬇ Install dependency", accent=True)
+        self._btn_install.setFixedHeight(26)
+        self._btn_install.setToolTip("Install the missing Python library via pip")
+        self._btn_install.setVisible(False)
+        self._btn_install.clicked.connect(self._on_install_dep)
+        hdr_lay.addWidget(self._btn_install)
+
         # Refresh button
         self._btn_refresh = _btn("↻")
         self._btn_refresh.setFixedWidth(28)
@@ -1048,8 +1072,9 @@ class HubCard(QFrame):
 
         # ── Password row ──────────────────────────────────────────────────────
         pw_row = QFrame()
+        pw_row.setObjectName("hubCardPwRow")
         pw_row.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f"QFrame#hubCardPwRow {{ background:{BG_CARD}; border:none;"
             f" border-top:1px solid {BORDER}; border-radius:0px; }}"
         )
         pw_lay = QHBoxLayout(pw_row)
@@ -1109,7 +1134,7 @@ class HubCard(QFrame):
         outer.addWidget(self._detail)
 
         # Apply persisted result immediately if available
-        if last_result:
+        if isinstance(last_result, dict):
             self._apply_result(last_result)
 
     # ── Public interface ──────────────────────────────────────────────────────
@@ -1119,13 +1144,39 @@ class HubCard(QFrame):
         self._apply_result(data)
 
     def set_error(self, msg: str) -> None:
+        import re as _re
         self._dot.setStyleSheet(f"color:{RED}; font-size:13px; border:none;")
-        self._metrics_lbl.setText(f"Error: {msg[:80]}")
+        m = _re.search(r"pip install\s+(\S+)", msg)
+        if m:
+            self._pending_pkg = m.group(1)
+            self._metrics_lbl.setText(f"Missing library: {self._pending_pkg}")
+            self._btn_install.setText(f"⬇ Install {self._pending_pkg}")
+            self._btn_install.setVisible(True)
+        else:
+            self._pending_pkg = ""
+            self._metrics_lbl.setText(f"Error: {msg[:80]}")
+            self._btn_install.setVisible(False)
         self._metrics_lbl.setStyleSheet(
             f"color:{AMBER}; font-size:10px; border:none; background:transparent;"
         )
         self._btn_refresh.setEnabled(True)
         self._btn_refresh.setText("↻")
+
+    def _on_install_dep(self) -> None:
+        if not self._pending_pkg:
+            return
+        dlg = PipInstallDialog(self._pending_pkg, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            import importlib
+            importlib.invalidate_caches()
+            self._btn_install.setVisible(False)
+            self._pending_pkg = ""
+            self._dot.setStyleSheet(f"color:{GREEN}; font-size:13px; border:none;")
+            self._metrics_lbl.setText("Installed — refreshing…")
+            self._metrics_lbl.setStyleSheet(
+                f"color:{GREEN}; font-size:10px; border:none; background:transparent;"
+            )
+            self.refresh_clicked.emit(self._path)
 
     def set_refreshing(self, active: bool) -> None:
         self._btn_refresh.setEnabled(not active)
@@ -1138,9 +1189,12 @@ class HubCard(QFrame):
     # ── Private ───────────────────────────────────────────────────────────────
 
     def _apply_result(self, data: dict) -> None:
-        info    = data.get("info", {})
-        status  = data.get("status", {})
-        clients = data.get("clients", [])
+        if not isinstance(data, dict):
+            return
+        info    = data.get("info", {}) or {}
+        status  = data.get("status", {}) or {}
+        # Guard: QSettings round-trip can corrupt list-of-dicts to list-of-strings
+        clients = [c for c in (data.get("clients") or []) if isinstance(c, dict)]
         extra   = status.get("extra", {})
         hw_type = info.get("type", self._hw_type)
 
@@ -1173,7 +1227,8 @@ class HubCard(QFrame):
             self._metrics_lbl.setStyleSheet(
                 f"color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;"
             )
-            self._detail.update(extra, status)
+            if isinstance(self._detail, _ModemDetailPanel):
+                self._detail.update(extra, status)
         else:
             n_nodes  = status.get("mesh_nodes") or 0
             n_cli    = status.get("connected_clients") or len(clients)
@@ -1187,7 +1242,8 @@ class HubCard(QFrame):
             self._metrics_lbl.setStyleSheet(
                 f"color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;"
             )
-            self._detail.update(status, clients)
+            if isinstance(self._detail, _RouterDetailPanel):
+                self._detail.update(status, clients)
 
         self._btn_refresh.setEnabled(True)
         self._btn_refresh.setText("↻")
@@ -1219,7 +1275,7 @@ class HubCard(QFrame):
             pw_edit.clear()
             status.setText("✓ Saved")
             status.setStyleSheet(f"color:{GREEN}; font-size:9px;")
-            QTimer.singleShot(3000, lambda: status.setText(""))
+            QTimer.singleShot(3000, lambda s=status: _safe_set_text(s, ""))
         except Exception as exc:
             status.setText("Error")
             status.setStyleSheet(f"color:{RED}; font-size:9px;")
@@ -1241,15 +1297,16 @@ class HubCard(QFrame):
         except Exception:
             status.setText("Not saved")
             status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
-        QTimer.singleShot(3000, lambda: status.setText(""))
+        QTimer.singleShot(3000, lambda s=status: _safe_set_text(s, ""))
 
 
 # ── Step-guide helper widgets (guide section) ─────────────────────────────────
 
 def _step_card(number: int, title: str) -> tuple[QWidget, QVBoxLayout]:
     frame = QFrame()
+    frame.setObjectName("hubStepCard")
     frame.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+        f"QFrame#hubStepCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
         f" border-radius:{CARD_RADIUS}; }}"
     )
     outer = QVBoxLayout(frame)
@@ -1314,7 +1371,7 @@ def _copy_text(btn: QPushButton, text: str) -> None:
 def _code_chip(code: str) -> QWidget:
     frame = QFrame()
     frame.setStyleSheet(
-        f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:3px; }}"
+        f"background:{BG_DARK}; border:1px solid {BORDER}; border-radius:3px;"
     )
     row = QHBoxLayout(frame)
     row.setContentsMargins(8, 4, 6, 4)
@@ -1335,7 +1392,7 @@ def _code_chip(code: str) -> QWidget:
 def _prompt_block(label: str, text: str) -> QWidget:
     frame = QFrame()
     frame.setStyleSheet(
-        f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:4px; }}"
+        f"background:{BG_DARK}; border:1px solid {BORDER}; border-radius:4px;"
     )
     outer = QVBoxLayout(frame)
     outer.setContentsMargins(10, 6, 10, 8)
@@ -1503,9 +1560,6 @@ class HardwareIntegrationPage(QWidget):
         modem_tab_lay.setContentsMargins(0, 0, 0, 0)
         modem_tab_lay.setSpacing(0)
         self._modem_panel = _ModemDetailPanel()
-        self._modem_panel.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:none; }}"
-        )
         modem_tab_lay.addWidget(self._modem_panel)
         modem_tab_lay.addStretch()
         self._modem_tab_idx = self._tabs.addTab(modem_tab, "Modem")
@@ -1518,9 +1572,6 @@ class HardwareIntegrationPage(QWidget):
         mesh_tab_lay.setContentsMargins(0, 0, 0, 0)
         mesh_tab_lay.setSpacing(0)
         self._mesh_panel = _RouterDetailPanel()
-        self._mesh_panel.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:none; }}"
-        )
         self._mesh_panel.geo_map_ip.connect(self.geo_map_ip)
         self._mesh_panel.port_scan_ip.connect(self.port_scan_ip)
         self._mesh_panel.check_abuse_ip.connect(self.check_abuse_ip)
@@ -1537,8 +1588,9 @@ class HardwareIntegrationPage(QWidget):
         suggested_outer.setSpacing(0)
 
         sug_hdr = QFrame()
+        sug_hdr.setObjectName("hubSugHdr")
         sug_hdr.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:none;"
+            f"QFrame#hubSugHdr {{ background:{BG_CARD}; border:none;"
             f" border-bottom:1px solid {BORDER}; }}"
         )
         sug_hdr_lay = QHBoxLayout(sug_hdr)
@@ -1596,9 +1648,19 @@ class HardwareIntegrationPage(QWidget):
         # ── Active integrations ───────────────────────────────────────────────
         paths = _load_paths()
         if not paths:
+            # Auto-import bundled plugins on first run / after QSettings wipe
+            bdir = self._bundled_plugins_dir()
+            if bdir.is_dir():
+                auto = [str(p) for p in sorted(bdir.glob("*_plugin.py"))
+                        if _validate_script(str(p))[0]]
+                if auto:
+                    _save_paths(auto)
+                    paths = auto
+
+        if not paths:
             empty = QLabel(
                 "No hardware imported yet.\n"
-                "Use a catalog entry above, or click  ＋ Add Integration  to import a script."
+                "Click  ＋ Add Integration  to import a script."
             )
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             empty.setStyleSheet(
@@ -1655,7 +1717,7 @@ class HardwareIntegrationPage(QWidget):
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(
-            f"QFrame {{ border:none; border-top:1px solid {BORDER}; background:transparent; }}"
+            f"border:none; border-top:1px solid {BORDER}; background:transparent;"
         )
         sep.setFixedHeight(1)
         self._hub_lay.addWidget(sep)
@@ -1664,8 +1726,9 @@ class HardwareIntegrationPage(QWidget):
         _TYPE_ICON = {"modem": "📡", "router": "🔀", "ap": "📶",
                       "switch": "🔗", "other": "🔌"}
         card = QFrame()
+        card.setObjectName("hubCatalogCard")
         card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#hubCatalogCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             " border-radius:4px; }}"
         )
         lay = QHBoxLayout(card)
@@ -1715,7 +1778,30 @@ class HardwareIntegrationPage(QWidget):
         return card
 
     def _import_bundled(self, path: str) -> None:
-        """Add a bundled plugin to the imported list and start polling."""
+        """Add a bundled plugin to the imported list and start polling.
+
+        If the plugin declares PYPI_PACKAGE and that library is not installed,
+        opens PipInstallDialog first. Only proceeds on success.
+        """
+        ok, _, meta = _validate_script(path)
+        pypi_pkg = meta.get("pypi_package", "") if ok else ""
+        if pypi_pkg:
+            import importlib.util
+            module_name = pypi_pkg.replace("-", "_")
+            if importlib.util.find_spec(module_name) is None:
+                dlg = PipInstallDialog(pypi_pkg, parent=self)
+                if dlg.exec() != QDialog.DialogCode.Accepted:
+                    self._set_status("Dependency install cancelled.", error=True)
+                    return
+                import importlib
+                importlib.invalidate_caches()
+                if importlib.util.find_spec(module_name) is None:
+                    self._set_status(
+                        f"'{pypi_pkg}' still not importable — check pip output.",
+                        error=True,
+                    )
+                    return
+
         paths = _load_paths()
         if path not in paths:
             paths.append(path)
@@ -1876,8 +1962,8 @@ class HardwareIntegrationPage(QWidget):
     ) -> QWidget:
         row = QFrame()
         row.setStyleSheet(
-            f"QFrame {{ background:transparent; border:none;"
-            f" border-bottom:1px solid {BORDER}; }}"
+            f"background:transparent; border:none;"
+            f" border-bottom:1px solid {BORDER};"
         )
         lay = QHBoxLayout(row)
         lay.setContentsMargins(12, 8, 10, 8)
@@ -2033,7 +2119,7 @@ class HardwareIntegrationPage(QWidget):
         status = {"wan_ip": raw.get("wan_ip"), "extra": extra}
         self._modem_panel.update(extra, status)
 
-        nt = raw.get("network_type", "")
+        nt = raw.get("network_type") or ""
         if "NR5G" in nt.upper() or "5G" in nt.upper():
             suffix = " · 5G NR"
         elif "LTE" in nt.upper():
@@ -2154,7 +2240,6 @@ class HardwareIntegrationPage(QWidget):
                     "_path": path, "_ts": ts}
             _save_last_result(path, data)
             card.update_result(data, ts)
-            self.plugin_result.emit(data)
 
     # ── Guide content (collapsible) ───────────────────────────────────────────
 

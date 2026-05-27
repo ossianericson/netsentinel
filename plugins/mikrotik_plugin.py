@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 HARDWARE_NAME    = "MikroTik Router"
 HARDWARE_TYPE    = "router"
 HARDWARE_IP      = "192.168.88.1"
+PYPI_PACKAGE     = "routeros-api"
 USERNAME         = "admin"
 API_PORT         = 8728
 DESCRIPTION      = "MikroTik RouterOS — hAP, CCR, RB series; API service must be enabled (port 8728)"

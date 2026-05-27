@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 HARDWARE_NAME    = "Netgear Router"
 HARDWARE_TYPE    = "router"
 HARDWARE_IP      = "192.168.1.1"
+PYPI_PACKAGE     = "pynetgear"
 DESCRIPTION      = "Netgear routers and Orbi mesh — Nighthawk, Orbi RBK series; requires pip install pynetgear"
 CREDENTIAL_LABEL = "Password"
 

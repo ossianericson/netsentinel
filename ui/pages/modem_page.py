@@ -89,8 +89,9 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     outer.setSpacing(0)
 
     hdr = QFrame()
+    hdr.setObjectName("modemCardHdr")
     hdr.setStyleSheet(
-        f"QFrame {{ background:{BG_CARD}; border:none;"
+        f"QFrame#modemCardHdr {{ background:{BG_CARD}; border:none;"
         f" border-bottom:1px solid {BORDER}; }}"
     )
     hdr_lay = QHBoxLayout(hdr)
@@ -227,8 +228,9 @@ class ModemPage(QWidget):
         root.addWidget(PageHeaderBar("Modem"))
 
         compat = QFrame()
+        compat.setObjectName("modemCompatBanner")
         compat.setStyleSheet(
-            f"QFrame {{ background:#1A2A3A; border:1px solid #2A4A6A;"
+            f"QFrame#modemCompatBanner {{ background:#1A2A3A; border:1px solid #2A4A6A;"
             f" border-left:3px solid {ACCENT}; border-radius:0px; }}"
         )
         compat_lay = QHBoxLayout(compat)
@@ -249,8 +251,7 @@ class ModemPage(QWidget):
         # ── config card ───────────────────────────────────────────────────────
         cfg_card = QFrame()
         cfg_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:0px; }}"
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0px;"
         )
         cfg_lay = QVBoxLayout(cfg_card)
         cfg_lay.setContentsMargins(0, 0, 0, 0)
@@ -258,7 +259,7 @@ class ModemPage(QWidget):
 
         # Row 1 — inputs
         row1 = QFrame()
-        row1.setStyleSheet("QFrame { border:none; background:transparent; }")
+        row1.setStyleSheet("border:none; background:transparent;")
         row1_lay = QHBoxLayout(row1)
         row1_lay.setContentsMargins(12, 8, 12, 8)
         row1_lay.setSpacing(8)
@@ -317,7 +318,7 @@ class ModemPage(QWidget):
 
         # Row 2 — keyring
         row2 = QFrame()
-        row2.setStyleSheet("QFrame { border:none; background:transparent; }")
+        row2.setStyleSheet("border:none; background:transparent;")
         row2_lay = QHBoxLayout(row2)
         row2_lay.setContentsMargins(12, 6, 12, 6)
         row2_lay.setSpacing(8)
@@ -350,8 +351,9 @@ class ModemPage(QWidget):
         if not self._keyring_ok and not ModemPage._keyring_warned:
             ModemPage._keyring_warned = True
             warn = QFrame()
+            warn.setObjectName("modemWarnBanner")
             warn.setStyleSheet(
-                f"QFrame {{ background:#FFF8E1; border:1px solid {AMBER}; border-radius:0px; }}"
+                f"QFrame#modemWarnBanner {{ background:#FFF8E1; border:1px solid {AMBER}; border-radius:0px; }}"
             )
             warn_lay = QHBoxLayout(warn)
             warn_lay.setContentsMargins(12, 8, 12, 8)

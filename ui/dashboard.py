@@ -1142,6 +1142,22 @@ _PAGE_HELP: dict[str, dict] = {
             "Filter the Activity Log by hostname using the filter box — useful on busy networks.",
         ],
     },
+    "Modem": {
+        "what": "Live 5G NR and LTE signal metrics polled from your WAN modem — SINR, RSRP, RSRQ, band, and cell ID. Enter your modem's local IP and credentials to connect.",
+        "hidden": [
+            "Each speed test automatically snapshots the current modem signal — click any history row to restore the signal panel for that moment.",
+            "Signal history is stored in the database so you can correlate slow speeds with poor SINR or band changes over time.",
+            "ZTE MC889 is fully supported out of the box; the worker architecture accepts additional modem models via plugins.",
+        ],
+    },
+    "Mesh & Router": {
+        "what": "Live signal stats, client counts, and topology from your TP-Link Deco XE75 mesh system. Enter your Deco admin credentials to connect.",
+        "hidden": [
+            "Once connected, the Devices table gains real hostnames instead of 'Unknown Device' — the enrichment runs automatically after every scan.",
+            "The Network Map upgrades from a flat star to a three-tier mesh tree showing which node each device is connected to.",
+            "Client-to-node assignment helps locate dead spots: devices that roam to a distant node despite a nearby node being available.",
+        ],
+    },
     "Service Heartbeat": {
         "what": "Monitors specific hosts and ports on a schedule — alerts when a service goes down.",
         "hidden": [
@@ -4194,6 +4210,8 @@ class Dashboard(QMainWindow):
 
         self._nav_begin_section("Monitor", "monitor")
         self._nav_add_rail_item("Network Logger",      self._logging_container)
+        self._nav_add_rail_item("Modem",               self._modem_page)
+        self._nav_add_rail_item("Mesh & Router",       self._mesh_router_page)
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
         self._nav_add_rail_item("Active Connections",  self._connections_page)
         self._nav_add_rail_item("Availability History", self._history_page)
@@ -9682,12 +9700,10 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("wmic removed (Win 11 24H2)", "Credentialed scan now uses PowerShell Get-CimInstance; compatible with Windows 11 24H2 where wmic is absent"),
-            ("REST API hardening",         "CORS locked to localhost; query-param auth removed (X-API-Key header only); waitress WSGI replaces Flask dev server"),
-            ("CLI output path safety",     "Output paths are resolved and parent directories created automatically; invalid paths exit with a clear error message"),
-            ("GeoLite2 onboarding hint",   "First-run wizard now shows a banner explaining the MaxMind GeoLite2-City database download step for the Geo Map"),
-            ("MSIX cosign signing",        "CI signs the MSIX artifact with keyless cosign (OIDC); .bundle file attached to releases for offline verification"),
-            ("HTML coverage reports",      "pytest now produces htmlcov/ uploaded as per-platform CI artifacts (coverage-windows, coverage-macos, coverage-linux)"),
+            ("Hardware plugin auto-install", "Adding a hardware plugin now installs its pip dependency automatically via a progress dialog — no terminal required"),
+            ("Inline install button",        "Plugin cards showing a missing-library error now display a blue Install button; clicking it installs the library and re-polls immediately"),
+            ("Hardware page crash fixes",    "Fixed RecursionError infinite signal loop, NoneType AttributeError, startup QSettings crash, and delete-while-timer crash in the Hardware Hub"),
+            ("Plugin password fixes",        "Bundled ZTE/Deco plugin passwords now persist correctly; cards auto-import on first launch after a settings wipe"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────

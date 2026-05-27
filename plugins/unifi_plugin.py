@@ -24,6 +24,7 @@ HARDWARE_TYPE       = "router"
 HARDWARE_IP         = "192.168.1.1"
 USERNAME            = "admin"
 CONTROLLER_VERSION  = "UDMP-unifiOS"   # or "v5" for older standalone controllers
+PYPI_PACKAGE        = "pyunifi"
 DESCRIPTION         = "Ubiquiti UniFi — UDM, UDM Pro, Cloud Key Gen2+; requires pip install pyunifi"
 CREDENTIAL_LABEL    = "Password"
 
