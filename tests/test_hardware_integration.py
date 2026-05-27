@@ -348,11 +348,16 @@ def test_delete_card_while_password_save_timer_pending(monkeypatch):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. Auto-import on empty QSettings
+# 7. No auto-import on empty QSettings (regression guard)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_auto_import_runs_when_paths_empty(monkeypatch):
-    """When _load_paths returns [], _rebuild_hub should auto-import bundled plugins."""
+def test_no_auto_import_when_paths_empty(monkeypatch):
+    """When _load_paths returns [], _rebuild_hub must NOT auto-save any paths.
+
+    The catalog shows available hardware; the user must explicitly click Add.
+    Auto-import was removed because it caused all bundled plugins to appear as
+    active nav items on first launch.
+    """
     saved = []
     monkeypatch.setattr("ui.pages.hardware_integration_page._load_paths",
                         lambda: [])
@@ -366,11 +371,9 @@ def test_auto_import_runs_when_paths_empty(monkeypatch):
     p.deleteLater()
     _app.processEvents()
 
-    # _save_paths must have been called with at least one bundled plugin
-    assert saved, "Auto-import never called _save_paths"
-    auto_paths = saved[0]
-    assert any("zte_plugin.py" in path or "deco_plugin.py" in path
-               for path in auto_paths)
+    assert not saved, (
+        "_save_paths was called — auto-import must not run on first launch"
+    )
 
 
 def test_auto_import_skipped_when_paths_already_set(monkeypatch):

@@ -239,17 +239,22 @@ class TestConnectSignal:
 
         assert received == [("192.168.1.1", "secret")]
 
-    def test_connect_requires_host(self):
+    def test_connect_uses_placeholder_when_host_empty(self):
+        """Empty IP field falls back to placeholder text (192.168.254.1)."""
         page = _make_page()
         page._ip_edit.setText("")
         page._pw_edit.setText("secret")
 
         received = []
         page.connect_requested.connect(lambda h, p: received.append((h, p)))
-        page._on_connect_clicked()
 
-        assert received == []
-        assert "IP" in page._status_lbl.text() or "modem" in page._status_lbl.text().lower()
+        mock_s = MagicMock()
+        with patch("ui.pages.modem_page.QSettings", return_value=mock_s):
+            page._on_connect_clicked()
+
+        assert len(received) == 1
+        assert received[0][0] == page._ip_edit.placeholderText()
+        assert received[0][1] == "secret"
 
     def test_connect_requires_password(self):
         page = _make_page()

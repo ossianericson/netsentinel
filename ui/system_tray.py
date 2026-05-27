@@ -189,7 +189,7 @@ class SystemTrayManager:
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
             f"QMenu::item {{ padding:5px 20px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             f"QMenu::separator {{ height:1px; background:{BORDER}; margin:3px 8px; }}"
         )
 

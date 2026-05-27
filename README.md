@@ -3,7 +3,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](#install)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-1550%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-2000%2B-brightgreen?style=flat-square)](tests/)
 
 # NetSentinel
 
@@ -319,6 +319,23 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 ---
 
 ## Changelog
+
+### v1.9.44
+
+**Added**
+- `ui/first_run_dialog.py`: 3-slide Apple-style welcome wizard (Welcome → Discover & Protect → Monitor) with progress dots, Back/Next navigation, and "Scan my network →" CTA on the final slide
+- `PluginDevicePage` modem view: `SignalBar` widgets for RSRP and SINR in 5G NR and LTE sections, matching the visual quality of the dedicated Modem page
+
+**Changed**
+- Extend nav section: "Modem" and "Mesh & Router" legacy items removed; hardware plugin pages (e.g. ZTE MC889, TP-Link Deco XE75) are the sole nav entries under Extend
+- Home page hardware setup cards now navigate to Hardware page instead of legacy Modem/Mesh pages
+- Startup window geometry: fresh installs open at 1280×800 centered on the primary screen instead of a random position
+- `mesh_router_page.py`: `_on_scan_clicked`, `_on_forget_clicked`, and `_on_result` now fall back to placeholder IP when the field is empty (matching modem page behaviour)
+
+**Fixed**
+- `ModemPage` and `MeshRouterPage` incorrectly auto-filling the gateway IP instead of showing a blank field on first launch
+- Extend section nav items for Modem/Mesh appearing even when no device was configured
+- Home page "Set up →" links for 5G Modem and Mesh Router silently failing when legacy nav items were not registered
 
 ### v1.9.43
 

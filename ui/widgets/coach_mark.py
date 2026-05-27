@@ -217,11 +217,13 @@ class CoachMarkOverlay(QWidget):
 class CoachMarkChain:
     """Sequences a list of coach marks and saves completion to QSettings."""
 
-    def __init__(self, parent_window: QWidget, marks: list[dict]) -> None:
+    def __init__(self, parent_window: QWidget, marks: list[dict],
+                 on_done=None) -> None:
         self._parent  = parent_window
         self._marks   = marks
         self._current = 0
         self._overlay: CoachMarkOverlay | None = None
+        self._on_done = on_done  # optional callable — fired once when chain ends
 
     def start(self) -> None:
         self._show_mark(0)
@@ -286,6 +288,10 @@ class CoachMarkChain:
         if self._overlay:
             self._overlay.deleteLater()
             self._overlay = None
+        if callable(self._on_done):
+            _cb = self._on_done
+            self._on_done = None  # fire once only
+            _cb()
 
     def _complete(self) -> None:
         from PyQt6.QtCore import QSettings

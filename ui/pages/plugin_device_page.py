@@ -27,9 +27,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BORDER, BG_CARD, BG_DARK, BG_ALT_ROW,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-    BG_HOVER,
+    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BORDER, BG_CARD, BG_DARK,
+    BG_ALT_ROW, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE, BG_HOVER,
 )
 
 log = logging.getLogger(__name__)
@@ -131,6 +131,30 @@ def _row(label: str, layout: QVBoxLayout) -> QLabel:
     h.addWidget(val, 1)
     layout.addLayout(h)
     return val
+
+
+def _signal_row(label: str, metric: str, layout: QVBoxLayout) -> tuple:
+    """Row with a SignalBar widget + value label; returns (SignalBar, QLabel)."""
+    from ui.widgets.signal_bar import SignalBar
+    h = QHBoxLayout()
+    h.setContentsMargins(0, 0, 0, 0)
+    lbl = QLabel(label)
+    lbl.setFixedWidth(160)
+    lbl.setStyleSheet(
+        f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;"
+    )
+    bar = SignalBar(metric=metric)
+    val = QLabel("—")
+    val.setStyleSheet(
+        f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:bold;"
+        " background:transparent; border:none;"
+    )
+    val.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    h.addWidget(lbl)
+    h.addWidget(bar)
+    h.addWidget(val, 1)
+    layout.addLayout(h)
+    return bar, val
 
 
 def _quality_color(rsrp: Optional[float]) -> str:
@@ -372,7 +396,7 @@ class PluginDevicePage(QWidget):
             warn = QFrame()
             warn.setObjectName("pluginWarnBanner")
             warn.setStyleSheet(
-                f"QFrame#pluginWarnBanner {{ background:#3a2800; border:1px solid {AMBER}; border-radius:0px; }}"
+                f"QFrame#pluginWarnBanner {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:0px; }}"
             )
             warn_lay = QHBoxLayout(warn)
             warn_lay.setContentsMargins(12, 8, 12, 8)
@@ -435,20 +459,20 @@ class PluginDevicePage(QWidget):
         self._m_firmware    = _row("Firmware",       body)
         self._root.addWidget(card)
 
-        # NR5G
+        # NR5G — RSRP and SINR get visual signal bars
         card2, body2 = _card("5G NR")
-        self._m_nr_band  = _row("Band",    body2)
-        self._m_nr_rsrp  = _row("RSRP",   body2)
-        self._m_nr_sinr  = _row("SINR",   body2)
+        self._m_nr_band                     = _row("Band",    body2)
+        self._m_nr_rsrp_bar, self._m_nr_rsrp = _signal_row("RSRP", "rsrp", body2)
+        self._m_nr_sinr_bar, self._m_nr_sinr  = _signal_row("SINR", "sinr", body2)
         self._m_nr_rsrq  = _row("RSRQ",   body2)
         self._m_nr_pci   = _row("PCI",    body2)
         self._m_nr_arfcn = _row("ARFCN",  body2)
         self._root.addWidget(card2)
 
-        # LTE
+        # LTE — RSRP gets a visual signal bar
         card3, body3 = _card("LTE")
-        self._m_lte_band   = _row("Band",   body3)
-        self._m_lte_rsrp   = _row("RSRP",  body3)
+        self._m_lte_band                      = _row("Band",   body3)
+        self._m_lte_rsrp_bar, self._m_lte_rsrp = _signal_row("RSRP", "rsrp", body3)
         self._m_lte_snr    = _row("SNR",   body3)
         self._m_lte_rsrq   = _row("RSRQ",  body3)
         self._m_lte_pci    = _row("PCI",   body3)
@@ -617,19 +641,23 @@ class PluginDevicePage(QWidget):
         self._m_firmware.setText(_fmt(extra.get("firmware")))
 
         nr_rsrp = extra.get("nr5g_rsrp_dbm")
+        nr_sinr = extra.get("nr5g_sinr_db")
         self._m_nr_band.setText(_fmt(extra.get("nr5g_band")))
+        self._m_nr_rsrp_bar.set_value(nr_rsrp, "dBm")
         self._m_nr_rsrp.setText(_fmt(nr_rsrp, " dBm"))
         self._m_nr_rsrp.setStyleSheet(
             f"color:{_quality_color(nr_rsrp)}; font-size:12px; font-weight:bold;"
             " background:transparent; border:none;"
         )
-        self._m_nr_sinr.setText(_fmt(extra.get("nr5g_sinr_db"), " dB"))
+        self._m_nr_sinr_bar.set_value(nr_sinr, "dB")
+        self._m_nr_sinr.setText(_fmt(nr_sinr, " dB"))
         self._m_nr_rsrq.setText(_fmt(extra.get("nr5g_rsrq_db"), " dB"))
         self._m_nr_pci.setText(_fmt(extra.get("nr5g_pci")))
         self._m_nr_arfcn.setText(_fmt(extra.get("nr5g_arfcn")))
 
         lte_rsrp = extra.get("lte_rsrp_dbm")
         self._m_lte_band.setText(_fmt(extra.get("lte_band")))
+        self._m_lte_rsrp_bar.set_value(lte_rsrp, "dBm")
         self._m_lte_rsrp.setText(_fmt(lte_rsrp, " dBm"))
         self._m_lte_rsrp.setStyleSheet(
             f"color:{_quality_color(lte_rsrp)}; font-size:12px; font-weight:bold;"

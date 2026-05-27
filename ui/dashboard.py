@@ -2144,11 +2144,11 @@ class Dashboard(QMainWindow):
             self._monitors_restored = True
             from PyQt6.QtCore import QTimer as _QT3
             _QT3.singleShot(3000, self._restore_running_monitors)
-        # POLISH-5: first-run coach marks (fires once, keyed to onboarding_v6_done)
-        if not getattr(self, "_coach_marks_shown", False):
-            self._coach_marks_shown = True
+        # Welcome overlay — shown once on first ever launch
+        if not getattr(self, "_welcome_shown", False):
+            self._welcome_shown = True
             from PyQt6.QtCore import QTimer as _QT4
-            _QT4.singleShot(800, self._maybe_show_coach_marks)
+            _QT4.singleShot(600, self._show_welcome_overlay)
 
     def _install_snap_subclass(self):
         """Subclass the Win32 HWND so WM_NCHITTEST returns HTMAXBUTTON over our
@@ -2902,6 +2902,8 @@ class Dashboard(QMainWindow):
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
         self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
+        self._hardware_integration_page.plugin_page_added.connect(self._on_plugin_page_added)
+        self._hardware_integration_page.plugin_page_removed.connect(self._on_plugin_page_removed)
         self._hardware_integration_page.navigate_to.connect(self._nav_rail_go_to)
         self._hardware_integration_page.geo_map_ip.connect(self._show_ip_on_geo_map)
         self._hardware_integration_page.port_scan_ip.connect(
@@ -4210,8 +4212,6 @@ class Dashboard(QMainWindow):
 
         self._nav_begin_section("Monitor", "monitor")
         self._nav_add_rail_item("Network Logger",      self._logging_container)
-        self._nav_add_rail_item("Modem",               self._modem_page)
-        self._nav_add_rail_item("Mesh & Router",       self._mesh_router_page)
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
         self._nav_add_rail_item("Active Connections",  self._connections_page)
         self._nav_add_rail_item("Availability History", self._history_page)
@@ -6493,19 +6493,12 @@ class Dashboard(QMainWindow):
             self._log_live_table.setRowCount(0)
             self._log_outage_table.setRowCount(0)
             self._home_page.set_monitoring_status(True, "", 0)
-            # One-time prompt: only the very first time logging is started in this installation
+            # Show a non-blocking toast on first-ever logger start
             _qs2 = QSettings("NetSentinel", "NetSentinel")
             if not _qs2.value("logger/first_start_prompted", False, type=bool):
                 _qs2.setValue("logger/first_start_prompted", True)
-                from PyQt6.QtWidgets import QMessageBox
-                _ans = QMessageBox.question(
-                    self, "Logging started",
-                    "Logger is now running.\n\nSwitch to Activity Log to view entries?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                )
-                if _ans == QMessageBox.StandardButton.Yes and hasattr(self, "_logging_container"):
-                    self._logging_container.setCurrentIndex(1)
-                    self._nav_rail_go_to("Network Logger")
+                from ui.widgets.toast import ToastManager
+                ToastManager.show("Background logging started — data appears in Network Logger.")
 
     @pyqtSlot(object)
     def _on_log_entry(self, entry):
@@ -8128,44 +8121,24 @@ class Dashboard(QMainWindow):
         if "scheduler" in keys and not (self._sched_worker and self._sched_worker.isRunning()):
             self._start_scheduler()
 
-    # POLISH-5 — first-run coach marks ─────────────────────────────────────────
+    # ── First-run welcome overlay ──────────────────────────────────────────────
 
-    def _maybe_show_coach_marks(self) -> None:
-        """Show 3 sequential coach marks on first ever launch (onboarding_v6_done gate)."""
-        _qs = QSettings("NetSentinel", "NetSentinel")
-        if _qs.value("onboarding_v6_done", False, type=bool):
+    def _show_welcome_overlay(self) -> None:
+        """Show the WelcomeOverlay on first ever launch (ui/first_run_done gate)."""
+        from ui.first_run_dialog import WelcomeOverlay, should_show_first_run
+        if not should_show_first_run():
             return
-        # Mark done immediately — dismissing early (× or outside click) must not re-show.
-        _qs.setValue("onboarding_v6_done", True)
-        from ui.widgets.coach_mark import CoachMarkChain
-        marks = [
-            {
-                "target": lambda: getattr(self, "_home_page", None),
-                "title":  "Your network, on a map.",
-                "body":   (
-                    "After a scan, NetSentinel plots every device "
-                    "on the world map with location, vendor and status."
-                ),
-            },
-            {
-                "target": lambda: self._nav_rail_buttons.get("Discover"),
-                "title":  "Start here — scan your network.",
-                "body":   (
-                    "Open Discover → Devices and hit Scan "
-                    "to map everything on your local network."
-                ),
-            },
-            {
-                "target": lambda: self._nav_rail_buttons.get("Security Audit"),
-                "title":  "Alerts live here.",
-                "body":   (
-                    "NetSentinel raises alerts for new devices, "
-                    "port scans and cert expiry — all in Security Audit."
-                ),
-            },
-        ]
-        self._coach_mark_chain = CoachMarkChain(self, marks)
-        self._coach_mark_chain.start()
+        overlay = WelcomeOverlay(self)
+        self._welcome_overlay = overlay
+        overlay.start_scan_requested.connect(self._on_welcome_scan)
+        overlay.dismissed.connect(lambda: setattr(self, "_welcome_overlay", None))
+        overlay.show_animated()
+
+    def _on_welcome_scan(self) -> None:
+        """User clicked 'Scan my network →' in the welcome overlay."""
+        self._welcome_overlay = None
+        self._nav_rail_go_to("Home")
+        self._start_full_scan()
 
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
@@ -8295,6 +8268,18 @@ class Dashboard(QMainWindow):
         self._minimize_to_tray = QSettings("NetSentinel", "NetSentinel").value(
             "tray/minimize_window_to_tray", False, type=bool)
 
+    def _center_on_screen(self, w: int, h: int) -> None:
+        """Resize to w×h and center on the primary screen."""
+        from PyQt6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            ag = screen.availableGeometry()
+            x = ag.x() + (ag.width()  - w) // 2
+            y = ag.y() + (ag.height() - h) // 2
+            self.setGeometry(x, y, w, h)
+        else:
+            self.resize(w, h)
+
     def _restore_settings(self):
         from PyQt6.QtCore import QSettings
         from PyQt6.QtCore import QByteArray
@@ -8302,8 +8287,8 @@ class Dashboard(QMainWindow):
         # Window geometry
         geom_b64 = s.value("window/geometry", "")
         was_maximized = s.value("window/maximized", "False") == "True"
-        # Fresh-install fallback — prevents starting maximized with no saved geometry.
-        self.resize(1280, 800)
+        # Fresh-install / no-saved-geometry fallback: 1280×800 centered on primary screen.
+        self._center_on_screen(1280, 800)
         if was_maximized:
             nx = s.value("window/normal_x")
             ny = s.value("window/normal_y")
@@ -9700,10 +9685,10 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Hardware plugin auto-install", "Adding a hardware plugin now installs its pip dependency automatically via a progress dialog — no terminal required"),
-            ("Inline install button",        "Plugin cards showing a missing-library error now display a blue Install button; clicking it installs the library and re-polls immediately"),
-            ("Hardware page crash fixes",    "Fixed RecursionError infinite signal loop, NoneType AttributeError, startup QSettings crash, and delete-while-timer crash in the Hardware Hub"),
-            ("Plugin password fixes",        "Bundled ZTE/Deco plugin passwords now persist correctly; cards auto-import on first launch after a settings wipe"),
+            ("3-slide welcome wizard",       "Fresh installs now show an Apple-style 3-slide onboarding overlay — Welcome, Discover & Protect, Monitor — with progress dots and a 'Scan my network →' CTA on the final slide"),
+            ("Signal bars on plugin pages",  "ZTE MC889 and other modem-type plugin pages now show RSRP and SINR signal bar indicators, matching the visual quality of the dedicated Modem page"),
+            ("Cleaner Extend nav",           "Legacy 'Modem' and 'Mesh & Router' rail entries removed; hardware plugin pages (e.g. ZTE MC889, TP-Link Deco XE75) are the only items under Extend"),
+            ("Centered startup window",      "Fresh installs open at 1280×800 centred on the primary screen instead of a random position"),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -10986,6 +10971,67 @@ class Dashboard(QMainWindow):
             from PyQt6.QtCore import QSettings as _QS_pl
             if self._store and _QS_pl().value(f"logging/plugin_{_qs_key}_enabled", False, type=bool):
                 self._store.record_plugin_snapshot(hw_name, data)
+
+    @pyqtSlot(str, str)
+    def _on_plugin_page_added(self, path: str, label: str) -> None:
+        """Create a nav item under Extend for a newly-installed hardware plugin."""
+        from ui.pages.plugin_device_page import PluginDevicePage
+        from ui.pages.hardware_integration_page import _validate_script
+        from pathlib import Path as _P
+        if path in getattr(self, "_plugin_pages", {}):
+            return  # already registered
+        ok, _, meta = _validate_script(path)
+        hw_type  = meta.get("type", "other") if ok else "other"
+        hw_ip    = meta.get("ip", "") if ok else ""
+        cred_lbl = meta.get("credential_label", "Password") if ok else "Password"
+        pg = PluginDevicePage(path, label, hw_type, hw_ip=hw_ip,
+                              credential_label=cred_lbl, parent=None)
+        pg.test_requested.connect(self._on_plugin_page_test)
+        if not ok or not _P(path).is_file():
+            pg.mark_unavailable()
+        self._plugin_pages[path] = pg
+        # Add to the stack and register under "Extend" in _nav_sections
+        if self._stack.indexOf(pg) < 0:
+            self._stack.addWidget(pg)
+        self._nav_label_to_widget[label] = pg
+        self._nav_page_to_section[label] = "Extend"
+        entry = _NavEntry(
+            label=label, page=pg,
+            admin_required=False, audit_item=False,
+            pinned=label in self._nav_pinned_labels,
+        )
+        extend_sec = next((s for s in self._nav_sections if s["name"] == "Extend"), None)
+        if extend_sec:
+            extend_sec["entries"].append(entry)
+        self._log_hub_page.update_plugin_sources(
+            [p._label for p in self._plugin_pages.values()]
+        )
+        self._refresh_hardware_badge()
+
+    @pyqtSlot(str)
+    def _on_plugin_page_removed(self, path: str) -> None:
+        """Remove a plugin's nav item when it is deleted from the Hardware page."""
+        pg = self._plugin_pages.pop(path, None)
+        if pg is None:
+            return
+        label = pg._label
+        # Remove from nav data structures
+        self._nav_label_to_widget.pop(label, None)
+        self._nav_page_to_section.pop(label, None)
+        extend_sec = next((s for s in self._nav_sections if s["name"] == "Extend"), None)
+        if extend_sec:
+            extend_sec["entries"] = [
+                e for e in extend_sec["entries"] if e.label != label
+            ]
+        # Remove from stack
+        idx = self._stack.indexOf(pg)
+        if idx >= 0:
+            self._stack.removeWidget(pg)
+        pg.deleteLater()
+        self._log_hub_page.update_plugin_sources(
+            [p._label for p in self._plugin_pages.values()]
+        )
+        self._refresh_hardware_badge()
 
     def _update_monitor_badge(self, _active: bool = False) -> None:
         """Refresh all section badges and Home pills when log source state changes."""

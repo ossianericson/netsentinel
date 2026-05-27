@@ -25,9 +25,9 @@ from PyQt6.QtWidgets import (
 from ui.widgets.signal_bar import SignalBar
 
 from ui.styles import (
-    ACCENT, AMBER, BORDER, BG_CARD, BG_DARK, GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-    BG_HOVER,
+    ACCENT, ADMIN_WARN_FG, AMBER, AMBER_BG, BORDER, BG_CARD, BG_DARK,
+    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    TH_BORDER, WHITE, BG_HOVER,
 )
 
 log = logging.getLogger(__name__)
@@ -193,6 +193,7 @@ class ModemPage(QWidget):
 
     connect_requested    = pyqtSignal(str, str)   # host, password
     disconnect_requested = pyqtSignal()
+    device_configured    = pyqtSignal()           # emitted the first time a host is saved
 
     _keyring_warned: bool = False   # class-level: warn once per session
 
@@ -230,7 +231,7 @@ class ModemPage(QWidget):
         compat = QFrame()
         compat.setObjectName("modemCompatBanner")
         compat.setStyleSheet(
-            f"QFrame#modemCompatBanner {{ background:#1A2A3A; border:1px solid #2A4A6A;"
+            f"QFrame#modemCompatBanner {{ background:{TH_BG}; border:1px solid {TH_BORDER};"
             f" border-left:3px solid {ACCENT}; border-radius:0px; }}"
         )
         compat_lay = QHBoxLayout(compat)
@@ -353,14 +354,14 @@ class ModemPage(QWidget):
             warn = QFrame()
             warn.setObjectName("modemWarnBanner")
             warn.setStyleSheet(
-                f"QFrame#modemWarnBanner {{ background:#FFF8E1; border:1px solid {AMBER}; border-radius:0px; }}"
+                f"QFrame#modemWarnBanner {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:0px; }}"
             )
             warn_lay = QHBoxLayout(warn)
             warn_lay.setContentsMargins(12, 8, 12, 8)
             warn_lbl = QLabel(
                 "⚠  No secure keyring backend found — password will not be saved between sessions."
             )
-            warn_lbl.setStyleSheet(f"color:#7A5700; font-size:11px; border:none; background:transparent;")
+            warn_lbl.setStyleSheet(f"color:{ADMIN_WARN_FG}; font-size:11px; border:none; background:transparent;")
             warn_lay.addWidget(warn_lbl)
             root.addWidget(warn)
 
@@ -486,14 +487,6 @@ class ModemPage(QWidget):
         """Load last-used host + saved password from keyring/QSettings."""
         s = QSettings("NetSentinel", "NetSentinel")
         host = s.value(_SETTINGS_HOST, "") or ""
-        if not host:
-            try:
-                from modules.rogue_device import _get_default_gateway
-                gw = _get_default_gateway()
-                if gw:
-                    host = gw
-            except Exception:
-                pass
         if host:
             self._ip_edit.setText(host)
             pw = _keyring_load(host)
@@ -598,7 +591,7 @@ class ModemPage(QWidget):
             self.disconnect_requested.emit()
             return
 
-        host = self._ip_edit.text().strip()
+        host = self._ip_edit.text().strip() or self._ip_edit.placeholderText()
         pw   = self._pw_edit.text().strip()
 
         if not host:
@@ -612,7 +605,11 @@ class ModemPage(QWidget):
         if self._keyring_ok and self._remember_cb.isChecked():
             _keyring_save(host, pw)
 
-        QSettings("NetSentinel", "NetSentinel").setValue(_SETTINGS_HOST, host)
+        qs = QSettings("NetSentinel", "NetSentinel")
+        first_save = not qs.value(_SETTINGS_HOST, "")
+        qs.setValue(_SETTINGS_HOST, host)
+        if first_save:
+            self.device_configured.emit()
 
         self._connected = True
         self._connect_btn.setText("■  Disconnect")

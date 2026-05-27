@@ -373,7 +373,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.43")
+    app.setApplicationVersion("1.9.44")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -406,7 +406,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.43")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.44")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -713,22 +713,8 @@ def main():
     if _instance_server is not None:
         _instance_server.newConnection.connect(_on_second_instance)
 
-    # First-run onboarding — deferred so the window is fully painted first.
-    # Use a parented QTimer (not singleShot) so Qt destroys it with the window;
-    # an unparented singleShot can fire after the C++ object is deleted → SIGABRT.
-    from ui.first_run_dialog import FirstRunDialog, should_show_first_run
-    if should_show_first_run():
-        from PyQt6.QtCore import QTimer as _QTimer
-        _onboarding_timer = _QTimer(window)
-        _onboarding_timer.setSingleShot(True)
-        def _show_onboarding():
-            try:
-                if window.isVisible():
-                    FirstRunDialog(parent=window).exec()
-            except RuntimeError:
-                return
-        _onboarding_timer.timeout.connect(_show_onboarding)
-        _onboarding_timer.start(250)
+    # First-run welcome overlay is shown by Dashboard._show_welcome_overlay()
+    # via a 600 ms deferred timer after the window is fully painted.
 
     ret = app.exec()
     avail_worker.stop()

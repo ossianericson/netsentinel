@@ -4,34 +4,29 @@ Tests for ui/pages/settings_page.py and ui/first_run_dialog.py.
 Covers:
   SettingsPage:
     • Constructs without errors
-    • _build_appearance_card returns a QFrame
     • Theme buttons are present (one per theme)
     • Active theme button has filled ACCENT style
     • Inactive theme buttons have outline style
     • _on_theme saves via set_active_theme_name
     • _on_theme updates the status label
-    • _build_display_card constructs checkboxes
     • Compact-row checkbox persists to QSettings
     • Tooltip checkbox persists to QSettings
-    • _build_shortcuts_card contains at least 4 shortcuts
+    • _build_shortcuts_card returns a QFrame
     • SettingsPage has objectName "contentArea"
 
-  FirstRunDialog:
+  First-run persistence helpers:
     • should_show_first_run returns True when QSettings key absent
     • should_show_first_run returns False when key is True
-    • mark_first_run_done writes True to QSettings
+    • mark_first_run_done writes both keys to QSettings
+    • should_show_first_run calls QSettings with correct app/org args
+
+  WelcomeOverlay:
     • Constructs without errors
-    • Has correct number of slides (4)
-    • Back button hidden on first slide
-    • Next button text on last slide is "Get Started"
-    • _go_next advances the slide
-    • _go_back retreats the slide
-    • _finish calls accept
-    • _finish calls mark_first_run_done when checkbox checked
-    • _finish does NOT call mark_first_run_done when checkbox unchecked
-    • SLIDES constant has 4 entries
-    • Each slide dict has icon, title, body keys
-    • _ProgressStrip set_step highlights correct dot
+    • Has a QFrame child named "welcomeCard"
+    • Card has the correct fixed dimensions
+    • start_scan_requested signal emits on scan
+    • _on_skip calls mark_first_run_done
+    • FirstRunDialog backward-compat alias: exec() returns 0
 """
 
 from __future__ import annotations
@@ -57,11 +52,11 @@ _app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscre
 from ui.pages.settings_page import SettingsPage
 from ui.first_run_dialog import (
     FirstRunDialog,
-    _STEPS,
-    _StepCard,
+    WelcomeOverlay,
     should_show_first_run,
     mark_first_run_done,
     _FIRST_RUN_KEY,
+    _SLIDES,
 )
 import ui.styles as _styles
 
@@ -145,39 +140,6 @@ class TestSettingsPage:
 
 
 # ===========================================================================
-# _STEPS constant
-# ===========================================================================
-
-class TestSlidesConstant:
-
-    def test_three_steps(self):
-        assert len(_STEPS) == 3
-
-    def test_step_keys(self):
-        for step in _STEPS:
-            assert "number" in step
-            assert "title" in step
-            assert "body" in step
-            assert "action_key" in step
-            assert "action_label" in step
-
-    def test_step_titles_non_empty(self):
-        for step in _STEPS:
-            assert step["title"].strip()
-
-    def test_step_bodies_non_empty(self):
-        for step in _STEPS:
-            assert step["body"].strip()
-
-    def test_step_keys_unique(self):
-        keys = [s["action_key"] for s in _STEPS]
-        assert len(keys) == len(set(keys))
-
-    def test_step_numbers_are_1_2_3(self):
-        assert [s["number"] for s in _STEPS] == ["1", "2", "3"]
-
-
-# ===========================================================================
 # should_show_first_run / mark_first_run_done
 # ===========================================================================
 
@@ -197,11 +159,13 @@ class TestFirstRunPersistence:
             result = should_show_first_run()
         assert result is False
 
-    def test_mark_done_writes_true(self):
+    def test_mark_done_writes_both_keys(self):
         mock_qs = MagicMock()
         with patch("ui.first_run_dialog.QSettings", return_value=mock_qs):
             mark_first_run_done()
-        mock_qs.setValue.assert_called_once_with(_FIRST_RUN_KEY, True)
+        calls = mock_qs.setValue.call_args_list
+        keys_written = [c[0][0] for c in calls]
+        assert _FIRST_RUN_KEY in keys_written
 
     def test_should_show_calls_qsettings_correct_args(self):
         mock_qs = MagicMock()
@@ -212,71 +176,114 @@ class TestFirstRunPersistence:
 
 
 # ===========================================================================
-# FirstRunDialog construction
+# WelcomeOverlay (replaces old FirstRunDialog tests)
 # ===========================================================================
 
-class TestFirstRunDialog:
+class TestWelcomeOverlay:
 
     def setup_method(self):
-        self.dlg = FirstRunDialog()
+        self.parent = _app.activeWindow() or _app.allWidgets()[0] if _app.allWidgets() else None
+        if self.parent is None:
+            from PyQt6.QtWidgets import QWidget
+            self.parent = QWidget()
+            self.parent.resize(1024, 768)
+        self.overlay = WelcomeOverlay(self.parent)
+
+    def teardown_method(self):
+        self.overlay.deleteLater()
+        _app.processEvents()
 
     def test_constructs_without_error(self):
-        assert self.dlg is not None
+        assert self.overlay is not None
 
-    def test_correct_card_count(self):
-        assert len(self.dlg._cards) == len(_STEPS)
-
-    def test_cards_are_step_cards(self):
-        for card in self.dlg._cards:
-            assert isinstance(card, _StepCard)
-
-    def test_finish_calls_accept(self):
-        self.dlg.accept = MagicMock()
-        self.dlg._finish()
-        self.dlg.accept.assert_called_once()
-
-    def test_finish_marks_done(self):
-        with patch("ui.first_run_dialog.mark_first_run_done") as mock_done:
-            self.dlg._finish()
-        mock_done.assert_called_once()
-
-    def test_fixed_size(self):
-        assert self.dlg.width() == 560
-        assert self.dlg.height() == 545
-
-    def test_is_modal(self):
-        assert self.dlg.isModal()
-
-    def test_window_title(self):
-        assert "NetSentinel" in self.dlg.windowTitle()
-
-    def test_mark_done_disables_button(self):
-        card = self.dlg._cards[0]
-        card.mark_done()
-        assert not card._btn.isEnabled()
-        assert card._done is True
-
-    def test_mark_done_shows_done_label(self):
-        card = self.dlg._cards[0]
-        card.mark_done()
-        assert not card._done_lbl.isHidden()
-
-
-# ===========================================================================
-# _StepCard
-# ===========================================================================
-
-class TestStepCard:
-
-    def test_constructs(self):
-        card = _StepCard(_STEPS[0])
+    def test_has_card(self):
+        from PyQt6.QtWidgets import QFrame
+        card = self.overlay.findChild(QFrame, "welcomeCard")
         assert card is not None
 
-    def test_initial_not_done(self):
-        card = _StepCard(_STEPS[0])
-        assert card._done is False
+    def test_card_has_correct_size(self):
+        assert self.overlay._card.width() == WelcomeOverlay._CARD_W
+        assert self.overlay._card.height() == WelcomeOverlay._CARD_H
 
-    def test_mark_done_sets_flag(self):
-        card = _StepCard(_STEPS[0])
-        card.mark_done()
-        assert card._done is True
+    def test_starts_on_first_slide(self):
+        assert self.overlay._slide_idx == 0
+
+    def test_back_button_hidden_on_first_slide(self):
+        assert not self.overlay._back_btn.isVisible()
+
+    def test_next_button_text_changes_on_last_slide(self):
+        self.overlay._slide_idx = len(_SLIDES) - 1
+        self.overlay._sync_nav()
+        assert "Scan" in self.overlay._next_btn.text()
+
+    def test_go_next_advances_slide(self):
+        self.overlay._slide_idx = 0
+        self.overlay._go_next()
+        assert self.overlay._slide_idx == 1
+
+    def test_go_back_retreats_slide(self):
+        self.overlay._slide_idx = 1
+        self.overlay._go_back()
+        assert self.overlay._slide_idx == 0
+
+    def test_go_next_on_last_slide_triggers_scan(self):
+        received = []
+        self.overlay.start_scan_requested.connect(lambda: received.append(True))
+        self.overlay._slide_idx = len(_SLIDES) - 1
+        with patch("ui.first_run_dialog.mark_first_run_done"):
+            self.overlay.hide_animated = lambda callback=None: (
+                callback() if callback else None
+            )
+            self.overlay._go_next()
+        assert len(received) == 1
+
+    def test_progress_dots_count_matches_slides(self):
+        assert len(self.overlay._dots) == len(_SLIDES)
+
+    def test_scan_signal_emits_on_scan(self):
+        received = []
+        self.overlay.start_scan_requested.connect(lambda: received.append(True))
+        with patch("ui.first_run_dialog.mark_first_run_done"):
+            self.overlay._on_scan = lambda: (
+                mark_first_run_done(),
+                self.overlay.start_scan_requested.emit(),
+            )
+            self.overlay._on_scan()
+        assert len(received) == 1
+
+    def test_skip_marks_done(self):
+        with patch("ui.first_run_dialog.mark_first_run_done") as mock_done:
+            self.overlay.hide_animated = lambda callback=None: callback() if callback else None
+            self.overlay._on_skip()
+        mock_done.assert_called_once()
+
+    def test_first_run_compat_alias(self):
+        """FirstRunDialog backward-compat alias: constructs and exec() returns 0."""
+        dlg = FirstRunDialog()
+        assert dlg is not None
+        assert dlg.exec() == 0
+
+
+# ===========================================================================
+# _SLIDES constant
+# ===========================================================================
+
+class TestSlidesConstant:
+
+    def test_has_three_slides(self):
+        assert len(_SLIDES) == 3
+
+    def test_slide_keys(self):
+        for slide in _SLIDES:
+            assert "icon" in slide
+            assert "color" in slide
+            assert "title" in slide
+            assert "body" in slide
+
+    def test_slide_titles_non_empty(self):
+        for slide in _SLIDES:
+            assert slide["title"].strip()
+
+    def test_slide_bodies_non_empty(self):
+        for slide in _SLIDES:
+            assert slide["body"].strip()

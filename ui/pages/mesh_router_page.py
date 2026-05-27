@@ -23,9 +23,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BORDER, BG_CARD, GREEN,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-    BG_HOVER,
+    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BORDER, BG_CARD, GREEN,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_BORDER,
+    WHITE, BG_HOVER,
 )
 
 log = logging.getLogger(__name__)
@@ -152,10 +152,11 @@ class MeshRouterPage(QWidget):
     cross-enrich the Devices on Network table with node/band information.
     """
 
-    scan_done    = pyqtSignal(dict)
-    geo_map_ip   = pyqtSignal(str)   # show IP on Geolocation Map
-    port_scan_ip = pyqtSignal(str)   # pre-fill and open Port Scanner
-    check_abuse_ip = pyqtSignal(str) # pre-fill and open Threat Intelligence
+    scan_done       = pyqtSignal(dict)
+    geo_map_ip      = pyqtSignal(str)   # show IP on Geolocation Map
+    port_scan_ip    = pyqtSignal(str)   # pre-fill and open Port Scanner
+    check_abuse_ip  = pyqtSignal(str)   # pre-fill and open Threat Intelligence
+    device_configured = pyqtSignal()    # emitted the first time a host is saved
 
     # Class-level flag so the keyring warning shows once per app session
     _keyring_warned: bool = False
@@ -181,7 +182,7 @@ class MeshRouterPage(QWidget):
         compat = QFrame()
         compat.setObjectName("meshCompatBanner")
         compat.setStyleSheet(
-            f"QFrame#meshCompatBanner {{ background:#1A2A3A; border:1px solid #2A4A6A;"
+            f"QFrame#meshCompatBanner {{ background:{TH_BG}; border:1px solid {TH_BORDER};"
             f" border-left:3px solid {ACCENT}; border-radius:0px; }}"
         )
         compat_lay = QHBoxLayout(compat)
@@ -312,7 +313,7 @@ class MeshRouterPage(QWidget):
             warn = QFrame()
             warn.setObjectName("meshWarnBanner")
             warn.setStyleSheet(
-                f"QFrame#meshWarnBanner {{ background:#3a2800; border:1px solid {AMBER};"
+                f"QFrame#meshWarnBanner {{ background:{AMBER_BG}; border:1px solid {AMBER};"
                 " border-radius:0px; padding:0px; }}"
             )
             warn_lay = QHBoxLayout(warn)
@@ -382,24 +383,12 @@ class MeshRouterPage(QWidget):
         root.addWidget(clients_card, 1)
 
     def _prepopulate_gateway(self) -> None:
-        """Auto-fill gateway IP; then try to load a saved password for that host."""
+        """Load last-used host + saved password from keyring/QSettings."""
         from PyQt6.QtCore import QSettings
-        # Last-used mesh host is the most reliable key — stored on every successful scan.
-        # This is independent of gateway detection, which can fail at startup.
         saved_host = QSettings("NetSentinel", "NetSentinel").value("mesh/last_host", "")
         if saved_host:
             self._ip_edit.setText(saved_host)
             self._try_load_keyring(saved_host)
-            return
-        # Fall back: detect the default gateway (best-effort)
-        try:
-            from modules.rogue_device import _get_default_gateway
-            gw = _get_default_gateway()
-            if gw:
-                self._ip_edit.setText(gw)
-                self._try_load_keyring(gw)
-        except Exception:
-            pass
 
     # ── keyring ops ───────────────────────────────────────────────────────────
 
@@ -418,7 +407,7 @@ class MeshRouterPage(QWidget):
             self._keyring_info_lbl.setVisible(True)
 
     def _on_forget_clicked(self) -> None:
-        host = self._ip_edit.text().strip()
+        host = self._ip_edit.text().strip() or self._ip_edit.placeholderText()
         if _keyring_delete(host):
             self._pw_edit.clear()
             self._forget_btn.setEnabled(False)
@@ -430,7 +419,7 @@ class MeshRouterPage(QWidget):
     # ── scan ──────────────────────────────────────────────────────────────────
 
     def _on_scan_clicked(self) -> None:
-        host = self._ip_edit.text().strip()
+        host = self._ip_edit.text().strip() or self._ip_edit.placeholderText()
         pw   = self._pw_edit.text().strip()
         if not host:
             self._set_status("Enter a gateway IP address.", error=True)
@@ -492,7 +481,7 @@ class MeshRouterPage(QWidget):
         )
 
         # Save credentials on successful scan if the user opted in
-        host = self._ip_edit.text().strip()
+        host = self._ip_edit.text().strip() or self._ip_edit.placeholderText()
         pw   = self._pw_edit.text().strip()
         if self._keyring_ok and self._remember_cb.isChecked() and host and pw:
             if _keyring_save(host, pw):
@@ -505,7 +494,11 @@ class MeshRouterPage(QWidget):
         # even when gateway auto-detection returns None or a different IP.
         if host:
             from PyQt6.QtCore import QSettings
-            QSettings("NetSentinel", "NetSentinel").setValue("mesh/last_host", host)
+            qs = QSettings("NetSentinel", "NetSentinel")
+            first_save = not qs.value("mesh/last_host", "")
+            qs.setValue("mesh/last_host", host)
+            if first_save:
+                self.device_configured.emit()
 
         self.scan_done.emit(data)
 

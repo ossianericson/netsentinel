@@ -40,6 +40,7 @@ from ui.styles import (
     BORDER,
     CARD_RADIUS,
     GREEN,
+    NAV_BAR,
     PRO_WARN_BG,
     RED,
     TEXT_MUTED,
@@ -310,12 +311,13 @@ class _EventsTicker(QFrame):
     def __init__(self, store=None, parent=None):
         super().__init__(parent)
         self._store = store
+        self.setObjectName("statusTicker")
         self.setFixedHeight(28)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(
-            f"QFrame {{ background:{BG_HOVER}; border:1px solid {BORDER};"
+            f"QFrame#statusTicker {{ background:{BG_HOVER}; border:1px solid {BORDER};"
             f" border-radius:4px; }}"
-            f"QFrame:hover {{ border-color:{ACCENT}; }}"
+            f"QFrame#statusTicker:hover {{ border-color:{ACCENT}; }}"
         )
         lay = QHBoxLayout(self)
         lay.setContentsMargins(8, 0, 8, 0)
@@ -430,6 +432,7 @@ class HomePage(QWidget):
         def __init__(self, icon: str, title: str, val: str, sub: str,
                      parent: QWidget | None = None) -> None:
             super().__init__(parent)
+            self.setObjectName("statCard")
             self.setMinimumHeight(100)
             self.setSizePolicy(
                 QSizePolicy.Policy.Expanding,
@@ -437,7 +440,7 @@ class HomePage(QWidget):
             )
             self.setCursor(Qt.CursorShape.PointingHandCursor)
             self.setStyleSheet(
-                f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+                f"QFrame#statCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
                 f" border-radius:{CARD_RADIUS}; }}"
             )
             lay = QVBoxLayout(self)
@@ -526,9 +529,10 @@ class HomePage(QWidget):
                      parent: QWidget | None = None) -> None:
             super().__init__(parent)
             self._alert = alert
+            self.setObjectName("alertRow")
             self.setFixedHeight(28)
             self.setCursor(Qt.CursorShape.PointingHandCursor)
-            self.setStyleSheet("QFrame { background:transparent; border:none; }")
+            self.setStyleSheet("QFrame#alertRow { background:transparent; border:none; }")
             lay = QHBoxLayout(self)
             lay.setContentsMargins(0, 0, 0, 0)
             lay.setSpacing(6)
@@ -601,8 +605,9 @@ class HomePage(QWidget):
         active = _styles.get_active_theme_name()
 
         banner = QFrame()
+        banner.setObjectName("themeBanner")
         banner.setStyleSheet(
-            f"QFrame {{ background:{UPDATE_BAR_BG}; border-bottom:1px solid {UPDATE_BAR_BORDER}; }}"
+            f"QFrame#themeBanner {{ background:{UPDATE_BAR_BG}; border-bottom:1px solid {UPDATE_BAR_BORDER}; }}"
         )
         row = QHBoxLayout(banner)
         row.setContentsMargins(14, 6, 10, 6)
@@ -679,9 +684,10 @@ class HomePage(QWidget):
 
     def _build_freshness_strip(self) -> QFrame:
         strip = QFrame()
+        strip.setObjectName("freshnessStrip")
         strip.setFixedHeight(30)
         strip.setStyleSheet(
-            f"QFrame {{ background:#1C2530; border-bottom:1px solid {BORDER}; }}"
+            f"QFrame#freshnessStrip {{ background:{NAV_BAR}; border-bottom:1px solid {BORDER}; }}"
         )
         row = QHBoxLayout(strip)
         row.setContentsMargins(14, 0, 8, 0)
@@ -855,8 +861,9 @@ class HomePage(QWidget):
 
         # ── Browser dashboard strip (visible when API enabled + not dismissed) ─
         self._dashboard_strip = QFrame()
+        self._dashboard_strip.setObjectName("dashboardStrip")
         self._dashboard_strip.setStyleSheet(
-            f"QFrame {{ background:{UPDATE_BAR_BG}; border:1px solid {UPDATE_BAR_BORDER};"
+            f"QFrame#dashboardStrip {{ background:{UPDATE_BAR_BG}; border:1px solid {UPDATE_BAR_BORDER};"
             f" border-radius:4px; }}"
         )
         self._dashboard_strip.setVisible(False)
@@ -903,8 +910,9 @@ class HomePage(QWidget):
             "home/hw_setup_dismissed", False, type=bool
         )
         self._hw_setup_strip = QFrame()
+        self._hw_setup_strip.setObjectName("hwSetupStrip")
         self._hw_setup_strip.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#hwSetupStrip {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._hw_setup_strip.setVisible(not _hw_dismissed)
@@ -951,13 +959,13 @@ class HomePage(QWidget):
                 "▶  5G Modem",
                 "ZTE MC889",
                 "Live SINR, RSRP, band & cell ID logged alongside every speed test.",
-                "Modem",
+                "Hardware",
             ),
             (
                 "▶  Mesh Router",
                 "TP-Link Deco XE75",
                 "Real hostnames and mesh topology — makes Devices & Network Map accurate.",
-                "Mesh & Router",
+                "Hardware",
             ),
             (
                 "▶  Hardware Devices",
@@ -968,8 +976,9 @@ class HomePage(QWidget):
         ]
         for _hw_title, _hw_sub, _hw_desc, _hw_nav in _HW_SETUP_ITEMS:
             _card = QFrame()
+            _card.setObjectName("hwSetupCard")
             _card.setStyleSheet(
-                f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER};"
+                f"QFrame#hwSetupCard {{ background:{BG_DARK}; border:1px solid {BORDER};"
                 f" border-radius:4px; }}"
             )
             _card_lay = QVBoxLayout(_card)
@@ -1010,8 +1019,9 @@ class HomePage(QWidget):
 
         # ── Since you were last here (hidden until data loaded) ───────────────
         self._last_visit_card = QFrame()
+        self._last_visit_card.setObjectName("lastVisitCard")
         self._last_visit_card.setStyleSheet(
-            f"QFrame {{ background:{PRO_WARN_BG}; border:1px solid {UPDATE_BAR_BORDER};"
+            f"QFrame#lastVisitCard {{ background:{PRO_WARN_BG}; border:1px solid {UPDATE_BAR_BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._last_visit_card.setVisible(False)
@@ -1034,8 +1044,9 @@ class HomePage(QWidget):
 
         # ── DASH-1: "Action needed" card ─────────────────────────────────────
         self._action_card = QFrame()
+        self._action_card.setObjectName("actionCard")
         self._action_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {RED}44;"
+            f"QFrame#actionCard {{ background:{BG_CARD}; border:1px solid {RED}44;"
             f" border-left:3px solid {RED}; border-radius:{CARD_RADIUS}; }}"
         )
         self._action_card.setVisible(False)
@@ -1101,8 +1112,9 @@ class HomePage(QWidget):
 
         # ── Post-scan delta banner (hidden until 2nd+ scan) ───────────────────
         self._delta_banner = QFrame()
+        self._delta_banner.setObjectName("deltaBanner")
         self._delta_banner.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#deltaBanner {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._delta_banner.setVisible(False)
@@ -1129,8 +1141,9 @@ class HomePage(QWidget):
 
         # ── Recurring-user top section (hidden until conditions met) ──────────
         self._recurring_section = QFrame()
+        self._recurring_section.setObjectName("recurringSection")
         self._recurring_section.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#recurringSection {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._recurring_section.setVisible(False)
@@ -1232,8 +1245,9 @@ class HomePage(QWidget):
 
         # ── This Week card (DASH-2) ───────────────────────────────────────────
         self._this_week_card = QFrame()
+        self._this_week_card.setObjectName("thisWeekCard")
         self._this_week_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#thisWeekCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._this_week_card.setVisible(False)
@@ -1253,8 +1267,9 @@ class HomePage(QWidget):
 
         def _tw_chip(color: str) -> tuple[QFrame, QLabel, QLabel]:
             chip = QFrame()
+            chip.setObjectName("weekChip")
             chip.setStyleSheet(
-                f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER};"
+                f"QFrame#weekChip {{ background:{BG_DARK}; border:1px solid {BORDER};"
                 f" border-radius:6px; }}"
             )
             chip_lay = QVBoxLayout(chip)
@@ -1297,8 +1312,9 @@ class HomePage(QWidget):
 
         # ── Hero card ─────────────────────────────────────────────────────────
         hero = QFrame()
+        hero.setObjectName("heroCard")
         hero.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#heroCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         hero_lay = QHBoxLayout(hero)
@@ -1402,8 +1418,9 @@ class HomePage(QWidget):
 
         # ── Feature search bar ────────────────────────────────────────────────
         search_card = QFrame()
+        search_card.setObjectName("searchCard")
         search_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#searchCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         search_outer = QVBoxLayout(search_card)
@@ -1424,7 +1441,8 @@ class HomePage(QWidget):
         search_outer.addWidget(self._home_search)
 
         self._search_results = QFrame()
-        self._search_results.setStyleSheet("QFrame { background:transparent; border:none; }")
+        self._search_results.setObjectName("searchResults")
+        self._search_results.setStyleSheet("QFrame#searchResults { background:transparent; border:none; }")
         self._search_results.setVisible(False)
         self._search_results_inner = QVBoxLayout(self._search_results)
         self._search_results_inner.setContentsMargins(0, 2, 0, 0)
@@ -1435,8 +1453,9 @@ class HomePage(QWidget):
 
         # ── Post-scan summary sheet (NUX-2, one-time) ─────────────────────────
         self._post_scan_sheet = QFrame()
+        self._post_scan_sheet.setObjectName("postScanSheet")
         self._post_scan_sheet.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
+            f"QFrame#postScanSheet {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._post_scan_sheet.setVisible(False)
@@ -1589,8 +1608,9 @@ class HomePage(QWidget):
         lay.addWidget(self._sec_mon_lbl)
 
         self._mon_card = QFrame()
+        self._mon_card.setObjectName("monCard")
         self._mon_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#monCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         mon_lay = QHBoxLayout(self._mon_card)
@@ -1639,8 +1659,9 @@ class HomePage(QWidget):
 
         # ── Post-scan results strip (hidden until first scan completes) ────────
         self._results_strip = QFrame()
+        self._results_strip.setObjectName("resultsStrip")
         self._results_strip.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            f"QFrame#resultsStrip {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
         )
         self._results_strip.setVisible(False)
         _strip_lay = QVBoxLayout(self._results_strip)
@@ -1708,8 +1729,9 @@ class HomePage(QWidget):
         lay.addWidget(self._suggestions_sec)
 
         self._suggestions_card = QFrame()
+        self._suggestions_card.setObjectName("suggestionsCard")
         self._suggestions_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#suggestionsCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._suggestions_card.setVisible(False)
@@ -1749,8 +1771,9 @@ class HomePage(QWidget):
 
         # ── Alert card ────────────────────────────────────────────────────────
         self._alert_card = QFrame()
+        self._alert_card.setObjectName("alertCard")
         self._alert_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#alertCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._alert_inner = QVBoxLayout(self._alert_card)
@@ -1775,8 +1798,9 @@ class HomePage(QWidget):
 
         # ── Setup checklist card (NUX-4) ──────────────────────────────────────
         self._setup_card = QFrame()
+        self._setup_card.setObjectName("setupCard")
         self._setup_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#setupCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         _sc_outer = QVBoxLayout(self._setup_card)
@@ -1864,8 +1888,9 @@ class HomePage(QWidget):
 
         # ── Quick tips card (dismissible; hidden once user dismisses) ──────────
         self._tips_card = QFrame()
+        self._tips_card.setObjectName("tipsCard")
         self._tips_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#tipsCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._tips_card.setVisible(False)
@@ -3009,8 +3034,9 @@ class _GradeBreakdownDialog:
         }
         if worst_dim and getattr(worst_dim, "tip", ""):
             _tip_frame = QFrame()
+            _tip_frame.setObjectName("gradeTipFrame")
             _tip_frame.setStyleSheet(
-                f"QFrame {{ background:{AMBER}1A; border:1px solid {AMBER}44;"
+                f"QFrame#gradeTipFrame {{ background:{AMBER}1A; border:1px solid {AMBER}44;"
                 f" border-left:3px solid {AMBER}; border-radius:4px; }}"
             )
             _tip_vlay = QVBoxLayout(_tip_frame)
@@ -3198,8 +3224,9 @@ class StandardWelcomePage(QWidget):
     def _make_card(icon: str, title: str, icon_colour: str,
                    bullets: list[str]) -> QFrame:
         card = QFrame()
+        card.setObjectName("nuxFeatureCard")
         card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            f"QFrame#nuxFeatureCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
         )
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(12, 10, 12, 10)
@@ -3279,8 +3306,9 @@ class ProWelcomePage(QWidget):
 
         # Red warning box
         warn = QFrame()
+        warn.setObjectName("securityWarnFrame")
         warn.setStyleSheet(
-            f"QFrame {{ background:{PRO_WARN_BG}; border:1px solid {RED}; }}"
+            f"QFrame#securityWarnFrame {{ background:{PRO_WARN_BG}; border:1px solid {RED}; }}"
         )
         warn_lay = QHBoxLayout(warn)
         warn_lay.setContentsMargins(12, 10, 12, 10)
@@ -3326,8 +3354,9 @@ class ProWelcomePage(QWidget):
     @staticmethod
     def _make_card(icon: str, title: str, bullets: list[str]) -> QFrame:
         card = QFrame()
+        card.setObjectName("secCapabilityCard")
         card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            f"QFrame#secCapabilityCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
         )
         card_lay = QVBoxLayout(card)
         card_lay.setContentsMargins(12, 10, 12, 10)

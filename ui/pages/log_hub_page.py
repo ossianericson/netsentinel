@@ -287,9 +287,10 @@ class LogHubPage(QWidget):
 
         # ── History range bar (LOG-7) ─────────────────────────────────────────
         self._history_bar = QFrame()
+        self._history_bar.setObjectName("historyBar")
         self._history_bar.setVisible(False)
         self._history_bar.setStyleSheet(
-            f"QFrame {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
+            f"QFrame#historyBar {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
             f" border-radius:0; padding:0; }}"
         )
         _hb_lay = QHBoxLayout(self._history_bar)
@@ -359,9 +360,10 @@ class LogHubPage(QWidget):
 
         # ── Live-challenge banner (LOG-5) ─────────────────────────────────────
         self._challenge_banner = QFrame()
+        self._challenge_banner.setObjectName("challengeBanner")
         self._challenge_banner.setVisible(False)
         self._challenge_banner.setStyleSheet(
-            f"QFrame {{ background:{AMBER}22; border-bottom:1px solid {AMBER}55;"
+            f"QFrame#challengeBanner {{ background:{AMBER}22; border-bottom:1px solid {AMBER}55;"
             f" border-radius:0; padding:0; }}"
         )
         _cb_lay = QHBoxLayout(self._challenge_banner)
@@ -402,9 +404,10 @@ class LogHubPage(QWidget):
 
         # ── Row-cap banner (LOG-4) ─────────────────────────────────────────────
         self._cap_banner = QFrame()
+        self._cap_banner.setObjectName("capBanner")
         self._cap_banner.setVisible(False)
         self._cap_banner.setStyleSheet(
-            f"QFrame {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
+            f"QFrame#capBanner {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER};"
             f" border-radius:0; padding:0; }}"
         )
         _cap_lay = QHBoxLayout(self._cap_banner)
@@ -465,9 +468,10 @@ class LogHubPage(QWidget):
 
         # ALERT-4: inline alert correlation panel (hidden until triggered)
         self._alert_corr_panel = QFrame()
+        self._alert_corr_panel.setObjectName("alertCorrPanel")
         self._alert_corr_panel.setVisible(False)
         self._alert_corr_panel.setStyleSheet(
-            f"QFrame {{ background:{BG_HOVER}; border-top:1px solid {BORDER}; }}"
+            f"QFrame#alertCorrPanel {{ background:{BG_HOVER}; border-top:1px solid {BORDER}; }}"
         )
         _acp_lay = QVBoxLayout(self._alert_corr_panel)
         _acp_lay.setContentsMargins(12, 8, 12, 8)
@@ -512,8 +516,9 @@ class LogHubPage(QWidget):
 
         # ── Toggle header ──────────────────────────────────────────────────────
         header = QFrame()
+        header.setObjectName("accordionHeader")
         header.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#accordionHeader {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         hdr_lay = QHBoxLayout(header)
@@ -542,9 +547,10 @@ class LogHubPage(QWidget):
 
         # ── Body (hidden by default) ───────────────────────────────────────────
         body = QFrame()
+        body.setObjectName("accordionBody")
         body.setVisible(False)
         body.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#accordionBody {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-top:none; border-radius:0 0 {CARD_RADIUS} {CARD_RADIUS}; }}"
         )
         body_lay = QVBoxLayout(body)
@@ -637,8 +643,9 @@ class LogHubPage(QWidget):
     def _build_control_bar(self) -> QWidget:
         """Unified filter row: search | source chips | + | stretch | live/history pill."""
         bar = QFrame()
+        bar.setObjectName("controlBar")
         bar.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#controlBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         lay = QHBoxLayout(bar)
@@ -726,8 +733,9 @@ class LogHubPage(QWidget):
 
         # Live / History pill toggle — rightmost
         _pill = QFrame()
+        _pill.setObjectName("liveHistoryPill")
         _pill.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:13px; }}"
+            f"QFrame#liveHistoryPill {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:13px; }}"
         )
         _pill_lay = QHBoxLayout(_pill)
         _pill_lay.setContentsMargins(2, 2, 2, 2)
@@ -793,8 +801,9 @@ class LogHubPage(QWidget):
 
     def _build_source_bar(self) -> QWidget:
         bar = QFrame()
+        bar.setObjectName("sourceBar")
         bar.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#sourceBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         lay = QHBoxLayout(bar)
@@ -861,8 +870,9 @@ class LogHubPage(QWidget):
     def _build_mode_bar(self) -> QWidget:
         """Live / History segmented toggle (LOG-7)."""
         bar = QFrame()
+        bar.setObjectName("modeBar")
         bar.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#modeBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         lay = QHBoxLayout(bar)
@@ -905,8 +915,9 @@ class LogHubPage(QWidget):
     def _build_logged_sources_bar(self) -> QWidget:
         """DB logging controls — one row per configured hardware plugin."""
         bar = QFrame()
+        bar.setObjectName("loggedSourcesBar")
         bar.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f"QFrame#loggedSourcesBar {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         lay = QVBoxLayout(bar)

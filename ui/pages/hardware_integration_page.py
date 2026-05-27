@@ -1426,11 +1426,13 @@ class HardwareIntegrationPage(QWidget):
     """Hardware Hub — live status dashboard for all imported hardware plugins."""
 
     # data dict has "_path" embedded so dashboard knows which plugin
-    plugin_result  = pyqtSignal(dict)
-    navigate_to    = pyqtSignal(str)   # page label → _nav_rail_go_to
-    geo_map_ip     = pyqtSignal(str)   # open geo map for this IP
-    port_scan_ip   = pyqtSignal(str)   # pre-fill port scanner with this IP
-    check_abuse_ip = pyqtSignal(str)   # check IP on AbuseIPDB
+    plugin_result    = pyqtSignal(dict)
+    plugin_page_added = pyqtSignal(str, str)  # (script_path, display_label) — new plugin installed at runtime
+    plugin_page_removed = pyqtSignal(str)     # script_path — plugin removed at runtime
+    navigate_to      = pyqtSignal(str)   # page label → _nav_rail_go_to
+    geo_map_ip       = pyqtSignal(str)   # open geo map for this IP
+    port_scan_ip     = pyqtSignal(str)   # pre-fill port scanner with this IP
+    check_abuse_ip   = pyqtSignal(str)   # check IP on AbuseIPDB
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -1647,15 +1649,6 @@ class HardwareIntegrationPage(QWidget):
 
         # ── Active integrations ───────────────────────────────────────────────
         paths = _load_paths()
-        if not paths:
-            # Auto-import bundled plugins on first run / after QSettings wipe
-            bdir = self._bundled_plugins_dir()
-            if bdir.is_dir():
-                auto = [str(p) for p in sorted(bdir.glob("*_plugin.py"))
-                        if _validate_script(str(p))[0]]
-                if auto:
-                    _save_paths(auto)
-                    paths = auto
 
         if not paths:
             empty = QLabel(
@@ -1694,6 +1687,8 @@ class HardwareIntegrationPage(QWidget):
         imported = set(_load_paths())
         entries: list[tuple[str, dict]] = []
         for pyf in sorted(bdir.glob("*_plugin.py")):
+            if "template" in pyf.stem.lower():
+                continue
             ps = str(pyf)
             if ps in imported:
                 continue
@@ -1803,14 +1798,18 @@ class HardwareIntegrationPage(QWidget):
                     return
 
         paths = _load_paths()
-        if path not in paths:
+        is_new = path not in paths
+        if is_new:
             paths.append(path)
             _save_paths(paths)
+        label = meta.get("name", Path(path).stem) if ok else Path(path).stem
         self._set_status(
-            f"Imported '{Path(path).stem}' — running first check…", error=False
+            f"Imported '{label}' — running first check…", error=False
         )
         self._rebuild_hub()
         self._start_poll_worker(path)
+        if is_new:
+            self.plugin_page_added.emit(path, label)
 
     def _start_all_poll_workers(self) -> None:
         for i, path in enumerate(_load_paths()):
@@ -1887,7 +1886,8 @@ class HardwareIntegrationPage(QWidget):
             return
 
         paths = _load_paths()
-        if path not in paths:
+        is_new = path not in paths
+        if is_new:
             paths.append(path)
             _save_paths(paths)
 
@@ -1895,6 +1895,8 @@ class HardwareIntegrationPage(QWidget):
         self._set_status(f"Imported '{name}' — running first check…", error=False)
         self._rebuild_hub()
         self._start_poll_worker(path)
+        if is_new:
+            self.plugin_page_added.emit(path, name)
 
     @pyqtSlot(str)
     def _remove_plugin(self, path: str) -> None:
@@ -1903,6 +1905,7 @@ class HardwareIntegrationPage(QWidget):
         _save_paths(paths)
         self._set_status(f"Removed {Path(path).name}.", error=False)
         self._rebuild_hub()
+        self.plugin_page_removed.emit(path)
 
     # ── Status helper ─────────────────────────────────────────────────────────
 
@@ -2093,7 +2096,8 @@ class HardwareIntegrationPage(QWidget):
             return
 
         paths = _load_paths()
-        if dest_str not in paths:
+        is_new = dest_str not in paths
+        if is_new:
             paths.append(dest_str)
             _save_paths(paths)
 
@@ -2101,6 +2105,8 @@ class HardwareIntegrationPage(QWidget):
         self._set_status(f"Installed '{name}' — opening password field…", error=False)
         self._rebuild_hub()
         self._start_poll_worker(dest_str)
+        if is_new:
+            self.plugin_page_added.emit(dest_str, name)
         # Hide the Suggested tab since the device is now installed
         if self._tabs is not None:
             self._tabs.setTabVisible(self._suggested_tab_idx, False)
