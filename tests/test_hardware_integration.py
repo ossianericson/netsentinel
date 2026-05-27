@@ -17,11 +17,10 @@ Covers:
 
 from __future__ import annotations
 
-import json
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -29,7 +28,6 @@ import pytest
 
 try:
     from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtCore import QSettings
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
@@ -47,11 +45,6 @@ with (
         _ModemDetailPanel,
         _RouterDetailPanel,
         _validate_script,
-        _load_paths,
-        _save_paths,
-        _load_last_result,
-        _save_last_result,
-        _path_hash,
         _safe_set_text,
     )
 
