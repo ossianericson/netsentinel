@@ -328,7 +328,7 @@ def _safe_set_text(lbl: "QLabel", text: str) -> None:
     try:
         lbl.setText(text)
     except RuntimeError:
-        pass
+        pass  # Qt widget deleted before the timer/worker callback fired — safe to ignore
 
 
 def _age_str(ts: float) -> str:
