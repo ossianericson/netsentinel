@@ -53,27 +53,18 @@ Tags:
   - network
   - security
   - scanner
-  - rogue-device
-  - stp
-  - lan
-  - diagnostics
-  - iot
   - monitoring
-  - arp
-  - broadcast-storm
+  - diagnostics
+  - lan
   - wifi
   - dns
+  - iot
   - port-scanner
   - cve
-  - mesh-router
-  - modem
-  - 5g
   - speed-test
+  - packet-capture
   - mqtt
   - home-assistant
-  - hardware
-  - protocol-analyzer
-  - packet-capture
   - network-health
 ReleaseNotesUrl: https://github.com/ossianericson/netsentinel/releases
 ManifestType: defaultLocale
