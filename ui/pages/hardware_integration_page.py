@@ -321,7 +321,7 @@ def _save_last_result(path: str, data: dict) -> None:
     try:
         s.setValue(_SETTINGS_RESULT.format(_path_hash(path)), json.dumps(data, default=str))
     except Exception:
-        pass
+        pass  # QSettings write failure (e.g. serialisation error) is non-critical — skip silently
 
 
 def _safe_set_text(lbl: "QLabel", text: str) -> None:

@@ -36,8 +36,6 @@ else:
     os.environ.setdefault("XDG_CONFIG_HOME", str(_TMP_APPDATA))
 
 # Patch Path.home() so any code that calls it directly gets the hermetic dir.
-_ORIGINAL_HOME = Path.home
-
 def _hermetic_home(_cls=Path) -> Path:
     home = os.environ.get("HOME") or os.environ.get("USERPROFILE")
     return Path(home) if home else _TMP_APPDATA
