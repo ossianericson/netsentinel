@@ -1546,10 +1546,6 @@ class Dashboard(QMainWindow):
         self._plugin_nodes:       dict[str, list] = {}  # path → [{name,mac,role}]
         self._plugin_hardware_name: str = ""  # name of last-run plugin
 
-        # Last modem credentials — used to resume ZteWorker after plugin test
-        self._last_modem_host: str = ""
-        self._last_modem_pw:   str = ""
-
         # M1 satellite grouping state
         self._m1_sat_expanded: dict = {}   # node_name → bool (default False = collapsed)
         self._m1_grouping_active: bool = False
@@ -1775,8 +1771,6 @@ class Dashboard(QMainWindow):
         self._restore_settings()
         # Install resize grips for all 8 edges/corners (frameless window)
         self._install_edge_grips()
-        # Auto-start modem polling if credentials were saved from a prior session
-        self._check_modem_autorun()
 
     def _build_mode_bar(self) -> QWidget:
         """Mode-switcher pill — now built inline inside the sidebar in _build_tabs().
@@ -2816,7 +2810,6 @@ class Dashboard(QMainWindow):
         from ui.pages.speed_test_page import SpeedTestPage
         self._speed_test_page = SpeedTestPage(store=self._store, parent=None)
         self._speed_test_page.modem_pause_requested.connect(self._on_modem_disconnect)
-        self._speed_test_page.modem_resume_requested.connect(self._resume_modem_worker)
         self.global_time_range_changed.connect(self._speed_test_page.set_global_hours)
 
         from ui.pages.home_automation_page import HomeAutomationPage
@@ -2988,22 +2981,6 @@ class Dashboard(QMainWindow):
         _QT.singleShot(0, self._update_monitor_badge)
         _QT.singleShot(0, self._push_monitor_pills)
 
-        from ui.pages.mesh_router_page import MeshRouterPage
-        self._mesh_router_page = MeshRouterPage(parent=None)
-        self._mesh_router_page.scan_done.connect(self._on_mesh_result)
-        self._mesh_router_page.geo_map_ip.connect(self._show_ip_on_geo_map)
-        self._mesh_router_page.port_scan_ip.connect(
-            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (TCP)"))
-        )
-        self._mesh_router_page.check_abuse_ip.connect(
-            lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intelligence"))
-        )
-
-        from ui.pages.modem_page import ModemPage
-        self._modem_page = ModemPage(parent=None)
-        self._modem_page.connect_requested.connect(self._on_modem_connect)
-        self._modem_page.disconnect_requested.connect(self._on_modem_disconnect)
-
         from ui.pages.rest_api_page import RestApiPage
         self._rest_api_page = RestApiPage(store=self._store, parent=None)
 
@@ -3087,6 +3064,9 @@ class Dashboard(QMainWindow):
             self._home_page.investigate_live_requested.connect(self._on_investigate_live)
             self._home_page.alert_view_requested.connect(self._on_alert_view_requested)
             self._home_page.rescan_requested.connect(self._start_full_scan)
+            self._home_page.add_plugin_requested.connect(
+                lambda p: self._hardware_integration_page._import_bundled(p)
+            )
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
         self._overview_page.scan_requested.connect(self._start_full_scan)
@@ -9685,10 +9665,9 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("3-slide welcome wizard",       "Fresh installs now show an Apple-style 3-slide onboarding overlay — Welcome, Discover & Protect, Monitor — with progress dots and a 'Scan my network →' CTA on the final slide"),
-            ("Signal bars on plugin pages",  "ZTE MC889 and other modem-type plugin pages now show RSRP and SINR signal bar indicators, matching the visual quality of the dedicated Modem page"),
-            ("Cleaner Extend nav",           "Legacy 'Modem' and 'Mesh & Router' rail entries removed; hardware plugin pages (e.g. ZTE MC889, TP-Link Deco XE75) are the only items under Extend"),
-            ("Centered startup window",      "Fresh installs open at 1280×800 centred on the primary screen instead of a random position"),
+            ("Unified Getting Started checklist", "Home page now shows a single 'Getting Started' card with hardware setup (ZTE MC889, Deco XE75) and core steps (scan, grade, ARP). 'Add →' buttons open the credential dialog instantly — no navigating away."),
+            ("Hardware-only plugin flow",    "ZTE MC889 and TP-Link Deco XE75 are managed exclusively via the plugin system. Dedicated Modem and Mesh Router pages removed; all signal data appears in the plugin's Hardware page."),
+            ("Credential-on-add dialog",     "Adding a hardware plugin now always prompts for the password and saves it securely in the OS keychain — no extra setup step needed."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -10264,12 +10243,6 @@ class Dashboard(QMainWindow):
         for w in self._workers:
             w.start()
 
-        # Trigger immediate modem and Deco refresh alongside the scan.
-        # The mesh M1-fallback (_check_mesh_autorun) stays active for first runs
-        # where _net_info hasn't resolved the gateway yet.
-        self._trigger_modem_refresh()
-        self._trigger_mesh_refresh()
-
     # ── Module result handlers ────────────────────────────────────────────────
 
     @pyqtSlot(dict)
@@ -10570,15 +10543,7 @@ class Dashboard(QMainWindow):
         if self._mesh_enrichment or any(self._plugin_enrichments.values()):
             self._apply_mesh_enrichment()
 
-        # Mesh enrichment — show button when a gateway is found; auto-run if
-        # the user has already entered their mesh password this session.
-        self._check_mesh_autodetect(data)
         self._check_hw_autodetect()
-
-        # Push cached modem signal to the Modem page so it shows fresh data
-        # immediately after a network scan, without waiting for the next 30 s poll.
-        if getattr(self, "_last_modem_data", None) and hasattr(self, "_modem_page"):
-            self._modem_page.on_modem_signal(self._last_modem_data)
 
         # Fetch WAN IP in background so geo map can resolve LAN devices later
         if not self._wan_ip:
@@ -10674,42 +10639,6 @@ class Dashboard(QMainWindow):
                 self._geo_map_page.navigate_to_ip(ip, label="Threat Intel")
             except Exception:
                 pass
-
-    # ── Mesh enrichment ────────────────────────────────────────────────────────
-
-    def _check_mesh_autodetect(self, m1_data: dict) -> None:
-        """Pre-fill gateway IP on Mesh & Router page; auto-run if keyring has saved creds."""
-        gateway_ip = m1_data.get("gateway_ip")
-        if not gateway_ip:
-            return
-        if hasattr(self, "_mesh_router_page"):
-            self._mesh_router_page.set_gateway_ip(gateway_ip)
-        self._check_mesh_autorun(gateway_ip)
-
-    def _check_mesh_autorun(self, gateway_ip: str) -> None:
-        """Re-fetch mesh data on every scan if keyring has credentials for gateway_ip."""
-        # Skip if a previous fetch is still in flight
-        existing = getattr(self, "_mesh_auto_worker", None)
-        if existing and existing.isRunning():
-            return
-        try:
-            import keyring as _kr
-            pw = _kr.get_password("NetSentinel/mesh", gateway_ip)
-        except Exception:
-            return
-        if not pw:
-            return
-        from workers.mesh_worker import MeshWorker
-        worker = MeshWorker(host=gateway_ip, password=pw)
-        # Route through the page's own handler so its UI gets populated;
-        # scan_done from there fires _on_mesh_result for enrichment.
-        worker.result.connect(self._mesh_router_page._on_result)
-        worker.status.connect(lambda msg: self._m1_status.setText(
-            f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
-        ), Qt.ConnectionType.QueuedConnection)
-        # Keep a reference so the thread isn't garbage-collected mid-run
-        self._mesh_auto_worker = worker
-        worker.start()
 
     def _check_hw_autodetect(self) -> None:
         """Run hardware catalogue detection once per gateway IP per session."""
@@ -10820,17 +10749,12 @@ class Dashboard(QMainWindow):
 
     @pyqtSlot(dict)
     def _on_mesh_result(self, data: dict) -> None:
-        """Receive scan result from MeshRouterPage and enrich the Devices table."""
-        from modules.deco_client import _norm_mac
+        """Receive mesh scan result and enrich the Devices table."""
         clients  = data.get("clients", [])
         provider = data.get("provider", "mesh").title()
         self._mesh_units      = data.get("units", [])
         self._mesh_enrichment = {c.mac: c for c in clients}
         self._apply_mesh_enrichment()
-        if hasattr(self, "_hardware_integration_page"):
-            self._hardware_integration_page.on_mesh_card_data(
-                self._mesh_units, clients, provider
-            )
         matched  = sum(1 for c in clients if c.mac in self._mesh_enrichment)
         summary  = getattr(self, "_m1_scan_summary", "")
         self._m1_status.setText(
@@ -11007,6 +10931,8 @@ class Dashboard(QMainWindow):
             [p._label for p in self._plugin_pages.values()]
         )
         self._refresh_hardware_badge()
+        if hasattr(self, "_home_page"):
+            self._home_page.refresh_hw_strip()
 
     @pyqtSlot(str)
     def _on_plugin_page_removed(self, path: str) -> None:
@@ -11891,129 +11817,16 @@ class Dashboard(QMainWindow):
         )
         self._m1_group_btn.setText("▼▼  Collapse All" if all_expanded else "▶▶  Expand All")
 
-    # ── Modem (ZTE MC889 / generic WAN modem) ───────────────────────────────
-
-    def _check_modem_autorun(self) -> None:
-        """Start ZTE polling on launch if host + password were saved in a prior session."""
-        from PyQt6.QtCore import QSettings
-        settings = QSettings()
-        host = settings.value("modem/last_host", "").strip()
-        if not host:
-            return
-        try:
-            import keyring as _kr
-            pw = _kr.get_password("NetSentinel/modem", host)
-        except Exception:
-            return
-        if not pw:
-            return
-        self._on_modem_connect(host, pw)
-
-    def _trigger_modem_refresh(self) -> None:
-        """Restart ZTE worker for an immediate fresh poll at scan time."""
-        from PyQt6.QtCore import QSettings
-        host = QSettings().value("modem/last_host", "").strip()
-        if not host:
-            return
-        try:
-            import keyring as _kr
-            pw = _kr.get_password("NetSentinel/modem", host)
-        except Exception:
-            return
-        if not pw:
-            return
-        self._on_modem_connect(host, pw)
-
-    def _trigger_mesh_refresh(self) -> None:
-        """Start a fresh Deco scan at scan time using the cached gateway IP.
-
-        Falls back to the M1-result path (_check_mesh_autorun) when _net_info
-        hasn't resolved the gateway yet (first run, cold start).
-        """
-        gateway_ip = (self._net_info or {}).get("gateway", "").strip()
-        if not gateway_ip:
-            return
-        # Don't interrupt a fetch that's already in flight
-        existing = getattr(self, "_mesh_auto_worker", None)
-        if existing and existing.isRunning():
-            return
-        try:
-            import keyring as _kr
-            pw = _kr.get_password("NetSentinel/mesh", gateway_ip)
-        except Exception:
-            return
-        if not pw:
-            return
-        from workers.mesh_worker import MeshWorker
-        worker = MeshWorker(host=gateway_ip, password=pw)
-        # Route through the page's own handler so its UI (nodes/clients tables,
-        # status label) gets populated; scan_done from there fires _on_mesh_result.
-        worker.result.connect(self._mesh_router_page._on_result)
-        worker.status.connect(lambda msg: self._m1_status.setText(
-            f"{getattr(self, '_m1_scan_summary', '')}  ·  {msg}"
-        ), Qt.ConnectionType.QueuedConnection)
-        self._mesh_auto_worker = worker
-        worker.start()
-
-    @pyqtSlot(str, str)
     @pyqtSlot(object)
     def _on_speed_test_modem_forward(self, result) -> None:
-        """Forward speed-test modem snapshot to the Modem page and Hardware Hub."""
+        """Forward speed-test modem snapshot to the Hardware Hub."""
         sig = getattr(result, "modem_signal", None)
         if sig:
-            if hasattr(self, "_modem_page"):
-                self._modem_page.on_modem_signal(sig)
-            if hasattr(self, "_hardware_integration_page"):
-                self._hardware_integration_page.on_modem_card_data(sig)
-            return
-        # No ZTE signal — check if a plugin modem has a cached result
-        if not hasattr(self, "_hardware_integration_page"):
-            return
-        try:
-            from ui.pages.hardware_integration_page import (
-                _load_paths, _load_last_result, _validate_script
-            )
-            for _p in _load_paths():
-                _ok, _, _meta = _validate_script(_p)
-                if _ok and _meta.get("type") == "modem":
-                    _cached = _load_last_result(_p)
-                    if _cached:
-                        _extra = _cached.get("status", {}).get("extra", {})
-                        if _extra:
-                            self._hardware_integration_page.on_modem_card_data(_extra)
-                        break
-        except Exception:
-            pass
-
-    def _on_modem_connect(self, host: str, password: str) -> None:
-        """Start (or restart) the ZTE polling worker."""
-        self._on_modem_disconnect()
-        from workers.zte_worker import ZteWorker
-        worker = ZteWorker(host=host, password=password, interval_s=30)
-        worker.result.connect(self._on_modem_signal)
-        worker.error.connect(self._on_modem_error)
-        worker.status.connect(self._on_modem_status)
-        self._zte_worker = worker
-        worker.start()
-        self._last_modem_host = host
-        self._last_modem_pw   = password
-        # Give the speed test page the modem credentials for signal enrichment
-        if hasattr(self, "_speed_test_page"):
-            self._speed_test_page.set_modem_credentials(host, password)
-        # Pause modem plugin workers — native ZteWorker owns the session
-        if hasattr(self, "_hardware_integration_page"):
-            self._hardware_integration_page.set_native_modem_connected(True)
-
-    def _resume_modem_worker(self) -> None:
-        """Restart ZteWorker after a plugin test, using cached or keyring credentials."""
-        if self._last_modem_host and self._last_modem_pw:
-            self._on_modem_connect(self._last_modem_host, self._last_modem_pw)
-        else:
-            self._trigger_modem_refresh()
+            self._on_modem_signal(sig)
 
     @pyqtSlot()
     def _on_modem_disconnect(self) -> None:
-        """Stop the ZTE polling worker and clear cached modem data."""
+        """Stop any active ZTE polling worker and clear cached modem data."""
         worker = getattr(self, "_zte_worker", None)
         if worker:
             worker.stop()
@@ -12026,23 +11839,15 @@ class Dashboard(QMainWindow):
         hw_state.clear_modem()
         if hasattr(self, "_speed_test_page"):
             self._speed_test_page.clear_modem_credentials()
-        # Resume modem plugin workers — native session is gone
-        if hasattr(self, "_hardware_integration_page"):
-            self._hardware_integration_page.set_native_modem_connected(False)
 
     @pyqtSlot(dict)
     def _on_modem_signal(self, data: dict) -> None:
-        """Cache signal data, route to Modem page, Overview tile, topology, and Monitor."""
+        """Cache signal data, route to Overview tile, topology, and Monitor."""
         self._last_modem_data = data
         from modules.network_infrastructure import hw_state
         hw_state.update_modem(data, source="zte", hw_name="ZTE MC889")
-        if hasattr(self, "_modem_page"):
-            self._modem_page.on_modem_signal(data)
         if hasattr(self, "_overview_page"):
             self._overview_page.on_modem_signal(data)
-        if hasattr(self, "_hardware_integration_page"):
-            self._hardware_integration_page.on_native_modem_data(data)
-            self._hardware_integration_page.on_modem_card_data(data)
         # Update topology only when the modem's connection details change.
         # Skipping on every poll prevents a costly matplotlib redraw every 30 s.
         _topo_key = (data.get("wan_ip"), data.get("network_type"))
@@ -12096,16 +11901,6 @@ class Dashboard(QMainWindow):
                         self._last_modem_log_ts = now
                     except Exception:
                         pass
-
-    @pyqtSlot(str)
-    def _on_modem_error(self, msg: str) -> None:
-        if hasattr(self, "_modem_page"):
-            self._modem_page.on_modem_error(msg)
-
-    @pyqtSlot(str)
-    def _on_modem_status(self, msg: str) -> None:
-        if hasattr(self, "_modem_page"):
-            self._modem_page.on_modem_status(msg)
 
     @pyqtSlot(str)
     def _filter_m1_by_nl(self, text: str):

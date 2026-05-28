@@ -24,7 +24,6 @@ from pathlib import Path
 from PyQt6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
-    QRect,
     QSettings,
     Qt,
     pyqtSignal,

@@ -173,8 +173,6 @@ hiddenimports: list = [
     "ui.pages.live_bandwidth_page",
     "ui.pages.log_hub_page",
     "ui.pages.maintenance_page",
-    "ui.pages.mesh_router_page",
-    "ui.pages.modem_page",
     "ui.pages.mqtt_page",
     "ui.pages.network_doc_page",
     "ui.pages.notifications_page",
@@ -245,7 +243,6 @@ hiddenimports: list = [
     "workers.dns_zone_worker",
     "workers.ha_worker",
     "workers.iface_bw_worker",
-    "workers.mesh_worker",
     "workers.process_worker",
     "workers.report_scheduler_worker",
     "workers.rest_api_worker",
@@ -259,7 +256,6 @@ hiddenimports: list = [
     "workers.plugin_polling_worker",
     "workers.plugin_worker",
     "workers.wifi_monitor_worker",
-    "workers.zte_worker",
     "ui.pages.hardware_integration_page",
 ]
 

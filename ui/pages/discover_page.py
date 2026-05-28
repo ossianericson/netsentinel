@@ -266,7 +266,7 @@ _FEATURES: list[dict] = [
             "TP-Link Deco is fully supported. The worker architecture accepts additional providers "
             "(Eero, Google Nest, Asus ZenWiFi, Netgear Orbi) via a single provider key."
         ),
-        "page": "Mesh & Router",
+        "page": "Hardware",
         "requires": None,
         "tags": [
             "mesh", "router", "deco", "tp-link", "gateway", "band", "node", "wifi", "client",
@@ -289,7 +289,7 @@ _FEATURES: list[dict] = [
             "ZTE MC889 is fully supported; the worker architecture accepts additional modem models "
             "via a single provider key."
         ),
-        "page": "Modem",
+        "page": "Hardware",
         "requires": None,
         "tags": [
             "modem", "5g", "lte", "signal", "rsrp", "sinr", "rsrq", "band", "cell",

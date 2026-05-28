@@ -1438,15 +1438,9 @@ class HardwareIntegrationPage(QWidget):
         super().__init__(parent)
         self._poll_workers: Dict[str, PluginPollingWorker] = {}
         self._cards:   Dict[str, HubCard] = {}
-        self._native_modem_connected: bool = False
         # Tab indices — set by _build_ui
         self._tabs: Optional[QTabWidget] = None
-        self._modem_tab_idx:     int = 1
-        self._mesh_tab_idx:      int = 2
-        self._suggested_tab_idx: int = 3
-        # Panels inside tabs
-        self._modem_panel:    Optional[_ModemDetailPanel]  = None
-        self._mesh_panel:     Optional[_RouterDetailPanel] = None
+        self._suggested_tab_idx: int = 1
         self._suggested_lay:  Optional[QVBoxLayout]        = None
 
         self._build_ui()
@@ -1555,34 +1549,7 @@ class HardwareIntegrationPage(QWidget):
 
         self._tabs.addTab(hub_tab, "Hardware")
 
-        # ── Tab 1: Modem — hidden until modem data arrives ────────────────────
-        modem_tab = QWidget()
-        modem_tab.setStyleSheet(f"background:{BG_DARK};")
-        modem_tab_lay = QVBoxLayout(modem_tab)
-        modem_tab_lay.setContentsMargins(0, 0, 0, 0)
-        modem_tab_lay.setSpacing(0)
-        self._modem_panel = _ModemDetailPanel()
-        modem_tab_lay.addWidget(self._modem_panel)
-        modem_tab_lay.addStretch()
-        self._modem_tab_idx = self._tabs.addTab(modem_tab, "Modem")
-        self._tabs.setTabVisible(self._modem_tab_idx, False)
-
-        # ── Tab 2: Mesh & Router — hidden until router data arrives ───────────
-        mesh_tab = QWidget()
-        mesh_tab.setStyleSheet(f"background:{BG_DARK};")
-        mesh_tab_lay = QVBoxLayout(mesh_tab)
-        mesh_tab_lay.setContentsMargins(0, 0, 0, 0)
-        mesh_tab_lay.setSpacing(0)
-        self._mesh_panel = _RouterDetailPanel()
-        self._mesh_panel.geo_map_ip.connect(self.geo_map_ip)
-        self._mesh_panel.port_scan_ip.connect(self.port_scan_ip)
-        self._mesh_panel.check_abuse_ip.connect(self.check_abuse_ip)
-        mesh_tab_lay.addWidget(self._mesh_panel)
-        mesh_tab_lay.addStretch()
-        self._mesh_tab_idx = self._tabs.addTab(mesh_tab, "Mesh & Router")
-        self._tabs.setTabVisible(self._mesh_tab_idx, False)
-
-        # ── Tab 3: Suggested — hidden until hw_detect finds matches ───────────
+        # ── Tab 1: Suggested — hidden until hw_detect finds matches ───────────
         suggested_tab = QWidget()
         suggested_tab.setStyleSheet(f"background:{BG_DARK};")
         suggested_outer = QVBoxLayout(suggested_tab)
@@ -1632,10 +1599,6 @@ class HardwareIntegrationPage(QWidget):
     def _bundled_plugins_dir() -> Path:
         return Path(__file__).parent.parent.parent / "plugins"
 
-    def _zte_plugin_imported(self) -> bool:
-        bdir = self._bundled_plugins_dir()
-        return str(bdir / "zte_plugin.py") in _load_paths()
-
     def _rebuild_hub(self) -> None:
         # Remove all existing card widgets
         while self._hub_lay.count():
@@ -1674,10 +1637,6 @@ class HardwareIntegrationPage(QWidget):
                 self._cards[path] = card
 
         self._hub_lay.addStretch()
-
-        # Phase 3: keep native modem tab hidden when ZTE plugin is active
-        if self._tabs and self._zte_plugin_imported():
-            self._tabs.setTabVisible(self._modem_tab_idx, False)
 
     def _rebuild_catalog(self) -> None:
         """Inject catalog cards for bundled plugins that are not yet imported."""
@@ -1797,6 +1756,22 @@ class HardwareIntegrationPage(QWidget):
                     )
                     return
 
+        # ── Credential dialog (before registering) ───────────────────────────
+        cred_label = meta.get("credential_label", "") if ok else ""
+        hw_ip      = meta.get("ip", "") if ok else ""
+        if cred_label and hw_ip:
+            try:
+                import keyring as _kr
+                existing_pw = _kr.get_password("NetSentinel/hardware", hw_ip)
+            except Exception:
+                existing_pw = None
+            if not existing_pw:
+                if not self._show_credential_dialog(
+                    meta.get("name", Path(path).stem), hw_ip, cred_label
+                ):
+                    self._set_status("Setup cancelled.", error=True)
+                    return
+
         paths = _load_paths()
         is_new = path not in paths
         if is_new:
@@ -1811,6 +1786,72 @@ class HardwareIntegrationPage(QWidget):
         if is_new:
             self.plugin_page_added.emit(path, label)
 
+    def _show_credential_dialog(self, name: str, default_ip: str, cred_label: str) -> bool:
+        """Show IP + password dialog before adding a plugin that requires credentials.
+
+        Saves the password to keyring on confirm.  Returns True on accept, False on cancel.
+        """
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Set up {name}")
+        dlg.setMinimumWidth(380)
+
+        _field_ss = (
+            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:3px 6px; font-size:12px;"
+        )
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(16, 16, 16, 12)
+        lay.setSpacing(10)
+
+        note = QLabel(f"Enter the connection details for <b>{name}</b>.")
+        note.setTextFormat(Qt.TextFormat.RichText)
+        note.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px;")
+        note.setWordWrap(True)
+        lay.addWidget(note)
+
+        form = QFormLayout()
+        form.setSpacing(6)
+
+        ip_edit = QLineEdit(default_ip)
+        ip_edit.setStyleSheet(_field_ss)
+        ip_edit.setPlaceholderText("e.g. 192.168.1.1")
+        form.addRow("IP Address", ip_edit)
+
+        pw_edit = QLineEdit()
+        pw_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        pw_edit.setStyleSheet(_field_ss)
+        pw_edit.setPlaceholderText(f"Device {cred_label.lower()}")
+        form.addRow(cred_label, pw_edit)
+        lay.addLayout(form)
+
+        keyring_note = QLabel("🔒  Password saved to OS keychain — never written to disk")
+        keyring_note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
+        lay.addWidget(keyring_note)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.button(QDialogButtonBox.StandardButton.Ok).setText("Add Integration")
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return False
+
+        ip  = ip_edit.text().strip()
+        pw  = pw_edit.text().strip()
+        if not ip or not pw:
+            return False
+
+        try:
+            import keyring as _kr
+            _kr.set_password("NetSentinel/hardware", ip, pw)
+        except Exception:
+            pass  # keyring unavailable — plugin will show its own credential field
+        return True
+
     def _start_all_poll_workers(self) -> None:
         for i, path in enumerate(_load_paths()):
             QTimer.singleShot(i * 3000, lambda p=path: self._start_poll_worker(p))
@@ -1820,8 +1861,6 @@ class HardwareIntegrationPage(QWidget):
             return
         ok, _, meta = _validate_script(path)
         hw_type = meta.get("type", "other") if ok else "other"
-        if hw_type == "modem" and self._native_modem_connected:
-            return
         worker = PluginPollingWorker(path=path, hw_type=hw_type, parent=self)
         worker.result.connect(lambda data, p=path: self._on_plugin_result(p, data),
                               Qt.ConnectionType.QueuedConnection)
@@ -1939,17 +1978,16 @@ class HardwareIntegrationPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
+        imported = set(_load_paths())
         for match in visible:
             plugin     = match["plugin"]
             confidence = match["confidence"]
             signals    = match["signals"]
-            # Modem tab visible → ZTE is already active; Mesh tab → Deco is active
-            native_active = (
-                (plugin.get("id") == "zte_mc889"
-                 and self._tabs.isTabVisible(self._modem_tab_idx)) or
-                (plugin.get("id") == "deco"
-                 and self._tabs.isTabVisible(self._mesh_tab_idx))
-            )
+            # Consider a plugin "already active" if its bundled script is imported
+            plugin_file = plugin.get("file", "")
+            native_active = bool(plugin_file and any(
+                Path(p).name == Path(plugin_file).name for p in imported
+            ))
             self._suggested_lay.addWidget(
                 self._build_detect_row(plugin, confidence, signals, native_active)
             )
@@ -2111,77 +2149,6 @@ class HardwareIntegrationPage(QWidget):
         if self._tabs is not None:
             self._tabs.setTabVisible(self._suggested_tab_idx, False)
 
-    # ── Modem / mesh tab data ────────────────────────────────────────────────
-
-    def on_modem_card_data(self, raw: dict) -> None:
-        """Update the Modem tab with incoming signal data (any modem source).
-
-        Also updates the shared hw_state singleton so speed test and other
-        surfaces can read the latest modem snapshot without a dashboard ref.
-        """
-        if self._tabs is None or self._modem_panel is None:
-            return
-        extra  = {k: v for k, v in raw.items() if k != "host"}
-        status = {"wan_ip": raw.get("wan_ip"), "extra": extra}
-        self._modem_panel.update(extra, status)
-
-        nt = raw.get("network_type") or ""
-        if "NR5G" in nt.upper() or "5G" in nt.upper():
-            suffix = " · 5G NR"
-        elif "LTE" in nt.upper():
-            suffix = " · LTE"
-        else:
-            suffix = ""
-        self._tabs.setTabText(self._modem_tab_idx, f"Modem{suffix}")
-        if not self._zte_plugin_imported():
-            self._tabs.setTabVisible(self._modem_tab_idx, True)
-
-        from modules.network_infrastructure import hw_state
-        hw_state.update_modem(raw, source="hub", hw_name=raw.get("host", "Modem"))
-
-    def on_mesh_card_data(self, units: list, clients: list, provider: str = "Mesh") -> None:
-        """Update the Mesh & Router tab with incoming router data (any source).
-
-        Also updates the shared hw_state singleton.
-        """
-        if self._tabs is None or self._mesh_panel is None:
-            return
-
-        nodes_dicts = [
-            {"name": getattr(u, "name", ""), "role": getattr(u, "role", "satellite"),
-             "mac": str(getattr(u, "mac", ""))}
-            for u in units
-        ]
-        clients_dicts = [
-            {"ip": getattr(c, "ip", ""), "mac": str(getattr(c, "mac", "")),
-             "hostname": getattr(c, "name", "") or "", "band": getattr(c, "band", ""),
-             "unit": getattr(c, "unit_name", ""),
-             "upload_kbps": getattr(c, "upload_kbps", 0),
-             "download_kbps": getattr(c, "download_kbps", 0)}
-            for c in clients
-        ]
-        status = {
-            "mesh_nodes": len(units),
-            "connected_clients": len(clients),
-            "extra": {"nodes": nodes_dicts},
-        }
-        self._mesh_panel.update(status, clients_dicts)
-
-        n_cli = len(clients)
-        n_nodes = len(units)
-        parts = []
-        if n_nodes:
-            parts.append(f"{n_nodes} node{'s' if n_nodes != 1 else ''}")
-        if n_cli:
-            parts.append(f"{n_cli} client{'s' if n_cli != 1 else ''}")
-        title = "Mesh & Router" + (f"  ·  {', '.join(parts)}" if parts else "")
-        self._tabs.setTabText(self._mesh_tab_idx, title)
-        self._tabs.setTabVisible(self._mesh_tab_idx, True)
-
-        from modules.network_infrastructure import hw_state
-        hw_state.update_router(clients_dicts, nodes_dicts,
-                               source="hub", hw_name=provider)
-
     def _copy_ai_prompt(self, plugin: dict, btn: QPushButton) -> None:
         """Copy the catalogue AI prompt to clipboard, replacing {ip} placeholder."""
         prompt = plugin.get("ai_prompt", "")
@@ -2191,61 +2158,6 @@ class HardwareIntegrationPage(QWidget):
         orig = btn.text()
         btn.setText("✓  Copied!")
         QTimer.singleShot(2000, lambda: btn.setText(orig))
-
-    # ── Native modem coordination ─────────────────────────────────────────────
-
-    def set_native_modem_connected(self, connected: bool) -> None:
-        """Called by dashboard when ZteWorker connects/disconnects.
-
-        ZTE MC889 supports only one web session.  While the native ZteWorker is
-        active, modem plugin workers are stopped and data flows via
-        on_native_modem_data instead.  When ZteWorker stops, the plugin worker
-        takes over automatically.
-        """
-        self._native_modem_connected = connected
-        modem_paths = [
-            p for p in list(self._poll_workers.keys())
-            if _validate_script(p)[2].get("type") == "modem"
-        ]
-        if connected:
-            for p in modem_paths:
-                self._stop_poll_worker(p)
-        else:
-            for p in _load_paths():
-                if _validate_script(p)[2].get("type") == "modem":
-                    self._start_poll_worker(p)
-
-    def on_native_modem_data(self, raw: dict) -> None:
-        """Forward ZteWorker signal payload to modem-type plugin cards.
-
-        Converts the flat ZteSignalData dict to the {info, status, clients}
-        envelope that HubCard.update_result() expects.  Saves to QSettings so
-        the card shows data on next launch without waiting for first poll.
-        """
-        ts = time.time()
-        for path, card in self._cards.items():
-            ok, _, meta = _validate_script(path)
-            if not ok or meta.get("type") != "modem":
-                continue
-            extra = {k: v for k, v in raw.items() if k != "host"}
-            status = {
-                "wan_ip":            raw.get("wan_ip"),
-                "uptime_sec":        None,
-                "download_mbps":     None,
-                "upload_mbps":       None,
-                "signal_dbm":        raw.get("nr5g_rsrp_dbm") or raw.get("lte_rsrp_dbm"),
-                "connected_clients": None,
-                "extra":             extra,
-            }
-            info = {
-                "name": meta.get("name", "Modem"),
-                "type": "modem",
-                "ip":   raw.get("host", meta.get("ip", "")),
-            }
-            data = {"info": info, "status": status, "clients": [],
-                    "_path": path, "_ts": ts}
-            _save_last_result(path, data)
-            card.update_result(data, ts)
 
     # ── Guide content (collapsible) ───────────────────────────────────────────
 

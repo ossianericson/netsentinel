@@ -163,14 +163,10 @@ def _smoke_test() -> None:
         "ui.pages.timeline_page",
         "modules.digest_builder",
         "ui.pages.trend_page",
-        "ui.pages.mesh_router_page",
-        "ui.pages.modem_page",
         "ui.skeleton",
         "modules.colours",
         "modules.deco_client",
         "modules.wifi_heatmap",
-        "workers.mesh_worker",
-        "workers.zte_worker",
         "ui.pages.hardware_integration_page",
         "ui.pages.wifi_monitor_page",
         "workers.wifi_monitor_worker",
@@ -373,7 +369,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.44")
+    app.setApplicationVersion("1.9.45")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -406,7 +402,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.44")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.45")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)

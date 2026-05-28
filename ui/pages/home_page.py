@@ -403,6 +403,12 @@ def _load_grade_history() -> list[float]:
         return []
 
 
+def _bundled_plugin_path(filename: str) -> str:
+    """Return the absolute path of a bundled plugin script."""
+    from pathlib import Path as _P
+    return str(_P(__file__).parent.parent.parent / "plugins" / filename)
+
+
 class HomePage(QWidget):
     """Simple landing page for new / Home-mode users."""
 
@@ -416,6 +422,8 @@ class HomePage(QWidget):
     investigate_live_requested = pyqtSignal()
     #: Emitted when the user clicks an alert row; carries the raw alert object.
     alert_view_requested = pyqtSignal(object)
+    #: Emitted when user clicks "Add" on a hardware checklist step; carries plugin path.
+    add_plugin_requested = pyqtSignal(str)
 
     # ── _MiniCard ─────────────────────────────────────────────────────────────
 
@@ -905,117 +913,9 @@ class HomePage(QWidget):
         _ds_lay.addWidget(_ds_dismiss)
         lay.addWidget(self._dashboard_strip)
 
-        # ── Hardware setup strip (shown until dismissed) ──────────────────────
-        _hw_dismissed = QSettings("NetSentinel", "NetSentinel").value(
-            "home/hw_setup_dismissed", False, type=bool
-        )
-        self._hw_setup_strip = QFrame()
-        self._hw_setup_strip.setObjectName("hwSetupStrip")
-        self._hw_setup_strip.setStyleSheet(
-            f"QFrame#hwSetupStrip {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
-        self._hw_setup_strip.setVisible(not _hw_dismissed)
-        _hw_outer = QVBoxLayout(self._hw_setup_strip)
-        _hw_outer.setContentsMargins(12, 10, 12, 10)
-        _hw_outer.setSpacing(8)
-
-        _hw_hdr_row = QHBoxLayout()
-        _hw_hdr_row.setSpacing(6)
-        _hw_hdr_lbl = QLabel("◆  Get more from NetSentinel — connect your hardware")
-        _hw_hdr_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:600; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
-        _hw_hdr_sub = QLabel(
-            "These integrations enrich your Devices table and Network Map with real hostnames,"
-            " signal data, and mesh topology — the rest of the app gets better."
-        )
-        _hw_hdr_sub.setWordWrap(True)
-        _hw_hdr_sub.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
-        _hw_dismiss = QPushButton("×")
-        _hw_dismiss.setFixedSize(20, 20)
-        _hw_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
-        _hw_dismiss.setToolTip("Dismiss — you can find these pages in the Monitor and Extend sections")
-        _hw_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
-        )
-        _hw_dismiss.clicked.connect(self._dismiss_hw_setup_strip)
-        _hw_hdr_row.addWidget(_hw_hdr_lbl)
-        _hw_hdr_row.addStretch()
-        _hw_hdr_row.addWidget(_hw_dismiss)
-        _hw_outer.addLayout(_hw_hdr_row)
-        _hw_outer.addWidget(_hw_hdr_sub)
-
-        _hw_cards_row = QHBoxLayout()
-        _hw_cards_row.setSpacing(8)
-        _HW_SETUP_ITEMS = [
-            (
-                "▶  5G Modem",
-                "ZTE MC889",
-                "Live SINR, RSRP, band & cell ID logged alongside every speed test.",
-                "Hardware",
-            ),
-            (
-                "▶  Mesh Router",
-                "TP-Link Deco XE75",
-                "Real hostnames and mesh topology — makes Devices & Network Map accurate.",
-                "Hardware",
-            ),
-            (
-                "▶  Hardware Devices",
-                "USB · Serial · GPIO",
-                "Connect physical sensors and network hardware to extend NetSentinel.",
-                "Hardware",
-            ),
-        ]
-        for _hw_title, _hw_sub, _hw_desc, _hw_nav in _HW_SETUP_ITEMS:
-            _card = QFrame()
-            _card.setObjectName("hwSetupCard")
-            _card.setStyleSheet(
-                f"QFrame#hwSetupCard {{ background:{BG_DARK}; border:1px solid {BORDER};"
-                f" border-radius:4px; }}"
-            )
-            _card_lay = QVBoxLayout(_card)
-            _card_lay.setContentsMargins(10, 8, 10, 8)
-            _card_lay.setSpacing(3)
-            _ct = QLabel(_hw_title)
-            _ct.setStyleSheet(
-                f"font-size:11px; font-weight:600; color:{TEXT_PRIMARY};"
-                f" background:transparent; border:none;"
-            )
-            _cs = QLabel(_hw_sub)
-            _cs.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
-            _cd = QLabel(_hw_desc)
-            _cd.setWordWrap(True)
-            _cd.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
-            _cb = QPushButton("Set up →")
-            _cb.setFixedHeight(22)
-            _cb.setCursor(Qt.CursorShape.PointingHandCursor)
-            _cb.setStyleSheet(
-                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-                f" border-radius:3px; font-size:10px; padding:0 8px; }}"
-                f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-                f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            )
-            _cb.clicked.connect(lambda _=False, t=_hw_nav: self.navigate_to.emit(t))
-            _card_lay.addWidget(_ct)
-            _card_lay.addWidget(_cs)
-            _card_lay.addWidget(_cd)
-            _card_lay.addStretch()
-            _card_lay.addWidget(_cb)
-            _hw_cards_row.addWidget(_card)
-        _hw_outer.addLayout(_hw_cards_row)
-        lay.addWidget(self._hw_setup_strip)
+        # ── GETTING STARTED checklist (replaces separate hw strip) ──────────────
+        self._setup_card_top = self._build_getting_started_card()
+        lay.addWidget(self._setup_card_top)
 
         # ── Since you were last here (hidden until data loaded) ───────────────
         self._last_visit_card = QFrame()
@@ -1796,96 +1696,6 @@ class HomePage(QWidget):
         self._alert_inner.addWidget(self._no_other_alerts_lbl)
         lay.addWidget(self._alert_card)
 
-        # ── Setup checklist card (NUX-4) ──────────────────────────────────────
-        self._setup_card = QFrame()
-        self._setup_card.setObjectName("setupCard")
-        self._setup_card.setStyleSheet(
-            f"QFrame#setupCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
-        _sc_outer = QVBoxLayout(self._setup_card)
-        _sc_outer.setContentsMargins(12, 8, 12, 10)
-        _sc_outer.setSpacing(0)
-
-        # Header row — shows "Setup" or "✓ Setup complete" chip; clickable to collapse
-        self._setup_collapsed = False
-        _sc_hdr_row = QHBoxLayout()
-        _sc_hdr_row.setSpacing(8)
-        self._setup_hdr_lbl = QLabel("SETUP CHECKLIST")
-        self._setup_hdr_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-            " border:none; letter-spacing:1px;"
-        )
-        self._setup_progress_lbl = QLabel("0/5 done")
-        self._setup_progress_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
-        _sc_collapse_btn = QPushButton("▼")
-        _sc_collapse_btn.setFixedSize(18, 18)
-        _sc_collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _sc_collapse_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:10px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
-        self._setup_collapse_btn = _sc_collapse_btn
-        _sc_collapse_btn.clicked.connect(self._setup_toggle_collapse)
-        _sc_hdr_row.addWidget(self._setup_hdr_lbl)
-        _sc_hdr_row.addWidget(self._setup_progress_lbl)
-        _sc_hdr_row.addStretch()
-        _sc_hdr_row.addWidget(_sc_collapse_btn)
-        _sc_outer.addLayout(_sc_hdr_row)
-
-        # Body — checklist rows
-        self._setup_body = QWidget()
-        self._setup_body.setStyleSheet("background:transparent;")
-        _sc_body_lay = QVBoxLayout(self._setup_body)
-        _sc_body_lay.setContentsMargins(0, 6, 0, 0)
-        _sc_body_lay.setSpacing(5)
-
-        _setup_steps = [
-            ("Run your first scan",        "Devices"),
-            ("Turn on ARP Spoof Watch",    "ARP Spoof Watch"),
-            ("Add a notification channel", "Notifications"),
-            ("Enable at least one alert rule", "Notifications"),
-            ("Run a Network Grade",        "Network Grade"),
-        ]
-        self._setup_check_lbls: list[QLabel] = []
-        for title, target in _setup_steps:
-            _row = QWidget()
-            _row.setStyleSheet("background:transparent;")
-            _rl = QHBoxLayout(_row)
-            _rl.setContentsMargins(0, 0, 0, 0)
-            _rl.setSpacing(8)
-            _chk = QLabel("○")
-            _chk.setFixedWidth(14)
-            _chk.setStyleSheet(
-                f"font-size:12px; color:{TEXT_MUTED}; background:transparent; border:none;"
-            )
-            self._setup_check_lbls.append(_chk)
-            _step_lbl = QLabel(title)
-            _step_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
-            _nav_btn = QPushButton("→")
-            _nav_btn.setFlat(True)
-            _nav_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            _nav_btn.setStyleSheet(
-                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-                f" border:none; padding:0; }}"
-                f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
-                f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
-            )
-            _nav_btn.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
-            _rl.addWidget(_chk)
-            _rl.addWidget(_step_lbl, 1)
-            _rl.addWidget(_nav_btn)
-            _sc_body_lay.addWidget(_row)
-
-        _sc_outer.addWidget(self._setup_body)
-        lay.addWidget(self._setup_card)
-
         # ── Quick tips card (dismissible; hidden once user dismisses) ──────────
         self._tips_card = QFrame()
         self._tips_card.setObjectName("tipsCard")
@@ -2060,11 +1870,10 @@ class HomePage(QWidget):
         )
         self._dashboard_strip.setVisible(False)
 
-    def _dismiss_hw_setup_strip(self) -> None:
-        QSettings("NetSentinel", "NetSentinel").setValue(
-            "home/hw_setup_dismissed", True
-        )
-        self._hw_setup_strip.setVisible(False)
+    @pyqtSlot()
+    def refresh_hw_strip(self) -> None:
+        """Compatibility shim — delegates to refresh_checklist."""
+        self.refresh_checklist()
 
     def _dismiss_tips(self) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("home/tips_dismissed", True)
@@ -2138,7 +1947,7 @@ class HomePage(QWidget):
             return
         qs = QSettings("NetSentinel", "NetSentinel")
         scan_count = int(qs.value("home/scan_count", 0))
-        if scan_count >= 5 and all(self._checklist_states()):
+        if scan_count >= 5 and all(self._checklist_states().values()):
             self._apply_recurring_layout(True)
 
     def _apply_recurring_layout(self, on: bool) -> None:
@@ -2405,66 +2214,244 @@ class HomePage(QWidget):
                 self._action_card.setVisible(False)
 
     def _scroll_to_setup_card(self) -> None:
-        """Scroll to / expand the setup checklist card (NUX-4)."""
-        if not hasattr(self, "_setup_card"):
-            return
-        self._setup_card.setVisible(True)
-        if self._setup_collapsed:
+        """Scroll to / expand the Getting Started card."""
+        card = getattr(self, "_setup_card_top", None) or getattr(self, "_setup_card", None)
+        if card:
+            card.setVisible(True)
+        if getattr(self, "_setup_collapsed", False):
             self._setup_toggle_collapse()
 
-    # ── NUX-4 setup checklist ─────────────────────────────────────────────────
+    # ── Getting Started checklist builder ─────────────────────────────────────
+
+    def _build_getting_started_card(self) -> "QFrame":
+        """Build the unified Getting Started onboarding card."""
+        from pathlib import Path as _P
+
+        card = QFrame()
+        card.setObjectName("gettingStartedCard")
+        card.setStyleSheet(
+            f"QFrame#gettingStartedCard {{"
+            f" background:{BG_CARD};"
+            f" border:1px solid {BORDER};"
+            f" border-left:3px solid {ACCENT};"
+            f" border-radius:{CARD_RADIUS};"
+            f"}}"
+        )
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(14, 10, 12, 12)
+        outer.setSpacing(0)
+
+        self._setup_collapsed = False
+        hdr_row = QHBoxLayout()
+        hdr_row.setSpacing(8)
+
+        self._setup_hdr_lbl = QLabel("GETTING STARTED")
+        self._setup_hdr_lbl.setStyleSheet(
+            f"font-size:10px; font-weight:700; color:{ACCENT};"
+            " background:transparent; border:none; letter-spacing:1.5px;"
+        )
+        self._setup_progress_lbl = QLabel("")
+        self._setup_progress_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        self._setup_collapse_btn = QPushButton("▼")
+        self._setup_collapse_btn.setFixedSize(18, 18)
+        self._setup_collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._setup_collapse_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:10px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+        self._setup_collapse_btn.clicked.connect(self._setup_toggle_collapse)
+        hdr_row.addWidget(self._setup_hdr_lbl)
+        hdr_row.addWidget(self._setup_progress_lbl)
+        hdr_row.addStretch()
+        hdr_row.addWidget(self._setup_collapse_btn)
+        outer.addLayout(hdr_row)
+
+        self._setup_body = QWidget()
+        self._setup_body.setStyleSheet("background:transparent;")
+        body_lay = QVBoxLayout(self._setup_body)
+        body_lay.setContentsMargins(0, 8, 0, 0)
+        body_lay.setSpacing(0)
+
+        zte_path  = _bundled_plugin_path("zte_plugin.py")
+        deco_path = _bundled_plugin_path("deco_plugin.py")
+
+        # (key, title, subtitle, plugin_path_or_None, nav_target_or_None)
+        _STEPS = [
+            ("hw_zte",  "Connect 5G Modem",       "ZTE MC889 — signal data in every speed test",  zte_path,  None),
+            ("hw_deco", "Connect Mesh Router",     "Deco XE75 — real hostnames in Devices & Map", deco_path, None),
+            ("scan",    "Run your first scan",     "Discover all devices on your network",          None,     "Devices"),
+            ("grade",   "Run a Network Grade",     "Score your network across 8 dimensions",        None,     "Network Grade"),
+            ("arp",     "Turn on ARP Spoof Watch", "Detect address spoofing in real time",           None,     "ARP Spoof Watch"),
+        ]
+
+        self._setup_check_lbls: dict[str, QLabel]       = {}
+        self._setup_step_rows:  dict[str, QWidget]      = {}
+        self._setup_step_btns:  dict[str, QPushButton]  = {}
+        _hw_keys = {"hw_zte", "hw_deco"}
+        prev_section = None
+
+        for key, title, subtitle, plugin_path, nav_target in _STEPS:
+            section = "hw" if key in _hw_keys else "core"
+            if section != prev_section:
+                if prev_section == "hw":
+                    sep = QFrame()
+                    sep.setFrameShape(QFrame.Shape.HLine)
+                    sep.setStyleSheet(f"border:none; border-top:1px solid {BORDER};")
+                    sep.setFixedHeight(1)
+                    body_lay.addSpacing(4)
+                    body_lay.addWidget(sep)
+                    body_lay.addSpacing(4)
+                sec_lbl = QLabel("HARDWARE CONNECTIONS" if section == "hw" else "CORE SETUP")
+                sec_lbl.setStyleSheet(
+                    f"font-size:9px; font-weight:600; color:{TEXT_MUTED};"
+                    " background:transparent; border:none; letter-spacing:0.8px;"
+                    " padding-bottom:2px;"
+                )
+                body_lay.addWidget(sec_lbl)
+                prev_section = section
+
+            row = QWidget()
+            row.setObjectName(f"setupRow_{key}")
+            row.setStyleSheet("background:transparent;")
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 3, 0, 3)
+            rl.setSpacing(8)
+
+            chk = QLabel("○")
+            chk.setFixedWidth(14)
+            chk.setStyleSheet(
+                f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+            self._setup_check_lbls[key] = chk
+
+            text_col = QVBoxLayout()
+            text_col.setSpacing(1)
+            title_lbl = QLabel(title)
+            title_lbl.setStyleSheet(
+                f"font-size:11px; font-weight:500; color:{TEXT_PRIMARY};"
+                " background:transparent; border:none;"
+            )
+            sub_lbl = QLabel(subtitle)
+            sub_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            text_col.addWidget(title_lbl)
+            text_col.addWidget(sub_lbl)
+
+            if plugin_path:
+                btn = QPushButton("Add →")
+                btn.setFixedHeight(24)
+                btn.setFixedWidth(72)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.setStyleSheet(
+                    f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+                    f" border-radius:3px; font-size:10px; font-weight:600; padding:0 8px; }}"
+                    f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+                    f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+                )
+                _p = plugin_path
+                btn.clicked.connect(lambda _=False, p=_p: self.add_plugin_requested.emit(p))
+            else:
+                btn = QPushButton("→")
+                btn.setFlat(True)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.setStyleSheet(
+                    f"QPushButton {{ color:{ACCENT}; font-size:14px; background:transparent;"
+                    f" border:none; padding:0 4px; }}"
+                    f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+                    f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
+                )
+                _t = nav_target
+                btn.clicked.connect(lambda _=False, t=_t: self.navigate_to.emit(t))
+
+            self._setup_step_btns[key] = btn
+            self._setup_step_rows[key] = row
+
+            rl.addWidget(chk)
+            rl.addLayout(text_col, 1)
+            rl.addWidget(btn)
+            body_lay.addWidget(row)
+
+        outer.addWidget(self._setup_body)
+        # Keep _setup_card alias for legacy references
+        self._setup_card = card
+        return card
 
     def _setup_toggle_collapse(self) -> None:
         self._setup_collapsed = not self._setup_collapsed
         self._setup_body.setVisible(not self._setup_collapsed)
         self._setup_collapse_btn.setText("▶" if self._setup_collapsed else "▼")
 
-    def _checklist_states(self) -> list[bool]:
+    def _checklist_states(self) -> dict:
+        import json as _json
         qs = QSettings("NetSentinel", "NetSentinel")
-        scan_done  = self._device_count > 0
-        arp_done   = qs.value("home/setup/arp_started", False, type=bool)
-        channel_done = any(
-            qs.value(k, False, type=bool)
-            for k in qs.allKeys()
-            if k.startswith("notif/") and k.endswith("_enabled")
-        )
-        rule_done  = qs.value("notif/any_rule_enabled", False, type=bool)
-        grade_done = qs.value("grade/last_run", False, type=bool)
-        return [scan_done, arp_done, channel_done, rule_done, grade_done]
+        try:
+            imported = set(_json.loads(qs.value("hardware/custom_scripts", "[]") or "[]"))
+        except Exception:
+            imported = set()
+        zte_path  = _bundled_plugin_path("zte_plugin.py")
+        deco_path = _bundled_plugin_path("deco_plugin.py")
+        return {
+            "hw_zte":  zte_path  in imported,
+            "hw_deco": deco_path in imported,
+            "scan":    self._device_count > 0,
+            "grade":   qs.value("grade/last_run", False, type=bool),
+            "arp":     qs.value("home/setup/arp_started", False, type=bool),
+        }
 
     def refresh_checklist(self) -> None:
-        """Re-read step states and update checklist UI. Call from showEvent and cycle_done."""
+        """Re-read step states and update checklist UI."""
         if not hasattr(self, "_setup_check_lbls"):
             return
         states = self._checklist_states()
-        done_count = sum(states)
-        for chk, done in zip(self._setup_check_lbls, states):
+        done_count = sum(states.values())
+        total = len(states)
+        for key, chk in self._setup_check_lbls.items():
+            done = states.get(key, False)
             if done:
                 chk.setText("✓")
                 chk.setStyleSheet(
-                    f"font-size:12px; color:{GREEN}; background:transparent; border:none;"
+                    f"font-size:13px; color:{GREEN}; background:transparent; border:none;"
                 )
+                # Dim the action button once done
+                btn = self._setup_step_btns.get(key)
+                if btn:
+                    btn.setEnabled(False)
+                    if key.startswith("hw_"):
+                        btn.setText("✓ Added")
+                    btn.setStyleSheet(
+                        f"QPushButton {{ color:{GREEN}; font-size:10px; background:transparent;"
+                        f" border:none; padding:0 4px; }}"
+                        f"QPushButton:hover   {{ color:{GREEN}; background:transparent; }}"
+                        f"QPushButton:pressed {{ color:{GREEN}; background:transparent; }}"
+                        f"QPushButton:disabled {{ color:{GREEN}; background:transparent; }}"
+                    )
             else:
                 chk.setText("○")
                 chk.setStyleSheet(
-                    f"font-size:12px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                    f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
                 )
-        self._setup_progress_lbl.setText(f"{done_count}/5 done")
-        all_done = done_count == 5
+        self._setup_progress_lbl.setText(f"{done_count}/{total} done")
+        all_done = done_count == total
         if all_done:
             self._setup_hdr_lbl.setText("✓ SETUP COMPLETE")
             self._setup_hdr_lbl.setStyleSheet(
-                f"font-size:10px; color:{GREEN}; background:transparent;"
-                " border:none; letter-spacing:1px;"
+                f"font-size:10px; font-weight:700; color:{GREEN};"
+                " background:transparent; border:none; letter-spacing:1.5px;"
             )
-            if not self._setup_collapsed:
-                self._setup_toggle_collapse()
-            self._setup_card.setVisible(False)
+            from PyQt6.QtCore import QTimer as _QT
+            _QT.singleShot(2000, lambda: (
+                getattr(self, "_setup_card_top", None) or getattr(self, "_setup_card", None)
+            ) and (getattr(self, "_setup_card_top", None) or self._setup_card).setVisible(False))
         else:
-            self._setup_hdr_lbl.setText("SETUP CHECKLIST")
+            self._setup_hdr_lbl.setText("GETTING STARTED")
             self._setup_hdr_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-                " border:none; letter-spacing:1px;"
+                f"font-size:10px; font-weight:700; color:{ACCENT};"
+                " background:transparent; border:none; letter-spacing:1.5px;"
             )
 
     def refresh_diag_summary(self) -> None:

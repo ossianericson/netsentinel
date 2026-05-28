@@ -320,6 +320,19 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.45
+
+**Added**
+- Home page unified "Getting Started" checklist — hardware setup (ZTE MC889, Deco XE75) and core setup steps (scan, grade, ARP) in one prominent card; "Add →" buttons open the credential dialog directly without navigating away; card hides after all 5 steps are ticked
+
+**Changed**
+- `modem_page.py`, `mesh_router_page.py`, `workers/zte_worker.py`, `workers/mesh_worker.py` removed; ZTE MC889 and TP-Link Deco XE75 are managed exclusively via the hardware plugin system
+- `hardware_integration_page.py`: modem and mesh tabs removed; credential dialog wired into `_import_bundled` so password is requested on first add and stored in OS keychain
+
+**Fixed**
+- `home_page.py`: `_check_recurring_mode` was iterating dict keys (always truthy) instead of values when testing whether all setup steps are complete
+- `first_run_dialog.py`: removed unused `QRect` import (CodeQL `py/unused-import` #694)
+
 ### v1.9.44
 
 **Added**
