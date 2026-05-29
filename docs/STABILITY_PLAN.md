@@ -438,30 +438,30 @@ structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
 
 | # | Item | Sprint | Version Target | Notes |
 |---|---|---|---|---|
-| 1 | S0-1: Identify Qt-crash culprit | 1 | v1.9.55 | Bisect using conftest logger |
-| 2 | S0-2: Session-scoped QApplication fixture | 1 | v1.9.55 | Prerequisite for S0-4 |
-| 3 | S0-3: QSettings isolation fixture | 1 | v1.9.55 | |
-| 4 | S0-4: Full suite green gate | 1 | v1.9.55 | Hard gate — no further work until green |
-| 5 | S4-1: `test_codeql_prevention.py` | 1 | v1.9.55 | Fast win, no structural change |
-| 6 | S8-1: Mark robustness plan complete | 1 | v1.9.55 | Housekeeping |
-| 7 | S1-1: Extract `ui/nav/` package | 2 | v1.9.56 | Biggest risk/reward |
-| 8 | S1-2: Extract scan-result wiring | 2 | v1.9.56 | |
-| 9 | S1-3: Extract help panel | 2 | v1.9.56 | |
-| 10 | S1-4: Add dashboard LOC budget test | 2 | v1.9.56 | |
-| 11 | S3-1: Extract HubCard to widget | 3 | v1.9.57 | Largest page file |
-| 12 | S3-2: Extract OverviewTile | 3 | v1.9.57 | |
-| 13 | S3-3: Extract home-page section widgets | 3 | v1.9.57 | |
-| 14 | S2-1: Split metric_store | 4 | v1.9.58 | Schema migration is highest risk |
-| 15 | S2-2: Split report_exporter | 4 | v1.9.58 | |
-| 16 | S2-3: Split utils | 4 | v1.9.58 | |
-| 17 | S2-4: Tests for new module files | 4 | v1.9.58 | |
-| 18 | S5-1: Worker coverage audit | 5 | v1.9.59 | Enumerate gaps |
-| 19 | S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.59 | |
-| 20 | S5-3: `_running` flag audit | 5 | v1.9.59 | |
-| 21 | S6-1: WAL growth guard | 5 | v1.9.59 | |
-| 22 | S6-2: VACUUM on migration | 5 | v1.9.59 | |
-| 23 | S6-3: Connection busy timeout | 5 | v1.9.59 | |
-| 24 | S6-4: `test_metric_store_concurrency.py` | 5 | v1.9.59 | |
+| 1 | ✅ S0-1: Identify Qt-crash culprit | 1 | v1.9.56 | Root cause: QFileSystemWatcher OS threads in test_hardware_integration.py; fixed with MagicMock patch + explicit cleanup |
+| 2 | ✅ S0-2: Session-scoped QApplication fixture | 1 | v1.9.56 | Was already in conftest.py; removed module-level QApplication from 7 test files (RULE-WIN3) |
+| 3 | ✅ S0-3: QSettings isolation fixture | 1 | v1.9.56 | `isolated_settings` autouse fixture added to conftest.py |
+| 4 | ✅ S0-4: Full suite green gate | 1 | v1.9.56 | 2136 passed, 4 skipped, exit 0 — no crash |
+| 5 | ✅ S4-1: `test_codeql_prevention.py` | 1 | v1.9.56 | bare-except + URL-substring AST checks |
+| 6 | ✅ S8-1: Mark robustness plan complete | 1 | v1.9.56 | PLUGIN_ROBUSTNESS_PLAN.md already in docs/completed/ |
+| 7 | S1-1: Extract `ui/nav/` package | 2 | v1.9.57 | Biggest risk/reward |
+| 8 | S1-2: Extract scan-result wiring | 2 | v1.9.57 | |
+| 9 | S1-3: Extract help panel | 2 | v1.9.57 | |
+| 10 | S1-4: Add dashboard LOC budget test | 2 | v1.9.57 | |
+| 11 | S3-1: Extract HubCard to widget | 3 | v1.9.58 | Largest page file |
+| 12 | S3-2: Extract OverviewTile | 3 | v1.9.58 | |
+| 13 | S3-3: Extract home-page section widgets | 3 | v1.9.58 | |
+| 14 | S2-1: Split metric_store | 4 | v1.9.59 | Schema migration is highest risk |
+| 15 | S2-2: Split report_exporter | 4 | v1.9.59 | |
+| 16 | S2-3: Split utils | 4 | v1.9.59 | |
+| 17 | S2-4: Tests for new module files | 4 | v1.9.59 | |
+| 18 | S5-1: Worker coverage audit | 5 | v1.9.60 | Enumerate gaps |
+| 19 | S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.60 | |
+| 20 | S5-3: `_running` flag audit | 5 | v1.9.60 | |
+| 21 | S6-1: WAL growth guard | 5 | v1.9.60 | |
+| 22 | S6-2: VACUUM on migration | 5 | v1.9.60 | |
+| 23 | S6-3: Connection busy timeout | 5 | v1.9.60 | |
+| 24 | S6-4: `test_metric_store_concurrency.py` | 5 | v1.9.60 | |
 | 25 | S7-1: Lazy-import audit | 6 | v1.9.60 | |
 | 26 | S7-2: Startup profiling script | 6 | v1.9.60 | |
 | 27 | S7-3: Debug log rotation | 6 | v1.9.60 | |
@@ -496,4 +496,4 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 ---
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
-*Sprint 1 target: v1.9.55.  Full plan target: v1.9.60.*
+*Sprint 1 complete: v1.9.56 (2026-05-29).  Sprint 2 target: v1.9.57.  Full plan target: v1.9.61.*
