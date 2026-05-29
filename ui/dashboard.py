@@ -2919,11 +2919,23 @@ class Dashboard(QMainWindow):
             # Try by instance_id (new format), fall back to path (old format)
             _hw_cached = _hw_last(_hw_inst["id"]) or _hw_last(_hw_inst["path"])
             if _hw_cached and _hw_cached.get("info", {}).get("type") != "modem":
+                _hw_clients = _hw_cached.get("clients", [])
                 self._plugin_enrichments[_hw_inst["id"]] = {
                     _hw_nm(c.get("mac", "")): c
-                    for c in _hw_cached.get("clients", [])
+                    for c in _hw_clients
                     if c.get("mac")
                 }
+                # Also pre-populate _plugin_nodes so the topology renders as
+                # mesh (not flat) on the first scan before the first poll cycle.
+                _hw_nodes = _hw_cached.get("status", {}).get("extra", {}).get("nodes", [])
+                _hw_type  = _hw_cached.get("info", {}).get("type", "other")
+                _hw_name  = (_hw_cached.get("info", {}).get("name", "")
+                             or _hw_inst.get("name", "")
+                             or _hw_inst.get("path", "plugin"))
+                if not _hw_nodes and _hw_clients and _hw_type in ("router", "mesh", "ap"):
+                    _hw_nodes = [{"name": _hw_name, "role": "primary",
+                                  "ip": _hw_cached.get("info", {}).get("ip", ""), "mac": ""}]
+                self._plugin_nodes[_hw_inst["id"]] = _hw_nodes
 
         # Create one PluginDevicePage per registered instance.
         # Pages are registered in the nav by _build_pro_nav() further below.
