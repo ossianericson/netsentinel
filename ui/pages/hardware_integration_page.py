@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QSettings, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QCursor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -81,6 +81,7 @@ from ui.styles import (
     TH_BG,
     TH_BORDER,
     TH_TEXT,
+    WHITE,
 )
 
 _SETTINGS_KEY    = "hardware/custom_scripts"
@@ -877,6 +878,121 @@ class _RouterDetailPanel(QFrame):
             menu.exec(QCursor.pos())
 
 
+# ── Plugin connection tester (live-test before registration) ─────────────────
+
+class _PluginConnectionTester(QThread):
+    """Runs get_info() + get_status() in a background thread with temporary credentials.
+
+    Emits success(dict) if both calls return without error, or failure(str) with
+    a human-readable message.  The caller is responsible for persisting the
+    credential to keyring ONLY on success.
+    """
+
+    success = pyqtSignal(dict)  # {"info": ..., "status": ...}
+    failure = pyqtSignal(str)   # plain-English error message
+
+    def __init__(self, path: str, ip: str, pw: str, parent=None) -> None:
+        super().__init__(parent)
+        self._path = path
+        self._ip   = ip
+        self._pw   = pw
+
+    def run(self) -> None:
+        import importlib.util
+        try:
+            # Temporarily save credential so the plugin can read it
+            import keyring as _kr
+            _kr.set_password("NetSentinel/hardware", self._ip, self._pw)
+        except Exception:
+            pass  # keyring unavailable — plugin reads from its own field
+
+        try:
+            if not Path(self._path).exists():
+                self.failure.emit(f"Plugin file not found: {self._path}")
+                return
+
+            # Ensure NetSentinel modules are importable
+            _ns_root = next(
+                (p for p in __import__("sys").path
+                 if p and Path(p, "modules", "utils.py").exists()),
+                str(Path(__file__).parent.parent.parent),
+            )
+            import sys as _sys
+            if _ns_root not in _sys.path:
+                _sys.path.insert(0, _ns_root)
+
+            spec = importlib.util.spec_from_file_location(
+                f"_ns_test_{Path(self._path).stem}", self._path
+            )
+            if spec is None or spec.loader is None:
+                self.failure.emit("Cannot load plugin file.")
+                return
+
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)  # type: ignore[union-attr]
+
+            get_info   = getattr(mod, "get_info",   None)
+            get_status = getattr(mod, "get_status", None)
+
+            if not callable(get_info) or not callable(get_status):
+                self.failure.emit("Plugin is missing get_info() or get_status().")
+                return
+
+            info   = get_info()
+            status = get_status()
+
+            # Treat an error inside extra as a failure so the user can fix it now
+            err = (status.get("extra") or {}).get("error", "")
+            if err:
+                self.failure.emit(_classify_error(str(err)))
+                return
+
+            self.success.emit({"info": info, "status": status})
+
+        except SystemExit:
+            self.failure.emit("Plugin called sys.exit() unexpectedly.")
+        except Exception as exc:
+            self.failure.emit(_classify_error(str(exc)))
+
+
+def _classify_error(msg: str) -> str:
+    """Convert a raw or prefixed error string into a human-readable sentence.
+
+    Handles structured prefixes emitted by plugin _fmt_err() helpers:
+      DEPS: <msg>  — missing pip package
+      AUTH: <msg>  — authentication failure
+      NET:  <msg>  — network / connectivity failure
+      ERR:  <msg>  — other error
+    Also parses unstructured legacy messages for backwards compatibility.
+    """
+    import re
+    # Structured prefixes from plugin _fmt_err()
+    if msg.startswith("DEPS:"):
+        body = msg[5:].strip()
+        m = re.search(r"pip install\s+(\S+)", body)
+        if m:
+            return f"Missing library: {m.group(1)}\nRun: pip install {m.group(1)}"
+        return f"Missing dependency — {body}"
+    if msg.startswith("AUTH:"):
+        return f"Authentication failed — {msg[5:].strip()}"
+    if msg.startswith("NET:"):
+        return f"Cannot reach the device — {msg[4:].strip()}"
+    if msg.startswith("ERR:"):
+        return msg[4:].strip()
+    # Legacy / unstructured fallback
+    m = re.search(r"pip install\s+(\S+)", msg)
+    if m:
+        return f"Missing library: {m.group(1)}\nRun: pip install {m.group(1)}"
+    low = msg.lower()
+    if "wrong password" in low or "auth" in low or "login" in low or "401" in low:
+        return "Authentication failed — check your password."
+    if "connection refused" in low or "timed out" in low or "unreachable" in low:
+        return "Cannot reach the device — check the IP address and that the device is online."
+    if "no saved password" in low or "no password" in low:
+        return "No password saved — enter a password and try again."
+    return msg
+
+
 # ── Pip install dialog ────────────────────────────────────────────────────────
 
 class PipInstallDialog(QDialog):
@@ -1195,8 +1311,15 @@ class HubCard(QFrame):
         status  = data.get("status", {}) or {}
         # Guard: QSettings round-trip can corrupt list-of-dicts to list-of-strings
         clients = [c for c in (data.get("clients") or []) if isinstance(c, dict)]
-        extra   = status.get("extra", {})
+        extra   = status.get("extra", {}) or {}
         hw_type = info.get("type", self._hw_type)
+
+        # If the plugin returned an error inside extra (e.g. missing pip package),
+        # route it through set_error so the pip-install button appears if applicable.
+        err_msg = extra.get("error", "")
+        if err_msg:
+            self.set_error(str(err_msg))
+            return
 
         self._dot.setStyleSheet(f"color:{GREEN}; font-size:13px; border:none;")
         self._ts_lbl.setText(_age_str(self._last_ts))
@@ -1756,6 +1879,24 @@ class HardwareIntegrationPage(QWidget):
                     )
                     return
 
+        # ── Copy to stable AppData location ─────────────────────────────────
+        # Bundled plugins live inside the PyInstaller _MEI* temp dir which is
+        # recreated with a new name on every launch.  Storing that path in
+        # QSettings means it is invalid after the first restart.  Copy once to
+        # the user-writable AppData plugins dir and use that stable path.
+        import shutil as _shutil
+        from modules.utils import get_app_data_dir as _gad
+        try:
+            _dest_dir = _gad() / "plugins"
+            _dest_dir.mkdir(parents=True, exist_ok=True)
+            _dest = _dest_dir / Path(path).name
+            if Path(path).resolve() != _dest.resolve():
+                _shutil.copy2(path, _dest)
+            path = str(_dest)
+        except Exception as _exc:
+            self._set_status(f"Failed to install plugin: {_exc}", error=True)
+            return
+
         # ── Credential dialog (before registering) ───────────────────────────
         cred_label = meta.get("credential_label", "") if ok else ""
         hw_ip      = meta.get("ip", "") if ok else ""
@@ -1767,7 +1908,8 @@ class HardwareIntegrationPage(QWidget):
                 existing_pw = None
             if not existing_pw:
                 if not self._show_credential_dialog(
-                    meta.get("name", Path(path).stem), hw_ip, cred_label
+                    meta.get("name", Path(path).stem), hw_ip, cred_label,
+                    plugin_path=path,
                 ):
                     self._set_status("Setup cancelled.", error=True)
                     return
@@ -1786,15 +1928,21 @@ class HardwareIntegrationPage(QWidget):
         if is_new:
             self.plugin_page_added.emit(path, label)
 
-    def _show_credential_dialog(self, name: str, default_ip: str, cred_label: str) -> bool:
-        """Show IP + password dialog before adding a plugin that requires credentials.
+    def _show_credential_dialog(self, name: str, default_ip: str, cred_label: str,
+                                plugin_path: str = "") -> bool:
+        """Credential dialog with live connection test.
 
-        Saves the password to keyring on confirm.  Returns True on accept, False on cancel.
+        Shows IP + password fields.  The primary button ("Test & Add") runs a
+        live connection test in a background thread before accepting.  The dialog
+        only closes with Accepted after a successful test, so the plugin is never
+        registered when it cannot connect.
+
+        Returns True on success (credential saved to keyring), False on cancel.
         """
         from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout
         dlg = QDialog(self)
         dlg.setWindowTitle(f"Set up {name}")
-        dlg.setMinimumWidth(380)
+        dlg.setMinimumWidth(400)
 
         _field_ss = (
             f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
@@ -1829,32 +1977,170 @@ class HardwareIntegrationPage(QWidget):
         keyring_note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
         lay.addWidget(keyring_note)
 
-        btns = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        # ── Status area ───────────────────────────────────────────────────────
+        status_lbl = QLabel("")
+        status_lbl.setWordWrap(True)
+        status_lbl.setVisible(False)
+        status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; padding:4px 0;")
+        lay.addWidget(status_lbl)
+
+        # ── Buttons ───────────────────────────────────────────────────────────
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+        btn_row.addStretch()
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+            f" border-radius:3px; padding:5px 14px; font-size:12px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
-        btns.button(QDialogButtonBox.StandardButton.Ok).setText("Add Integration")
-        btns.accepted.connect(dlg.accept)
-        btns.rejected.connect(dlg.reject)
-        lay.addWidget(btns)
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_row.addWidget(cancel_btn)
 
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return False
+        test_btn = QPushButton("Test & Add")
+        test_btn.setDefault(True)
+        test_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:3px; padding:5px 18px; font-size:12px; font-weight:600; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
+        )
+        btn_row.addWidget(test_btn)
+        lay.addLayout(btn_row)
 
-        ip  = ip_edit.text().strip()
-        pw  = pw_edit.text().strip()
-        if not ip or not pw:
-            return False
+        # ── Live-test logic ───────────────────────────────────────────────────
+        _tester: list[_PluginConnectionTester] = []
 
-        try:
-            import keyring as _kr
-            _kr.set_password("NetSentinel/hardware", ip, pw)
-        except Exception:
-            pass  # keyring unavailable — plugin will show its own credential field
-        return True
+        def _run_test() -> None:
+            ip = ip_edit.text().strip()
+            pw = pw_edit.text().strip()
+            if not ip or not pw:
+                _set_status("Enter both IP address and password.", RED)
+                return
+
+            test_btn.setEnabled(False)
+            cancel_btn.setEnabled(False)
+            ip_edit.setEnabled(False)
+            pw_edit.setEnabled(False)
+            _set_status("Testing connection…  ⏳", TEXT_SECONDARY)
+
+            tester = _PluginConnectionTester(plugin_path or "", ip, pw, parent=dlg)
+            _tester.append(tester)
+
+            def _on_success(result: dict) -> None:
+                _set_status("✓  Connected successfully — adding integration.", GREEN)
+                # Credential already saved by tester; persist permanently
+                try:
+                    import keyring as _kr
+                    _kr.set_password("NetSentinel/hardware", ip, pw)
+                except Exception:
+                    pass
+                QTimer.singleShot(600, dlg.accept)
+
+            def _on_failure(msg: str) -> None:
+                # Remove the temporary credential written by tester
+                try:
+                    import keyring as _kr
+                    _kr.delete_password("NetSentinel/hardware", ip)
+                except Exception:
+                    pass
+                _set_status(f"✗  {msg}", RED)
+                test_btn.setEnabled(True)
+                cancel_btn.setEnabled(True)
+                ip_edit.setEnabled(True)
+                pw_edit.setEnabled(True)
+                test_btn.setText("Retry")
+
+            tester.success.connect(_on_success, Qt.ConnectionType.QueuedConnection)
+            tester.failure.connect(_on_failure, Qt.ConnectionType.QueuedConnection)
+            tester.start()
+
+        def _set_status(msg: str, color: str) -> None:
+            status_lbl.setText(msg)
+            status_lbl.setStyleSheet(
+                f"font-size:11px; color:{color}; padding:4px 0; background:transparent;"
+            )
+            status_lbl.setVisible(True)
+
+        test_btn.clicked.connect(_run_test)
+        pw_edit.returnPressed.connect(_run_test)
+
+        result = dlg.exec()
+
+        # Stop any running tester
+        for t in _tester:
+            if t.isRunning():
+                t.wait(500)
+
+        return result == QDialog.DialogCode.Accepted
 
     def _start_all_poll_workers(self) -> None:
+        self._migrate_stale_paths()
         for i, path in enumerate(_load_paths()):
+            # Smoke-check after cards are rendered (100 ms gives Qt a layout pass)
+            QTimer.singleShot(100, lambda p=path: self._smoke_check_deps(p))
             QTimer.singleShot(i * 3000, lambda p=path: self._start_poll_worker(p))
+
+    def _smoke_check_deps(self, path: str) -> None:
+        """Check PYPI_PACKAGE dep is importable; set card to error immediately if not."""
+        ok, _, meta = _validate_script(path)
+        if not ok:
+            return
+        pypi_pkg = meta.get("pypi_package", "")
+        if not pypi_pkg:
+            return
+        import importlib.util
+        module_name = pypi_pkg.replace("-", "_")
+        if importlib.util.find_spec(module_name) is not None:
+            return
+        err_msg = f"DEPS: {pypi_pkg} not installed. Run: pip install {pypi_pkg}"
+        card = self._cards.get(path)
+        if card:
+            card.set_error(_classify_error(err_msg))
+
+    def _migrate_stale_paths(self) -> None:
+        """Replace any _MEI* temp paths saved in QSettings with AppData copies.
+
+        PyInstaller extracts to a new _MEI<n> directory on every launch; paths
+        saved from a previous run are immediately invalid.  This one-time migration
+        copies the plugin to get_app_data_dir()/plugins/ and updates QSettings so
+        subsequent launches find the file without user action.
+        """
+        import shutil as _sh
+        from modules.utils import get_app_data_dir as _gad
+        paths = _load_paths()
+        changed = False
+        new_paths = []
+        for p in paths:
+            if Path(p).exists():
+                new_paths.append(p)
+                continue
+            # Try to find the same filename in AppData plugins dir
+            appdata_copy = _gad() / "plugins" / Path(p).name
+            if appdata_copy.exists():
+                new_paths.append(str(appdata_copy))
+                changed = True
+                continue
+            # Plugin source is still accessible (running from source after a
+            # bundle run): copy from the source plugins/ dir if available
+            from pathlib import Path as _P
+            src_candidate = _P(__file__).parent.parent.parent / "plugins" / _P(p).name
+            if src_candidate.exists():
+                try:
+                    appdata_copy.parent.mkdir(parents=True, exist_ok=True)
+                    _sh.copy2(src_candidate, appdata_copy)
+                    new_paths.append(str(appdata_copy))
+                    changed = True
+                    continue
+                except Exception:
+                    pass
+            # Path is genuinely gone — keep it so the card can show the error
+            new_paths.append(p)
+        if changed:
+            _save_paths(new_paths)
 
     def _start_poll_worker(self, path: str) -> None:
         if path in self._poll_workers:

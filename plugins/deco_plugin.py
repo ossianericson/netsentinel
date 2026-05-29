@@ -25,6 +25,7 @@ HARDWARE_TYPE    = "router"
 HARDWARE_IP      = "192.168.68.1"   # default; keyring lookup uses the saved host at runtime
 DESCRIPTION      = "TP-Link Deco mesh systems — all Deco models with TP-Link account login"
 CREDENTIAL_LABEL = "Password"
+PYPI_PACKAGE     = "tplinkrouterc6u"
 
 
 def _load_credentials() -> tuple[str, str]:
@@ -59,6 +60,19 @@ def _get_client():
 
 
 # ── Required interface ────────────────────────────────────────────────────────
+
+
+def _fmt_err(exc: Exception) -> str:
+    """Return a structured error string with a machine-readable prefix."""
+    msg = str(exc)
+    if isinstance(exc, ImportError) or 'pip install' in msg:
+        return 'DEPS: ' + msg
+    lm = msg.lower()
+    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+        return 'AUTH: ' + msg
+    if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network')):
+        return 'NET: ' + msg
+    return 'ERR: ' + msg
 
 def get_info() -> dict:
     host, _ = _load_credentials()
@@ -95,7 +109,7 @@ def get_status() -> dict:
             "wan_ip": None, "uptime_sec": None,
             "download_mbps": None, "upload_mbps": None,
             "signal_dbm": None, "connected_clients": None,
-            "extra": {"error": str(exc)},
+            "extra": {"error": _fmt_err(exc)},
         }
 
 
@@ -167,7 +181,7 @@ if "--netsentinel" in _sys.argv:
     except (MeshAuthError, MeshApiError, RuntimeError) as _exc:
         _status = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
                    "upload_mbps": None, "signal_dbm": None,
-                   "connected_clients": None, "extra": {"error": str(_exc)}}
+                   "connected_clients": None, "extra": {"error": _fmt_err(_exc)}}
         _client_list = []
         _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP,
                  "manufacturer": "TP-Link", "model": "Deco XE75", "firmware": None}

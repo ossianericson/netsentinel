@@ -1,13 +1,14 @@
 """
 PluginPollingWorker — persistent hardware plugin poller.
 
-Mirrors the ZteWorker / DecoMeshWorker pattern: runs in a QThread,
-executes the plugin subprocess repeatedly on a tuned interval, and
-emits result / error signals just like the native workers.
+Runs in a QThread, loads each plugin in-process via importlib, and emits
+result / error signals.  In-process execution (rather than subprocess) works
+correctly in both source-run and PyInstaller frozen builds — in a frozen build
+sys.executable is the .exe, not a Python interpreter, so subprocess would fail.
 
 Intervals (tuned by hardware type):
-    modem     60 s   — frequent signal updates for Overview / Modem page
-    router   120 s   — frequent enough for device tracking / enrichment
+    modem     30 s    — frequent signal updates for Overview page
+    router   120 s    — frequent enough for device tracking / enrichment
     ap       120 s
     switch   300 s
     other    300 s
@@ -18,9 +19,6 @@ Stop: call stop() then wait().
 
 from __future__ import annotations
 
-import json
-import os
-import subprocess
 import sys
 import threading
 import time
@@ -35,13 +33,17 @@ class PluginPollingWorker(QThread):
     error  = pyqtSignal(str)
 
     _INTERVALS: dict[str, int] = {
-        "modem":  30,    # match ZteWorker cadence
+        "modem":  30,
         "router": 120,
         "ap":     120,
         "switch": 300,
     }
     _DEFAULT_INTERVAL = 300
-    _SUBPROCESS_TIMEOUT = 90   # seconds
+
+    # Fallback repo-root hint — used only when sys.path has no entry that contains
+    # modules/utils.py (rare; in practice sys.path is always correct when running
+    # from source or from the frozen bundle).
+    _NS_ROOT_FALLBACK = str(Path(__file__).parent.parent)
 
     def __init__(self, path: str, hw_type: str, parent=None) -> None:
         super().__init__(parent)
@@ -68,43 +70,67 @@ class PluginPollingWorker(QThread):
         while not self._stop:
             self._trigger.clear()
             self._run_once()
-
             if not self._stop:
-                # Interruptible sleep — wakes within 0.5 s of stop() or trigger_now()
                 self._trigger.wait(timeout=self._interval_s)
 
-    # Repo root (workers/ → parent) so plugins can do `from modules.xxx import`
-    _NS_ROOT = str(Path(__file__).parent.parent)
-
     def _run_once(self) -> None:
-        try:
-            env = os.environ.copy()
-            # Ensure plugins can import NetSentinel modules regardless of cwd
-            existing = env.get("PYTHONPATH", "")
-            paths = [self._NS_ROOT] + ([existing] if existing else [])
-            env["PYTHONPATH"] = os.pathsep.join(paths)
+        """Load the plugin in-process and call get_info() / get_status() directly.
 
-            proc = subprocess.run(
-                [sys.executable, self._path, "--netsentinel"],
-                capture_output=True,
-                text=True,
-                timeout=self._SUBPROCESS_TIMEOUT,
-                env=env,
+        This works in both source-run and PyInstaller frozen builds.  A subprocess
+        approach breaks in frozen builds because sys.executable is the .exe, not a
+        Python interpreter.
+        """
+        import importlib.util
+
+        if not Path(self._path).exists():
+            self.error.emit(f"Plugin file not found: {self._path}")
+            return
+
+        # Ensure NetSentinel modules are importable.  Look for the live entry in
+        # sys.path that actually contains modules/utils.py (works from source,
+        # from AppData copy, and from frozen bundle where modules are compiled in).
+        _ns_root = next(
+            (p for p in sys.path if p and Path(p, "modules", "utils.py").exists()),
+            self._NS_ROOT_FALLBACK,
+        )
+        if _ns_root not in sys.path:
+            sys.path.insert(0, _ns_root)
+
+        try:
+            spec = importlib.util.spec_from_file_location(
+                f"_ns_hw_{Path(self._path).stem}", self._path
             )
+            if spec is None or spec.loader is None:
+                self.error.emit(f"Cannot load plugin: {self._path}")
+                return
+
+            mod = importlib.util.module_from_spec(spec)
+            # Execute module top-level (defines functions, constants; does NOT run
+            # the --netsentinel shim because sys.argv won't contain that flag).
+            spec.loader.exec_module(mod)  # type: ignore[union-attr]
+
             if self._stop:
                 return
-            if proc.returncode == 0 and proc.stdout.strip():
-                try:
-                    data = json.loads(proc.stdout.strip())
-                    self.result.emit(data)
-                except json.JSONDecodeError as exc:
-                    self.error.emit(f"JSON parse error: {exc}")
-            else:
-                # Surface the last non-empty stderr line
-                lines = [l for l in (proc.stderr or "").splitlines() if l.strip()]
-                msg = lines[-1] if lines else f"plugin exited {proc.returncode}"
-                self.error.emit(msg)
-        except subprocess.TimeoutExpired:
-            self.error.emit(f"Plugin timed out after {self._SUBPROCESS_TIMEOUT} s")
+
+            get_info    = getattr(mod, "get_info",    None)
+            get_status  = getattr(mod, "get_status",  None)
+            get_clients = getattr(mod, "get_clients", None)
+
+            if not callable(get_info) or not callable(get_status):
+                self.error.emit("Plugin missing get_info() or get_status()")
+                return
+
+            info    = get_info()
+            if self._stop:
+                return
+            status  = get_status()
+            if self._stop:
+                return
+            clients = get_clients() if callable(get_clients) else []
+
+            self.result.emit({"info": info, "status": status, "clients": clients})
+
+        except SystemExit:
+            pass  # plugin shim called sys.exit() — harmless, treat as success-less run
         except Exception as exc:
             self.error.emit(str(exc))

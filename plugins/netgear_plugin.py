@@ -52,6 +52,19 @@ def _load_password() -> str:
 
 # ── Plugin interface ──────────────────────────────────────────────────────────
 
+
+def _fmt_err(exc: Exception) -> str:
+    """Return a structured error string with a machine-readable prefix."""
+    msg = str(exc)
+    if isinstance(exc, ImportError) or 'pip install' in msg:
+        return 'DEPS: ' + msg
+    lm = msg.lower()
+    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+        return 'AUTH: ' + msg
+    if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network')):
+        return 'NET: ' + msg
+    return 'ERR: ' + msg
+
 def get_info() -> dict:
     return {
         "name":         HARDWARE_NAME,
@@ -115,7 +128,7 @@ if "--netsentinel" in sys.argv:
     except Exception as _exc:
         _status  = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
                     "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
-                    "extra": {"error": str(_exc)}}
+                    "extra": {"error": _fmt_err(_exc)}}
         _clients = []
     sys.stdout.write(_json.dumps({"info": _info, "status": _status, "clients": _clients},
                                  default=str) + "\n")

@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BORDER, BG_CARD, BG_DARK,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, AMBER_BG, BORDER, BG_CARD, BG_DARK,
     BG_ALT_ROW, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE, BG_HOVER,
 )
@@ -233,16 +233,23 @@ class PluginDevicePage(QWidget):
         self._root.setContentsMargins(16, 16, 16, 16)
         self._root.setSpacing(12)
 
-        # Error / info banner
-        self._banner = QLabel()
-        self._banner.setWordWrap(True)
-        self._banner.setContentsMargins(10, 6, 10, 6)
-        self._banner.setStyleSheet(
-            f"background:{RED}22; color:{RED}; border:1px solid {RED}44;"
-            " border-radius:4px; font-size:12px;"
-        )
-        self._banner.setVisible(False)
-        self._root.addWidget(self._banner)
+        # Error / info banner — frame so we can embed an action button
+        self._banner_frame = QFrame()
+        self._banner_frame.setVisible(False)
+        _banner_lay = QHBoxLayout(self._banner_frame)
+        _banner_lay.setContentsMargins(10, 6, 10, 6)
+        _banner_lay.setSpacing(8)
+        self._banner_lbl = QLabel()
+        self._banner_lbl.setWordWrap(True)
+        self._banner_lbl.setStyleSheet("font-size:12px; background:transparent; border:none;")
+        _banner_lay.addWidget(self._banner_lbl, 1)
+        self._banner_install_btn = QPushButton()
+        self._banner_install_btn.setVisible(False)
+        self._banner_install_btn.setFixedHeight(24)
+        _banner_lay.addWidget(self._banner_install_btn)
+        self._root.addWidget(self._banner_frame)
+        # keep _banner as alias so old code paths still work
+        self._banner = self._banner_lbl
 
         # Timestamp row
         self._ts_lbl = QLabel("No data yet — run a Test from the Hardware page.")
@@ -625,12 +632,50 @@ class PluginDevicePage(QWidget):
                                       if self._cred_remember_cb.isChecked() else "")
 
     def _show_banner(self, text: str, color: str) -> None:
-        self._banner.setText(text)
-        self._banner.setStyleSheet(
-            f"background:{color}22; color:{color}; border:1px solid {color}44;"
-            " border-radius:4px; font-size:12px; padding:6px 10px;"
+        import re as _re
+        self._banner_lbl.setText(text)
+        self._banner_lbl.setStyleSheet(
+            f"font-size:12px; color:{color}; background:transparent; border:none;"
         )
-        self._banner.setVisible(True)
+        self._banner_frame.setStyleSheet(
+            f"background:{color}22; border:1px solid {color}44; border-radius:4px;"
+        )
+        # Detect "pip install <pkg>" and show install button
+        m = _re.search(r"pip install\s+(\S+)", text)
+        if m:
+            pkg = m.group(1)
+            self._banner_install_btn.setText(f"⬇ Install {pkg}")
+            self._banner_install_btn.setStyleSheet(
+                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+                f" border-radius:3px; padding:3px 10px; font-size:11px; }}"
+                f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+                f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            )
+            try:
+                self._banner_install_btn.clicked.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+            self._banner_install_btn.clicked.connect(
+                lambda: self._pip_install(pkg)
+            )
+            self._banner_install_btn.setVisible(True)
+        else:
+            self._banner_install_btn.setVisible(False)
+        self._banner_frame.setVisible(True)
+
+    def _pip_install(self, pkg: str) -> None:
+        """Launch PipInstallDialog for a missing package and refresh on success."""
+        try:
+            from ui.pages.hardware_integration_page import PipInstallDialog
+            from PyQt6.QtWidgets import QDialog
+            dlg = PipInstallDialog(pkg, parent=self)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                import importlib
+                importlib.invalidate_caches()
+                self._banner_frame.setVisible(False)
+        except Exception as exc:
+            self._banner_lbl.setText(f"Install failed: {exc}")
+            self._banner_frame.setVisible(True)
 
     def _fill_modem(self, status: dict, extra: dict) -> None:
         self._m_wan_ip.setText(_fmt(status.get("wan_ip")))

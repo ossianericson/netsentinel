@@ -140,7 +140,7 @@ class DecoMeshClient:
             from tplinkrouterc6u import TPLinkDecoClient
         except ImportError as exc:
             raise MeshAuthError(
-                "tplinkrouterc6u is not installed. "
+                "DEPS: tplinkrouterc6u not installed. "
                 "Run: pip install tplinkrouterc6u"
             ) from exc
 

@@ -52,6 +52,19 @@ def _load_credentials() -> tuple[str, str]:
 
 # ── Required interface ────────────────────────────────────────────────────────
 
+
+def _fmt_err(exc: Exception) -> str:
+    """Return a structured error string with a machine-readable prefix."""
+    msg = str(exc)
+    if isinstance(exc, ImportError) or 'pip install' in msg:
+        return 'DEPS: ' + msg
+    lm = msg.lower()
+    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+        return 'AUTH: ' + msg
+    if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network')):
+        return 'NET: ' + msg
+    return 'ERR: ' + msg
+
 def get_info() -> dict:
     host, _ = _load_credentials()
     return {
@@ -107,7 +120,7 @@ def get_status() -> dict:
             "wan_ip": None, "uptime_sec": None,
             "download_mbps": None, "upload_mbps": None,
             "signal_dbm": None, "connected_clients": None,
-            "extra": {"error": str(exc)},
+            "extra": {"error": _fmt_err(exc)},
         }
 
 
@@ -173,7 +186,7 @@ if "--netsentinel" in _sys.argv:
     except (ZteAuthError, ZteApiError, RuntimeError) as _exc:
         _status = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
                    "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
-                   "extra": {"error": str(_exc)}}
+                   "extra": {"error": _fmt_err(_exc)}}
         _info = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP,
                  "manufacturer": "ZTE", "model": "MC889", "firmware": None}
     _sys.stdout.write(_json.dumps({
