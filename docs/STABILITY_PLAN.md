@@ -412,6 +412,262 @@ symlink (or copy on Windows) pointing to the latest run.
 
 ---
 
+## S9 — Module Test Coverage (RULE-T1 Completion)
+
+**Source:** APM rules/docs/codebase audit — 2026-05-29.
+
+36 of 70 module files have no corresponding test file. This is a blocking RULE-T1
+violation and means more than half the business logic layer has zero automated
+regression coverage. Any change to an untested module is undetectable until it
+reaches the user.
+
+### S9-1  Tier 1 — utility and plumbing modules
+Lowest-risk files; no network I/O. Add import test + at least one behavioural test
+for each:
+- `modules/colours.py` — test colour constant names and hex format
+- `modules/exporter.py` — test CSV/JSON serialisation with mock data
+- `modules/log_chart.py` — test chart data builder with stub log entries
+- `modules/mac_lookup.py` — test OUI prefix extraction (no network required)
+- `modules/name_resolver.py` — test fallback resolution chain with mocked calls
+- `modules/nl_query.py` — test query parsing for known patterns
+- `modules/protocol_animator.py` — test scene building returns valid AnimNode/AnimStep
+- `modules/web_dashboard.py` — test `build_html()` returns valid HTML string
+
+### S9-2  Tier 2 — scan and detection modules
+Each requires mocked scapy/nmap/socket to avoid live network calls:
+- `modules/arp_monitor.py`
+- `modules/bandwidth_monitor.py`
+- `modules/dhcp_detector.py`
+- `modules/dhcp_lease_scanner.py`
+- `modules/dns_correlator.py`
+- `modules/dns_zone_scanner.py`
+- `modules/ha_detector.py`
+- `modules/internet_exposure.py`
+- `modules/os_fingerprint.py`
+- `modules/port_scanner.py`
+- `modules/private_endpoint_checker.py`
+- `modules/rogue_device.py`
+- `modules/smb_enumerator.py`
+- `modules/snmp_poller.py`
+- `modules/storm_analyser.py`
+- `modules/stp_detector.py`
+- `modules/syn_scanner.py`
+- `modules/wifi_scanner.py`
+
+Mark all with `@pytest.mark.live` if they require real network; ensure CI skips them.
+
+### S9-3  Tier 3 — report, enrichment and display modules
+- `modules/cloud_metadata.py` — test IMDS URL construction, mock `requests`
+- `modules/diagnostic_card.py` — test PNG/HTML generation with stub grade data
+- `modules/digest_builder.py` — test 7-day summary output with stub MetricStore
+- `modules/hw_detect.py` — test device list parsing with mock pyserial/usb data
+- `modules/lab_scenarios.py` — test scenario list completeness and result dataclasses
+- `modules/network_diagnostics.py` — test ping/DNS result schema
+- `modules/process_monitor.py` — test socket-map parsing with mock psutil data
+- `modules/report_exporter.py` (supplemental; S2-2 split may change structure)
+- `modules/speed_tester.py` — test backend cascade fallback logic
+- `modules/threat_intel.py` — test DB lookup with stub data; mock AbuseIPDB calls
+
+### S9-4  Coverage gate for module tests
+Add `tests/test_module_coverage_gate.py`:
+
+```python
+EXEMPT = {"metric_store_schema", "metric_store_io", ...}  # post-split fragments
+
+def test_every_module_has_a_test_file():
+    modules = {p.stem for p in (ROOT / "modules").glob("*.py") if not p.stem.startswith("_")}
+    tests   = {p.stem.replace("test_", "") for p in (ROOT / "tests").glob("test_*.py")}
+    missing = modules - tests - EXEMPT
+    assert not missing, f"Modules with no test file: {sorted(missing)}"
+```
+
+This gate prevents regressions silently accruing new untested modules.
+
+---
+
+## S10 — Hardcoded Colour Purge (RULE-1 / RULE-AH3)
+
+**Source:** APM rules/docs/codebase audit — 2026-05-29.
+
+44 UI files contain raw hex colour strings (`#005A9E`, `#EAEAEA`, `#fff`, etc.) in
+`setStyleSheet()` calls and widget constructors. RULE-1 and RULE-AH3 both prohibit
+this. The practical risk is theme-switching breakage: colours hardcoded in page
+files override the theme tokens in `ui/styles.py`, causing widgets to ignore
+Midnight Pro and Obsidian Neon themes entirely.
+
+### S10-1  Inventory missing tokens in `ui/styles.py`
+Before touching page files, audit all hex strings found in the 44 files and
+determine which are already present in `ui/styles.py` under a different name, and
+which are genuinely missing. Add missing tokens to `ui/styles.py` with descriptive
+names. Never add a token whose value duplicates an existing one — use the existing
+name. Common gaps identified in the audit:
+- `#254A6E` — deep navy (used in automation, connections pages)
+- `#005A9E`, `#005FA3`, `#006BBD` — accent dark variants → map to `ACCENT_DARK`
+- `#EAEAEA`, `#ECECEC` — light grey borders → map to `BORDER` or add `BORDER_LIGHT`
+- `#9BA8B4`, `#B0C4D8` — muted blue-grey → map to `TEXT_SECONDARY` or add token
+- `#1e2d3d`, `#3a4f63` — dark chart backgrounds → add to `modules/colours.py`
+
+### S10-2  Batch-replace hardcoded hex in `ui/pages/*.py`
+Work file-by-file. For each replacement:
+1. Identify the token name in `ui/styles.py`.
+2. Ensure `from ui.styles import TOKEN` is at the top of the file.
+3. Replace the hex string with the token inside the f-string or direct call.
+4. Run `python tools/debug_launch.py` after every file — do not batch across files.
+
+Priority order (largest violation count first):
+`baseline_page`, `geo_map_page`, `dhcp_lease_page`, `diagnosis_page`, `dns_zone_page`,
+`home_page`, `hardware_integration_page`, then remaining 30 pages.
+
+### S10-3  Batch-replace hardcoded hex in `ui/widgets/*.py` and root `ui/` files
+Same process as S10-2. Affected: `coach_mark.py`, `density_toggle.py`,
+`device_popover.py`, `explainer_panel.py`, `page_header.py`, `protocol_canvas.py`,
+`pulsing_dot.py`, `dashboard.py`, `live_graph.py`, `first_run_dialog.py`,
+`system_tray.py`, `npcap_banner.py`.
+
+### S10-4  Enforce via `test_codeql_prevention.py` extension
+Extend the existing `test_codeql_prevention.py` (created in S4-1) with:
+
+```python
+_HEX_PATTERN = re.compile(r'["\'](#[0-9A-Fa-f]{3,6})["\']')
+_ALLOWED_FILES = {Path("ui/styles.py"), Path("modules/colours.py")}
+
+def test_no_hardcoded_hex_outside_style_files():
+    offenders = []
+    for path in ROOT.glob("ui/**/*.py"):
+        if path.relative_to(ROOT) in _ALLOWED_FILES:
+            continue
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if _HEX_PATTERN.match(repr(node.value)):
+                    offenders.append((path.name, node.lineno, node.value))
+    assert not offenders, f"Hardcoded hex colours: {offenders[:10]}"
+```
+
+This gate is CI-blocking once S10-2 and S10-3 are complete.
+
+---
+
+## S11 — Page Help & Feature Discoverability (RULE-D1 + RULE-D2)
+
+**Source:** APM rules/docs/codebase audit — 2026-05-29.
+
+Two discoverability rules are violated across the board:
+- **RULE-D1**: zero `_PAGE_HELP` entries exist in `dashboard.py` (61 nav labels need one each)
+- **RULE-D2**: 25 of 61 pages have no `_FEATURES` entry; 4 existing entries reference stale nav labels
+
+Without `_PAGE_HELP`, the `?` help button on every page is silently empty.
+Without `_FEATURES`, nearly half the app's pages are invisible to the Feature Guide.
+
+### S11-1  Add `_PAGE_HELP` entries for all 61 nav labels
+`_PAGE_HELP` entries live in `ui/dashboard.py`. Add all 61 entries following the
+pattern in RULE-D1. Each entry needs a short title (≤60 chars) and one or two plain-
+English sentences. Group entries by nav section so they can be reviewed at a glance.
+Example for a currently-missing entry:
+```python
+_PAGE_HELP["Threat Intel"] = (
+    "Threat Intelligence Lookup",
+    "Query IPs found in your scan against AbuseIPDB and the local threat database. "
+    "First use requires consent to enable external lookups."
+)
+```
+
+### S11-2  Fix 4 stale `_FEATURES` page references in `discover_page.py`
+The `"page"` field in `_FEATURES` must exactly match the nav label string passed to
+`_nav_add_rail_item()`. Four entries are broken:
+
+| Current (broken) | Correct nav label |
+|---|---|
+| `"Diagnose"` | `"What's Wrong?"` |
+| `"Logs"` | `"Network Logger"` |
+| `"Network Timeline"` | `None` (not navigable) |
+| `"Threat Intelligence"` | `"Threat Intel"` |
+
+### S11-3  Add 25 missing `_FEATURES` entries in `discover_page.py`
+Every page listed below must have an entry added to `_FEATURES` (all six fields
+mandatory per RULE-D2). Assign to the most accurate `group`:
+
+| Page label | Suggested group |
+|---|---|
+| Bandwidth Usage | `"Monitoring"` |
+| CVE Tracker | `"Security"` |
+| Cloud Metadata Probe | `"Security"` |
+| Config Snapshots | `"Advanced"` |
+| Custom Triggers | `"Advanced"` |
+| DHCP Rogue Monitor | `"Security"` |
+| Device Risk Score | `"Security"` |
+| Exposed to Internet | `"Security"` |
+| Full Device Discovery | `"Security"` |
+| Help & Reference | `"Hidden Features"` |
+| Home Automation | `"Monitoring"` |
+| IPv6 Devices | `"Monitoring"` |
+| Inventory Changes | `"Monitoring"` |
+| Login Test | `"Security"` |
+| Maintenance Windows | `"Advanced"` |
+| OS Detection | `"Security"` |
+| Port Scan (TCP) | `"Security"` |
+| Port Scan (UDP) | `"Security"` |
+| Private Endpoint Check | `"Security"` |
+| Recon Plugins | `"Security"` |
+| SNMP Device Info | `"Advanced"` |
+| Threat Intel | `"Security"` |
+| Trend Forecasts | `"Advanced"` |
+| Windows Shares (SMB) | `"Security"` |
+
+### S11-4  CI gate for help + feature parity
+Extend `tests/test_nav_completeness.py` with two new checks:
+1. Every label in `_nav_item_labels` has a non-empty `_PAGE_HELP` entry.
+2. Every label in `_nav_item_labels` has a `_FEATURES` entry whose `"page"` either
+   matches the label exactly or is `None` (intentionally non-navigable).
+
+---
+
+## S12 — PyInstaller Spec Integrity (RULE-B1)
+
+**Source:** APM rules/docs/codebase audit — 2026-05-29.
+
+Two modules are missing from `hiddenimports` in `NetSentinel.spec`. Both exist on
+disk and are documented in the architecture, but will produce `ModuleNotFoundError`
+at runtime in an installed build — a failure mode that does not appear in source
+runs or the test suite, only in production.
+
+Four additional spec entries are duplicated, which adds noise but is otherwise
+harmless.
+
+### S12-1  Add missing hiddenimports
+In `NetSentinel.spec`, add to the `hiddenimports` list:
+- `"modules.nspkg"`
+- `"modules.plugin_tools"`
+
+### S12-2  Deduplicate spec entries
+Remove the duplicate occurrences of:
+- `"modules.deco_client"` (appears twice)
+- `"modules.diagnostic_card"` (appears twice)
+- `"modules.wifi_heatmap"` (appears twice)
+- `"ui.pages.trigger_builder_page"` (appears twice)
+
+### S12-3  CI gate for spec completeness
+Add `tests/test_spec_hiddenimports.py`:
+
+```python
+def test_all_modules_in_spec_hiddenimports():
+    spec = Path("NetSentinel.spec").read_text()
+    missing = []
+    for path in sorted(Path("modules").glob("*.py")):
+        if path.stem.startswith("_"):
+            continue
+        key = f'"modules.{path.stem}"'
+        if key not in spec:
+            missing.append(key)
+    assert not missing, f"Missing from hiddenimports: {missing}"
+```
+
+Run as part of the pre-release checklist (not the main suite — spec is build
+artefact, not source).
+
+---
+
 ## S8 — Documentation Health
 
 ### S8-1  Mark PLUGIN_ROBUSTNESS_PLAN as complete
@@ -468,6 +724,22 @@ structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
 | 28 | S4-2: Pre-commit check update in CLAUDE.md | 6 | v1.9.60 | |
 | 29 | S8-2: Architecture docs update | 6 | v1.9.60 | |
 | 30 | S8-3: Version history update | 6 | v1.9.60 | |
+| — | **— APM audit findings (2026-05-29) — order TBD —** | — | — | Added at plan end; re-slot into sprints as capacity allows |
+| 31 | S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | TBD | TBD | 2-line fix; do immediately before next release build |
+| 32 | S12-2: Deduplicate 4 duplicate spec entries | TBD | TBD | Companion to S12-1 |
+| 33 | S12-3: `test_spec_hiddenimports.py` CI gate | TBD | TBD | Prevents future regressions |
+| 34 | S11-2: Fix 4 stale `_FEATURES` page refs in `discover_page.py` | TBD | TBD | Quick: 4 string corrections |
+| 35 | S11-3: Add 25 missing `_FEATURES` entries | TBD | TBD | Unlocks Feature Guide for half the app |
+| 36 | S11-1: Add `_PAGE_HELP` entries for all 61 nav labels | TBD | TBD | Unblocks help-button UX for every page |
+| 37 | S11-4: CI gate — nav/help/features parity check | TBD | TBD | Extend `test_nav_completeness.py` |
+| 38 | S10-1: Inventory missing colour tokens; add to `ui/styles.py` | TBD | TBD | Must precede S10-2/S10-3 |
+| 39 | S10-2: Purge hardcoded hex from `ui/pages/*.py` (37 files) | TBD | TBD | Run debug_launch.py after each file |
+| 40 | S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` (7 files) | TBD | TBD | Companion to S10-2 |
+| 41 | S10-4: Add hex-colour AST gate to `test_codeql_prevention.py` | TBD | TBD | Enable only after S10-2+S10-3 complete |
+| 42 | S9-1: Tests for Tier 1 modules — utility/plumbing (8 modules) | TBD | TBD | No network mocks needed |
+| 43 | S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | TBD | TBD | Use `@pytest.mark.live` for real-network tests |
+| 44 | S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | TBD | TBD | Mock MetricStore where needed |
+| 45 | S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | TBD | TBD | Enable only after S9-1–S9-3 complete |
 
 ---
 
@@ -497,3 +769,4 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
 *Sprint 1 complete: v1.9.56 (2026-05-29).  Sprint 2 target: v1.9.57.  Full plan target: v1.9.61.*
+*Items 31–45 added 2026-05-29 from APM rules/docs/codebase audit (197 gaps across 6 rule categories).  Version targets and sprint assignments TBD — re-slot as capacity allows.*
