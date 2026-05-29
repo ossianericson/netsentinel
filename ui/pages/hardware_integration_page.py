@@ -369,7 +369,7 @@ def _load_instances() -> list[dict]:
             if isinstance(data, list):
                 return data
         except Exception:
-            pass
+            pass  # corrupted QSettings value — fall through to migration path
     # Migrate from legacy custom_scripts list on first access
     legacy = _load_paths()
     if not legacy:
@@ -470,7 +470,7 @@ def _migrate_stale_paths() -> None:
                 changed = True
                 continue
             except Exception:
-                pass
+                pass  # copy failed — keep original path so the card shows the error
         # Path is genuinely gone — keep it so the card can show the error
         new_paths.append(p)
     if changed:
@@ -2705,7 +2705,7 @@ class HardwareIntegrationPage(QWidget):
                     lay.addWidget(icon_lbl)
                     icon_widget_added = True
             except Exception:
-                pass
+                pass  # icon load is non-critical — fall back to text emoji below
         if not icon_widget_added:
             icon_lbl = QLabel(_TYPE_ICON.get(meta.get("type", ""), "🔌"))
             icon_lbl.setFixedWidth(22)
@@ -2967,7 +2967,7 @@ class HardwareIntegrationPage(QWidget):
                     # Legacy namespace for backwards-compat
                     _kr.set_password("NetSentinel/hardware", ip, pw)
                 except Exception:
-                    pass
+                    pass  # keyring unavailable — dialog still accepts; plugin will re-prompt later
             dlg.accept()
 
         def _run_test() -> None:
@@ -3001,7 +3001,7 @@ class HardwareIntegrationPage(QWidget):
                     # Legacy namespace for backwards-compat
                     _kr.set_password("NetSentinel/hardware", ip, pw)
                 except Exception:
-                    pass
+                    pass  # keyring unavailable — credential stored in-memory for this session
                 QTimer.singleShot(600, dlg.accept)
 
             def _on_failure(msg: str) -> None:
@@ -3009,7 +3009,7 @@ class HardwareIntegrationPage(QWidget):
                     import keyring as _kr
                     _kr.delete_password("NetSentinel/hardware", ip)
                 except Exception:
-                    pass
+                    pass  # key may not exist yet; deletion is best-effort
                 _set_status(f"✗  {msg}", RED)
                 test_btn.setEnabled(True)
                 cancel_btn.setEnabled(True)
