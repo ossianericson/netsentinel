@@ -140,18 +140,26 @@ USERNAME      = "admin"
 def _load_password() -> str:
     """Return the saved admin password from the OS keychain.
 
-    Save the password once using the Hardware Integration page in NetSentinel
-    (the password field shown below each imported script).
+    The IP is resolved from the worker-injected globals() attribute first so
+    multiple instances at different IPs each use the correct credential.
+    Save the password using the Hardware Integration page in NetSentinel.
     """
+    # globals() == this module\'s __dict__; PluginPollingWorker injects the IP here
+    _ip = globals().get("_NETSENTINEL_INSTANCE_IP") or HARDWARE_IP
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", HARDWARE_IP)
+        _iid = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
+        pw = None
+        if _iid:
+            pw = keyring.get_password("NetSentinel/plugin", _iid)
+        if not pw:
+            pw = keyring.get_password("NetSentinel/hardware", _ip)
         if pw:
             return pw
     except Exception:
         pass
     raise RuntimeError(
-        f"No password saved for {HARDWARE_IP}. "
+        f"No password saved for {_ip}. "
         "Enter and save the password in the Hardware Integration page."
     )
 
@@ -1209,18 +1217,18 @@ class _PluginConnectionTester(QThread):
         import importlib.util
         import os as _os
 
-        # Pin the IP override before exec_module so _load_credentials() inside
-        # the plugin sees the IP from the dialog, not whatever a concurrent
-        # poll worker (e.g. ZTE modem) left in NETSENTINEL_PLUGIN_IP.
-        _prev_ip = _os.environ.get("NETSENTINEL_PLUGIN_IP")
-        _os.environ["NETSENTINEL_PLUGIN_IP"] = self._ip
-
+        # Temporarily save credential so the plugin can read it via keyring.
         try:
-            # Temporarily save credential so the plugin can read it
             import keyring as _kr
             _kr.set_password("NetSentinel/hardware", self._ip, self._pw)
         except Exception:
             pass  # keyring unavailable — plugin reads from its own field
+
+        # Legacy env-var shim: set NETSENTINEL_PLUGIN_IP so older plugins that
+        # haven't adopted _NETSENTINEL_INSTANCE_IP still work.  We save/restore
+        # so concurrent testers don't pollute each other's IP (RULE-PL1).
+        _prev_ip = _os.environ.get("NETSENTINEL_PLUGIN_IP")
+        _os.environ["NETSENTINEL_PLUGIN_IP"] = self._ip
 
         try:
             if not Path(self._path).exists():
@@ -1247,6 +1255,11 @@ class _PluginConnectionTester(QThread):
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)  # type: ignore[union-attr]
 
+            # Inject IP directly into the module namespace (RULE-PL1).
+            # This takes precedence over the env-var shim above.
+            mod._NETSENTINEL_INSTANCE_IP = self._ip
+            mod._NETSENTINEL_INSTANCE_ID = ""  # no stable ID yet at test time
+
             get_info   = getattr(mod, "get_info",   None)
             get_status = getattr(mod, "get_status", None)
 
@@ -1270,7 +1283,7 @@ class _PluginConnectionTester(QThread):
         except Exception as exc:
             self.failure.emit(_classify_error(str(exc)))
         finally:
-            # Restore whatever the env var was before this test ran.
+            # Always restore the env var to its pre-test value (RULE-PL1).
             if _prev_ip is None:
                 _os.environ.pop("NETSENTINEL_PLUGIN_IP", None)
             else:
@@ -1403,12 +1416,13 @@ class PipInstallDialog(QDialog):
 class HubCard(QFrame):
     """Live status card for one imported hardware plugin."""
 
-    refresh_clicked    = pyqtSignal(str)   # path
-    remove_clicked     = pyqtSignal(str)   # path
-    stop_clicked       = pyqtSignal(str)   # path — stop polling worker
-    reenable_clicked   = pyqtSignal(str)   # path — re-enable after circuit break
-    install_completed  = pyqtSignal(str)   # path — pip install succeeded, reload worker
-    add_another        = pyqtSignal(str)   # path — add a second instance of this plugin
+    refresh_clicked         = pyqtSignal(str)   # path
+    remove_clicked          = pyqtSignal(str)   # path
+    stop_clicked            = pyqtSignal(str)   # path — stop polling worker
+    reenable_clicked        = pyqtSignal(str)   # path — re-enable after circuit break
+    install_completed       = pyqtSignal(str)   # path — pip install succeeded, reload worker
+    add_another             = pyqtSignal(str)   # path — add a second instance of this plugin
+    update_credentials_clicked = pyqtSignal(str)  # instance_id — open credential dialog
 
     def __init__(self, path: str, meta: dict, last_result: Optional[dict],
                  instance_id: str = "", display_name: str = "",
@@ -1530,6 +1544,18 @@ class HubCard(QFrame):
         self._btn_reenable.setVisible(False)
         self._btn_reenable.clicked.connect(self._on_reenable)
         hdr_lay.addWidget(self._btn_reenable)
+
+        # Update credentials button — shown when an AUTH: error is detected (P4-1)
+        self._btn_update_cred = _btn("🔑 Re-enter Password")
+        self._btn_update_cred.setFixedHeight(26)
+        self._btn_update_cred.setToolTip(
+            "Authentication failed — click to update the saved password"
+        )
+        self._btn_update_cred.setVisible(False)
+        self._btn_update_cred.clicked.connect(
+            lambda: self.update_credentials_clicked.emit(self._instance_id)
+        )
+        hdr_lay.addWidget(self._btn_update_cred)
 
         # Refresh button
         self._btn_refresh = _btn("↻")
@@ -1701,9 +1727,16 @@ class HubCard(QFrame):
             self._metrics_lbl.setText(f"Missing library: {self._pending_pkg}")
             self._btn_install.setText(f"⬇ Install {self._pending_pkg}")
             self._btn_install.setVisible(True)
+            self._btn_update_cred.setVisible(False)
+        elif msg.startswith("Authentication failed"):
+            # P4-1: auth error — show credential update button, not circuit-breaker path
+            self._pending_pkg = ""
+            self._metrics_lbl.setText(f"Error: {msg[:80]}")
+            self._btn_update_cred.setVisible(True)
         else:
             self._pending_pkg = ""
             self._metrics_lbl.setText(f"Error: {msg[:80]}")
+            self._btn_update_cred.setVisible(False)
             self._btn_install.setVisible(False)
         self._metrics_lbl.setStyleSheet(
             f"color:{AMBER}; font-size:10px; border:none; background:transparent;"
@@ -1857,6 +1890,7 @@ class HubCard(QFrame):
 
         self._btn_refresh.setEnabled(True)
         self._btn_refresh.setText("↻")
+        self._btn_update_cred.setVisible(False)
 
         # Auto-expand detail on first successful result
         if not self._detail_visible:
@@ -2532,6 +2566,7 @@ class HardwareIntegrationPage(QWidget):
                 card.reenable_clicked.connect(self._on_reenable_plugin)
                 card.install_completed.connect(self._on_install_completed)
                 card.add_another.connect(self._on_add_another_instance)
+                card.update_credentials_clicked.connect(self._on_update_credentials)
                 self._hub_lay.addWidget(card)
                 # Key by instance_id so multiple instances of same plugin coexist
                 self._cards[inst["id"]] = card
@@ -2863,6 +2898,10 @@ class HardwareIntegrationPage(QWidget):
             if pw:
                 try:
                     import keyring as _kr
+                    # Per-instance namespace (P4-2)
+                    iid = _instance_id(plugin_path or ip, ip)
+                    _kr.set_password("NetSentinel/plugin", iid, pw)
+                    # Legacy namespace for backwards-compat
                     _kr.set_password("NetSentinel/hardware", ip, pw)
                 except Exception:
                     pass
@@ -2893,6 +2932,10 @@ class HardwareIntegrationPage(QWidget):
                 _set_status("✓  Connected successfully — adding integration.", GREEN)
                 try:
                     import keyring as _kr
+                    # Per-instance namespace (P4-2)
+                    iid = _instance_id(plugin_path or ip, ip)
+                    _kr.set_password("NetSentinel/plugin", iid, pw)
+                    # Legacy namespace for backwards-compat
                     _kr.set_password("NetSentinel/hardware", ip, pw)
                 except Exception:
                     pass
@@ -3145,6 +3188,49 @@ class HardwareIntegrationPage(QWidget):
             card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
             card._metrics_lbl.setText("Library installed — reconnecting…")
         QTimer.singleShot(300, lambda p=path: self._start_poll_worker(p))
+
+    @pyqtSlot(str)
+    def _on_update_credentials(self, instance_id: str) -> None:
+        """P4-1: Re-open credential dialog for an AUTH-error card.
+
+        On success, saves the new credential to the per-instance keyring key
+        and restarts the poll worker so it picks up the new password.
+        """
+        inst = next((i for i in _load_instances() if i["id"] == instance_id), None)
+        if inst is None:
+            return
+        path = inst["path"]
+        ok, _, meta = _validate_script(path)
+        if not ok:
+            return
+        cred_label = meta.get("credential_label", "Password")
+        hw_name    = inst.get("name") or meta.get("name", Path(path).stem)
+        current_ip = inst.get("ip") or meta.get("ip", "")
+
+        accepted, confirmed_ip = self._show_credential_dialog(
+            hw_name, current_ip, cred_label, plugin_path=path
+        )
+        if not accepted:
+            return
+
+        # Update stored IP if the user changed it
+        if confirmed_ip and confirmed_ip != current_ip:
+            instances = _load_instances()
+            for i in instances:
+                if i["id"] == instance_id:
+                    i["ip"] = confirmed_ip
+            _save_instances(instances)
+
+        # Reset circuit breaker and restart the worker
+        _reset_health(path)
+        self._stop_poll_worker(instance_id)
+        card = self._cards.get(instance_id)
+        if card:
+            card._btn_update_cred.setVisible(False)
+            card._btn_reenable.setVisible(False)
+            card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
+            card._metrics_lbl.setText("Credentials updated — reconnecting…")
+        QTimer.singleShot(300, lambda iid=instance_id: self._start_poll_worker_inst(iid))
 
     # ── Import / remove ───────────────────────────────────────────────────────
 

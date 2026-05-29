@@ -32,21 +32,36 @@ PYPI_PACKAGE     = "tplinkrouterc6u"
 def _load_credentials() -> tuple[str, str]:
     """Return (host, password) from the OS keychain.
 
-    Checks in order:
-      1. NetSentinel/mesh     — saved by the Mesh Router page
-      2. NetSentinel/hardware — saved by the Hardware Integration page password field
+    IP resolution order (RULE-PL1):
+      1. _NETSENTINEL_INSTANCE_IP  — injected by PluginPollingWorker per instance
+      2. NETSENTINEL_PLUGIN_IP env var  — legacy shim for older code paths
+      3. HARDWARE_IP constant  — static default
+
+    Password lookup order:
+      1. NetSentinel/plugin/<instance_id>  — per-instance keyring (P4-2)
+      2. NetSentinel/mesh                  — saved by the Mesh Router page
+      3. NetSentinel/hardware/<ip>         — saved by the Hub password field
     """
-    _ip = os.environ.get("NETSENTINEL_PLUGIN_IP") or HARDWARE_IP
+    # globals() returns this module's own __dict__, where the worker injects the
+    # per-instance IP and ID via mod._NETSENTINEL_INSTANCE_IP (RULE-PL1).
+    _ip = (globals().get("_NETSENTINEL_INSTANCE_IP")
+           or os.environ.get("NETSENTINEL_PLUGIN_IP")
+           or HARDWARE_IP)
+    _iid = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
     try:
         import keyring
-        pw = (keyring.get_password("NetSentinel/mesh", _ip)
-              or keyring.get_password("NetSentinel/hardware", _ip))
+        pw = None
+        if _iid:
+            pw = keyring.get_password("NetSentinel/plugin", _iid)
+        if not pw:
+            pw = (keyring.get_password("NetSentinel/mesh", _ip)
+                  or keyring.get_password("NetSentinel/hardware", _ip))
         if pw:
             return _ip, pw
     except Exception:
         pass
     raise RuntimeError(
-        f"No saved password found for Deco at {HARDWARE_IP}. "
+        f"No saved password found for Deco at {_ip}. "
         "Enter the password in the Hardware Integration page and click Save."
     )
 

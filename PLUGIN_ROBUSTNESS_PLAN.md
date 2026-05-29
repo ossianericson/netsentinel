@@ -86,7 +86,7 @@ The path-list system predates multi-instance support.  All paths go through
 
 ## P1 — Eliminate `NETSENTINEL_PLUGIN_IP` Global State
 
-### P1-1  Replace env var with direct module-attribute injection
+### P1-1  Replace env var with direct module-attribute injection  ✅ v1.9.50
 Instead of setting `os.environ["NETSENTINEL_PLUGIN_IP"]`, the worker injects the IP
 directly into the freshly-loaded module before calling any plugin function:
 
@@ -94,36 +94,39 @@ directly into the freshly-loaded module before calling any plugin function:
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 mod._NETSENTINEL_INSTANCE_IP = self._instance_ip   # injected, not env
+mod._NETSENTINEL_INSTANCE_ID = self._instance_id
 ```
 
-Plugin credential helpers check `getattr(sys.modules[__name__], "_NETSENTINEL_INSTANCE_IP", None)`
-before falling back to `HARDWARE_IP`.  No env var involved.
+Plugin credential helpers check `globals().get("_NETSENTINEL_INSTANCE_IP")` before
+falling back to `HARDWARE_IP`.  **Note:** `globals()` is the correct mechanism —
+`sys.modules[__name__]` fails because modules loaded via `module_from_spec` are not
+automatically registered in `sys.modules`.  No env var involved.
 
 This is thread-safe: each `exec_module` produces an independent module object with its
 own namespace.
 
-### P1-2  `_PluginConnectionTester` uses the same injection
+### P1-2  `_PluginConnectionTester` uses the same injection  ✅ v1.9.50
 The tester already loads a fresh module per test.  After `exec_module`, inject
 `mod._NETSENTINEL_INSTANCE_IP = self._ip` before calling `get_info()` / `get_status()`.
 Remove the `os.environ` set entirely (the `finally` guard added in this session remains
 as a safety net until all bundled plugins are updated to check module-attribute first).
 
-### P1-3  Update all bundled plugins to read `_NETSENTINEL_INSTANCE_IP`
+### P1-3  Update all bundled plugins to read `_NETSENTINEL_INSTANCE_IP`  ✅ v1.9.50
 `deco_plugin.py`, `zte_plugin.py`, and any future bundled plugins update
 `_load_credentials()` to check module attribute before env var before `HARDWARE_IP`:
 
 ```python
 def _load_credentials():
-    import sys as _sys
-    _ip = (getattr(_sys.modules[__name__], "_NETSENTINEL_INSTANCE_IP", None)
+    _ip = (globals().get("_NETSENTINEL_INSTANCE_IP")
            or os.environ.get("NETSENTINEL_PLUGIN_IP")
            or HARDWARE_IP)
+    _iid = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
     ...
 ```
 
 Backwards-compatible: plugins that haven't been updated still work via env var.
 
-### P1-4  `tests/test_env_var_isolation.py`
+### P1-4  `tests/test_env_var_isolation.py`  ✅ v1.9.50
 - Verifies two `_PluginConnectionTester` instances running concurrently do not
   interfere with each other's IP
 - Verifies `NETSENTINEL_PLUGIN_IP` is restored to its pre-test value after success
@@ -179,14 +182,14 @@ Four scenarios tested:
 
 ## P3 — Reactive Navigation & UI
 
-### P3-1  Flyout reload is the responsibility of `_on_plugin_page_added` / `_on_plugin_page_removed`
+### P3-1  Flyout reload is the responsibility of `_on_plugin_page_added` / `_on_plugin_page_removed`  ✅ v1.9.50
 (Implemented in this session.)  Formalise as a rule: any mutation of `_nav_sections`
 entries **must** be followed by a `load_section` call if the affected section is
 currently open, and an `open()` call if the section should become visible.
 Add a helper `_reload_section(name: str, force_open: bool = False)` to encapsulate
 this pattern so future code cannot forget it.
 
-### P3-2  Auto-navigate to the new plugin's device page on successful add
+### P3-2  Auto-navigate to the new plugin's device page on successful add  ✅ v1.9.50
 After `plugin_page_added` fires and the nav item is created, navigate the stack to the
 new `PluginDevicePage`.  This confirms to the user that the add succeeded and shows live
 status immediately.  Use the existing `_nav_rail_go_to(label)` — no new machinery.
@@ -206,13 +209,13 @@ new) and a `_on_plugin_page_renamed` handler.
 
 ## P4 — Credential Robustness
 
-### P4-1  "Update Credentials" action on each HubCard
+### P4-1  "Update Credentials" action on each HubCard  ✅ v1.9.50
 When a plugin card is in error state with an `AUTH:` prefix, show a "Re-enter
 Password" button (not just text).  Clicking it opens `_show_credential_dialog` with
 the current instance IP pre-filled.  On success, restarts the poll worker.
 This eliminates the need to delete and re-add a plugin just because a password changed.
 
-### P4-2  Per-instance keyring namespace
+### P4-2  Per-instance keyring namespace  ✅ v1.9.50
 Current keyring keys are inconsistent: `NetSentinel/mesh`, `NetSentinel/hardware`,
 `NetSentinel/hardware/<ip>`.  New convention:
 
@@ -353,14 +356,14 @@ Already described in P2-4.
 | 6 | P7-2: `test_registration_pipeline.py` | S | v1.9.49 |
 | 7 | P7-3: `test_flyout_refresh.py` | S | v1.9.49 |
 | 8 | P7-4: `test_enrichment_timing.py` | S | v1.9.49 |
-| 9 | P1-1: module-attribute injection replaces env var | M | v1.9.50 |
-| 10 | P1-2: tester uses attribute injection | S | v1.9.50 |
-| 11 | P1-3: update bundled plugins to read module attribute | S | v1.9.50 |
-| 12 | P1-4: `test_env_var_isolation.py` | S | v1.9.50 |
-| 13 | P4-2: per-instance keyring namespace | S | v1.9.50 |
-| 14 | P4-1: "Update Credentials" on AUTH-error cards | M | v1.9.50 |
-| 15 | P3-1: `_reload_section` helper | S | v1.9.50 |
-| 16 | P3-2: auto-navigate to new plugin page on add | S | v1.9.50 |
+| 9 | P1-1: module-attribute injection replaces env var | M | ✅ v1.9.50 |
+| 10 | P1-2: tester uses attribute injection | S | ✅ v1.9.50 |
+| 11 | P1-3: update bundled plugins to read module attribute | S | ✅ v1.9.50 |
+| 12 | P1-4: `test_env_var_isolation.py` | S | ✅ v1.9.50 |
+| 13 | P4-2: per-instance keyring namespace | S | ✅ v1.9.50 |
+| 14 | P4-1: "Update Credentials" on AUTH-error cards | M | ✅ v1.9.50 |
+| 15 | P3-1: `_reload_section` helper | S | ✅ v1.9.50 |
+| 16 | P3-2: auto-navigate to new plugin page on add | S | ✅ v1.9.50 |
 | 17 | P6-1: exponential backoff | M | v1.9.51 |
 | 18 | P6-3: AUTH errors exempt from circuit breaker | S | v1.9.51 |
 | 19 | P6-2: structured `FILE:` error prefix | S | v1.9.51 |

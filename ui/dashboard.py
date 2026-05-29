@@ -9674,9 +9674,10 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("CONFIG_SCHEMA plugin config",  "Plugins can declare CONFIG_SCHEMA with typed fields (poll_interval, verify_ssl, etc.). The Hub card shows a ⚙ button that opens an auto-generated config panel; values are passed to get_status(config=…) on each poll."),
-            (".nspkg plugin bundles",        "Import a .nspkg file (ZIP with plugin.py + manifest.json + optional icon.png) via the new '⬡ Import .nspkg' button. Manifest is validated before extraction."),
-            ("Community plugin Browse tab",  "The Hardware Hub now has a Browse tab that fetches a community plugin index, verifies SHA-256 before download, and lets you install community plugins in one click."),
+            ("Plugin IP isolation (RULE-PL1)", "Each plugin instance now receives its IP and instance ID via direct module-attribute injection (mod._NETSENTINEL_INSTANCE_IP) rather than os.environ — zero cross-instance pollution even when two plugins poll simultaneously."),
+            ("Re-enter Password on auth errors", "When a hardware plugin fails with an authentication error, the Hub card now shows a '🔑 Re-enter Password' button. Clicking it opens the credential dialog with the current IP pre-filled and restarts the poll worker on success — no need to delete and re-add the plugin."),
+            ("Per-instance keyring namespace",  "Credentials are now saved to NetSentinel/plugin/<instance_id> in addition to the legacy key, so two instances of the same plugin type at different IPs have fully independent credentials."),
+            ("Reactive nav (RULE-PL3)",         "The Extend flyout now updates immediately when a plugin is added or removed via the new _reload_section() helper. The new plugin's device page is also navigated to automatically on add."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -10956,31 +10957,10 @@ class Dashboard(QMainWindow):
         if hasattr(self, "_home_page"):
             self._home_page.refresh_hw_strip()
         # Immediately refresh the Extend flyout so the new nav item is visible
-        # without requiring the user to click away and back.
-        try:
-            if extend_sec and hasattr(self, "_nav_flyout"):
-                _ext_entries = [
-                    (e.label, e.label in self._nav_pinned_labels,
-                     e.admin_required or e.audit_item)
-                    for e in extend_sec["entries"]
-                ]
-                self._nav_flyout.load_section(
-                    title="Extend",
-                    entries=_ext_entries,
-                    active_label=self._nav_current_page_label,
-                    on_navigate=self._nav_rail_go_to,
-                    on_pin_toggle=self._on_rail_pin_toggle,
-                )
-                for _lbl, _clr in getattr(self, "_flyout_dots", {}).items():
-                    if _clr:
-                        self._nav_flyout.apply_dot(_lbl, _clr)
-                if getattr(self, "_nav_open_section", "") != "Extend":
-                    self._nav_open_section = "Extend"
-                    if "Extend" in getattr(self, "_nav_rail_buttons", {}):
-                        self._nav_rail_buttons["Extend"].setChecked(True)
-                self._nav_flyout.open()
-        except Exception:
-            pass
+        # without requiring the user to click away and back (RULE-PL3).
+        self._reload_section("Extend", force_open=True)
+        # Navigate to the new page immediately so the user sees live status (P3-2).
+        self._nav_rail_go_to(label)
 
     @pyqtSlot(str)
     def _on_plugin_page_removed(self, path: str) -> None:
@@ -11006,22 +10986,43 @@ class Dashboard(QMainWindow):
             [p._label for p in self._plugin_pages.values()]
         )
         self._refresh_hardware_badge()
-        # Refresh the Extend flyout so the removed item disappears immediately.
+        # Refresh the Extend flyout so the removed item disappears immediately (RULE-PL3).
+        if getattr(self, "_nav_open_section", "") == "Extend":
+            self._reload_section("Extend")
+
+    def _reload_section(self, name: str, force_open: bool = False) -> None:
+        """Reload the flyout for the named section and optionally force it open.
+
+        Call this after any mutation to _nav_sections[name]["entries"] so the
+        flyout widget immediately reflects the change (RULE-PL3).
+        """
+        sec = next((s for s in self._nav_sections if s["name"] == name), None)
+        if sec is None or not hasattr(self, "_nav_flyout"):
+            return
+        entries = [
+            (e.label, e.label in self._nav_pinned_labels,
+             e.admin_required or e.audit_item)
+            for e in sec["entries"]
+        ]
         try:
-            if extend_sec and hasattr(self, "_nav_flyout"):
-                _ext_entries = [
-                    (e.label, e.label in self._nav_pinned_labels,
-                     e.admin_required or e.audit_item)
-                    for e in extend_sec["entries"]
-                ]
-                if getattr(self, "_nav_open_section", "") == "Extend":
-                    self._nav_flyout.load_section(
-                        title="Extend",
-                        entries=_ext_entries,
-                        active_label=self._nav_current_page_label,
-                        on_navigate=self._nav_rail_go_to,
-                        on_pin_toggle=self._on_rail_pin_toggle,
-                    )
+            self._nav_flyout.load_section(
+                title=name,
+                entries=entries,
+                active_label=self._nav_current_page_label,
+                on_navigate=self._nav_rail_go_to,
+                on_pin_toggle=self._on_rail_pin_toggle,
+            )
+            for _lbl, _clr in getattr(self, "_flyout_dots", {}).items():
+                if _clr:
+                    self._nav_flyout.apply_dot(_lbl, _clr)
+            if force_open:
+                self._nav_open_section = name
+                if name in getattr(self, "_nav_rail_buttons", {}):
+                    self._nav_rail_buttons[name].setChecked(True)
+                    for _n, _b in self._nav_rail_buttons.items():
+                        if _n != name:
+                            _b.setChecked(False)
+                self._nav_flyout.open()
         except Exception:
             pass
 

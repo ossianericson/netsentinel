@@ -19,7 +19,6 @@ Stop: call stop() then wait().
 
 from __future__ import annotations
 
-import os
 import sys
 import threading
 import time
@@ -106,14 +105,8 @@ class PluginPollingWorker(QThread):
 
         if not Path(self._path).exists():
             _log(f"✗ File not found: {Path(self._path).name}")
-            self.error.emit(f"Plugin file not found: {self._path}")
+            self.error.emit(f"FILE: plugin file not found at {self._path}")
             return
-
-        # Set IP override so _load_credentials() in the plugin uses the instance IP.
-        if self._instance_ip:
-            os.environ["NETSENTINEL_PLUGIN_IP"] = self._instance_ip
-        elif "NETSENTINEL_PLUGIN_IP" in os.environ:
-            del os.environ["NETSENTINEL_PLUGIN_IP"]
 
         # Ensure NetSentinel modules are importable.  Look for the live entry in
         # sys.path that actually contains modules/utils.py (works from source,
@@ -138,6 +131,12 @@ class PluginPollingWorker(QThread):
             # Execute module top-level (defines functions, constants; does NOT run
             # the --netsentinel shim because sys.argv won't contain that flag).
             spec.loader.exec_module(mod)  # type: ignore[union-attr]
+
+            # Inject per-instance identifiers directly into the module namespace
+            # (RULE-PL1).  This is thread-safe: each exec_module creates an
+            # independent namespace so concurrent instances don't interfere.
+            mod._NETSENTINEL_INSTANCE_IP = self._instance_ip or ""
+            mod._NETSENTINEL_INSTANCE_ID = self._instance_id or ""
 
             if self._stop:
                 return

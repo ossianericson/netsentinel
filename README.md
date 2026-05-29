@@ -320,6 +320,21 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.50
+
+**Fixed**
+- `workers/plugin_polling_worker.py`: replaced `os.environ["NETSENTINEL_PLUGIN_IP"]` with direct module-attribute injection (`mod._NETSENTINEL_INSTANCE_IP`, `mod._NETSENTINEL_INSTANCE_ID`) after `exec_module` — each instance gets its own namespace, zero cross-instance IP pollution (RULE-PL1)
+- `ui/pages/hardware_integration_page.py` `_PluginConnectionTester`: injects `_NETSENTINEL_INSTANCE_IP` into the module after `exec_module`; env-var shim kept with proper `finally` restore for backwards-compat
+- `plugins/deco_plugin.py`, `plugins/zte_plugin.py`: `_load_credentials()` reads `globals().get("_NETSENTINEL_INSTANCE_IP")` first (correct idiom — `sys.modules[__name__]` fails for modules loaded via `module_from_spec`), then falls back to env var, then `HARDWARE_IP`
+- `HubCard`: adds `🔑 Re-enter Password` button shown only on `AUTH:` errors; clicking reopens the credential dialog with current IP pre-filled and restarts the worker on success — no need to delete and re-add a plugin when a password changes (P4-1)
+- Credential dialog: saves password to `NetSentinel/plugin/<instance_id>` (per-instance keyring, P4-2) in addition to the legacy `NetSentinel/hardware/<ip>` key; bundled plugins check the per-instance key first
+- `ui/dashboard.py`: `_reload_section(name, force_open)` helper consolidates flyout-reload logic previously duplicated across `_on_plugin_page_added` and `_on_plugin_page_removed` (RULE-PL3)
+- `ui/dashboard.py` `_on_plugin_page_added`: calls `_nav_rail_go_to(label)` after flyout reload so the new plugin's device page is shown immediately on add (P3-2)
+- `workers/plugin_polling_worker.py`: file-missing error now emits `FILE: plugin file not found at <path>` prefix so `_classify_error` can route it to a "Re-import" action (P6-2 prefix)
+
+**Added**
+- `tests/test_env_var_isolation.py` — 6 tests: module attribute preferred over env var; env var restored on success and failure; concurrent `exec_module` loads have independent namespaces; worker leaves `os.environ` unchanged; FILE: prefix on missing plugin file
+
 ### v1.9.48
 
 **Added**
