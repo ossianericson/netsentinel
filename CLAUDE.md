@@ -341,9 +341,9 @@ Both goals are served by the same core property: zero prior knowledge required. 
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v1.9.55**
+Current version: **v1.9.56**
 
-Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42 → v1.9.53 → v1.9.54 → v1.9.54 → v1.9.55
+Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42 → v1.9.53 → v1.9.54 → v1.9.54 → v1.9.55 → v1.9.56 → v1.9.56
 
 ---
 
@@ -1087,6 +1087,57 @@ Never reintroduce subprocess PIPE in `get_network_info()`, `get_dhcp_info()`, or
 
 ### RULE-WIN2 (blocking): nativeEvent HTMAXBUTTON requires full NC message interception on frameless windows
 Returning `HTMAXBUTTON` from `nativeEvent(WM_NCHITTEST)` on a frameless window crashes via `STATUS_ACCESS_VIOLATION`. Must also intercept `WM_NCMOUSEMOVE`, `WM_NCLBUTTONDOWN`, `WM_NCLBUTTONUP` with `wParam==HTMAXBUTTON`. Do not re-add a partial implementation covering only `WM_NCHITTEST`.
+
+### RULE-WIN3 (blocking): Qt test files must never create QApplication at module level
+Creating `QApplication` at module import time (collection phase) bypasses conftest.py's session fixture and can cause cumulative C-level heap/stack corruption (`STATUS_STACK_BUFFER_OVERRUN`) that surfaces hundreds of tests later.
+
+```python
+# WRONG — runs at import time before any fixture
+_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
+
+# CORRECT — conftest.py owns the session QApplication; just import the class
+try:
+    from PyQt6.QtWidgets import QApplication
+except ImportError:
+    pytest.skip("PyQt6 not available", allow_module_level=True)
+```
+
+`conftest.py` provides a session-scoped `qt_app` fixture (autouse=True). All test files that need `QApplication` must use `QApplication.instance()` at call time, not store it at module level.
+
+### RULE-WIN4 (blocking): Qt widgets in tests must use deleteLater() — never rely on Python GC
+When a Qt widget goes out of scope at the end of a test function, Python's reference counting calls the C++ destructor *immediately and synchronously*. On Windows, this can corrupt the Qt event loop's internal state, causing `STATUS_STACK_BUFFER_OVERRUN` 400+ tests later.
+
+Required pattern for ALL test fixtures that create Qt widgets:
+
+```python
+@pytest.fixture
+def my_widget():
+    w = MyWidget()
+    yield w
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+```
+
+For widgets with `QFileSystemWatcher`, `QTimer`, or OS-level background threads: stop those resources BEFORE `deleteLater()`:
+
+```python
+# Stop timer to prevent it firing after deletion
+if hasattr(w, "_tick_timer"):
+    w._tick_timer.stop()
+# Mock QFileSystemWatcher in test setup to prevent OS file-watching threads
+monkeypatch.setattr(
+    "ui.pages.some_page.QFileSystemWatcher",
+    lambda *a, **kw: MagicMock(),
+)
+```
+
+**Never** delete Qt widgets by letting them go out of scope or by calling the C++ destructor directly. **Always** use `deleteLater()` followed by `processEvents()`.
 
 ---
 

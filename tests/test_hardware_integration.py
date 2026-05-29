@@ -17,7 +17,6 @@ Covers:
 
 from __future__ import annotations
 
-import sys
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -25,13 +24,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # ── Qt bootstrap ───────────────────────────────────────────────────────────────
-
+# Conftest owns the session-scoped QApplication; do NOT create one here.
 try:
     from PyQt6.QtWidgets import QApplication
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
-
-_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
 
 # ── Module imports (patch keyring + worker so page constructs cleanly) ─────────
 
@@ -71,14 +68,38 @@ def _reset_qsettings(monkeypatch):
     monkeypatch.setattr(
         "ui.pages.hardware_integration_page._save_last_result", lambda *_: None
     )
+    # Prevent QFileSystemWatcher from starting OS-level file-watching threads
+    # (ReadDirectoryChangesW on Windows) that don't clean up reliably in tests.
+    # Use a lambda to ignore the parent arg so MagicMock doesn't treat it as spec.
+    monkeypatch.setattr(
+        "ui.pages.hardware_integration_page.QFileSystemWatcher",
+        lambda *a, **kw: MagicMock(),
+    )
+
+
+def _cleanup_page(p):
+    """Stop Qt resources on HardwareIntegrationPage before deleting."""
+    app = QApplication.instance()
+    try:
+        # Stop the 30-second tick timer so it cannot fire after deletion
+        if hasattr(p, "_tick_timer"):
+            p._tick_timer.stop()
+    except RuntimeError:
+        pass
+    try:
+        p.deleteLater()
+    except RuntimeError:
+        pass
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
 
 @pytest.fixture
 def page(monkeypatch):
     p = HardwareIntegrationPage()
     yield p
-    p.deleteLater()
-    _app.processEvents()
+    _cleanup_page(p)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -165,7 +186,7 @@ def test_remove_plugin_drops_path(monkeypatch):
 
 def test_page_shows_empty_when_no_paths(page):
     """With no paths, the hub body must not crash (empty label shown)."""
-    _app.processEvents()  # no exception means pass
+    QApplication.instance().processEvents()  # no exception means pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -192,7 +213,7 @@ def test_save_password_writes_to_keyring(monkeypatch):
     assert ("NetSentinel/hardware", hw_ip) in saved
     assert saved[("NetSentinel/hardware", hw_ip)] == "secret123"
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_save_password_empty_shows_error(monkeypatch):
@@ -203,7 +224,7 @@ def test_save_password_empty_shows_error(monkeypatch):
     card._save_password(meta["ip"], card._pw_edit, card._pw_status)
     assert card._pw_status.text() != ""  # some error/feedback text set
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_forget_password_calls_delete_for_all_services(monkeypatch):
@@ -221,7 +242,7 @@ def test_forget_password_calls_delete_for_all_services(monkeypatch):
     services = {s for s, _ in deleted}
     assert "NetSentinel/hardware" in services
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -239,7 +260,7 @@ def test_hubcard_survives_corrupt_clients_strings(monkeypatch):
     }
     card = HubCard(_DECO, meta, corrupt)  # must not raise
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_hubcard_survives_corrupt_nodes_strings(monkeypatch):
@@ -256,7 +277,7 @@ def test_hubcard_survives_corrupt_nodes_strings(monkeypatch):
     }
     card = HubCard(_DECO, meta, corrupt)  # must not raise
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_hubcard_survives_none_last_result():
@@ -264,7 +285,7 @@ def test_hubcard_survives_none_last_result():
     _, _, meta = _validate_script(_ZTE)
     card = HubCard(_ZTE, meta, None)
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_hubcard_survives_non_dict_last_result():
@@ -272,7 +293,7 @@ def test_hubcard_survives_non_dict_last_result():
     _, _, meta = _validate_script(_DECO)
     card = HubCard(_DECO, meta, "garbage")  # type: ignore[arg-type]
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -291,7 +312,7 @@ def test_type_mismatch_meta_unknown_data_modem(monkeypatch):
     }
     card = HubCard(_ZTE, bad_meta, modem_result)  # must not raise
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_type_mismatch_meta_modem_data_router(monkeypatch):
@@ -306,7 +327,7 @@ def test_type_mismatch_meta_modem_data_router(monkeypatch):
     }
     card = HubCard(_ZTE, modem_meta, router_result)  # must not raise
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -326,7 +347,7 @@ def test_safe_set_text_sets_text_on_live_widget():
     _safe_set_text(lbl, "after")
     assert lbl.text() == "after"
     lbl.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_delete_card_while_password_save_timer_pending(monkeypatch):
@@ -339,11 +360,11 @@ def test_delete_card_while_password_save_timer_pending(monkeypatch):
     card._save_password(meta["ip"], card._pw_edit, card._pw_status)
     # Immediately delete the card — timer will fire after deleteLater
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
     # Fire all pending timers (forces the lambda to run on deleted widget)
     from PyQt6.QtTest import QTest
     QTest.qWait(50)
-    _app.processEvents()
+    QApplication.instance().processEvents()
     # If we reach here without RuntimeError, the guard works
 
 
@@ -366,13 +387,13 @@ def test_no_auto_import_when_paths_empty(monkeypatch):
                         lambda _: None)
 
     p = HardwareIntegrationPage()
-    _app.processEvents()
-    p.deleteLater()
-    _app.processEvents()
-
-    assert not saved, (
-        "_save_paths/_save_instances was called — auto-import must not run on first launch"
-    )
+    QApplication.instance().processEvents()
+    try:
+        assert not saved, (
+            "_save_paths/_save_instances was called — auto-import must not run on first launch"
+        )
+    finally:
+        _cleanup_page(p)
 
 
 def test_auto_import_skipped_when_paths_already_set(monkeypatch):
@@ -391,11 +412,11 @@ def test_auto_import_skipped_when_paths_already_set(monkeypatch):
                         lambda _: None)
 
     p = HardwareIntegrationPage()
-    _app.processEvents()
-    p.deleteLater()
-    _app.processEvents()
-
-    assert not saved, "_save_paths/_save_instances called unexpectedly when already set"
+    QApplication.instance().processEvents()
+    try:
+        assert not saved, "_save_paths/_save_instances called unexpectedly when already set"
+    finally:
+        _cleanup_page(p)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -407,7 +428,7 @@ def router_panel():
     p = _RouterDetailPanel()
     yield p
     p.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_router_panel_update_empty(router_panel):
@@ -458,7 +479,7 @@ def modem_panel():
     p = _ModemDetailPanel()
     yield p
     p.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_modem_panel_update_empty(modem_panel):
@@ -500,7 +521,7 @@ def test_hubcard_update_result_router(monkeypatch):
     }
     card.update_result(data, time.time())  # must not raise
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 def test_hubcard_update_result_modem(monkeypatch):
@@ -517,4 +538,4 @@ def test_hubcard_update_result_modem(monkeypatch):
     }
     card.update_result(data, time.time())  # must not raise
     card.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()

@@ -31,7 +31,6 @@ Covers:
 
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock, patch, call
 
 import pytest
@@ -44,7 +43,6 @@ try:
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
-_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
 
 # ---------------------------------------------------------------------------
 # Module imports
@@ -182,7 +180,7 @@ class TestFirstRunPersistence:
 class TestWelcomeOverlay:
 
     def setup_method(self):
-        self.parent = _app.activeWindow() or _app.allWidgets()[0] if _app.allWidgets() else None
+        self.parent = QApplication.instance().activeWindow() or QApplication.instance().allWidgets()[0] if QApplication.instance().allWidgets() else None
         if self.parent is None:
             from PyQt6.QtWidgets import QWidget
             self.parent = QWidget()
@@ -191,7 +189,7 @@ class TestWelcomeOverlay:
 
     def teardown_method(self):
         self.overlay.deleteLater()
-        _app.processEvents()
+        QApplication.instance().processEvents()
 
     def test_constructs_without_error(self):
         assert self.overlay is not None

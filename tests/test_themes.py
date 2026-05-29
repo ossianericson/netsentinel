@@ -21,7 +21,6 @@ Covers:
   • Chart palette keys present in all themes
 """
 
-import sys
 import re
 from unittest.mock import MagicMock, patch
 
@@ -35,7 +34,6 @@ try:
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
-_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
 
 # ---------------------------------------------------------------------------
 # Required palette keys — every theme MUST define all of these

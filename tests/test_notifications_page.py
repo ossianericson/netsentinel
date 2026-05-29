@@ -13,7 +13,6 @@ Covers:
 """
 from __future__ import annotations
 
-import sys
 from unittest.mock import MagicMock
 
 import pytest
@@ -24,7 +23,6 @@ except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
 # Use the session-scoped app from conftest; fall back for standalone runs.
-_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
 
 
 # ---------------------------------------------------------------------------

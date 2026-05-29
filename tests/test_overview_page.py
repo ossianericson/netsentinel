@@ -26,7 +26,6 @@ Covers:
   • swap_tiles same id is a no-op
 """
 
-import sys
 import types
 from dataclasses import dataclass
 from typing import List, Optional
@@ -42,7 +41,6 @@ try:
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
-_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
 
 # ---------------------------------------------------------------------------
 # Stub MetricStore-like objects returned from mock queries

@@ -18,6 +18,7 @@ AppData redirect (import-time, before any test runs):
 import os
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 import pytest
 
@@ -73,6 +74,48 @@ def qt_app():
     yield app
     # Do NOT call app.quit() or del app here — let Python GC handle it after
     # pytest has finished so no test module is left with a dangling reference.
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _crash_logger(tmp_path_factory):
+    """Write each test name to a file before it runs.
+
+    After a process-level crash (STATUS_STACK_BUFFER_OVERRUN) the last line
+    in crash_last_test.txt is the test that triggered the crash.
+    """
+    log_path = Path(tempfile.gettempdir()) / "ns_test_crash_log.txt"
+    log_path.write_text("", encoding="utf-8")
+    return log_path
+
+
+@pytest.fixture(autouse=True)
+def _log_test_name(request, _crash_logger):
+    """Append the current test node-id to the crash log before it runs."""
+    with open(_crash_logger, "a", encoding="utf-8") as f:
+        f.write(request.node.nodeid + "\n")
+    yield
+
+
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch):
+    """Give each test its own QSettings namespace so registry state cannot
+    leak between tests.  Without this, a test that writes to QSettings can
+    change the behaviour of a completely unrelated test that reads the same key.
+    """
+    try:
+        from PyQt6.QtCore import QSettings, QCoreApplication
+    except ImportError:
+        yield
+        return
+
+    key = str(uuid.uuid4())[:8]
+    original_org = QCoreApplication.organizationName()
+    original_app = QCoreApplication.applicationName()
+    QCoreApplication.setOrganizationName(f"NetSentinel-test-{key}")
+    QCoreApplication.setApplicationName("test")
+    yield
+    QCoreApplication.setOrganizationName(original_org)
+    QCoreApplication.setApplicationName(original_app)
 
 
 @pytest.fixture(autouse=True)

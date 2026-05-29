@@ -13,7 +13,6 @@ Covers:
 """
 from __future__ import annotations
 
-import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +23,6 @@ try:
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
-_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
 
 
 # ---------------------------------------------------------------------------

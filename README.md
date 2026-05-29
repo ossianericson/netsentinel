@@ -320,6 +320,19 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.56
+
+**Fixed**
+- Test suite crash (`STATUS_STACK_BUFFER_OVERRUN`) at ~52% run: `QFileSystemWatcher` OS threads in `test_hardware_integration.py` were accumulating without cleanup; fix mocks the watcher and adds explicit `_tick_timer.stop()` + multi-pass `deleteLater()` cleanup
+- Removed module-level `QApplication` creation from 7 test files (`test_hardware_integration`, `test_home_page`, `test_mesh_grouping_toggle`, `test_notifications_page`, `test_overview_page`, `test_settings_and_onboarding`, `test_themes`) — conftest.py's session fixture now owns the `QApplication`
+- `test_hub_card_errors.py` rewrote widget creation to use factory fixtures with `deleteLater()` cleanup; removed module-scoped `qapp` fixture that duplicated conftest
+
+**Added**
+- `tests/test_codeql_prevention.py` — static AST checks for bare `except:` blocks (CodeQL `py/bare-except`) and URL substring comparisons in test files (CodeQL `py/incomplete-url-substring-sanitization`)
+- `tests/conftest.py` QSettings isolation fixture (`isolated_settings`, autouse) — each test gets a unique org/app name so QSettings state cannot leak between tests
+- `tests/conftest.py` crash logger fixture (`_crash_logger` / `_log_test_name`) — writes test names to `ns_test_crash_log.txt` before each run to identify last test before a process-level crash
+- `RULE-WIN3` and `RULE-WIN4` in `CLAUDE.md` — document the Qt test lifecycle rules learned from the crash investigation
+
 ### v1.9.55
 
 **Fixed**

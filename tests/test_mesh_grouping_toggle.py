@@ -14,7 +14,6 @@ Contract:
 
 from __future__ import annotations
 
-import sys
 
 import pytest
 
@@ -25,7 +24,6 @@ try:
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
-_app = QApplication.instance() or QApplication(sys.argv + ["-platform", "offscreen"])
 
 from ui.pages.hardware_integration_page import _RouterDetailPanel
 
@@ -49,7 +47,7 @@ def panel():
     p = _RouterDetailPanel()
     yield p
     p.deleteLater()
-    _app.processEvents()
+    QApplication.instance().processEvents()
 
 
 # ── Structure ─────────────────────────────────────────────────────────────────
