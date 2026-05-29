@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QSettings, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QFileSystemWatcher, QSettings, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QCursor, QFont, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -537,9 +537,15 @@ def _record_success(path: str) -> dict:
 
 def _record_error(path: str, msg: str) -> dict:
     h = _load_health(path)
-    h["errors"]     += 1
-    h["consecutive"] = h.get("consecutive", 0) + 1
-    h["last_err"]    = msg
+    h["errors"] += 1
+    # AUTH errors are not transient — wrong credentials won't fix themselves by
+    # retrying.  Don't count them toward the consecutive circuit-breaker so the
+    # card stays in the "Re-enter Password" state rather than auto-disabling.
+    if msg.startswith("AUTH:"):
+        h["consecutive"] = 0
+    else:
+        h["consecutive"] = h.get("consecutive", 0) + 1
+    h["last_err"] = msg
     if h["consecutive"] >= _CIRCUIT_BREAK_THRESHOLD:
         h["disabled"] = True
     _save_health(path, h)
@@ -1294,6 +1300,7 @@ def _classify_error(msg: str) -> str:
     """Convert a raw or prefixed error string into a human-readable sentence.
 
     Handles structured prefixes emitted by plugin _fmt_err() helpers:
+      FILE: <msg>  — plugin file not found (moved / deleted)
       DEPS: <msg>  — missing pip package
       AUTH: <msg>  — authentication failure
       NET:  <msg>  — network / connectivity failure
@@ -1302,6 +1309,8 @@ def _classify_error(msg: str) -> str:
     """
     import re
     # Structured prefixes from plugin _fmt_err()
+    if msg.startswith("FILE:"):
+        return "Plugin file was moved or deleted — re-import it to restore functionality."
     if msg.startswith("DEPS:"):
         body = msg[5:].strip()
         m = re.search(r"pip install\s+(\S+)", body)
@@ -1423,6 +1432,7 @@ class HubCard(QFrame):
     install_completed       = pyqtSignal(str)   # path — pip install succeeded, reload worker
     add_another             = pyqtSignal(str)   # path — add a second instance of this plugin
     update_credentials_clicked = pyqtSignal(str)  # instance_id — open credential dialog
+    reimport_clicked        = pyqtSignal(str)   # path — plugin file not found, browse for new
 
     def __init__(self, path: str, meta: dict, last_result: Optional[dict],
                  instance_id: str = "", display_name: str = "",
@@ -1556,6 +1566,18 @@ class HubCard(QFrame):
             lambda: self.update_credentials_clicked.emit(self._instance_id)
         )
         hdr_lay.addWidget(self._btn_update_cred)
+
+        # Re-import button — shown when FILE: error indicates plugin file is gone (P6-2)
+        self._btn_reimport = _btn("⤵ Re-import")
+        self._btn_reimport.setFixedHeight(26)
+        self._btn_reimport.setToolTip(
+            "Plugin file was moved or deleted — browse to locate it again"
+        )
+        self._btn_reimport.setVisible(False)
+        self._btn_reimport.clicked.connect(
+            lambda: self.reimport_clicked.emit(self._path)
+        )
+        hdr_lay.addWidget(self._btn_reimport)
 
         # Refresh button
         self._btn_refresh = _btn("↻")
@@ -1728,16 +1750,26 @@ class HubCard(QFrame):
             self._btn_install.setText(f"⬇ Install {self._pending_pkg}")
             self._btn_install.setVisible(True)
             self._btn_update_cred.setVisible(False)
+            self._btn_reimport.setVisible(False)
         elif msg.startswith("Authentication failed"):
             # P4-1: auth error — show credential update button, not circuit-breaker path
             self._pending_pkg = ""
             self._metrics_lbl.setText(f"Error: {msg[:80]}")
             self._btn_update_cred.setVisible(True)
+            self._btn_reimport.setVisible(False)
+        elif msg.startswith("Plugin file was moved or deleted"):
+            # P6-2: file gone — show re-import button
+            self._pending_pkg = ""
+            self._metrics_lbl.setText("Plugin file not found — re-import required")
+            self._btn_reimport.setVisible(True)
+            self._btn_update_cred.setVisible(False)
+            self._btn_install.setVisible(False)
         else:
             self._pending_pkg = ""
             self._metrics_lbl.setText(f"Error: {msg[:80]}")
             self._btn_update_cred.setVisible(False)
             self._btn_install.setVisible(False)
+            self._btn_reimport.setVisible(False)
         self._metrics_lbl.setStyleSheet(
             f"color:{AMBER}; font-size:10px; border:none; background:transparent;"
         )
@@ -2200,6 +2232,10 @@ class HardwareIntegrationPage(QWidget):
         self._tick_timer.timeout.connect(self._tick_timestamps)
         self._tick_timer.start()
 
+        # P6-4: file watcher — detects plugin edits (trigger re-poll) and deletions (FILE: error)
+        self._file_watcher = QFileSystemWatcher(self)
+        self._file_watcher.fileChanged.connect(self._on_plugin_file_changed)
+
         # Start persistent poll workers for all imported plugins, staggered 3 s apart
         self._start_all_poll_workers()
 
@@ -2567,6 +2603,7 @@ class HardwareIntegrationPage(QWidget):
                 card.install_completed.connect(self._on_install_completed)
                 card.add_another.connect(self._on_add_another_instance)
                 card.update_credentials_clicked.connect(self._on_update_credentials)
+                card.reimport_clicked.connect(self._on_reimport_plugin)
                 self._hub_lay.addWidget(card)
                 # Key by instance_id so multiple instances of same plugin coexist
                 self._cards[inst["id"]] = card
@@ -3067,6 +3104,9 @@ class HardwareIntegrationPage(QWidget):
             )
         worker.start()
         self._poll_workers[instance_id] = worker
+        # P6-4: watch plugin file for changes / deletion
+        if Path(path).exists() and path not in self._file_watcher.files():
+            self._file_watcher.addPath(path)
 
     def _stop_poll_worker(self, path_or_id: str) -> None:
         """Stop by instance_id (preferred) or by path (legacy)."""
@@ -3082,6 +3122,11 @@ class HardwareIntegrationPage(QWidget):
         if worker:
             worker.stop()
             worker.wait(2000)
+
+    @pyqtSlot(str)
+    def _on_reimport_plugin(self, path: str) -> None:
+        """P6-2: Plugin file gone — open file browser so user can locate the new path."""
+        self._on_browse()
 
     @pyqtSlot(str)
     def _on_add_another_instance(self, path: str) -> None:
@@ -3155,6 +3200,37 @@ class HardwareIntegrationPage(QWidget):
             card.update_result(data, ts)
             card.refresh_health_ui()
         self.plugin_result.emit(data)
+
+    def _instance_id_for_path(self, path: str) -> "str | None":
+        """Return the instance_id whose card._path matches *path*, or None."""
+        for iid, card in self._cards.items():
+            if card._path == path:
+                return iid
+        return None
+
+    @pyqtSlot(str)
+    def _on_plugin_file_changed(self, path: str) -> None:
+        """P6-4: QFileSystemWatcher callback — plugin file was modified or deleted.
+
+        File modified → re-add the watch path (OS removes it after notification on some
+        platforms) then trigger an immediate re-poll so the worker picks up the new code.
+        File deleted  → emit FILE: error to the card immediately without waiting for the
+        next poll cycle.
+        """
+        if Path(path).exists():
+            # OS may have removed the path from the watcher after the change event
+            if path not in self._file_watcher.files():
+                self._file_watcher.addPath(path)
+            # Wake the worker immediately to pick up the edited plugin
+            for iid, worker in self._poll_workers.items():
+                if getattr(worker, "_path", "") == path and worker.isRunning():
+                    worker.trigger_now()
+                    break
+        else:
+            # File deleted — surface the error on the card right away
+            inst_id = self._instance_id_for_path(path)
+            if inst_id:
+                self._on_plugin_error(inst_id, f"FILE: plugin file not found at {path}")
 
     def _on_plugin_error(self, instance_id: str, msg: str) -> None:
         h = _record_error(instance_id, msg)

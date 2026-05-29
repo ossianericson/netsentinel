@@ -64,8 +64,13 @@ class PluginPollingWorker(QThread):
                 self._interval_s = max(10, int(self._config["poll_interval"]))
             except (TypeError, ValueError):
                 pass
-        self._stop        = False
-        self._trigger     = threading.Event()
+        self._stop              = False
+        self._trigger           = threading.Event()
+        # P5-1: concurrent poll guard — True while _run_once is executing
+        self._poll_in_progress  = False
+        # P6-1: exponential backoff state
+        self._consecutive_errors = 0
+        self._last_run_ok        = False
 
     # ── Public interface ──────────────────────────────────────────────────────
 
@@ -75,17 +80,43 @@ class PluginPollingWorker(QThread):
         self._trigger.set()
 
     def trigger_now(self) -> None:
-        """Wake the inter-poll sleep immediately — runs plugin right away."""
-        self._trigger.set()
+        """Wake the inter-poll sleep immediately — runs plugin right away.
+
+        No-op if a poll is already in progress (P5-1 concurrent poll guard).
+        CPython bool reads/writes are GIL-protected; no explicit lock needed.
+        """
+        if not self._poll_in_progress:
+            self._trigger.set()
+
+    def get_effective_interval(self) -> int:
+        """Return the current sleep interval accounting for exponential backoff (P6-1).
+
+        1 error        → base interval (no change)
+        3+ consecutive → 2× base, capped at 300 s
+        6+ consecutive → 4× base, capped at 300 s
+        """
+        if self._consecutive_errors >= 6:
+            return min(self._interval_s * 4, 300)
+        if self._consecutive_errors >= 3:
+            return min(self._interval_s * 2, 300)
+        return self._interval_s
 
     # ── Thread body ───────────────────────────────────────────────────────────
 
     def run(self) -> None:
         while not self._stop:
             self._trigger.clear()
+            self._poll_in_progress = True
+            self._last_run_ok = False
             self._run_once()
+            self._poll_in_progress = False
+            # Update backoff counter based on run outcome (P6-1)
+            if self._last_run_ok:
+                self._consecutive_errors = 0
+            else:
+                self._consecutive_errors += 1
             if not self._stop:
-                self._trigger.wait(timeout=self._interval_s)
+                self._trigger.wait(timeout=self.get_effective_interval())
 
     def _run_once(self) -> None:
         """Load the plugin in-process and call get_info() / get_status() directly.
@@ -183,6 +214,7 @@ class PluginPollingWorker(QThread):
                 "_path": self._path,
             })
             if not err_msg:
+                self._last_run_ok = True  # clean result — reset backoff counter
                 _log("✓ Result emitted")
 
         except SystemExit:
