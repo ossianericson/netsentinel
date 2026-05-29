@@ -320,6 +320,11 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.57
+
+**Fixed**
+- `ui/topology_widget.py`: invalid escape sequence (`\ `) in module docstring replaced with raw string — eliminates `DeprecationWarning` in full test run
+
 ### v1.9.56
 
 **Fixed**

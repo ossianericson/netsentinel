@@ -9687,10 +9687,9 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Plugin rename (P3-4)", "Every Hub card now has a ✎ rename button. Clicking it opens an inline prompt; the new name propagates atomically to the nav flyout, breadcrumb, command palette, and the pinned section — no restart required."),
-            ("Backoff & resilience (P6-1)", "The poll worker now applies exponential backoff: normal interval after 1 error, 2× after 3 consecutive errors, 4× (capped at 300 s) after 6. AUTH errors are exempt from the circuit breaker — they reset the consecutive counter instead of incrementing it."),
-            ("File-watcher (P6-4)", "Each registered plugin file is watched via QFileSystemWatcher. If the file is edited, a 'Reload plugin' toast appears. If it is deleted, the card immediately shows a FILE: error with a Re-import button."),
-            ("Concurrent poll guard (P5-1)", "trigger_now() is now a no-op while a poll cycle is already in progress, preventing duplicate concurrent executions of the same plugin."),
+            ("Crash-free test suite (Sprint 1)", "The full 2,136-test suite now runs to completion with no STATUS_STACK_BUFFER_OVERRUN crash. QFileSystemWatcher threads and module-level QApplication instances were the root cause; both fixed via conftest.py session fixture and per-widget deleteLater() cleanup."),
+            ("CodeQL prevention tests", "tests/test_codeql_prevention.py catches bare-except blocks and URL-substring comparisons before they reach CI, replicating the categories that triggered hotfixes in v1.9.53–v1.9.54."),
+            ("Docstring escape fix", "Invalid escape sequences in ui/topology_widget.py module docstring replaced with a raw string — eliminates DeprecationWarning in the test run."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-"""
+r"""
 Network topology graph widget.
 
 Flat star (no mesh data):
