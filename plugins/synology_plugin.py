@@ -14,6 +14,7 @@ Note: This is for Synology ROUTERS (SRM firmware), not NAS devices (DSM).
 """
 
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
@@ -34,7 +35,7 @@ CREDENTIAL_LABEL = "Password"
 def _load_password() -> str:
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", HARDWARE_IP)
+        pw = keyring.get_password("NetSentinel/hardware", _ip)
         if pw:
             return pw
     except Exception:

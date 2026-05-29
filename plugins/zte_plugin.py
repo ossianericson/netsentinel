@@ -14,6 +14,7 @@ saved automatically.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -36,12 +37,13 @@ def _load_credentials() -> tuple[str, str]:
       1. NetSentinel/modem    — saved by the Modem page
       2. NetSentinel/hardware — saved by the Hardware Integration page password field
     """
+    _ip = os.environ.get("NETSENTINEL_PLUGIN_IP") or HARDWARE_IP
     try:
         import keyring
-        pw = (keyring.get_password("NetSentinel/modem", HARDWARE_IP)
-              or keyring.get_password("NetSentinel/hardware", HARDWARE_IP))
+        pw = (keyring.get_password("NetSentinel/modem", _ip)
+              or keyring.get_password("NetSentinel/hardware", _ip))
         if pw:
-            return HARDWARE_IP, pw
+            return _ip, pw
     except Exception:
         pass
     raise RuntimeError(

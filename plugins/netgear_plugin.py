@@ -14,6 +14,7 @@ Supports: Orbi RBK863S/752, Nighthawk AX12/RAX200, R7000, R8000, R9000, and most
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -39,7 +40,7 @@ def _check_deps():
 def _load_password() -> str:
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", HARDWARE_IP)
+        pw = keyring.get_password("NetSentinel/hardware", _ip)
         if pw:
             return pw
     except Exception:

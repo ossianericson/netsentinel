@@ -19,6 +19,7 @@ Stop: call stop() then wait().
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -29,8 +30,8 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 class PluginPollingWorker(QThread):
 
-    result = pyqtSignal(dict)
-    error  = pyqtSignal(str)
+    result = pyqtSignal(dict)   # data dict; includes "_instance_id" key
+    error  = pyqtSignal(str)    # error message
 
     _INTERVALS: dict[str, int] = {
         "modem":  30,
@@ -45,13 +46,17 @@ class PluginPollingWorker(QThread):
     # from source or from the frozen bundle).
     _NS_ROOT_FALLBACK = str(Path(__file__).parent.parent)
 
-    def __init__(self, path: str, hw_type: str, parent=None) -> None:
+    def __init__(self, path: str, hw_type: str,
+                 instance_id: str = "", instance_ip: str = "",
+                 parent=None) -> None:
         super().__init__(parent)
-        self._path       = path
-        self._hw_type    = hw_type
-        self._interval_s = self._INTERVALS.get(hw_type, self._DEFAULT_INTERVAL)
-        self._stop       = False
-        self._trigger    = threading.Event()
+        self._path        = path
+        self._hw_type     = hw_type
+        self._instance_id = instance_id  # unique key for this instance
+        self._instance_ip = instance_ip  # IP override for multi-instance
+        self._interval_s  = self._INTERVALS.get(hw_type, self._DEFAULT_INTERVAL)
+        self._stop        = False
+        self._trigger     = threading.Event()
 
     # ── Public interface ──────────────────────────────────────────────────────
 
@@ -85,6 +90,12 @@ class PluginPollingWorker(QThread):
         if not Path(self._path).exists():
             self.error.emit(f"Plugin file not found: {self._path}")
             return
+
+        # Set IP override so _load_credentials() in the plugin uses the instance IP.
+        if self._instance_ip:
+            os.environ["NETSENTINEL_PLUGIN_IP"] = self._instance_ip
+        elif "NETSENTINEL_PLUGIN_IP" in os.environ:
+            del os.environ["NETSENTINEL_PLUGIN_IP"]
 
         # Ensure NetSentinel modules are importable.  Look for the live entry in
         # sys.path that actually contains modules/utils.py (works from source,
@@ -128,7 +139,10 @@ class PluginPollingWorker(QThread):
                 return
             clients = get_clients() if callable(get_clients) else []
 
-            self.result.emit({"info": info, "status": status, "clients": clients})
+            self.result.emit({
+                "info": info, "status": status, "clients": clients,
+                "_instance_id": self._instance_id,
+            })
 
         except SystemExit:
             pass  # plugin shim called sys.exit() — harmless, treat as success-less run

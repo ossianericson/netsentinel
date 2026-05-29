@@ -13,6 +13,7 @@ Supports: any router running OpenWrt 18.06+ or LEDE with LuCI installed.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -39,7 +40,7 @@ def _check_deps():
 def _load_password() -> str:
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", HARDWARE_IP)
+        pw = keyring.get_password("NetSentinel/hardware", _ip)
         if pw:
             return pw
     except Exception:

@@ -18,6 +18,7 @@ Import via Hardware Hub — no password in the card needed (token is in the scri
 """
 
 import json
+import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -40,7 +41,7 @@ def _load_token() -> str:
         return HA_TOKEN
     try:
         import keyring
-        tok = keyring.get_password("NetSentinel/hardware", HARDWARE_IP)
+        tok = keyring.get_password("NetSentinel/hardware", _ip)
         if tok:
             return tok
     except Exception:

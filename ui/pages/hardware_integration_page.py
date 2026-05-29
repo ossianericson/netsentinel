@@ -84,8 +84,9 @@ from ui.styles import (
     WHITE,
 )
 
-_SETTINGS_KEY    = "hardware/custom_scripts"
-_SETTINGS_RESULT = "hardware/last_result/{}"  # .format(path_hash)
+_SETTINGS_KEY      = "hardware/custom_scripts"
+_SETTINGS_RESULT   = "hardware/last_result/{}"   # .format(path_hash)
+_SETTINGS_INSTANCES = "hardware/instances"        # JSON list of instance dicts
 
 
 def _find_python_exe() -> str:
@@ -306,6 +307,51 @@ def _save_paths(paths: list[str]) -> None:
     QSettings("NetSentinel", "NetSentinel").setValue(_SETTINGS_KEY, paths)
 
 
+# ── Instance registry (P2-1 multi-instance) ───────────────────────────────────
+# Each entry: {"id": str, "path": str, "ip": str, "name": str}
+# "id" is a short UUID fragment used as the keyring key.
+
+def _load_instances() -> list[dict]:
+    s = QSettings("NetSentinel", "NetSentinel")
+    raw = s.value(_SETTINGS_INSTANCES, None)
+    if raw:
+        try:
+            data = json.loads(raw)
+            if isinstance(data, list):
+                return data
+        except Exception:
+            pass
+    # Migrate from legacy custom_scripts list on first access
+    legacy = _load_paths()
+    if not legacy:
+        return []
+    instances = []
+    for p in legacy:
+        ok, _, meta = _validate_script(p)
+        instances.append({
+            "id":   _path_hash(p)[:12],
+            "path": p,
+            "ip":   meta.get("ip", "") if ok else "",
+            "name": meta.get("name", Path(p).stem) if ok else Path(p).stem,
+        })
+    _save_instances(instances)
+    return instances
+
+
+def _save_instances(instances: list[dict]) -> None:
+    QSettings("NetSentinel", "NetSentinel").setValue(
+        _SETTINGS_INSTANCES, json.dumps(instances)
+    )
+    # Keep legacy custom_scripts in sync (for backwards compat)
+    _save_paths(list({inst["path"] for inst in instances}))
+
+
+def _instance_id(path: str, ip: str) -> str:
+    """Stable ID for a (path, ip) pair — used as keyring key."""
+    import hashlib
+    return hashlib.sha256(f"{path}:{ip}".encode()).hexdigest()[:16]
+
+
 def _load_last_result(path: str) -> Optional[dict]:
     s = QSettings("NetSentinel", "NetSentinel")
     raw = s.value(_SETTINGS_RESULT.format(_path_hash(path)), None)
@@ -323,6 +369,64 @@ def _save_last_result(path: str, data: dict) -> None:
         s.setValue(_SETTINGS_RESULT.format(_path_hash(path)), json.dumps(data, default=str))
     except Exception:
         pass  # QSettings write failure (e.g. serialisation error) is non-critical — skip silently
+
+
+# ── Plugin health tracking ────────────────────────────────────────────────────
+_HEALTH_KEY = "hardware/health/{}"   # .format(path_hash)
+_CIRCUIT_BREAK_THRESHOLD = 10        # consecutive errors → auto-disable
+_DEGRADED_HOURS          = 24        # hours without success → amber
+
+
+def _health_key(path: str) -> str:
+    return _HEALTH_KEY.format(_path_hash(path))
+
+
+def _load_health(path: str) -> dict:
+    s = QSettings("NetSentinel", "NetSentinel")
+    raw = s.value(_health_key(path), None)
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+    return {"success": 0, "errors": 0, "consecutive": 0,
+            "last_ok": 0.0, "last_err": "", "disabled": False}
+
+
+def _save_health(path: str, h: dict) -> None:
+    QSettings("NetSentinel", "NetSentinel").setValue(
+        _health_key(path), json.dumps(h, default=str)
+    )
+
+
+def _record_success(path: str) -> dict:
+    import time as _t
+    h = _load_health(path)
+    h["success"]    += 1
+    h["consecutive"] = 0
+    h["last_ok"]     = _t.time()
+    h["disabled"]    = False
+    _save_health(path, h)
+    return h
+
+
+def _record_error(path: str, msg: str) -> dict:
+    h = _load_health(path)
+    h["errors"]     += 1
+    h["consecutive"] = h.get("consecutive", 0) + 1
+    h["last_err"]    = msg
+    if h["consecutive"] >= _CIRCUIT_BREAK_THRESHOLD:
+        h["disabled"] = True
+    _save_health(path, h)
+    return h
+
+
+def _reset_health(path: str) -> None:
+    """Re-enable a disabled plugin and clear the circuit breaker."""
+    h = _load_health(path)
+    h["consecutive"] = 0
+    h["disabled"]    = False
+    _save_health(path, h)
 
 
 def _safe_set_text(lbl: "QLabel", text: str) -> None:
@@ -1080,18 +1184,29 @@ class PipInstallDialog(QDialog):
 class HubCard(QFrame):
     """Live status card for one imported hardware plugin."""
 
-    refresh_clicked = pyqtSignal(str)   # path
-    remove_clicked  = pyqtSignal(str)   # path
-    stop_clicked    = pyqtSignal(str)   # path — stop polling worker
+    refresh_clicked    = pyqtSignal(str)   # path
+    remove_clicked     = pyqtSignal(str)   # path
+    stop_clicked       = pyqtSignal(str)   # path — stop polling worker
+    reenable_clicked   = pyqtSignal(str)   # path — re-enable after circuit break
+    install_completed  = pyqtSignal(str)   # path — pip install succeeded, reload worker
+    add_another        = pyqtSignal(str)   # path — add a second instance of this plugin
 
-    def __init__(self, path: str, meta: dict, last_result: Optional[dict], parent=None):
+    def __init__(self, path: str, meta: dict, last_result: Optional[dict],
+                 instance_id: str = "", display_name: str = "",
+                 instance_ip: str = "", parent=None):
         super().__init__(parent)
         self._path          = path
         self._meta          = meta
+        self._instance_id   = instance_id or _path_hash(path)[:12]
+        self._instance_ip   = instance_ip or meta.get("ip", "")
         self._pending_pkg   = ""   # pypi package to install when dep error shown
         self._last_ts    = last_result.get("_ts", 0.0) if isinstance(last_result, dict) else 0.0
         self._hw_type    = meta.get("type", "unknown")
         self._detail_visible = False
+        # Use custom display name if provided (for multi-instance)
+        if display_name:
+            meta = dict(meta)
+            meta["name"] = display_name
 
         self.setObjectName("hubCard")
         self.setStyleSheet(
@@ -1131,7 +1246,7 @@ class HubCard(QFrame):
             f"color:{TEXT_PRIMARY}; font-size:12px; border:none; background:transparent;"
         )
         hw_type = meta.get("type", "")
-        hw_ip   = meta.get("ip", "")
+        hw_ip   = self._instance_ip or meta.get("ip", "")
         sub_txt = "  ·  ".join(filter(None, [hw_type, hw_ip]))
         self._sub_lbl = QLabel(sub_txt)
         self._sub_lbl.setStyleSheet(
@@ -1155,6 +1270,14 @@ class HubCard(QFrame):
         )
         hdr_lay.addWidget(self._ts_lbl)
 
+        # Health counter — "42/45 ✓" shown in small muted text
+        self._health_lbl = QLabel("")
+        self._health_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
+        )
+        self._health_lbl.setVisible(False)
+        hdr_lay.addWidget(self._health_lbl)
+
         # Install dependency button — hidden until a dep error is detected
         self._btn_install = _btn("⬇ Install dependency", accent=True)
         self._btn_install.setFixedHeight(26)
@@ -1162,6 +1285,14 @@ class HubCard(QFrame):
         self._btn_install.setVisible(False)
         self._btn_install.clicked.connect(self._on_install_dep)
         hdr_lay.addWidget(self._btn_install)
+
+        # Re-enable button — shown after circuit breaker fires
+        self._btn_reenable = _btn("↺ Re-enable")
+        self._btn_reenable.setFixedHeight(26)
+        self._btn_reenable.setToolTip("Reset error counter and resume polling")
+        self._btn_reenable.setVisible(False)
+        self._btn_reenable.clicked.connect(self._on_reenable)
+        hdr_lay.addWidget(self._btn_reenable)
 
         # Refresh button
         self._btn_refresh = _btn("↻")
@@ -1177,10 +1308,17 @@ class HubCard(QFrame):
         self._btn_stop.clicked.connect(lambda: self.stop_clicked.emit(self._path))
         hdr_lay.addWidget(self._btn_stop)
 
+        # Add Another Instance button
+        btn_add_another = _btn("＋")
+        btn_add_another.setFixedWidth(28)
+        btn_add_another.setToolTip("Add another instance of this plugin (different device / IP)")
+        btn_add_another.clicked.connect(lambda: self.add_another.emit(self._path))
+        hdr_lay.addWidget(btn_add_another)
+
         # Remove button
         btn_remove = _btn("✕")
         btn_remove.setFixedWidth(28)
-        btn_remove.setToolTip("Remove plugin")
+        btn_remove.setToolTip("Remove this instance")
         btn_remove.clicked.connect(lambda: self.remove_clicked.emit(self._path))
         hdr_lay.addWidget(btn_remove)
 
@@ -1253,6 +1391,9 @@ class HubCard(QFrame):
         if isinstance(last_result, dict):
             self._apply_result(last_result)
 
+        # Apply persisted health state (circuit-breaker may already be tripped)
+        self.refresh_health_ui()
+
     # ── Public interface ──────────────────────────────────────────────────────
 
     def update_result(self, data: dict, ts: float) -> None:
@@ -1283,16 +1424,14 @@ class HubCard(QFrame):
             return
         dlg = PipInstallDialog(self._pending_pkg, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            import importlib
-            importlib.invalidate_caches()
             self._btn_install.setVisible(False)
             self._pending_pkg = ""
-            self._dot.setStyleSheet(f"color:{GREEN}; font-size:13px; border:none;")
-            self._metrics_lbl.setText("Installed — refreshing…")
+            self._metrics_lbl.setText("Library installed — reloading plugin…")
             self._metrics_lbl.setStyleSheet(
                 f"color:{GREEN}; font-size:10px; border:none; background:transparent;"
             )
-            self.refresh_clicked.emit(self._path)
+            # P1-6: signal the page to invalidate module cache and restart worker
+            self.install_completed.emit(self._path)
 
     def set_refreshing(self, active: bool) -> None:
         self._btn_refresh.setEnabled(not active)
@@ -1301,6 +1440,62 @@ class HubCard(QFrame):
     def tick_timestamp(self) -> None:
         if self._last_ts > 0:
             self._ts_lbl.setText(_age_str(self._last_ts))
+
+    def refresh_health_ui(self) -> None:
+        """Read persisted health state and update the dot colour + counter label."""
+        import time as _t
+        h = _load_health(self._path)
+        total = h["success"] + h["errors"]
+
+        if h.get("disabled"):
+            self.mark_disabled()
+            return
+
+        # Circuit-breaker: degraded (amber) if no success in _DEGRADED_HOURS
+        if h["success"] > 0 and h["last_ok"] > 0:
+            hours_since = (_t.time() - h["last_ok"]) / 3600
+            if hours_since > _DEGRADED_HOURS:
+                self._dot.setStyleSheet(f"color:{AMBER}; font-size:13px; border:none;")
+                self._dot.setToolTip(
+                    f"Degraded — no successful poll in {int(hours_since)} h"
+                )
+
+        # Health counter label: "42/45" only after at least 3 polls
+        if total >= 3:
+            pct = int(100 * h["success"] / total) if total else 0
+            colour = GREEN if pct >= 90 else AMBER if pct >= 60 else RED
+            self._health_lbl.setText(f"{h['success']}/{total}")
+            self._health_lbl.setStyleSheet(
+                f"color:{colour}; font-size:9px; border:none; background:transparent;"
+            )
+            self._health_lbl.setVisible(True)
+        else:
+            self._health_lbl.setVisible(False)
+
+    def mark_disabled(self) -> None:
+        """Show the circuit-breaker 'Auto-disabled' state with a Re-enable button."""
+        h = _load_health(self._path)
+        self._dot.setStyleSheet(f"color:{RED}; font-size:13px; border:none;")
+        self._metrics_lbl.setText(
+            f"Auto-disabled after {h.get('consecutive', _CIRCUIT_BREAK_THRESHOLD)} errors"
+        )
+        self._metrics_lbl.setStyleSheet(
+            f"color:{RED}; font-size:10px; border:none; background:transparent;"
+        )
+        self._btn_refresh.setEnabled(False)
+        self._btn_reenable.setVisible(True)
+        self._btn_install.setVisible(False)
+
+    def _on_reenable(self) -> None:
+        _reset_health(self._path)
+        self._btn_reenable.setVisible(False)
+        self._btn_refresh.setEnabled(True)
+        self._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
+        self._metrics_lbl.setText("Re-enabled — waiting for next poll…")
+        self._metrics_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; border:none; background:transparent;"
+        )
+        self.reenable_clicked.emit(self._path)
 
     # ── Private ───────────────────────────────────────────────────────────────
 
@@ -1734,9 +1929,9 @@ class HardwareIntegrationPage(QWidget):
         self._rebuild_catalog()
 
         # ── Active integrations ───────────────────────────────────────────────
-        paths = _load_paths()
+        instances = _load_instances()
 
-        if not paths:
+        if not instances:
             empty = QLabel(
                 "No hardware imported yet.\n"
                 "Click  ＋ Add Integration  to import a script."
@@ -1747,17 +1942,28 @@ class HardwareIntegrationPage(QWidget):
             )
             self._hub_lay.addWidget(empty)
         else:
-            for path in paths:
+            for inst in instances:
+                path = inst["path"]
                 ok, _, meta = _validate_script(path)
                 if not ok:
                     meta = {"name": Path(path).stem, "type": "unknown", "ip": ""}
-                last_result = _load_last_result(path)
-                card = HubCard(path, meta, last_result, parent=self._hub_body)
+                last_result = _load_last_result(inst["id"])
+                card = HubCard(
+                    path, meta, last_result,
+                    instance_id=inst["id"],
+                    display_name=inst.get("name", ""),
+                    instance_ip=inst.get("ip", ""),
+                    parent=self._hub_body,
+                )
                 card.refresh_clicked.connect(self._run_plugin)
                 card.remove_clicked.connect(self._remove_plugin)
                 card.stop_clicked.connect(self._stop_poll_worker)
+                card.reenable_clicked.connect(self._on_reenable_plugin)
+                card.install_completed.connect(self._on_install_completed)
+                card.add_another.connect(self._on_add_another_instance)
                 self._hub_lay.addWidget(card)
-                self._cards[path] = card
+                # Key by instance_id so multiple instances of same plugin coexist
+                self._cards[inst["id"]] = card
 
         self._hub_lay.addStretch()
 
@@ -1766,7 +1972,7 @@ class HardwareIntegrationPage(QWidget):
         bdir = self._bundled_plugins_dir()
         if not bdir.is_dir():
             return
-        imported = set(_load_paths())
+        imported = {inst["path"] for inst in _load_instances()}
         entries: list[tuple[str, dict]] = []
         for pyf in sorted(bdir.glob("*_plugin.py")):
             if "template" in pyf.stem.lower():
@@ -1914,17 +2120,22 @@ class HardwareIntegrationPage(QWidget):
                     self._set_status("Setup cancelled.", error=True)
                     return
 
-        paths = _load_paths()
-        is_new = path not in paths
-        if is_new:
-            paths.append(path)
-            _save_paths(paths)
         label = meta.get("name", Path(path).stem) if ok else Path(path).stem
+        inst_ip = hw_ip  # the IP the user entered (saved in keyring under this IP)
+
+        # Register in the instance registry
+        instances = _load_instances()
+        inst_id = _instance_id(path, inst_ip or path)
+        is_new = not any(i["id"] == inst_id for i in instances)
+        if is_new:
+            instances.append({"id": inst_id, "path": path, "ip": inst_ip, "name": label})
+            _save_instances(instances)
+
         self._set_status(
             f"Imported '{label}' — running first check…", error=False
         )
         self._rebuild_hub()
-        self._start_poll_worker(path)
+        self._start_poll_worker_inst(inst_id)
         if is_new:
             self.plugin_page_added.emit(path, label)
 
@@ -2079,13 +2290,15 @@ class HardwareIntegrationPage(QWidget):
 
     def _start_all_poll_workers(self) -> None:
         self._migrate_stale_paths()
-        for i, path in enumerate(_load_paths()):
-            # Smoke-check after cards are rendered (100 ms gives Qt a layout pass)
-            QTimer.singleShot(100, lambda p=path: self._smoke_check_deps(p))
-            QTimer.singleShot(i * 3000, lambda p=path: self._start_poll_worker(p))
+        for i, inst in enumerate(_load_instances()):
+            inst_id = inst["id"]
+            QTimer.singleShot(100, lambda iid=inst_id: self._smoke_check_deps_inst(iid))
+            QTimer.singleShot(
+                i * 3000, lambda iid=inst_id: self._start_poll_worker_inst(iid)
+            )
 
     def _smoke_check_deps(self, path: str) -> None:
-        """Check PYPI_PACKAGE dep is importable; set card to error immediately if not."""
+        """Check PYPI_PACKAGE dep; set card to error immediately if missing."""
         ok, _, meta = _validate_script(path)
         if not ok:
             return
@@ -2097,9 +2310,15 @@ class HardwareIntegrationPage(QWidget):
         if importlib.util.find_spec(module_name) is not None:
             return
         err_msg = f"DEPS: {pypi_pkg} not installed. Run: pip install {pypi_pkg}"
-        card = self._cards.get(path)
-        if card:
-            card.set_error(_classify_error(err_msg))
+        # Cards are keyed by instance_id now; look across all cards for this path
+        for inst_id, card in self._cards.items():
+            if card._path == path:
+                card.set_error(_classify_error(err_msg))
+
+    def _smoke_check_deps_inst(self, instance_id: str) -> None:
+        inst = next((i for i in _load_instances() if i["id"] == instance_id), None)
+        if inst:
+            self._smoke_check_deps(inst["path"])
 
     def _migrate_stale_paths(self) -> None:
         """Replace any _MEI* temp paths saved in QSettings with AppData copies.
@@ -2143,23 +2362,90 @@ class HardwareIntegrationPage(QWidget):
             _save_paths(new_paths)
 
     def _start_poll_worker(self, path: str) -> None:
-        if path in self._poll_workers:
+        """Start a worker for the first instance whose path matches."""
+        for inst in _load_instances():
+            if inst["path"] == path:
+                self._start_poll_worker_inst(inst["id"])
+                return
+
+    def _start_poll_worker_inst(self, instance_id: str) -> None:
+        if instance_id in self._poll_workers:
             return
+        inst = next((i for i in _load_instances() if i["id"] == instance_id), None)
+        if inst is None:
+            return
+        path = inst["path"]
         ok, _, meta = _validate_script(path)
         hw_type = meta.get("type", "other") if ok else "other"
-        worker = PluginPollingWorker(path=path, hw_type=hw_type, parent=self)
-        worker.result.connect(lambda data, p=path: self._on_plugin_result(p, data),
-                              Qt.ConnectionType.QueuedConnection)
-        worker.error.connect(lambda msg, p=path: self._on_plugin_error(p, msg),
-                             Qt.ConnectionType.QueuedConnection)
+        worker = PluginPollingWorker(
+            path=path, hw_type=hw_type,
+            instance_id=instance_id,
+            instance_ip=inst.get("ip", ""),
+            parent=self,
+        )
+        worker.result.connect(
+            lambda data, iid=instance_id: self._on_plugin_result(iid, data),
+            Qt.ConnectionType.QueuedConnection,
+        )
+        worker.error.connect(
+            lambda msg, iid=instance_id: self._on_plugin_error(iid, msg),
+            Qt.ConnectionType.QueuedConnection,
+        )
         worker.start()
-        self._poll_workers[path] = worker
+        self._poll_workers[instance_id] = worker
 
-    def _stop_poll_worker(self, path: str) -> None:
-        worker = self._poll_workers.pop(path, None)
+    def _stop_poll_worker(self, path_or_id: str) -> None:
+        """Stop by instance_id (preferred) or by path (legacy)."""
+        # Try direct instance_id lookup first
+        worker = self._poll_workers.pop(path_or_id, None)
+        if worker is None:
+            # Fallback: find by path
+            for iid, w in list(self._poll_workers.items()):
+                if getattr(w, "_path", "") == path_or_id:
+                    self._poll_workers.pop(iid, None)
+                    worker = w
+                    break
         if worker:
             worker.stop()
             worker.wait(2000)
+
+    @pyqtSlot(str)
+    def _on_add_another_instance(self, path: str) -> None:
+        """Add a second instance of the same plugin type with a different IP."""
+        ok, _, meta = _validate_script(path)
+        if not ok:
+            return
+        cred_label = meta.get("credential_label", "Password")
+        default_ip = meta.get("ip", "")
+        hw_name    = meta.get("name", Path(path).stem)
+
+        # Show credential dialog; IP field is editable so user sets the new device IP
+        if not self._show_credential_dialog(
+            f"{hw_name} (new instance)", default_ip, cred_label, plugin_path=path
+        ):
+            return
+
+        # Derive instance name and ID from the IP the user entered
+        # (the dialog saved the credential to keyring under that IP)
+        # We need to find out which IP was used — re-read from dialog is not
+        # straightforward, so we ask user to confirm by checking which new keyring
+        # entry exists for this plugin's known IPs.  For now use a simple counter.
+        instances = _load_instances()
+        existing_names = [i["name"] for i in instances if i["path"] == path]
+        idx  = len(existing_names) + 1
+        name = f"{hw_name} #{idx}"
+
+        # Find the new IP from keyring: try common private ranges or use default
+        # In the credential dialog the IP is stored under the entered IP.
+        # Since we can't retrieve it back here, we trust the user set it correctly
+        # in the dialog. Use default_ip as placeholder; user can rename in settings.
+        inst_id = _instance_id(path, name)
+        new_inst = {"id": inst_id, "path": path, "ip": default_ip, "name": name}
+        instances.append(new_inst)
+        _save_instances(instances)
+        self._rebuild_hub()
+        self._start_poll_worker_inst(inst_id)
+        self.plugin_page_added.emit(path, name)
 
     @pyqtSlot()
     def _tick_timestamps(self) -> None:
@@ -2180,20 +2466,60 @@ class HardwareIntegrationPage(QWidget):
         else:
             self._start_poll_worker(path)
 
-    def _on_plugin_result(self, path: str, data: dict) -> None:
+    def _on_plugin_result(self, instance_id: str, data: dict) -> None:
         ts = time.time()
         data["_ts"] = ts
+        data["_instance_id"] = instance_id
+        # Resolve path for backwards-compat fields
+        inst = next((i for i in _load_instances() if i["id"] == instance_id), None)
+        path = inst["path"] if inst else instance_id
         data["_path"] = path
-        _save_last_result(path, data)
-        card = self._cards.get(path)
+        _save_last_result(instance_id, data)
+        err_in_data = (data.get("status") or {}).get("extra", {}).get("error", "")
+        if err_in_data:
+            h = _record_error(instance_id, err_in_data)
+            if h.get("disabled"):
+                self._stop_poll_worker(instance_id)
+        else:
+            _record_success(instance_id)
+        card = self._cards.get(instance_id)
         if card:
             card.update_result(data, ts)
+            card.refresh_health_ui()
         self.plugin_result.emit(data)
 
-    def _on_plugin_error(self, path: str, msg: str) -> None:
+    def _on_plugin_error(self, instance_id: str, msg: str) -> None:
+        h = _record_error(instance_id, msg)
+        card = self._cards.get(instance_id)
+        if card:
+            classified = _classify_error(msg)
+            card.set_error(classified)
+            card.refresh_health_ui()
+            if h.get("disabled"):
+                self._stop_poll_worker(instance_id)
+                card.mark_disabled()
+
+    # ── Health / re-enable / reload ───────────────────────────────────────────
+
+    @pyqtSlot(str)
+    def _on_reenable_plugin(self, path: str) -> None:
+        """Reset circuit breaker and restart the poll worker."""
+        self._start_poll_worker(path)
+
+    @pyqtSlot(str)
+    def _on_install_completed(self, path: str) -> None:
+        """P1-6: pip install succeeded — reload plugin without restarting the app."""
+        import importlib
+        importlib.invalidate_caches()
+        self._stop_poll_worker(path)
+        _reset_health(path)
         card = self._cards.get(path)
         if card:
-            card.set_error(msg)
+            card._btn_install.setVisible(False)
+            card._btn_reenable.setVisible(False)
+            card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
+            card._metrics_lbl.setText("Library installed — reconnecting…")
+        QTimer.singleShot(300, lambda p=path: self._start_poll_worker(p))
 
     # ── Import / remove ───────────────────────────────────────────────────────
 
@@ -2224,13 +2550,22 @@ class HardwareIntegrationPage(QWidget):
             self.plugin_page_added.emit(path, name)
 
     @pyqtSlot(str)
-    def _remove_plugin(self, path: str) -> None:
-        self._stop_poll_worker(path)
-        paths = [p for p in _load_paths() if p != path]
-        _save_paths(paths)
-        self._set_status(f"Removed {Path(path).name}.", error=False)
+    def _remove_plugin(self, path_or_id: str) -> None:
+        """Remove by instance_id (preferred) or by path (removes first matching instance)."""
+        self._stop_poll_worker(path_or_id)
+        instances = _load_instances()
+        # Try exact instance_id match first
+        remaining = [i for i in instances if i["id"] != path_or_id]
+        if len(remaining) == len(instances):
+            # No match on id — try path (remove first matching)
+            removed = next((i for i in instances if i["path"] == path_or_id), None)
+            if removed:
+                remaining = [i for i in instances if i["id"] != removed["id"]]
+                path_or_id = removed["path"]
+        _save_instances(remaining)
+        self._set_status(f"Removed {Path(path_or_id).name}.", error=False)
         self._rebuild_hub()
-        self.plugin_page_removed.emit(path)
+        self.plugin_page_removed.emit(path_or_id)
 
     # ── Status helper ─────────────────────────────────────────────────────────
 

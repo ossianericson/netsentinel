@@ -352,17 +352,16 @@ def test_delete_card_while_password_save_timer_pending(monkeypatch):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_no_auto_import_when_paths_empty(monkeypatch):
-    """When _load_paths returns [], _rebuild_hub must NOT auto-save any paths.
-
-    The catalog shows available hardware; the user must explicitly click Add.
-    Auto-import was removed because it caused all bundled plugins to appear as
-    active nav items on first launch.
-    """
+    """When no instances are registered, _rebuild_hub must NOT auto-save anything."""
     saved = []
     monkeypatch.setattr("ui.pages.hardware_integration_page._load_paths",
                         lambda: [])
+    monkeypatch.setattr("ui.pages.hardware_integration_page._load_instances",
+                        lambda: [])
     monkeypatch.setattr("ui.pages.hardware_integration_page._save_paths",
                         lambda p: saved.append(list(p)))
+    monkeypatch.setattr("ui.pages.hardware_integration_page._save_instances",
+                        lambda _: saved.append("instances"))
     monkeypatch.setattr("ui.pages.hardware_integration_page._load_last_result",
                         lambda _: None)
 
@@ -372,17 +371,22 @@ def test_no_auto_import_when_paths_empty(monkeypatch):
     _app.processEvents()
 
     assert not saved, (
-        "_save_paths was called — auto-import must not run on first launch"
+        "_save_paths/_save_instances was called — auto-import must not run on first launch"
     )
 
 
 def test_auto_import_skipped_when_paths_already_set(monkeypatch):
-    """When _load_paths already returns paths, no new _save_paths call expected."""
+    """When instances are already registered, no new _save_instances call expected."""
     saved = []
+    _inst = [{"id": "abc123", "path": _ZTE, "ip": "192.168.254.1", "name": "ZTE MC889"}]
     monkeypatch.setattr("ui.pages.hardware_integration_page._load_paths",
                         lambda: [_ZTE])
+    monkeypatch.setattr("ui.pages.hardware_integration_page._load_instances",
+                        lambda: _inst)
     monkeypatch.setattr("ui.pages.hardware_integration_page._save_paths",
                         lambda p: saved.append(list(p)))
+    monkeypatch.setattr("ui.pages.hardware_integration_page._save_instances",
+                        lambda _: saved.append("instances"))
     monkeypatch.setattr("ui.pages.hardware_integration_page._load_last_result",
                         lambda _: None)
 
@@ -391,8 +395,7 @@ def test_auto_import_skipped_when_paths_already_set(monkeypatch):
     p.deleteLater()
     _app.processEvents()
 
-    # _save_paths should NOT be called (paths already exist)
-    assert not saved, "_save_paths called unexpectedly when paths already set"
+    assert not saved, "_save_paths/_save_instances called unexpectedly when already set"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
