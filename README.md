@@ -320,6 +320,14 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.55
+
+**Fixed**
+- `data/plugin_hashes.json` hashes now computed on LF-normalised content via `_file_hash()` in `modules/plugin_tools.py` — `TestBundledPluginHashSync` was failing on Linux/macOS CI because hashes generated on Windows (CRLF) differed from checkout content (LF)
+- `TestBundledPluginHashSync` and `TestVerifySignature.test_verified_when_hash_matches` updated to use `_file_hash()` for cross-platform consistency
+- Documented the gap: `.apm/instructions/` are the true sources; `bump_version.py`'s `apm compile` step regenerates `.claude/rules/` from them — manual edits to `.claude/rules/` are overwritten
+- Updated `RULE-21-I` in `.apm/instructions/development-rules.instructions.md` (canonical source): "tag" now means the exact four-step sequence: `bump_version.py` → push branch → tag → push tag
+
 ### v1.9.54
 
 **Fixed**
@@ -381,7 +389,8 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 **Added**
 - `modules/plugin_tools.py` — plugin validator CLI (`python -m modules.plugin_tools validate <plugin.py>`); static checks for required constants, function signatures, PYPI_PACKAGE, top-level network calls, and imports outside safe list (P3-1)
-- `tools/generate_plugin_hashes.py` + `data/plugin_hashes.json` — build-time SHA-256 hash list for bundled plugins; runtime signature verification in `_start_poll_worker_inst` blocks tampered plugins (P4-2)
+- `tools/generate_plugin_hashes.py` + `data/plugin_hashes.json` — build-time SHA-256 hash list for bundled plugins; runtime signature verification in `_start_poll_worker_inst` blocks tampered plugins (P4-2); `TestBundledPluginHashSync` CI guard prevents stale-hash silent failures
+- Plugin instance rename — `✎` button on each Hub card renames the instance inline; change propagates atomically to nav flyout label, breadcrumb, pinned section, and command palette (P3-4)
 - P4-3 restricted import advisory — `validate_plugin()` warns when imports fall outside `_DEFAULT_SAFE_IMPORTS`; plugin may declare `SAFE_IMPORTS = [...]` to acknowledge custom imports
 - Hardware Hub "⬡ New Plugin" button — 6-field template wizard dialog generates a filled-in `.py` file in the user plugins dir, then offers to open it in the system editor (P3-2)
 - Plugin icon support — `HubCard` and catalog cards display a 24×24 PNG icon when `icon.png` is found alongside the plugin file or `ICON_PATH` constant is declared (P2-3)

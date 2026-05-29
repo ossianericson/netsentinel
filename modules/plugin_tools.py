@@ -320,6 +320,18 @@ def _load_hash_db() -> dict[str, str]:
     return {}
 
 
+def _file_hash(path: "str | Path") -> str:
+    """SHA-256 of a file's content normalised to LF line endings.
+
+    Normalising before hashing makes the digest identical on Windows (CRLF),
+    Linux, and macOS (LF) after git checkout, regardless of the host platform
+    or .gitattributes autocrlf settings.
+    """
+    raw = Path(path).read_bytes()
+    normalised = raw.replace(b"\r\n", b"\n")
+    return hashlib.sha256(normalised).hexdigest()
+
+
 def verify_signature(path: str) -> tuple[bool, str]:
     """Check a plugin file against data/plugin_hashes.json.
 
@@ -333,7 +345,7 @@ def verify_signature(path: str) -> tuple[bool, str]:
     if recorded is None:
         return False, "Not in hash list"
     try:
-        actual = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        actual = _file_hash(path)
     except Exception:
         return False, "Cannot read file"
     if actual == recorded:

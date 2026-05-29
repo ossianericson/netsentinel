@@ -1,14 +1,14 @@
 {
-  "asus_plugin.py": "68e9f6911959e41786e7de67beb4485c66df49c5aaf59318ca2f3253d6134841",
-  "deco_plugin.py": "d388f158261f1d73661a0707ab71edcd332ad19fb65ca8ca0c3f709bb74b4e43",
-  "example_open_ports_report.py": "326f58bb92bba8293fc401052752853275804feb32dc07afcbb106681428527a",
-  "fritzbox_plugin.py": "e06549c2ac6d722c4149624efddf20d4a6b4a6b62448aea8934787dcdb1929c0",
-  "ha_plugin.py": "c9f41b6b2aee258350d198728f22bb2994aa80ccf11e9e94f318883ed1d493a4",
-  "mikrotik_plugin.py": "e6f86a952ca0203918c982dde4faed42eea02bbf0c45e588cce16ccc8d5698db",
-  "netgear_plugin.py": "21241d858336b3989d5c109d59a00fa6e8154a0a4e0440f84329d256d003879f",
-  "openwrt_plugin.py": "e2886a63c8f64f51589b4b8ea0bd579a42b9916f11e6e5f882eecda28b94e650",
-  "synology_plugin.py": "b20ac5f386ae34b990510d21e5c20413101f9fdf35b645a4960b1d50236d1bce",
-  "template_plugin.py": "61f39efe1b0fafc38b66abef0e1cde0b2e8418942a4c67d8316d095b3fd21b91",
-  "unifi_plugin.py": "819f14aa74b5b6445edc311601a54b8dd1b9d55b0db2d3523ddcb474d6396117",
-  "zte_plugin.py": "43a9a7cde7c0cb63c41438298da7131ef67ce23b4ed1ad85bde886e44909bac2"
+  "asus_plugin.py": "46e794382b386ecb6f061c6ec4054bdf553ef12da9aec8bf4bfde8d102c90056",
+  "deco_plugin.py": "5ae009a9f55b4ad8c150129e246fa184221885f40e3d7f100183c27e6f526093",
+  "example_open_ports_report.py": "6180219cad7b4c9734cad515c48095db403a37237a17f0238d40f858cc5ea569",
+  "fritzbox_plugin.py": "87d5e80f010ae9254b18a1f7225888aad102153842e2bc3f5a4a314fba3c8499",
+  "ha_plugin.py": "16c7af02eb58c3c63a6e58ffb28c6bde6eb7785ea933566aa35d0783a28fe26e",
+  "mikrotik_plugin.py": "32a256724965163cb07f9caa573b17c59837fb494276f62e9b453cefd76bdb11",
+  "netgear_plugin.py": "1f0d42644748c3465c34920d0426fb5777ab724a469057d8a71ece4ce7d5e0af",
+  "openwrt_plugin.py": "eec741e3e4852a3ee0e95de4c5da26bca36fdcc5439b218f13560b47cc096b58",
+  "synology_plugin.py": "5530076be28c12d224d332fd99aac5bd0f7db8ec64f550a38e429846bd1f05c8",
+  "template_plugin.py": "890d02be5b7c4716934eb14bd8a60c66e7faeeb97095eee0e2e4f4ce4edacc48",
+  "unifi_plugin.py": "cb5f656e024c0571c0cd0c02e1412ba2563e68497ab285b3f6599dd65ac689da",
+  "zte_plugin.py": "66547f7605392f4aa6ecaf95c1dae82303212928fe47cf2f7a4d70cd436da61e"
 }

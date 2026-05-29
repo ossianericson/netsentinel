@@ -258,8 +258,9 @@ class TestVerifySignature:
         assert "Not in hash list" in msg
 
     def test_verified_when_hash_matches(self, tmp_path, monkeypatch):
+        from modules.plugin_tools import _file_hash
         path = _write_plugin(tmp_path, _MINIMAL_VALID)
-        sha = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+        sha = _file_hash(path)  # must match _file_hash used inside verify_signature
         monkeypatch.setattr(
             "modules.plugin_tools._load_hash_db",
             lambda: {Path(path).name: sha},
@@ -327,17 +328,21 @@ class TestBundledPluginHashSync:
     not regenerated.  The consequence: _start_poll_worker_inst returned early
     on every startup, so no plugin ever produced data.
 
+    Hashes are computed on LF-normalised content so they are identical on Windows
+    (CRLF) and Linux/macOS (LF) after git checkout.
+
     If this test fails, regenerate with:
         python -c "
         import hashlib, json
         from pathlib import Path
-        hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                  for p in sorted(Path('plugins').glob('*.py'))}
+        def fh(p): raw=p.read_bytes(); return hashlib.sha256(raw.replace(b'\\r\\n',b'\\n')).hexdigest()
+        hashes = {p.name: fh(p) for p in sorted(Path('plugins').glob('*.py'))}
         Path('data/plugin_hashes.json').write_text(json.dumps(hashes, indent=2) + chr(10))
         "
     """
 
     def test_hash_db_matches_bundled_plugins(self):
+        from modules.plugin_tools import _file_hash
         PLUGINS = ROOT / "plugins"
         HASH_DB = ROOT / "data" / "plugin_hashes.json"
 
@@ -352,7 +357,7 @@ class TestBundledPluginHashSync:
             if recorded is None:
                 mismatches.append(f"{plugin.name}: missing from hash DB")
                 continue
-            actual = hashlib.sha256(plugin.read_bytes()).hexdigest()
+            actual = _file_hash(plugin)
             if actual != recorded:
                 mismatches.append(
                     f"{plugin.name}: DB={recorded[:12]}… actual={actual[:12]}…"
