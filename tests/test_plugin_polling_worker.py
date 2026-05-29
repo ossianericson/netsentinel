@@ -9,10 +9,7 @@ from __future__ import annotations
 import sys
 import textwrap
 import time
-from pathlib import Path
-
 import pytest
-from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 # ── QApplication fixture ─────────────────────────────────────────────────────

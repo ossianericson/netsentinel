@@ -9,7 +9,6 @@ No PyQt6 GUI is initialised — all UI-level code is tested via the module-level
 helper functions that do not depend on a QWidget parent.
 """
 
-import json
 import sys
 from pathlib import Path
 

@@ -9,9 +9,8 @@ No QApplication required: all Qt/QSettings calls are patched out.
 from __future__ import annotations
 
 import inspect
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

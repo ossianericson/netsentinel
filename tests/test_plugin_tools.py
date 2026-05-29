@@ -13,8 +13,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from modules.plugin_tools import (
-    ValidationResult,
-    ValidationIssue,
     validate_plugin,
     verify_signature,
     _cli_validate,

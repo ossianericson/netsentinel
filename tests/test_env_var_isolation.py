@@ -18,7 +18,6 @@ import textwrap
 import threading
 import time
 from pathlib import Path
-from unittest.mock import patch
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -121,7 +120,7 @@ def test_env_var_restored_after_failure(monkeypatch):
             else:
                 os.environ["NETSENTINEL_PLUGIN_IP"] = prev
     except RuntimeError:
-        pass
+        pass  # expected — simulated failure; finally block restores the env var
 
     assert os.environ.get("NETSENTINEL_PLUGIN_IP") == "172.16.0.1"
 
