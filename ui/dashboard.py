@@ -10543,6 +10543,17 @@ class Dashboard(QMainWindow):
         if self._mesh_enrichment or any(self._plugin_enrichments.values()):
             self._apply_mesh_enrichment()
 
+        # Wake any router/AP plugin workers so fresh client data arrives quickly
+        # rather than waiting up to 60 s for the next scheduled poll cycle.
+        try:
+            _hw_page = getattr(self, "_hardware_integration_page", None)
+            if _hw_page:
+                for _pw in _hw_page._poll_workers.values():
+                    if getattr(_pw, "_hw_type", "modem") != "modem" and _pw.isRunning():
+                        _pw.trigger_now()
+        except Exception:
+            pass
+
         self._check_hw_autodetect()
 
         # Fetch WAN IP in background so geo map can resolve LAN devices later
@@ -10933,6 +10944,32 @@ class Dashboard(QMainWindow):
         self._refresh_hardware_badge()
         if hasattr(self, "_home_page"):
             self._home_page.refresh_hw_strip()
+        # Immediately refresh the Extend flyout so the new nav item is visible
+        # without requiring the user to click away and back.
+        try:
+            if extend_sec and hasattr(self, "_nav_flyout"):
+                _ext_entries = [
+                    (e.label, e.label in self._nav_pinned_labels,
+                     e.admin_required or e.audit_item)
+                    for e in extend_sec["entries"]
+                ]
+                self._nav_flyout.load_section(
+                    title="Extend",
+                    entries=_ext_entries,
+                    active_label=self._nav_current_page_label,
+                    on_navigate=self._nav_rail_go_to,
+                    on_pin_toggle=self._on_rail_pin_toggle,
+                )
+                for _lbl, _clr in getattr(self, "_flyout_dots", {}).items():
+                    if _clr:
+                        self._nav_flyout.apply_dot(_lbl, _clr)
+                if getattr(self, "_nav_open_section", "") != "Extend":
+                    self._nav_open_section = "Extend"
+                    if "Extend" in getattr(self, "_nav_rail_buttons", {}):
+                        self._nav_rail_buttons["Extend"].setChecked(True)
+                self._nav_flyout.open()
+        except Exception:
+            pass
 
     @pyqtSlot(str)
     def _on_plugin_page_removed(self, path: str) -> None:
@@ -10958,6 +10995,24 @@ class Dashboard(QMainWindow):
             [p._label for p in self._plugin_pages.values()]
         )
         self._refresh_hardware_badge()
+        # Refresh the Extend flyout so the removed item disappears immediately.
+        try:
+            if extend_sec and hasattr(self, "_nav_flyout"):
+                _ext_entries = [
+                    (e.label, e.label in self._nav_pinned_labels,
+                     e.admin_required or e.audit_item)
+                    for e in extend_sec["entries"]
+                ]
+                if getattr(self, "_nav_open_section", "") == "Extend":
+                    self._nav_flyout.load_section(
+                        title="Extend",
+                        entries=_ext_entries,
+                        active_label=self._nav_current_page_label,
+                        on_navigate=self._nav_rail_go_to,
+                        on_pin_toggle=self._on_rail_pin_toggle,
+                    )
+        except Exception:
+            pass
 
     def _update_monitor_badge(self, _active: bool = False) -> None:
         """Refresh all section badges and Home pills when log source state changes."""

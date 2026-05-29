@@ -37,8 +37,8 @@ class PluginPollingWorker(QThread):
 
     _INTERVALS: dict[str, int] = {
         "modem":  30,
-        "router": 120,
-        "ap":     120,
+        "router": 60,
+        "ap":     60,
         "switch": 300,
     }
     _DEFAULT_INTERVAL = 300
@@ -181,6 +181,7 @@ class PluginPollingWorker(QThread):
             self.result.emit({
                 "info": info, "status": status, "clients": clients,
                 "_instance_id": self._instance_id,
+                "_path": self._path,
             })
             if not err_msg:
                 _log("✓ Result emitted")

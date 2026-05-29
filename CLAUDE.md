@@ -960,6 +960,81 @@ Theme names, page labels, feature names must be identical in code, docstrings, R
 
 ---
 
+## Plugin System Rules
+
+These rules were extracted from bug classes found in session 2026-05-29 (post-v1.9.48).
+Each rule is labelled blocking because violating it produces silent failures that only
+appear for certain users or in certain timing windows.
+
+### RULE-PL1 (blocking): No shared mutable state between plugin instances
+`os.environ` is process-wide.  Never use it to pass per-plugin data (IP, credentials,
+config) between the host and a plugin.  Use module-attribute injection instead:
+
+```python
+# WRONG — ZTE poller sets this; Deco tester reads the wrong IP
+os.environ["NETSENTINEL_PLUGIN_IP"] = self._instance_ip
+
+# CORRECT — injected into the freshly-loaded module's own namespace
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+mod._NETSENTINEL_INSTANCE_IP = self._instance_ip
+```
+
+If `os.environ` must be used as a temporary compatibility shim, save and restore the
+previous value in a `finally` block every time.
+
+### RULE-PL2 (blocking): One registration code path for all plugin sources
+If a plugin can be added via multiple entry points (browse, bundled, community, nspkg),
+every invariant — credential dialog, dep check, AppData copy, instance-registry write —
+must be enforced in a single shared function, not duplicated across each entry point.
+
+```
+# WRONG — _on_browse and _import_bundled each partially implement registration
+def _on_browse(self): ...          # no credential dialog, no AppData copy
+def _import_bundled(self): ...     # credential dialog, AppData copy
+
+# CORRECT — one pipeline function called by all entry points
+def _register_plugin(self, path, source): ...
+```
+
+Any behaviour gap between entry points is a bug waiting to be reported.
+
+### RULE-PL3 (blocking): Any mutation of _nav_sections must be followed by a flyout reload
+Appending or removing entries from `_nav_sections[n]["entries"]` does not update the
+flyout widget — the widget was built from a previous snapshot.  Every mutation site
+must call `_reload_section(name, force_open)` immediately after.
+
+```python
+# WRONG — entries updated but flyout still shows the old list
+extend_sec["entries"].append(entry)
+
+# CORRECT — reload the flyout so the new item is visible immediately
+extend_sec["entries"].append(entry)
+self._reload_section("Extend", force_open=True)
+```
+
+"The user will see it next time they open the section" is a UX bug, not acceptable behaviour.
+
+### RULE-PL4 (blocking): Plugin enrichment and scan results are independent — neither waits for the other
+`_apply_mesh_enrichment` must never return early solely because `_m1_result` is None.
+Plugin poll data is stored in `_plugin_enrichments` regardless of scan state.
+When a scan completes it applies whatever plugin data is already cached.
+When plugin data arrives it applies it to whatever scan result is already cached.
+
+```python
+# WRONG — discards plugin data that arrives before first scan
+def _apply_mesh_enrichment(self):
+    if not self._m1_result:
+        return   # silent discard
+
+# CORRECT — store always; apply when both sides have data
+def _apply_mesh_enrichment(self):
+    if not self._m1_result or (not self._mesh_enrichment and not _all_plugin):
+        return   # nothing to merge yet — safe early exit
+```
+
+---
+
 ## Navigation Wiring
 
 ### RULE-NAV1 (blocking): Every registered page must be reachable from _build_pro_nav()

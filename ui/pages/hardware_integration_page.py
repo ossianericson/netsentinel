@@ -1207,6 +1207,14 @@ class _PluginConnectionTester(QThread):
 
     def run(self) -> None:
         import importlib.util
+        import os as _os
+
+        # Pin the IP override before exec_module so _load_credentials() inside
+        # the plugin sees the IP from the dialog, not whatever a concurrent
+        # poll worker (e.g. ZTE modem) left in NETSENTINEL_PLUGIN_IP.
+        _prev_ip = _os.environ.get("NETSENTINEL_PLUGIN_IP")
+        _os.environ["NETSENTINEL_PLUGIN_IP"] = self._ip
+
         try:
             # Temporarily save credential so the plugin can read it
             import keyring as _kr
@@ -1261,6 +1269,12 @@ class _PluginConnectionTester(QThread):
             self.failure.emit("Plugin called sys.exit() unexpectedly.")
         except Exception as exc:
             self.failure.emit(_classify_error(str(exc)))
+        finally:
+            # Restore whatever the env var was before this test ran.
+            if _prev_ip is None:
+                _os.environ.pop("NETSENTINEL_PLUGIN_IP", None)
+            else:
+                _os.environ["NETSENTINEL_PLUGIN_IP"] = _prev_ip
 
 
 def _classify_error(msg: str) -> str:
@@ -3408,6 +3422,24 @@ class HardwareIntegrationPage(QWidget):
         if not ok:
             self._set_status(f"Validation failed: {msg}", error=True)
             return
+
+        # Show credential dialog before registering the plugin so the user
+        # is prompted immediately instead of having to scroll to the new card.
+        cred_label = meta.get("credential_label", "") if ok else ""
+        hw_ip      = meta.get("ip", "") if ok else ""
+        if cred_label and hw_ip:
+            try:
+                import keyring as _kr
+                existing_pw = _kr.get_password("NetSentinel/hardware", hw_ip)
+            except Exception:
+                existing_pw = None
+            if not existing_pw:
+                if not self._show_credential_dialog(
+                    meta.get("name", Path(path).stem), hw_ip, cred_label,
+                    plugin_path=path,
+                ):
+                    self._set_status("Setup cancelled.", error=True)
+                    return
 
         paths = _load_paths()
         is_new = path not in paths
