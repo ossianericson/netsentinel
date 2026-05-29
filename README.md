@@ -320,6 +320,13 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.53
+
+**Fixed**
+- `data/plugin_hashes.json`: regenerated after P1-3 edited bundled plugins; stale hashes caused `_start_poll_worker_inst` to silently return early — no plugin produced data on startup
+- `ui/pages/hardware_integration_page.py`: added explanatory comments to five bare `except: pass` blocks (CodeQL `py/empty-except` #740–#745)
+- `tests/test_plugin_tools.py`: `TestBundledPluginHashSync` regression guard — fails immediately when any bundled plugin is edited without regenerating the hash database
+
 ### v1.9.52
 
 **Added**
