@@ -234,15 +234,30 @@ violation.  A worker test must be added before any further plugin changes ship.
 
 ## Immediate Next Actions (ordered)
 
-1. [ ] `tests/test_plugin_polling_worker.py` — lifecycle test (RULE-T2 compliance)
-2. [ ] P0-3: pip-install action button in `plugin_device_page` banner
-3. [ ] P0-4: fix `_NS_ROOT` runtime computation
-4. [ ] P1-2: blocking live-test before registration completes
-5. [ ] P1-3: structured error prefix convention in all bundled plugins
-6. [ ] P0-5: startup smoke-check for registered plugins
-7. [ ] P1-4: per-plugin health tracking
-8. [ ] P2-1: multi-instance support
+1. [x] `tests/test_plugin_polling_worker.py` — lifecycle test (RULE-T2 compliance)  ✅ v1.9.45
+2. [x] P0-3: pip-install action button in `plugin_device_page` banner  ✅ v1.9.45
+3. [x] P0-4: fix `_NS_ROOT` runtime computation  ✅ v1.9.45
+4. [x] P1-2: blocking live-test before registration completes  ✅ v1.9.45
+5. [x] P1-3: structured error prefix convention in all bundled plugins  ✅ v1.9.45
+6. [x] P0-5: startup smoke-check for registered plugins  ✅ v1.9.45
+7. [x] P1-4: per-plugin health tracking  ✅ v1.9.45
+8. [x] P2-1: multi-instance support  ✅ v1.9.45
+9. [x] P3-3: in-app output console (`≡ Logs` button on HubCard)  ✅ v1.9.46
+10. [x] P4-1: unsigned plugin warning dialog + consent tracking  ✅ v1.9.46
+11. [x] `tests/test_plugin_validator.py`, `test_plugin_health.py`, `test_plugin_migration.py`, `test_hub_card_errors.py`  ✅ v1.9.46
+
+## Remaining
+
+- P2-2: Typed CONFIG_SCHEMA (plugin declares poll_interval, verify_ssl, etc.)
+- P2-3: Plugin icons (ICON_URL or icon.png alongside script)
+- P3-1: Plugin validator CLI (`python -m netsentinel.plugin_tools validate`)
+- P3-2: Plugin template wizard (in-app "Create from template" with name/IP/cred/pypi fields)
+- P3-4: Community plugin index (GitHub-hosted JSON, SHA-256 verified)
+- P3-5: Plugin bundle format (.nspkg ZIP)
+- P4-2: Official plugin signing (build-time SHA-256 hash list in data/plugin_hashes.json)
+- P4-3: Restricted import list (advisory warning for imports outside SAFE_IMPORTS)
+- `tests/test_import_bundled.py` — AppData copy, PYPI_PACKAGE check, credential flow
 
 ---
 
-*Plan created 2026-05-29.  Covers v1.9.46 and beyond.*
+*Plan created 2026-05-29.  Sprint 3 completed 2026-05-29 at v1.9.46.*

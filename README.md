@@ -320,6 +320,19 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.46
+
+**Added**
+- `workers/plugin_polling_worker.py`: `log_line` signal emits structured per-poll log entries (`[HH:MM:SS] get_info() → …`, errors, result status)
+- Hardware Hub `HubCard`: `≡ Logs` toggle button expands a collapsible 130 px console showing the last 100 plugin log lines; wired via `_start_poll_worker_inst`
+- `_migrate_stale_paths()` extracted to module level so it is directly testable and callable without a widget instance
+- `_is_consented()` / `_record_consent()`: sha256-based one-time consent store for non-bundled plugins (P4-1)
+- P4-1 unsigned plugin warning dialog — shown once per unique plugin file before `_on_browse` registers a non-bundled script; consent persisted in QSettings
+- `tests/test_plugin_validator.py` — 16 tests for `_validate_script` and `_classify_error` (RULE-T1)
+- `tests/test_plugin_health.py` — 15 tests for health tracking, circuit-breaker, and path-hash helpers (RULE-T1)
+- `tests/test_plugin_migration.py` — 6 tests for `_migrate_stale_paths` path-replacement logic (RULE-T1)
+- `tests/test_hub_card_errors.py` — 13 tests for `HubCard.set_error` routing and `PluginDevicePage` banner pip-install detection (RULE-T1)
+
 ### v1.9.45
 
 **Added**

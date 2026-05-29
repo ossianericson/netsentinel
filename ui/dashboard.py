@@ -9665,9 +9665,9 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Unified Getting Started checklist", "Home page now shows a single 'Getting Started' card with hardware setup (ZTE MC889, Deco XE75) and core steps (scan, grade, ARP). 'Add →' buttons open the credential dialog instantly — no navigating away."),
-            ("Hardware-only plugin flow",    "ZTE MC889 and TP-Link Deco XE75 are managed exclusively via the plugin system. Dedicated Modem and Mesh Router pages removed; all signal data appears in the plugin's Hardware page."),
-            ("Credential-on-add dialog",     "Adding a hardware plugin now always prompts for the password and saves it securely in the OS keychain — no extra setup step needed."),
+            ("Plugin log console",           "Each Hardware Hub card has a new ≡ Logs button. Click it to expand a live console showing the last 100 structured poll entries — timestamps, get_info/get_status results, errors — so failures are never invisible."),
+            ("Unsigned plugin warning",      "Importing a non-bundled plugin now shows a one-time consent dialog with the file path and size. Consent is remembered per file content (sha256), so the dialog never appears twice for the same script."),
+            ("Plugin health tracking",       "Health counters (success/error) and the circuit-breaker (auto-disable after 10 consecutive errors) with a Re-enable button shipped in v1.9.45 and are now fully covered by the test suite."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────

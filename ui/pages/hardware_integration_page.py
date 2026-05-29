@@ -25,6 +25,7 @@ under the key  hardware/custom_scripts.
 from __future__ import annotations
 
 import ast
+import collections
 import hashlib
 import json
 import time
@@ -350,6 +351,82 @@ def _instance_id(path: str, ip: str) -> str:
     """Stable ID for a (path, ip) pair — used as keyring key."""
     import hashlib
     return hashlib.sha256(f"{path}:{ip}".encode()).hexdigest()[:16]
+
+
+# ── P4-1 unsigned plugin consent tracking ─────────────────────────────────────
+_CONSENTED_HASHES_KEY = "hardware/consented_hashes"
+
+
+def _is_consented(path: str) -> bool:
+    """Return True if the user has previously consented to run this plugin content."""
+    try:
+        h = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except Exception:
+        return True  # unreadable file — don't block on consent; validation will catch it
+    s = QSettings("NetSentinel", "NetSentinel")
+    try:
+        consented = set(json.loads(s.value(_CONSENTED_HASHES_KEY, "[]") or "[]"))
+    except Exception:
+        consented = set()
+    return h in consented
+
+
+def _record_consent(path: str) -> None:
+    """Persist a sha256 hash of the plugin file so the warning is not shown again."""
+    try:
+        h = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except Exception:
+        return
+    s = QSettings("NetSentinel", "NetSentinel")
+    try:
+        consented = set(json.loads(s.value(_CONSENTED_HASHES_KEY, "[]") or "[]"))
+    except Exception:
+        consented = set()
+    consented.add(h)
+    s.setValue(_CONSENTED_HASHES_KEY, json.dumps(sorted(consented)))
+
+
+def _migrate_stale_paths() -> None:
+    """Module-level function: replace stale _MEI* paths with stable AppData copies.
+
+    PyInstaller extracts to a new _MEI<n> dir on every launch; paths saved from
+    a previous run are immediately invalid.  This copies the plugin once to
+    get_app_data_dir()/plugins/ and updates QSettings so subsequent launches
+    work without user action.
+
+    Extracted from the page method so tests can import and call it directly.
+    """
+    import shutil as _sh
+    from modules.utils import get_app_data_dir as _gad
+    paths = _load_paths()
+    changed = False
+    new_paths = []
+    for p in paths:
+        if Path(p).exists():
+            new_paths.append(p)
+            continue
+        # Try to find the same filename in AppData plugins dir
+        appdata_copy = _gad() / "plugins" / Path(p).name
+        if appdata_copy.exists():
+            new_paths.append(str(appdata_copy))
+            changed = True
+            continue
+        # Plugin source is still accessible (running from source after a bundle
+        # run): copy from the source plugins/ dir if available
+        src_candidate = Path(__file__).parent.parent.parent / "plugins" / Path(p).name
+        if src_candidate.exists():
+            try:
+                appdata_copy.parent.mkdir(parents=True, exist_ok=True)
+                _sh.copy2(src_candidate, appdata_copy)
+                new_paths.append(str(appdata_copy))
+                changed = True
+                continue
+            except Exception:
+                pass
+        # Path is genuinely gone — keep it so the card can show the error
+        new_paths.append(p)
+    if changed:
+        _save_paths(new_paths)
 
 
 def _load_last_result(path: str) -> Optional[dict]:
@@ -1315,6 +1392,22 @@ class HubCard(QFrame):
         btn_add_another.clicked.connect(lambda: self.add_another.emit(self._path))
         hdr_lay.addWidget(btn_add_another)
 
+        # Log console toggle button (P3-3)
+        self._btn_logs = QPushButton("≡")
+        self._btn_logs.setFixedSize(28, 26)
+        self._btn_logs.setCheckable(True)
+        self._btn_logs.setToolTip("Show / hide plugin log")
+        self._btn_logs.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_logs.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:checked {{ background:{ACCENT}22; border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        )
+        self._btn_logs.toggled.connect(self._toggle_logs)
+        hdr_lay.addWidget(self._btn_logs)
+
         # Remove button
         btn_remove = _btn("✕")
         btn_remove.setFixedWidth(28)
@@ -1386,6 +1479,19 @@ class HubCard(QFrame):
             self._detail = _RouterDetailPanel()
         self._detail.setVisible(False)
         outer.addWidget(self._detail)
+
+        # Log console panel (P3-3) — collapsible, hidden by default
+        self._log_lines: collections.deque = collections.deque(maxlen=100)
+        self._log_panel = QTextEdit()
+        self._log_panel.setReadOnly(True)
+        self._log_panel.setMaximumHeight(130)
+        self._log_panel.setFont(QFont("Consolas", 8))
+        self._log_panel.setStyleSheet(
+            f"QTextEdit {{ background:{BG_DARK}; color:{TEXT_SECONDARY}; border:none;"
+            f" border-top:1px solid {BORDER}; font-family:Consolas,monospace; }}"
+        )
+        self._log_panel.setVisible(False)
+        outer.addWidget(self._log_panel)
 
         # Apply persisted result immediately if available
         if isinstance(last_result, dict):
@@ -1576,6 +1682,18 @@ class HubCard(QFrame):
         self._dot.setToolTip(
             "Click to collapse detail" if self._detail_visible else "Click to expand detail"
         )
+
+    # ── Log console (P3-3) ────────────────────────────────────────────────────
+
+    def append_log(self, line: str) -> None:
+        """Append a structured log entry from the polling worker."""
+        self._log_lines.append(line)
+        self._log_panel.setPlainText("\n".join(self._log_lines))
+        sb = self._log_panel.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+    def _toggle_logs(self, checked: bool) -> None:
+        self._log_panel.setVisible(checked)
 
     def _save_password(self, hw_ip: str, pw_edit: QLineEdit, status: QLabel) -> None:
         pw = pw_edit.text().strip()
@@ -2321,45 +2439,8 @@ class HardwareIntegrationPage(QWidget):
             self._smoke_check_deps(inst["path"])
 
     def _migrate_stale_paths(self) -> None:
-        """Replace any _MEI* temp paths saved in QSettings with AppData copies.
-
-        PyInstaller extracts to a new _MEI<n> directory on every launch; paths
-        saved from a previous run are immediately invalid.  This one-time migration
-        copies the plugin to get_app_data_dir()/plugins/ and updates QSettings so
-        subsequent launches find the file without user action.
-        """
-        import shutil as _sh
-        from modules.utils import get_app_data_dir as _gad
-        paths = _load_paths()
-        changed = False
-        new_paths = []
-        for p in paths:
-            if Path(p).exists():
-                new_paths.append(p)
-                continue
-            # Try to find the same filename in AppData plugins dir
-            appdata_copy = _gad() / "plugins" / Path(p).name
-            if appdata_copy.exists():
-                new_paths.append(str(appdata_copy))
-                changed = True
-                continue
-            # Plugin source is still accessible (running from source after a
-            # bundle run): copy from the source plugins/ dir if available
-            from pathlib import Path as _P
-            src_candidate = _P(__file__).parent.parent.parent / "plugins" / _P(p).name
-            if src_candidate.exists():
-                try:
-                    appdata_copy.parent.mkdir(parents=True, exist_ok=True)
-                    _sh.copy2(src_candidate, appdata_copy)
-                    new_paths.append(str(appdata_copy))
-                    changed = True
-                    continue
-                except Exception:
-                    pass
-            # Path is genuinely gone — keep it so the card can show the error
-            new_paths.append(p)
-        if changed:
-            _save_paths(new_paths)
+        """Delegate to the module-level _migrate_stale_paths() helper."""
+        _migrate_stale_paths()
 
     def _start_poll_worker(self, path: str) -> None:
         """Start a worker for the first instance whose path matches."""
@@ -2391,6 +2472,13 @@ class HardwareIntegrationPage(QWidget):
             lambda msg, iid=instance_id: self._on_plugin_error(iid, msg),
             Qt.ConnectionType.QueuedConnection,
         )
+        # P3-3: wire log output to the card's console panel
+        card = self._cards.get(instance_id)
+        if card is not None:
+            worker.log_line.connect(
+                lambda line, c=card: c.append_log(line),
+                Qt.ConnectionType.QueuedConnection,
+            )
         worker.start()
         self._poll_workers[instance_id] = worker
 
@@ -2531,6 +2619,14 @@ class HardwareIntegrationPage(QWidget):
         if not path:
             return
 
+        # P4-1: one-time unsigned plugin warning for scripts not in the bundled dir
+        bundled_dir = self._bundled_plugins_dir()
+        is_bundled = Path(path).resolve().parent == bundled_dir.resolve()
+        if not is_bundled and not _is_consented(path):
+            if not self._show_unsigned_warning(path):
+                return
+            _record_consent(path)
+
         ok, msg, meta = _validate_script(path)
         if not ok:
             self._set_status(f"Validation failed: {msg}", error=True)
@@ -2548,6 +2644,72 @@ class HardwareIntegrationPage(QWidget):
         self._start_poll_worker(path)
         if is_new:
             self.plugin_page_added.emit(path, name)
+
+    def _show_unsigned_warning(self, path: str) -> bool:
+        """One-time consent dialog shown before adding any non-bundled plugin.
+
+        Returns True when the user clicks 'I understand — Add anyway'.
+        The caller records consent so the dialog is not shown again for the same content.
+        """
+        try:
+            sz = Path(path).stat().st_size
+            sz_str = f"{sz:,} bytes"
+        except Exception:
+            sz_str = "unknown size"
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Untrusted Plugin")
+        dlg.setMinimumWidth(460)
+
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(16, 16, 16, 12)
+        lay.setSpacing(10)
+
+        warn_lbl = QLabel(
+            "<b>⚠  This plugin runs arbitrary Python code on your machine.</b><br><br>"
+            "Only add scripts from sources you trust — for example, scripts you wrote "
+            "yourself or obtained from a known community repository.<br><br>"
+            "You will <b>not</b> see this warning again for this exact file."
+        )
+        warn_lbl.setTextFormat(Qt.TextFormat.RichText)
+        warn_lbl.setWordWrap(True)
+        warn_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+        lay.addWidget(warn_lbl)
+
+        path_lbl = QLabel(f"<b>Path:</b> {path}<br><b>Size:</b> {sz_str}")
+        path_lbl.setTextFormat(Qt.TextFormat.RichText)
+        path_lbl.setWordWrap(True)
+        path_lbl.setStyleSheet(
+            f"background:{BG_DARK}; color:{TEXT_SECONDARY}; font-size:10px; font-family:Consolas;"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:6px;"
+        )
+        lay.addWidget(path_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:5px 14px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_row.addWidget(cancel_btn)
+
+        proceed_btn = QPushButton("I understand — Add anyway")
+        proceed_btn.setStyleSheet(
+            f"QPushButton {{ background:{AMBER}; color:{TEXT_PRIMARY}; border:none;"
+            f" border-radius:3px; padding:5px 16px; font-weight:600; }}"
+            f"QPushButton:hover {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{AMBER}; color:{TEXT_PRIMARY}; }}"
+        )
+        proceed_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(proceed_btn)
+        lay.addLayout(btn_row)
+
+        return dlg.exec() == QDialog.DialogCode.Accepted
 
     @pyqtSlot(str)
     def _remove_plugin(self, path_or_id: str) -> None:

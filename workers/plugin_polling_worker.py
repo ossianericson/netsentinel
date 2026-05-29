@@ -23,6 +23,7 @@ import os
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -30,8 +31,9 @@ from PyQt6.QtCore import QThread, pyqtSignal
 
 class PluginPollingWorker(QThread):
 
-    result = pyqtSignal(dict)   # data dict; includes "_instance_id" key
-    error  = pyqtSignal(str)    # error message
+    result   = pyqtSignal(dict)  # data dict; includes "_instance_id" key
+    error    = pyqtSignal(str)   # error message
+    log_line = pyqtSignal(str)   # structured log entry "[HH:MM:SS] …" for the card console
 
     _INTERVALS: dict[str, int] = {
         "modem":  30,
@@ -87,7 +89,15 @@ class PluginPollingWorker(QThread):
         """
         import importlib.util
 
+        _ts = datetime.now().strftime("%H:%M:%S")
+
+        def _log(msg: str) -> None:
+            self.log_line.emit(f"[{_ts}] {msg}")
+
+        _log("Poll started")
+
         if not Path(self._path).exists():
+            _log(f"✗ File not found: {Path(self._path).name}")
             self.error.emit(f"Plugin file not found: {self._path}")
             return
 
@@ -112,6 +122,7 @@ class PluginPollingWorker(QThread):
                 f"_ns_hw_{Path(self._path).stem}", self._path
             )
             if spec is None or spec.loader is None:
+                _log("✗ Cannot load plugin (spec error)")
                 self.error.emit(f"Cannot load plugin: {self._path}")
                 return
 
@@ -128,23 +139,40 @@ class PluginPollingWorker(QThread):
             get_clients = getattr(mod, "get_clients", None)
 
             if not callable(get_info) or not callable(get_status):
+                _log("✗ Plugin missing get_info() or get_status()")
                 self.error.emit("Plugin missing get_info() or get_status()")
                 return
 
-            info    = get_info()
+            info = get_info()
+            _log(f"get_info() → {(info or {}).get('name', '?')}")
             if self._stop:
                 return
+
             status  = get_status()
+            extra   = (status or {}).get("extra", {}) or {}
+            err_msg = extra.get("error", "")
+            if err_msg:
+                _log(f"✗ Plugin error: {str(err_msg)[:80]}")
+            else:
+                n_cli = (status or {}).get("connected_clients", "?")
+                _log(f"get_status() → {n_cli} clients")
             if self._stop:
                 return
+
             clients = get_clients() if callable(get_clients) else []
+            if callable(get_clients):
+                _log(f"get_clients() → {len(clients)} devices")
 
             self.result.emit({
                 "info": info, "status": status, "clients": clients,
                 "_instance_id": self._instance_id,
             })
+            if not err_msg:
+                _log("✓ Result emitted")
 
         except SystemExit:
+            _log("Plugin called sys.exit() — skipped")
             pass  # plugin shim called sys.exit() — harmless, treat as success-less run
         except Exception as exc:
+            _log(f"✗ Error: {exc}")
             self.error.emit(str(exc))
