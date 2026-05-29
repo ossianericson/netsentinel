@@ -318,6 +318,55 @@ class TestCliValidate:
         assert rc == 0  # minimal plugin has no external imports so live import succeeds
 
 
+# ── Regression: bundled plugin hashes must stay in sync ──────────────────────
+
+class TestBundledPluginHashSync:
+    """Regression guard: data/plugin_hashes.json must match the actual plugins/.
+
+    This test failed silently when P1-3 (sprint 2) updated deco_plugin.py and
+    zte_plugin.py to use module-attribute injection but the hash database was
+    not regenerated.  The consequence: _start_poll_worker_inst returned early
+    on every startup, so no plugin ever produced data.
+
+    If this test fails, regenerate with:
+        python -c "
+        import hashlib, json
+        from pathlib import Path
+        hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                  for p in sorted(Path('plugins').glob('*.py'))}
+        Path('data/plugin_hashes.json').write_text(json.dumps(hashes, indent=2) + chr(10))
+        "
+    """
+
+    def test_hash_db_matches_bundled_plugins(self):
+        PLUGINS = ROOT / "plugins"
+        HASH_DB = ROOT / "data" / "plugin_hashes.json"
+
+        if not HASH_DB.exists():
+            pytest.skip("data/plugin_hashes.json not present")
+
+        db = json.loads(HASH_DB.read_text(encoding="utf-8"))
+
+        mismatches = []
+        for plugin in sorted(PLUGINS.glob("*.py")):
+            recorded = db.get(plugin.name)
+            if recorded is None:
+                mismatches.append(f"{plugin.name}: missing from hash DB")
+                continue
+            actual = hashlib.sha256(plugin.read_bytes()).hexdigest()
+            if actual != recorded:
+                mismatches.append(
+                    f"{plugin.name}: DB={recorded[:12]}… actual={actual[:12]}…"
+                )
+
+        assert not mismatches, (
+            "Bundled plugin(s) changed but data/plugin_hashes.json was not "
+            "regenerated — workers will silently refuse to start.\n"
+            "Run the regeneration command in the docstring above.\n"
+            "Mismatches:\n  " + "\n  ".join(mismatches)
+        )
+
+
 # ── Helper for hash DB test ───────────────────────────────────────────────────
 
 class _FakePath:

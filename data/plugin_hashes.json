@@ -1,6 +1,6 @@
 {
   "asus_plugin.py": "ecbf14b2a11bc340bfafa41aca314fa431048a297ba962a14bd765958a40bc9e",
-  "deco_plugin.py": "1f06797ac8dbeb580fd778b73ae0304d726c7f293ea67f3f9864115b211637e4",
+  "deco_plugin.py": "5b6a8fdbce72af8741f033ebf0755449a38154a3884b8eedafc09b729807eedb",
   "example_open_ports_report.py": "326f58bb92bba8293fc401052752853275804feb32dc07afcbb106681428527a",
   "fritzbox_plugin.py": "9dd82088a665d3fc3143377a695c70acfbf08753f443725e82fc26c26e1be88a",
   "ha_plugin.py": "89d9884cb8d83cab523ed102bdea8a976951541b04573e58ea29af1bd80c0af6",
@@ -10,5 +10,5 @@
   "synology_plugin.py": "8554ef1ff8ebda914891e0c8cbbbb819ee722c05aedcc341a39b379db85a4ccb",
   "template_plugin.py": "61f39efe1b0fafc38b66abef0e1cde0b2e8418942a4c67d8316d095b3fd21b91",
   "unifi_plugin.py": "d3b06d691ce1e73d1ba8b9e536b490743cd62324d3beea7cd4433e76e46fede4",
-  "zte_plugin.py": "00eeb4dcd7e0bdce6c243c29b19d75684822cef8385eb45d2f080a62976f9ffc"
+  "zte_plugin.py": "c3e8ce62259f53d52bfb7ffd0a5cc41ed53a2bbf402b73a8a9b75e1bc110d427"
 }
