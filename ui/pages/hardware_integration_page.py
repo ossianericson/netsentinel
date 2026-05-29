@@ -1433,6 +1433,7 @@ class HubCard(QFrame):
     add_another             = pyqtSignal(str)   # path — add a second instance of this plugin
     update_credentials_clicked = pyqtSignal(str)  # instance_id — open credential dialog
     reimport_clicked        = pyqtSignal(str)   # path — plugin file not found, browse for new
+    rename_requested        = pyqtSignal(str, str, str)  # (instance_id, old_name, new_name)
 
     def __init__(self, path: str, meta: dict, last_result: Optional[dict],
                  instance_id: str = "", display_name: str = "",
@@ -1633,6 +1634,13 @@ class HubCard(QFrame):
         self._btn_configure.toggled.connect(self._toggle_config_panel)
         self._btn_configure.setVisible(bool(self._config_schema))
         hdr_lay.addWidget(self._btn_configure)
+
+        # Rename button — inline display-name edit (P3-4)
+        btn_rename = _btn("✎")
+        btn_rename.setFixedWidth(28)
+        btn_rename.setToolTip("Rename this plugin instance")
+        btn_rename.clicked.connect(self._on_rename_btn)
+        hdr_lay.addWidget(btn_rename)
 
         # Remove button
         btn_remove = _btn("✕")
@@ -2080,6 +2088,22 @@ class HubCard(QFrame):
             status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
         QTimer.singleShot(3000, lambda s=status: _safe_set_text(s, ""))
 
+    def _on_rename_btn(self) -> None:
+        """P3-4: Inline rename — prompt for a new display name, update card and emit signal."""
+        from PyQt6.QtWidgets import QInputDialog
+        current_name = self._meta.get("name", Path(self._path).stem)
+        new_name, ok = QInputDialog.getText(
+            self, "Rename Plugin",
+            "Display name:", text=current_name,
+        )
+        new_name = new_name.strip()
+        if not ok or not new_name or new_name == current_name:
+            return
+        self._meta = dict(self._meta)
+        self._meta["name"] = new_name
+        self._name_lbl.setText(f"<b>{new_name}</b>")
+        self.rename_requested.emit(self._instance_id, current_name, new_name)
+
 
 # ── Step-guide helper widgets (guide section) ─────────────────────────────────
 
@@ -2210,6 +2234,7 @@ class HardwareIntegrationPage(QWidget):
     plugin_result    = pyqtSignal(dict)
     plugin_page_added = pyqtSignal(str, str)  # (script_path, display_label) — new plugin installed at runtime
     plugin_page_removed = pyqtSignal(str)     # script_path — plugin removed at runtime
+    plugin_renamed   = pyqtSignal(str, str, str)  # (path, old_label, new_label) — instance display name changed
     navigate_to      = pyqtSignal(str)   # page label → _nav_rail_go_to
     geo_map_ip       = pyqtSignal(str)   # open geo map for this IP
     port_scan_ip     = pyqtSignal(str)   # pre-fill port scanner with this IP
@@ -2604,6 +2629,7 @@ class HardwareIntegrationPage(QWidget):
                 card.add_another.connect(self._on_add_another_instance)
                 card.update_credentials_clicked.connect(self._on_update_credentials)
                 card.reimport_clicked.connect(self._on_reimport_plugin)
+                card.rename_requested.connect(self._on_rename_card)
                 self._hub_lay.addWidget(card)
                 # Key by instance_id so multiple instances of same plugin coexist
                 self._cards[inst["id"]] = card
@@ -3307,6 +3333,20 @@ class HardwareIntegrationPage(QWidget):
             card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
             card._metrics_lbl.setText("Credentials updated — reconnecting…")
         QTimer.singleShot(300, lambda iid=instance_id: self._start_poll_worker_inst(iid))
+
+    @pyqtSlot(str, str, str)
+    def _on_rename_card(self, instance_id: str, old_name: str, new_name: str) -> None:
+        """P3-4: Persist display name change and propagate to dashboard nav (plugin_renamed)."""
+        instances = _load_instances()
+        path = ""
+        for inst in instances:
+            if inst["id"] == instance_id:
+                inst["name"] = new_name
+                path = inst.get("path", "")
+                break
+        if path:
+            _save_instances(instances)
+            self.plugin_renamed.emit(path, old_name, new_name)
 
     # ── Import / remove ───────────────────────────────────────────────────────
 

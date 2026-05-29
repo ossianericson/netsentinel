@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required. 
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v1.9.50**
+Current version: **v1.9.52**
 
 Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42
 

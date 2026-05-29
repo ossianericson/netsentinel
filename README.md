@@ -320,6 +320,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.52
+
+**Added**
+- `HubCard`: `✎` rename button on every hub card — click to set a new display name inline; nav item label, breadcrumb, pinned set, and command palette all update atomically (P3-4)
+- `HardwareIntegrationPage`: `plugin_renamed` signal (path, old_label, new_label) emitted on confirmed rename
+- `ui/dashboard.py` `_on_plugin_page_renamed`: handler propagates display-name change to `_nav_label_to_widget`, `_nav_page_to_section`, `_nav_sections["Extend"]` entries, and `_nav_pinned_labels` atomically (P3-4)
+- `tests/test_credential_robustness.py` — 8 tests: `_instance_id` determinism and uniqueness; multi-instance independence; credential dialog IP pre-fill; rename registry update; stable key algorithm (P4-4)
+- `tests/test_plugin_isolation.py` — 5 tests: module namespace isolation between poll cycles; independent namespaces for concurrent workers; concurrent poll guard (P5-3, P5-4)
+- `tests/test_plugin_resilience.py` — 10 tests: backoff interval calculation; backoff reset after success; AUTH-exempt circuit breaker; FILE: error classification; instance-ID keying consistency (P6-1, P6-3, P6-5, P7-5)
+
 ### v1.9.50
 
 **Fixed**

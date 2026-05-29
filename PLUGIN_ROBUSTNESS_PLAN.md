@@ -364,20 +364,20 @@ Already described in P2-4.
 | 14 | P4-1: "Update Credentials" on AUTH-error cards | M | ✅ v1.9.50 |
 | 15 | P3-1: `_reload_section` helper | S | ✅ v1.9.50 |
 | 16 | P3-2: auto-navigate to new plugin page on add | S | ✅ v1.9.50 |
-| 17 | P6-1: exponential backoff | M | v1.9.51 |
-| 18 | P6-3: AUTH errors exempt from circuit breaker | S | v1.9.51 |
-| 19 | P6-2: structured `FILE:` error prefix | S | v1.9.51 |
-| 20 | P5-1: concurrent poll guard | S | v1.9.51 |
-| 21 | P6-4: `QFileSystemWatcher` for plugin files | M | v1.9.51 |
-| 22 | P7-5: regression tests for IP keying | S | v1.9.51 |
-| 23 | P2-3: topology re-render on plugin data update | S | v1.9.52 |
-| 24 | P3-3: command palette refresh on add/remove | S | v1.9.52 |
-| 25 | P3-4: display-name rename propagation | M | v1.9.52 |
-| 26 | P4-3: credential pre-fill on Retry | S | v1.9.52 |
-| 27 | P5-3: module namespace isolation verification | S | v1.9.52 |
-| 28 | P4-4: `test_credential_robustness.py` | M | v1.9.52 |
-| 29 | P5-4: `test_plugin_isolation.py` | M | v1.9.52 |
-| 30 | P6-5: `test_plugin_resilience.py` | M | v1.9.52 |
+| 17 | P6-1: exponential backoff | M | ✅ v1.9.51 |
+| 18 | P6-3: AUTH errors exempt from circuit breaker | S | ✅ v1.9.51 |
+| 19 | P6-2: structured `FILE:` error prefix | S | ✅ v1.9.51 |
+| 20 | P5-1: concurrent poll guard | S | ✅ v1.9.51 |
+| 21 | P6-4: `QFileSystemWatcher` for plugin files | M | ✅ v1.9.51 |
+| 22 | P7-5: regression tests for IP keying | S | ✅ v1.9.51 |
+| 23 | P2-3: topology re-render on plugin data update | S | ✅ v1.9.52 (in `_apply_mesh_enrichment`) |
+| 24 | P3-3: command palette refresh on add/remove | S | ✅ v1.9.52 (palette rebuilt on every open) |
+| 25 | P3-4: display-name rename propagation | M | ✅ v1.9.52 |
+| 26 | P4-3: credential pre-fill on Retry | S | ✅ v1.9.52 (via P4-1: `_on_update_credentials`) |
+| 27 | P5-3: module namespace isolation verification | S | ✅ v1.9.52 (`test_plugin_isolation.py`) |
+| 28 | P4-4: `test_credential_robustness.py` | M | ✅ v1.9.52 |
+| 29 | P5-4: `test_plugin_isolation.py` | M | ✅ v1.9.52 |
+| 30 | P6-5: `test_plugin_resilience.py` | M | ✅ v1.9.52 |
 
 S = small (half-day), M = medium (full day).
 

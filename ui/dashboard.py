@@ -2897,6 +2897,7 @@ class Dashboard(QMainWindow):
         self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
         self._hardware_integration_page.plugin_page_added.connect(self._on_plugin_page_added)
         self._hardware_integration_page.plugin_page_removed.connect(self._on_plugin_page_removed)
+        self._hardware_integration_page.plugin_renamed.connect(self._on_plugin_page_renamed)
         self._hardware_integration_page.navigate_to.connect(self._nav_rail_go_to)
         self._hardware_integration_page.geo_map_ip.connect(self._show_ip_on_geo_map)
         self._hardware_integration_page.port_scan_ip.connect(
@@ -9674,10 +9675,10 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Plugin IP isolation (RULE-PL1)", "Each plugin instance now receives its IP and instance ID via direct module-attribute injection (mod._NETSENTINEL_INSTANCE_IP) rather than os.environ — zero cross-instance pollution even when two plugins poll simultaneously."),
-            ("Re-enter Password on auth errors", "When a hardware plugin fails with an authentication error, the Hub card now shows a '🔑 Re-enter Password' button. Clicking it opens the credential dialog with the current IP pre-filled and restarts the poll worker on success — no need to delete and re-add the plugin."),
-            ("Per-instance keyring namespace",  "Credentials are now saved to NetSentinel/plugin/<instance_id> in addition to the legacy key, so two instances of the same plugin type at different IPs have fully independent credentials."),
-            ("Reactive nav (RULE-PL3)",         "The Extend flyout now updates immediately when a plugin is added or removed via the new _reload_section() helper. The new plugin's device page is also navigated to automatically on add."),
+            ("Plugin rename (P3-4)", "Every Hub card now has a ✎ rename button. Clicking it opens an inline prompt; the new name propagates atomically to the nav flyout, breadcrumb, command palette, and the pinned section — no restart required."),
+            ("Backoff & resilience (P6-1)", "The poll worker now applies exponential backoff: normal interval after 1 error, 2× after 3 consecutive errors, 4× (capped at 300 s) after 6. AUTH errors are exempt from the circuit breaker — they reset the consecutive counter instead of incrementing it."),
+            ("File-watcher (P6-4)", "Each registered plugin file is watched via QFileSystemWatcher. If the file is edited, a 'Reload plugin' toast appears. If it is deleted, the card immediately shows a FILE: error with a Re-import button."),
+            ("Concurrent poll guard (P5-1)", "trigger_now() is now a no-op while a poll cycle is already in progress, preventing duplicate concurrent executions of the same plugin."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -10989,6 +10990,47 @@ class Dashboard(QMainWindow):
         # Refresh the Extend flyout so the removed item disappears immediately (RULE-PL3).
         if getattr(self, "_nav_open_section", "") == "Extend":
             self._reload_section("Extend")
+
+    @pyqtSlot(str, str, str)
+    def _on_plugin_page_renamed(self, path: str, old_label: str, new_label: str) -> None:
+        """P3-4: Propagate a plugin display-name rename to all nav data structures.
+
+        Updates atomically: PluginDevicePage._label, _nav_label_to_widget,
+        _nav_page_to_section, _nav_sections entries, pinned set, and breadcrumb.
+        """
+        pg = getattr(self, "_plugin_pages", {}).get(path)
+        if pg is None or old_label == new_label:
+            return
+
+        pg._label = new_label
+
+        # Update nav lookup dicts
+        self._nav_label_to_widget.pop(old_label, None)
+        self._nav_label_to_widget[new_label] = pg
+        if hasattr(self, "_nav_page_to_section"):
+            self._nav_page_to_section.pop(old_label, None)
+            self._nav_page_to_section[new_label] = "Extend"
+
+        # Update the _nav_sections entry in-place
+        extend_sec = next((s for s in self._nav_sections if s["name"] == "Extend"), None)
+        if extend_sec:
+            for entry in extend_sec["entries"]:
+                if entry.label == old_label:
+                    entry.label = new_label
+                    break
+
+        # Update pinned labels if this item was pinned
+        if old_label in self._nav_pinned_labels:
+            self._nav_pinned_labels.discard(old_label)
+            self._nav_pinned_labels.add(new_label)
+            self._save_pinned_labels()
+
+        # Reload flyout and update breadcrumb
+        self._reload_section("Extend")
+        if getattr(self, "_nav_current_page_label", "") == old_label:
+            self._nav_current_page_label = new_label
+            if hasattr(self, "_breadcrumb_lbl"):
+                self._breadcrumb_lbl.setText(f"Extend  ›  {new_label}")
 
     def _reload_section(self, name: str, force_open: bool = False) -> None:
         """Reload the flyout for the named section and optionally force it open.
