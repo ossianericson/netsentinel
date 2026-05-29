@@ -11,7 +11,6 @@ No username needed — FRITZ!Box only requires the admin password.
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 

@@ -10,7 +10,7 @@ lightweight stubs.
 from __future__ import annotations
 
 from collections import namedtuple
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ def _build_extend_section() -> dict:
 def test_extend_section_entry_appended_on_add():
     """After _on_plugin_page_added, Extend section entries must contain new label."""
     extend_sec = _build_extend_section()
-    nav_sections = [
+    _nav_sections = [  # context — extend_sec is operated on directly below
         _make_nav_section("Getting Started"),
         extend_sec,
     ]

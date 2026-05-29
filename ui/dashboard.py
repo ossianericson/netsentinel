@@ -10563,7 +10563,7 @@ class Dashboard(QMainWindow):
                     if getattr(_pw, "_hw_type", "modem") != "modem" and _pw.isRunning():
                         _pw.trigger_now()
         except Exception:
-            pass
+            pass  # defensive guard — _hardware_integration_page may not be initialised yet
 
         self._check_hw_autodetect()
 
@@ -10654,13 +10654,13 @@ class Dashboard(QMainWindow):
                                 ),
                             ))
                     except Exception:
-                        pass
+                        pass  # geolocation update is best-effort; WAN IP probe may fail
                 threading.Thread(target=_do_and_update, daemon=True).start()
         else:
             try:
                 self._geo_map_page.navigate_to_ip(ip, label="Threat Intel")
             except Exception:
-                pass
+                pass  # geo_map_page may not be initialised at this call site
 
     def _check_hw_autodetect(self) -> None:
         """Run hardware catalogue detection once per gateway IP per session."""
@@ -11066,7 +11066,7 @@ class Dashboard(QMainWindow):
                             _b.setChecked(False)
                 self._nav_flyout.open()
         except Exception:
-            pass
+            pass  # flyout not yet built; safe to skip on very early calls
 
     def _update_monitor_badge(self, _active: bool = False) -> None:
         """Refresh all section badges and Home pills when log source state changes."""

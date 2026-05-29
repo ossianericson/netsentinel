@@ -1,14 +1,14 @@
 {
-  "asus_plugin.py": "ecbf14b2a11bc340bfafa41aca314fa431048a297ba962a14bd765958a40bc9e",
-  "deco_plugin.py": "5b6a8fdbce72af8741f033ebf0755449a38154a3884b8eedafc09b729807eedb",
+  "asus_plugin.py": "68e9f6911959e41786e7de67beb4485c66df49c5aaf59318ca2f3253d6134841",
+  "deco_plugin.py": "d388f158261f1d73661a0707ab71edcd332ad19fb65ca8ca0c3f709bb74b4e43",
   "example_open_ports_report.py": "326f58bb92bba8293fc401052752853275804feb32dc07afcbb106681428527a",
-  "fritzbox_plugin.py": "9dd82088a665d3fc3143377a695c70acfbf08753f443725e82fc26c26e1be88a",
-  "ha_plugin.py": "89d9884cb8d83cab523ed102bdea8a976951541b04573e58ea29af1bd80c0af6",
-  "mikrotik_plugin.py": "bdafee087d1f6dde1b33f5fe753cc47dc8cd01e60a064ffbdeb1ff711a49cada",
-  "netgear_plugin.py": "502a7027f6ee2ed8870c0585c78b52fa281638ebc89c236f88abbc7f3933c8a2",
-  "openwrt_plugin.py": "1d0b758fffe86c7cf838e65b36ccd3a6a9faf5fd8c354007fc6cc3ad6c5cee6a",
-  "synology_plugin.py": "8554ef1ff8ebda914891e0c8cbbbb819ee722c05aedcc341a39b379db85a4ccb",
+  "fritzbox_plugin.py": "e06549c2ac6d722c4149624efddf20d4a6b4a6b62448aea8934787dcdb1929c0",
+  "ha_plugin.py": "c9f41b6b2aee258350d198728f22bb2994aa80ccf11e9e94f318883ed1d493a4",
+  "mikrotik_plugin.py": "e6f86a952ca0203918c982dde4faed42eea02bbf0c45e588cce16ccc8d5698db",
+  "netgear_plugin.py": "21241d858336b3989d5c109d59a00fa6e8154a0a4e0440f84329d256d003879f",
+  "openwrt_plugin.py": "e2886a63c8f64f51589b4b8ea0bd579a42b9916f11e6e5f882eecda28b94e650",
+  "synology_plugin.py": "b20ac5f386ae34b990510d21e5c20413101f9fdf35b645a4960b1d50236d1bce",
   "template_plugin.py": "61f39efe1b0fafc38b66abef0e1cde0b2e8418942a4c67d8316d095b3fd21b91",
-  "unifi_plugin.py": "d3b06d691ce1e73d1ba8b9e536b490743cd62324d3beea7cd4433e76e46fede4",
-  "zte_plugin.py": "c3e8ce62259f53d52bfb7ffd0a5cc41ed53a2bbf402b73a8a9b75e1bc110d427"
+  "unifi_plugin.py": "819f14aa74b5b6445edc311601a54b8dd1b9d55b0db2d3523ddcb474d6396117",
+  "zte_plugin.py": "43a9a7cde7c0cb63c41438298da7131ef67ce23b4ed1ad85bde886e44909bac2"
 }

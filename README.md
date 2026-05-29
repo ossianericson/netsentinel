@@ -320,6 +320,17 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.54
+
+**Fixed**
+- Resolved all open CodeQL alerts: `py/empty-except` comments added in `hardware_integration_page.py`, `dashboard.py`, `plugin_device_page.py`, `plugin_polling_worker.py`, `plugin_tools.py`, `nspkg.py`, `deco_plugin.py`, `zte_plugin.py`
+- `py/unnecessary-pass` removed from `plugin_polling_worker.py` `SystemExit` handler
+- `py/variable-redefined` fixed in `modules/nspkg.py` (dead `plugin_dest` assignment removed)
+- `py/unused-global-variable` removed `_MANIFEST_VERSION` from `modules/nspkg.py`
+- Removed `import os` (unused) from all 8 non-credential bundled plugins; regenerated `data/plugin_hashes.json`
+- Removed unused imports from `hardware_integration_page.py`, `plugin_tools.py`, `plugin_polling_worker.py`, and all affected test files
+- Updated `RULE-21-I`: "tag" now means exactly: `bump_version.py` → push branch → push tag, every time without exception
+
 ### v1.9.53
 
 **Fixed**

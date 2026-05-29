@@ -14,7 +14,6 @@ Supports: Orbi RBK863S/752, Nighthawk AX12/RAX200, R7000, R8000, R9000, and most
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 

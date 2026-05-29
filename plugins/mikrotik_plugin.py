@@ -14,7 +14,6 @@ Supports: hAP ax³, hAP ac², CCR2004, RB4011, Audience LTE6, and any device
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 

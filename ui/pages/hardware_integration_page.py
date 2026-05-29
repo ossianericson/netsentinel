@@ -30,7 +30,7 @@ import hashlib
 import json
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from PyQt6.QtCore import Qt, QFileSystemWatcher, QSettings, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QCursor, QFont, QPixmap
@@ -47,7 +47,6 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QStackedWidget,
     QTabWidget,
     QTableWidget,

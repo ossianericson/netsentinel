@@ -6,12 +6,10 @@ error emission for missing file, and error emission for broken plugin code.
 """
 from __future__ import annotations
 
-import json
 import sys
 import textwrap
 import time
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from PyQt6.QtCore import Qt

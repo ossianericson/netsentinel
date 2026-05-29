@@ -13,7 +13,6 @@ Supports: any router running OpenWrt 18.06+ or LEDE with LuCI installed.
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 

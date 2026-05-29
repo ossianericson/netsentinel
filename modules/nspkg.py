@@ -24,9 +24,6 @@ from typing import Any
 # Fields that manifest.json must contain
 _REQUIRED_MANIFEST_KEYS = ("name", "version", "author")
 
-# Minimum manifest schema understood by this version
-_MANIFEST_VERSION = "1"
-
 
 def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     """Return a (possibly empty) list of error strings for a manifest dict."""
@@ -84,11 +81,8 @@ def unpack_nspkg(nspkg_path: str, dest_dir: Path) -> tuple[Path, dict]:
 
         dest_dir.mkdir(parents=True, exist_ok=True)
 
-        # Extract plugin.py
+        # Extract plugin.py — use manifest name to avoid collisions between bundles
         plugin_source = zf.read("plugin.py")
-        plugin_dest = dest_dir / "plugin.py"
-
-        # Use plugin name from manifest to avoid collisions
         safe_name = _safe_filename(manifest.get("name", "plugin"))
         plugin_dest = dest_dir / f"{safe_name}.py"
         plugin_dest.write_bytes(plugin_source)

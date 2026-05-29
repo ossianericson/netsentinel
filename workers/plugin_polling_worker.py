@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import sys
 import threading
-import time
 from datetime import datetime
 from pathlib import Path
 
@@ -63,7 +62,7 @@ class PluginPollingWorker(QThread):
             try:
                 self._interval_s = max(10, int(self._config["poll_interval"]))
             except (TypeError, ValueError):
-                pass
+                pass  # invalid config value — keep the hardware-type default interval
         self._stop              = False
         self._trigger           = threading.Event()
         # P5-1: concurrent poll guard — True while _run_once is executing
@@ -219,7 +218,7 @@ class PluginPollingWorker(QThread):
 
         except SystemExit:
             _log("Plugin called sys.exit() — skipped")
-            pass  # plugin shim called sys.exit() — harmless, treat as success-less run
+            # plugin shim called sys.exit() — harmless, treat as success-less run
         except Exception as exc:
             _log(f"✗ Error: {exc}")
             self.error.emit(str(exc))

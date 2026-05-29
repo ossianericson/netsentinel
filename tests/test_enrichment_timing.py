@@ -14,7 +14,7 @@ through lightweight stubs.
 from __future__ import annotations
 
 from collections import namedtuple
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 # ── Minimal _apply_mesh_enrichment logic stub ─────────────────────────────────

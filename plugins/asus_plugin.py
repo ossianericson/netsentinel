@@ -15,7 +15,6 @@ Supports: RT-AX88U, RT-AX86U, RT-AX58U, ZenWiFi AX (XT8), ZenWiFi Pro ET12, and 
 
 import asyncio
 import json
-import os
 import sys
 from pathlib import Path
 

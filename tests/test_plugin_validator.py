@@ -7,7 +7,6 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-import pytest
 
 from ui.pages.hardware_integration_page import _classify_error, _validate_script
 

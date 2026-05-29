@@ -654,7 +654,7 @@ class PluginDevicePage(QWidget):
             try:
                 self._banner_install_btn.clicked.disconnect()
             except (RuntimeError, TypeError):
-                pass
+                pass  # signal not connected yet; disconnect() is idempotent
             self._banner_install_btn.clicked.connect(
                 lambda: self._pip_install(pkg)
             )

@@ -7,10 +7,8 @@ Patches _load_health / _save_health so no QSettings / QApplication needed.
 """
 from __future__ import annotations
 
-import time
 from unittest.mock import patch
 
-import pytest
 
 
 # ── storage stub ──────────────────────────────────────────────────────────────

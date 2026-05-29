@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import sys
 import textwrap
 import threading
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -86,7 +85,7 @@ def test_env_var_restored_after_success(tmp_path, monkeypatch):
     """_PluginConnectionTester restores NETSENTINEL_PLUGIN_IP after a successful run."""
     monkeypatch.setenv("NETSENTINEL_PLUGIN_IP", "10.10.10.10")
 
-    plugin = _write_fake_plugin(tmp_path, "plugin_restore_ok")
+    _write_fake_plugin(tmp_path, "plugin_restore_ok")
 
     results: list = []
     errors: list = []

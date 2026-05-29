@@ -9,13 +9,10 @@ No PyQt6 GUI is initialised — all UI-level code is tested via the module-level
 helper functions that do not depend on a QWidget parent.
 """
 
-import hashlib
 import json
 import sys
-import tempfile
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).parent.parent
 if str(ROOT) not in sys.path:

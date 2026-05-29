@@ -25,7 +25,7 @@ import importlib.util
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 # P4-3: Safe import baseline — plugin may override with SAFE_IMPORTS = [...]
 _DEFAULT_SAFE_IMPORTS: set[str] = {
@@ -316,7 +316,7 @@ def _load_hash_db() -> dict[str, str]:
         if hash_file.exists():
             return json.loads(hash_file.read_text(encoding="utf-8"))
     except Exception:
-        pass
+        pass  # hash file absent or corrupted — treat all plugins as unsigned
     return {}
 
 

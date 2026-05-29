@@ -18,7 +18,6 @@ Import via Hardware Hub — no password in the card needed (token is in the scri
 """
 
 import json
-import os
 import sys
 import urllib.request
 from pathlib import Path

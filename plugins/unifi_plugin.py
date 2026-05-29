@@ -13,7 +13,6 @@ For older non-UniFi-OS controllers change CONTROLLER_VERSION to "v5".
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 

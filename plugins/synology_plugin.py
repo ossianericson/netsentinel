@@ -14,7 +14,6 @@ Note: This is for Synology ROUTERS (SRM firmware), not NAS devices (DSM).
 """
 
 import json
-import os
 import sys
 import urllib.parse
 import urllib.request

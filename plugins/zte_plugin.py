@@ -60,7 +60,7 @@ def _load_credentials() -> tuple[str, str]:
         if pw:
             return _ip, pw
     except Exception:
-        pass
+        pass  # keyring unavailable — fall through to RuntimeError below
     raise RuntimeError(
         f"No saved password found for ZTE modem at {_ip}. "
         "Enter the password in the Hardware Integration page and click Save."
