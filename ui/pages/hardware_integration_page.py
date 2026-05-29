@@ -376,6 +376,8 @@ def _load_instances() -> list[dict]:
             "name": meta.get("name", Path(p).stem) if ok else Path(p).stem,
         })
     _save_instances(instances)
+    # Delete the legacy key now that instances have been promoted
+    QSettings("NetSentinel", "NetSentinel").remove(_SETTINGS_KEY)
     return instances
 
 
@@ -383,8 +385,6 @@ def _save_instances(instances: list[dict]) -> None:
     QSettings("NetSentinel", "NetSentinel").setValue(
         _SETTINGS_INSTANCES, json.dumps(instances)
     )
-    # Keep legacy custom_scripts in sync (for backwards compat)
-    _save_paths(list({inst["path"] for inst in instances}))
 
 
 def _instance_id(path: str, ip: str) -> str:
@@ -2651,14 +2651,28 @@ class HardwareIntegrationPage(QWidget):
         lay.addWidget(add_btn)
         return card
 
-    def _import_bundled(self, path: str) -> None:
-        """Add a bundled plugin to the imported list and start polling.
+    def _register_plugin(self, path: str, source: str = "browse") -> None:
+        """Unified plugin registration pipeline — all entry points call this.
 
-        If the plugin declares PYPI_PACKAGE and that library is not installed,
-        opens PipInstallDialog first. Only proceeds on success.
+        Steps (always in this order, regardless of source):
+        1. Validate script
+        2. Check and install PYPI deps
+        3. Copy to AppData stable path
+        4. Show credential dialog → live test → capture confirmed IP
+        5. Write instance registry entry using confirmed IP
+        6. Rebuild hub card
+        7. Start poll worker
+        8. Emit plugin_page_added → nav updates
+
+        source: "browse" | "bundled" | "community" | "nspkg"
         """
-        ok, _, meta = _validate_script(path)
-        pypi_pkg = meta.get("pypi_package", "") if ok else ""
+        ok, msg, meta = _validate_script(path)
+        if not ok:
+            self._set_status(f"Validation failed: {msg}", error=True)
+            return
+
+        # Step 2: PYPI dependency check and install
+        pypi_pkg = meta.get("pypi_package", "")
         if pypi_pkg:
             import importlib.util
             module_name = pypi_pkg.replace("-", "_")
@@ -2676,11 +2690,10 @@ class HardwareIntegrationPage(QWidget):
                     )
                     return
 
-        # ── Copy to stable AppData location ─────────────────────────────────
-        # Bundled plugins live inside the PyInstaller _MEI* temp dir which is
-        # recreated with a new name on every launch.  Storing that path in
-        # QSettings means it is invalid after the first restart.  Copy once to
-        # the user-writable AppData plugins dir and use that stable path.
+        # Step 3: copy to stable AppData plugins dir.
+        # Bundled/frozen plugins live in a _MEI* temp dir recreated each launch.
+        # Browse plugins may be anywhere on disk.  Both are copied once to
+        # get_app_data_dir()/plugins/ so the stored path is always valid.
         import shutil as _shutil
         from modules.utils import get_app_data_dir as _gad
         try:
@@ -2694,9 +2707,9 @@ class HardwareIntegrationPage(QWidget):
             self._set_status(f"Failed to install plugin: {_exc}", error=True)
             return
 
-        # ── Credential dialog (before registering) ───────────────────────────
-        cred_label = meta.get("credential_label", "") if ok else ""
-        hw_ip      = meta.get("ip", "") if ok else ""
+        # Step 4: credential dialog
+        cred_label = meta.get("credential_label", "")
+        hw_ip      = meta.get("ip", "")
         if cred_label and hw_ip:
             try:
                 import keyring as _kr
@@ -2704,34 +2717,38 @@ class HardwareIntegrationPage(QWidget):
             except Exception:
                 existing_pw = None
             if not existing_pw:
-                if not self._show_credential_dialog(
+                accepted, confirmed_ip = self._show_credential_dialog(
                     meta.get("name", Path(path).stem), hw_ip, cred_label,
                     plugin_path=path,
-                ):
+                )
+                if not accepted:
                     self._set_status("Setup cancelled.", error=True)
                     return
+                hw_ip = confirmed_ip or hw_ip
 
-        label = meta.get("name", Path(path).stem) if ok else Path(path).stem
-        inst_ip = hw_ip  # the IP the user entered (saved in keyring under this IP)
-
-        # Register in the instance registry
+        # Step 5: instance registry
+        label   = meta.get("name", Path(path).stem)
+        inst_ip = hw_ip
         instances = _load_instances()
         inst_id = _instance_id(path, inst_ip or path)
-        is_new = not any(i["id"] == inst_id for i in instances)
+        is_new  = not any(i["id"] == inst_id for i in instances)
         if is_new:
             instances.append({"id": inst_id, "path": path, "ip": inst_ip, "name": label})
             _save_instances(instances)
 
-        self._set_status(
-            f"Imported '{label}' — running first check…", error=False
-        )
+        # Steps 6–8: rebuild, start, emit
+        self._set_status(f"Imported '{label}' — running first check…", error=False)
         self._rebuild_hub()
         self._start_poll_worker_inst(inst_id)
         if is_new:
             self.plugin_page_added.emit(path, label)
 
+    def _import_bundled(self, path: str) -> None:
+        """Add a bundled plugin — delegates to the unified registration pipeline."""
+        self._register_plugin(path, source="bundled")
+
     def _show_credential_dialog(self, name: str, default_ip: str, cred_label: str,
-                                plugin_path: str = "") -> bool:
+                                plugin_path: str = "") -> tuple[bool, str]:
         """Credential dialog with live connection test.
 
         Shows IP + password fields.  The primary button ("Test & Add") runs a
@@ -2739,7 +2756,8 @@ class HardwareIntegrationPage(QWidget):
         only closes with Accepted after a successful test, so the plugin is never
         registered when it cannot connect.
 
-        Returns True on success (credential saved to keyring), False on cancel.
+        Returns (accepted, confirmed_ip).  confirmed_ip is the IP the user
+        actually entered (may differ from default_ip), or "" on cancel.
         """
         from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout
         dlg = QDialog(self)
@@ -2903,13 +2921,15 @@ class HardwareIntegrationPage(QWidget):
         pw_edit.returnPressed.connect(_run_test)
 
         result = dlg.exec()
+        confirmed_ip = ip_edit.text().strip()
 
         # Stop any running tester
         for t in _tester:
             if t.isRunning():
                 t.wait(500)
 
-        return result == QDialog.DialogCode.Accepted
+        accepted = result == QDialog.DialogCode.Accepted
+        return accepted, (confirmed_ip if accepted else "")
 
     def _start_all_poll_workers(self) -> None:
         self._migrate_stale_paths()
@@ -3030,28 +3050,22 @@ class HardwareIntegrationPage(QWidget):
         default_ip = meta.get("ip", "")
         hw_name    = meta.get("name", Path(path).stem)
 
-        # Show credential dialog; IP field is editable so user sets the new device IP
-        if not self._show_credential_dialog(
+        # Show credential dialog; IP field is editable so user sets the new device IP.
+        # The confirmed_ip returned is what the user actually typed.
+        accepted, confirmed_ip = self._show_credential_dialog(
             f"{hw_name} (new instance)", default_ip, cred_label, plugin_path=path
-        ):
+        )
+        if not accepted:
             return
 
-        # Derive instance name and ID from the IP the user entered
-        # (the dialog saved the credential to keyring under that IP)
-        # We need to find out which IP was used — re-read from dialog is not
-        # straightforward, so we ask user to confirm by checking which new keyring
-        # entry exists for this plugin's known IPs.  For now use a simple counter.
+        inst_ip = confirmed_ip or default_ip
         instances = _load_instances()
         existing_names = [i["name"] for i in instances if i["path"] == path]
         idx  = len(existing_names) + 1
         name = f"{hw_name} #{idx}"
 
-        # Find the new IP from keyring: try common private ranges or use default
-        # In the credential dialog the IP is stored under the entered IP.
-        # Since we can't retrieve it back here, we trust the user set it correctly
-        # in the dialog. Use default_ip as placeholder; user can rename in settings.
-        inst_id = _instance_id(path, name)
-        new_inst = {"id": inst_id, "path": path, "ip": default_ip, "name": name}
+        inst_id = _instance_id(path, inst_ip)
+        new_inst = {"id": inst_id, "path": path, "ip": inst_ip, "name": name}
         instances.append(new_inst)
         _save_instances(instances)
         self._rebuild_hub()
@@ -3418,41 +3432,7 @@ class HardwareIntegrationPage(QWidget):
                 return
             _record_consent(path)
 
-        ok, msg, meta = _validate_script(path)
-        if not ok:
-            self._set_status(f"Validation failed: {msg}", error=True)
-            return
-
-        # Show credential dialog before registering the plugin so the user
-        # is prompted immediately instead of having to scroll to the new card.
-        cred_label = meta.get("credential_label", "") if ok else ""
-        hw_ip      = meta.get("ip", "") if ok else ""
-        if cred_label and hw_ip:
-            try:
-                import keyring as _kr
-                existing_pw = _kr.get_password("NetSentinel/hardware", hw_ip)
-            except Exception:
-                existing_pw = None
-            if not existing_pw:
-                if not self._show_credential_dialog(
-                    meta.get("name", Path(path).stem), hw_ip, cred_label,
-                    plugin_path=path,
-                ):
-                    self._set_status("Setup cancelled.", error=True)
-                    return
-
-        paths = _load_paths()
-        is_new = path not in paths
-        if is_new:
-            paths.append(path)
-            _save_paths(paths)
-
-        name = meta.get("name", Path(path).stem)
-        self._set_status(f"Imported '{name}' — running first check…", error=False)
-        self._rebuild_hub()
-        self._start_poll_worker(path)
-        if is_new:
-            self.plugin_page_added.emit(path, name)
+        self._register_plugin(path, source="browse")
 
     def _show_unsigned_warning(self, path: str) -> bool:
         """One-time consent dialog shown before adding any non-bundled plugin.

@@ -2908,28 +2908,37 @@ class Dashboard(QMainWindow):
 
         # Pre-populate enrichment from cached QSettings so the first scan has
         # hostname / band / node data without waiting for the first poll cycle.
-        from ui.pages.hardware_integration_page import _load_paths as _hw_paths, _load_last_result as _hw_last
+        # Key by instance_id (stable) not path (may change between launches).
+        from ui.pages.hardware_integration_page import (
+            _load_instances as _hw_instances,
+            _load_last_result as _hw_last,
+        )
         from modules.deco_client import _norm_mac as _hw_nm
-        for _hw_p in _hw_paths():
-            _hw_cached = _hw_last(_hw_p)
+        for _hw_inst in _hw_instances():
+            # Try by instance_id (new format), fall back to path (old format)
+            _hw_cached = _hw_last(_hw_inst["id"]) or _hw_last(_hw_inst["path"])
             if _hw_cached and _hw_cached.get("info", {}).get("type") != "modem":
-                self._plugin_enrichments[_hw_p] = {
+                self._plugin_enrichments[_hw_inst["id"]] = {
                     _hw_nm(c.get("mac", "")): c
                     for c in _hw_cached.get("clients", [])
                     if c.get("mac")
                 }
 
-        # Create one PluginDevicePage per saved plugin path.
+        # Create one PluginDevicePage per registered instance.
         # Pages are registered in the nav by _build_pro_nav() further below.
         from ui.pages.plugin_device_page import PluginDevicePage
         from ui.pages.hardware_integration_page import _validate_script as _hw_validate
         from pathlib import Path as _HwPath
         self._plugin_pages: dict[str, PluginDevicePage] = {}
-        for _hw_p in _hw_paths():
+        for _hw_inst in _hw_instances():
+            _hw_p = _hw_inst["path"]
+            if _hw_p in self._plugin_pages:
+                continue  # deduplicate — same path, multiple instances
             _ok, _msg, _meta = _hw_validate(_hw_p)
             _hw_type   = _meta.get("type", "other") if _ok else "other"
-            _hw_label  = _meta.get("name") if _ok else _HwPath(_hw_p).stem
-            _hw_ip     = _meta.get("ip", "") if _ok else ""
+            # Prefer instance name (may have been customised) over meta name
+            _hw_label  = _hw_inst.get("name") or (_meta.get("name") if _ok else None) or _HwPath(_hw_p).stem
+            _hw_ip     = _hw_inst.get("ip") or (_meta.get("ip", "") if _ok else "")
             _cred_lbl  = _meta.get("credential_label", "Password") if _ok else "Password"
             _pg = PluginDevicePage(_hw_p, _hw_label, _hw_type, hw_ip=_hw_ip,
                                    credential_label=_cred_lbl, parent=None)
@@ -2938,7 +2947,7 @@ class Dashboard(QMainWindow):
                 _pg.mark_unavailable()
             else:
                 # Seed with cached result so page shows data on first open
-                _hw_cached2 = _hw_last(_hw_p)
+                _hw_cached2 = _hw_last(_hw_inst["id"]) or _hw_last(_hw_p)
                 if _hw_cached2:
                     _pg.update(_hw_cached2)
                     if _hw_type == "modem":
@@ -2971,7 +2980,7 @@ class Dashboard(QMainWindow):
                             "lte_earfcn":       _x2.get("lte_earfcn"),
                             "endc_info":        _x2.get("endc_info"),
                         }, source=_hw_p, hw_name=_hw_label)
-            self._plugin_pages[_hw_p] = _pg
+            self._plugin_pages[_hw_p] = _pg  # keyed by path for signal compat
 
         # Populate Log Hub DB bar and set initial Monitor badge once the event loop starts.
         from PyQt6.QtCore import QTimer as _QT
@@ -10868,8 +10877,9 @@ class Dashboard(QMainWindow):
             return  # modem plugins have no LAN clients to enrich
 
         # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
-        path = data.get("_path", hw_name)
-        self._plugin_enrichments[path] = {
+        # Key by instance_id (stable across renames/restarts), not path or hw_name.
+        inst_id = data.get("_instance_id") or data.get("_path", hw_name)
+        self._plugin_enrichments[inst_id] = {
             _norm_mac(c.get("mac", "")): c
             for c in clients
             if c.get("mac")
@@ -10881,11 +10891,12 @@ class Dashboard(QMainWindow):
         if not nodes and clients and hw_type in ("router", "mesh", "ap"):
             nodes = [{"name": hw_name, "role": "primary",
                       "ip": info.get("ip", ""), "mac": ""}]
-        self._plugin_nodes[path] = nodes
+        self._plugin_nodes[inst_id] = nodes
         self._apply_mesh_enrichment()  # handles topology + regrouping + synthesis
         from modules.network_infrastructure import hw_state
+        path = data.get("_path", hw_name)
         hw_state.update_router(clients, nodes, source=path, hw_name=hw_name)
-        n = len(self._plugin_enrichments[path])
+        n = len(self._plugin_enrichments[inst_id])
         if hasattr(self, "_m1_status"):
             summary = getattr(self, "_m1_scan_summary", "")
             self._m1_status.setText(
@@ -11352,13 +11363,13 @@ class Dashboard(QMainWindow):
 
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient and plugin client data into the M1 table rows."""
-        if not self._m1_result:
-            return
-        # Merge all per-plugin enrichment dicts into one flat MAC→client map
+        # Build the full plugin MAC→client map first so the guard below can
+        # check whether there is any data to apply (RULE-PL4).
         _all_plugin: dict = {}
         for _pe in self._plugin_enrichments.values():
             _all_plugin.update(_pe)
-        if not self._mesh_enrichment and not _all_plugin:
+        # Only proceed if there is a scan result AND at least one enrichment source.
+        if not self._m1_result or (not self._mesh_enrichment and not _all_plugin):
             return
 
         from PyQt6.QtGui import QColor
