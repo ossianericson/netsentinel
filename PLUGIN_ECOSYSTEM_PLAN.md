@@ -246,18 +246,22 @@ violation.  A worker test must be added before any further plugin changes ship.
 10. [x] P4-1: unsigned plugin warning dialog + consent tracking  ✅ v1.9.46
 11. [x] `tests/test_plugin_validator.py`, `test_plugin_health.py`, `test_plugin_migration.py`, `test_hub_card_errors.py`  ✅ v1.9.46
 
+12. [x] P3-1: Plugin validator CLI — `modules/plugin_tools.py`; `python -m modules.plugin_tools validate <path>` ✅ v1.9.47
+13. [x] P3-2: Plugin template wizard — "⬡ New Plugin" button + 6-field dialog in `hardware_integration_page.py` ✅ v1.9.47
+14. [x] P2-3: Plugin icons — `icon.png` detection in `_validate_script`; 24×24 QPixmap in HubCard + catalog cards ✅ v1.9.47
+15. [x] P4-2: Official plugin signing — `tools/generate_plugin_hashes.py` + `data/plugin_hashes.json`; runtime hash check in `_start_poll_worker_inst` ✅ v1.9.47
+16. [x] P4-3: Restricted import advisory — `_DEFAULT_SAFE_IMPORTS` check in `validate_plugin()`; `SAFE_IMPORTS` override ✅ v1.9.47
+17. [x] `tests/test_import_bundled.py` — 28 tests for `_validate_script`, `_path_hash`, `_instance_id`, AppData copy, PYPI check, `_classify_error` ✅ v1.9.47
+18. [x] `tests/test_plugin_tools.py` — 23 tests for validator, signature check, CLI ✅ v1.9.47
+
+19. [x] P2-2: Typed CONFIG_SCHEMA — `_parse_dict_literal` in `_validate_script`; per-instance `hardware/config/<id>` QSettings; ⚙ HubCard panel auto-generated from schema; config passed to `get_status(config=…)` via worker ✅ v1.9.48
+20. [x] P3-5: Plugin bundle format — `modules/nspkg.py`; `unpack_nspkg()` + manifest validation; "⬡ Import .nspkg" button in Hardware Hub; `tests/test_nspkg.py` ✅ v1.9.48
+21. [x] P3-4: Community plugin index — `_CommunityIndexThread` + `_CommunityDownloadThread`; Browse tab in Hardware Hub; SHA-256 verified before install; `tests/test_community_index.py` ✅ v1.9.48
+
 ## Remaining
 
-- P2-2: Typed CONFIG_SCHEMA (plugin declares poll_interval, verify_ssl, etc.)
-- P2-3: Plugin icons (ICON_URL or icon.png alongside script)
-- P3-1: Plugin validator CLI (`python -m netsentinel.plugin_tools validate`)
-- P3-2: Plugin template wizard (in-app "Create from template" with name/IP/cred/pypi fields)
-- P3-4: Community plugin index (GitHub-hosted JSON, SHA-256 verified)
-- P3-5: Plugin bundle format (.nspkg ZIP)
-- P4-2: Official plugin signing (build-time SHA-256 hash list in data/plugin_hashes.json)
-- P4-3: Restricted import list (advisory warning for imports outside SAFE_IMPORTS)
-- `tests/test_import_bundled.py` — AppData copy, PYPI_PACKAGE check, credential flow
+*All items complete.*
 
 ---
 
-*Plan created 2026-05-29.  Sprint 3 completed 2026-05-29 at v1.9.46.*
+*Plan created 2026-05-29.  Sprint 5 completed 2026-05-29 at v1.9.48.  Plugin ecosystem hardening DONE.*

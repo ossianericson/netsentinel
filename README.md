@@ -320,6 +320,32 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.48
+
+**Added**
+- `modules/nspkg.py` — `.nspkg` plugin bundle format (ZIP with `plugin.py` + `manifest.json` + optional `icon.png`); `unpack_nspkg()` validates manifest and extracts to AppData/plugins (P3-5)
+- Hardware Hub "⬡ Import .nspkg" button — imports a `.nspkg` bundle, verifies manifest, shows unsigned-plugin consent, then calls the normal registration flow
+- P2-2 `CONFIG_SCHEMA` support — plugins declare typed config fields (`poll_interval`, `verify_ssl`, etc.); `HubCard` auto-generates a ⚙ config panel; values saved per-instance in QSettings and passed to `get_status(config=…)` on each poll
+- Community plugin Browse tab (P3-4) — fetches a GitHub-hosted JSON index in a background thread; per-entry SHA-256 verified before download; Install button copies plugin to AppData/plugins and calls the normal registration flow
+- `_CommunityIndexThread` / `_CommunityDownloadThread` — non-blocking background workers for P3-4
+- `tests/test_nspkg.py` — 13 tests covering bundle unpacking, manifest validation, safe filename, icon extraction, and error paths
+- `tests/test_community_index.py` — 9 tests covering index fetch, SHA-256 mismatch, non-list response, and download success
+
+**Fixed**
+- CodeQL `py/empty-except` #696 — `ui/dashboard.py` modem log write now has an explanatory comment
+
+### v1.9.47
+
+**Added**
+- `modules/plugin_tools.py` — plugin validator CLI (`python -m modules.plugin_tools validate <plugin.py>`); static checks for required constants, function signatures, PYPI_PACKAGE, top-level network calls, and imports outside safe list (P3-1)
+- `tools/generate_plugin_hashes.py` + `data/plugin_hashes.json` — build-time SHA-256 hash list for bundled plugins; runtime signature verification in `_start_poll_worker_inst` blocks tampered plugins (P4-2)
+- P4-3 restricted import advisory — `validate_plugin()` warns when imports fall outside `_DEFAULT_SAFE_IMPORTS`; plugin may declare `SAFE_IMPORTS = [...]` to acknowledge custom imports
+- Hardware Hub "⬡ New Plugin" button — 6-field template wizard dialog generates a filled-in `.py` file in the user plugins dir, then offers to open it in the system editor (P3-2)
+- Plugin icon support — `HubCard` and catalog cards display a 24×24 PNG icon when `icon.png` is found alongside the plugin file or `ICON_PATH` constant is declared (P2-3)
+- `_validate_script` now extracts `icon_path` from sibling `icon.png`/`icon.jpg`/`icon.svg` and from `ICON_PATH` constant
+- `tests/test_plugin_tools.py` — 23 tests covering validator, signature check, and CLI (RULE-T1)
+- `tests/test_import_bundled.py` — 28 tests covering `_validate_script`, `_path_hash`, `_instance_id`, AppData copy logic, PYPI_PACKAGE check, and `_classify_error` (closes RULE-T1 gap)
+
 ### v1.9.46
 
 **Added**

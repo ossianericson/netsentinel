@@ -79,6 +79,8 @@ netsentinel/
 │   ├── os_fingerprint.py
 │   ├── plugin_registry.py      # Plugin discovery, metadata, enable/disable registry
 │   ├── plugin_system.py        # Plugin loader and sandbox execution engine
+│   ├── plugin_tools.py         # Plugin validator CLI + signature check (P3-1, P4-2, P4-3)
+│   ├── nspkg.py                # .nspkg plugin bundle format — unpack_nspkg(), validate_manifest() (P3-5)
 │   ├── port_scanner.py
 │   ├── private_endpoint_checker.py  # RFC 1918 boundary exposure checker
 │   ├── process_monitor.py      # Active process-to-socket correlation (psutil-based)
@@ -144,8 +146,6 @@ netsentinel/
 │   │   ├── live_bandwidth_page.py
 │   │   ├── log_hub_page.py         # Log Hub — unified chronological log (RTT, Modem, Mesh, Syslog, SNMP); emits live_challenge_detected
 │   │   ├── maintenance_page.py
-│   │   ├── mesh_router_page.py     # Mesh Router — TP-Link Deco XE75 signal stats; compatibility notice strip
-│   │   ├── modem_page.py           # Modem — ZTE MC889 5G modem signal stats; compatibility notice strip
 │   │   ├── monitor_overview_page.py # Monitor Overview — aggregated view of all monitoring streams
 │   │   ├── mqtt_page.py            # MQTT/Home Assistant — broker config, discovery payloads, test publish
 │   │   ├── network_doc_page.py     # Network Doc — one-click HTML/Markdown snapshot

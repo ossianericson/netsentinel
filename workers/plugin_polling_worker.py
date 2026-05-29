@@ -50,13 +50,21 @@ class PluginPollingWorker(QThread):
 
     def __init__(self, path: str, hw_type: str,
                  instance_id: str = "", instance_ip: str = "",
+                 config: "dict | None" = None,
                  parent=None) -> None:
         super().__init__(parent)
         self._path        = path
         self._hw_type     = hw_type
         self._instance_id = instance_id  # unique key for this instance
         self._instance_ip = instance_ip  # IP override for multi-instance
+        self._config      = config or {}  # P2-2 CONFIG_SCHEMA values
         self._interval_s  = self._INTERVALS.get(hw_type, self._DEFAULT_INTERVAL)
+        # Allow schema-declared poll_interval to override the type default
+        if "poll_interval" in self._config:
+            try:
+                self._interval_s = max(10, int(self._config["poll_interval"]))
+            except (TypeError, ValueError):
+                pass
         self._stop        = False
         self._trigger     = threading.Event()
 
@@ -148,7 +156,14 @@ class PluginPollingWorker(QThread):
             if self._stop:
                 return
 
-            status  = get_status()
+            # P2-2: pass CONFIG_SCHEMA values to get_status if it accepts kwargs
+            if self._config:
+                try:
+                    status = get_status(config=self._config)
+                except TypeError:
+                    status = get_status()
+            else:
+                status = get_status()
             extra   = (status or {}).get("extra", {}) or {}
             err_msg = extra.get("error", "")
             if err_msg:

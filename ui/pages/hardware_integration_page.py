@@ -33,9 +33,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QSettings, QThread, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QCursor, QFont
+from PyQt6.QtGui import QColor, QCursor, QFont, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -88,6 +89,7 @@ from ui.styles import (
 _SETTINGS_KEY      = "hardware/custom_scripts"
 _SETTINGS_RESULT   = "hardware/last_result/{}"   # .format(path_hash)
 _SETTINGS_INSTANCES = "hardware/instances"        # JSON list of instance dicts
+_SETTINGS_CONFIG   = "hardware/config/{}"         # .format(instance_id) — CONFIG_SCHEMA values
 
 
 def _find_python_exe() -> str:
@@ -261,6 +263,27 @@ def _path_hash(path: str) -> str:
     return hashlib.md5(path.encode()).hexdigest()[:12]
 
 
+def _parse_dict_literal(node: ast.Dict) -> dict:
+    """Shallow-parse an AST Dict literal into a plain Python dict.
+
+    Keys must be string constants.  Values may be constants or nested dicts.
+    Used to extract CONFIG_SCHEMA without importing the plugin.
+    """
+    result: dict = {}
+    for k, v in zip(node.keys, node.values):
+        if not isinstance(k, ast.Constant) or not isinstance(k.value, str):
+            continue
+        if isinstance(v, ast.Constant):
+            result[k.value] = v.value
+        elif isinstance(v, ast.Dict):
+            inner: dict = {}
+            for ik, iv in zip(v.keys, v.values):
+                if isinstance(ik, ast.Constant) and isinstance(iv, ast.Constant):
+                    inner[ik.value] = iv.value
+            result[k.value] = inner
+    return result
+
+
 def _validate_script(path: str) -> tuple[bool, str, dict]:
     try:
         source = Path(path).read_text(encoding="utf-8", errors="replace")
@@ -276,8 +299,11 @@ def _validate_script(path: str) -> tuple[bool, str, dict]:
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and isinstance(node.value, ast.Constant):
-                    top_names[target.id] = node.value.value
+                if isinstance(target, ast.Name):
+                    if isinstance(node.value, ast.Constant):
+                        top_names[target.id] = node.value.value
+                    elif isinstance(node.value, ast.Dict):
+                        top_names[target.id] = _parse_dict_literal(node.value)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             func_names.add(node.name)
 
@@ -286,6 +312,18 @@ def _validate_script(path: str) -> tuple[bool, str, dict]:
     if missing:
         return False, f"Missing: {', '.join(sorted(missing))}", {}
 
+    icon_path = str(top_names.get("ICON_PATH", ""))
+    # Also look for icon.png / icon.jpg alongside the plugin file
+    if not icon_path:
+        for ext in ("icon.png", "icon.jpg", "icon.svg"):
+            candidate = Path(path).parent / ext
+            if candidate.exists():
+                icon_path = str(candidate)
+                break
+
+    raw_schema = top_names.get("CONFIG_SCHEMA")
+    config_schema = raw_schema if isinstance(raw_schema, dict) else {}
+
     return True, "OK", {
         "name":             str(top_names.get("HARDWARE_NAME", Path(path).stem)),
         "type":             str(top_names.get("HARDWARE_TYPE", "unknown")),
@@ -293,6 +331,8 @@ def _validate_script(path: str) -> tuple[bool, str, dict]:
         "description":      str(top_names.get("DESCRIPTION", "")),
         "credential_label": str(top_names.get("CREDENTIAL_LABEL", "Password")),
         "pypi_package":     str(top_names.get("PYPI_PACKAGE", "")),
+        "icon_path":        icon_path,
+        "config_schema":    config_schema,
     }
 
 
@@ -506,6 +546,25 @@ def _reset_health(path: str) -> None:
     _save_health(path, h)
 
 
+# ── P2-2 CONFIG_SCHEMA per-instance config storage ────────────────────────────
+
+def _load_instance_config(instance_id: str) -> dict:
+    s = QSettings("NetSentinel", "NetSentinel")
+    raw = s.value(_SETTINGS_CONFIG.format(instance_id), None)
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+    return {}
+
+
+def _save_instance_config(instance_id: str, cfg: dict) -> None:
+    QSettings("NetSentinel", "NetSentinel").setValue(
+        _SETTINGS_CONFIG.format(instance_id), json.dumps(cfg)
+    )
+
+
 def _safe_set_text(lbl: "QLabel", text: str) -> None:
     try:
         lbl.setText(text)
@@ -552,6 +611,74 @@ def _sinr_color(v) -> str:
     if f >= 5:
         return AMBER
     return RED
+
+
+# ── P3-4 Community index background threads ───────────────────────────────────
+
+class _CommunityIndexThread(QThread):
+    """Fetch community plugin index JSON in a background thread."""
+
+    done  = pyqtSignal(list)   # list of plugin dicts
+    error = pyqtSignal(str)
+
+    def __init__(self, url: str, parent=None) -> None:
+        super().__init__(parent)
+        self._url = url
+
+    def run(self) -> None:
+        try:
+            import urllib.request
+            with urllib.request.urlopen(self._url, timeout=15) as resp:  # noqa: S310
+                data = resp.read().decode("utf-8", errors="replace")
+            import json as _json
+            entries = _json.loads(data)
+            if not isinstance(entries, list):
+                self.error.emit("Index is not a JSON array")
+                return
+            self.done.emit(entries)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _CommunityDownloadThread(QThread):
+    """Download a community plugin file, verify SHA-256, save to AppData/plugins/."""
+
+    done  = pyqtSignal(str)    # path to saved .py file
+    error = pyqtSignal(str)
+
+    def __init__(self, url: str, expected_sha256: str, plugin_name: str, parent=None) -> None:
+        super().__init__(parent)
+        self._url      = url
+        self._expected = expected_sha256
+        self._name     = plugin_name
+
+    def run(self) -> None:
+        try:
+            import urllib.request
+            import hashlib as _hl
+            import re
+            from modules.utils import get_app_data_dir
+
+            with urllib.request.urlopen(self._url, timeout=30) as resp:  # noqa: S310
+                data = resp.read()
+
+            if self._expected:
+                actual = _hl.sha256(data).hexdigest()
+                if actual != self._expected:
+                    self.error.emit(
+                        f"SHA-256 mismatch for '{self._name}' — "
+                        f"expected {self._expected[:16]}… got {actual[:16]}…"
+                    )
+                    return
+
+            safe = re.sub(r"[^a-zA-Z0-9_]", "_", self._name.lower()).strip("_") or "plugin"
+            dest_dir = get_app_data_dir() / "plugins"
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / f"{safe}.py"
+            dest.write_bytes(data)
+            self.done.emit(str(dest))
+        except Exception as exc:
+            self.error.emit(str(exc))
 
 
 # ── Signal detail panel (modem) ───────────────────────────────────────────────
@@ -1231,8 +1358,9 @@ class PipInstallDialog(QDialog):
         self._proc.start(python, ["-m", "pip", "install", "--upgrade", package])
 
     def _on_output(self) -> None:
+        from PyQt6.QtGui import QTextCursor
         data = bytes(self._proc.readAllStandardOutput()).decode("utf-8", errors="replace")
-        self._log.moveCursor(self._log.textCursor().End)
+        self._log.moveCursor(QTextCursor.MoveOperation.End)
         self._log.insertPlainText(data)
         sb = self._log.verticalScrollBar()
         sb.setValue(sb.maximum())
@@ -1312,6 +1440,24 @@ class HubCard(QFrame):
         self._dot.setToolTip("Click to expand / collapse detail")
         self._dot.mousePressEvent = lambda _: self._toggle_detail()
         hdr_lay.addWidget(self._dot)
+
+        # Plugin icon (P2-3) — 24×24 QPixmap if icon.png found alongside script
+        icon_path = meta.get("icon_path", "")
+        if icon_path:
+            try:
+                px = QPixmap(icon_path).scaled(
+                    24, 24,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                if not px.isNull():
+                    icon_lbl = QLabel()
+                    icon_lbl.setPixmap(px)
+                    icon_lbl.setFixedSize(26, 26)
+                    icon_lbl.setStyleSheet("border:none; background:transparent;")
+                    hdr_lay.addWidget(icon_lbl)
+            except Exception:
+                pass  # icon load failure is non-critical
 
         # Name + type badge
         name_col = QVBoxLayout()
@@ -1408,6 +1554,24 @@ class HubCard(QFrame):
         self._btn_logs.toggled.connect(self._toggle_logs)
         hdr_lay.addWidget(self._btn_logs)
 
+        # Configure button (P2-2) — only shown when plugin declares CONFIG_SCHEMA
+        self._config_schema: dict = meta.get("config_schema", {}) or {}
+        self._btn_configure = QPushButton("⚙")
+        self._btn_configure.setFixedSize(28, 26)
+        self._btn_configure.setCheckable(True)
+        self._btn_configure.setToolTip("Configure plugin settings")
+        self._btn_configure.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_configure.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:checked {{ background:{ACCENT}22; border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        )
+        self._btn_configure.toggled.connect(self._toggle_config_panel)
+        self._btn_configure.setVisible(bool(self._config_schema))
+        hdr_lay.addWidget(self._btn_configure)
+
         # Remove button
         btn_remove = _btn("✕")
         btn_remove.setFixedWidth(28)
@@ -1492,6 +1656,14 @@ class HubCard(QFrame):
         )
         self._log_panel.setVisible(False)
         outer.addWidget(self._log_panel)
+
+        # Config panel (P2-2) — auto-generated from CONFIG_SCHEMA, hidden by default
+        self._config_panel: Optional[QFrame] = None
+        self._config_fields: dict = {}   # key → widget
+        if self._config_schema:
+            self._config_panel = self._build_config_panel(self._config_schema)
+            self._config_panel.setVisible(False)
+            outer.addWidget(self._config_panel)
 
         # Apply persisted result immediately if available
         if isinstance(last_result, dict):
@@ -1688,12 +1860,105 @@ class HubCard(QFrame):
     def append_log(self, line: str) -> None:
         """Append a structured log entry from the polling worker."""
         self._log_lines.append(line)
-        self._log_panel.setPlainText("\n".join(self._log_lines))
-        sb = self._log_panel.verticalScrollBar()
-        sb.setValue(sb.maximum())
+        try:
+            self._log_panel.setPlainText("\n".join(self._log_lines))
+            sb = self._log_panel.verticalScrollBar()
+            sb.setValue(sb.maximum())
+        except RuntimeError:
+            pass  # QTextEdit deleted before the worker callback fired — safe to ignore
 
     def _toggle_logs(self, checked: bool) -> None:
         self._log_panel.setVisible(checked)
+
+    # ── Config panel (P2-2) ───────────────────────────────────────────────────
+
+    def _build_config_panel(self, schema: dict) -> QFrame:
+        """Auto-generate a config form from a CONFIG_SCHEMA dict."""
+        from PyQt6.QtWidgets import QFormLayout, QCheckBox, QSpinBox
+        panel = QFrame()
+        panel.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:none;"
+            f" border-top:1px solid {BORDER}; }}"
+        )
+        lay = QVBoxLayout(panel)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(4)
+
+        hdr = QLabel("Plugin Configuration")
+        hdr.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:9px; font-weight:bold;"
+            " border:none; background:transparent;"
+        )
+        lay.addWidget(hdr)
+
+        form = QFormLayout()
+        form.setSpacing(4)
+        form.setContentsMargins(0, 2, 0, 2)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        saved = _load_instance_config(self._instance_id)
+
+        _fss = (
+            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:2px 5px; font-size:11px;"
+        )
+
+        for key, spec in schema.items():
+            if not isinstance(spec, dict):
+                continue
+            label = spec.get("label", key)
+            typ   = spec.get("type", "str")
+            default = saved.get(key, spec.get("default", ""))
+
+            if typ == "bool":
+                w = QCheckBox()
+                w.setChecked(bool(default))
+                w.setStyleSheet("border:none; background:transparent;")
+            elif typ == "int":
+                w = QSpinBox()
+                w.setRange(int(spec.get("min", 0)), int(spec.get("max", 99999)))
+                try:
+                    w.setValue(int(default))
+                except (TypeError, ValueError):
+                    w.setValue(int(spec.get("default", 0)))
+                w.setStyleSheet(_fss)
+                w.setFixedHeight(24)
+            else:
+                w = QLineEdit(str(default))
+                w.setStyleSheet(_fss)
+                w.setFixedHeight(24)
+
+            self._config_fields[key] = w
+            form.addRow(label, w)
+
+        lay.addLayout(form)
+
+        btn_save = _btn("Save", accent=True)
+        btn_save.setFixedHeight(24)
+        btn_save.clicked.connect(self._apply_config)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(btn_save)
+        lay.addLayout(btn_row)
+        return panel
+
+    def _toggle_config_panel(self, checked: bool) -> None:
+        if self._config_panel is not None:
+            self._config_panel.setVisible(checked)
+
+    def _apply_config(self) -> None:
+        """Read config field values and persist them."""
+        from PyQt6.QtWidgets import QCheckBox, QSpinBox
+        cfg: dict = {}
+        for key, w in self._config_fields.items():
+            if isinstance(w, QCheckBox):
+                cfg[key] = w.isChecked()
+            elif isinstance(w, QSpinBox):
+                cfg[key] = w.value()
+            else:
+                cfg[key] = w.text()
+        _save_instance_config(self._instance_id, cfg)
+        self._btn_configure.setChecked(False)
 
     def _save_password(self, hw_ip: str, pw_edit: QLineEdit, status: QLabel) -> None:
         pw = pw_edit.text().strip()
@@ -1904,9 +2169,23 @@ class HardwareIntegrationPage(QWidget):
         title.setStyleSheet(f"color:{TEXT_PRIMARY};")
         hdr_row.addWidget(title)
         hdr_row.addStretch()
+        self._btn_new_plugin = _btn("⬡  New Plugin")
+        self._btn_new_plugin.setToolTip(
+            "Launch the wizard to create a new plugin script from a template"
+        )
+        self._btn_new_plugin.clicked.connect(self._on_create_plugin)
+        hdr_row.addWidget(self._btn_new_plugin)
+
         self._btn_add = _btn("＋  Add Integration", accent=True)
         self._btn_add.clicked.connect(self._on_browse)
         hdr_row.addWidget(self._btn_add)
+
+        # P3-5: Import .nspkg bundle
+        self._btn_nspkg = _btn("⬡  Import .nspkg")
+        self._btn_nspkg.setToolTip("Import a .nspkg plugin bundle (ZIP containing plugin.py + manifest.json)")
+        self._btn_nspkg.clicked.connect(self._on_import_nspkg)
+        hdr_row.addWidget(self._btn_nspkg)
+
         root.addLayout(hdr_row)
 
         # Status label (import feedback) — outside tabs
@@ -2021,6 +2300,10 @@ class HardwareIntegrationPage(QWidget):
         self._suggested_tab_idx = self._tabs.addTab(suggested_tab, "Suggested")
         self._tabs.setTabVisible(self._suggested_tab_idx, False)
 
+        # ── Tab 2: Browse community plugins (P3-4) ────────────────────────────
+        self._browse_index_thread: Optional[QThread] = None
+        self._browse_tab_idx = self._tabs.addTab(self._build_browse_tab(), "Browse")
+
     def _toggle_guide(self) -> None:
         visible = not self._guide_area.isVisible()
         self._guide_area.setVisible(visible)
@@ -2028,6 +2311,162 @@ class HardwareIntegrationPage(QWidget):
             "▼  How to write a plugin script" if visible
             else "▶  How to write a plugin script"
         )
+
+    # ── Browse tab (P3-4 community plugin index) ──────────────────────────────
+
+    # URL of the community plugin index JSON.  Override by setting
+    # QSettings("NetSentinel","NetSentinel")["hardware/community_index_url"].
+    _DEFAULT_COMMUNITY_URL = (
+        "https://raw.githubusercontent.com/netsentinel/"
+        "netsentinel-plugins/main/index.json"
+    )
+
+    def _build_browse_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setStyleSheet(f"background:{BG_DARK};")
+        lay = QVBoxLayout(tab)
+        lay.setContentsMargins(12, 10, 12, 10)
+        lay.setSpacing(6)
+
+        # Toolbar
+        bar = QHBoxLayout()
+        title = QLabel("Community Plugins")
+        title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none;")
+        bar.addWidget(title)
+        bar.addStretch()
+        self._browse_status = QLabel("Press Refresh to fetch the index.")
+        self._browse_status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
+        bar.addWidget(self._browse_status)
+        btn_refresh = _btn("↻  Refresh")
+        btn_refresh.clicked.connect(self._fetch_community_index)
+        bar.addWidget(btn_refresh)
+        lay.addLayout(bar)
+
+        # Plugin card area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; }")
+        self._browse_inner = QWidget()
+        self._browse_inner.setStyleSheet(f"background:{BG_DARK};")
+        self._browse_lay = QVBoxLayout(self._browse_inner)
+        self._browse_lay.setContentsMargins(0, 4, 0, 4)
+        self._browse_lay.setSpacing(4)
+        self._browse_lay.addStretch()
+        scroll.setWidget(self._browse_inner)
+        lay.addWidget(scroll, 1)
+
+        return tab
+
+    def _fetch_community_index(self) -> None:
+        """Fetch community index JSON in a background thread."""
+        if self._browse_index_thread is not None and self._browse_index_thread.isRunning():
+            return
+        url = (
+            QSettings("NetSentinel", "NetSentinel")
+            .value("hardware/community_index_url", self._DEFAULT_COMMUNITY_URL)
+        )
+        self._browse_status.setText("Fetching index…")
+        self._browse_index_thread = _CommunityIndexThread(url, parent=self)
+        self._browse_index_thread.done.connect(self._on_community_index_done,
+                                                Qt.ConnectionType.QueuedConnection)
+        self._browse_index_thread.error.connect(self._on_community_index_error,
+                                                 Qt.ConnectionType.QueuedConnection)
+        self._browse_index_thread.start()
+
+    @pyqtSlot(list)
+    def _on_community_index_done(self, entries: list) -> None:
+        self._browse_status.setText(f"{len(entries)} plugin(s) found.")
+        self._rebuild_browse_cards(entries)
+
+    @pyqtSlot(str)
+    def _on_community_index_error(self, msg: str) -> None:
+        self._browse_status.setText(f"Error: {msg}")
+
+    def _rebuild_browse_cards(self, entries: list) -> None:
+        # Remove existing cards (keep the trailing stretch)
+        while self._browse_lay.count() > 1:
+            item = self._browse_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for entry in entries:
+            card = self._build_community_card(entry)
+            self._browse_lay.insertWidget(self._browse_lay.count() - 1, card)
+
+    def _build_community_card(self, entry: dict) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        lay = QHBoxLayout(card)
+        lay.setContentsMargins(12, 8, 10, 8)
+        lay.setSpacing(10)
+
+        info = QVBoxLayout()
+        name_lbl = QLabel(f"<b>{entry.get('name', 'Unknown')}</b>")
+        name_lbl.setTextFormat(Qt.TextFormat.RichText)
+        name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none; background:transparent;")
+        info.addWidget(name_lbl)
+
+        author = entry.get("author", "")
+        pypi   = entry.get("pypi", "")
+        meta_parts = [p for p in [f"by {author}" if author else "", f"pip: {pypi}" if pypi else ""] if p]
+        sub = QLabel("  ·  ".join(meta_parts))
+        sub.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;")
+        info.addWidget(sub)
+
+        desc = entry.get("desc", entry.get("description", ""))
+        if desc:
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none; background:transparent;")
+            desc_lbl.setWordWrap(True)
+            info.addWidget(desc_lbl)
+
+        lay.addLayout(info, 1)
+
+        btn_install = _btn("⬇ Install", accent=True)
+        has_url = bool(entry.get("file_url"))
+        btn_install.setEnabled(has_url)
+        if not has_url:
+            btn_install.setToolTip("No download URL provided")
+        btn_install.clicked.connect(lambda _=False, e=entry: self._install_community_plugin(e))
+        lay.addWidget(btn_install)
+        return card
+
+    def _install_community_plugin(self, entry: dict) -> None:
+        """Download, SHA-256 verify, and import a community plugin."""
+        file_url  = entry.get("file_url", "")
+        expected  = entry.get("sha256", "")
+        name      = entry.get("name", "plugin")
+
+        if not file_url:
+            self._set_status("No download URL for this plugin.", error=True)
+            return
+
+        self._browse_status.setText(f"Downloading {name}…")
+        thread = _CommunityDownloadThread(file_url, expected, name, parent=self)
+        thread.done.connect(
+            lambda path: self._on_community_download_done(path, entry),
+            Qt.ConnectionType.QueuedConnection,
+        )
+        thread.error.connect(
+            lambda msg: self._on_community_download_error(msg),
+            Qt.ConnectionType.QueuedConnection,
+        )
+        # Keep a reference so it isn't GC'd
+        self._browse_index_thread = thread
+        thread.start()
+
+    @pyqtSlot(str)
+    def _on_community_download_done(self, plugin_path: str, entry: dict) -> None:
+        self._browse_status.setText(f"Downloaded — importing '{entry.get('name', plugin_path)}'…")
+        self._import_bundled(plugin_path)
+
+    @pyqtSlot(str)
+    def _on_community_download_error(self, msg: str) -> None:
+        self._browse_status.setText(f"Download error: {msg}")
 
     # ── Hub management ────────────────────────────────────────────────────────
 
@@ -2136,10 +2575,30 @@ class HardwareIntegrationPage(QWidget):
         lay.setContentsMargins(12, 8, 12, 8)
         lay.setSpacing(10)
 
-        icon_lbl = QLabel(_TYPE_ICON.get(meta.get("type", ""), "🔌"))
-        icon_lbl.setFixedWidth(22)
-        icon_lbl.setStyleSheet("background:transparent; border:none;")
-        lay.addWidget(icon_lbl)
+        # Use PNG icon if available (P2-3), else fall back to emoji type icon
+        icon_path = meta.get("icon_path", "")
+        icon_widget_added = False
+        if icon_path:
+            try:
+                px = QPixmap(icon_path).scaled(
+                    24, 24,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                if not px.isNull():
+                    icon_lbl = QLabel()
+                    icon_lbl.setPixmap(px)
+                    icon_lbl.setFixedSize(26, 26)
+                    icon_lbl.setStyleSheet("background:transparent; border:none;")
+                    lay.addWidget(icon_lbl)
+                    icon_widget_added = True
+            except Exception:
+                pass
+        if not icon_widget_added:
+            icon_lbl = QLabel(_TYPE_ICON.get(meta.get("type", ""), "🔌"))
+            icon_lbl.setFixedWidth(22)
+            icon_lbl.setStyleSheet("background:transparent; border:none;")
+            lay.addWidget(icon_lbl)
 
         txt = QVBoxLayout()
         txt.setSpacing(1)
@@ -2340,20 +2799,59 @@ class HardwareIntegrationPage(QWidget):
         btn_row.addWidget(test_btn)
         lay.addLayout(btn_row)
 
+        # "Add Without Testing" — hidden initially; appears after a live-test failure
+        # so the user can still register when the device is temporarily offline.
+        skip_btn = QPushButton("Add Without Testing")
+        skip_btn.setVisible(False)
+        skip_btn.setToolTip(
+            "Device unreachable — save credentials now and add.\n"
+            "The card will show an error until the device comes online."
+        )
+        skip_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:10px; padding:2px 0; text-decoration:underline; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        lay.addWidget(skip_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
         # ── Live-test logic ───────────────────────────────────────────────────
         _tester: list[_PluginConnectionTester] = []
+
+        def _set_status(msg: str, color: str) -> None:
+            status_lbl.setText(msg)
+            status_lbl.setStyleSheet(
+                f"font-size:11px; color:{color}; padding:4px 0; background:transparent;"
+            )
+            status_lbl.setVisible(True)
+
+        def _save_and_accept() -> None:
+            ip = ip_edit.text().strip()
+            pw = pw_edit.text().strip()
+            if pw:
+                try:
+                    import keyring as _kr
+                    _kr.set_password("NetSentinel/hardware", ip, pw)
+                except Exception:
+                    pass
+            dlg.accept()
 
         def _run_test() -> None:
             ip = ip_edit.text().strip()
             pw = pw_edit.text().strip()
-            if not ip or not pw:
-                _set_status("Enter both IP address and password.", RED)
+            if not ip:
+                _set_status("Enter the device IP address.", RED)
+                return
+            if not pw:
+                _set_status(f"Enter the device {cred_label.lower()} to continue.", RED)
+                pw_edit.setFocus()
                 return
 
             test_btn.setEnabled(False)
             cancel_btn.setEnabled(False)
             ip_edit.setEnabled(False)
             pw_edit.setEnabled(False)
+            skip_btn.setVisible(False)
             _set_status("Testing connection…  ⏳", TEXT_SECONDARY)
 
             tester = _PluginConnectionTester(plugin_path or "", ip, pw, parent=dlg)
@@ -2361,7 +2859,6 @@ class HardwareIntegrationPage(QWidget):
 
             def _on_success(result: dict) -> None:
                 _set_status("✓  Connected successfully — adding integration.", GREEN)
-                # Credential already saved by tester; persist permanently
                 try:
                     import keyring as _kr
                     _kr.set_password("NetSentinel/hardware", ip, pw)
@@ -2370,7 +2867,6 @@ class HardwareIntegrationPage(QWidget):
                 QTimer.singleShot(600, dlg.accept)
 
             def _on_failure(msg: str) -> None:
-                # Remove the temporary credential written by tester
                 try:
                     import keyring as _kr
                     _kr.delete_password("NetSentinel/hardware", ip)
@@ -2382,18 +2878,13 @@ class HardwareIntegrationPage(QWidget):
                 ip_edit.setEnabled(True)
                 pw_edit.setEnabled(True)
                 test_btn.setText("Retry")
+                skip_btn.setVisible(True)  # offer skip only after a real failure
 
             tester.success.connect(_on_success, Qt.ConnectionType.QueuedConnection)
             tester.failure.connect(_on_failure, Qt.ConnectionType.QueuedConnection)
             tester.start()
 
-        def _set_status(msg: str, color: str) -> None:
-            status_lbl.setText(msg)
-            status_lbl.setStyleSheet(
-                f"font-size:11px; color:{color}; padding:4px 0; background:transparent;"
-            )
-            status_lbl.setVisible(True)
-
+        skip_btn.clicked.connect(_save_and_accept)
         test_btn.clicked.connect(_run_test)
         pw_edit.returnPressed.connect(_run_test)
 
@@ -2456,12 +2947,30 @@ class HardwareIntegrationPage(QWidget):
         if inst is None:
             return
         path = inst["path"]
+
+        # P4-2: verify bundled plugin signature before execution
+        try:
+            from modules.plugin_tools import verify_signature as _vsig
+            _signed, _sig_msg = _vsig(path)
+            if "MISMATCH" in _sig_msg:
+                card = self._cards.get(instance_id)
+                if card:
+                    card.set_error(
+                        f"ERR: Plugin hash mismatch — possible tampering. "
+                        f"Re-import the original plugin or reinstall NetSentinel."
+                    )
+                return
+        except Exception:
+            pass  # hash DB unavailable — proceed without check
+
         ok, _, meta = _validate_script(path)
         hw_type = meta.get("type", "other") if ok else "other"
+        saved_config = _load_instance_config(instance_id)
         worker = PluginPollingWorker(
             path=path, hw_type=hw_type,
             instance_id=instance_id,
             instance_ip=inst.get("ip", ""),
+            config=saved_config or None,
             parent=self,
         )
         worker.result.connect(
@@ -2610,6 +3119,274 @@ class HardwareIntegrationPage(QWidget):
         QTimer.singleShot(300, lambda p=path: self._start_poll_worker(p))
 
     # ── Import / remove ───────────────────────────────────────────────────────
+
+    @pyqtSlot()
+    def _on_create_plugin(self) -> None:
+        """P3-2: Template wizard — generate a new plugin .py from user-supplied fields.
+
+        Presents a dialog collecting hardware name, type, IP, credential label,
+        optional PyPI package, and author.  On "Create", writes a filled-in
+        template to get_app_data_dir()/plugins/ and offers to import it immediately.
+        """
+        from modules.utils import get_app_data_dir as _gad
+
+        _field_ss = (
+            f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            " border-radius:3px; padding:3px 6px; font-size:11px;"
+        )
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Create New Plugin")
+        dlg.setMinimumWidth(480)
+
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(16, 16, 16, 12)
+        lay.setSpacing(10)
+
+        intro = QLabel(
+            "Fill in the fields below and NetSentinel will generate a plugin "
+            "template ready for you to complete with your hardware's API calls."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        lay.addWidget(intro)
+
+        from PyQt6.QtWidgets import QFormLayout
+        form = QFormLayout()
+        form.setSpacing(8)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        name_edit = QLineEdit()
+        name_edit.setStyleSheet(_field_ss)
+        name_edit.setPlaceholderText("e.g. ASUS RT-AX88U")
+        form.addRow("Hardware name *", name_edit)
+
+        type_combo = QComboBox()
+        type_combo.addItems(["router", "modem", "ap", "switch", "other"])
+        type_combo.setStyleSheet(
+            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 6px; font-size:11px; }}"
+            f"QComboBox:drop-down {{ border:none; }}"
+        )
+        form.addRow("Hardware type *", type_combo)
+
+        ip_edit = QLineEdit()
+        ip_edit.setStyleSheet(_field_ss)
+        ip_edit.setPlaceholderText("e.g. 192.168.1.1")
+        form.addRow("Default IP *", ip_edit)
+
+        cred_edit = QLineEdit()
+        cred_edit.setStyleSheet(_field_ss)
+        cred_edit.setText("Password")
+        form.addRow("Credential label", cred_edit)
+
+        pypi_edit = QLineEdit()
+        pypi_edit.setStyleSheet(_field_ss)
+        pypi_edit.setPlaceholderText("e.g. fritzconnection  (leave blank if none)")
+        form.addRow("PyPI package", pypi_edit)
+
+        author_edit = QLineEdit()
+        author_edit.setStyleSheet(_field_ss)
+        author_edit.setPlaceholderText("optional — shown in plugin catalog")
+        form.addRow("Author", author_edit)
+
+        lay.addLayout(form)
+
+        # Output file path (auto, shown read-only)
+        try:
+            dest_dir = _gad() / "plugins"
+        except Exception:
+            dest_dir = Path.home() / ".netsentinel" / "plugins"
+        path_lbl = QLabel("")
+        path_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; font-family:Consolas;"
+        )
+        path_lbl.setWordWrap(True)
+        lay.addWidget(path_lbl)
+
+        def _update_path_preview(*_):
+            raw = name_edit.text().strip()
+            slug = (
+                raw.lower()
+                .replace(" ", "_")
+                .replace("-", "_")
+                .replace("/", "_")
+            )
+            slug = "".join(c for c in slug if c.isalnum() or c == "_")
+            slug = slug or "my_plugin"
+            fname = f"{slug}_plugin.py"
+            path_lbl.setText(f"Will be created at: {dest_dir / fname}")
+
+        name_edit.textChanged.connect(_update_path_preview)
+        _update_path_preview()
+
+        status_lbl = QLabel("")
+        status_lbl.setStyleSheet(f"color:{RED}; font-size:10px;")
+        status_lbl.setVisible(False)
+        lay.addWidget(status_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:5px 14px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_row.addWidget(cancel_btn)
+
+        create_btn = QPushButton("Create Plugin")
+        create_btn.setDefault(True)
+        create_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:3px; padding:5px 18px; font-size:12px; font-weight:600; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
+        )
+        btn_row.addWidget(create_btn)
+        lay.addLayout(btn_row)
+
+        _created_path: list[str] = []
+
+        def _on_create() -> None:
+            hw_name    = name_edit.text().strip()
+            hw_type    = type_combo.currentText()
+            hw_ip      = ip_edit.text().strip()
+            cred_label = cred_edit.text().strip() or "Password"
+            pypi_pkg   = pypi_edit.text().strip()
+            author     = author_edit.text().strip()
+
+            if not hw_name:
+                status_lbl.setText("Hardware name is required.")
+                status_lbl.setVisible(True)
+                return
+            if not hw_ip:
+                status_lbl.setText("Default IP is required.")
+                status_lbl.setVisible(True)
+                return
+
+            slug = (
+                hw_name.lower()
+                .replace(" ", "_")
+                .replace("-", "_")
+                .replace("/", "_")
+            )
+            slug = "".join(c for c in slug if c.isalnum() or c == "_") or "my_plugin"
+            fname = f"{slug}_plugin.py"
+
+            # Build file content from _TEMPLATE with substitutions
+            content = _TEMPLATE
+            content = content.replace(
+                'Hardware: <YOUR HARDWARE NAME>', f'Hardware: {hw_name}'
+            )
+            content = content.replace(
+                'Author:   <YOUR NAME>', f'Author:   {author or "Unknown"}'
+            )
+            content = content.replace(
+                'HARDWARE_NAME = "My Router XYZ"     # displayed in the app',
+                f'HARDWARE_NAME = "{hw_name}"',
+            )
+            content = content.replace(
+                'HARDWARE_TYPE = "router"            # router | modem | ap | switch | other',
+                f'HARDWARE_TYPE = "{hw_type}"',
+            )
+            content = content.replace(
+                'HARDWARE_IP   = "192.168.1.1"       # your device\'s LAN address',
+                f'HARDWARE_IP   = "{hw_ip}"',
+            )
+
+            # Insert PYPI_PACKAGE and/or CREDENTIAL_LABEL before the credential helper
+            extra_consts = ""
+            if pypi_pkg:
+                extra_consts += f'\nPYPI_PACKAGE    = "{pypi_pkg}"'
+            extra_consts += f'\nCREDENTIAL_LABEL = "{cred_label}"'
+            if extra_consts:
+                content = content.replace(
+                    '\n# ── Credentials',
+                    extra_consts + '\n\n# ── Credentials',
+                )
+
+            # Write to user plugins dir
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                dest = dest_dir / fname
+                dest.write_text(content, encoding="utf-8")
+                _created_path.append(str(dest))
+                dlg.accept()
+            except Exception as exc:
+                status_lbl.setText(f"Failed to create file: {exc}")
+                status_lbl.setVisible(True)
+
+        create_btn.clicked.connect(_on_create)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted or not _created_path:
+            return
+
+        created = _created_path[0]
+        self._set_status(
+            f"Plugin created: {Path(created).name}  "
+            "— click ＋ Add Integration to import it.",
+            error=False,
+        )
+
+        # Offer to open the file in the system editor
+        from PyQt6.QtWidgets import QMessageBox
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Plugin Created")
+        msg.setText(
+            f"<b>{Path(created).name}</b> has been created.<br><br>"
+            f"Path: <code>{created}</code><br><br>"
+            "Open the file in your default editor to complete the API code, "
+            "then click <b>＋ Add Integration</b> to import it."
+        )
+        msg.setTextFormat(Qt.TextFormat.RichText)
+        open_btn = msg.addButton("Open in editor", QMessageBox.ButtonRole.ActionRole)
+        msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+        msg.exec()
+        if msg.clickedButton() == open_btn:
+            import os as _os
+            try:
+                _os.startfile(created)  # type: ignore[attr-defined]
+            except AttributeError:
+                import subprocess
+                subprocess.Popen(["xdg-open", created])  # noqa: S603
+
+    def _on_import_nspkg(self) -> None:
+        """Import a .nspkg plugin bundle (P3-5)."""
+        from PyQt6.QtWidgets import QMessageBox
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import plugin bundle", "",
+            "NetSentinel plugin bundles (*.nspkg);;ZIP files (*.zip)",
+        )
+        if not path:
+            return
+
+        try:
+            from modules.nspkg import unpack_nspkg
+            from modules.utils import get_app_data_dir
+            dest_dir = get_app_data_dir() / "plugins"
+            plugin_path, manifest = unpack_nspkg(path, dest_dir)
+        except Exception as exc:
+            self._set_status(f"Import failed: {exc}", error=True)
+            return
+
+        # Treat the extracted .py as a user-supplied script (show consent if unsigned)
+        if not _is_consented(str(plugin_path)):
+            if not self._show_unsigned_warning(str(plugin_path)):
+                return
+            _record_consent(str(plugin_path))
+
+        ok, msg, meta = _validate_script(str(plugin_path))
+        if not ok:
+            self._set_status(f"Bundle plugin invalid: {msg}", error=True)
+            return
+
+        name = manifest.get("name") or meta.get("name", plugin_path.stem)
+        self._set_status(f"Importing '{name}' from bundle…", error=False)
+        self._import_bundled(str(plugin_path))
 
     def _on_browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

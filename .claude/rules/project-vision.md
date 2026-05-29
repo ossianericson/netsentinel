@@ -21,13 +21,13 @@ Both goals are served by the same core property: zero prior knowledge required. 
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v1.9.46**
+Current version: **v1.9.48**
 
 Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42
 
 ---
 
-## Implemented Features (as of v1.9.37)
+## Implemented Features (as of v1.9.47)
 
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection
@@ -120,6 +120,19 @@ Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42
 - **Winget E_ABORT fix** — three-layer defence for Ookla CLI install edge cases
 - **Plugin system** — drop Python scripts into `plugins/`; `plugin_system.py` + `plugin_registry.py`; exposed via Security Audit sidebar
 - **Hardware integration** — USB/serial/GPIO device detection; `hardware_integration_page.py` in Extend section
+- **Hardware plugin ecosystem (v1.9.45–v1.9.47)**
+  - Multi-instance support — same plugin type, different device IPs, each with its own keyring credential and Hub card
+  - Per-plugin health tracking — success/error counters, circuit-breaker (auto-disable after 10 errors), degraded amber state after 24 h without success
+  - Structured error classification — AUTH / DEPS / NET / TIMEOUT prefixes; `_classify_error()` routes to appropriate remediation text
+  - Blocking live-test before registration — credential dialog runs get_info()+get_status() in background thread; only saves on success
+  - Startup dep smoke-check — missing PYPI_PACKAGE dependencies surface as card errors immediately at startup
+  - Plugin log console — "≡ Logs" toggle on each Hub card shows last 100 structured poll log lines (P3-3)
+  - Unsigned plugin warning — one-time SHA-256-keyed consent dialog for non-bundled scripts (P4-1)
+  - Plugin validator CLI — `python -m modules.plugin_tools validate <plugin.py>` performs static analysis (P3-1)
+  - Plugin template wizard — "⬡ New Plugin" button in Hardware Hub generates a filled-in .py template (P3-2)
+  - Plugin icon support — `icon.png` alongside script or `ICON_PATH` constant displayed as 24×24 on Hub cards (P2-3)
+  - Bundled plugin signing — `data/plugin_hashes.json` SHA-256 hash list; tampered files blocked at load time (P4-2)
+  - Restricted import advisory — `validate_plugin()` warns when imports fall outside `_DEFAULT_SAFE_IMPORTS` (P4-3)
 
 ---
 
@@ -134,7 +147,13 @@ Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42
 1. **CompTIA Network+ / CCNA curriculum alignment** — compact exam-objective badge per page; exportable study-session checklist. New: `data/curriculum_map.json`, `ui/widgets/objective_badge.py`. Effort: S.
 2. **Classroom export** — signed JSON+HTML scan report with machine fingerprint; instructor aggregation view. New: `modules/classroom_export.py`, `ui/pages/classroom_page.py`. Effort: M.
 
-### Priority 3 — Polish and Retention
+### Priority 3 — Plugin Ecosystem (remaining)
+
+- **Typed CONFIG_SCHEMA** (P2-2) — plugin declares `poll_interval`, `verify_ssl` etc.; auto-generated config panel in the Hub card
+- **Community plugin index** (P3-4) — GitHub-hosted JSON index; SHA-256 verified before install; in-app "Browse" tab
+- **Plugin bundle format** (P3-5) — `.nspkg` ZIP with `plugin.py` + `manifest.json` + optional `icon.png`
+
+### Priority 4 — Polish and Retention
 
 - **"Abyss" WCAG AA high-contrast theme** — fourth theme; true black, no low-opacity elements
 - **Keyboard shortcut reference card** — in Help panel

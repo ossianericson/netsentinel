@@ -9665,9 +9665,9 @@ class Dashboard(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Plugin log console",           "Each Hardware Hub card has a new ≡ Logs button. Click it to expand a live console showing the last 100 structured poll entries — timestamps, get_info/get_status results, errors — so failures are never invisible."),
-            ("Unsigned plugin warning",      "Importing a non-bundled plugin now shows a one-time consent dialog with the file path and size. Consent is remembered per file content (sha256), so the dialog never appears twice for the same script."),
-            ("Plugin health tracking",       "Health counters (success/error) and the circuit-breaker (auto-disable after 10 consecutive errors) with a Re-enable button shipped in v1.9.45 and are now fully covered by the test suite."),
+            ("CONFIG_SCHEMA plugin config",  "Plugins can declare CONFIG_SCHEMA with typed fields (poll_interval, verify_ssl, etc.). The Hub card shows a ⚙ button that opens an auto-generated config panel; values are passed to get_status(config=…) on each poll."),
+            (".nspkg plugin bundles",        "Import a .nspkg file (ZIP with plugin.py + manifest.json + optional icon.png) via the new '⬡ Import .nspkg' button. Manifest is validated before extraction."),
+            ("Community plugin Browse tab",  "The Hardware Hub now has a Browse tab that fetches a community plugin index, verifies SHA-256 before download, and lets you install community plugins in one click."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────
@@ -11900,7 +11900,7 @@ class Dashboard(QMainWindow):
                         )
                         self._last_modem_log_ts = now
                     except Exception:
-                        pass
+                        pass  # log_modem_entry is best-effort; DB write failure is non-fatal
 
     @pyqtSlot(str)
     def _filter_m1_by_nl(self, text: str):
