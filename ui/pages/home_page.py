@@ -1782,13 +1782,13 @@ class HomePage(QWidget):
     def set_scanning(self, running: bool) -> None:
         self._btn_scan.setEnabled(not running)
         if running:
-            self._btn_scan.setText(“Scanning…”)
+            self._btn_scan.setText("Scanning…")
             self._hero_sub.setText(
-                “Scan in progress — tiles will update as each module completes.”
+                "Scan in progress — tiles will update as each module completes."
             )
         else:
             self._update_scan_button_label()
-            self._hero_sub.setText(“Discover devices · check stability · detect threats”)
+            self._hero_sub.setText("Discover devices · check stability · detect threats")
             self._freshness_strip.set_scan_progress("")
 
     @pyqtSlot(str)

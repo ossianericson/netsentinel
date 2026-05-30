@@ -187,15 +187,18 @@ hiddenimports: list = [
     "ui.pages.lab_mode_page",
     "ui.pages.live_bandwidth_page",
     "ui.pages.log_hub_page",
+    "ui.pages.log_source_panel",
     "ui.pages.maintenance_page",
     "ui.pages.mqtt_page",
     "ui.pages.network_doc_page",
+    "ui.pages.notif_channel_panels",
     "ui.pages.notifications_page",
     "ui.pages.ookla_cli_banner",
     "ui.pages.overview_page",
     "ui.pages.protocol_viz_page",
     "ui.pages.reports_page",
     "ui.pages.service_page",
+    "ui.pages.settings_cards",
     "ui.pages.settings_page",
     "ui.pages.snmp_trap_page",
     "ui.pages.speed_test_page",
@@ -272,6 +275,7 @@ hiddenimports: list = [
     "workers.plugin_worker",
     "workers.wifi_monitor_worker",
     "ui.pages.hardware_integration_page",
+    "ui.pages.plugin_guide",
 ]
 
 for _pkg in ("scapy", "PyQt6", "matplotlib", "flask", "keyring"):

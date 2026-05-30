@@ -144,6 +144,7 @@ netsentinel/
 │   │   ├── geo_map_page.py         # Offline MaxMind geolocation map
 │   │   ├── hardware_integration_page.py  # Hardware — USB/serial/GPIO device integration (Extend section)
 │   │   ├── history_page.py
+│   │   ├── plugin_guide.py         # PluginGuide widget — collapsible 4-step plugin authoring guide (S14-2 split)
 │   │   ├── home_automation_page.py
 │   │   ├── home_page.py            # Landing page — hero, suggestions, tips, dashboard strip
 │   │   ├── inventory_page.py
@@ -151,10 +152,12 @@ netsentinel/
 │   │   ├── lab_mode_page.py        # LabModePage — guided exercises; inject_live_challenge()
 │   │   ├── live_bandwidth_page.py
 │   │   ├── log_hub_page.py         # Log Hub — unified chronological log (RTT, Modem, Mesh, Syslog, SNMP); emits live_challenge_detected
+│   │   ├── log_source_panel.py     # _LogSourcePanelMixin — panel builders + source management for LogHubPage (S14-3b split)
 │   │   ├── maintenance_page.py
 │   │   ├── monitor_overview_page.py # Monitor Overview — aggregated view of all monitoring streams
 │   │   ├── mqtt_page.py            # MQTT/Home Assistant — broker config, discovery payloads, test publish
 │   │   ├── network_doc_page.py     # Network Doc — one-click HTML/Markdown snapshot
+│   │   ├── notif_channel_panels.py  # _NotifChannelsMixin — all card builders, log panel, test helpers for NotificationsPage (S14-3a split)
 │   │   ├── notifications_page.py
 │   │   ├── ookla_cli_banner.py     # Dismissible install banner for Ookla CLI
 │   │   ├── overview_page.py
@@ -164,6 +167,7 @@ netsentinel/
 │   │   ├── rest_api_page.py        # REST API — enable toggle, port, API key, live status probe, endpoint reference
 │   │   ├── security_overview_page.py # Security Overview — aggregate security findings dashboard
 │   │   ├── service_page.py
+│   │   ├── settings_cards.py       # _SettingsCardsMixin — all card builder methods for SettingsPage (S14-3c split)
 │   │   ├── settings_page.py
 │   │   ├── snmp_trap_page.py
 │   │   ├── speed_test_page.py      # Speed Test — history rows store full modem signal dict; clicking a row restores signal panel

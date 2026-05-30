@@ -1003,8 +1003,8 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 30 | ✅ S13-3: Extract `AppHeaderMixin` to `ui/header.py` | 6 | v1.9.61 | `_build_header`, `_DragHeader`, `_install_snap_subclass`, `_install_edge_grips`, `_build_update_bar`, etc. → `AppHeaderMixin` (659 lines) |
 | 31 | ✅ S13-4: Extract settings persistence to `ui/app_settings.py` | 6 | v1.9.61 | `save_settings()`, `restore_settings()`, `center_on_screen()` extracted; dashboard.py −166 lines |
 | 32 | ✅ S13-5b: Tighten dashboard.py budget to 6,740 (actual 6,540+200) | 6 | v1.9.61 | Far exceeded target of 7,200; budget updated in test_module_loc.py |
-| 33 | S14-1: Complete home_page.py split (2,747 → ≤1,200) | 7 | v1.9.62 | Deferred — monolithic _setup_ui() needs careful extraction; moved to Sprint 7 |
-| 34 | S14-2: Complete hardware_integration_page.py (1,934 → ≤900) | 7 | v1.9.62 | Deferred — guide section (~120 lines) insufficient to reach target; moved to Sprint 7 |
+| 33 | ✅ S14-1: home_page.py split (3,032 → 2,238 lines) | 7 | v1.9.61 | FreshnessStrip + GettingStartedCard extracted to home_widgets.py; encoding mojibake fixed |
+| 34 | ✅ S14-2: hardware_integration_page.py → plugin_guide.py (1,934 → 1,782 lines) | 7 | v1.9.62 | 4-step guide widget extracted to plugin_guide.py |
 | 35 | ✅ S15-2: Split hub_card.py → hub_helpers.py (2,209 → 1,665 lines) | 6 | v1.9.61 | Pure helpers extracted to `ui/widgets/hub_helpers.py` (577 lines); patch targets updated in 3 test files |
 | 36 | ✅ S15-3: Document mock-patch canonical locations in tests/CLAUDE.md | 6 | v1.9.61 | Section added; hub_card vs hub_helpers re-export relationship documented |
 | 37 | ✅ S7-1: Lazy-import audit | 6 | v1.9.61 | All optional imports already guarded; `requests` in deco_client/zte_client is a required dep — no violations |
@@ -1013,9 +1013,9 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 40 | ✅ S4-2: Pre-commit Step 0 added to CLAUDE.md commit gate | 6 | v1.9.61 | `test_codeql_prevention.py` + `test_interactive_states.py` run before full suite |
 | 41 | ✅ S8-3: Version history in CLAUDE.md updated | 6 | v1.9.61 | Sprint summary table v1.9.40–v1.9.60 added to CLAUDE.md |
 | — | **— Sprint 7+ (target v1.9.62+) —** | — | — | — |
-| 42 | S14-3 follow-up: Split notifications_page.py (1,812) | 7 | v1.9.62 | Extract per-channel config panels |
-| 43 | S14-3 follow-up: Split log_hub_page.py (1,648) | 7 | v1.9.62 | Extract `LogSourcePanel` base class |
-| 44 | S14-3 follow-up: Split settings_page.py (1,526) | 7 | v1.9.62 | Extract per-section QWidget subclasses |
+| 42 | ✅ S14-3a: notifications_page.py → notif_channel_panels.py (2,025 → 296 lines) | 7 | v1.9.62 | _NotifChannelsMixin with all card builders, log panel, test helpers |
+| 43 | ✅ S14-3b: log_hub_page.py → log_source_panel.py (1,848 → 892 lines) | 7 | v1.9.62 | _LogSourcePanelMixin + shared constants/helpers in log_source_panel.py |
+| 44 | ✅ S14-3c: settings_page.py → settings_cards.py (1,730 → 275 lines) | 7 | v1.9.62 | _SettingsCardsMixin + workers + helpers in settings_cards.py |
 | 45 | S13-5c: Tighten dashboard.py budget to 5,000 | 7 | v1.9.62 | After all S13 and S14 splits land |
 | — | **— TBD sprints —** | — | — | — |
 | 46 | S10-1: Inventory missing colour tokens | TBD | TBD | Must precede S10-2/S10-3 |
@@ -1083,7 +1083,7 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
 *Re-audited 2026-05-30 post-Sprint-4 (13 new findings added, S13/S14/S15 sections added).*
-*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6: v1.9.61.  Sprint 7 target: v1.9.62.*
+*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6: v1.9.61.  Sprint 7: v1.9.62 (S14-1 through S14-3c complete 2026-05-30).*
 
 **Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes → `ui/nav/rail.py`; −683 lines), S11-1 (PAGE_HELP duplicate key fixed), S11-4 (CI parity gates added).
 
@@ -1093,4 +1093,4 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 **Sprint 6 delivered (2026-05-30):** S13-1 (TabBuilderMixin → `ui/tabs.py`; dashboard.py 9,776→6,540 lines, −3,236), S13-2 (build_help_tab → `ui/help.py`; −587 lines), S13-3 (AppHeaderMixin → `ui/header.py`; −659 lines), S13-4 (settings persistence → `ui/app_settings.py`; −166 lines), S13-5b (dashboard budget tightened to 6,740), S15-2 (hub_helpers.py from hub_card.py; hub_card.py 2,209→1,665), S15-3 (mock-patch docs in tests/CLAUDE.md), S7-1 (lazy-import audit — clean), S7-2 (tools/startup_profile.py), S7-3 (debug_launch.py log rotation), S4-2 (Step 0 pre-commit gate), S8-3 (version history table in CLAUDE.md). 2231 tests pass, 4 skipped.
 
-**Sprint 7 queue:** S14-1 (home_page.py split: monolithic _setup_ui() → 6 QWidget subclasses in home_widgets.py; target 1,200 lines), S14-2 (hardware_integration_page.py → ≤900; guide section → plugin_guide.py), S14-3 (notifications_page.py, log_hub_page.py, settings_page.py splits), S13-5c (tighten dashboard budget toward 5,000), remaining recon tab builder extractions from tabs.py (3,302 lines).
+**Sprint 7 complete (2026-05-30):** S14-1 ✅ home_page.py 3,032→2,238 lines; S14-2 ✅ hardware_integration_page.py 1,934→1,782 lines (plugin_guide.py extracted); S14-3a ✅ notifications_page.py 2,025→296 lines (notif_channel_panels.py); S14-3b ✅ log_hub_page.py 1,848→892 lines (log_source_panel.py); S14-3c ✅ settings_page.py 1,730→275 lines (settings_cards.py). **Sprint 8 queue:** S13-5c (tighten dashboard budget toward 5,000), remaining recon tab builder extractions from tabs.py (3,302 lines), S14-2 further reduction of hardware_integration_page.py below 900 lines.
