@@ -794,6 +794,7 @@ class ScanResultMixin:
         self._update_overall_verdict()
 
     def _on_m3_result(self, storm):
+        from ui.dashboard import _color_for_level
         self._m3_stack.setCurrentIndex(1)
         self._m3_result = storm
         level = storm.storm_level if not isinstance(storm, dict) else storm.get("storm_level", "?")

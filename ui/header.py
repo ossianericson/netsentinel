@@ -320,7 +320,7 @@ class AppHeaderMixin:
         _wc_font = QFont("Segoe MDL2 Assets", 10)
         _wc_font.setStyleStrategy(QFont.StyleStrategy.NoSubpixelAntialias)
 
-        _btn_min = _ChromeButton("")     # ChromeMinimize
+        _btn_min = _ChromeButton("\uE921")     # ChromeMinimize
         _btn_min.setToolTip("Minimise")
         _btn_min.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         _btn_min.setFont(_wc_font)
@@ -332,7 +332,7 @@ class AppHeaderMixin:
         _btn_min.clicked.connect(self.showMinimized)
         lay.addWidget(_btn_min)
 
-        self._maximize_btn = _ChromeButton("")   # ChromeMaximize
+        self._maximize_btn = _ChromeButton("\uE922")   # ChromeMaximize
         self._maximize_btn.setToolTip("Maximise")
         self._maximize_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._maximize_btn.setFont(_wc_font)
@@ -344,7 +344,7 @@ class AppHeaderMixin:
         self._maximize_btn.clicked.connect(self._toggle_maximize)
         lay.addWidget(self._maximize_btn)
 
-        _btn_close = _ChromeButton("")   # ChromeClose
+        _btn_close = _ChromeButton("\uE8BB")   # ChromeClose
         _btn_close.setToolTip("Close")
         _btn_close.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         _btn_close.setFont(_wc_font)
@@ -380,7 +380,7 @@ class AppHeaderMixin:
             from PyQt6.QtCore import QEvent, Qt
             if event.type() == QEvent.Type.WindowStateChange:
                 is_max = bool(self.windowState() & Qt.WindowState.WindowMaximized)
-                self._maximize_btn.setText("" if is_max else "")
+                self._maximize_btn.setText("\uE923" if is_max else "\uE922")
                 self._maximize_btn.setToolTip("Restore" if is_max else "Maximise")
                 if not is_max:
                     self._pre_maximize_geo = None
