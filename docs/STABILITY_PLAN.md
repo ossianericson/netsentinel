@@ -93,6 +93,117 @@ untested failure mode.
 
 ---
 
+## Post-Sprint-4 Re-Audit (v1.9.59, 2026-05-30)
+
+Four sprints delivered: test-suite stability (S0), nav extraction (S1-1), wiring extraction
+(S1-2), partial help extraction (S1-3), module spec fixes (S12), discoverability (S11),
+and three major page splits (S3-1, S3-2, S3-3).  Below is what the audit now shows.
+
+### Finding 7 — dashboard.py decomposition is only 18% complete (13,483 → 10,046 lines)
+
+| Sprint | Lines removed | dashboard.py total |
+|--------|-------------|---------------------|
+| Baseline (v1.9.54) | — | 13,483 |
+| Sprint 1 | — | ~12,800 (minor cleanup) |
+| Sprint 3 S1-1 | −683 | 12,117 |
+| Sprint 4 S1-2 | −1,163 | 10,046 (+ 14 orphaned decorators removed) |
+| **Goal** | **−7,046** | **≤3,000** |
+
+Remaining 7,046 lines to extract.  The largest discrete blocks:
+
+| Method | Lines | Natural extraction |
+|--------|-------|--------------------|
+| `_build_tabs()` | 884 | → `ui/tabs/` package |
+| `_build_help_tab()` | 585 | → `ui/help.py` (S1-3 remainder) |
+| `_build_logger_tab()` | 325 | → `ui/tabs/` package |
+| `_apply_mesh_enrichment()` | 291 | → `ui/scan_wiring.py` or page enrichment module |
+| `_build_header()` | 246 | → `ui/header.py` |
+| `_build_m1_tab()` | 220 | → `ui/tabs/` package |
+| `_build_network_info_tab()` | 162 | → `ui/tabs/` package |
+| `__init__` | 166 | Irreducible core |
+| `_build_benchmark_tab()` | 115 | → `ui/tabs/` package |
+| `_build_advanced_tools_tab()` | 125 | → `ui/tabs/` package |
+| `_restore_settings()` | 109 | → `ui/app_settings.py` |
+
+The tab-builder family (`_build_tabs`, `_build_m1_tab`, and ~10 sibling methods) accounts
+for roughly 3,000 lines.  This is the single highest-leverage remaining extraction.
+
+### Finding 8 — `KNOWN_LARGE_UI_FILES` budget for dashboard.py is stale and permits re-growth
+
+`test_module_loc.py::KNOWN_LARGE_UI_FILES["dashboard.py"]` is set to **13,700** — the
+original baseline.  At 10,046 lines, dashboard.py is 3,654 lines below its own budget.
+This means the test would not catch dashboard.py growing back to 13,000 lines.
+
+**Required action:** tighten the budget to `current_actual + 200` after every sprint that
+reduces dashboard.py, and set a hard 3,000-line target once the tab-builder extraction lands.
+
+### Finding 9 — Sprint 4 created untracked large new files
+
+| File | Lines | Tracking status |
+|------|-------|-----------------|
+| `ui/widgets/hub_card.py` | 1,902 | Not in `KNOWN_LARGE_UI_FILES` |
+| `ui/widgets/overview_tile.py` | 1,620 | Not in `KNOWN_LARGE_UI_FILES` |
+| `ui/scan_wiring.py` | 1,168 | Not tracked |
+
+`test_module_loc.py::UI_DEFAULT_BUDGET` is 1,000 lines — these new files exceed it and are
+not exempt.  The CI gate is blind to them.  Add all three to `KNOWN_LARGE_UI_FILES` with
+budgets and split notes; tighten over time.
+
+`hub_card.py` in particular is a candidate for further split: the ~700-line helper-function
+section (`_load_health`, `_record_success`, `_load_paths`, etc.) has no widget-level logic
+and could become a dedicated `ui/widgets/hub_helpers.py`.
+
+### Finding 10 — S3-3 and S1-3 are only partial — their targets remain incomplete
+
+**S3-3** (home_page.py): The `_GradeRing` / `_EventsTicker` helper classes were extracted
+(−280 lines), but `home_page.py` is still **2,747 lines**.  The `HomePage` class itself
+contains six 200–500 line `_build_*` section methods (hero, suggestions strip, digest card,
+quick tips, session banner, dashboard strip).  Each is a standalone UI concern.  The intent
+of S3-3 was to extract these sections as reusable `QWidget` subclasses.  That work was not done.
+
+**S1-3** (help panel): Only the `_PAGE_HELP` dict (455 lines) was moved to `ui/help.py`.
+The `_build_help_tab()` method (585 lines) and all its helper functions (`_section()`,
+`_entry()`, `_subsection()`, etc.) remain in `dashboard.py`.
+
+### Finding 11 — 19 of 22 workers have no lifecycle test (RULE-T2, unchanged since original audit)
+
+Current untested workers (as of v1.9.59):
+`availability_worker`, `cert_worker`, `dhcp_lease_worker`, `diagnosis_worker`,
+`dns_zone_worker`, `ha_worker`, `hw_detect_worker`, `iface_bw_worker`, `plugin_worker`,
+`process_worker`, `report_scheduler_worker`, `rest_api_worker`, `scan_worker`,
+`service_worker`, `snmp_trap_worker`, `speed_test_worker`, `syslog_worker`,
+`threat_intel_worker`, `wifi_monitor_worker`.
+
+### Finding 12 — Five large UI pages are untracked and growing
+
+Original audit (v1.9.54) captured hardware_integration, home, overview, and connections.
+These pages have since grown or emerged and are not in any tracking structure:
+
+| File | Lines | Status |
+|------|-------|--------|
+| `notifications_page.py` | 1,812 | Not in KNOWN_LARGE_UI_FILES |
+| `log_hub_page.py` | 1,648 | Not tracked |
+| `settings_page.py` | 1,526 | Not tracked |
+| `speed_test_page.py` | 1,336 | Not tracked |
+| `discover_page.py` | 1,319 | Not tracked (grew from 1,016) |
+| `hardware_integration_page.py` | 1,701 | Target was ~800; still at 2.1× target |
+
+### Finding 13 — Mock patch location drift is a future test fragility risk
+
+Sprint 4 moved hub_card helper functions (`_save_health`, `_load_health`, etc.) to
+`ui/widgets/hub_card.py`.  Tests that patch these functions must now target
+`ui.widgets.hub_card.*` not `ui.pages.hardware_integration_page.*`.  Four test files
+were fixed, but:
+
+- No comment or convention document tells new test authors where to find each function.
+- `hardware_integration_page.py` re-exports all hub_card symbols, which can mislead
+  authors into patching the wrong namespace.
+
+**Required action:** Add a `# Mock target: ui.widgets.hub_card.*` comment block at the
+top of `hardware_integration_page.py`, and a note in the test conventions document.
+
+---
+
 ## S0 — Fix the Test Suite Crash (must do first)
 
 ### S0-1  Identify and isolate the Qt-heap-corruption trigger
@@ -668,6 +779,169 @@ artefact, not source).
 
 ---
 
+## S13 — dashboard.py Tab Builder Extraction (Critical remaining S1 work)
+
+`_build_tabs()` (884 lines) and the sibling tab-builder methods account for ~3,000 lines of
+dashboard.py.  They build the UI for each security audit result tab (Port Scan, CVE, SYN,
+UDP, OS fingerprint, exposure, etc.) and have zero dependency on the nav shell.  Extracting
+them is the single highest-leverage step remaining on the S1 goal.
+
+### S13-1  Extract `ui/tabs/` package
+
+```
+ui/tabs/__init__.py         # re-exports tab factory functions
+ui/tabs/scan_tabs.py        # _build_m1_tab, _build_tabs (all security scan tabs)
+ui/tabs/diag_tabs.py        # _build_diagnostics_tab, _build_benchmark_tab, _build_logger_tab
+ui/tabs/network_tabs.py     # _build_network_info_tab, _build_advanced_tools_tab
+```
+
+Each file contains pure UI-construction functions that take `window: Dashboard` as their
+first argument (same pattern used by `ScanResultMixin`).  Called once from `Dashboard._build_ui()`.
+
+Target: `dashboard.py` ≤ 7,000 lines after this split.
+
+### S13-2  Extract `_build_help_tab()` to `ui/help.py` (complete S1-3)
+
+`_build_help_tab()` (585 lines) and its `_section()`, `_entry()`, `_subsection()` helpers
+are still in `dashboard.py`.  Extract to `ui/help.py` as `build_help_tab(window)`.
+The `_PAGE_HELP` dict is already there from S1-3 partial.
+
+Target: removes 600+ lines from `dashboard.py`.
+
+### S13-3  Extract `_build_header()` and `_build_update_bar()` to `ui/header.py`
+
+The top application bar builder (`_build_header`, 246 lines, plus `_build_mode_bar`,
+`_build_update_bar`, `_toggle_maximize`, `changeEvent`, `resizeEvent`, `showEvent`,
+`_install_snap_subclass`, `_install_edge_grips`) is a self-contained frameless-window
+concern.  Extract to `ui/header.py`.
+
+Target: removes ~500 lines from `dashboard.py`.
+
+### S13-4  Extract settings persistence to `ui/app_settings.py`
+
+`_restore_settings()` (109 lines), `_save_settings()`, and related QSettings methods form
+a standalone persistence layer.  Extract to `ui/app_settings.py` as
+`restore_settings(window)` and `save_settings(window)`.
+
+Target: removes ~250 lines from `dashboard.py`.
+
+### S13-5  Tighten `KNOWN_LARGE_UI_FILES["dashboard.py"]` budget after each split
+
+After S13-1: set budget to **7,200**.
+After S13-2: set budget to **6,500**.
+After S13-3: set budget to **6,000**.
+After S13-4: set budget to **5,700**.
+Final target once all S1+S13 splits are complete: **3,000**.
+
+---
+
+## S14 — Complete Oversize Page Reductions
+
+The original S3 sprint intended to reduce large page files.  Sprint 4 delivered
+S3-1, S3-2, S3-3 but not their targets.  This section tracks the remaining reductions.
+
+### S14-1  Complete home_page.py split (2,747 → ≤1,200)
+
+The `HomePage` class contains six large `_build_*` section methods that are standalone
+UI concerns.  Extract each as a `QWidget` subclass to `ui/widgets/home_widgets.py`
+(which already exists from S3-3):
+
+- `_build_hero_section()` → `HeroCard(QWidget)` — grade ring + sparkline + metrics
+- `_build_suggestions_strip()` → `SuggestionsStrip(QWidget)` — "What to do next" cards
+- `_build_digest_card()` → `DigestCard(QWidget)` — weekly digest notification
+- `_build_tips_card()` → `TipsCard(QWidget)` — dismissible quick tips
+- `_build_since_last_session()` → `SessionBanner(QWidget)` — new devices / outages
+- `_build_dashboard_strip()` → `DashboardStrip(QWidget)` — browser dashboard link
+
+Each extracted widget is independently testable.  Target: home_page.py ≤ 1,200 lines.
+
+### S14-2  Complete hardware_integration_page.py reduction (1,701 → ≤900)
+
+The S3-1 target was ~800 lines; actual is 1,701.  The remaining 800+ lines of excess are:
+- `_build_guide_section()` and its "How to write a plugin" content blocks (~400 lines)
+- `_build_hub_grid()` and card layout management (~300 lines)
+- Worker setup for community download threads (~100 lines)
+
+The guide section has no dependency on the hub grid.  Extract to `ui/widgets/plugin_guide.py`.
+
+### S14-3  Add 5 untracked large pages to `KNOWN_LARGE_UI_FILES`
+
+All five pages below exceed `UI_DEFAULT_BUDGET` (1,000 lines) and are invisible to the
+LOC gate:
+
+| Page | Lines | Split target | Split note |
+|------|-------|--------------|------------|
+| `notifications_page.py` | 1,812 | 900 | Extract per-channel config panels |
+| `log_hub_page.py` | 1,648 | 900 | Extract `LogSourcePanel` base class |
+| `settings_page.py` | 1,526 | 800 | Extract per-section `QWidget` subclasses |
+| `speed_test_page.py` | 1,336 | 800 | Extract modem signal panel |
+| `discover_page.py` | 1,319 | 800 | Extract feature card widget |
+
+Add all five to `KNOWN_LARGE_UI_FILES` in `test_module_loc.py` immediately — even before
+splitting — so they cannot grow further without a failing test.
+
+---
+
+## S15 — New Widget File Governance
+
+Sprint 4 created three large new files that are not yet tracked by any LOC gate.
+
+### S15-1  Register Sprint 4 new files in `KNOWN_LARGE_UI_FILES`
+
+Add to `test_module_loc.py::KNOWN_LARGE_UI_FILES`:
+
+```python
+# Hub card widget + all plugin helper functions.
+# Further split: helper functions → ui/widgets/hub_helpers.py (target: hub_card.py ≤ 900)
+"hub_card.py": 1950,
+
+# All Overview tile classes + _TILE_CLASSES/_DEFAULT_ORDER.
+# Single concern, appropriate size for now.  Watch for growth.
+"overview_tile.py": 1650,
+
+# ScanResultMixin — all _on_*_result handlers.
+# If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
+"scan_wiring.py": 1200,
+```
+
+Note: these budgets apply to the `ui/` root and `ui/widgets/` directories.  Update
+the LOC test to also check `ui/widgets/*.py` and `ui/scan_wiring.py`.
+
+### S15-2  Split `hub_card.py` (1,902 → ≤ 900 + helpers)
+
+The 700-line helper section in `hub_card.py` (`_load_health`, `_record_success`,
+`_load_paths`, `_save_paths`, `_load_instances`, etc.) has no widget-level logic — it is
+purely data persistence and health tracking.  Extract to `ui/widgets/hub_helpers.py`.
+
+```
+ui/widgets/hub_helpers.py    # all helper functions and constants (lines 25–700)
+ui/widgets/hub_card.py       # HubCard, _ModemDetailPanel, _RouterDetailPanel, PipInstallDialog (~800 lines)
+```
+
+`hardware_integration_page.py` import block updates accordingly.
+
+### S15-3  Document mock-patch canonical locations
+
+Add to `tests/CLAUDE.md` (test conventions):
+
+```
+## Mock patch canonical locations
+
+When patching functions that live in ui/widgets/ but are re-exported by ui/pages/:
+  → Patch at the DEFINITION site, not the re-export site.
+
+  # WRONG — patches the re-export namespace, not where the code runs
+  patch("ui.pages.hardware_integration_page._save_health", ...)
+
+  # CORRECT — patches where _record_success actually looks up _save_health
+  patch("ui.widgets.hub_card._save_health", ...)
+
+Files currently re-exporting from hub_card:
+  ui/pages/hardware_integration_page.py → all hub_card symbols
+```
+
+---
+
 ## S8 — Documentation Health
 
 ### S8-1  Mark PLUGIN_ROBUSTNESS_PLAN as complete
@@ -690,56 +964,77 @@ of each sprint focus.
 ## Implementation Order
 
 Phased to minimise risk: test infrastructure first (S0), then the most critical
-structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
+structural changes (S1/S13), then module splits (S2), then data-layer health (S6),
+then worker coverage (S5), then test/prevention coverage (S9, S10).
 
 | # | Item | Sprint | Version Target | Notes |
 |---|---|---|---|---|
-| 1 | ✅ S0-1: Identify Qt-crash culprit | 1 | v1.9.56 | Root cause: QFileSystemWatcher OS threads in test_hardware_integration.py; fixed with MagicMock patch + explicit cleanup |
-| 2 | ✅ S0-2: Session-scoped QApplication fixture | 1 | v1.9.56 | Was already in conftest.py; removed module-level QApplication from 7 test files (RULE-WIN3) |
+| 1 | ✅ S0-1: Identify Qt-crash culprit | 1 | v1.9.56 | Root cause: QFileSystemWatcher OS threads; fixed with MagicMock patch |
+| 2 | ✅ S0-2: Session-scoped QApplication fixture | 1 | v1.9.56 | Removed module-level QApplication from 7 test files (RULE-WIN3) |
 | 3 | ✅ S0-3: QSettings isolation fixture | 1 | v1.9.56 | `isolated_settings` autouse fixture added to conftest.py |
-| 4 | ✅ S0-4: Full suite green gate | 1 | v1.9.56 | 2136 passed, 4 skipped, exit 0 — no crash |
+| 4 | ✅ S0-4: Full suite green gate | 1 | v1.9.56 | 2136 passed, 4 skipped, exit 0 |
 | 5 | ✅ S4-1: `test_codeql_prevention.py` | 1 | v1.9.56 | bare-except + URL-substring AST checks |
 | 6 | ✅ S8-1: Mark robustness plan complete | 1 | v1.9.56 | PLUGIN_ROBUSTNESS_PLAN.md already in docs/completed/ |
-| 7 | ✅ S1-1: Extract `ui/nav/` package (widget classes) | 3 | v1.9.58 | `_LUCIDE`, `_make_nav_icon`, `_NavEntry`, `_RailButton`, `_FlyoutItem`, `_FlyoutPanel`, `_CanvasClickFilter`, `_ClickLabel`, `_SmoothProgressBar` moved to `ui/nav/rail.py`; dashboard.py reduced by ~683 lines |
-| 8 | ✅ S1-2: Extract scan-result wiring | 4 | v1.9.59 | ScanResultMixin in `ui/scan_wiring.py`; Dashboard now inherits mixin; dashboard.py reduced by ~1,163 lines (11,209→10,046); 14 orphaned @pyqtSlot decorators also removed |
-| 9 | ✅ S1-3 partial: Extract `_PAGE_HELP` dict to `ui/help.py` | 2 | v1.9.58 | 455 lines removed (13,483→13,028); full `_build_help_tab` extraction deferred to Sprint 3 |
-| 10 | ✅ S1-4: Add dashboard LOC budget test | 2 | v1.9.58 | `test_module_loc.py::test_dashboard_does_not_exceed_loc_budget` added; budget 13,700 |
-| 11 | ✅ S3-1: Extract HubCard to widget | 4 | v1.9.59 | HubCard, panels, all helpers → `ui/widgets/hub_card.py` (2,209 lines); hardware_integration_page.py reduced 4,055→1,701 lines |
-| 12 | ✅ S3-2: Extract OverviewTile | 4 | v1.9.59 | All tile classes + constants → `ui/widgets/overview_tile.py` (1,620 lines); overview_page.py reduced 2,536→633 lines |
-| 13 | ✅ S3-3: Extract home-page section widgets | 4 | v1.9.59 | _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers → `ui/widgets/home_widgets.py` (293 lines); home_page.py reduced 3,027→2,747 lines |
-| 14 | S2-1: Split metric_store | 5 | v1.9.60 | Schema migration is highest risk |
-| 15 | S2-2: Split report_exporter | 5 | v1.9.60 | |
-| 16 | S2-3: Split utils | 5 | v1.9.60 | |
-| 17 | S2-4: Tests for new module files | 5 | v1.9.60 | |
-| 18 | S5-1: Worker coverage audit | 5 | v1.9.60 | Enumerate gaps |
-| 19 | S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.60 | |
-| 20 | S5-3: `_running` flag audit | 5 | v1.9.60 | |
-| 21 | S6-1: WAL growth guard | 5 | v1.9.60 | |
-| 22 | S6-2: VACUUM on migration | 5 | v1.9.60 | |
-| 23 | S6-3: Connection busy timeout | 5 | v1.9.60 | |
-| 24 | S6-4: `test_metric_store_concurrency.py` | 5 | v1.9.60 | |
-| 25 | S7-1: Lazy-import audit | 6 | v1.9.60 | |
-| 26 | S7-2: Startup profiling script | 6 | v1.9.60 | |
-| 27 | S7-3: Debug log rotation | 6 | v1.9.60 | |
-| 28 | S4-2: Pre-commit check update in CLAUDE.md | 6 | v1.9.60 | |
-| 29 | S8-2: Architecture docs update | 6 | v1.9.60 | |
-| 30 | S8-3: Version history update | 6 | v1.9.60 | |
-| — | **— APM audit findings (2026-05-29) — Sprint 2 deliveries below —** | — | — | |
-| 31 | ✅ S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | 2 | v1.9.58 | Done; `ui.help` also added for new module |
-| 32 | ✅ S12-2: Deduplicate 4 duplicate spec entries | 2 | v1.9.58 | Removed deco_client, diagnostic_card, wifi_heatmap, trigger_builder_page duplicates |
-| 33 | ✅ S12-3: `test_spec_hiddenimports.py` CI gate | 2 | v1.9.58 | 2 tests: all-modules-present + no-duplicates |
-| 34 | ✅ S11-2: Fix 7 stale `_FEATURES` page refs in `discover_page.py` | 2 | v1.9.58 | Fixed: Logs→Network Logger (×4), Network Timeline→None, Diagnose→What's Wrong?, Threat Intelligence→Threat Intel |
-| 35 | ✅ S11-3: Add 23 missing `_FEATURES` entries | 2 | v1.9.58 | All nav-registered pages now have Feature Guide entries (Threat Intel was already present, now fixed) |
-| 36 | ✅ S11-1: Fix `_PAGE_HELP` quality issues | 3 | v1.9.58 | Removed duplicate "Bandwidth Usage" key (second entry silently overwrote first); merged hidden tips; all 64 nav labels already had entries |
-| 37 | ✅ S11-4: CI gate — nav/help/features parity check | 3 | v1.9.58 | `test_all_nav_labels_have_page_help` + `test_features_page_refs_are_valid_nav_labels` added to `test_nav_completeness.py`; also fixed stale "Connectivity Tests" → "What's Wrong?" ref in discover_page.py |
-| 38 | S10-1: Inventory missing colour tokens; add to `ui/styles.py` | TBD | TBD | Must precede S10-2/S10-3 |
-| 39 | S10-2: Purge hardcoded hex from `ui/pages/*.py` (37 files) | TBD | TBD | Run debug_launch.py after each file |
-| 40 | S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` (7 files) | TBD | TBD | Companion to S10-2 |
-| 41 | S10-4: Add hex-colour AST gate to `test_codeql_prevention.py` | TBD | TBD | Enable only after S10-2+S10-3 complete |
-| 42 | S9-1: Tests for Tier 1 modules — utility/plumbing (8 modules) | TBD | TBD | No network mocks needed |
-| 43 | S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | TBD | TBD | Use `@pytest.mark.live` for real-network tests |
-| 44 | S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | TBD | TBD | Mock MetricStore where needed |
-| 45 | S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | TBD | TBD | Enable only after S9-1–S9-3 complete |
+| 7 | ✅ S1-1: Extract `ui/nav/` package (widget classes) | 3 | v1.9.58 | `_RailButton`, `_FlyoutPanel` etc. → `ui/nav/rail.py`; dashboard.py −683 lines |
+| 8 | ✅ S1-2: Extract scan-result wiring | 4 | v1.9.59 | ScanResultMixin → `ui/scan_wiring.py`; dashboard.py −1,163 lines (10,046); 14 orphaned decorators removed |
+| 9 | ✅ S1-3 partial: Extract `_PAGE_HELP` dict to `ui/help.py` | 2 | v1.9.58 | 455 lines removed; `_build_help_tab()` (585 lines) still in dashboard.py — completed by S13-2 |
+| 10 | ✅ S1-4: Add dashboard LOC budget test | 2 | v1.9.58 | `test_module_loc.py::KNOWN_LARGE_UI_FILES["dashboard.py"] = 13700` — budget must be tightened (see S13-5) |
+| 11 | ✅ S3-1: Extract HubCard to widget | 4 | v1.9.59 | Hub card family → `ui/widgets/hub_card.py` (1,902 lines); hardware_integration_page.py 4,055→1,701 lines |
+| 12 | ✅ S3-2: Extract OverviewTile | 4 | v1.9.59 | All tile classes → `ui/widgets/overview_tile.py` (1,620 lines); overview_page.py 2,536→633 lines |
+| 13 | ✅ S3-3 partial: Extract home helper widgets | 4 | v1.9.59 | 4 helper classes → `ui/widgets/home_widgets.py`; home_page.py 3,027→2,747 lines; section widgets NOT extracted — see S14-1 |
+| 14 | ✅ S8-2: Architecture docs update | 4 | v1.9.59 | CLAUDE.md + .apm/instructions + .github/instructions all updated with Sprint 4 new modules |
+| — | **— Sprint 5 (target v1.9.60) —** | — | — | — |
+| 15 | S15-1: Register Sprint 4 new files in `KNOWN_LARGE_UI_FILES` | 5 | v1.9.60 | hub_card.py (1,950), overview_tile.py (1,650), scan_wiring.py (1,200); also add 5 untracked pages (S14-3) |
+| 16 | S13-5a: Tighten dashboard.py budget to 10,200 | 5 | v1.9.60 | Immediate: current actual is 10,046, budget is 13,700 — close the 3,654-line safety gap |
+| 17 | S2-1: Split metric_store (1,522 → ≤600) | 5 | v1.9.60 | → metric_store_schema.py + metric_store_io.py; schema migration is highest risk |
+| 18 | S2-2: Split report_exporter (1,108 → ≤600) | 5 | v1.9.60 | → report_html.py + report_pdf.py |
+| 19 | S2-3: Split utils (939 → ≤600) | 5 | v1.9.60 | → utils_net.py + utils_platform.py |
+| 20 | S2-4: Tests for new module files | 5 | v1.9.60 | RULE-T1: test_metric_store_schema.py, test_metric_store_io.py, etc. |
+| 21 | S6-1: WAL growth guard | 5 | v1.9.60 | PRAGMA wal_checkpoint if -wal > 50 MB at startup |
+| 22 | S6-2: VACUUM on schema upgrade | 5 | v1.9.60 | PRAGMA VACUUM after every migration |
+| 23 | S6-3: Connection busy timeout | 5 | v1.9.60 | PRAGMA busy_timeout = 5000 in _connect() |
+| 24 | S6-4: `test_metric_store_concurrency.py` | 5 | v1.9.60 | Two-thread write test; WAL checkpoint test; VACUUM test |
+| 25 | S5-1: Worker coverage audit | 5 | v1.9.60 | 19 of 22 workers untested — enumerate confirmed gaps |
+| 26 | S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.60 | start/stop/isRunning for every untested worker |
+| 27 | S5-3: `_running` flag audit | 5 | v1.9.60 | Scan for `while True` in run() without _running check |
+| — | **— Sprint 6 (target v1.9.61) —** | — | — | — |
+| 28 | S13-1: Extract `ui/tabs/` package (tab builder family ~3,000 lines) | 6 | v1.9.61 | `_build_tabs`, `_build_m1_tab`, `_build_logger_tab` etc. → `ui/tabs/scan_tabs.py` etc.; dashboard.py target 7,000 lines |
+| 29 | S13-2: Complete `_build_help_tab()` extraction to `ui/help.py` | 6 | v1.9.61 | Remaining 585 lines from S1-3 partial; removes `_section()/_entry()` from dashboard.py |
+| 30 | S13-3: Extract `_build_header()` to `ui/header.py` | 6 | v1.9.61 | Frameless-window concern, ~500 lines |
+| 31 | S13-4: Extract settings persistence to `ui/app_settings.py` | 6 | v1.9.61 | `_restore_settings`, `_save_settings` → ~250 lines |
+| 32 | S13-5b: Tighten dashboard.py budget to 7,200 post-S13-1 | 6 | v1.9.61 | Step-wise toward final 3,000-line target |
+| 33 | S14-1: Complete home_page.py split (2,747 → ≤1,200) | 6 | v1.9.61 | Extract 6 section widgets as QWidget subclasses to `ui/widgets/home_widgets.py` |
+| 34 | S14-2: Complete hardware_integration_page.py (1,701 → ≤900) | 6 | v1.9.61 | Extract guide section → `ui/widgets/plugin_guide.py` |
+| 35 | S15-2: Split hub_card.py (1,902 → ≤900 + helpers) | 6 | v1.9.61 | Helper functions → `ui/widgets/hub_helpers.py`; no circular imports |
+| 36 | S15-3: Document mock-patch canonical locations in tests/CLAUDE.md | 6 | v1.9.61 | Add "Mock target: ui.widgets.hub_card.*" note |
+| 37 | S7-1: Lazy-import audit | 6 | v1.9.61 | Move heavy optional imports inside functions (RULE-AH4) |
+| 38 | S7-2: Startup profiling script | 6 | v1.9.61 | `tools/startup_profile.py` — stage timing output |
+| 39 | S7-3: Debug log rotation | 6 | v1.9.61 | Keep last 5 launch logs; symlink/copy to netsentinel_debug.log |
+| 40 | S4-2: Pre-commit check update (RULE-APM1: edit .apm/instructions/) | 6 | v1.9.61 | Add Step 0 to development-rules.instructions.md commit gate |
+| 41 | S8-3: Version history update in project-vision.md | 6 | v1.9.61 | v1.9.40 → v1.9.59 condensed history |
+| — | **— Sprint 7+ (target v1.9.62+) —** | — | — | — |
+| 42 | S14-3 follow-up: Split notifications_page.py (1,812) | 7 | v1.9.62 | Extract per-channel config panels |
+| 43 | S14-3 follow-up: Split log_hub_page.py (1,648) | 7 | v1.9.62 | Extract `LogSourcePanel` base class |
+| 44 | S14-3 follow-up: Split settings_page.py (1,526) | 7 | v1.9.62 | Extract per-section QWidget subclasses |
+| 45 | S13-5c: Tighten dashboard.py budget to 5,000 | 7 | v1.9.62 | After all S13 and S14 splits land |
+| — | **— TBD sprints —** | — | — | — |
+| 46 | S10-1: Inventory missing colour tokens | TBD | TBD | Must precede S10-2/S10-3 |
+| 47 | S10-2: Purge hardcoded hex from `ui/pages/*.py` (37+ files) | TBD | TBD | Run debug_launch.py after each file |
+| 48 | S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` | TBD | TBD | Now includes hub_card.py, overview_tile.py |
+| 49 | S10-4: Add hex-colour AST gate to `test_codeql_prevention.py` | TBD | TBD | Enable only after S10-2+S10-3 complete |
+| 50 | S9-1: Tests for Tier 1 modules — utility/plumbing (8 modules) | TBD | TBD | No network mocks needed |
+| 51 | S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | TBD | TBD | Use `@pytest.mark.live` for real-network tests |
+| 52 | S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | TBD | TBD | Mock MetricStore where needed |
+| 53 | S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | TBD | TBD | Enable only after S9-1–S9-3 complete |
+| 54 | S3-4: Update `test_module_loc.py` to remove exemptions post-split | TBD | TBD | Remove each KNOWN_LARGE_MODULES entry as its split lands |
+| — | **— APM audit findings (2026-05-29) — delivered below —** | — | — | — |
+| 55 | ✅ S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | 2 | v1.9.58 | Done; `ui.help` also added |
+| 56 | ✅ S12-2: Deduplicate 4 duplicate spec entries | 2 | v1.9.58 | Removed deco_client, diagnostic_card, wifi_heatmap, trigger_builder_page duplicates |
+| 57 | ✅ S12-3: `test_spec_hiddenimports.py` CI gate | 2 | v1.9.58 | 2 tests: all-modules-present + no-duplicates |
+| 58 | ✅ S11-2: Fix 7 stale `_FEATURES` page refs in `discover_page.py` | 2 | v1.9.58 | Fixed: Logs→Network Logger (×4), Diagnose→What's Wrong?, Threat Intelligence→Threat Intel |
+| 59 | ✅ S11-3: Add 23 missing `_FEATURES` entries | 2 | v1.9.58 | All nav-registered pages now have Feature Guide entries |
+| 60 | ✅ S11-1: Fix `_PAGE_HELP` quality issues | 3 | v1.9.58 | Removed duplicate "Bandwidth Usage" key; all 64 nav labels confirmed |
+| 61 | ✅ S11-4: CI gate — nav/help/features parity check | 3 | v1.9.58 | Two new tests in `test_nav_completeness.py`; stale "Connectivity Tests" ref fixed |
 
 ---
 
@@ -765,14 +1060,33 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
    is less risky than refactoring the internals of a large file.  Do the split first.
    The refactor — if needed at all — is a separate PR.
 
+9. **LOC budgets must be tightened after every split, not set once at baseline.**
+   A budget set at creation time (e.g., dashboard.py = 13,700 at v1.9.54) becomes
+   meaningless after the file shrinks.  Every sprint that reduces a file must tighten
+   the budget to `current_actual + 200`.  Otherwise the test catches only dramatic
+   regression, not slow re-accumulation.
+
+10. **New large files need budgets at creation time, not retroactively.**
+    When a split creates a new file that is itself large (e.g., hub_card.py at 1,902),
+    add it to `KNOWN_LARGE_UI_FILES` in the same PR that creates it.  A file with no
+    budget entry silently grows without bound.
+
+11. **Extraction tools must capture decorator lines, not just def lines.**
+    When extracting methods from a class using AST node positions, `node.lineno` is
+    the `def` line — decorator lines at `node.lineno - N` are NOT included.  Any
+    extraction script must scan backwards from `node.lineno` to include all
+    `@decorator` lines.  Failure to do so leaves orphaned decorators that accidentally
+    decorate unrelated functions, causing `TypeError: decorated slot has no signature
+    compatible` at runtime.
+
 ---
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
-*Sprint 1 complete: v1.9.57 (2026-05-30).  Sprint 2 complete: v1.9.58 (2026-05-30).  Sprint 3 complete: v1.9.58 (2026-05-30).  Sprint 4 complete: v1.9.59 (2026-05-30).  Sprint 5 target: v1.9.60.  Full plan target: v1.9.61.*
-*Items 31–45 added 2026-05-29 from APM rules/docs/codebase audit (197 gaps across 6 rule categories).  Version targets and sprint assignments TBD — re-slot as capacity allows.*
+*Re-audited 2026-05-30 post-Sprint-4 (13 new findings added, S13/S14/S15 sections added).*
+*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5 target: v1.9.60.  Sprint 6 target: v1.9.61.  Sprint 7 target: v1.9.62.*
 
-**Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes extracted to `ui/nav/rail.py` — ~683 lines removed from dashboard.py), S11-1 (duplicate `_PAGE_HELP` key fixed; stale "Connectivity Tests" _FEATURES ref corrected), S11-4 (two new CI parity gates in `test_nav_completeness.py`).
+**Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes → `ui/nav/rail.py`; −683 lines), S11-1 (PAGE_HELP duplicate key fixed), S11-4 (CI parity gates added).
 
-**Sprint 4 delivered (2026-05-30):** S1-2 (ScanResultMixin extracted to `ui/scan_wiring.py` — 23 handlers, dashboard.py −1,163 lines; 14 orphaned @pyqtSlot decorators removed), S3-1 (HubCard + all helpers → `ui/widgets/hub_card.py`; hardware_integration_page.py 4,055→1,701 lines), S3-2 (all Overview tile classes → `ui/widgets/overview_tile.py`; overview_page.py 2,536→633 lines), S3-3 (_GradeRing etc. → `ui/widgets/home_widgets.py`; home_page.py 3,027→2,747 lines). Mock patch targets updated in 4 test files (ui.widgets.hub_card.*).
+**Sprint 4 delivered (2026-05-30):** S1-2 (ScanResultMixin → `ui/scan_wiring.py`; dashboard.py −1,163 lines; 14 orphaned decorators removed), S3-1 (hub_card.py created; hardware_integration_page.py 4,055→1,701), S3-2 (overview_tile.py created; overview_page.py 2,536→633), S3-3 partial (home_widgets.py created; home_page.py 3,027→2,747; section widgets NOT extracted). S8-2 done (architecture docs synced).
 
-**Sprint 5 queue (next session):** S2-1 (split metric_store.py 1,522 lines → metric_store_schema.py + metric_store_io.py), S2-2 (split report_exporter.py 1,108 lines → report_html.py + report_pdf.py), S2-3 (split utils.py 939 lines → utils_net.py + utils_platform.py), S2-4 (tests for new module files), S5-1 (worker lifecycle audit), S5-2 (test_worker_lifecycle_full.py), S5-3 (_running flag audit), S6-1 (WAL growth guard), S6-2 (VACUUM on migration), S6-3 (connection busy timeout), S6-4 (test_metric_store_concurrency.py).
+**Sprint 5 queue:** S15-1 (register new large files in LOC gate), S13-5a (tighten dashboard.py budget to 10,200), S2-1/S2-2/S2-3 (module splits), S2-4 (new module tests), S6-1–S6-4 (MetricStore health), S5-1–S5-3 (worker lifecycle).
