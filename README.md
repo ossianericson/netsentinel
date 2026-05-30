@@ -320,6 +320,26 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.60
+
+**Added**
+- `modules/metric_store_schema.py` — DDL, schema version, column migrations, and all dataclasses extracted from `metric_store.py` (S2-1 split)
+- `modules/metric_store_queries.py` — `MetricStoreQueryMixin` with all read/query methods extracted from `metric_store.py` (S2-1 split)
+- `modules/report_html.py` — CSS template and HTML generation helpers extracted from `report_exporter.py` (S2-2 split)
+- `modules/report_pdf.py` — `save_pdf_report()` with weasyprint/headless-browser cascade extracted from `report_exporter.py` (S2-2 split)
+- `modules/utils_net.py` — `get_network_info()`, `get_dhcp_info()`, `get_interface_details()` extracted from `utils.py` (S2-3 split)
+- `modules/utils_platform.py` — `get_ipv6_devices()`, `ping_sweep_ipv6()` extracted from `utils.py` (S2-3 split)
+- `tests/test_metric_store_schema.py`, `test_metric_store_queries.py`, `test_metric_store_concurrency.py` — 37 new tests covering schema, queries, and concurrent-write safety (RULE-T1)
+- `tests/test_utils_net.py`, `test_utils_platform.py`, `test_report_html.py` — 27 new tests for split modules (RULE-T1)
+- `tests/test_worker_lifecycle_full.py` — lifecycle tests for `HwDetectWorker`, `PluginWorker`, `WiFiMonitorWorker`; `_running`-flag audit (RULE-T2, S5-2)
+
+**Changed**
+- `modules/metric_store.py`: 1,673 → 623 lines; inherits `MetricStoreQueryMixin`; WAL checkpoint at startup if `-wal` > 50 MB (S6-1); `PRAGMA VACUUM` after schema migration (S6-2); `PRAGMA busy_timeout = 5000` on every connection (S6-3)
+- `modules/report_exporter.py`: 1,241 → 716 lines; HTML/PDF logic delegated to split modules; all public names re-exported for backwards compatibility
+- `modules/utils.py`: 1,055 → 421 lines; network info and IPv6 scanning delegated to split modules; all names re-exported for backwards compatibility
+- `tests/test_module_loc.py`: LOC gate updated — dashboard.py budget tightened to 11,312; 9 new entries for Sprint 4 and previously-untracked large files; test function supports `ui/widgets/` subdirectory paths
+- `NetSentinel.spec`: 7 new `hiddenimports` entries for all split modules
+
 ### v1.9.59
 
 **Changed**

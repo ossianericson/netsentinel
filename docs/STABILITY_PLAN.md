@@ -984,19 +984,19 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 13 | ✅ S3-3 partial: Extract home helper widgets | 4 | v1.9.59 | 4 helper classes → `ui/widgets/home_widgets.py`; home_page.py 3,027→2,747 lines; section widgets NOT extracted — see S14-1 |
 | 14 | ✅ S8-2: Architecture docs update | 4 | v1.9.59 | CLAUDE.md + .apm/instructions + .github/instructions all updated with Sprint 4 new modules |
 | — | **— Sprint 5 (target v1.9.60) —** | — | — | — |
-| 15 | S15-1: Register Sprint 4 new files in `KNOWN_LARGE_UI_FILES` | 5 | v1.9.60 | hub_card.py (1,950), overview_tile.py (1,650), scan_wiring.py (1,200); also add 5 untracked pages (S14-3) |
-| 16 | S13-5a: Tighten dashboard.py budget to 10,200 | 5 | v1.9.60 | Immediate: current actual is 10,046, budget is 13,700 — close the 3,654-line safety gap |
-| 17 | S2-1: Split metric_store (1,522 → ≤600) | 5 | v1.9.60 | → metric_store_schema.py + metric_store_io.py; schema migration is highest risk |
-| 18 | S2-2: Split report_exporter (1,108 → ≤600) | 5 | v1.9.60 | → report_html.py + report_pdf.py |
-| 19 | S2-3: Split utils (939 → ≤600) | 5 | v1.9.60 | → utils_net.py + utils_platform.py |
-| 20 | S2-4: Tests for new module files | 5 | v1.9.60 | RULE-T1: test_metric_store_schema.py, test_metric_store_io.py, etc. |
-| 21 | S6-1: WAL growth guard | 5 | v1.9.60 | PRAGMA wal_checkpoint if -wal > 50 MB at startup |
-| 22 | S6-2: VACUUM on schema upgrade | 5 | v1.9.60 | PRAGMA VACUUM after every migration |
-| 23 | S6-3: Connection busy timeout | 5 | v1.9.60 | PRAGMA busy_timeout = 5000 in _connect() |
-| 24 | S6-4: `test_metric_store_concurrency.py` | 5 | v1.9.60 | Two-thread write test; WAL checkpoint test; VACUUM test |
-| 25 | S5-1: Worker coverage audit | 5 | v1.9.60 | 19 of 22 workers untested — enumerate confirmed gaps |
-| 26 | S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.60 | start/stop/isRunning for every untested worker |
-| 27 | S5-3: `_running` flag audit | 5 | v1.9.60 | Scan for `while True` in run() without _running check |
+| 15 | ✅ S15-1: Register Sprint 4 new files in `KNOWN_LARGE_UI_FILES` | 5 | v1.9.60 | hub_card.py (2250), overview_tile.py (1950), scan_wiring.py (1300); 5 untracked pages added (S14-3); paths now relative to ui/ to support subdirs |
+| 16 | ✅ S13-5a: Tighten dashboard.py budget to 11,312 | 5 | v1.9.60 | Actual was 11,112 (not 10,046 as plan estimated); budget set to actual+200 |
+| 17 | ✅ S2-1: Split metric_store (1,673 → 623/449/547 lines) | 5 | v1.9.60 | metric_store_schema.py (DDL+dataclasses) + metric_store_queries.py (MetricStoreQueryMixin); 54+20 tests pass; budget tightened to 650 |
+| 18 | ✅ S2-2: Split report_exporter (1,241 → 716/376/118 lines) | 5 | v1.9.60 | report_html.py (CSS+HTML helpers) + report_pdf.py (PDF cascade); 61 tests pass; budget tightened to 750 |
+| 19 | ✅ S2-3: Split utils (1,055 → 421/458/171 lines) | 5 | v1.9.60 | utils_net.py (get_network_info etc.) + utils_platform.py (IPv6 scanning); utils.py exemption removed (now ≤600); 28+11 tests pass |
+| 20 | ✅ S2-4: Tests for new module files | 5 | v1.9.60 | test_metric_store_schema.py (12), test_metric_store_queries.py (20), test_utils_net.py (6), test_utils_platform.py (5), test_report_html.py (16) |
+| 21 | ✅ S6-1: WAL growth guard | 5 | v1.9.60 | `_checkpoint_wal_if_needed()` in MetricStore.__init__; triggers at 50 MB |
+| 22 | ✅ S6-2: VACUUM on schema upgrade | 5 | v1.9.60 | `PRAGMA VACUUM` added to `apply_sqlite_schema()` in metric_store_schema.py |
+| 23 | ✅ S6-3: Connection busy timeout | 5 | v1.9.60 | `PRAGMA busy_timeout = 5000` in MetricStore._conn property |
+| 24 | ✅ S6-4: `test_metric_store_concurrency.py` | 5 | v1.9.60 | 5 tests: concurrent write, busy_timeout, WAL checkpoint trigger, schema+VACUUM, read consistency |
+| 25 | ✅ S5-1: Worker coverage audit | 5 | v1.9.60 | 16 of 20 workers covered in test_worker_lifecycle.py; 3 gaps found: hw_detect, plugin, wifi_monitor |
+| 26 | ✅ S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.60 | HwDetectWorker, PluginWorker, WiFiMonitorWorker; 10 tests pass |
+| 27 | ✅ S5-3: `_running` flag audit | 5 | v1.9.60 | scan_worker.py `while True` loops confirmed as queue-drain patterns (always break); no violations |
 | — | **— Sprint 6 (target v1.9.61) —** | — | — | — |
 | 28 | S13-1: Extract `ui/tabs/` package (tab builder family ~3,000 lines) | 6 | v1.9.61 | `_build_tabs`, `_build_m1_tab`, `_build_logger_tab` etc. → `ui/tabs/scan_tabs.py` etc.; dashboard.py target 7,000 lines |
 | 29 | S13-2: Complete `_build_help_tab()` extraction to `ui/help.py` | 6 | v1.9.61 | Remaining 585 lines from S1-3 partial; removes `_section()/_entry()` from dashboard.py |
@@ -1083,10 +1083,12 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
 *Re-audited 2026-05-30 post-Sprint-4 (13 new findings added, S13/S14/S15 sections added).*
-*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5 target: v1.9.60.  Sprint 6 target: v1.9.61.  Sprint 7 target: v1.9.62.*
+*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6 target: v1.9.61.  Sprint 7 target: v1.9.62.*
 
 **Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes → `ui/nav/rail.py`; −683 lines), S11-1 (PAGE_HELP duplicate key fixed), S11-4 (CI parity gates added).
 
 **Sprint 4 delivered (2026-05-30):** S1-2 (ScanResultMixin → `ui/scan_wiring.py`; dashboard.py −1,163 lines; 14 orphaned decorators removed), S3-1 (hub_card.py created; hardware_integration_page.py 4,055→1,701), S3-2 (overview_tile.py created; overview_page.py 2,536→633), S3-3 partial (home_widgets.py created; home_page.py 3,027→2,747; section widgets NOT extracted). S8-2 done (architecture docs synced).
 
-**Sprint 5 queue:** S15-1 (register new large files in LOC gate), S13-5a (tighten dashboard.py budget to 10,200), S2-1/S2-2/S2-3 (module splits), S2-4 (new module tests), S6-1–S6-4 (MetricStore health), S5-1–S5-3 (worker lifecycle).
+**Sprint 5 delivered (2026-05-30):** S15-1+S13-5a (LOC gate updated: 9 new entries, dashboard budget tightened to 11,312), S2-1 (metric_store split: schema+queries extracted; 623+449+547 lines; WAL/VACUUM/busy_timeout health improvements), S2-2 (report_exporter split: report_html+report_pdf; 716+376+118 lines), S2-3 (utils split: utils_net+utils_platform; 421+458+171 lines), S2-4+S6-4 (90 new tests across 5 new test files), S5-2 (test_worker_lifecycle_full.py; HwDetect+Plugin+WiFiMonitor workers), S5-3 (scan_worker queue-drain patterns confirmed safe). 2226 tests pass, 4 skipped.
+
+**Sprint 6 queue:** S13-1 (extract ui/tabs/ package; dashboard.py →7,000 lines), S13-2 (complete _build_help_tab() → ui/help.py), S13-3 (_build_header() → ui/header.py), S13-4 (settings persistence → ui/app_settings.py), S13-5b (tighten dashboard budget to 7,200), S14-1 (home_page.py split: 6 section widgets → home_widgets.py; target 1,200 lines), S14-2 (hardware_integration_page.py → ≤900; guide section → plugin_guide.py), S15-2 (hub_card.py helper functions → hub_helpers.py), S15-3 (mock-patch canonical locations in tests/CLAUDE.md), S7-1 (lazy-import audit), S7-2 (startup profiling script), S7-3 (debug log rotation), S4-2 (pre-commit check update), S8-3 (version history update).

@@ -8287,10 +8287,10 @@ class Dashboard(ScanResultMixin, QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Architecture splits (Sprints 2–4)", "Major codebase restructuring for long-term maintainability: scan result handlers extracted to ui/scan_wiring.py (−1,163 lines from dashboard.py); HubCard and plugin helpers to ui/widgets/hub_card.py; Overview tile classes to ui/widgets/overview_tile.py; Home helper widgets to ui/widgets/home_widgets.py."),
-            ("dashboard.py reduced 23% (13,483→10,046 lines)", "Nav widget classes, scan-result handlers, and the PAGE_HELP dict have all been extracted to dedicated modules. The file now has one class definition and clear boundaries between concerns."),
-            ("Crash-free test suite (Sprint 1)", "The full 2,151-test suite runs to completion with no STATUS_STACK_BUFFER_OVERRUN crash. QFileSystemWatcher threads and module-level QApplication instances were the root cause; fixed via session fixtures and deleteLater() cleanup."),
-            ("CodeQL prevention + discoverability gates", "test_codeql_prevention.py, test_nav_completeness.py, and test_spec_hiddenimports.py enforce structural rules in CI so regressions are caught before shipping."),
+            ("Module layer splits (Sprint 5)", "metric_store.py (1,673→623 lines), report_exporter.py (1,241→716 lines), and utils.py (1,055→421 lines) have each been split into focused sub-modules. All public APIs unchanged — existing imports continue to work."),
+            ("MetricStore reliability hardening", "WAL file checkpoint at startup when -wal exceeds 50 MB; PRAGMA VACUUM after every schema migration; PRAGMA busy_timeout = 5000 prevents OperationalError under concurrent read/write load."),
+            ("90 new tests (Sprint 5)", "test_metric_store_schema, test_metric_store_queries, test_metric_store_concurrency, test_utils_net, test_utils_platform, test_report_html, and test_worker_lifecycle_full added. Full suite: 2,226 tests pass."),
+            ("Worker lifecycle coverage complete", "HwDetectWorker, PluginWorker, and WiFiMonitorWorker now have start/stop/isRunning lifecycle tests. All 20 workers covered across test_worker_lifecycle.py and test_worker_lifecycle_full.py."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────

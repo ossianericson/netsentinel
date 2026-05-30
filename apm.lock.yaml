@@ -9,9 +9,9 @@ local_deployed_files:
 - .github/instructions/development-rules.instructions.md
 - .github/instructions/project-vision.instructions.md
 local_deployed_file_hashes:
-  .claude/rules/architecture.md: sha256:94b44e5fb6918fc70dd8466976b756ebeea31937a93468562e1f17a55b1b63e3
+  .claude/rules/architecture.md: sha256:12db38c74fa8b164cc529e860f3daa24a70b90563b3ad0426fbabf0789f906d6
   .claude/rules/development-rules.md: sha256:aff609d0f747ee5a08b9591d8ebd0fe19c0bf9b957476afb775045aa4bd73dae
-  .claude/rules/project-vision.md: sha256:181ff7127ffa09a5e4bb4e55ac8bcfc3a00a6dc568ef43263c61732ec038dfb1
-  .github/instructions/architecture.instructions.md: sha256:0acbedaaea7509202022b38a253529f9125ff8a90877950e4ff36e6a654bf083
+  .claude/rules/project-vision.md: sha256:65ab1d7ca0840076ae400e2c4b5a4fec337761a94543ffec8ef45b5935f9a2c5
+  .github/instructions/architecture.instructions.md: sha256:06bf89ee5071d5798828f7dc5e2467817848c1b72328d5c37a57819ffb1c366a
   .github/instructions/development-rules.instructions.md: sha256:70d4a0f61d8c6022636b25fd5f765ebca4e80c4a9644a5db63705760c9edcad2
-  .github/instructions/project-vision.instructions.md: sha256:35c3b51ef818b3606e5d482c87136c430087bce7a74bf83b41c9896a317228df
+  .github/instructions/project-vision.instructions.md: sha256:2972bbec5b2fb0d383b6b8c251c3974385c130ce21c60a6099ac01c63cf0e76f

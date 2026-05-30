@@ -67,6 +67,8 @@ netsentinel/
 │   ├── mac_registry.py         # OUI database (offenders.json)
 │   ├── maintenance_window.py   # Maintenance window schedule and suppression logic
 │   ├── metric_store.py         # SQLite time-series DB (singleton, WAL mode, schema v8)
+│   ├── metric_store_schema.py  # DDL, schema version, column migrations, dataclasses (S2-1 split)
+│   ├── metric_store_queries.py # MetricStoreQueryMixin — all read/query methods (S2-1 split)
 │   ├── mqtt_publisher.py       # MQTT broker client + Home Assistant Discovery payloads
 │   ├── name_resolver.py        # Hostname resolution cascade (mDNS, NetBIOS, rDNS)
 │   ├── net_doc_generator.py    # Network documentation HTML/Markdown snapshot generator
@@ -85,7 +87,9 @@ netsentinel/
 │   ├── private_endpoint_checker.py  # RFC 1918 boundary exposure checker
 │   ├── process_monitor.py      # Active process-to-socket correlation (psutil-based)
 │   ├── protocol_animator.py    # AnimNode/AnimStep scene builders for protocol viz
-│   ├── report_exporter.py      # generate_card_html(), generate_lab_html(), save_*()
+│   ├── report_exporter.py      # Public API: save_*() entry points, JSON/CSV/NMap/ISP/card/lab
+│   ├── report_html.py          # HTML generation helpers — CSS, _badge, module HTML builders (S2-2 split)
+│   ├── report_pdf.py           # PDF generation — weasyprint/headless-browser cascade (S2-2 split)
 │   ├── report_scheduler.py     # Scheduled report generation and delivery logic
 │   ├── rest_api.py             # Read-only Flask API (127.0.0.1, API key in keychain)
 │   ├── risk_scorer.py
@@ -106,7 +110,9 @@ netsentinel/
 │   ├── tls_checker.py
 │   ├── trend_analyser.py
 │   ├── trigger_expression.py   # Trigger condition expression evaluator for automation hooks
-│   ├── utils.py                # get_app_data_dir(), is_admin(), ping_sweep, etc.
+│   ├── utils.py                # Core: get_app_data_dir(), is_admin(), ping_sweep, send_wol
+│   ├── utils_net.py            # Network info: get_network_info(), get_dhcp_info(), get_interface_details() (S2-3 split)
+│   ├── utils_platform.py       # IPv6 scanning: get_ipv6_devices(), ping_sweep_ipv6() (S2-3 split)
 │   ├── web_dashboard.py        # build_html() — self-contained /dashboard HTML page
 │   ├── wifi_heatmap.py         # WiFi signal IDW interpolation and heatmap data builder
 │   ├── wifi_scanner.py         # 802.11 network enumeration (SSIDs, BSSIDs, signal levels)
