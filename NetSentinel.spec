@@ -112,8 +112,10 @@ hiddenimports: list = [
     "modules.network_logger",
     "modules.nl_query",
     "modules.notification_router",
+    "modules.nspkg",
     "modules.os_fingerprint",
     "modules.plugin_system",
+    "modules.plugin_tools",
     "modules.port_scanner",
     "modules.private_endpoint_checker",
     "modules.process_monitor",
@@ -146,6 +148,7 @@ hiddenimports: list = [
     # ── ui/ — shell and all page modules ──────────────────────────────────────
     "ui.dashboard",
     "ui.command_palette",
+    "ui.help",
     "ui.empty_state",
     "ui.expanding_table",
     "ui.first_run_dialog",
@@ -202,11 +205,8 @@ hiddenimports: list = [
     "modules.mqtt_publisher",
     "modules.plugin_registry",
     "modules.web_dashboard",
-    "modules.wifi_heatmap",
     "modules.zte_client",
-    "modules.deco_client",
     "modules.net_doc_generator",
-    "modules.diagnostic_card",
     "modules.exporter",
     # ── ui/pages/ missing from original list ──────────────────────────────────
     "ui.pages.diagnosis_page",
@@ -216,7 +216,6 @@ hiddenimports: list = [
     "ui.pages.timeline_page",
     "ui.pages.plugin_device_page",
     "ui.pages.wifi_monitor_page",
-    "ui.pages.trigger_builder_page",
     # ── ui/widgets/ — all widget modules ──────────────────────────────────────
     "ui.widgets.alert_drawer",
     "ui.widgets.animated_kpi",

@@ -170,7 +170,7 @@ _FEATURES: list[dict] = [
             "history to the database — set the interval (1–60 min) per source. "
             "Search across all sources in real time."
         ),
-        "page": "Logs",
+        "page": "Network Logger",
         "requires": None,
         "tags": ["monitor", "log", "unified", "modem", "mesh", "syslog", "snmp", "signal", "history", "interval"],
     },
@@ -331,7 +331,7 @@ _FEATURES: list[dict] = [
             "CVE discoveries, and speed tests in a single scrollable view. "
             "Filter by source with one click."
         ),
-        "page": "Network Timeline",
+        "page": None,
         "requires": None,
         "tags": ["timeline", "events", "history", "alerts", "devices", "cve", "feed"],
     },
@@ -356,7 +356,7 @@ _FEATURES: list[dict] = [
             "— so you see 'Your STP reconvergence is causing the DNS failures' instead of "
             "five separate alerts."
         ),
-        "page": "Diagnose",
+        "page": "What's Wrong?",
         "requires": None,
         "tags": ["diagnose", "root cause", "analysis", "correlate", "why", "problem", "fix", "slow", "dropping"],
     },
@@ -554,7 +554,7 @@ _FEATURES: list[dict] = [
             "flags known malicious hosts and overlays results on the Geolocation Map. "
             "Right-click any row to show the IP on the Geo Map, copy the indicator, or export."
         ),
-        "page": "Threat Intelligence",
+        "page": "Threat Intel",
         "requires": None,
         "tags": ["threat", "intel", "ip", "abuseipdb", "malicious", "blacklist", "reputation", "geo"],
     },
@@ -691,7 +691,7 @@ _FEATURES: list[dict] = [
             "'▶ ARP' button. Clicking jumps to the Protocol Visualizer pre-loaded "
             "with that exact event — real addresses, real timing."
         ),
-        "page": "Logs",
+        "page": "Network Logger",
         "requires": None,
         "tags": ["arp", "log", "animation", "protocol", "event", "jump"],
     },
@@ -745,7 +745,7 @@ _FEATURES: list[dict] = [
             "Enable the Syslog source toggle in Monitor to view them. "
             "Configure your router to forward syslog to this machine's IP."
         ),
-        "page": "Logs",
+        "page": "Network Logger",
         "requires": None,
         "tags": ["syslog", "udp", "router", "switch", "log", "514", "message"],
     },
@@ -757,7 +757,7 @@ _FEATURES: list[dict] = [
             "Receives SNMP traps on UDP 162 from managed switches and routers. "
             "Enable the SNMP source toggle in Monitor to view them."
         ),
-        "page": "Logs",
+        "page": "Network Logger",
         "requires": None,
         "tags": ["snmp", "trap", "udp", "162", "managed", "switch", "router", "oid"],
     },
@@ -844,6 +844,309 @@ _FEATURES: list[dict] = [
         "page": "Tools & Wake-on-LAN",
         "requires": None,
         "tags": ["wake on lan", "wol", "magic packet", "mac", "tool", "ping", "port check", "sweep"],
+    },
+    # ── Monitoring (missing entries) ───────────────────────────────────────────
+    {
+        "group": "Monitoring",
+        "icon": "▶",
+        "name": "Bandwidth Usage",
+        "desc": (
+            "Per-interface inbound/outbound bandwidth chart with 60-second rolling window. "
+            "Shows the top talkers on each interface and flags unusual spikes. "
+            "Useful for diagnosing 'something is eating my bandwidth' symptoms."
+        ),
+        "page": "Bandwidth Usage",
+        "requires": None,
+        "tags": ["bandwidth", "interface", "usage", "traffic", "chart", "rolling", "spike"],
+    },
+    {
+        "group": "Monitoring",
+        "icon": "⬡",
+        "name": "Home Automation Devices",
+        "desc": (
+            "Scans for smart home devices (Philips Hue, Sonos, Chromecast, Nest, etc.) "
+            "using mDNS and SSDP discovery. Lists device type, IP, and manufacturer. "
+            "Useful for inventorying IoT devices without logging into each app."
+        ),
+        "page": "Home Automation",
+        "requires": None,
+        "tags": ["home automation", "iot", "smart home", "hue", "sonos", "chromecast", "mdns", "ssdp"],
+    },
+    {
+        "group": "Monitoring",
+        "icon": "▷",
+        "name": "Inventory Changes",
+        "desc": (
+            "Shows devices that have appeared or disappeared since the last scan. "
+            "Compare two scan snapshots to see exactly which MACs joined or left the network. "
+            "Useful for tracking unauthorised devices or fleet changes."
+        ),
+        "page": "Inventory Changes",
+        "requires": None,
+        "tags": ["inventory", "changes", "new device", "left", "joined", "diff", "snapshot", "mac"],
+    },
+    {
+        "group": "Monitoring",
+        "icon": "◑",
+        "name": "IPv6 Devices",
+        "desc": (
+            "Lists all devices responding to IPv6 neighbour discovery on your local network. "
+            "Shows link-local and global unicast addresses side-by-side with the IPv4 address "
+            "so you can verify dual-stack is working correctly."
+        ),
+        "page": "IPv6 Devices",
+        "requires": None,
+        "tags": ["ipv6", "dual stack", "neighbour discovery", "link-local", "unicast", "icmpv6"],
+    },
+    # ── Security (missing entries) ─────────────────────────────────────────────
+    {
+        "group": "Security",
+        "icon": "◆",
+        "name": "CVE Tracker",
+        "desc": (
+            "Tracks CVE lifecycle for each device across scans — open, mitigated, or resolved. "
+            "Filters by severity and device. Stores CVE history in the database so you can "
+            "prove remediation progress over time."
+        ),
+        "page": "CVE Tracker",
+        "requires": None,
+        "tags": ["cve", "vulnerability", "tracker", "lifecycle", "mitigated", "resolved", "history"],
+    },
+    {
+        "group": "Security",
+        "icon": "◈",
+        "name": "Cloud Metadata Probe",
+        "desc": (
+            "Checks whether the AWS, Azure, or GCP Instance Metadata Service (IMDS) is "
+            "reachable from this machine — a sign that you are running inside a cloud VM "
+            "or that metadata endpoints are unexpectedly exposed."
+        ),
+        "page": "Cloud Metadata Probe",
+        "requires": None,
+        "tags": ["cloud", "aws", "azure", "gcp", "imds", "metadata", "exposure", "vm", "instance"],
+    },
+    {
+        "group": "Security",
+        "icon": "◆",
+        "name": "DHCP Rogue Monitor",
+        "desc": (
+            "Detects rogue DHCP servers on your network by comparing DHCP offers against "
+            "your known gateway. A rogue DHCP server is one of the easiest ways an attacker "
+            "can redirect all traffic through a man-in-the-middle device."
+        ),
+        "page": "DHCP Rogue Monitor",
+        "requires": "admin",
+        "tags": ["dhcp", "rogue", "server", "mitm", "gateway", "redirect", "offer", "detect"],
+    },
+    {
+        "group": "Security",
+        "icon": "▲",
+        "name": "Device Risk Score",
+        "desc": (
+            "Assigns each device a risk score based on open ports, CVEs, weak credentials, "
+            "and unexpected services. Ranks devices highest-risk first so you know where to "
+            "focus remediation effort."
+        ),
+        "page": "Device Risk Score",
+        "requires": None,
+        "tags": ["risk", "score", "device", "rank", "cve", "port", "credential", "remediation"],
+    },
+    {
+        "group": "Security",
+        "icon": "◆",
+        "name": "Exposed to Internet",
+        "desc": (
+            "Tests which services on your local devices are reachable from outside your "
+            "network by probing common ports from a public vantage point. "
+            "Identifies unintentional port forwards and firewall misconfigurations."
+        ),
+        "page": "Exposed to Internet",
+        "requires": None,
+        "tags": ["exposed", "internet", "port forward", "firewall", "public", "reachable", "external"],
+    },
+    {
+        "group": "Security",
+        "icon": "⊕",
+        "name": "Full Device Discovery",
+        "desc": (
+            "Comprehensive multi-method device enumeration: ARP, mDNS, NetBIOS, SNMP, "
+            "and active TCP probes. Finds devices that hide from simple ping sweeps. "
+            "Requires admin for SYN-based discovery."
+        ),
+        "page": "Full Device Discovery",
+        "requires": "admin",
+        "tags": ["discovery", "scan", "arp", "mdns", "netbios", "snmp", "full", "comprehensive"],
+    },
+    {
+        "group": "Security",
+        "icon": "▶",
+        "name": "Login Test",
+        "desc": (
+            "Tests a list of credentials against SSH, SMB, FTP, and Telnet services on "
+            "discovered devices. Use it to verify that default credentials have been changed "
+            "and that services are not accepting weak passwords."
+        ),
+        "page": "Login Test",
+        "requires": "admin",
+        "tags": ["login", "credential", "ssh", "smb", "ftp", "telnet", "default password", "auth test"],
+    },
+    {
+        "group": "Security",
+        "icon": "◑",
+        "name": "OS Detection",
+        "desc": (
+            "Fingerprints the operating system of each device using TCP/IP stack analysis "
+            "(TTL, window size, options). Shows OS family and version estimate alongside "
+            "each device in the scan results."
+        ),
+        "page": "OS Detection",
+        "requires": "admin",
+        "tags": ["os", "fingerprint", "detection", "operating system", "ttl", "tcp", "nmap"],
+    },
+    {
+        "group": "Security",
+        "icon": "▲",
+        "name": "Port Scan (TCP)",
+        "desc": (
+            "SYN-based TCP port scan across all discovered devices. Shows open ports, "
+            "service banners, and flags well-known risky services (Telnet, FTP, RDP, "
+            "unauthenticated databases). Requires admin for raw socket access."
+        ),
+        "page": "Port Scan (TCP)",
+        "requires": "admin",
+        "tags": ["port scan", "tcp", "syn", "open port", "service", "banner", "telnet", "rdp", "ftp"],
+    },
+    {
+        "group": "Security",
+        "icon": "▲",
+        "name": "Port Scan (UDP)",
+        "desc": (
+            "UDP port scan targeting common services (DNS, SNMP, NTP, TFTP). "
+            "UDP scans are slower than TCP but find services that do not use TCP — "
+            "often overlooked in quick audits."
+        ),
+        "page": "Port Scan (UDP)",
+        "requires": "admin",
+        "tags": ["port scan", "udp", "dns", "snmp", "ntp", "tftp", "service", "open port"],
+    },
+    {
+        "group": "Security",
+        "icon": "◆",
+        "name": "Private Endpoint Check",
+        "desc": (
+            "Verifies that RFC 1918 private addresses on your network are not accidentally "
+            "bridging to the public internet. Detects split-horizon DNS mismatches and "
+            "services binding on both private and public interfaces."
+        ),
+        "page": "Private Endpoint Check",
+        "requires": None,
+        "tags": ["private", "rfc1918", "endpoint", "exposure", "bridge", "dns", "interface", "public"],
+    },
+    {
+        "group": "Security",
+        "icon": "⬡",
+        "name": "Recon Plugins",
+        "desc": (
+            "Runs any installed plugin scripts in security-audit mode. Plugins can add "
+            "custom scan logic, vendor-specific checks, or proprietary device probes. "
+            "See the Hardware section to install and manage plugins."
+        ),
+        "page": "Recon Plugins",
+        "requires": None,
+        "tags": ["plugin", "recon", "custom", "scan", "audit", "extend", "vendor"],
+    },
+    {
+        "group": "Security",
+        "icon": "◆",
+        "name": "Windows Shares (SMB)",
+        "desc": (
+            "Enumerates SMB shares on Windows devices — lists share names, access level, "
+            "and whether they are accessible without authentication. "
+            "Open shares are a common accidental data-exposure vector."
+        ),
+        "page": "Windows Shares (SMB)",
+        "requires": None,
+        "tags": ["smb", "windows", "share", "file share", "exposed", "access", "enumerate"],
+    },
+    # ── Advanced (missing entries) ─────────────────────────────────────────────
+    {
+        "group": "Advanced",
+        "icon": "⊕",
+        "name": "Config Snapshots",
+        "desc": (
+            "Takes a structured snapshot of all scanned devices and compares it against "
+            "previous snapshots to show a diff: new devices, removed devices, changed ports "
+            "or services. Useful for change-control audits and compliance evidence."
+        ),
+        "page": "Config Snapshots",
+        "requires": None,
+        "tags": ["config", "snapshot", "baseline", "diff", "change", "audit", "compliance", "compare"],
+    },
+    {
+        "group": "Advanced",
+        "icon": "⊕",
+        "name": "Custom Triggers",
+        "desc": (
+            "Build custom alerting conditions using a visual expression editor — "
+            "combine metric thresholds (RTT > 100 ms AND loss > 5%) with boolean logic. "
+            "Triggers fire the Automation Hook pipeline when conditions are met."
+        ),
+        "page": "Custom Triggers",
+        "requires": None,
+        "tags": ["trigger", "custom", "alert", "expression", "threshold", "logic", "rtt", "loss"],
+    },
+    {
+        "group": "Advanced",
+        "icon": "▷",
+        "name": "Maintenance Windows",
+        "desc": (
+            "Schedule time windows during which alerts are suppressed — for planned reboots, "
+            "network changes, or overnight batch jobs. Suppression can be per-device or "
+            "fleet-wide, and supports recurring schedules."
+        ),
+        "page": "Maintenance Windows",
+        "requires": None,
+        "tags": ["maintenance", "window", "suppress", "alert", "schedule", "recurring", "reboot"],
+    },
+    {
+        "group": "Advanced",
+        "icon": "◑",
+        "name": "SNMP Device Info",
+        "desc": (
+            "Polls managed switches, routers, and servers via SNMP v1/v2c/v3. "
+            "Retrieves interface counters, CPU/memory utilisation, and vendor MIB data. "
+            "Configure community strings (stored in the OS keychain) in Settings."
+        ),
+        "page": "SNMP Device Info",
+        "requires": None,
+        "tags": ["snmp", "managed", "switch", "router", "mib", "counter", "cpu", "memory", "poll"],
+    },
+    {
+        "group": "Advanced",
+        "icon": "▶",
+        "name": "Trend Forecasts",
+        "desc": (
+            "Uses OLS regression over stored RTT, packet loss, and jitter history to predict "
+            "when a metric will breach a threshold. Shows 'ETA to degradation' so you can "
+            "intervene before users notice a problem."
+        ),
+        "page": "Trend Forecasts",
+        "requires": None,
+        "tags": ["trend", "forecast", "predict", "regression", "rtt", "loss", "jitter", "eta", "degrade"],
+    },
+    # ── Hidden features (missing entries) ─────────────────────────────────────
+    {
+        "group": "Hidden features",
+        "icon": "▸",
+        "name": "Help & Reference",
+        "desc": (
+            "Contextual help panel accessible from the '?' button on every page. "
+            "Shows a plain-English explanation of the current page and links to the "
+            "relevant protocol or concept. Also contains keyboard shortcut reference."
+        ),
+        "page": "Help & Reference",
+        "requires": None,
+        "tags": ["help", "reference", "shortcut", "keyboard", "explain", "documentation", "?"],
     },
 ]
 

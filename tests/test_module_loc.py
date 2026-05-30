@@ -51,6 +51,24 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
 }
 
 
+UI_ROOT = Path(__file__).resolve().parents[1] / "ui"
+
+# S1 split target: dashboard.py → 3,000 lines after ui/nav/, ui/help.py,
+# and ui/scan_wiring.py are extracted.  Budget is set to current actual + 200
+# margin; tighten to 3,000 once the split lands.
+KNOWN_LARGE_UI_FILES: dict[str, int] = {
+    # Main window shell + 9-section nav builder + all scan-result handlers +
+    # help panel + tray icon.  Natural split plan (S1):
+    #   ui/nav/ package     — _RailButton, _FlyoutPanel, _build_pro_nav
+    #   ui/help.py          — _PAGE_HELP dict, _build_help_panel, _section/_entry
+    #   ui/scan_wiring.py   — all _on_*_result handlers (~2,000 lines)
+    # Target after split: ≤3,000 lines.
+    "dashboard.py": 13700,
+}
+
+UI_DEFAULT_BUDGET = 1000  # stricter than modules for new UI files
+
+
 def _line_count(path: Path) -> int:
     return sum(1 for _ in path.read_text(encoding="utf-8", errors="replace").splitlines())
 
@@ -99,4 +117,26 @@ def test_known_large_modules_budgets_are_current():
     assert not stale, (
         "Stale KNOWN_LARGE_MODULES entries:\n"
         + "\n".join(f"  {name}: {reason}" for name, reason in stale)
+    )
+
+
+def test_dashboard_does_not_exceed_loc_budget():
+    """ui/dashboard.py must not grow beyond its tracked budget (S1 split gate).
+
+    The current budget reflects the pre-split baseline.  After ui/nav/,
+    ui/help.py, and ui/scan_wiring.py are extracted (S1), tighten this to
+    3,000 lines in KNOWN_LARGE_UI_FILES to prevent re-accumulation.
+    """
+    offenders = []
+    for name, budget in KNOWN_LARGE_UI_FILES.items():
+        path = UI_ROOT / name
+        if not path.exists():
+            continue
+        n = _line_count(path)
+        if n > budget:
+            offenders.append((name, n, budget))
+    assert not offenders, (
+        "UI files exceeding their LOC budget (file, actual, budget):\n"
+        + "\n".join(f"  {name}: {actual} lines (budget {budget})" for name, actual, budget in offenders)
+        + "\n\nSplit dashboard.py per the S1 plan before adding more code."
     )

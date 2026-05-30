@@ -700,17 +700,17 @@ structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
 | 4 | ✅ S0-4: Full suite green gate | 1 | v1.9.56 | 2136 passed, 4 skipped, exit 0 — no crash |
 | 5 | ✅ S4-1: `test_codeql_prevention.py` | 1 | v1.9.56 | bare-except + URL-substring AST checks |
 | 6 | ✅ S8-1: Mark robustness plan complete | 1 | v1.9.56 | PLUGIN_ROBUSTNESS_PLAN.md already in docs/completed/ |
-| 7 | S1-1: Extract `ui/nav/` package | 2 | v1.9.57 | Biggest risk/reward |
-| 8 | S1-2: Extract scan-result wiring | 2 | v1.9.57 | |
-| 9 | S1-3: Extract help panel | 2 | v1.9.57 | |
-| 10 | S1-4: Add dashboard LOC budget test | 2 | v1.9.57 | |
-| 11 | S3-1: Extract HubCard to widget | 3 | v1.9.58 | Largest page file |
-| 12 | S3-2: Extract OverviewTile | 3 | v1.9.58 | |
-| 13 | S3-3: Extract home-page section widgets | 3 | v1.9.58 | |
-| 14 | S2-1: Split metric_store | 4 | v1.9.59 | Schema migration is highest risk |
-| 15 | S2-2: Split report_exporter | 4 | v1.9.59 | |
-| 16 | S2-3: Split utils | 4 | v1.9.59 | |
-| 17 | S2-4: Tests for new module files | 4 | v1.9.59 | |
+| 7 | S1-1: Extract `ui/nav/` package | 3 | v1.9.58 | Biggest risk/reward; deferred — `_build_help_tab` uses self. refs requiring window-param refactor first |
+| 8 | S1-2: Extract scan-result wiring | 3 | v1.9.58 | |
+| 9 | ✅ S1-3 partial: Extract `_PAGE_HELP` dict to `ui/help.py` | 2 | v1.9.58 | 455 lines removed (13,483→13,028); full `_build_help_tab` extraction deferred to Sprint 3 |
+| 10 | ✅ S1-4: Add dashboard LOC budget test | 2 | v1.9.58 | `test_module_loc.py::test_dashboard_does_not_exceed_loc_budget` added; budget 13,700 |
+| 11 | S3-1: Extract HubCard to widget | 4 | v1.9.59 | Largest page file |
+| 12 | S3-2: Extract OverviewTile | 4 | v1.9.59 | |
+| 13 | S3-3: Extract home-page section widgets | 4 | v1.9.59 | |
+| 14 | S2-1: Split metric_store | 5 | v1.9.60 | Schema migration is highest risk |
+| 15 | S2-2: Split report_exporter | 5 | v1.9.60 | |
+| 16 | S2-3: Split utils | 5 | v1.9.60 | |
+| 17 | S2-4: Tests for new module files | 5 | v1.9.60 | |
 | 18 | S5-1: Worker coverage audit | 5 | v1.9.60 | Enumerate gaps |
 | 19 | S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.60 | |
 | 20 | S5-3: `_running` flag audit | 5 | v1.9.60 | |
@@ -724,14 +724,14 @@ structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
 | 28 | S4-2: Pre-commit check update in CLAUDE.md | 6 | v1.9.60 | |
 | 29 | S8-2: Architecture docs update | 6 | v1.9.60 | |
 | 30 | S8-3: Version history update | 6 | v1.9.60 | |
-| — | **— APM audit findings (2026-05-29) — order TBD —** | — | — | Added at plan end; re-slot into sprints as capacity allows |
-| 31 | S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | TBD | TBD | 2-line fix; do immediately before next release build |
-| 32 | S12-2: Deduplicate 4 duplicate spec entries | TBD | TBD | Companion to S12-1 |
-| 33 | S12-3: `test_spec_hiddenimports.py` CI gate | TBD | TBD | Prevents future regressions |
-| 34 | S11-2: Fix 4 stale `_FEATURES` page refs in `discover_page.py` | TBD | TBD | Quick: 4 string corrections |
-| 35 | S11-3: Add 25 missing `_FEATURES` entries | TBD | TBD | Unlocks Feature Guide for half the app |
-| 36 | S11-1: Add `_PAGE_HELP` entries for all 61 nav labels | TBD | TBD | Unblocks help-button UX for every page |
-| 37 | S11-4: CI gate — nav/help/features parity check | TBD | TBD | Extend `test_nav_completeness.py` |
+| — | **— APM audit findings (2026-05-29) — Sprint 2 deliveries below —** | — | — | |
+| 31 | ✅ S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | 2 | v1.9.58 | Done; `ui.help` also added for new module |
+| 32 | ✅ S12-2: Deduplicate 4 duplicate spec entries | 2 | v1.9.58 | Removed deco_client, diagnostic_card, wifi_heatmap, trigger_builder_page duplicates |
+| 33 | ✅ S12-3: `test_spec_hiddenimports.py` CI gate | 2 | v1.9.58 | 2 tests: all-modules-present + no-duplicates |
+| 34 | ✅ S11-2: Fix 7 stale `_FEATURES` page refs in `discover_page.py` | 2 | v1.9.58 | Fixed: Logs→Network Logger (×4), Network Timeline→None, Diagnose→What's Wrong?, Threat Intelligence→Threat Intel |
+| 35 | ✅ S11-3: Add 23 missing `_FEATURES` entries | 2 | v1.9.58 | All nav-registered pages now have Feature Guide entries (Threat Intel was already present, now fixed) |
+| 36 | S11-1: Add `_PAGE_HELP` entries for remaining nav labels | 3 | v1.9.58 | `ui/help.py` already covers 50+ labels; ~10 nav labels still missing entries |
+| 37 | S11-4: CI gate — nav/help/features parity check | 3 | v1.9.58 | Extend `test_nav_completeness.py` after S11-1 completes |
 | 38 | S10-1: Inventory missing colour tokens; add to `ui/styles.py` | TBD | TBD | Must precede S10-2/S10-3 |
 | 39 | S10-2: Purge hardcoded hex from `ui/pages/*.py` (37 files) | TBD | TBD | Run debug_launch.py after each file |
 | 40 | S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` (7 files) | TBD | TBD | Companion to S10-2 |
@@ -768,5 +768,5 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 ---
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
-*Sprint 1 complete: v1.9.56 (2026-05-29).  Sprint 2 target: v1.9.57.  Full plan target: v1.9.61.*
+*Sprint 1 complete: v1.9.57 (2026-05-30).  Sprint 2 complete: v1.9.58 (2026-05-30).  Sprint 3 target: v1.9.58.  Full plan target: v1.9.61.*
 *Items 31–45 added 2026-05-29 from APM rules/docs/codebase audit (197 gaps across 6 rule categories).  Version targets and sprint assignments TBD — re-slot as capacity allows.*
