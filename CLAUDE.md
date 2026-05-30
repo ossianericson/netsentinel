@@ -347,7 +347,7 @@ NetSentinel is a **professional-grade network security scanner and monitor** for
 
 Current version: **v1.9.59**
 
-Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42 → v1.9.53 → v1.9.54 → v1.9.54 → v1.9.55 → v1.9.56 → v1.9.56 → v1.9.57 → v1.9.59
+Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42 → v1.9.53 → v1.9.54 → v1.9.54 → v1.9.55 → v1.9.56 → v1.9.56 → v1.9.57 → v1.9.59 → v1.9.59
 
 ---
 
