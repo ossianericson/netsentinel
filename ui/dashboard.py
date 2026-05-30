@@ -8287,9 +8287,10 @@ class Dashboard(ScanResultMixin, QMainWindow):
         from PyQt6.QtWidgets import QApplication
         app_ver = QApplication.applicationVersion()
         bl.addWidget(_section(f"What's New in v{app_ver}", [
-            ("Crash-free test suite (Sprint 1)", "The full 2,136-test suite now runs to completion with no STATUS_STACK_BUFFER_OVERRUN crash. QFileSystemWatcher threads and module-level QApplication instances were the root cause; both fixed via conftest.py session fixture and per-widget deleteLater() cleanup."),
-            ("CodeQL prevention tests", "tests/test_codeql_prevention.py catches bare-except blocks and URL-substring comparisons before they reach CI, replicating the categories that triggered hotfixes in v1.9.53–v1.9.54."),
-            ("Docstring escape fix", "Invalid escape sequences in ui/topology_widget.py module docstring replaced with a raw string — eliminates DeprecationWarning in the test run."),
+            ("Architecture splits (Sprints 2–4)", "Major codebase restructuring for long-term maintainability: scan result handlers extracted to ui/scan_wiring.py (−1,163 lines from dashboard.py); HubCard and plugin helpers to ui/widgets/hub_card.py; Overview tile classes to ui/widgets/overview_tile.py; Home helper widgets to ui/widgets/home_widgets.py."),
+            ("dashboard.py reduced 23% (13,483→10,046 lines)", "Nav widget classes, scan-result handlers, and the PAGE_HELP dict have all been extracted to dedicated modules. The file now has one class definition and clear boundaries between concerns."),
+            ("Crash-free test suite (Sprint 1)", "The full 2,151-test suite runs to completion with no STATUS_STACK_BUFFER_OVERRUN crash. QFileSystemWatcher threads and module-level QApplication instances were the root cause; fixed via session fixtures and deleteLater() cleanup."),
+            ("CodeQL prevention + discoverability gates", "test_codeql_prevention.py, test_nav_completeness.py, and test_spec_hiddenimports.py enforce structural rules in CI so regressions are caught before shipping."),
         ]))
 
         # ── Requirements ─────────────────────────────────────────────────────

@@ -320,6 +320,22 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.59
+
+**Changed**
+- `ui/dashboard.py`: 23 `_on_*_result` scan-result handlers extracted to `ui/scan_wiring.py` as `ScanResultMixin`; `Dashboard` now inherits the mixin — dashboard.py reduced from 13,483 → 10,046 lines; 14 orphaned `@pyqtSlot` decorators removed
+- `ui/pages/hardware_integration_page.py`: `HubCard`, `_ModemDetailPanel`, `_RouterDetailPanel`, `PipInstallDialog`, and all plugin helper functions extracted to `ui/widgets/hub_card.py` — hardware_integration_page.py reduced 4,055 → 1,701 lines
+- `ui/pages/overview_page.py`: all 14 Overview tile classes, `_BaseTile`, `_TILE_CLASSES`, `_DEFAULT_ORDER` extracted to `ui/widgets/overview_tile.py` — overview_page.py reduced 2,536 → 633 lines
+- `ui/pages/home_page.py`: `_GradeRing`, `_MiniSparkline`, `_GradeSparkline`, `_EventsTicker`, and grade history helpers extracted to `ui/widgets/home_widgets.py` — home_page.py reduced 3,027 → 2,747 lines
+- `NetSentinel.spec`: 4 new `hiddenimports` entries added (`ui.scan_wiring`, `ui.widgets.home_widgets`, `ui.widgets.hub_card`, `ui.widgets.overview_tile`)
+- `docs/STABILITY_PLAN.md`: post-Sprint-4 re-audit — 7 new findings (F7–F13), three new plan sections (S13/S14/S15), three new architecture principles (P9–P11)
+
+**Fixed**
+- Mock patch targets in `test_plugin_health.py`, `test_plugin_resilience.py`, `test_plugin_migration.py`, `test_hub_card_errors.py` updated from `ui.pages.hardware_integration_page.*` → `ui.widgets.hub_card.*` after hub_card extraction
+- `ui/pages/overview_page.py`: `_DEFAULT_ORDER` and `_TILE_CLASSES` constants were missing from import after tile extraction — added to import block
+- `ui/pages/home_page.py`: BOM character stripped after PowerShell file write caused `ast.parse` to fail in style-token test
+- 14 orphaned `@pyqtSlot` decorators in `dashboard.py` removed — one was causing `TypeError: decorated slot has no signature compatible with timeout()` at startup
+
 ### v1.9.57
 
 **Fixed**
