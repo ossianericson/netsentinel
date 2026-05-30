@@ -174,6 +174,7 @@ netsentinel/
 │   │   ├── uptime_page.py
 │   │   ├── wifi_heatmap_page.py    # Floor plan import + IDW interpolation + PNG export
 │   │   └── wifi_monitor_page.py    # 802.11 Monitor — passive frame capture (Npcap; admin required)
+│   ├── scan_wiring.py          # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py)
 │   └── widgets/
 │       ├── alert_drawer.py         # Slide-in alert detail drawer
 │       ├── animated_kpi.py         # Animated KPI counter with ease-out count-up
@@ -182,6 +183,9 @@ netsentinel/
 │       ├── density_toggle.py       # Compact/comfortable row density toggle widget
 │       ├── device_popover.py       # Hover popover showing quick device info
 │       ├── explainer_panel.py      # Reusable inline explanation panel (Lab Mode, Protocol Viz)
+│       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers
+│       ├── hub_card.py             # HubCard, _ModemDetailPanel, _RouterDetailPanel, PipInstallDialog and all plugin helpers
+│       ├── overview_tile.py        # All Overview tile classes (_BaseTile subclasses) and _TILE_CLASSES/_DEFAULT_ORDER
 │       ├── page_header.py          # Standard page header with title, help button, actions bar
 │       ├── protocol_canvas.py      # QPainter animation engine for protocol diagrams
 │       ├── pulsing_dot.py          # Animated status indicator dot (live/offline)
