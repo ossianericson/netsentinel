@@ -320,6 +320,22 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.61
+
+**Added**
+- `ui/tabs.py` — `TabBuilderMixin` extracted from `dashboard.py`; all scan, log, network, and tools tab content builders (S13-1; dashboard.py 9,776 → 6,540 lines)
+- `ui/header.py` — `AppHeaderMixin` extracted from `dashboard.py`; top bar construction + frameless-window logic (S13-3)
+- `ui/app_settings.py` — `save_settings()`, `restore_settings()`, `center_on_screen()` extracted from `dashboard.py` (S13-4)
+- `ui/help.py` — `build_help_tab()` extracted from `dashboard.py`; Help & Shortcuts page builder (S13-2)
+- `ui/widgets/hub_helpers.py` — pure data-persistence and utility helpers extracted from `hub_card.py` (S15-2; hub_card.py 2,209 → 1,665 lines)
+- `tools/startup_profile.py` — stage-by-stage startup timing script (S7-2)
+
+**Changed**
+- `tools/debug_launch.py` — log rotation: keeps last 5 timestamped launch logs; `netsentinel_debug.log` always points to latest (S7-3)
+- `CLAUDE.md` — added Step 0 (static checks) to commit gate; expanded version history table with sprint summaries (S4-2, S8-3)
+- `tests/CLAUDE.md` — added mock-patch canonical locations guide (S15-3)
+- `tests/test_module_loc.py` — LOC budgets tightened for all Sprint 6 extracted files
+
 ### v1.9.60
 
 **Added**

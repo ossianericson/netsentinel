@@ -62,12 +62,26 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     #   ui/app_settings.py  — _restore_settings, _save_settings (S13-4)
     # Target after all splits: ≤3,000 lines.
     # Tighten after S13-1: 7,200; S13-2: 6,500; S13-3: 6,000; S13-4: 5,700
-    "dashboard.py": 11312,  # actual 11,112 + 200 margin (was 13,700; tightened S13-5a)
+    # S13-1 delivered: TabBuilderMixin extracted to ui/tabs.py (3,302 lines).
+    # Next target: ≤3,000 lines once remaining recon tab builders are extracted.
+    "dashboard.py": 6740,  # actual 6,540 + 200 margin (S13-1: TabBuilderMixin → tabs.py)
 
-    # Hub card widget (HubCard, _ModemDetailPanel, _RouterDetailPanel, PipInstallDialog)
-    # + all plugin helper functions.  Further split target (S15-2):
-    #   ui/widgets/hub_helpers.py — helper functions (lines 25-700); hub_card.py → ≤900
-    "widgets/hub_card.py": 2250,  # actual 2,209 + margin (Sprint 4 new file; S15-1)
+    # TabBuilderMixin: _build_tabs + all scan/log/net/tools tab content builders.
+    # Next split: extract large scan_tabs (recon) and advanced_tools groups.
+    "tabs.py": 3400,  # actual 3,302 + margin (S13-1 extraction)
+
+    # Help panel: _PAGE_HELP dict + build_help_tab() + _page_header helper.
+    "help.py": 1200,  # actual 1,133 + margin (S13-2 extraction)
+
+    # AppHeaderMixin: header bar + frameless-window + update-check methods.
+    "header.py": 700,  # actual 659 + margin (S13-3 extraction)
+
+    # Hub card widget (HubCard, _ModemDetailPanel, _RouterDetailPanel, PipInstallDialog).
+    # Helpers extracted to ui/widgets/hub_helpers.py (Sprint 6, S15-2).  Next target: ≤900.
+    "widgets/hub_card.py": 1870,  # actual 1,665 + margin (Sprint 6 S15-2 split)
+
+    # Pure data-persistence and utility helpers extracted from hub_card.py (Sprint 6, S15-2).
+    "widgets/hub_helpers.py": 620,  # actual 577 + margin
 
     # All Overview tile classes (_BaseTile subclasses) + _TILE_CLASSES/_DEFAULT_ORDER.
     # Single concern, appropriate size for now.  Watch for growth.

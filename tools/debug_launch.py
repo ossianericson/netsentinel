@@ -1,27 +1,42 @@
-﻿"""
+"""
 NetSentinel — Debug Launcher
 =============================
 Runs the full GUI with Qt message handler captured to a log file.
 All Qt warnings, Python exceptions and tracebacks are written to
-  netsentinel_debug.log  (in the repo root)
+  netsentinel_debug.log  (in the repo root, symlinked to the latest run)
+
+Log rotation: keeps the last 5 timestamped launch logs, plus a
+  netsentinel_debug.log  symlink/copy pointing to the most recent one.
 
 Usage:
     python tools/debug_launch.py
-
-The log is always overwritten so it is fresh each run.
 """
 import os
 import sys
 import traceback
+import shutil
+from datetime import datetime
 
 # Ensure repo root is on path
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(_ROOT)
 sys.path.insert(0, _ROOT)
 
+_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+_ROTATED_PATH = os.path.join(_ROOT, f"netsentinel_debug_{_TIMESTAMP}.log")
 LOG_PATH = os.path.join(_ROOT, "netsentinel_debug.log")
 
-_log = open(LOG_PATH, "w", encoding="utf-8")
+# Rotate: remove oldest logs, keep last 4 (the new one will be 5th)
+import glob as _glob
+
+_existing = sorted(_glob.glob(os.path.join(_ROOT, "netsentinel_debug_????????_??????.log")))
+for _old in _existing[:-4]:
+    try:
+        os.remove(_old)
+    except OSError:
+        pass
+
+_log = open(_ROTATED_PATH, "w", encoding="utf-8")
 
 
 def _w(msg: str) -> None:
@@ -33,6 +48,7 @@ def _w(msg: str) -> None:
 _w("=== NetSentinel Debug Launch ===")
 _w(f"Python {sys.version}")
 _w(f"CWD: {os.getcwd()}")
+_w(f"Log: {_ROTATED_PATH}")
 _w("")
 
 try:
@@ -56,7 +72,7 @@ try:
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.60")
+    app.setApplicationVersion("1.9.61")
     app.setOrganizationName("netsentinel")
 
     _w("QApplication created OK")
@@ -76,6 +92,13 @@ try:
     result = app.exec()
     _w(f"--- event loop exited: {result} ---")
     _log.close()
+
+    # Update the stable symlink/copy
+    try:
+        shutil.copy2(_ROTATED_PATH, LOG_PATH)
+    except OSError:
+        pass
+
     sys.exit(result)
 
 except Exception:
@@ -84,7 +107,12 @@ except Exception:
     _log.flush()
     traceback.print_exc()
     _log.close()
-    print(f"\nFull log: {LOG_PATH}")
+
+    # Still update the stable copy so CI can read LOG_PATH
+    try:
+        shutil.copy2(_ROTATED_PATH, LOG_PATH)
+    except OSError:
+        pass
+
+    print(f"\nFull log: {_ROTATED_PATH}")
     sys.exit(1)
-
-

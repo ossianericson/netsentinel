@@ -136,8 +136,8 @@ def test_trigger_now_sets_event_when_idle():
 def test_auth_error_does_not_increment_consecutive():
     """AUTH: errors reset consecutive to 0 — they must not trip the circuit breaker."""
     store, _load, _save = _make_store({"consecutive": 4, **_fresh_health()})
-    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
-         patch("ui.widgets.hub_card._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_helpers._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_helpers._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error
         h = _record_error("/fake/plugin.py", "AUTH: wrong password")
     assert h["consecutive"] == 0, (
@@ -155,8 +155,8 @@ def test_auth_error_does_not_disable_after_many_errors():
         "errors": _CIRCUIT_BREAK_THRESHOLD - 1,
         "consecutive": _CIRCUIT_BREAK_THRESHOLD - 1,
     })
-    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
-         patch("ui.widgets.hub_card._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_helpers._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_helpers._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error
         h = _record_error("/fake/plugin.py", "AUTH: bad credentials")
     assert not h["disabled"], (
@@ -172,8 +172,8 @@ def test_non_auth_error_still_trips_circuit_breaker():
         "consecutive": _CIRCUIT_BREAK_THRESHOLD - 1,
         "errors": _CIRCUIT_BREAK_THRESHOLD - 1,
     })
-    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
-         patch("ui.widgets.hub_card._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_helpers._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_helpers._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error
         h = _record_error("/fake/plugin.py", "NET: connection refused")
     assert h["disabled"], "Non-AUTH error at threshold must trip the circuit breaker"

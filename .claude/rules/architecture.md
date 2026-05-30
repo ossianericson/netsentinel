@@ -186,6 +186,7 @@ netsentinel/
 │       ├── explainer_panel.py      # Reusable inline explanation panel (Lab Mode, Protocol Viz)
 │       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers
 │       ├── hub_card.py             # HubCard, _ModemDetailPanel, _RouterDetailPanel, PipInstallDialog and all plugin helpers
+│       ├── hub_helpers.py          # Pure data-persistence and utility helpers extracted from hub_card.py (no widget logic)
 │       ├── overview_tile.py        # All Overview tile classes (_BaseTile subclasses) and _TILE_CLASSES/_DEFAULT_ORDER
 │       ├── page_header.py          # Standard page header with title, help button, actions bar
 │       ├── protocol_canvas.py      # QPainter animation engine for protocol diagrams

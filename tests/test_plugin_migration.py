@@ -25,8 +25,8 @@ def _migrate(paths: list[str], appdata_dir: Path) -> list[str] | None:
     def fake_save(ps: list[str]) -> None:
         saved.append(list(ps))
 
-    with patch("ui.widgets.hub_card._load_paths", return_value=list(paths)), \
-         patch("ui.widgets.hub_card._save_paths", side_effect=fake_save), \
+    with patch("ui.widgets.hub_helpers._load_paths", return_value=list(paths)), \
+         patch("ui.widgets.hub_helpers._save_paths", side_effect=fake_save), \
          patch("modules.utils.get_app_data_dir", return_value=appdata_dir):
         from ui.pages.hardware_integration_page import _migrate_stale_paths
         _migrate_stale_paths()

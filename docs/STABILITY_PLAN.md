@@ -998,20 +998,20 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 26 | ✅ S5-2: `test_worker_lifecycle_full.py` | 5 | v1.9.60 | HwDetectWorker, PluginWorker, WiFiMonitorWorker; 10 tests pass |
 | 27 | ✅ S5-3: `_running` flag audit | 5 | v1.9.60 | scan_worker.py `while True` loops confirmed as queue-drain patterns (always break); no violations |
 | — | **— Sprint 6 (target v1.9.61) —** | — | — | — |
-| 28 | S13-1: Extract `ui/tabs/` package (tab builder family ~3,000 lines) | 6 | v1.9.61 | `_build_tabs`, `_build_m1_tab`, `_build_logger_tab` etc. → `ui/tabs/scan_tabs.py` etc.; dashboard.py target 7,000 lines |
-| 29 | S13-2: Complete `_build_help_tab()` extraction to `ui/help.py` | 6 | v1.9.61 | Remaining 585 lines from S1-3 partial; removes `_section()/_entry()` from dashboard.py |
-| 30 | S13-3: Extract `_build_header()` to `ui/header.py` | 6 | v1.9.61 | Frameless-window concern, ~500 lines |
-| 31 | S13-4: Extract settings persistence to `ui/app_settings.py` | 6 | v1.9.61 | `_restore_settings`, `_save_settings` → ~250 lines |
-| 32 | S13-5b: Tighten dashboard.py budget to 7,200 post-S13-1 | 6 | v1.9.61 | Step-wise toward final 3,000-line target |
-| 33 | S14-1: Complete home_page.py split (2,747 → ≤1,200) | 6 | v1.9.61 | Extract 6 section widgets as QWidget subclasses to `ui/widgets/home_widgets.py` |
-| 34 | S14-2: Complete hardware_integration_page.py (1,701 → ≤900) | 6 | v1.9.61 | Extract guide section → `ui/widgets/plugin_guide.py` |
-| 35 | S15-2: Split hub_card.py (1,902 → ≤900 + helpers) | 6 | v1.9.61 | Helper functions → `ui/widgets/hub_helpers.py`; no circular imports |
-| 36 | S15-3: Document mock-patch canonical locations in tests/CLAUDE.md | 6 | v1.9.61 | Add "Mock target: ui.widgets.hub_card.*" note |
-| 37 | S7-1: Lazy-import audit | 6 | v1.9.61 | Move heavy optional imports inside functions (RULE-AH4) |
-| 38 | S7-2: Startup profiling script | 6 | v1.9.61 | `tools/startup_profile.py` — stage timing output |
-| 39 | S7-3: Debug log rotation | 6 | v1.9.61 | Keep last 5 launch logs; symlink/copy to netsentinel_debug.log |
-| 40 | S4-2: Pre-commit check update (RULE-APM1: edit .apm/instructions/) | 6 | v1.9.61 | Add Step 0 to development-rules.instructions.md commit gate |
-| 41 | S8-3: Version history update in project-vision.md | 6 | v1.9.61 | v1.9.40 → v1.9.59 condensed history |
+| 28 | ✅ S13-1: Extract `ui/tabs.py` — `TabBuilderMixin` | 6 | v1.9.61 | `_build_tabs`, `_build_m1_tab`–`_build_advanced_tools_tab` etc. → `TabBuilderMixin`; dashboard.py 9,776→6,540 lines (−3,236) |
+| 29 | ✅ S13-2: Complete `_build_help_tab()` extraction to `ui/help.py` | 6 | v1.9.61 | 587-line method extracted as `build_help_tab(window)`; `_page_header` helper moved too |
+| 30 | ✅ S13-3: Extract `AppHeaderMixin` to `ui/header.py` | 6 | v1.9.61 | `_build_header`, `_DragHeader`, `_install_snap_subclass`, `_install_edge_grips`, `_build_update_bar`, etc. → `AppHeaderMixin` (659 lines) |
+| 31 | ✅ S13-4: Extract settings persistence to `ui/app_settings.py` | 6 | v1.9.61 | `save_settings()`, `restore_settings()`, `center_on_screen()` extracted; dashboard.py −166 lines |
+| 32 | ✅ S13-5b: Tighten dashboard.py budget to 6,740 (actual 6,540+200) | 6 | v1.9.61 | Far exceeded target of 7,200; budget updated in test_module_loc.py |
+| 33 | S14-1: Complete home_page.py split (2,747 → ≤1,200) | 7 | v1.9.62 | Deferred — monolithic _setup_ui() needs careful extraction; moved to Sprint 7 |
+| 34 | S14-2: Complete hardware_integration_page.py (1,934 → ≤900) | 7 | v1.9.62 | Deferred — guide section (~120 lines) insufficient to reach target; moved to Sprint 7 |
+| 35 | ✅ S15-2: Split hub_card.py → hub_helpers.py (2,209 → 1,665 lines) | 6 | v1.9.61 | Pure helpers extracted to `ui/widgets/hub_helpers.py` (577 lines); patch targets updated in 3 test files |
+| 36 | ✅ S15-3: Document mock-patch canonical locations in tests/CLAUDE.md | 6 | v1.9.61 | Section added; hub_card vs hub_helpers re-export relationship documented |
+| 37 | ✅ S7-1: Lazy-import audit | 6 | v1.9.61 | All optional imports already guarded; `requests` in deco_client/zte_client is a required dep — no violations |
+| 38 | ✅ S7-2: Startup profiling script | 6 | v1.9.61 | `tools/startup_profile.py` created — stage timing with 3 s threshold warning |
+| 39 | ✅ S7-3: Debug log rotation | 6 | v1.9.61 | `tools/debug_launch.py` rotates to `netsentinel_debug_YYYYMMDD_HHMMSS.log`; last 5 kept |
+| 40 | ✅ S4-2: Pre-commit Step 0 added to CLAUDE.md commit gate | 6 | v1.9.61 | `test_codeql_prevention.py` + `test_interactive_states.py` run before full suite |
+| 41 | ✅ S8-3: Version history in CLAUDE.md updated | 6 | v1.9.61 | Sprint summary table v1.9.40–v1.9.60 added to CLAUDE.md |
 | — | **— Sprint 7+ (target v1.9.62+) —** | — | — | — |
 | 42 | S14-3 follow-up: Split notifications_page.py (1,812) | 7 | v1.9.62 | Extract per-channel config panels |
 | 43 | S14-3 follow-up: Split log_hub_page.py (1,648) | 7 | v1.9.62 | Extract `LogSourcePanel` base class |
@@ -1083,7 +1083,7 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
 *Re-audited 2026-05-30 post-Sprint-4 (13 new findings added, S13/S14/S15 sections added).*
-*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6 target: v1.9.61.  Sprint 7 target: v1.9.62.*
+*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6: v1.9.61.  Sprint 7 target: v1.9.62.*
 
 **Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes → `ui/nav/rail.py`; −683 lines), S11-1 (PAGE_HELP duplicate key fixed), S11-4 (CI parity gates added).
 
@@ -1091,4 +1091,6 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 **Sprint 5 delivered (2026-05-30):** S15-1+S13-5a (LOC gate updated: 9 new entries, dashboard budget tightened to 11,312), S2-1 (metric_store split: schema+queries extracted; 623+449+547 lines; WAL/VACUUM/busy_timeout health improvements), S2-2 (report_exporter split: report_html+report_pdf; 716+376+118 lines), S2-3 (utils split: utils_net+utils_platform; 421+458+171 lines), S2-4+S6-4 (90 new tests across 5 new test files), S5-2 (test_worker_lifecycle_full.py; HwDetect+Plugin+WiFiMonitor workers), S5-3 (scan_worker queue-drain patterns confirmed safe). 2226 tests pass, 4 skipped.
 
-**Sprint 6 queue:** S13-1 (extract ui/tabs/ package; dashboard.py →7,000 lines), S13-2 (complete _build_help_tab() → ui/help.py), S13-3 (_build_header() → ui/header.py), S13-4 (settings persistence → ui/app_settings.py), S13-5b (tighten dashboard budget to 7,200), S14-1 (home_page.py split: 6 section widgets → home_widgets.py; target 1,200 lines), S14-2 (hardware_integration_page.py → ≤900; guide section → plugin_guide.py), S15-2 (hub_card.py helper functions → hub_helpers.py), S15-3 (mock-patch canonical locations in tests/CLAUDE.md), S7-1 (lazy-import audit), S7-2 (startup profiling script), S7-3 (debug log rotation), S4-2 (pre-commit check update), S8-3 (version history update).
+**Sprint 6 delivered (2026-05-30):** S13-1 (TabBuilderMixin → `ui/tabs.py`; dashboard.py 9,776→6,540 lines, −3,236), S13-2 (build_help_tab → `ui/help.py`; −587 lines), S13-3 (AppHeaderMixin → `ui/header.py`; −659 lines), S13-4 (settings persistence → `ui/app_settings.py`; −166 lines), S13-5b (dashboard budget tightened to 6,740), S15-2 (hub_helpers.py from hub_card.py; hub_card.py 2,209→1,665), S15-3 (mock-patch docs in tests/CLAUDE.md), S7-1 (lazy-import audit — clean), S7-2 (tools/startup_profile.py), S7-3 (debug_launch.py log rotation), S4-2 (Step 0 pre-commit gate), S8-3 (version history table in CLAUDE.md). 2231 tests pass, 4 skipped.
+
+**Sprint 7 queue:** S14-1 (home_page.py split: monolithic _setup_ui() → 6 QWidget subclasses in home_widgets.py; target 1,200 lines), S14-2 (hardware_integration_page.py → ≤900; guide section → plugin_guide.py), S14-3 (notifications_page.py, log_hub_page.py, settings_page.py splits), S13-5c (tighten dashboard budget toward 5,000), remaining recon tab builder extractions from tabs.py (3,302 lines).

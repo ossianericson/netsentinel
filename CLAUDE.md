@@ -345,9 +345,22 @@ Both goals are served by the same core property: zero prior knowledge required. 
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v1.9.60**
+Current version: **v1.9.61**
 
-Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42 → v1.9.53 → v1.9.54 → v1.9.54 → v1.9.55 → v1.9.56 → v1.9.56 → v1.9.57 → v1.9.59 → v1.9.59 → v1.9.60
+Version history (condensed, with sprint focus):
+
+| Version | Sprint focus |
+|---|---|
+| v1.9.40 | Initial PyInstaller packaging and WinGet distribution |
+| v1.9.41–v1.9.42 | Speed test cascade (Ookla → speedtest-cli → pure-Python) |
+| v1.9.48–v1.9.52 | Plugin ecosystem: multi-instance support, health tracking, signed plugins (PLUGIN_ECOSYSTEM_PLAN) |
+| v1.9.53–v1.9.54 | Plugin robustness: circuit-breaker, auth error classification, startup smoke-check (PLUGIN_ROBUSTNESS_PLAN) |
+| v1.9.55 | Dashboard nav rail, rail icons, pinned section, breadcrumb strip |
+| v1.9.56 | Stability Sprint 1: test suite green (S0), CodeQL prevention gate (S4-1) |
+| v1.9.57 | Stability Sprint 2: PyInstaller spec integrity (S12), Feature Guide completeness (S11) |
+| v1.9.58 | Stability Sprint 3: nav widget extraction to ui/nav/ (S1-1, −683 lines), discoverability CI gates |
+| v1.9.59 | Stability Sprint 4: scan-result wiring extraction (S1-2, −1,163 lines), HubCard/OverviewTile splits |
+| v1.9.60 | Stability Sprint 5: module splits (metric_store, report_exporter, utils), MetricStore health (WAL/VACUUM/busy_timeout), worker lifecycle tests |
 
 ---
 
@@ -524,6 +537,14 @@ Version history (condensed): v1.9.40 → v1.9.41 → v1.9.42 → v1.9.53 → v1.
 ## COMMIT GATE — Mandatory Before Every Commit or Push
 
 **These steps are BLOCKING. Do not commit, tag, or push until ALL are complete.**
+
+### Step 0 — Run static checks (before tests)
+```powershell
+python -m pytest tests/test_codeql_prevention.py tests/test_interactive_states.py -q
+```
+Both tests catch categories that CI catches too late: bare-except blocks, unused imports,
+URL substring comparisons, and inline button stylesheets missing `:pressed` colour rules.
+Fix any failures before proceeding to Step 1.
 
 ### Step 1 — Run the full test suite
 ```powershell
