@@ -110,6 +110,16 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Feature guide with filter bar + feature card widget.  Split target (S14-3):
     #   extract feature card widget → feature_card.py
     "pages/discover_page.py": 1400,  # actual 1,358 + margin (S14-3 tracking)
+
+    # Landing page — hero, suggestions, tips, dashboard strip, GettingStartedCard, FreshnessStrip.
+    # Sprint 7 (S14-1): FreshnessStrip + GettingStartedCard + 3 standalone classes extracted
+    #   to ui/widgets/home_widgets.py; home_page.py 3,032 → 2,238 lines.
+    # Next target: extract RecurringSection and HeroCard sections from _setup_ui() → ≤1,500 lines.
+    "pages/home_page.py": 2440,  # actual 2,238 + 200 margin (Sprint 7 S14-1)
+
+    # home_widgets.py grew in Sprint 7 (S14-1) to hold extracted classes.
+    # Further split: move welcome pages to their own files if > 1,500 lines.
+    "widgets/home_widgets.py": 1370,  # actual 1,166 + 200 margin (Sprint 7 S14-1)
 }
 
 UI_DEFAULT_BUDGET = 1000  # stricter than modules for new UI files

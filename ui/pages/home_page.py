@@ -62,6 +62,8 @@ from ui.widgets.home_widgets import (
     _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker,
     _GRADE_HISTORY_KEY, _GRADE_HISTORY_MAX,
     _append_grade_history, _load_grade_history, _bundled_plugin_path,
+    FreshnessStrip, GettingStartedCard,
+    _GradeBreakdownDialog, StandardWelcomePage, ProWelcomePage,
 )
 
 
@@ -344,152 +346,6 @@ class HomePage(QWidget):
 
         return banner
 
-    # â”€â”€ Freshness strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    def _build_freshness_strip(self) -> QFrame:
-        strip = QFrame()
-        strip.setObjectName("freshnessStrip")
-        strip.setFixedHeight(30)
-        strip.setStyleSheet(
-            f"QFrame#freshnessStrip {{ background:{NAV_BAR}; border-bottom:1px solid {BORDER}; }}"
-        )
-        row = QHBoxLayout(strip)
-        row.setContentsMargins(14, 0, 8, 0)
-        row.setSpacing(12)
-
-        # Last scan timestamp
-        self._fs_scan_lbl = QLabel("Last scan: â€”")
-        self._fs_scan_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
-        row.addWidget(self._fs_scan_lbl)
-
-        _sep = QLabel("|")
-        _sep.setStyleSheet(f"font-size:11px; color:{BORDER}; background:transparent; border:none;")
-        row.addWidget(_sep)
-
-        # Monitor status pills
-        self._fs_pill_arp   = self._make_fs_pill("ARP")
-        self._fs_pill_dhcp  = self._make_fs_pill("DHCP")
-        self._fs_pill_storm = self._make_fs_pill("Storm")
-        self._fs_pill_log   = self._make_fs_pill("Logger")
-        for pill in (self._fs_pill_arp, self._fs_pill_dhcp, self._fs_pill_storm, self._fs_pill_log):
-            row.addWidget(pill)
-
-        _sep2 = QLabel("|")
-        _sep2.setStyleSheet(f"font-size:11px; color:{BORDER}; background:transparent; border:none;")
-        row.addWidget(_sep2)
-
-        # SCHED-2: next scheduled scan label
-        self._fs_next_scan_lbl = QLabel("")
-        self._fs_next_scan_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
-        row.addWidget(self._fs_next_scan_lbl)
-        self._refresh_next_scan_label()
-
-        row.addStretch()
-
-        # SCAN-2: per-host scan progress label (hidden when idle)
-        self._scan_progress_lbl = QLabel("")
-        self._scan_progress_lbl.setStyleSheet(
-            f"font-size:10px; color:{AMBER}; background:transparent; border:none;"
-        )
-        self._scan_progress_lbl.setVisible(False)
-        row.addWidget(self._scan_progress_lbl)
-
-        # Refresh button
-        self._fs_refresh_btn = QPushButton("â†»")
-        self._fs_refresh_btn.setFixedSize(24, 22)
-        self._fs_refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._fs_refresh_btn.setToolTip("Rescan network")
-        self._fs_refresh_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
-            f" font-size:14px; border-radius:3px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:{BORDER}; }}"
-        )
-        self._fs_refresh_btn.clicked.connect(self.rescan_requested)
-        row.addWidget(self._fs_refresh_btn)
-
-        # Restore last scan time from QSettings on startup
-        qs = QSettings("NetSentinel", "NetSentinel")
-        _ts = qs.value("home/last_scan_ts", "")
-        if _ts:
-            try:
-                _dt = datetime.datetime.fromisoformat(_ts)
-                self._fs_scan_lbl.setText(f"Last scan: {self._fmt_age(_dt)}")
-            except ValueError:
-                pass
-
-        return strip
-
-    @staticmethod
-    def _make_fs_pill(label: str) -> QLabel:
-        lbl = QLabel(f"â—‹ {label}")
-        lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
-        return lbl
-
-    @staticmethod
-    def _fmt_age(dt: "datetime.datetime") -> str:
-        delta = datetime.datetime.now() - dt
-        secs = int(delta.total_seconds())
-        if secs < 60:
-            return "just now"
-        if secs < 3600:
-            return f"{secs // 60} min ago"
-        if secs < 86400:
-            h = secs // 3600
-            return f"{h} hour{'s' if h != 1 else ''} ago"
-        d = secs // 86400
-        return f"{d} day{'s' if d != 1 else ''} ago"
-
-    def _update_freshness_strip(self, arp: bool = False, dhcp: bool = False,
-                                 storm: bool = False, logger: bool = False) -> None:
-        def _set_pill(pill: QLabel, active: bool, name: str) -> None:
-            if active:
-                pill.setText(f"â— {name}")
-                pill.setStyleSheet(
-                    f"font-size:10px; color:{GREEN}; background:transparent; border:none;"
-                )
-            else:
-                pill.setText(f"â—‹ {name}")
-                pill.setStyleSheet(
-                    f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-                )
-
-        _set_pill(self._fs_pill_arp,   arp,    "ARP")
-        _set_pill(self._fs_pill_dhcp,  dhcp,   "DHCP")
-        _set_pill(self._fs_pill_storm, storm,  "Storm")
-        _set_pill(self._fs_pill_log,   logger, "Logger")
-
-    def _refresh_next_scan_label(self) -> None:
-        """SCHED-2: update the 'Next scan' label in the freshness strip."""
-        if not hasattr(self, "_fs_next_scan_lbl"):
-            return
-        from PyQt6.QtCore import QSettings
-        import time as _t, datetime as _dt
-        qs = QSettings("NetSentinel", "NetSentinel")
-        if not qs.value("sched_scan/enabled", False, bool):
-            self._fs_next_scan_lbl.setVisible(False)
-            return
-        next_ts = float(qs.value("sched_scan/next_ts", 0))
-        self._fs_next_scan_lbl.setVisible(True)
-        if next_ts > _t.time():
-            nxt = _dt.datetime.fromtimestamp(next_ts)
-            now = _dt.datetime.now()
-            if nxt.date() == now.date():
-                self._fs_next_scan_lbl.setText(f"Next scan: today {nxt.strftime('%H:%M')}")
-            elif (nxt.date() - now.date()).days == 1:
-                self._fs_next_scan_lbl.setText(f"Next scan: tomorrow {nxt.strftime('%H:%M')}")
-            else:
-                self._fs_next_scan_lbl.setText(f"Next scan: {nxt.strftime('%a %H:%M')}")
-        else:
-            self._fs_next_scan_lbl.setText("Next scan: pending")
-
-    # â”€â”€ UI build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _setup_ui(self) -> None:
         self.setObjectName("homePageRoot")
@@ -505,7 +361,8 @@ class HomePage(QWidget):
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         # â”€â”€ Freshness strip â€” always visible above scroll area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        self._freshness_strip = self._build_freshness_strip()
+        self._freshness_strip = FreshnessStrip()
+        self._freshness_strip.rescan_requested.connect(self.rescan_requested)
         outer.addWidget(self._freshness_strip)
 
         scroll = QScrollArea()
@@ -570,7 +427,9 @@ class HomePage(QWidget):
         lay.addWidget(self._dashboard_strip)
 
         # â”€â”€ GETTING STARTED checklist (replaces separate hw strip) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        self._setup_card_top = self._build_getting_started_card()
+        self._setup_card_top = GettingStartedCard()
+        self._setup_card_top.add_plugin_requested.connect(self.add_plugin_requested)
+        self._setup_card_top.navigate_to.connect(self.navigate_to)
         lay.addWidget(self._setup_card_top)
 
         # â”€â”€ Since you were last here (hidden until data loaded) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1528,8 +1387,14 @@ class HomePage(QWidget):
 
     @pyqtSlot()
     def refresh_hw_strip(self) -> None:
-        """Compatibility shim â€” delegates to refresh_checklist."""
+        """Compatibility shim -- delegates to refresh_checklist."""
         self.refresh_checklist()
+
+    def refresh_checklist(self) -> None:
+        """Delegate to the GettingStartedCard widget."""
+        if hasattr(self, "_setup_card_top"):
+            self._setup_card_top.refresh_checklist(self._device_count)
+
 
     def _dismiss_tips(self) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("home/tips_dismissed", True)
@@ -1603,7 +1468,7 @@ class HomePage(QWidget):
             return
         qs = QSettings("NetSentinel", "NetSentinel")
         scan_count = int(qs.value("home/scan_count", 0))
-        if scan_count >= 5 and all(self._checklist_states().values()):
+        if scan_count >= 5 and all(self._setup_card_top._checklist_states(self._device_count).values()):
             self._apply_recurring_layout(True)
 
     def _apply_recurring_layout(self, on: bool) -> None:
@@ -1725,7 +1590,7 @@ class HomePage(QWidget):
                 )
         if any([arp, dhcp, storm, logger]):
             self._monitoring_nudge.setVisible(False)
-        self._update_freshness_strip(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
+        self._freshness_strip.update_freshness(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
         # Sync recurring section pills
         _rec_map = [
             (self._rec_pill_arp,    arp,    "ARP Watch"),
@@ -1871,244 +1736,9 @@ class HomePage(QWidget):
 
     def _scroll_to_setup_card(self) -> None:
         """Scroll to / expand the Getting Started card."""
-        card = getattr(self, "_setup_card_top", None) or getattr(self, "_setup_card", None)
-        if card:
-            card.setVisible(True)
-        if getattr(self, "_setup_collapsed", False):
-            self._setup_toggle_collapse()
+        if hasattr(self, "_setup_card_top"):
+            self._setup_card_top.ensure_expanded()
 
-    # â”€â”€ Getting Started checklist builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    def _build_getting_started_card(self) -> "QFrame":
-        """Build the unified Getting Started onboarding card."""
-        from pathlib import Path as _P
-
-        card = QFrame()
-        card.setObjectName("gettingStartedCard")
-        card.setStyleSheet(
-            f"QFrame#gettingStartedCard {{"
-            f" background:{BG_CARD};"
-            f" border:1px solid {BORDER};"
-            f" border-left:3px solid {ACCENT};"
-            f" border-radius:{CARD_RADIUS};"
-            f"}}"
-        )
-        outer = QVBoxLayout(card)
-        outer.setContentsMargins(14, 10, 12, 12)
-        outer.setSpacing(0)
-
-        self._setup_collapsed = False
-        hdr_row = QHBoxLayout()
-        hdr_row.setSpacing(8)
-
-        self._setup_hdr_lbl = QLabel("GETTING STARTED")
-        self._setup_hdr_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:700; color:{ACCENT};"
-            " background:transparent; border:none; letter-spacing:1.5px;"
-        )
-        self._setup_progress_lbl = QLabel("")
-        self._setup_progress_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
-        )
-        self._setup_collapse_btn = QPushButton("â–¼")
-        self._setup_collapse_btn.setFixedSize(18, 18)
-        self._setup_collapse_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._setup_collapse_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:10px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
-        self._setup_collapse_btn.clicked.connect(self._setup_toggle_collapse)
-        hdr_row.addWidget(self._setup_hdr_lbl)
-        hdr_row.addWidget(self._setup_progress_lbl)
-        hdr_row.addStretch()
-        hdr_row.addWidget(self._setup_collapse_btn)
-        outer.addLayout(hdr_row)
-
-        self._setup_body = QWidget()
-        self._setup_body.setStyleSheet("background:transparent;")
-        body_lay = QVBoxLayout(self._setup_body)
-        body_lay.setContentsMargins(0, 8, 0, 0)
-        body_lay.setSpacing(0)
-
-        zte_path  = _bundled_plugin_path("zte_plugin.py")
-        deco_path = _bundled_plugin_path("deco_plugin.py")
-
-        # (key, title, subtitle, plugin_path_or_None, nav_target_or_None)
-        _STEPS = [
-            ("hw_zte",  "Connect 5G Modem",       "ZTE MC889 â€” signal data in every speed test",  zte_path,  None),
-            ("hw_deco", "Connect Mesh Router",     "Deco XE75 â€” real hostnames in Devices & Map", deco_path, None),
-            ("scan",    "Run your first scan",     "Discover all devices on your network",          None,     "Devices"),
-            ("grade",   "Run a Network Grade",     "Score your network across 8 dimensions",        None,     "Network Grade"),
-            ("arp",     "Turn on ARP Spoof Watch", "Detect address spoofing in real time",           None,     "ARP Spoof Watch"),
-        ]
-
-        self._setup_check_lbls: dict[str, QLabel]       = {}
-        self._setup_step_rows:  dict[str, QWidget]      = {}
-        self._setup_step_btns:  dict[str, QPushButton]  = {}
-        _hw_keys = {"hw_zte", "hw_deco"}
-        prev_section = None
-
-        for key, title, subtitle, plugin_path, nav_target in _STEPS:
-            section = "hw" if key in _hw_keys else "core"
-            if section != prev_section:
-                if prev_section == "hw":
-                    sep = QFrame()
-                    sep.setFrameShape(QFrame.Shape.HLine)
-                    sep.setStyleSheet(f"border:none; border-top:1px solid {BORDER};")
-                    sep.setFixedHeight(1)
-                    body_lay.addSpacing(4)
-                    body_lay.addWidget(sep)
-                    body_lay.addSpacing(4)
-                sec_lbl = QLabel("HARDWARE CONNECTIONS" if section == "hw" else "CORE SETUP")
-                sec_lbl.setStyleSheet(
-                    f"font-size:9px; font-weight:600; color:{TEXT_MUTED};"
-                    " background:transparent; border:none; letter-spacing:0.8px;"
-                    " padding-bottom:2px;"
-                )
-                body_lay.addWidget(sec_lbl)
-                prev_section = section
-
-            row = QWidget()
-            row.setObjectName(f"setupRow_{key}")
-            row.setStyleSheet("background:transparent;")
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(0, 3, 0, 3)
-            rl.setSpacing(8)
-
-            chk = QLabel("â—‹")
-            chk.setFixedWidth(14)
-            chk.setStyleSheet(
-                f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
-            )
-            self._setup_check_lbls[key] = chk
-
-            text_col = QVBoxLayout()
-            text_col.setSpacing(1)
-            title_lbl = QLabel(title)
-            title_lbl.setStyleSheet(
-                f"font-size:11px; font-weight:500; color:{TEXT_PRIMARY};"
-                " background:transparent; border:none;"
-            )
-            sub_lbl = QLabel(subtitle)
-            sub_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
-            text_col.addWidget(title_lbl)
-            text_col.addWidget(sub_lbl)
-
-            if plugin_path:
-                btn = QPushButton("Add â†’")
-                btn.setFixedHeight(24)
-                btn.setFixedWidth(72)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet(
-                    f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-                    f" border-radius:3px; font-size:10px; font-weight:600; padding:0 8px; }}"
-                    f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-                    f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-                )
-                _p = plugin_path
-                btn.clicked.connect(lambda _=False, p=_p: self.add_plugin_requested.emit(p))
-            else:
-                btn = QPushButton("â†’")
-                btn.setFlat(True)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet(
-                    f"QPushButton {{ color:{ACCENT}; font-size:14px; background:transparent;"
-                    f" border:none; padding:0 4px; }}"
-                    f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
-                    f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
-                )
-                _t = nav_target
-                btn.clicked.connect(lambda _=False, t=_t: self.navigate_to.emit(t))
-
-            self._setup_step_btns[key] = btn
-            self._setup_step_rows[key] = row
-
-            rl.addWidget(chk)
-            rl.addLayout(text_col, 1)
-            rl.addWidget(btn)
-            body_lay.addWidget(row)
-
-        outer.addWidget(self._setup_body)
-        # Keep _setup_card alias for legacy references
-        self._setup_card = card
-        return card
-
-    def _setup_toggle_collapse(self) -> None:
-        self._setup_collapsed = not self._setup_collapsed
-        self._setup_body.setVisible(not self._setup_collapsed)
-        self._setup_collapse_btn.setText("â–¶" if self._setup_collapsed else "â–¼")
-
-    def _checklist_states(self) -> dict:
-        import json as _json
-        qs = QSettings("NetSentinel", "NetSentinel")
-        try:
-            imported = set(_json.loads(qs.value("hardware/custom_scripts", "[]") or "[]"))
-        except Exception:
-            imported = set()
-        zte_path  = _bundled_plugin_path("zte_plugin.py")
-        deco_path = _bundled_plugin_path("deco_plugin.py")
-        return {
-            "hw_zte":  zte_path  in imported,
-            "hw_deco": deco_path in imported,
-            "scan":    self._device_count > 0,
-            "grade":   qs.value("grade/last_run", False, type=bool),
-            "arp":     qs.value("home/setup/arp_started", False, type=bool),
-        }
-
-    def refresh_checklist(self) -> None:
-        """Re-read step states and update checklist UI."""
-        if not hasattr(self, "_setup_check_lbls"):
-            return
-        states = self._checklist_states()
-        done_count = sum(states.values())
-        total = len(states)
-        for key, chk in self._setup_check_lbls.items():
-            done = states.get(key, False)
-            if done:
-                chk.setText("âœ“")
-                chk.setStyleSheet(
-                    f"font-size:13px; color:{GREEN}; background:transparent; border:none;"
-                )
-                # Dim the action button once done
-                btn = self._setup_step_btns.get(key)
-                if btn:
-                    btn.setEnabled(False)
-                    if key.startswith("hw_"):
-                        btn.setText("âœ“ Added")
-                    btn.setStyleSheet(
-                        f"QPushButton {{ color:{GREEN}; font-size:10px; background:transparent;"
-                        f" border:none; padding:0 4px; }}"
-                        f"QPushButton:hover   {{ color:{GREEN}; background:transparent; }}"
-                        f"QPushButton:pressed {{ color:{GREEN}; background:transparent; }}"
-                        f"QPushButton:disabled {{ color:{GREEN}; background:transparent; }}"
-                    )
-            else:
-                chk.setText("â—‹")
-                chk.setStyleSheet(
-                    f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
-                )
-        self._setup_progress_lbl.setText(f"{done_count}/{total} done")
-        all_done = done_count == total
-        if all_done:
-            self._setup_hdr_lbl.setText("âœ“ SETUP COMPLETE")
-            self._setup_hdr_lbl.setStyleSheet(
-                f"font-size:10px; font-weight:700; color:{GREEN};"
-                " background:transparent; border:none; letter-spacing:1.5px;"
-            )
-            from PyQt6.QtCore import QTimer as _QT
-            _QT.singleShot(2000, lambda: (
-                getattr(self, "_setup_card_top", None) or getattr(self, "_setup_card", None)
-            ) and (getattr(self, "_setup_card_top", None) or self._setup_card).setVisible(False))
-        else:
-            self._setup_hdr_lbl.setText("GETTING STARTED")
-            self._setup_hdr_lbl.setStyleSheet(
-                f"font-size:10px; font-weight:700; color:{ACCENT};"
-                " background:transparent; border:none; letter-spacing:1.5px;"
-            )
 
     def refresh_diag_summary(self) -> None:
         import json as _json_mod
@@ -2159,18 +1789,13 @@ class HomePage(QWidget):
         else:
             self._update_scan_button_label()
             self._hero_sub.setText("Discover devices Â· check stability Â· detect threats")
-            self._scan_progress_lbl.setVisible(False)
-            self._scan_progress_lbl.setText("")
+            self._freshness_strip.set_scan_progress("")
 
     @pyqtSlot(str)
     def set_scan_progress(self, message: str) -> None:
         """Show per-host scan status in the freshness strip (SCAN-2)."""
-        if not message:
-            self._scan_progress_lbl.setVisible(False)
-            return
-        text = message if len(message) <= 60 else message[:57] + "â€¦"
-        self._scan_progress_lbl.setText(text)
-        self._scan_progress_lbl.setVisible(True)
+        self._freshness_strip.set_scan_progress(message)
+
 
     # â”€â”€ Startup preload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -2240,9 +1865,9 @@ class HomePage(QWidget):
         _now = datetime.datetime.now()
         self._last_scan_ts = _now
         QSettings("NetSentinel", "NetSentinel").setValue("home/last_scan_ts", _now.isoformat())
-        self._fs_scan_lbl.setText(f"Last scan: just now")
-        self._fs_scan_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        self._freshness_strip.set_scan_timestamp(
+            "Last scan: just now",
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;",
         )
 
         devices = result.get("devices", [])
@@ -2611,422 +2236,3 @@ class HomePage(QWidget):
         dlg.exec()
 
 
-class _GradeBreakdownDialog:
-    """QDialog showing the grade sub-score breakdown."""
-
-    def __new__(cls, grade: str, dimensions: list, parent=None):
-        from PyQt6.QtWidgets import (
-            QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-            QScrollArea, QWidget, QFrame, QPushButton,
-        )
-        from PyQt6.QtCore import Qt
-        from ui.styles import (
-            ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, GREEN, RED,
-            TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-        )
-
-        _GRADE_COLOR = {
-            "A": GREEN, "B": "#4CAF8A", "C": AMBER, "D": RED, "F": RED,
-        }
-
-        dlg = QDialog(parent)
-        dlg.setWindowTitle("Network Grade Breakdown")
-        dlg.setMinimumWidth(440)
-        dlg.setStyleSheet(f"QDialog {{ background:{BG_DARK}; }}")
-
-        lay = QVBoxLayout(dlg)
-        lay.setContentsMargins(20, 16, 20, 16)
-        lay.setSpacing(12)
-
-        # Header
-        hdr_row = QHBoxLayout()
-        overall_lbl = QLabel(grade)
-        _fg = _GRADE_COLOR.get(grade, TEXT_SECONDARY)
-        overall_lbl.setStyleSheet(
-            f"font-size:36px; font-weight:bold; color:{_fg};"
-            f" background:{BG_CARD}; border:3px solid {_fg}; border-radius:28px;"
-            f" min-width:56px; min-height:56px;"
-        )
-        overall_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        overall_lbl.setFixedSize(56, 56)
-        hdr_text = QLabel(
-            "<b>Network Grade Breakdown</b><br>"
-            f"<span style='font-size:11px; color:{TEXT_SECONDARY};'>"
-            "Hover each row for thresholds. The lowest score determines the overall grade.</span>"
-        )
-        hdr_text.setTextFormat(Qt.TextFormat.RichText)
-        hdr_text.setWordWrap(True)
-        hdr_text.setStyleSheet(f"background:transparent; border:none; color:{TEXT_PRIMARY};")
-        hdr_row.addWidget(overall_lbl)
-        hdr_row.addSpacing(12)
-        hdr_row.addWidget(hdr_text, 1)
-        lay.addLayout(hdr_row)
-
-        # "Biggest improvement" tip â€” amber framed block at the top
-        _grade_rank = {"A": 0, "B": 1, "C": 2, "D": 3, "F": 4, "N/A": 5}
-        worst_dim = max(dimensions, key=lambda d: _grade_rank.get(getattr(d, "grade", "N/A"), 5)) if dimensions else None
-        _DIM_NAV = {
-            "Connection Uptime":          "DNS & Stability",
-            "Average Latency":            "DNS & Stability",
-            "Jitter (Call Quality)":      "Bandwidth Usage",
-            "DNS Response Speed":         "DNS & Stability",
-            "Download Speed":             "Speed Test",
-            "Network Device Safety":      "Port Scan (TCP)",
-            "Spanning Tree (STP) Health": "Rogue Bridge (STP)",
-            "Broadcast Storm Level":      "Broadcast Storm",
-        }
-        if worst_dim and getattr(worst_dim, "tip", ""):
-            _tip_frame = QFrame()
-            _tip_frame.setObjectName("gradeTipFrame")
-            _tip_frame.setStyleSheet(
-                f"QFrame#gradeTipFrame {{ background:{AMBER}1A; border:1px solid {AMBER}44;"
-                f" border-left:3px solid {AMBER}; border-radius:4px; }}"
-            )
-            _tip_vlay = QVBoxLayout(_tip_frame)
-            _tip_vlay.setContentsMargins(12, 8, 10, 8)
-            _tip_vlay.setSpacing(4)
-            _tip_hdr = QLabel("Biggest improvement")
-            _tip_hdr.setStyleSheet(
-                f"font-size:11px; font-weight:bold; color:{AMBER};"
-                f" background:transparent; border:none;"
-            )
-            _tip_body = QLabel(worst_dim.tip)
-            _tip_body.setWordWrap(True)
-            _tip_body.setStyleSheet(
-                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-            )
-            _tip_vlay.addWidget(_tip_hdr)
-            _tip_vlay.addWidget(_tip_body)
-            _nav_target = _DIM_NAV.get(getattr(worst_dim, "name", ""), "")
-            if _nav_target:
-                _tip_cta = QPushButton(f"Go to {_nav_target} â†’")
-                _tip_cta.setFlat(True)
-                _tip_cta.setCursor(Qt.CursorShape.PointingHandCursor)
-                _tip_cta.setStyleSheet(
-                    f"QPushButton {{ background:transparent; color:{AMBER}; border:none;"
-                    f" font-size:11px; font-weight:600; padding:0; text-align:left; }}"
-                    f"QPushButton:hover {{ color:#D97B00; }}"
-                    f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
-                )
-                _nav_sig = getattr(parent, "navigate_to", None)
-                if _nav_sig:
-                    _tip_cta.clicked.connect(lambda _, t=_nav_target: (dlg.accept(), _nav_sig.emit(t)))
-                _tip_vlay.addWidget(_tip_cta)
-            lay.addWidget(_tip_frame)
-
-        # Separator
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"border:none; border-top:1px solid {BORDER};")
-        lay.addWidget(sep)
-
-        # Dimension rows
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background:transparent;")
-        inner = QWidget()
-        inner.setStyleSheet(f"background:{BG_DARK};")
-        il = QVBoxLayout(inner)
-        il.setContentsMargins(0, 0, 0, 0)
-        il.setSpacing(4)
-
-        for dim in dimensions:
-            dg = getattr(dim, "grade", "N/A")
-            dg_color = _GRADE_COLOR.get(dg, TEXT_SECONDARY)
-            row_w = QWidget()
-            row_w.setStyleSheet(
-                f"QWidget {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; }}"
-            )
-            rl = QHBoxLayout(row_w)
-            rl.setContentsMargins(10, 6, 10, 6)
-            rl.setSpacing(10)
-
-            dim_grade_lbl = QLabel(dg)
-            dim_grade_lbl.setFixedSize(28, 28)
-            dim_grade_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            dim_grade_lbl.setStyleSheet(
-                f"font-size:13px; font-weight:bold; color:{dg_color};"
-                f" border:2px solid {dg_color}; border-radius:14px;"
-                f" background:transparent;"
-            )
-            name_lbl = QLabel(getattr(dim, "name", ""))
-            name_lbl.setStyleSheet(
-                f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
-                f" background:transparent; border:none;"
-            )
-            val_lbl = QLabel(getattr(dim, "value_label", ""))
-            val_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-            )
-            if getattr(dim, "tip", ""):
-                row_w.setToolTip(getattr(dim, "tip", ""))
-
-            rl.addWidget(dim_grade_lbl)
-            rl.addWidget(name_lbl)
-            rl.addStretch()
-            rl.addWidget(val_lbl)
-            il.addWidget(row_w)
-
-        il.addStretch()
-        scroll.setWidget(inner)
-        lay.addWidget(scroll, 1)
-
-        # Close button
-        close_btn = QPushButton("Close")
-        close_btn.setFixedHeight(28)
-        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
-            f" border-radius:4px; font-size:11px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}22; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
-        close_btn.clicked.connect(dlg.accept)
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        btn_row.addWidget(close_btn)
-        lay.addLayout(btn_row)
-
-        return dlg
-
-
-# â”€â”€ Standard mode welcome page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-class StandardWelcomePage(QWidget):
-    """
-    Landing page shown when 'Home' is selected in Standard mode.
-    Displays a 2-column feature card grid: 'WHAT EACH SECTION GIVES YOU'.
-    """
-
-    _FEATURES = [
-        ("\u26a1", "Speed test",      AMBER,        ["Download / upload speed",
-                                                      "Ookla or fallback backends",
-                                                      "Historical trend chart"]),
-        ("\u25ce", "DNS & Stability", ACCENT,        ["Live ping + DNS latency graph",
-                                                      "Outage detection & log",
-                                                      "STP reconvergence signature"]),
-        ("\u2295", "Devices",         TEXT_PRIMARY,  ["IP, MAC, vendor, model",
-                                                      "Right-click How to Fix",
-                                                      "Availability history per device"]),
-        ("\u25b2", "Live Bandwidth",  TEXT_PRIMARY,  ["Per-device rx/tx Mbps",
-                                                      "60-second rolling area chart",
-                                                      "Session totals table"]),
-        ("\u25fc", "Network Grade",   TEXT_PRIMARY,  ["A\u2013F across 8 dimensions",
-                                                      "Colour-coded verdict per metric",
-                                                      "Actionable fix tip per grade"]),
-        ("\u2197", "Network Health Report", TEXT_PRIMARY, ["Self-contained HTML export",
-                                                           "MTR hop table + outage log",
-                                                           "Great for ISP support tickets"]),
-    ]
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-
-        inner = QWidget()
-        inner.setObjectName("homepageInner")
-        inner.setStyleSheet(f"QWidget#homepageInner {{ background:{BG_DARK}; }}")
-        scroll.setWidget(inner)
-        outer.addWidget(scroll)
-
-        lay = QVBoxLayout(inner)
-        lay.setContentsMargins(14, 14, 14, 14)
-        lay.setSpacing(12)
-
-        hdr = QLabel("WHAT EACH SECTION GIVES YOU")
-        hdr.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-            " letter-spacing:1px; padding-bottom:2px;"
-        )
-        lay.addWidget(hdr)
-
-        # 2-column grid of feature cards
-        from PyQt6.QtWidgets import QGridLayout
-        grid_w = QWidget()
-        grid_w.setStyleSheet(f"background:{BG_DARK};")
-        grid = QGridLayout(grid_w)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(8)
-
-        for i, (icon, title, icon_colour, bullets) in enumerate(self._FEATURES):
-            card = self._make_card(icon, title, icon_colour, bullets)
-            grid.addWidget(card, i // 2, i % 2)
-
-        lay.addWidget(grid_w)
-        lay.addStretch()
-
-    @staticmethod
-    def _make_card(icon: str, title: str, icon_colour: str,
-                   bullets: list[str]) -> QFrame:
-        card = QFrame()
-        card.setObjectName("nuxFeatureCard")
-        card.setStyleSheet(
-            f"QFrame#nuxFeatureCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-        )
-        card_lay = QVBoxLayout(card)
-        card_lay.setContentsMargins(12, 10, 12, 10)
-        card_lay.setSpacing(6)
-
-        # Icon + title row
-        title_row = QHBoxLayout()
-        title_row.setSpacing(6)
-        icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet(
-            f"font-size:14px; color:{icon_colour}; background:transparent; border:none;"
-        )
-        icon_lbl.setFixedWidth(18)
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
-        )
-        title_row.addWidget(icon_lbl)
-        title_row.addWidget(title_lbl, 1)
-        card_lay.addLayout(title_row)
-
-        for bullet in bullets:
-            b = QLabel(f"\u2022 {bullet}")
-            b.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY};"
-                " background:transparent; border:none; padding-left:4px;"
-            )
-            card_lay.addWidget(b)
-
-        return card
-
-
-# â”€â”€ Pro mode welcome page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-class ProWelcomePage(QWidget):
-    """
-    Landing page shown when 'Home' is selected in Pro mode.
-    Shows an admin-required warning and security audit capability cards.
-    """
-
-    _CAPABILITIES = [
-        ("\u25ce", "Port scanning",       ["\u2022 TCP connect + SYN (Scapy)",
-                                           "\u2022 UDP scanner (DNS/SNMP/NTP)",
-                                           "\u2022 Stealth / normal / fast modes"]),
-        ("\u25ce", "CVE tracker",         ["\u2022 NVD API v2 lookup per host",
-                                           "\u2022 Lifecycle state machine",
-                                           "\u2022 Days-open counter, owner field"]),
-        ("\u25ce", "Threat Intelligence", ["\u2022 Feodo Tracker + Emerging Threats",
-                                           "\u2022 AbuseIPDB v2 lookup",
-                                           "\u2022 Blocklist KPI tiles"]),
-        ("\u25fc", "TLS & exposure",      ["\u2022 Per-host cert expiry monitor",
-                                           "\u2022 WAN / CGNAT / UPnP exposure",
-                                           "\u2022 Cloud metadata probe"]),
-    ]
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-
-        inner = QWidget()
-        inner.setObjectName("homepageInner")
-        inner.setStyleSheet(f"QWidget#homepageInner {{ background:{BG_DARK}; }}")
-        scroll.setWidget(inner)
-        outer.addWidget(scroll)
-
-        lay = QVBoxLayout(inner)
-        lay.setContentsMargins(14, 14, 14, 14)
-        lay.setSpacing(12)
-
-        # Red warning box
-        warn = QFrame()
-        warn.setObjectName("securityWarnFrame")
-        warn.setStyleSheet(
-            f"QFrame#securityWarnFrame {{ background:{PRO_WARN_BG}; border:1px solid {RED}; }}"
-        )
-        warn_lay = QHBoxLayout(warn)
-        warn_lay.setContentsMargins(12, 10, 12, 10)
-        warn_icon = QLabel("\u26a0")
-        warn_icon.setStyleSheet(
-            f"font-size:16px; color:{RED}; background:transparent; border:none;"
-        )
-        warn_icon.setFixedWidth(22)
-        warn_text = QLabel(
-            "Security Audit tools require administrator privileges and Npcap. "
-            "They are intentionally separated from home-user features to avoid confusion."
-        )
-        warn_text.setWordWrap(True)
-        warn_text.setStyleSheet(
-            f"font-size:11px; color:{RED}; background:transparent; border:none;"
-        )
-        warn_lay.addWidget(warn_icon)
-        warn_lay.addWidget(warn_text, 1)
-        lay.addWidget(warn)
-
-        hdr = QLabel("SECURITY AUDIT CAPABILITIES")
-        hdr.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-            " letter-spacing:1px; padding-top:4px; padding-bottom:2px;"
-        )
-        lay.addWidget(hdr)
-
-        # 2-column grid
-        from PyQt6.QtWidgets import QGridLayout
-        grid_w = QWidget()
-        grid_w.setStyleSheet(f"background:{BG_DARK};")
-        grid = QGridLayout(grid_w)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(8)
-
-        for i, (icon, title, bullets) in enumerate(self._CAPABILITIES):
-            card = self._make_card(icon, title, bullets)
-            grid.addWidget(card, i // 2, i % 2)
-
-        lay.addWidget(grid_w)
-        lay.addStretch()
-
-    @staticmethod
-    def _make_card(icon: str, title: str, bullets: list[str]) -> QFrame:
-        card = QFrame()
-        card.setObjectName("secCapabilityCard")
-        card.setStyleSheet(
-            f"QFrame#secCapabilityCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-        )
-        card_lay = QVBoxLayout(card)
-        card_lay.setContentsMargins(12, 10, 12, 10)
-        card_lay.setSpacing(4)
-
-        title_row = QHBoxLayout()
-        title_row.setSpacing(6)
-        icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet(
-            f"font-size:14px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
-        )
-        icon_lbl.setFixedWidth(18)
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            " background:transparent; border:none;"
-        )
-        title_row.addWidget(icon_lbl)
-        title_row.addWidget(title_lbl, 1)
-        card_lay.addLayout(title_row)
-
-        for bullet in bullets:
-            b = QLabel(bullet)
-            b.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY};"
-                " background:transparent; border:none; padding-left:4px;"
-            )
-            card_lay.addWidget(b)
-
-        return card
