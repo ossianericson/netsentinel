@@ -147,6 +147,7 @@ hiddenimports: list = [
     "modules.wifi_scanner",
     # ── ui/ — shell and all page modules ──────────────────────────────────────
     "ui.dashboard",
+    "ui.scan_wiring",
     "ui.nav",
     "ui.nav.rail",
     "ui.command_palette",
@@ -225,6 +226,9 @@ hiddenimports: list = [
     "ui.widgets.context_menu",
     "ui.widgets.density_toggle",
     "ui.widgets.device_popover",
+    "ui.widgets.home_widgets",
+    "ui.widgets.hub_card",
+    "ui.widgets.overview_tile",
     "ui.widgets.page_header",
     "ui.widgets.pulsing_dot",
     "ui.widgets.scan_summary_sheet",

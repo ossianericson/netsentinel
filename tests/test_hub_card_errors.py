@@ -29,7 +29,7 @@ def make_card():
     created = []
 
     def _factory(health: dict, last_result=None):
-        with patch("ui.pages.hardware_integration_page._load_health",
+        with patch("ui.widgets.hub_card._load_health",
                    return_value=dict(health)):
             from ui.pages.hardware_integration_page import HubCard
             card = HubCard(

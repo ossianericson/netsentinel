@@ -41,8 +41,8 @@ def _make_store(initial: dict | None = None):
 
 def test_record_success_increments_counter():
     store, _load, _save = _make_store()
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_success
         h = _record_success("/fake/plugin.py")
 
@@ -55,8 +55,8 @@ def test_record_success_increments_counter():
 
 def test_record_success_resets_consecutive_errors():
     store, _load, _save = _make_store({**_fresh(), "errors": 3, "consecutive": 3})
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_success
         h = _record_success("/fake/plugin.py")
 
@@ -67,8 +67,8 @@ def test_record_success_resets_consecutive_errors():
 
 def test_record_success_clears_disabled():
     store, _load, _save = _make_store({**_fresh(), "disabled": True, "consecutive": 10})
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_success
         h = _record_success("/fake/plugin.py")
 
@@ -80,8 +80,8 @@ def test_record_success_clears_disabled():
 
 def test_record_error_increments_counters():
     store, _load, _save = _make_store()
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error
         h = _record_error("/fake/plugin.py", "connection timeout")
 
@@ -93,8 +93,8 @@ def test_record_error_increments_counters():
 
 def test_record_error_accumulates_consecutive():
     store, _load, _save = _make_store({**_fresh(), "errors": 5, "consecutive": 5})
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error
         h = _record_error("/fake/plugin.py", "again")
 
@@ -105,8 +105,8 @@ def test_record_error_accumulates_consecutive():
 def test_circuit_breaker_fires_at_threshold():
     """10 consecutive errors must set disabled=True."""
     store, _load, _save = _make_store({**_fresh(), "errors": 9, "consecutive": 9})
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error, _CIRCUIT_BREAK_THRESHOLD
         h = _record_error("/fake/plugin.py", "tenth failure")
 
@@ -121,8 +121,8 @@ def test_circuit_breaker_threshold_is_10():
 
 def test_circuit_breaker_does_not_fire_below_threshold():
     store, _load, _save = _make_store({**_fresh(), "consecutive": 8})
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error
         h = _record_error("/fake/plugin.py", "error")
 
@@ -136,8 +136,8 @@ def test_reset_health_clears_disabled_and_consecutive():
     store, _load, _save = _make_store(
         {**_fresh(), "consecutive": 10, "disabled": True, "errors": 10}
     )
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _reset_health
         _reset_health("/fake/plugin.py")
 
@@ -201,8 +201,8 @@ def test_separate_paths_have_independent_health():
     def _save(path, h):
         store[path] = dict(h)
 
-    with patch("ui.pages.hardware_integration_page._load_health", side_effect=_load), \
-         patch("ui.pages.hardware_integration_page._save_health", side_effect=_save):
+    with patch("ui.widgets.hub_card._load_health", side_effect=_load), \
+         patch("ui.widgets.hub_card._save_health", side_effect=_save):
         from ui.pages.hardware_integration_page import _record_error, _record_success
         for _ in range(9):
             _record_error("/path/a.py", "err")

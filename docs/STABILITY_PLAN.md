@@ -701,12 +701,12 @@ structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
 | 5 | ✅ S4-1: `test_codeql_prevention.py` | 1 | v1.9.56 | bare-except + URL-substring AST checks |
 | 6 | ✅ S8-1: Mark robustness plan complete | 1 | v1.9.56 | PLUGIN_ROBUSTNESS_PLAN.md already in docs/completed/ |
 | 7 | ✅ S1-1: Extract `ui/nav/` package (widget classes) | 3 | v1.9.58 | `_LUCIDE`, `_make_nav_icon`, `_NavEntry`, `_RailButton`, `_FlyoutItem`, `_FlyoutPanel`, `_CanvasClickFilter`, `_ClickLabel`, `_SmoothProgressBar` moved to `ui/nav/rail.py`; dashboard.py reduced by ~683 lines |
-| 8 | S1-2: Extract scan-result wiring | 4 | v1.9.59 | Deferred from Sprint 3 — 23 handlers scattered across dashboard.py; each uses self.* heavily; needs careful window-param conversion |
+| 8 | ✅ S1-2: Extract scan-result wiring | 4 | v1.9.59 | ScanResultMixin in `ui/scan_wiring.py`; Dashboard now inherits mixin; dashboard.py reduced by ~1,163 lines (11,209→10,046); 14 orphaned @pyqtSlot decorators also removed |
 | 9 | ✅ S1-3 partial: Extract `_PAGE_HELP` dict to `ui/help.py` | 2 | v1.9.58 | 455 lines removed (13,483→13,028); full `_build_help_tab` extraction deferred to Sprint 3 |
 | 10 | ✅ S1-4: Add dashboard LOC budget test | 2 | v1.9.58 | `test_module_loc.py::test_dashboard_does_not_exceed_loc_budget` added; budget 13,700 |
-| 11 | S3-1: Extract HubCard to widget | 4 | v1.9.59 | Largest page file |
-| 12 | S3-2: Extract OverviewTile | 4 | v1.9.59 | |
-| 13 | S3-3: Extract home-page section widgets | 4 | v1.9.59 | |
+| 11 | ✅ S3-1: Extract HubCard to widget | 4 | v1.9.59 | HubCard, panels, all helpers → `ui/widgets/hub_card.py` (2,209 lines); hardware_integration_page.py reduced 4,055→1,701 lines |
+| 12 | ✅ S3-2: Extract OverviewTile | 4 | v1.9.59 | All tile classes + constants → `ui/widgets/overview_tile.py` (1,620 lines); overview_page.py reduced 2,536→633 lines |
+| 13 | ✅ S3-3: Extract home-page section widgets | 4 | v1.9.59 | _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers → `ui/widgets/home_widgets.py` (293 lines); home_page.py reduced 3,027→2,747 lines |
 | 14 | S2-1: Split metric_store | 5 | v1.9.60 | Schema migration is highest risk |
 | 15 | S2-2: Split report_exporter | 5 | v1.9.60 | |
 | 16 | S2-3: Split utils | 5 | v1.9.60 | |
@@ -768,9 +768,11 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 ---
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
-*Sprint 1 complete: v1.9.57 (2026-05-30).  Sprint 2 complete: v1.9.58 (2026-05-30).  Sprint 3 complete: v1.9.58 (2026-05-30).  Sprint 4 target: v1.9.59.  Full plan target: v1.9.61.*
+*Sprint 1 complete: v1.9.57 (2026-05-30).  Sprint 2 complete: v1.9.58 (2026-05-30).  Sprint 3 complete: v1.9.58 (2026-05-30).  Sprint 4 complete: v1.9.59 (2026-05-30).  Sprint 5 target: v1.9.60.  Full plan target: v1.9.61.*
 *Items 31–45 added 2026-05-29 from APM rules/docs/codebase audit (197 gaps across 6 rule categories).  Version targets and sprint assignments TBD — re-slot as capacity allows.*
 
 **Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes extracted to `ui/nav/rail.py` — ~683 lines removed from dashboard.py), S11-1 (duplicate `_PAGE_HELP` key fixed; stale "Connectivity Tests" _FEATURES ref corrected), S11-4 (two new CI parity gates in `test_nav_completeness.py`).
 
-**Sprint 4 queue (next session):** S1-2 (extract scan-result wiring — 23 `_on_*_result` handlers to `ui/scan_wiring.py`; requires window-param conversion), S3-1 (extract `_HubCard` from hardware_integration_page.py), S3-2 (extract `OverviewTile` from overview_page.py), S3-3 (extract home-page section widgets to ui/widgets/home_widgets.py).
+**Sprint 4 delivered (2026-05-30):** S1-2 (ScanResultMixin extracted to `ui/scan_wiring.py` — 23 handlers, dashboard.py −1,163 lines; 14 orphaned @pyqtSlot decorators removed), S3-1 (HubCard + all helpers → `ui/widgets/hub_card.py`; hardware_integration_page.py 4,055→1,701 lines), S3-2 (all Overview tile classes → `ui/widgets/overview_tile.py`; overview_page.py 2,536→633 lines), S3-3 (_GradeRing etc. → `ui/widgets/home_widgets.py`; home_page.py 3,027→2,747 lines). Mock patch targets updated in 4 test files (ui.widgets.hub_card.*).
+
+**Sprint 5 queue (next session):** S2-1 (split metric_store.py 1,522 lines → metric_store_schema.py + metric_store_io.py), S2-2 (split report_exporter.py 1,108 lines → report_html.py + report_pdf.py), S2-3 (split utils.py 939 lines → utils_net.py + utils_platform.py), S2-4 (tests for new module files), S5-1 (worker lifecycle audit), S5-2 (test_worker_lifecycle_full.py), S5-3 (_running flag audit), S6-1 (WAL growth guard), S6-2 (VACUUM on migration), S6-3 (connection busy timeout), S6-4 (test_metric_store_concurrency.py).
