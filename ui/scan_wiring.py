@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
+
+from ui.tabs import _add_row
 
 from ui.styles import (
     ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER,

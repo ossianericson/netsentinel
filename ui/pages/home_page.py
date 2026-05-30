@@ -1,11 +1,11 @@
 """
-HomePage â€” introductory landing page shown in Home mode.
+HomePage — introductory landing page shown in Home mode.
 
 Hero card (network grade), three mini metric cards (speed / stability / devices),
 and a recent-alerts strip.
 
 Architecture rules observed:
-  â€¢ All colours from ui.styles â€” no hardcoded hex values.
+  â€¢ All colours from ui.styles — no hardcoded hex values.
   â€¢ No blocking I/O. Pure display widget; all data arrives via public slots.
   â€¢ Outer scroll area so the content is never clipped on small windows.
 """
@@ -76,7 +76,7 @@ class HomePage(QWidget):
     start_monitoring_requested = pyqtSignal()
     #: Emitted when the user clicks the refresh icon on the freshness strip.
     rescan_requested = pyqtSignal()
-    #: Emitted when the user clicks "Investigate â†’" on a live challenge suggestion.
+    #: Emitted when the user clicks "Investigate →" on a live challenge suggestion.
     investigate_live_requested = pyqtSignal()
     #: Emitted when the user clicks an alert row; carries the raw alert object.
     alert_view_requested = pyqtSignal(object)
@@ -286,15 +286,15 @@ class HomePage(QWidget):
         row.addWidget(lbl)
 
         _THEMES = [
-            ("Arctic Clean",  "â˜€  Light"),
+            ("Arctic Clean",  "☀  Light"),
             ("Midnight Pro",  "ðŸŒ™  Dark"),
-            ("Obsidian Neon", "âœ¦  Neon"),
+            ("Obsidian Neon", "✦  Neon"),
         ]
 
         def _dismiss(save_theme: str | None = None) -> None:
             if save_theme:
                 _styles.set_active_theme_name(save_theme)
-                lbl.setText(f"Theme '{save_theme}' saved â€” restart NetSentinel to apply.")
+                lbl.setText(f"Theme '{save_theme}' saved — restart NetSentinel to apply.")
                 for b in _btn_refs:
                     b.setEnabled(False)
                 close_btn.setVisible(False)
@@ -360,7 +360,7 @@ class HomePage(QWidget):
             outer.addWidget(_banner)
         # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-        # â”€â”€ Freshness strip â€” always visible above scroll area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â”€â”€ Freshness strip — always visible above scroll area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._freshness_strip = FreshnessStrip()
         self._freshness_strip.rescan_requested.connect(self.rescan_requested)
         outer.addWidget(self._freshness_strip)
@@ -400,7 +400,7 @@ class HomePage(QWidget):
         self._ds_text.setStyleSheet(
             f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
         )
-        _ds_open = QPushButton("Open â†—")
+        _ds_open = QPushButton("Open ↗")
         _ds_open.setFixedHeight(24)
         _ds_open.setCursor(Qt.CursorShape.PointingHandCursor)
         _ds_open.setStyleSheet(
@@ -443,7 +443,7 @@ class HomePage(QWidget):
         lv_lay = QHBoxLayout(self._last_visit_card)
         lv_lay.setContentsMargins(12, 8, 12, 8)
         lv_lay.setSpacing(10)
-        _lv_icon = QLabel("â—·")
+        _lv_icon = QLabel("◷")
         _lv_icon.setFixedWidth(18)
         _lv_icon.setStyleSheet(
             f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
@@ -469,7 +469,7 @@ class HomePage(QWidget):
         _ac_outer.setContentsMargins(14, 10, 14, 10)
         _ac_outer.setSpacing(6)
         _ac_hdr_row = QHBoxLayout()
-        _ac_hdr_lbl = QLabel("âš   Action needed")
+        _ac_hdr_lbl = QLabel("⚠  Action needed")
         _ac_hdr_lbl.setStyleSheet(
             f"font-size:12px; font-weight:bold; color:{RED};"
             " background:transparent; border:none;"
@@ -487,7 +487,7 @@ class HomePage(QWidget):
         self._ac_alert_rows_widget.setVisible(False)
         _ac_outer.addWidget(self._ac_alert_rows_widget)
 
-        self._ac_view_all_btn = QPushButton("View all alerts â†’")
+        self._ac_view_all_btn = QPushButton("View all alerts →")
         self._ac_view_all_btn.setFixedHeight(22)
         self._ac_view_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._ac_view_all_btn.setStyleSheet(
@@ -507,7 +507,7 @@ class HomePage(QWidget):
         self._ac_devices_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
-        _ac_devices_btn = QPushButton("View Devices â†’")
+        _ac_devices_btn = QPushButton("View Devices →")
         _ac_devices_btn.setFixedHeight(24)
         _ac_devices_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _ac_devices_btn.setStyleSheet(
@@ -573,13 +573,13 @@ class HomePage(QWidget):
         )
         _rec_outer.addWidget(_rec_mon_hdr)
 
-        # Pill row â€” separate instances synced by set_monitor_pills()
+        # Pill row — separate instances synced by set_monitor_pills()
         _rec_pills_row = QHBoxLayout()
         _rec_pills_row.setSpacing(6)
         _rec_pills_row.setContentsMargins(0, 0, 0, 0)
 
         def _rec_pill(label: str, target: str) -> QPushButton:
-            b = QPushButton(f"â—‹  {label}")
+            b = QPushButton(f"○  {label}")
             b.setFixedHeight(22)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(
@@ -605,17 +605,17 @@ class HomePage(QWidget):
         _rec_status_row = QHBoxLayout()
         _rec_status_row.setSpacing(12)
         _rec_status_row.setContentsMargins(0, 0, 0, 0)
-        self._rec_grade_lbl = QLabel("Network Grade: â€“")
+        self._rec_grade_lbl = QLabel("Network Grade: —")
         self._rec_grade_lbl.setStyleSheet(
             f"font-size:11px; font-weight:600; color:{TEXT_SECONDARY};"
             " background:transparent; border:none;"
         )
         self._grade_sparkline = _GradeSparkline()
-        self._rec_scan_time_lbl = QLabel("Last scan: â€“")
+        self._rec_scan_time_lbl = QLabel("Last scan: —")
         self._rec_scan_time_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
         )
-        self._btn_rescan_compact = QPushButton("â–¶  Rescan")
+        self._btn_rescan_compact = QPushButton("▶  Rescan")
         self._btn_rescan_compact.setFixedHeight(26)
         self._btn_rescan_compact.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_rescan_compact.setStyleSheet(
@@ -638,7 +638,7 @@ class HomePage(QWidget):
         self._rec_diag_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
         )
-        _diag_open = QPushButton("What's Wrong? â†’")
+        _diag_open = QPushButton("What's Wrong? →")
         _diag_open.setFlat(True)
         _diag_open.setCursor(Qt.CursorShape.PointingHandCursor)
         _diag_open.setStyleSheet(
@@ -690,7 +690,7 @@ class HomePage(QWidget):
             chip_lay = QVBoxLayout(chip)
             chip_lay.setContentsMargins(10, 6, 10, 6)
             chip_lay.setSpacing(2)
-            val_lbl = QLabel("â€”")
+            val_lbl = QLabel("—")
             val_lbl.setStyleSheet(
                 f"font-size:16px; font-weight:bold; color:{color};"
                 " background:transparent; border:none;"
@@ -780,7 +780,7 @@ class HomePage(QWidget):
             " background:transparent; border:none;"
         )
         self._hero_sub = QLabel(
-            "Discover devices Â· check stability Â· detect threats"
+            "Discover devices · check stability · detect threats"
         )
         self._hero_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY};"
@@ -844,7 +844,7 @@ class HomePage(QWidget):
 
         self._home_search = QLineEdit()
         self._home_search.setPlaceholderText(
-            "Search features â€” try 'wifi', 'arp', 'heatmap', 'dns'â€¦"
+            "Search features — try 'wifi', 'arp', 'heatmap', 'dns'…"
         )
         self._home_search.setFixedHeight(30)
         self._home_search.setStyleSheet(
@@ -908,7 +908,7 @@ class HomePage(QWidget):
 
         _sheet_cta = QHBoxLayout()
         _sheet_cta.setSpacing(16)
-        self._sheet_grade_btn = QPushButton("Run a Network Grade â†’")
+        self._sheet_grade_btn = QPushButton("Run a Network Grade →")
         self._sheet_grade_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sheet_grade_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
@@ -920,7 +920,7 @@ class HomePage(QWidget):
             lambda: self.navigate_to.emit("Network Grade")
         )
         _sheet_cta.addWidget(self._sheet_grade_btn)
-        self._sheet_action_btn = QPushButton("Set up notifications â†’")
+        self._sheet_action_btn = QPushButton("Set up notifications →")
         self._sheet_action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sheet_action_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
@@ -944,7 +944,7 @@ class HomePage(QWidget):
         )
         lay.addWidget(self._sec1_lbl)
 
-        # â”€â”€ Mini-card row â€” three equal-width columns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â”€â”€ Mini-card row — three equal-width columns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._mini_cards_widget = QWidget()
         self._mini_cards_widget.setStyleSheet("background:transparent;")
         card_row = QHBoxLayout(self._mini_cards_widget)
@@ -954,7 +954,7 @@ class HomePage(QWidget):
         self._stability_card = HomePage._MiniCard("\u25ce", "Stability", "\u2013", "\u2013")
         self._devices_card   = HomePage._MiniCard("\u2295", "Devices",   "\u2013", "\u2013")
         for _card in (self._speed_card, self._stability_card, self._devices_card):
-            card_row.addWidget(_card, 1)  # stretch=1 â†’ equal width
+            card_row.addWidget(_card, 1)  # stretch=1 → equal width
         self._speed_card.clicked.connect(
             lambda: self.navigate_to.emit("Speed Test"))
         self._stability_card.clicked.connect(
@@ -979,7 +979,7 @@ class HomePage(QWidget):
         _pills_lay.addSpacing(4)
 
         def _pill(label: str, target: str) -> QPushButton:
-            b = QPushButton(f"â—‹  {label}")
+            b = QPushButton(f"○  {label}")
             b.setFixedHeight(22)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(
@@ -1001,7 +1001,7 @@ class HomePage(QWidget):
         lay.addWidget(self._monitoring_pills_row)
 
         self._monitoring_nudge = QLabel(
-            "Monitoring is off â€” turn it on in 10 seconds â†’"
+            "Monitoring is off — turn it on in 10 seconds →"
         )
         self._monitoring_nudge.setVisible(False)
         self._monitoring_nudge.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1032,13 +1032,13 @@ class HomePage(QWidget):
         mon_lay.setContentsMargins(14, 10, 14, 10)
         mon_lay.setSpacing(10)
 
-        self._mon_dot = QLabel("â—")
+        self._mon_dot = QLabel("●")
         self._mon_dot.setFixedWidth(12)
         self._mon_dot.setStyleSheet(
             f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
         self._mon_status_lbl = QLabel(
-            "Not running â€” start to log connection stability over time."
+            "Not running — start to log connection stability over time."
         )
         self._mon_status_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
@@ -1055,7 +1055,7 @@ class HomePage(QWidget):
         )
         self._btn_mon_start.clicked.connect(self.start_monitoring_requested)
 
-        self._btn_mon_view = QPushButton("View Log â†’")
+        self._btn_mon_view = QPushButton("View Log →")
         self._btn_mon_view.setFlat(True)
         self._btn_mon_view.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_mon_view.setStyleSheet(
@@ -1096,7 +1096,7 @@ class HomePage(QWidget):
             rl = QHBoxLayout(rw)
             rl.setContentsMargins(0, 0, 0, 0)
             rl.setSpacing(8)
-            dot = QLabel("â—")
+            dot = QLabel("●")
             dot.setFixedWidth(12)
             dot.setStyleSheet(
                 f"font-size:8px; color:{TEXT_SECONDARY};"
@@ -1123,11 +1123,11 @@ class HomePage(QWidget):
             return rw, lbl, dot
 
         _dev_row, self._res_devices_lbl, self._res_devices_dot = \
-            _result_row("â€“", "View Devices â†’", "Devices")
+            _result_row("—", "View Devices →", "Devices")
         _conn_row, self._res_conn_lbl, self._res_conn_dot = \
-            _result_row("â€“", "View Connection â†’", "DNS & Stability")
+            _result_row("—", "View Connection →", "DNS & Stability")
         _sec_row, self._res_security_lbl, self._res_security_dot = \
-            _result_row("â€“", "View Overview â†’", "Overview")
+            _result_row("—", "View Overview →", "Overview")
 
         _strip_lay.addWidget(_dev_row)
         _strip_lay.addWidget(_conn_row)
@@ -1155,7 +1155,7 @@ class HomePage(QWidget):
         self._suggestions_inner.setSpacing(4)
         lay.addWidget(self._suggestions_card)
 
-        # â”€â”€ Recent alerts section label (+ "View all â†’" in recurring mode) â”€â”€â”€â”€
+        # â”€â”€ Recent alerts section label (+ "View all →" in recurring mode) â”€â”€â”€â”€
         self._alerts_hdr_row = QWidget()
         self._alerts_hdr_row.setStyleSheet("background:transparent;")
         _ahr_lay = QHBoxLayout(self._alerts_hdr_row)
@@ -1166,7 +1166,7 @@ class HomePage(QWidget):
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
             " border:none; letter-spacing:1px;"
         )
-        self._btn_view_all_alerts = QPushButton("View all â†’")
+        self._btn_view_all_alerts = QPushButton("View all →")
         self._btn_view_all_alerts.setFlat(True)
         self._btn_view_all_alerts.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_view_all_alerts.setVisible(False)
@@ -1201,7 +1201,7 @@ class HomePage(QWidget):
             " background:transparent; border:none;"
         )
         self._alert_inner.addWidget(self._no_alerts_lbl)
-        # Permanent footer â€” always visible; text changes to "No other alerts" once rows appear
+        # Permanent footer — always visible; text changes to "No other alerts" once rows appear
         self._no_other_alerts_lbl = QLabel()
         self._no_other_alerts_lbl.setVisible(False)
         self._no_other_alerts_lbl.setStyleSheet(
@@ -1264,10 +1264,10 @@ class HomePage(QWidget):
             rl.addWidget(lb, 1)
             return w
 
-        _tips_lay.addWidget(_tip_row("âŒ¨", "Press  Ctrl+K  to open the command palette â€” search any page instantly."))
+        _tips_lay.addWidget(_tip_row("âŒ¨", "Press  Ctrl+K  to open the command palette — search any page instantly."))
         _tips_lay.addWidget(_tip_row("ðŸ“Œ", "Right-click any nav item to pin it to the sidebar for quick access."))
         _tips_lay.addWidget(_tip_row("âš™", "Right-click a device row for quick actions: block, How to Fix, history."))
-        self._tip_row_rest_api = _tip_row("ðŸŒ", "Enable the REST API in  Settings â†’ REST API  for a live browser dashboard at localhost:8765/dashboard.")
+        self._tip_row_rest_api = _tip_row("ðŸŒ", "Enable the REST API in  Settings → REST API  for a live browser dashboard at localhost:8765/dashboard.")
         _tips_lay.addWidget(self._tip_row_rest_api)
 
         lay.addWidget(self._tips_card)
@@ -1328,7 +1328,7 @@ class HomePage(QWidget):
         )
         desc_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-        btn = QPushButton("Open â†’")
+        btn = QPushButton("Open →")
         btn.setFlat(True)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(
@@ -1356,8 +1356,8 @@ class HomePage(QWidget):
             port = int(qs.value("rest_api/port", 8765))
             self._dashboard_url = f"http://localhost:{port}/dashboard"
             self._ds_text.setText(
-                f"REST API running at localhost:{port} â€” browser dashboard + 7 endpoints "
-                f"(devices, alerts, uptime, gradeâ€¦). Open Settings to see the full list."
+                f"REST API running at localhost:{port} — browser dashboard + 7 endpoints "
+                f"(devices, alerts, uptime, grade…). Open Settings to see the full list."
             )
             self._dashboard_strip.setVisible(True)
         else:
@@ -1406,7 +1406,7 @@ class HomePage(QWidget):
             "home/post_scan_sheet_dismissed", True
         )
         # Show nudge if all monitoring pills are still off
-        if not any(p.text().startswith("â—") for p in (
+        if not any(p.text().startswith("●") for p in (
             self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger
         )):
             self._monitoring_nudge.setVisible(True)
@@ -1424,18 +1424,18 @@ class HomePage(QWidget):
             parts.append(f"{n_new} new")
         if n_recognized and n_new:
             parts.append(f"{n_recognized} recognized")
-        self._sheet_stats_lbl.setText("  Â·  ".join(parts))
+        self._sheet_stats_lbl.setText("  ·  ".join(parts))
         if self._current_grade:
             self._sheet_grade_btn.setText(
-                f"Network Grade: {self._current_grade}  â†’"
+                f"Network Grade: {self._current_grade}  →"
             )
         else:
-            self._sheet_grade_btn.setText("Run a Network Grade â†’")
+            self._sheet_grade_btn.setText("Run a Network Grade →")
         if n_at_risk > 0:
-            self._sheet_action_btn.setText("Check unknown devices â†’")
+            self._sheet_action_btn.setText("Check unknown devices →")
             self._sheet_action_target = "Devices"
         else:
-            self._sheet_action_btn.setText("Set up notifications â†’")
+            self._sheet_action_btn.setText("Set up notifications →")
             self._sheet_action_target = "Notifications"
         self._post_scan_sheet.setVisible(True)
 
@@ -1453,8 +1453,8 @@ class HomePage(QWidget):
             self._hero_title.setText("Discover your network")
             self._hero_sub.setText(
                 "See every device, check your security score, and start monitoring"
-                " â€” takes about 30 seconds."
-                "   Â·   Try Ctrl+K to find any feature instantly."
+                " — takes about 30 seconds."
+                "   ·   Try Ctrl+K to find any feature instantly."
             )
             self._suggestions_sec.setVisible(False)
             self._suggestions_card.setVisible(False)
@@ -1479,13 +1479,13 @@ class HomePage(QWidget):
         # Recurring top section: prominent monitoring status + grade/rescan
         self._recurring_section.setVisible(on)
         self._this_week_card.setVisible(on)
-        # Big scan button â†’ compact rescan link
+        # Big scan button → compact rescan link
         self._btn_scan.setVisible(not on)
         self._btn_rescan_compact.setVisible(on)
         # Existing monitoring pills row is duplicated in recurring section
         self._monitoring_pills_row.setVisible(not on)
         self._monitoring_nudge.setVisible(False)
-        # "View all â†’" next to Recent Alerts
+        # "View all →" next to Recent Alerts
         self._btn_view_all_alerts.setVisible(on)
         if on:
             # Refresh recurring section display
@@ -1507,13 +1507,13 @@ class HomePage(QWidget):
                 " background:transparent; border:none;"
             )
         else:
-            self._rec_grade_lbl.setText("Network Grade: â€“")
+            self._rec_grade_lbl.setText("Network Grade: —")
 
     def _update_recurring_scan_time(self) -> None:
         if not hasattr(self, "_rec_scan_time_lbl"):
             return
         if self._last_scan_ts is None:
-            self._rec_scan_time_lbl.setText("Last scan: â€“")
+            self._rec_scan_time_lbl.setText("Last scan: —")
             return
         delta = datetime.datetime.now() - self._last_scan_ts
         mins = int(delta.total_seconds() / 60)
@@ -1551,13 +1551,13 @@ class HomePage(QWidget):
             )
 
             # Grade change (current vs oldest snapshot)
-            grade_now = self._current_grade or "â€”"
+            grade_now = self._current_grade or "—"
             self._tw_grade_val.setText(grade_now)
         except Exception:
             pass
 
     def _update_scan_button_label(self) -> None:
-        label = "â–¶  Scan Network" if self._device_count == 0 else "â–¶  Rescan"
+        label = "▶  Scan Network" if self._device_count == 0 else "▶  Rescan"
         self._btn_scan.setText(label)
 
     def set_monitor_pills(
@@ -1572,7 +1572,7 @@ class HomePage(QWidget):
         ]
         for btn, active, label in _pill_map:
             if active:
-                btn.setText(f"â—  {label}")
+                btn.setText(f"●  {label}")
                 btn.setStyleSheet(
                     f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
                     f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
@@ -1581,7 +1581,7 @@ class HomePage(QWidget):
                     f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
             else:
-                btn.setText(f"â—‹  {label}")
+                btn.setText(f"○  {label}")
                 btn.setStyleSheet(
                     f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
                     f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
@@ -1600,7 +1600,7 @@ class HomePage(QWidget):
         ]
         for rbtn, active, rlabel in _rec_map:
             if active:
-                rbtn.setText(f"â—  {rlabel}")
+                rbtn.setText(f"●  {rlabel}")
                 rbtn.setStyleSheet(
                     f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
                     f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
@@ -1609,7 +1609,7 @@ class HomePage(QWidget):
                     f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
             else:
-                rbtn.setText(f"â—‹  {rlabel}")
+                rbtn.setText(f"○  {rlabel}")
                 rbtn.setStyleSheet(
                     f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:10px;"
                     f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
@@ -1662,7 +1662,7 @@ class HomePage(QWidget):
                 time_str = f"{elapsed // 3600}h ago"
 
             dot_color  = RED if severity == "CRITICAL" else AMBER
-            label_text = f"{rule} Â· {msg[:50]}" if msg else rule
+            label_text = f"{rule} · {msg[:50]}" if msg else rule
 
             row_w = QWidget()
             row_w.setStyleSheet("background:transparent;")
@@ -1670,7 +1670,7 @@ class HomePage(QWidget):
             row_lay.setContentsMargins(0, 1, 0, 1)
             row_lay.setSpacing(6)
 
-            dot = QLabel("â—")
+            dot = QLabel("●")
             dot.setFixedWidth(12)
             dot.setStyleSheet(
                 f"font-size:8px; color:{dot_color}; background:transparent; border:none;"
@@ -1768,12 +1768,12 @@ class HomePage(QWidget):
             else:
                 ago = f"{int(secs // 86400)}d ago"
         else:
-            ago = "â€“"
+            ago = "—"
         sev = e.get("severity", "INFO")
         n = len(e.get("findings", []))
         sev_colors = {"CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN, "INFO": ACCENT}
         color = sev_colors.get(sev, TEXT_MUTED)
-        txt = f"Last diagnosis:  {sev} Â· {n} finding{'s' if n != 1 else ''} Â· {ago}"
+        txt = f"Last diagnosis:  {sev} · {n} finding{'s' if n != 1 else ''} · {ago}"
         self._rec_diag_lbl.setText(txt)
         self._rec_diag_lbl.setStyleSheet(
             f"font-size:11px; color:{color}; background:transparent; border:none;"
@@ -1782,13 +1782,13 @@ class HomePage(QWidget):
     def set_scanning(self, running: bool) -> None:
         self._btn_scan.setEnabled(not running)
         if running:
-            self._btn_scan.setText("Scanningâ€¦")
+            self._btn_scan.setText(“Scanning…”)
             self._hero_sub.setText(
-                "Scan in progress â€” tiles will update as each module completes."
+                “Scan in progress — tiles will update as each module completes.”
             )
         else:
             self._update_scan_button_label()
-            self._hero_sub.setText("Discover devices Â· check stability Â· detect threats")
+            self._hero_sub.setText(“Discover devices · check stability · detect threats”)
             self._freshness_strip.set_scan_progress("")
 
     @pyqtSlot(str)
@@ -1809,7 +1809,7 @@ class HomePage(QWidget):
         except RuntimeError:
             return
         try:
-            # Speed card â€” last recorded test result + HOME-4 sparkline
+            # Speed card — last recorded test result + HOME-4 sparkline
             speed_rows = self._store.query_speed_test_history(hours=168, limit=10)
             if speed_rows:
                 row = speed_rows[0]
@@ -1834,7 +1834,7 @@ class HomePage(QWidget):
         except Exception:
             pass
         try:
-            # Devices card â€” count of known devices
+            # Devices card — count of known devices
             devices = self._store.get_known_devices()
             n = len(devices)
             self._device_count = n
@@ -1851,9 +1851,9 @@ class HomePage(QWidget):
         if self._device_count == 0:
             self._set_first_run_mode(True)
         else:
-            # Returning user: device count now known â€” check if recurring layout should activate.
+            # Returning user: device count now known — check if recurring layout should activate.
             # showEvent may have fired before _preload_from_store, leaving _device_count == 0
-            # which caused _checklist_states() scan_done = False â†’ recurring never activated.
+            # which caused _checklist_states() scan_done = False → recurring never activated.
             self._check_recurring_mode()
 
     # â”€â”€ Public slots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1895,14 +1895,14 @@ class HomePage(QWidget):
             _new_count  = len(_current_macs - _prev_macs)
             _gone_count = len(_prev_macs - _current_macs)
             if _new_count == 0 and _gone_count == 0:
-                _chips_html = f'<span style="color:{GREEN};">â— No changes since last scan</span>'
+                _chips_html = f'<span style="color:{GREEN};">● No changes since last scan</span>'
             else:
                 _parts = []
                 if _new_count:
                     _parts.append(f'<span style="color:{AMBER};">+{_new_count} new device{"s" if _new_count != 1 else ""}</span>')
                 if _gone_count:
-                    _parts.append(f'<span style="color:{RED};">âˆ’{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
-                _chips_html = "  Â·  ".join(_parts)
+                    _parts.append(f'<span style="color:{RED};">−{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
+                _chips_html = "  ·  ".join(_parts)
             self._delta_chips_lbl.setText(_chips_html)
             self._delta_chips_lbl.setTextFormat(Qt.TextFormat.RichText)
             self._delta_banner.setVisible(True)
@@ -2052,7 +2052,7 @@ class HomePage(QWidget):
         time_str = datetime.datetime.now().strftime("%H:%M")
         row = HomePage._AlertRow(colour, msg[:80], time_str, alert=alert)
         row.clicked.connect(self.alert_view_requested.emit)
-        # Insert before the footer labels (at index 0 â€” top of list)
+        # Insert before the footer labels (at index 0 — top of list)
         self._alert_inner.insertWidget(0, row)
         self._alert_count += 1
 
@@ -2062,10 +2062,10 @@ class HomePage(QWidget):
         """Update the stability monitoring card on the home page."""
         if running:
             dot_color = GREEN
-            outage_txt = f" Â· {outage_count} outage{'s' if outage_count != 1 else ''}" if outage_count else " Â· no outages"
+            outage_txt = f" · {outage_count} outage{'s' if outage_count != 1 else ''}" if outage_count else " · no outages"
             elapsed_txt = f"  {elapsed_str}" if elapsed_str else ""
             self._mon_status_lbl.setText(
-                f"Running{elapsed_txt}{outage_txt} â€” leave the app open to keep logging."
+                f"Running{elapsed_txt}{outage_txt} — leave the app open to keep logging."
             )
             self._mon_status_lbl.setStyleSheet(
                 f"font-size:11px; color:{GREEN}; background:transparent; border:none;"
@@ -2082,7 +2082,7 @@ class HomePage(QWidget):
             )
         else:
             self._mon_status_lbl.setText(
-                "Not running â€” start to log connection stability over time."
+                "Not running — start to log connection stability over time."
             )
             self._mon_status_lbl.setStyleSheet(
                 f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
@@ -2115,7 +2115,7 @@ class HomePage(QWidget):
         if not parts:
             self._last_visit_card.setVisible(False)
             return
-        self._lv_text.setText(f"Since {last_visit_str}: {'  Â·  '.join(parts)}.")
+        self._lv_text.setText(f"Since {last_visit_str}: {'  ·  '.join(parts)}.")
         self._last_visit_card.setVisible(True)
 
     def set_suggestions(self, suggestions: list) -> None:
@@ -2132,7 +2132,7 @@ class HomePage(QWidget):
 
         for sug in suggestions[:4]:
             text     = sug.get("text", "")
-            action   = sug.get("action_label", "Fix â†’")
+            action   = sug.get("action_label", "Fix →")
             target   = sug.get("target")       # None = emit start_monitoring_requested
             priority = sug.get("priority", "medium")
             colour   = RED if priority == "high" else (AMBER if priority == "medium" else ACCENT)
@@ -2143,7 +2143,7 @@ class HomePage(QWidget):
             rl.setContentsMargins(0, 2, 0, 2)
             rl.setSpacing(8)
 
-            dot = QLabel("â—")
+            dot = QLabel("●")
             dot.setFixedWidth(12)
             dot.setStyleSheet(
                 f"font-size:8px; color:{colour}; background:transparent; border:none;"
@@ -2197,7 +2197,7 @@ class HomePage(QWidget):
         last_avg = sum(last_week) / len(last_week)
         delta = this_avg - last_avg
         if abs(delta) < 1:
-            text  = "â€” no change"
+            text  = "— no change"
             color = TEXT_SECONDARY
         elif delta > 0:
             text  = f"â†‘ +{delta:.0f} vs last week"
