@@ -25,15 +25,13 @@ under the key  hardware/custom_scripts.
 from __future__ import annotations
 
 import ast
-import collections
-import hashlib
 import json
 import time
 from pathlib import Path
 from typing import Dict, Optional
 
-from PyQt6.QtCore import Qt, QFileSystemWatcher, QSettings, QThread, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QCursor, QFont, QPixmap
+from PyQt6.QtCore import Qt, QFileSystemWatcher, QSettings, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QColor, QFont, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -44,20 +42,12 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMenu,
-    QProgressBar,
     QPushButton,
     QScrollArea,
-    QStackedWidget,
     QTabWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QTextEdit,
-    QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
-from PyQt6.QtCore import QProcess
 
 from workers.plugin_polling_worker import PluginPollingWorker
 from ui.styles import (
@@ -65,23 +55,16 @@ from ui.styles import (
     ACCENT_DARK,
     ACCENT_LITE,
     AMBER,
-    BG_ALT_ROW,
     BG_CARD,
     BG_DARK,
     BG_HOVER,
     BORDER,
-    CARD_HDR_BORDER,
     CARD_RADIUS,
     GREEN,
     RED,
-    TABLE_ROW_BORDER,
-    TABLE_SEL,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    TH_BG,
-    TH_BORDER,
-    TH_TEXT,
     WHITE,
 )
 
@@ -97,11 +80,14 @@ from ui.widgets.hub_card import (
     _load_last_result, _save_last_result,
     _record_success, _record_error, _reset_health,
     _load_instance_config,
-    _TEMPLATE, _path_hash,
-    _step_card, _para, _sub_header, _copy_text, _code_chip, _prompt_block,
-    _ModemDetailPanel, _RouterDetailPanel, _classify_error, _safe_set_text,
+    _TEMPLATE,
+    _classify_error,
+    # Re-exported for test compatibility
+    _path_hash,
+    _ModemDetailPanel, _RouterDetailPanel, _safe_set_text,
     _CIRCUIT_BREAK_THRESHOLD, _DEGRADED_HOURS, _load_health, _save_health,
 )
+from ui.pages.plugin_guide import PluginGuide
 
 
 
@@ -228,21 +214,8 @@ class HardwareIntegrationPage(QWidget):
         guide_toggle_row.addStretch()
         hub_tab_lay.addLayout(guide_toggle_row)
 
-        self._guide_area = QScrollArea()
-        self._guide_area.setWidgetResizable(True)
-        self._guide_area.setStyleSheet("QScrollArea { border: none; }")
+        self._guide_area = PluginGuide(self._hub_body)
         self._guide_area.setVisible(False)
-        guide_body = QWidget()
-        guide_body.setStyleSheet(f"background:{BG_DARK};")
-        guide_lay = QVBoxLayout(guide_body)
-        guide_lay.setContentsMargins(0, 4, 0, 8)
-        guide_lay.setSpacing(10)
-        guide_lay.addWidget(self._build_step1())
-        guide_lay.addWidget(self._build_step2())
-        guide_lay.addWidget(self._build_step3_guide())
-        guide_lay.addWidget(self._build_step4())
-        guide_lay.addStretch()
-        self._guide_area.setWidget(guide_body)
         hub_tab_lay.addWidget(self._guide_area, 2)
 
         if not _load_paths():
@@ -1811,124 +1784,3 @@ class HardwareIntegrationPage(QWidget):
         btn.setText("✓  Copied!")
         QTimer.singleShot(2000, lambda: btn.setText(orig))
 
-    # ── Guide content (collapsible) ───────────────────────────────────────────
-
-    def _build_step1(self) -> QWidget:
-        frame, lay = _step_card(1, "Find your hardware's local API")
-        lay.addWidget(_para(
-            "You do not need to be a programmer — an AI can write almost all "
-            "the code for you. Your job is to find out HOW your specific hardware "
-            "exposes data, then hand that to the AI."
-        ))
-        lay.addWidget(_sub_header("1a  Search GitHub for an existing implementation"))
-        lay.addWidget(_para("Paste one of these search strings into github.com:"))
-        for s in ['"Brand Model" python router', '"Brand Model" python api',
-                  '"Brand" router python script', '"Brand" modem python library']:
-            lay.addWidget(_code_chip(s))
-
-        lay.addWidget(_sub_header("1b  Ask an AI to write the script for you"))
-        lay.addWidget(_para(
-            "Claude, ChatGPT, and Gemini can write the full Python script "
-            "if you give them the right information."
-        ))
-        lay.addWidget(_prompt_block(
-            "PROMPT A — General (start here)",
-            "I want to write a Python script that reads live data from my [Brand] [Model] "
-            "router/modem. The admin panel is at http://192.168.1.1. "
-            "Login: username 'admin', password 'admin'.\n\n"
-            "Please:\n"
-            "1. Find if this router has a local JSON REST API or requires HTML scraping\n"
-            "2. Write a Python script using requests that logs in and returns:\n"
-            "   - WAN IP, Uptime, Connected clients (name, IP, MAC)\n"
-            "3. Add a main block at the bottom that prints all results as JSON\n"
-            "4. Tell me which packages to install with pip",
-        ))
-        lay.addWidget(_prompt_block(
-            "PROMPT B — From a cURL command (best results)",
-            "I captured this API call from my router admin panel using browser dev tools "
-            "(F12 → Network → right-click request → Copy as cURL). "
-            "Convert it to a Python function using requests.\n\n"
-            "[Paste your cURL command here]\n\n"
-            "Then wrap the result in the NetSentinel plugin format:\n"
-            "- HARDWARE_NAME, HARDWARE_TYPE, get_info(), get_status(), get_clients()\n"
-            "- if __name__ == '__main__': print all results as JSON",
-        ))
-
-        lay.addWidget(_sub_header("1c  Spy on your own router with browser dev tools"))
-        lay.addWidget(_para(
-            "Open your router admin panel in a browser, press F12, go to the Network tab, "
-            "reload the page, look for JSON responses, and right-click → Copy as cURL. "
-            "Paste into Prompt B above."
-        ))
-        return frame
-
-    def _build_step2(self) -> QWidget:
-        frame, lay = _step_card(2, "Get the script written (template + AI)")
-        lay.addWidget(_para(
-            "Either fill in the template yourself or hand it to an AI."
-        ))
-        lay.addWidget(_sub_header("Template"))
-
-        template_edit = QTextEdit()
-        template_edit.setReadOnly(True)
-        template_edit.setPlainText(_TEMPLATE)
-        template_edit.setFont(QFont("Consolas", 8))
-        template_edit.setFixedHeight(240)
-        template_edit.setStyleSheet(
-            f"QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; border-radius:4px; }}"
-        )
-        lay.addWidget(template_edit)
-
-        btn_row = QHBoxLayout()
-        btn_copy = _btn("⎘  Copy template")
-        btn_save = _btn("💾  Save template as .py…")
-        btn_copy.clicked.connect(lambda: _copy_text(btn_copy, _TEMPLATE))
-        btn_save.clicked.connect(self._on_save_template)
-        btn_row.addWidget(btn_copy)
-        btn_row.addWidget(btn_save)
-        btn_row.addStretch()
-        lay.addLayout(btn_row)
-
-        lay.addWidget(_prompt_block(
-            "PROMPT — Ask AI to complete the template",
-            "I want to integrate my [Brand] [Model] router/modem into a monitoring app. "
-            "I have a Python plugin template. Hardware details:\n"
-            "- Admin panel URL: http://192.168.1.1\n"
-            "- Username: admin  Password: admin\n\n"
-            "Please complete get_info() and get_status() using the real API for my hardware.\n"
-            "[Paste the template here]",
-        ))
-        return frame
-
-    def _build_step3_guide(self) -> QWidget:
-        frame, lay = _step_card(3, "Test locally, then import via ＋ Add Integration above")
-        lay.addWidget(_para(
-            "Once your script prints correct data when run standalone "
-            "(python your_file.py), click ＋ Add Integration at the top of this page. "
-            "NetSentinel validates the interface, then runs the script and shows the result "
-            "in the Hub above."
-        ))
-        return frame
-
-    def _build_step4(self) -> QWidget:
-        frame, lay = _step_card(4, "Share your script with the community")
-        lay.addWidget(_para(
-            "A script that works for you almost certainly works for everyone with "
-            "the same hardware. Open a GitHub Issue at github.com/ossianericson/netsentinel "
-            "with title: [Hardware Plugin] Brand Model XYZ. Attach your .py file."
-        ))
-        return frame
-
-    def _on_save_template(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save integration template", "netsentinel_hardware.py",
-            "Python files (*.py)",
-        )
-        if not path:
-            return
-        try:
-            Path(path).write_text(_TEMPLATE, encoding="utf-8")
-            self._set_status(f"Template saved to {Path(path).name}", error=False)
-        except Exception as exc:
-            self._set_status(f"Save failed: {exc}", error=True)
