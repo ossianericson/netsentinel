@@ -183,7 +183,7 @@ _FEATURES: list[dict] = [
             "Produces a plain-English verdict: 'Your ISP's DNS is slow' or "
             "'Packet loss at hop 3 — likely an ISP routing issue'."
         ),
-        "page": "Connectivity Tests",
+        "page": "What's Wrong?",
         "requires": None,
         "tags": ["ping", "dns", "http", "mtr", "traceroute", "connectivity", "test", "isp"],
     },

@@ -700,8 +700,8 @@ structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
 | 4 | ✅ S0-4: Full suite green gate | 1 | v1.9.56 | 2136 passed, 4 skipped, exit 0 — no crash |
 | 5 | ✅ S4-1: `test_codeql_prevention.py` | 1 | v1.9.56 | bare-except + URL-substring AST checks |
 | 6 | ✅ S8-1: Mark robustness plan complete | 1 | v1.9.56 | PLUGIN_ROBUSTNESS_PLAN.md already in docs/completed/ |
-| 7 | S1-1: Extract `ui/nav/` package | 3 | v1.9.58 | Biggest risk/reward; deferred — `_build_help_tab` uses self. refs requiring window-param refactor first |
-| 8 | S1-2: Extract scan-result wiring | 3 | v1.9.58 | |
+| 7 | ✅ S1-1: Extract `ui/nav/` package (widget classes) | 3 | v1.9.58 | `_LUCIDE`, `_make_nav_icon`, `_NavEntry`, `_RailButton`, `_FlyoutItem`, `_FlyoutPanel`, `_CanvasClickFilter`, `_ClickLabel`, `_SmoothProgressBar` moved to `ui/nav/rail.py`; dashboard.py reduced by ~683 lines |
+| 8 | S1-2: Extract scan-result wiring | 4 | v1.9.59 | Deferred from Sprint 3 — 23 handlers scattered across dashboard.py; each uses self.* heavily; needs careful window-param conversion |
 | 9 | ✅ S1-3 partial: Extract `_PAGE_HELP` dict to `ui/help.py` | 2 | v1.9.58 | 455 lines removed (13,483→13,028); full `_build_help_tab` extraction deferred to Sprint 3 |
 | 10 | ✅ S1-4: Add dashboard LOC budget test | 2 | v1.9.58 | `test_module_loc.py::test_dashboard_does_not_exceed_loc_budget` added; budget 13,700 |
 | 11 | S3-1: Extract HubCard to widget | 4 | v1.9.59 | Largest page file |
@@ -730,8 +730,8 @@ structural changes (S1), then module splits (S2, S3), then prevention (S4–S8).
 | 33 | ✅ S12-3: `test_spec_hiddenimports.py` CI gate | 2 | v1.9.58 | 2 tests: all-modules-present + no-duplicates |
 | 34 | ✅ S11-2: Fix 7 stale `_FEATURES` page refs in `discover_page.py` | 2 | v1.9.58 | Fixed: Logs→Network Logger (×4), Network Timeline→None, Diagnose→What's Wrong?, Threat Intelligence→Threat Intel |
 | 35 | ✅ S11-3: Add 23 missing `_FEATURES` entries | 2 | v1.9.58 | All nav-registered pages now have Feature Guide entries (Threat Intel was already present, now fixed) |
-| 36 | S11-1: Add `_PAGE_HELP` entries for remaining nav labels | 3 | v1.9.58 | `ui/help.py` already covers 50+ labels; ~10 nav labels still missing entries |
-| 37 | S11-4: CI gate — nav/help/features parity check | 3 | v1.9.58 | Extend `test_nav_completeness.py` after S11-1 completes |
+| 36 | ✅ S11-1: Fix `_PAGE_HELP` quality issues | 3 | v1.9.58 | Removed duplicate "Bandwidth Usage" key (second entry silently overwrote first); merged hidden tips; all 64 nav labels already had entries |
+| 37 | ✅ S11-4: CI gate — nav/help/features parity check | 3 | v1.9.58 | `test_all_nav_labels_have_page_help` + `test_features_page_refs_are_valid_nav_labels` added to `test_nav_completeness.py`; also fixed stale "Connectivity Tests" → "What's Wrong?" ref in discover_page.py |
 | 38 | S10-1: Inventory missing colour tokens; add to `ui/styles.py` | TBD | TBD | Must precede S10-2/S10-3 |
 | 39 | S10-2: Purge hardcoded hex from `ui/pages/*.py` (37 files) | TBD | TBD | Run debug_launch.py after each file |
 | 40 | S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` (7 files) | TBD | TBD | Companion to S10-2 |
@@ -768,5 +768,9 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 ---
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
-*Sprint 1 complete: v1.9.57 (2026-05-30).  Sprint 2 complete: v1.9.58 (2026-05-30).  Sprint 3 target: v1.9.58.  Full plan target: v1.9.61.*
+*Sprint 1 complete: v1.9.57 (2026-05-30).  Sprint 2 complete: v1.9.58 (2026-05-30).  Sprint 3 complete: v1.9.58 (2026-05-30).  Sprint 4 target: v1.9.59.  Full plan target: v1.9.61.*
 *Items 31–45 added 2026-05-29 from APM rules/docs/codebase audit (197 gaps across 6 rule categories).  Version targets and sprint assignments TBD — re-slot as capacity allows.*
+
+**Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes extracted to `ui/nav/rail.py` — ~683 lines removed from dashboard.py), S11-1 (duplicate `_PAGE_HELP` key fixed; stale "Connectivity Tests" _FEATURES ref corrected), S11-4 (two new CI parity gates in `test_nav_completeness.py`).
+
+**Sprint 4 queue (next session):** S1-2 (extract scan-result wiring — 23 `_on_*_result` handlers to `ui/scan_wiring.py`; requires window-param conversion), S3-1 (extract `_HubCard` from hardware_integration_page.py), S3-2 (extract `OverviewTile` from overview_page.py), S3-3 (extract home-page section widgets to ui/widgets/home_widgets.py).

@@ -106,6 +106,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Packet capture requires Npcap on Windows — install it from npcap.com for this tab to populate.",
             "Click a row to see the breakdown of protocols that device is using.",
+            "The top-talker list shows which device is consuming the most bandwidth — useful for finding rogue downloaders.",
         ],
     },
     "Active Connections": {
@@ -128,12 +129,6 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Compare any two scan snapshots from the dropdown to see exactly which MACs joined or left.",
             "New devices are highlighted in green, departures in red — export the diff as CSV for change-control records.",
-        ],
-    },
-    "Bandwidth Usage": {
-        "what": "Per-interface inbound/outbound bandwidth with 60-second rolling window and top-talker list.",
-        "hidden": [
-            "The top-talker list shows which device is consuming the most bandwidth — useful for finding rogue downloaders.",
         ],
     },
     "Service Heartbeat": {

@@ -147,6 +147,8 @@ hiddenimports: list = [
     "modules.wifi_scanner",
     # ── ui/ — shell and all page modules ──────────────────────────────────────
     "ui.dashboard",
+    "ui.nav",
+    "ui.nav.rail",
     "ui.command_palette",
     "ui.help",
     "ui.empty_state",

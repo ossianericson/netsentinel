@@ -529,6 +529,35 @@ Add to `_ENDPOINTS` in `RestApiPage._update_endpoint_ref()` in the same session 
 
 ---
 
+## Sprint Planning
+
+### RULE-SPRINT1 (blocking): Git log first when starting a sprint
+Whenever the user says "work on the next sprint", "start Sprint N", or any variation,
+the **mandatory first step** is:
+```powershell
+git log --oneline -5
+```
+Read the output to understand what was delivered in previous sprints.
+Only then pick up the next available items from the plan.
+Do **not** start by reading files or checking current state before reviewing git history.
+
+### RULE-SPRINT2 (blocking): Update the active plan document when a sprint ends
+When a sprint's work is complete (all items done or explicitly deferred), locate the
+active backlog, plan, or sprint-tracking document and update it before closing the
+session.  Do **not** assume a specific filename — look for the document that contains
+the implementation-order table or sprint queue for the current body of work.
+
+Required updates (regardless of document name or format):
+1. Mark every completed item with ✅.
+2. Add a note for any items that were scoped but not completed, with the target sprint.
+3. Update the footer or summary line with the sprint completion date.
+4. Record the next sprint's planned queue so the next session can start without research.
+
+This keeps the plan current so any future agent or session can start immediately
+with the right context, without re-deriving what was already done.
+
+---
+
 ## Debugging & Troubleshooting
 
 ### RULE-DBG1 (blocking): Git Diff First — read the diff before writing any diagnostic plan
