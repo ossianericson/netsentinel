@@ -71,10 +71,13 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # tabs.py now 949 lines — tighten further as _build_tabs() is decomposed.
     "tabs.py": 1149,  # actual 949 + 200 margin (Sprint 8 sub-mixin extraction)
 
-    # _DiagTabsMixin — diagnostics, logger, MTR, advanced tools, event handlers.
-    # Large because it combines four tab builders + all associated handlers.
-    # Next split: extract logger tab + handlers → tabs_logger.py (~700 lines).
-    "tabs_diag.py": 1382,  # actual 1,182 + 200 margin (Sprint 8 new file)
+    # _DiagTabsMixin — diagnostics, MTR, advanced tools, alert routing.
+    # Logger tab + retention helpers extracted to tabs_logger.py (Sprint 15).
+    "tabs_diag.py": 650,  # actual 448 + 200 margin (Sprint 15 logger extraction)
+
+    # _LoggerTabMixin — network logger tab builder + handlers + retention helpers.
+    # Extracted from tabs_diag.py (Sprint 15).
+    "tabs_logger.py": 975,  # actual 772 + 200 margin (Sprint 15 new file)
 
     # Help panel: _PAGE_HELP dict + build_help_tab() + _page_header helper.
     "help.py": 1200,  # actual 1,133 + margin (S13-2 extraction)
@@ -146,15 +149,18 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # If grows past 1,400, split by group into discover_data_security.py etc.
     "pages/discover_data.py": 1342,  # actual 1,142 + 200 margin (Sprint 13 new file)
 
-    # Landing page — hero, suggestions, tips, dashboard strip, GettingStartedCard, FreshnessStrip.
-    # Sprint 7 (S14-1): FreshnessStrip + GettingStartedCard + 3 standalone classes extracted
-    #   to ui/widgets/home_widgets.py; home_page.py 3,032 → 2,238 lines.
-    # Next target: extract RecurringSection and HeroCard sections from _setup_ui() → ≤1,500 lines.
-    "pages/home_page.py": 2440,  # actual 2,238 + 200 margin (Sprint 7 S14-1)
+    # Landing page — layout only; all data handlers extracted to home_data_mixin.py (Sprint 15).
+    # Sprint 15: _MiniCard, _AlertRow → home_widgets.py; all handlers → home_data_mixin.py;
+    #   home_page.py 2,238 → 1,128 lines. Target ≤1,200 achieved.
+    "pages/home_page.py": 1328,  # actual 1,128 + 200 margin (Sprint 15)
 
-    # home_widgets.py grew in Sprint 7 (S14-1) to hold extracted classes.
-    # Further split: move welcome pages to their own files if > 1,500 lines.
-    "widgets/home_widgets.py": 1370,  # actual 1,166 + 200 margin (Sprint 7 S14-1)
+    # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15).
+    # Natural split if needed: split update vs. scan result methods.
+    "pages/home_data_mixin.py": 1107,  # actual 907 + 200 margin (Sprint 15 new file)
+
+    # home_widgets.py grew in Sprint 7 (S14-1) and Sprint 15 (_MiniCard, _AlertRow).
+    # Further split: move _MiniCard/_AlertRow to mini_card.py if > 1,600 lines.
+    "widgets/home_widgets.py": 1516,  # actual 1,316 + 200 margin (Sprint 15)
 
     # ── Sprint 13 new files ────────────────────────────────────────────────────
     # _PAGE_HELP dict — all page help strings for the tip bar.

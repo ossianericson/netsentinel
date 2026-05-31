@@ -151,6 +151,7 @@ netsentinel/
 │   │   ├── plugin_guide.py         # PluginGuide widget — collapsible 4-step plugin authoring guide (S14-2 split)
 │   │   ├── plugin_wizard_mixin.py  # _PluginWizardMixin — "New Plugin" template wizard (S14-2 split)
 │   │   ├── home_automation_page.py
+│   │   ├── home_data_mixin.py      # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15)
 │   │   ├── home_page.py            # Landing page — hero, suggestions, tips, dashboard strip
 │   │   ├── home_suggestions.py     # _HomeSuggestionsMixin — 'What to do next' strip logic (Sprint 13)
 │   │   ├── inventory_page.py
@@ -191,6 +192,7 @@ netsentinel/
 │   ├── scan_enrichment.py      # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers (Sprint 13)
 │   ├── tabs_analysis.py        # _AnalysisTabsMixin — IPv6/Cloud/Correlator/IoT/Benchmark tab builders (Sprint 13)
 │   ├── tabs_diag_extra.py      # _DiagExtraTabsMixin — MTR tab + advanced tools tab + handlers (Sprint 13)
+│   ├── tabs_logger.py          # _LoggerTabMixin — network logger tab builder + handlers + retention helpers (Sprint 15)
 │   └── widgets/
 │       ├── alert_drawer.py         # Slide-in alert detail drawer
 │       ├── animated_kpi.py         # Animated KPI counter with ease-out count-up

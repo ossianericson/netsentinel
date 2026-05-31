@@ -14,7 +14,7 @@ from PyQt6.QtCore import QEasingCurve, QPointF, QRectF, Qt, QSettings, QVariantA
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QVBoxLayout, QWidget,
+    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -1165,3 +1165,152 @@ class ProWelcomePage(QWidget):
             card_lay.addWidget(b)
 
         return card
+
+
+# ── Stat cards extracted from HomePage (Sprint 15) ───────────────────────────
+
+class _MiniCard(QFrame):
+    """One of the three top-line metric summary cards on the Home page."""
+
+    clicked = pyqtSignal()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def __init__(self, icon: str, title: str, val: str, sub: str,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("statCard")
+        self.setMinimumHeight(100)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet(
+            f"QFrame#statCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 8, 12, 8)
+        lay.setSpacing(2)
+
+        self._icon_lbl = QLabel(icon)
+        self._icon_lbl.setStyleSheet(
+            f"font-size:13px; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        self._title_lbl = QLabel(title)
+        self._title_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        self._val_lbl = QLabel(val)
+        self._val_lbl.setStyleSheet(
+            f"font-size:20px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        self._sub_lbl = QLabel(sub)
+        self._sub_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+
+        self._dot_lbl = QLabel("●")
+        self._dot_lbl.setStyleSheet(
+            f"font-size:8px; color:{GREEN}; background:transparent; border:none;"
+        )
+        self._dot_lbl.setFixedWidth(12)
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(0, 0, 0, 0)
+        status_row.setSpacing(3)
+        status_row.addWidget(self._dot_lbl)
+        status_row.addWidget(self._status_lbl)
+        status_row.addStretch()
+
+        self._sparkline = _MiniSparkline(self)
+        self._sparkline.hide()
+
+        lay.addWidget(self._icon_lbl)
+        lay.addWidget(self._title_lbl)
+        lay.addWidget(self._val_lbl)
+        lay.addWidget(self._sparkline)
+        lay.addWidget(self._sub_lbl)
+        lay.addLayout(status_row)
+
+    def set_value(self, val: str, sub: str, status: str, colour: str) -> None:
+        """Update the card's main value, subtitle, status dot and label."""
+        self._val_lbl.setText(val)
+        self._val_lbl.setStyleSheet(
+            f"font-size:20px; font-weight:bold; color:{colour};"
+            " background:transparent; border:none;"
+        )
+        self._sub_lbl.setText(sub)
+        self._dot_lbl.setStyleSheet(
+            f"font-size:8px; color:{colour};"
+            " background:transparent; border:none;"
+        )
+        self._status_lbl.setText(status)
+
+    def set_sparkline_data(self, points: list, colour: str = ACCENT) -> None:
+        """Show the mini sparkline with the given data points."""
+        if len(points) >= 2:
+            self._sparkline.set_data(points, colour)
+            self._sparkline.show()
+        else:
+            self._sparkline.hide()
+
+
+class _AlertRow(QFrame):
+    """Single row in the recent-alerts strip on the Home page."""
+
+    clicked = pyqtSignal(object)  # carries the raw alert object
+
+    def __init__(self, colour: str, msg: str, time_str: str,
+                 alert: object = None,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._alert = alert
+        self.setObjectName("alertRow")
+        self.setFixedHeight(28)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet("QFrame#alertRow { background:transparent; border:none; }")
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+
+        dot = QLabel("●")
+        dot.setFixedWidth(12)
+        dot.setStyleSheet(
+            f"font-size:8px; color:{colour};"
+            " background:transparent; border:none;"
+        )
+        msg_lbl = QLabel(msg)
+        msg_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        msg_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        time_lbl = QLabel(time_str)
+        time_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+        time_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        lay.addWidget(dot)
+        lay.addWidget(msg_lbl, 1)
+        lay.addWidget(time_lbl)
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        self.clicked.emit(self._alert)
+        super().mousePressEvent(event)

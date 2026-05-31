@@ -320,6 +320,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.65
+
+**Changed**
+- `ui/tabs_diag.py`: logger tab + retention helpers extracted to `ui/tabs_logger.py` (`_LoggerTabMixin`); `tabs_diag.py` 1,182→448 lines (S15)
+- `ui/pages/home_page.py`: 2,238→1,128 lines — `_MiniCard` + `_AlertRow` moved to `home_widgets.py`; all data handlers extracted to `_HomeDataMixin` in `home_data_mixin.py`; `_HomeSuggestionsMixin` wired (S15)
+
+**Added**
+- `ui/tabs_logger.py` — `_LoggerTabMixin`: Network Logger tab builder, logger start/stop handlers, live-challenge handlers, retention helpers (Sprint 15)
+- `ui/pages/home_data_mixin.py` — `_HomeDataMixin`: all data update and public slot methods for `HomePage` (Sprint 15)
+
 ### v1.9.64
 
 **Added**

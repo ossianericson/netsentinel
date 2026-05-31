@@ -1,0 +1,907 @@
+"""
+home_data_mixin.py — _HomeDataMixin: data handlers and public slots for HomePage.
+
+Extracted from ui/pages/home_page.py (Sprint 15). Contains all update/handler methods
+that operate on widgets built by _setup_ui, keeping home_page.py focused on layout.
+"""
+from __future__ import annotations
+
+import datetime
+import json
+
+from PyQt6.QtCore import Qt, QSettings, QUrl, pyqtSlot
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtWidgets import (
+    QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+)
+
+from ui.styles import (
+    ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_HOVER, BORDER,
+    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+)
+from ui.widgets.home_widgets import (
+    _load_grade_history, _GRADE_HISTORY_KEY,
+    _GradeBreakdownDialog, _AlertRow,
+)
+
+try:
+    from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
+except ImportError:
+    _GUIDE_FEATURES: list = []
+
+
+class _HomeDataMixin:
+    """Mixin providing data handlers and public slots for HomePage.
+
+    Extracted from ui/pages/home_page.py (Sprint 15).
+    Requires all widgets to be pre-built by _setup_ui in the host class.
+    """
+
+    # ── Feature search ────────────────────────────────────────────────────────
+
+    def _apply_home_search(self, text: str) -> None:
+        while self._search_results_inner.count():
+            item = self._search_results_inner.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+
+        q = text.strip().lower()
+        if not q:
+            self._search_results.setVisible(False)
+            return
+
+        filtered = [
+            f for f in _GUIDE_FEATURES
+            if q in f["name"].lower()
+            or q in f["desc"].lower()
+            or q in f.get("group", "").lower()
+            or q in (f.get("page") or "").lower()
+            or any(q in t.lower() for t in f.get("tags", []))
+        ][:6]
+
+        if not filtered:
+            lbl = QLabel(f'No features matching "{text}"')
+            lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY};"
+                " background:transparent; border:none;"
+            )
+            self._search_results_inner.addWidget(lbl)
+        else:
+            for feat in filtered:
+                self._search_results_inner.addWidget(
+                    self._make_search_result_row(feat)
+                )
+        self._search_results.setVisible(True)
+
+    def _make_search_result_row(self, feat: dict) -> QWidget:
+        row = QWidget()
+        row.setStyleSheet("background:transparent;")
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(2, 3, 2, 3)
+        rl.setSpacing(8)
+
+        name_lbl = QLabel(feat["name"])
+        name_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none; min-width:130px;"
+        )
+        desc_lbl = QLabel(feat["desc"])
+        desc_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+        desc_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        btn = QPushButton("Open →")
+        btn.setFlat(True)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px;"
+            f" background:transparent; border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+        )
+        target = feat.get("page") or "Feature Guide"
+        btn.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
+
+        rl.addWidget(name_lbl)
+        rl.addWidget(desc_lbl, 1)
+        rl.addWidget(btn)
+        return row
+
+    # ── Discoverability / show event ──────────────────────────────────────────
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        qs = QSettings("NetSentinel", "NetSentinel")
+        api_enabled = qs.value("rest_api/enabled", False, type=bool)
+        strip_dismissed = qs.value("home/dashboard_strip_dismissed", False, type=bool)
+        if api_enabled and not strip_dismissed:
+            port = int(qs.value("rest_api/port", 8765))
+            self._dashboard_url = f"http://localhost:{port}/dashboard"
+            self._ds_text.setText(
+                f"REST API running at localhost:{port} — browser dashboard + 7 endpoints "
+                f"(devices, alerts, uptime, grade…). Open Settings to see the full list."
+            )
+            self._dashboard_strip.setVisible(True)
+        else:
+            self._dashboard_strip.setVisible(False)
+        tips_dismissed = qs.value("home/tips_dismissed", False, type=bool)
+        if not tips_dismissed:
+            self._tip_row_rest_api.setVisible(not api_enabled)
+            self._tips_card.setVisible(True)
+        else:
+            self._tips_card.setVisible(False)
+        self.refresh_checklist()
+        self.refresh_diag_summary()
+        self._check_recurring_mode()
+        if self._recurring_mode:
+            self._update_recurring_scan_time()
+            self._update_this_week()
+            self._refresh_sparkline()
+
+    def _open_dashboard(self) -> None:
+        QDesktopServices.openUrl(QUrl(self._dashboard_url))
+
+    def _dismiss_dashboard_strip(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            "home/dashboard_strip_dismissed", True
+        )
+        self._dashboard_strip.setVisible(False)
+
+    @pyqtSlot()
+    def refresh_hw_strip(self) -> None:
+        """Compatibility shim -- delegates to refresh_checklist."""
+        self.refresh_checklist()
+
+    def refresh_checklist(self) -> None:
+        """Delegate to the GettingStartedCard widget."""
+        if hasattr(self, "_setup_card_top"):
+            self._setup_card_top.refresh_checklist(self._device_count)
+
+    def _dismiss_tips(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("home/tips_dismissed", True)
+        self._tips_card.setVisible(False)
+
+    def _dismiss_post_scan_sheet(self) -> None:
+        self._post_scan_sheet.setVisible(False)
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            "home/post_scan_sheet_dismissed", True
+        )
+        if not any(p.text().startswith("●") for p in (
+            self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger
+        )):
+            self._monitoring_nudge.setVisible(True)
+
+    def _maybe_show_post_scan_sheet(
+        self, n_total: int, n_new: int, n_at_risk: int
+    ) -> None:
+        if QSettings("NetSentinel", "NetSentinel").value(
+            "home/post_scan_sheet_dismissed", False, type=bool
+        ):
+            return
+        n_recognized = n_total - n_new
+        parts = [f"{n_total} device{'s' if n_total != 1 else ''} found"]
+        if n_new:
+            parts.append(f"{n_new} new")
+        if n_recognized and n_new:
+            parts.append(f"{n_recognized} recognized")
+        self._sheet_stats_lbl.setText("  ·  ".join(parts))
+        if self._current_grade:
+            self._sheet_grade_btn.setText(
+                f"Network Grade: {self._current_grade}  →"
+            )
+        else:
+            self._sheet_grade_btn.setText("Run a Network Grade →")
+        if n_at_risk > 0:
+            self._sheet_action_btn.setText("Check unknown devices →")
+            self._sheet_action_target = "Devices"
+        else:
+            self._sheet_action_btn.setText("Set up notifications →")
+            self._sheet_action_target = "Notifications"
+        self._post_scan_sheet.setVisible(True)
+
+    # ── First-run / recurring-user layout ────────────────────────────────────
+
+    def _set_first_run_mode(self, on: bool) -> None:
+        """Show/hide secondary sections based on whether any devices have been scanned."""
+        self._first_run_mode = on
+        for w in (
+            self._sec1_lbl, self._mini_cards_widget,
+            self._monitoring_pills_row, self._monitoring_nudge,
+            self._sec_mon_lbl, self._mon_card,
+            self._alerts_hdr_row, self._alert_card,
+        ):
+            w.setVisible(not on)
+        if on:
+            self._hero_title.setText("Discover your network")
+            self._hero_sub.setText(
+                "See every device, check your security score, and start monitoring"
+                " — takes about 30 seconds."
+                "   ·   Try Ctrl+K to find any feature instantly."
+            )
+            self._suggestions_sec.setVisible(False)
+            self._suggestions_card.setVisible(False)
+            self._tips_card.setVisible(False)
+
+    def _check_recurring_mode(self) -> None:
+        """Activate recurring layout if setup is complete and ≥5 scans recorded."""
+        if self._first_run_mode or self._recurring_mode:
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        scan_count = int(qs.value("home/scan_count", 0))
+        if scan_count >= 5 and all(self._setup_card_top._checklist_states(self._device_count).values()):
+            self._apply_recurring_layout(True)
+
+    def _apply_recurring_layout(self, on: bool) -> None:
+        """Toggle between new-user and recurring-user Home layout."""
+        if self._recurring_mode == on:
+            return
+        self._recurring_mode = on
+        self._recurring_section.setVisible(on)
+        self._this_week_card.setVisible(on)
+        self._btn_scan.setVisible(not on)
+        self._btn_rescan_compact.setVisible(on)
+        self._monitoring_pills_row.setVisible(not on)
+        self._monitoring_nudge.setVisible(False)
+        self._btn_view_all_alerts.setVisible(on)
+        if on:
+            self._update_recurring_grade_display()
+            self._update_recurring_scan_time()
+            self._update_this_week()
+
+    def _update_recurring_grade_display(self) -> None:
+        if not hasattr(self, "_rec_grade_lbl"):
+            return
+        if self._current_grade:
+            from ui.styles import GREEN as _G, AMBER as _A, RED as _R
+            color = _G if self._current_grade in ("A", "B") else (
+                _A if self._current_grade == "C" else _R
+            )
+            self._rec_grade_lbl.setText(f"Network Grade: {self._current_grade}")
+            self._rec_grade_lbl.setStyleSheet(
+                f"font-size:11px; font-weight:600; color:{color};"
+                " background:transparent; border:none;"
+            )
+        else:
+            self._rec_grade_lbl.setText("Network Grade: —")
+
+    def _update_recurring_scan_time(self) -> None:
+        if not hasattr(self, "_rec_scan_time_lbl"):
+            return
+        if self._last_scan_ts is None:
+            self._rec_scan_time_lbl.setText("Last scan: —")
+            return
+        delta = datetime.datetime.now() - self._last_scan_ts
+        mins = int(delta.total_seconds() / 60)
+        if mins < 1:
+            self._rec_scan_time_lbl.setText("Last scan: just now")
+        elif mins < 60:
+            self._rec_scan_time_lbl.setText(f"Last scan: {mins}m ago")
+        else:
+            self._rec_scan_time_lbl.setText(f"Last scan: {mins // 60}h ago")
+
+    def _refresh_sparkline(self) -> None:
+        if hasattr(self, "_grade_sparkline"):
+            self._grade_sparkline.set_points(_load_grade_history())
+
+    def _update_this_week(self) -> None:
+        if not self._store:
+            return
+        try:
+            alerts = self._store.get_recent_alerts(hours=168, limit=500)
+            self._tw_alerts_val.setText(str(len(alerts)))
+
+            events = self._store.query_device_events(hours=168, event_types=["JOINED"])
+            self._tw_devices_val.setText(str(len(events)))
+
+            cves = self._store.list_cve_lifecycles() or []
+            self._tw_cve_val.setText(str(len(cves)))
+            self._tw_cve_val.setStyleSheet(
+                f"font-size:16px; font-weight:bold;"
+                f" color:{RED if cves else TEXT_MUTED};"
+                " background:transparent; border:none;"
+            )
+
+            grade_now = self._current_grade or "—"
+            self._tw_grade_val.setText(grade_now)
+        except Exception:
+            pass
+
+    def _update_scan_button_label(self) -> None:
+        label = "▶  Scan Network" if self._device_count == 0 else "▶  Rescan"
+        self._btn_scan.setText(label)
+
+    # ── Monitoring pill status ────────────────────────────────────────────────
+
+    def set_monitor_pills(
+        self, arp: bool, dhcp: bool, storm: bool, logger: bool
+    ) -> None:
+        """Update monitoring pill badges. Called by dashboard on worker state changes."""
+        _pill_map = [
+            (self._pill_arp,    arp,    "ARP Watch"),
+            (self._pill_dhcp,   dhcp,   "DHCP Watch"),
+            (self._pill_storm,  storm,  "Broadcast Storm"),
+            (self._pill_logger, logger, "Network Logger"),
+        ]
+        for btn, active, label in _pill_map:
+            if active:
+                btn.setText(f"●  {label}")
+                btn.setStyleSheet(
+                    f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                    f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
+                    f" padding:1px 10px; }}"
+                    f"QPushButton:hover {{ background:{GREEN}44; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                )
+            else:
+                btn.setText(f"○  {label}")
+                btn.setStyleSheet(
+                    f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
+                    f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                    f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                )
+        if any([arp, dhcp, storm, logger]):
+            self._monitoring_nudge.setVisible(False)
+        self._freshness_strip.update_freshness(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
+        _rec_map = [
+            (self._rec_pill_arp,    arp,    "ARP Watch"),
+            (self._rec_pill_dhcp,   dhcp,   "DHCP Watch"),
+            (self._rec_pill_storm,  storm,  "Broadcast Storm"),
+            (self._rec_pill_logger, logger, "Network Logger"),
+        ]
+        for rbtn, active, rlabel in _rec_map:
+            if active:
+                rbtn.setText(f"●  {rlabel}")
+                rbtn.setStyleSheet(
+                    f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                    f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
+                    f" padding:1px 10px; }}"
+                    f"QPushButton:hover {{ background:{GREEN}44; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                )
+            else:
+                rbtn.setText(f"○  {rlabel}")
+                rbtn.setStyleSheet(
+                    f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:10px;"
+                    f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
+                    f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                )
+
+    # ── Action-needed card ────────────────────────────────────────────────────
+
+    def set_action_needed(self, pending_alerts: int, offline_devices: int) -> None:
+        """Update the offline-devices portion of the Action Needed card (DASH-1)."""
+        self._ac_offline_count = offline_devices
+        if offline_devices > 0:
+            self._ac_devices_lbl.setText(
+                f"{offline_devices} device{'s' if offline_devices != 1 else ''} offline"
+            )
+        else:
+            self._ac_devices_lbl.setText("")
+        if pending_alerts == 0:
+            has_alert_rows = self._ac_alert_rows_lay.count() > 0
+            if not has_alert_rows:
+                self._action_card.setVisible(offline_devices > 0)
+
+    def set_pending_alert_rows(self, alerts: list) -> None:
+        """ALERT-3: Populate the action-needed card with per-alert rows + inline ack."""
+        import time as _time
+
+        while self._ac_alert_rows_lay.count():
+            item = self._ac_alert_rows_lay.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+
+        alerts = alerts[:5]
+
+        for alert in alerts:
+            alert_id   = alert.get("id")
+            severity   = alert.get("severity", "WARNING")
+            rule       = alert.get("rule_name", "Alert")
+            msg        = alert.get("message", "")
+            ts         = float(alert.get("ts") or 0)
+            elapsed    = max(0, int(_time.time()) - int(ts))
+            if elapsed < 60:
+                time_str = f"{elapsed}s ago"
+            elif elapsed < 3600:
+                time_str = f"{elapsed // 60}m ago"
+            else:
+                time_str = f"{elapsed // 3600}h ago"
+
+            dot_color  = RED if severity == "CRITICAL" else AMBER
+            label_text = f"{rule} · {msg[:50]}" if msg else rule
+
+            row_w = QWidget()
+            row_w.setStyleSheet("background:transparent;")
+            row_lay = QHBoxLayout(row_w)
+            row_lay.setContentsMargins(0, 1, 0, 1)
+            row_lay.setSpacing(6)
+
+            dot = QLabel("●")
+            dot.setFixedWidth(12)
+            dot.setStyleSheet(
+                f"font-size:8px; color:{dot_color}; background:transparent; border:none;"
+            )
+
+            msg_lbl = QLabel(label_text)
+            msg_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            )
+            msg_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            msg_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+            msg_lbl.setToolTip("Click to view in Notifications")
+            msg_lbl.mousePressEvent = lambda _e, a=alert: self.alert_view_requested.emit(a)
+
+            time_lbl = QLabel(time_str)
+            time_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+
+            ack_btn = QPushButton("✓")
+            ack_btn.setFixedSize(22, 18)
+            ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            ack_btn.setToolTip("Acknowledge this alert")
+            ack_btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
+                f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
+                f"QPushButton:hover {{ color:{GREEN}; border-color:{GREEN}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            )
+            ack_btn.clicked.connect(lambda _=False, aid=alert_id, w=row_w: self._ack_alert_row(aid, w))
+
+            row_lay.addWidget(dot)
+            row_lay.addWidget(msg_lbl, 1)
+            row_lay.addWidget(time_lbl)
+            row_lay.addWidget(ack_btn)
+            self._ac_alert_rows_lay.addWidget(row_w)
+
+        has_alerts = len(alerts) > 0
+        self._ac_alert_rows_widget.setVisible(has_alerts)
+        self._ac_view_all_btn.setVisible(has_alerts)
+        self._action_card.setVisible(has_alerts or self._ac_offline_count > 0)
+
+    def _ack_alert_row(self, alert_id, row_widget) -> None:
+        if self._store and alert_id is not None:
+            try:
+                self._store.acknowledge_alert(int(alert_id))
+            except Exception:
+                pass
+        row_widget.setVisible(False)
+        row_widget.deleteLater()
+        remaining = sum(
+            1 for i in range(self._ac_alert_rows_lay.count())
+            if self._ac_alert_rows_lay.itemAt(i) and
+               self._ac_alert_rows_lay.itemAt(i).widget() and
+               self._ac_alert_rows_lay.itemAt(i).widget().isVisible()
+        )
+        if remaining == 0:
+            self._ac_alert_rows_widget.setVisible(False)
+            self._ac_view_all_btn.setVisible(False)
+            if self._ac_offline_count == 0:
+                self._action_card.setVisible(False)
+
+    def _scroll_to_setup_card(self) -> None:
+        """Scroll to / expand the Getting Started card."""
+        if hasattr(self, "_setup_card_top"):
+            self._setup_card_top.ensure_expanded()
+
+    # ── Diag summary / scanning state ────────────────────────────────────────
+
+    def refresh_diag_summary(self) -> None:
+        import json as _json_mod
+        if not hasattr(self, "_rec_diag_lbl"):
+            return
+        s = QSettings("NetSentinel", "NetSentinel")
+        try:
+            history = _json_mod.loads(s.value("diagnosis/history", "[]"))
+        except Exception:
+            history = []
+        if not history:
+            self._rec_diag_lbl.setText("Last diagnosis:  none yet")
+            self._rec_diag_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+            return
+        e = history[0]
+        ts = e.get("ts", 0)
+        if ts:
+            secs = datetime.datetime.now().timestamp() - ts
+            if secs < 60:
+                ago = "just now"
+            elif secs < 3600:
+                ago = f"{int(secs // 60)}m ago"
+            elif secs < 86400:
+                ago = f"{int(secs // 3600)}h ago"
+            else:
+                ago = f"{int(secs // 86400)}d ago"
+        else:
+            ago = "—"
+        sev = e.get("severity", "INFO")
+        n = len(e.get("findings", []))
+        sev_colors = {"CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN, "INFO": ACCENT}
+        color = sev_colors.get(sev, TEXT_MUTED)
+        txt = f"Last diagnosis:  {sev} · {n} finding{'s' if n != 1 else ''} · {ago}"
+        self._rec_diag_lbl.setText(txt)
+        self._rec_diag_lbl.setStyleSheet(
+            f"font-size:11px; color:{color}; background:transparent; border:none;"
+        )
+
+    def set_scanning(self, running: bool) -> None:
+        self._btn_scan.setEnabled(not running)
+        if running:
+            self._btn_scan.setText("Scanning…")
+            self._hero_sub.setText(
+                "Scan in progress — tiles will update as each module completes."
+            )
+        else:
+            self._update_scan_button_label()
+            self._hero_sub.setText("Discover devices · check stability · detect threats")
+            self._freshness_strip.set_scan_progress("")
+
+    @pyqtSlot(str)
+    def set_scan_progress(self, message: str) -> None:
+        """Show per-host scan status in the freshness strip (SCAN-2)."""
+        self._freshness_strip.set_scan_progress(message)
+
+    # ── Data preload ──────────────────────────────────────────────────────────
+
+    def _preload_from_store(self) -> None:
+        """Populate cards with the most-recent persisted data on first show."""
+        if self._store is None:
+            return
+        try:
+            self.objectName()
+        except RuntimeError:
+            return
+        try:
+            speed_rows = self._store.query_speed_test_history(hours=168, limit=10)
+            if speed_rows:
+                row = speed_rows[0]
+                dl = row.download_mbps or 0.0
+                ul = row.upload_mbps or 0.0
+                colour = GREEN if dl > 25 else (AMBER if dl > 5 else RED)
+                self._speed_card.set_value(
+                    f"{dl:.0f} Mbps",
+                    f"/ up {ul:.0f} Mbps",
+                    "(last scan)",
+                    colour,
+                )
+                dl_points = [r.download_mbps or 0.0 for r in reversed(speed_rows)]
+                self._speed_card.set_sparkline_data(dl_points, colour)
+        except Exception:
+            pass
+
+        try:
+            self._events_ticker.set_store(self._store)
+        except Exception:
+            pass
+        try:
+            devices = self._store.get_known_devices()
+            n = len(devices)
+            self._device_count = n
+            self._update_scan_button_label()
+            if n > 0:
+                self._devices_card.set_value(
+                    str(n),
+                    "on network",
+                    "(last scan)",
+                    GREEN,
+                )
+        except Exception:
+            pass
+        if self._device_count == 0:
+            self._set_first_run_mode(True)
+        else:
+            self._check_recurring_mode()
+
+    # ── Public slots: scan results ────────────────────────────────────────────
+
+    @pyqtSlot(dict)
+    def on_cycle_done(self, result: dict) -> None:
+        """Refresh devices and stability cards from an availability cycle result."""
+        _now = datetime.datetime.now()
+        self._last_scan_ts = _now
+        QSettings("NetSentinel", "NetSentinel").setValue("home/last_scan_ts", _now.isoformat())
+        self._freshness_strip.set_scan_timestamp(
+            "Last scan: just now",
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;",
+        )
+
+        devices = result.get("devices", [])
+        rtts = result.get("rtts", {})
+        n_total = len(devices)
+        was_first_run = self._first_run_mode
+        if n_total > 0 and self._first_run_mode:
+            self._set_first_run_mode(False)
+
+        import json as _json
+        _qs_delta = QSettings("NetSentinel", "NetSentinel")
+        _current_macs = {
+            (d.get("mac") or getattr(d, "mac", None) or "")
+            for d in devices
+            if (d.get("mac") if isinstance(d, dict) else getattr(d, "mac", None))
+        }
+        _prev_raw = _qs_delta.value("home/last_scan_macs", "[]")
+        try:
+            _prev_macs = set(_json.loads(_prev_raw))
+        except Exception:
+            _prev_macs = set()
+        _qs_delta.setValue("home/last_scan_macs", _json.dumps(list(_current_macs)))
+        if _prev_macs:
+            _new_count  = len(_current_macs - _prev_macs)
+            _gone_count = len(_prev_macs - _current_macs)
+            if _new_count == 0 and _gone_count == 0:
+                _chips_html = f'<span style="color:{GREEN};">● No changes since last scan</span>'
+            else:
+                _parts = []
+                if _new_count:
+                    _parts.append(f'<span style="color:{AMBER};">+{_new_count} new device{"s" if _new_count != 1 else ""}</span>')
+                if _gone_count:
+                    _parts.append(f'<span style="color:{RED};">−{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
+                _chips_html = "  ·  ".join(_parts)
+            self._delta_chips_lbl.setText(_chips_html)
+            self._delta_chips_lbl.setTextFormat(Qt.TextFormat.RichText)
+            self._delta_banner.setVisible(True)
+
+        n_at_risk = sum(
+            1 for d in devices
+            if d.get("risk_level", "UNKNOWN") in ("HIGH", "UNKNOWN")
+        )
+        dev_colour = GREEN if n_at_risk == 0 else AMBER
+        n_new = sum(1 for d in devices if d.get("is_new", False))
+        dev_sub = f"on network" + (f" · {n_new} new" if n_new else "")
+        dev_status = (
+            f"{n_at_risk} at risk" if n_at_risk
+            else ("All healthy" if n_total > 0 else "Run a scan to discover devices")
+        )
+        self._device_count = n_total
+        self._update_scan_button_label()
+        self._devices_card.set_value(str(n_total), dev_sub, dev_status, dev_colour)
+
+        avg_rtt: float | None = None
+        if rtts:
+            all_vals: list[float] = []
+            for v in rtts.values():
+                if isinstance(v, (int, float)):
+                    all_vals.append(float(v))
+                elif isinstance(v, list):
+                    all_vals.extend(float(x) for x in v if x is not None)
+            if all_vals:
+                avg_rtt = sum(all_vals) / len(all_vals)
+                if avg_rtt < 50:
+                    stab_colour, stab_status = GREEN, "Stable connection"
+                elif avg_rtt < 150:
+                    stab_colour, stab_status = AMBER, "Moderate latency"
+                else:
+                    stab_colour, stab_status = RED, "High latency"
+                self._stability_card.set_value(
+                    f"{avg_rtt:.0f} ms", "avg latency", stab_status, stab_colour
+                )
+
+        if n_total > 0:
+            rtt_part = f" · {avg_rtt:.0f} ms avg latency" if avg_rtt is not None else ""
+            risk_part = (
+                f" · {n_at_risk} device{'s' if n_at_risk != 1 else ''} at risk"
+                if n_at_risk else " · No alerts"
+            )
+            self._hero_title.setText(
+                "Your network is in great shape"
+                if n_at_risk == 0 else
+                f"{n_at_risk} device{'s' if n_at_risk != 1 else ''} need attention"
+            )
+            self._hero_sub.setText(
+                f"{n_total} device{'s' if n_total != 1 else ''} online"
+                f"{rtt_part}{risk_part}"
+            )
+
+        if n_total > 0:
+            _s = "s" if n_total != 1 else ""
+            _new = f"  ·  {n_new} new" if n_new else ""
+            self._res_devices_lbl.setText(f"{n_total} device{_s} found{_new}")
+            _dev_colour = GREEN if n_at_risk == 0 else AMBER
+            self._res_devices_dot.setStyleSheet(
+                f"font-size:8px; color:{_dev_colour};"
+                " background:transparent; border:none;"
+            )
+
+            if avg_rtt is not None:
+                _conn_colour = GREEN if avg_rtt < 50 else (AMBER if avg_rtt < 150 else RED)
+                self._res_conn_lbl.setText(f"{avg_rtt:.0f} ms avg latency")
+            else:
+                _conn_colour = GREEN
+                self._res_conn_lbl.setText("Connection monitoring active")
+            self._res_conn_dot.setStyleSheet(
+                f"font-size:8px; color:{_conn_colour};"
+                " background:transparent; border:none;"
+            )
+
+            if n_at_risk == 0:
+                _sec_colour = GREEN
+                self._res_security_lbl.setText("No security issues detected")
+            else:
+                _sec_colour = RED
+                _i = "s" if n_at_risk != 1 else ""
+                self._res_security_lbl.setText(f"{n_at_risk} device{_i} need attention")
+            self._res_security_dot.setStyleSheet(
+                f"font-size:8px; color:{_sec_colour};"
+                " background:transparent; border:none;"
+            )
+
+            self._results_strip.setVisible(True)
+
+        if was_first_run and n_total > 0:
+            self._maybe_show_post_scan_sheet(n_total, n_new, n_at_risk)
+        self.refresh_checklist()
+        if n_total > 0:
+            self._last_scan_ts = datetime.datetime.now()
+            qs = QSettings("NetSentinel", "NetSentinel")
+            qs.setValue("home/scan_count", int(qs.value("home/scan_count", 0)) + 1)
+            if self._recurring_mode:
+                self._update_recurring_scan_time()
+            else:
+                self._check_recurring_mode()
+
+    @pyqtSlot(object)
+    def on_speed_result(self, result) -> None:
+        """Refresh the speed mini-card from a SpeedTestResult."""
+        dl = getattr(result, "download_mbps", 0.0) or 0.0
+        ul = getattr(result, "upload_mbps", 0.0) or 0.0
+        colour = GREEN if dl > 25 else (AMBER if dl > 5 else RED)
+        self._speed_card.set_value(
+            f"{dl:.0f} Mbps",
+            f"/ up {ul:.0f} Mbps",
+            "last result",
+            colour,
+        )
+
+    @pyqtSlot(object)
+    def on_alert(self, alert) -> None:
+        """Prepend an alert row; keep at most 3 rows."""
+        if self._alert_count == 0:
+            self._no_alerts_lbl.setVisible(False)
+            self._no_other_alerts_lbl.setText("No other alerts in the last 24 hours")
+            self._no_other_alerts_lbl.setVisible(True)
+
+        if self._alert_count >= 3:
+            item = self._alert_inner.takeAt(self._alert_inner.count() - 3)
+            if item and item.widget():
+                item.widget().deleteLater()
+            self._alert_count -= 1
+
+        severity = getattr(alert, "severity", "WARNING")
+        msg = str(getattr(alert, "message", alert))
+        colour = RED if any(k in severity.upper() for k in ("HIGH", "CRITICAL")) else AMBER
+        time_str = datetime.datetime.now().strftime("%H:%M")
+        row = _AlertRow(colour, msg[:80], time_str, alert=alert)
+        row.clicked.connect(self.alert_view_requested.emit)
+        self._alert_inner.insertWidget(0, row)
+        self._alert_count += 1
+
+    # ── Monitoring status cards ───────────────────────────────────────────────
+
+    @pyqtSlot(str, float)
+    def set_monitoring_status(self, running: bool, elapsed_str: str = "",
+                              outage_count: int = 0) -> None:
+        """Update the stability monitoring card on the home page."""
+        if running:
+            dot_color = GREEN
+            outage_txt = f" · {outage_count} outage{'s' if outage_count != 1 else ''}" if outage_count else " · no outages"
+            elapsed_txt = f"  {elapsed_str}" if elapsed_str else ""
+            self._mon_status_lbl.setText(
+                f"Running{elapsed_txt}{outage_txt} — leave the app open to keep logging."
+            )
+            self._mon_status_lbl.setStyleSheet(
+                f"font-size:11px; color:{GREEN}; background:transparent; border:none;"
+            )
+            self._mon_dot.setStyleSheet(
+                f"font-size:9px; color:{GREEN}; background:transparent; border:none;"
+            )
+            self._btn_mon_start.setText("Stop")
+            self._btn_mon_start.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+                f" border-radius:4px; font-size:11px; padding:0 12px; }}"
+                f"QPushButton:hover {{ background:{BORDER}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+            )
+        else:
+            self._mon_status_lbl.setText(
+                "Not running — start to log connection stability over time."
+            )
+            self._mon_status_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            self._mon_dot.setStyleSheet(
+                f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            self._btn_mon_start.setText("Start Monitoring")
+            self._btn_mon_start.setStyleSheet(
+                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+                f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
+                f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            )
+
+    def set_last_visit_summary(
+        self,
+        joined_count: int,
+        outage_count: int,
+        last_visit_str: str,
+    ) -> None:
+        """Show or hide the 'Since you were last here' banner."""
+        parts = []
+        if joined_count > 0:
+            s = "s" if joined_count != 1 else ""
+            parts.append(f"{joined_count} new device{s} joined")
+        if outage_count > 0:
+            s = "s" if outage_count != 1 else ""
+            parts.append(f"{outage_count} outage{s} recorded")
+        if not parts:
+            self._last_visit_card.setVisible(False)
+            return
+        self._lv_text.setText(f"Since {last_visit_str}: {'  ·  '.join(parts)}.")
+        self._last_visit_card.setVisible(True)
+
+    # ── Grade display ─────────────────────────────────────────────────────────
+
+    def _update_grade_delta(self, current_score: float) -> None:
+        """HOME-2: show week-over-week grade delta chip beside the grade ring."""
+        import time as _t
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            history: list = json.loads(qs.value(_GRADE_HISTORY_KEY, "[]", type=str))
+        except Exception:
+            history = []
+        now = _t.time()
+        week_ago = now - 7 * 86400
+        two_weeks_ago = now - 14 * 86400
+        this_week  = [e["score"] for e in history if e.get("ts", 0) >= week_ago and "score" in e]
+        last_week  = [e["score"] for e in history
+                      if two_weeks_ago <= e.get("ts", 0) < week_ago and "score" in e]
+        if len(this_week) < 2 or not last_week:
+            self._grade_delta_lbl.setVisible(False)
+            return
+        this_avg = sum(this_week) / len(this_week)
+        last_avg = sum(last_week) / len(last_week)
+        delta = this_avg - last_avg
+        if abs(delta) < 1:
+            text  = "— no change"
+            color = TEXT_SECONDARY
+        elif delta > 0:
+            text  = f"↑ +{delta:.0f} vs last week"
+            color = GREEN
+        else:
+            text  = f"↓ {delta:.0f} vs last week"
+            color = RED
+        self._grade_delta_lbl.setText(text)
+        self._grade_delta_lbl.setStyleSheet(
+            f"font-size:10px; color:{color}; background:transparent; border:none;"
+        )
+        self._grade_delta_lbl.setVisible(True)
+
+    def on_grade(self, grade: str, score: float) -> None:
+        """Update the hero grade ring and sparkline."""
+        from ui.widgets.home_widgets import _append_grade_history
+        self._current_grade = grade
+        self._grade_circle.set_grade(grade, score)
+        _append_grade_history(grade, score)
+        self._update_grade_delta(score)
+        self._refresh_sparkline()
+        if self._recurring_mode:
+            self._update_recurring_grade_display()
+
+    def on_grade_details(self, grade: str, score: float, dimensions: list) -> None:
+        """Store grade sub-score dimensions and reveal the (?) button."""
+        self.on_grade(grade, score)
+        self._grade_dimensions = dimensions or []
+        self._grade_details_btn.setVisible(bool(dimensions))
+
+    def _show_grade_breakdown(self) -> None:
+        dlg = _GradeBreakdownDialog(
+            self._current_grade,
+            self._grade_dimensions,
+            parent=self,
+        )
+        dlg.exec()
