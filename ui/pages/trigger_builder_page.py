@@ -58,21 +58,11 @@ from modules.trigger_expression import (
     save_rules,
 )
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_HOVER,
-    BORDER,
-    CARD_HDR_BORDER,
-    CARD_RADIUS,
-    GREEN,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, CRITICAL, GREEN, INPUT_PLACEHOLDER,
+    RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    TH_BG, TH_TEXT, WHITE,
 )
 
 
@@ -125,10 +115,10 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
     b.setFont(QFont("Segoe UI", 9))
     if accent:
         b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f"  border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:#005A9E; }}"
-            f"QPushButton:disabled {{ background:#9BA8B4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:
@@ -397,9 +387,9 @@ class TriggerBuilderPage(QWidget):
         _btn_template = QPushButton("＋  Alert when host goes down →")
         _btn_template.setFixedHeight(28)
         _btn_template.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:#fff;border:none;"
+            f"QPushButton{{background:{ACCENT};color:{WHITE};border:none;"
             f"border-radius:3px;padding:0 10px;font-size:10px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:#005A9E;}}"
+            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _btn_template.clicked.connect(self._on_add_template)

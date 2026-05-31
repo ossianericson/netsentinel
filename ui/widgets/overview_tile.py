@@ -19,9 +19,11 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+    CARD_HDR_BORDER, CHART_DOWN, CHART_UP, CRITICAL,
+    GREEN, PRO_WARN_BG, RED, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 _MIME_TYPE    = "application/x-netsentinel-tile"
@@ -131,7 +133,7 @@ class _BaseTile(QFrame):
         title_bar = QWidget()
         title_bar.setFixedHeight(28)
         title_bar.setStyleSheet(
-            f"QWidget {{ background:{BG_CARD}; border-bottom:1px solid #ECECEC; }}"
+            f"QWidget {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER}; }}"
         )
         tb = QHBoxLayout(title_bar)
         tb.setContentsMargins(10, 0, 8, 0)
@@ -191,7 +193,7 @@ class _BaseTile(QFrame):
             f"QPushButton {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" color:{RED}; font-size:13px; font-weight:bold; padding:0;"
             f" border-radius:3px; }}"
-            f"QPushButton:hover {{ background:#fff0f0; border-color:{RED}; }}"
+            f"QPushButton:hover {{ background:{PRO_WARN_BG}; border-color:{RED}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -719,7 +721,7 @@ class NetworkGradeTile(_BaseTile):
         self._sub_lbl.setStyleSheet(
             f"QPushButton {{ font-size:10px; color:{ACCENT}; border:none;"
             f" background:transparent; padding:0; }}"
-            f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sub_lbl.clicked.connect(lambda: self._rerun_cb() if self._rerun_cb else None)
@@ -751,7 +753,7 @@ class NetworkGradeTile(_BaseTile):
             self._sub_lbl.setStyleSheet(
                 f"QPushButton {{ font-size:10px; color:{ACCENT}; border:none;"
                 f" background:transparent; padding:0; }}"
-                f"QPushButton:hover {{ color:#005A9E; }}"
+                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             self._sub_lbl.setEnabled(True)
@@ -1086,7 +1088,7 @@ class LiveBandwidthTile(_BaseTile):
         )
         self._up_val = QLabel("—")
         self._up_val.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:#4CAF50; border:none;"
+            f"font-size:20px; font-weight:bold; color:{CHART_UP}; border:none;"
         )
         self._up_unit = QLabel("Mbps")
         self._up_unit.setStyleSheet(
@@ -1105,7 +1107,7 @@ class LiveBandwidthTile(_BaseTile):
         )
         self._dn_val = QLabel("—")
         self._dn_val.setStyleSheet(
-            f"font-size:20px; font-weight:bold; color:#2196F3; border:none;"
+            f"font-size:20px; font-weight:bold; color:{CHART_DOWN}; border:none;"
         )
         self._dn_unit = QLabel("Mbps")
         self._dn_unit.setStyleSheet(
@@ -1795,10 +1797,10 @@ class _SecurityScanPanel(QWidget):
         self._run_btn.setMinimumWidth(110)
         self._run_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._run_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" font-size:11px; font-weight:bold; padding:0 14px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
-            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:#fff; }}"
+            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._run_btn.clicked.connect(self._on_run)

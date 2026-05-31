@@ -19,8 +19,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, ACCENT_DARK, AMBER, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, CARD_RADIUS,
+    RISK_COLORS, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE,
 )
 
 
@@ -103,9 +105,9 @@ def _empty_state_widget(icon: str, headline: str, body: str,
         btn.setFixedHeight(28)
         btn.setCursor(_Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ background:{_AC}; color:#fff; border:none;"
+            f"QPushButton {{ background:{_AC}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{_TP}; }}"
         )
         btn.clicked.connect(cta_action)

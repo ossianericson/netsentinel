@@ -41,9 +41,10 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+    CRITICAL, GREEN, RED, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.overview_tile import (
     _MIME_TYPE, _COLS, _SETTINGS_KEY, _TILE_HEIGHT, _EXPANDED_HEIGHT, _LAYOUT_VER,
@@ -165,7 +166,7 @@ class OverviewPage(QWidget):
             f" border:1px solid {ACCENT}; padding:4px 14px;"
             f" font-size:11px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:checked {{ background:{ACCENT}; color:#fff; }}"
+            f"QPushButton:checked {{ background:{ACCENT}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._edit_btn.toggled.connect(self._on_edit_toggled)
@@ -268,10 +269,10 @@ class OverviewPage(QWidget):
         self._scan_btn.setMinimumWidth(145)
         self._scan_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._scan_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" font-size:12px; font-weight:bold; padding:0 18px; border-radius:4px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
-            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:#fff; }}"
+            f"QPushButton:disabled {{ background:{TEXT_SECONDARY}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._scan_btn.clicked.connect(self._on_scan_clicked)
@@ -674,7 +675,7 @@ class OverviewPage(QWidget):
             btn.setStyleSheet(
                 f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
                 f" color:{ACCENT}; border-radius:4px; font-size:10px; padding:0 8px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:#fff; }}"
+                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
             btn.clicked.connect(lambda _checked, tid=tile_id: self._add_tile(tid))

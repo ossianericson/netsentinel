@@ -39,8 +39,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, BORDER, BG_CARD, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE, GREEN,
+    ACCENT, ACCENT_DARK, BG_CARD, BORDER,
+    GREEN, OVERLAY_BG, OVERLAY_BG2, OVERLAY_BG3,
+    OVERLAY_BLUE2, OVERLAY_FG2, OVERLAY_FG3, OVERLAY_ORANGE,
+    STATUS_OFFLINE, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 _FIRST_RUN_KEY = "ui/first_run_done"
@@ -87,7 +89,7 @@ _SLIDES = [
     },
     {
         "icon":  "▶",
-        "color": "#FF9F0A",
+        "color": OVERLAY_ORANGE,
         "title": "Monitor over time",
         "body":  (
             "Track internet speed, latency, 5G signal and uptime continuously. "
@@ -136,7 +138,7 @@ class WelcomeOverlay(QWidget):
         card.setObjectName("welcomeCard")
         card.setFixedSize(self._CARD_W, self._CARD_H)
         card.setStyleSheet(
-            "QFrame#welcomeCard { background:#1C1C1E; border:1px solid #3A3A3C;"
+            "QFrame#welcomeCard { background:OVERLAY_BG; border:1px solid OVERLAY_BG3;"
             " border-radius:16px; }"
         )
 
@@ -172,7 +174,7 @@ class WelcomeOverlay(QWidget):
 
         app_name_lbl = QLabel("NetSentinel")
         app_name_lbl.setStyleSheet(
-            "color:#AEAEB2; font-size:12px; font-weight:600;"
+            "color:OVERLAY_FG3; font-size:12px; font-weight:600;"
             " background:transparent; border:none;"
         )
         brand_row.addWidget(logo_lbl)
@@ -183,10 +185,10 @@ class WelcomeOverlay(QWidget):
         self._skip_btn = QPushButton("Skip")
         self._skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._skip_btn.setStyleSheet(
-            "QPushButton { background:transparent; color:#636366; border:none;"
+            "QPushButton { background:transparent; color:STATUS_OFFLINE; border:none;"
             " font-size:12px; }"
-            "QPushButton:hover { color:#AEAEB2; }"
-            "QPushButton:pressed { color:#636366; }"
+            "QPushButton:hover { color:OVERLAY_FG3; }"
+            "QPushButton:pressed { color:STATUS_OFFLINE; }"
         )
         self._skip_btn.clicked.connect(self._on_skip)
         brand_row.addWidget(self._skip_btn)
@@ -212,7 +214,7 @@ class WelcomeOverlay(QWidget):
             dot.setStyleSheet(
                 f"color:{ACCENT}; font-size:10px; background:transparent; border:none;"
                 if i == 0 else
-                "color:#3A3A3C; font-size:10px; background:transparent; border:none;"
+                "color:OVERLAY_BG3; font-size:10px; background:transparent; border:none;"
             )
             self._dots.append(dot)
             dots_row.addWidget(dot)
@@ -228,10 +230,10 @@ class WelcomeOverlay(QWidget):
         self._back_btn.setFixedHeight(38)
         self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._back_btn.setStyleSheet(
-            f"QPushButton {{ background:#2C2C2E; color:#AEAEB2; border:none;"
+            f"QPushButton {{ background:{OVERLAY_BG2}; color:{OVERLAY_FG3}; border:none;"
             f" border-radius:8px; font-size:13px; }}"
-            f"QPushButton:hover {{ background:#3A3A3C; color:#FFFFFF; }}"
-            f"QPushButton:pressed {{ background:#1C1C1E; color:#AEAEB2; }}"
+            f"QPushButton:hover {{ background:{OVERLAY_BG3}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{OVERLAY_BG}; color:{OVERLAY_FG3}; }}"
         )
         self._back_btn.clicked.connect(self._go_back)
         self._back_btn.setVisible(False)
@@ -242,7 +244,7 @@ class WelcomeOverlay(QWidget):
         self._next_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:8px; font-size:13px; font-weight:600; }}"
-            f"QPushButton:hover {{ background:#409CFF; color:{WHITE}; }}"
+            f"QPushButton:hover {{ background:{OVERLAY_BLUE2}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         self._next_btn.clicked.connect(self._go_next)
@@ -273,7 +275,7 @@ class WelcomeOverlay(QWidget):
         title_lbl = QLabel(slide["title"])
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_lbl.setStyleSheet(
-            "color:#FFFFFF; font-size:20px; font-weight:700;"
+            "color:WHITE; font-size:20px; font-weight:700;"
             " background:transparent; border:none;"
         )
         lay.addWidget(title_lbl)
@@ -283,7 +285,7 @@ class WelcomeOverlay(QWidget):
         body_lbl.setWordWrap(True)
         body_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         body_lbl.setStyleSheet(
-            "color:#8E8E93; font-size:13px; line-height:1.5;"
+            "color:OVERLAY_FG2; font-size:13px; line-height:1.5;"
             " background:transparent; border:none;"
         )
         lay.addWidget(body_lbl)
@@ -318,7 +320,7 @@ class WelcomeOverlay(QWidget):
             dot.setStyleSheet(
                 f"color:{ACCENT}; font-size:10px; background:transparent; border:none;"
                 if i == self._slide_idx else
-                "color:#3A3A3C; font-size:10px; background:transparent; border:none;"
+                "color:OVERLAY_BG3; font-size:10px; background:transparent; border:none;"
             )
 
     # ── Animation ─────────────────────────────────────────────────────────────

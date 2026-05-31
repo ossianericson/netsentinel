@@ -65,25 +65,12 @@ from modules.wifi_heatmap import (
 )
 from modules.wifi_scanner import scan as wifi_scan
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_DARK,
-    BG_HOVER,
-    BORDER,
-    CARD_HDR_BORDER,
-    CARD_RADIUS,
-    CHART_BG,
-    CHART_GRID,
-    CHART_PLOT_BG,
-    GREEN,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    BG_CARD, BG_DARK, BG_HOVER, BORDER,
+    CARD_HDR_BORDER, CARD_RADIUS, CHART_BG, CHART_GRID,
+    CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER, RED,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    TH_TEXT, WHITE,
 )
 
 
@@ -144,10 +131,10 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
     b.setFont(QFont("Segoe UI", 9))
     if accent:
         b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f"  border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:#005A9E; }}"
-            f"QPushButton:disabled {{ background:#9BA8B4; color:#fff; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:disabled {{ background:{INPUT_PLACEHOLDER}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:

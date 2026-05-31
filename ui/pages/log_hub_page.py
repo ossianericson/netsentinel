@@ -38,9 +38,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BG_ALT_ROW,
-    BORDER, CARD_RADIUS, GREEN, RED, TABLE_SEL, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    BG_CARD, BG_DARK, BG_HOVER, BORDER,
+    CARD_RADIUS, GREEN, RED, TABLE_SEL,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    TH_TEXT, WHITE,
 )
 
 from ui.pages.log_source_panel import (
@@ -231,9 +233,9 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         _hb_load.setFixedHeight(24)
         _hb_load.setCursor(Qt.CursorShape.PointingHandCursor)
         _hb_load.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:3px; padding:0 12px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _hb_load.clicked.connect(self._load_history_range)
@@ -243,7 +245,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         _hb_export.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _hb_export.clicked.connect(self._open_export_dialog)
@@ -279,7 +281,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         _cb_view_btn.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _cb_view_btn.clicked.connect(lambda: self.navigate_to.emit("Notifications"))
@@ -325,7 +327,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         _cap_export_btn.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _cap_export_btn.clicked.connect(self._open_export_dialog)

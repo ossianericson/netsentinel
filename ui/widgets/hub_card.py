@@ -42,28 +42,12 @@ from PyQt6.QtCore import QProcess
 
 from workers.plugin_polling_worker import PluginPollingWorker
 from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    ACCENT_LITE,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_DARK,
-    BG_HOVER,
-    BORDER,
-    CARD_HDR_BORDER,
-    CARD_RADIUS,
-    GREEN,
-    RED,
-    TABLE_ROW_BORDER,
-    TABLE_SEL,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
-    TH_BORDER,
-    TH_TEXT,
-    WHITE,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
+    BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
+    BLACK, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
+    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    TH_BORDER, TH_TEXT, WHITE,
 )
 
 from ui.widgets.hub_helpers import (
@@ -89,7 +73,7 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
     b.setFont(QFont("Segoe UI", 9))
     if accent:
         b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:3px; padding:0 12px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
             f"QPushButton:pressed {{ background:{ACCENT_DARK}; }}"
@@ -435,7 +419,7 @@ class _RouterDetailPanel(QFrame):
             f"QPushButton {{ background:{BG_DARK}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
             f"  border-radius:3px; font-size:9px; padding:0 6px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{ACCENT}; }}"
-            f"QPushButton:checked {{ background:{ACCENT}; color:#000; border-color:{ACCENT}; }}"
+            f"QPushButton:checked {{ background:{ACCENT}; color:{BLACK}; border-color:{ACCENT}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._toggle_btn.setCheckable(True)
@@ -1566,7 +1550,7 @@ def _step_card(number: int, title: str) -> tuple[QWidget, QVBoxLayout]:
     badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
     badge.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
     badge.setStyleSheet(
-        f"background:{ACCENT}; color:#fff; border-radius:11px; border:none;"
+        f"background:{ACCENT}; color:{WHITE}; border-radius:11px; border:none;"
     )
     title_lbl = QLabel(title)
     title_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))

@@ -24,8 +24,8 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, BG_HOVER, GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK, BORDER, BG_HOVER, GREEN, RED,
+    PROGRESS_TRACK, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 _SEV_COLOR = {
@@ -178,7 +178,7 @@ class DiagnosisPage(QWidget):
         back_btn.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; text-align:left; }}"
-            f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -225,7 +225,7 @@ class DiagnosisPage(QWidget):
             f" font-size:12px; padding:18px 12px; }}"
             f"QPushButton:hover {{ border-color:{ACCENT}; color:{ACCENT}; }}"
             f"QPushButton:checked {{ border-color:{ACCENT}; background:{ACCENT};"
-            f" color:#fff; }}"
+            f" color:{WHITE}; }}"
         )
 
         self._symptom_btns: dict = {}
@@ -255,9 +255,9 @@ class DiagnosisPage(QWidget):
         run_btn.setFixedWidth(180)
         run_btn.setFixedHeight(44)
         run_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" font-size:13px; font-weight:bold; border-radius:6px; }}"
-            f"QPushButton:hover {{ background:#005A9E; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         run_btn.clicked.connect(self._start)
@@ -285,7 +285,7 @@ class DiagnosisPage(QWidget):
         self._progress_bar.setFixedHeight(10)
         self._progress_bar.setTextVisible(False)
         self._progress_bar.setStyleSheet(
-            f"QProgressBar {{ background:#E0E8EF; border-radius:5px; border:none; }}"
+            f"QProgressBar {{ background:{PROGRESS_TRACK}; border-radius:5px; border:none; }}"
             f"QProgressBar::chunk {{ background:{ACCENT}; border-radius:5px; }}"
         )
 
@@ -367,7 +367,7 @@ class DiagnosisPage(QWidget):
         self._other_toggle.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:4px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._other_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -398,7 +398,7 @@ class DiagnosisPage(QWidget):
         self._grade_cta.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:2px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._grade_cta.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -414,7 +414,7 @@ class DiagnosisPage(QWidget):
             f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
             f" border:1px solid {ACCENT}; padding:4px 14px; font-size:11px;"
             f" border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:#fff; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
         )
         self._again_btn.setStyleSheet(_btn_qss)
         self._again_btn.clicked.connect(self._reset)
@@ -556,7 +556,7 @@ class DiagnosisPage(QWidget):
             cta_btn.setStyleSheet(
                 f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
                 f" border:none; padding:2px 0; text-align:left; }}"
-                f"QPushButton:hover {{ color:#005A9E; }}"
+                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             cta_btn.clicked.connect(

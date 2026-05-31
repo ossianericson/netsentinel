@@ -29,8 +29,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, BG_CARD, BG_DARK, BORDER, CARD_RADIUS, GREEN, RED, AMBER,
-    TABLE_SEL, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT, BG_HOVER, BG_ALT_ROW,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, GREEN, INPUT_PLACEHOLDER, RED,
+    TABLE_SEL, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    TH_TEXT, WHITE,
 )
 
 
@@ -69,7 +72,7 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
 
     title_bar = QLabel(title)
     title_bar.setStyleSheet(
-        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid #ECECEC;"
+        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
         f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}"
     )
     outer_lay.addWidget(title_bar)
@@ -159,7 +162,7 @@ class _MsgDetailDialog(QDialog):
 
         close_btn = QPushButton("Close")
         close_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" padding:4px 16px; font-size:11px; border-radius:4px; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
@@ -283,7 +286,7 @@ class SyslogPage(QWidget):
         self._empty_lbl = QLabel("Waiting for syslog messages…")
         self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_lbl.setStyleSheet(
-            f"font-size:13px; color:#9BA8B4; background:{BG_CARD}; padding:32px;"
+            f"font-size:13px; color:{INPUT_PLACEHOLDER}; background:{BG_CARD}; padding:32px;"
         )
         body_lay.addWidget(self._empty_lbl)
         self._table.hide()

@@ -1091,7 +1091,7 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
 *Re-audited 2026-05-30 post-Sprint-4 (13 new findings added, S13/S14/S15 sections added).*
-*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6: v1.9.61.  Sprint 7: v1.9.61.  Sprint 8: v1.9.62 (tabs.py split complete 2026-05-31).*
+*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6: v1.9.61.  Sprint 7: v1.9.61.  Sprint 8: v1.9.62 (tabs.py split complete 2026-05-31).  Sprint 12: v1.9.62 (hex purge complete 2026-05-31).*
 
 **Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes → `ui/nav/rail.py`; −683 lines), S11-1 (PAGE_HELP duplicate key fixed), S11-4 (CI parity gates added).
 
@@ -1109,4 +1109,8 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 **Sprint 10 delivered (2026-05-31):** S13-5c ✅ flat-nav dead-code removal — `_nav_mode`, `_nav_goto_label`, `_update_mode_pill`, `_cycle_mode`, `_set_mode`, `_rail_mode_btn` removed; `_nav_go_to` simplified to rail delegate; 5 files (dashboard.py, tabs.py, header.py, app_settings.py + ui/); S9-2 ✅ 18 Tier 2 scan/detection module tests — 140 new tests across arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner; S10-1 ✅ colour token inventory — test_colour_inventory.py with per-file budgets for 63 UI files + 7 module files. 2452 tests pass, 4 skipped.
 
-**Sprint 11 queue:** S10-2 (purge hardcoded hex from `ui/pages/*.py` — 37 files, lower budgets to 0); S9-3 (Tier 3 tests — report/enrichment modules, 10 modules); S14-3d/S14-3e (further page splits if any remain above LOC budget).
+**Sprint 11 partial (2026-05-31):** S10-2 started — `INPUT_PLACEHOLDER` token added to all 3 themes in `ui/styles.py`; 5 pages purged to 0 hex violations: `home_page.py` (13→0), `diagnosis_page.py` (9→0), `threat_intel_page.py` (16→0), `dns_zone_page.py` (13→0), `dhcp_lease_page.py` (7→0); inventory budgets lowered. Token mapping used: `#fff/#FFFFFF→WHITE`, `#005A9E/#006BBD/#005FA3/#1A6FC4→ACCENT_DARK`, `#ECECEC→CARD_HDR_BORDER`, `#B0C4D8→BTN_DISABLED_BORDER`, `#9BA8B4→INPUT_PLACEHOLDER`, `#F4F4F4→BG_DARK`, `#E0E8EF/#E0E7F0→PROGRESS_TRACK`. Session ended at token limit.
+
+**Sprint 12 delivered (2026-05-31):** S10-2 ✅ complete — ALL 63 tracked UI files purged to 0 hex violations (53 new constants added to `ui/styles.py`: MAP_LAND_*, IP_CALC_*, LOG_SOURCE_PLUGIN, GRADE_B_COLOR, BLACK, ORANGE, STATUS_OFFLINE, INLINE_WARN_*, BADGE_OK/OFF_*, TEAL, DEEP_ORANGE, ACCENT_PURPLE, INFO_BOX_*, HTML_*, OVERLAY_*, CANVAS_*); inventory budgets all lowered to 0 in test_colour_inventory.py (ratchet locked). S9-3 ✅ 73 new tests across 10 Tier 3 modules — dhcp_detector, dhcp_lease_scanner, diagnostic_card, digest_builder, hw_detect, lab_scenarios, network_diagnostics, private_endpoint_checker, speed_tester, combined_discovery (test files: test_dhcp_detector.py, test_dhcp_lease_scanner.py, test_diagnostic_card.py, test_digest_builder.py, test_hw_detect.py, test_lab_scenarios.py, test_network_diagnostics.py, test_private_endpoint_checker.py, test_speed_tester.py, test_combined_discovery.py). 2525 tests pass, 5 skipped.
+
+**Sprint 13 queue:** Remaining STABILITY_PLAN items not yet addressed — S4-1 (async queue worker), S6-1/S6-2/S6-3 (scan result caching), remaining module LOC checks, any new findings.

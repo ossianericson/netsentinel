@@ -41,17 +41,19 @@ from ui.help import _PAGE_HELP
 from ui.live_graph import LiveGraphWidget
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
-    ACCENT, ACCENT_LITE, ACCENT_DARK, ADMIN_WARN_FG, ADMIN_WARN_HOVER,
-    AMBER, AMBER_BG, AUDIT_RED, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER, BLUE, BORDER, BORDER_MED,
-    CHART_PURPLE,
-    BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GRADE_A_BG, GRADE_B_FG, GRADE_B_BG, GRADE_C_BG,
-    GRADE_D_BG, GRADE_F_FG, GRADE_F_BG, GREEN, GREEN_BG,
-    MAIN_STYLE, NAV_BAR, NAV_DIVIDER, PRO_BANNER_BORDER, PRO_WARN_BG,
-    RED, RED_BG, RISK_BG, RISK_COLORS,
-    SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, SIDEBAR_SECTION_FG,
-    SIDEBAR_SEL_BG,
-    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
-    UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, ADMIN_WARN_FG,
+    ADMIN_WARN_HOVER, AMBER, AMBER_BG, AUDIT_RED,
+    BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
+    BLUE, BORDER, BORDER_MED, BTN_HOVER_BG,
+    CARD_HDR_BORDER, CARD_RADIUS, CHART_PURPLE, CRITICAL,
+    GRADE_A_BG, GRADE_B_BG, GRADE_B_FG, GRADE_C_BG,
+    GRADE_D_BG, GRADE_F_BG, GRADE_F_FG, GREEN,
+    GREEN_BG, MAIN_STYLE, NAV_BAR, NAV_DIVIDER,
+    PRO_BANNER_BORDER, PRO_WARN_BG, RED, RED_BG,
+    RISK_BG, RISK_COLORS, SIDEBAR_BG, SIDEBAR_HOVER,
+    SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, SIDEBAR_SECTION_FG, SIDEBAR_SEL_BG,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, UPDATE_BAR_BG,
+    UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
 )
 from modules.utils import get_offenders_path, is_admin
 
@@ -382,7 +384,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
         _pulse_base = (
             "QLabel { padding: 0 8px; font-size: 11px; background: transparent;"
             f" border: none; color: {TEXT_MUTED}; }}"
-            "QLabel:hover { color: #FFFFFF; }"
+            f"QLabel:hover {{ color: {WHITE}; }}"
         )
         _pulse_sep = QFrame()
         _pulse_sep.setFrameShape(QFrame.Shape.VLine)
@@ -489,7 +491,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
             painter.setBrush(QColor(bg))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(rect, 3, 3)
-            painter.setPen(QColor("#FFFFFF"))
+            painter.setPen(QColor(WHITE))
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
             return bw + self._GAP
 
@@ -1624,7 +1626,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btns.rejected.connect(dlg.accept)
         btns.button(QDialogButtonBox.StandardButton.Close).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
@@ -2829,10 +2831,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
         """Update the four permanent status-bar indicators (called every 10 s)."""
         import time as _t
 
-        _muted  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {TEXT_MUTED}; }} QLabel:hover {{ color: #FFFFFF; }}"
-        _green  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {GREEN}; }} QLabel:hover {{ color: #FFFFFF; }}"
-        _amber  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {AMBER}; }} QLabel:hover {{ color: #FFFFFF; }}"
-        _red    = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {RED}; }} QLabel:hover {{ color: #FFFFFF; }}"
+        _muted  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {TEXT_MUTED}; }} QLabel:hover {{ color: {WHITE}; }}"
+        _green  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {GREEN}; }} QLabel:hover {{ color: {WHITE}; }}"
+        _amber  = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {AMBER}; }} QLabel:hover {{ color: {WHITE}; }}"
+        _red    = f"QLabel {{ padding: 0 8px; font-size: 11px; background: transparent; border: none; color: {RED}; }} QLabel:hover {{ color: {WHITE}; }}"
 
         # Online / Offline
         status = self._last_log_status

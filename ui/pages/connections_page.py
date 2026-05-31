@@ -47,22 +47,11 @@ from PyQt6.QtWidgets import (
 from ui.expanding_table import ExpandingTable
 
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_DARK,
-    BG_HOVER,
-    BORDER,
-    CARD_HDR_BORDER,
-    GREEN,
-    RED,
-    TABLE_SEL,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    TH_BORDER, TH_TEXT,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 
@@ -350,11 +339,11 @@ class ConnectionsPage(QWidget):
             f"QHeaderView::section {{"
             f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
             f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid #254A6E;"
+            f"  border-right:1px solid {TH_BORDER};"
             f"}}"
             f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
             f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid #EAEAEA; }}"
+            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
         )
         self._tbl.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tbl.customContextMenuRequested.connect(self._context_menu)

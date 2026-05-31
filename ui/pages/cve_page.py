@@ -27,8 +27,11 @@ from PyQt6.QtWidgets import (
 from modules.metric_store import MetricStore
 from ui.expanding_table import ExpandingTable
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, CRITICAL, GREEN, RED, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, CRITICAL, GREEN, INPUT_PLACEHOLDER,
+    RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 
@@ -64,8 +67,8 @@ def _table(cols: list[str]) -> QTableWidget:
     t.verticalHeader().setDefaultSectionSize(26)
     t.horizontalHeader().setStretchLastSection(True)
     t.setStyleSheet(
-        f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:#EAEAEA;"
-        f" alternate-background-color:#F7F9FC; background:{BG_CARD}; border:none; }}"
+        f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:{TABLE_ROW_BORDER};"
+        f" alternate-background-color:{BG_ALT_ROW}; background:{BG_CARD}; border:none; }}"
         f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
         f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
@@ -84,7 +87,7 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     ol.setSpacing(0)
     hdr = QLabel(title)
     hdr.setStyleSheet(
-        f"background:{BG_CARD}; border-bottom:1px solid #ECECEC;"
+        f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
         f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
     )
     ol.addWidget(hdr)
@@ -346,8 +349,8 @@ class CvePage(QWidget):
         self._table.verticalHeader().setDefaultSectionSize(26)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.setStyleSheet(
-            f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:#EAEAEA;"
-            f" alternate-background-color:#F7F9FC; background:{BG_CARD}; border:none; }}"
+            f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:{TABLE_ROW_BORDER};"
+            f" alternate-background-color:{BG_ALT_ROW}; background:{BG_CARD}; border:none; }}"
             f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
             f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
             f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
@@ -381,7 +384,7 @@ class CvePage(QWidget):
             "No CVEs tracked yet. Run the port scanner then use \"Import from Scan\" "
             "to import discovered service versions."
         )
-        self._lbl_empty.setStyleSheet(f"font-size:11px; color:#9BA8B4; padding:16px;")
+        self._lbl_empty.setStyleSheet(f"font-size:11px; color:{INPUT_PLACEHOLDER}; padding:16px;")
         self._lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_lay.addWidget(self._lbl_empty)
 

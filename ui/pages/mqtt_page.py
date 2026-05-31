@@ -24,9 +24,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    BG_HOVER,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, GREEN, RED, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY,
 )
 from modules.mqtt_publisher import MqttPublisher, get_publisher, _PAHO_AVAILABLE
 
@@ -222,7 +223,7 @@ class MqttPage(QWidget):
         self._btn_connect.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:white; border:none;"
             f" border-radius:2px; padding:0 14px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:#005FA3; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:disabled {{ background:{TEXT_MUTED}; color:white; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )

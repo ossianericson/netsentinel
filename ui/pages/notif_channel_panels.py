@@ -49,9 +49,12 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN, GREEN_BG,
-    RED, RED_BG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, BG_HOVER,
+    ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
+    BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
+    BORDER, BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS,
+    CRITICAL, GREEN, GREEN_BG, RED,
+    RED_BG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE,
 )
 from modules.alert_engine import rule_settings_key as _rule_key
 
@@ -930,7 +933,7 @@ class _NotifChannelsMixin:
             btn.setStyleSheet(
                 f"QPushButton {{ font-size:9px; font-weight:bold; border:1px solid {col};"
                 f" border-radius:3px; padding:0 6px; color:{col}; background:transparent; }}"
-                f"QPushButton:checked {{ background:{col}; color:#fff; }}"
+                f"QPushButton:checked {{ background:{col}; color:{WHITE}; }}"
                 f"QPushButton:unchecked {{ background:transparent; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
@@ -1010,9 +1013,9 @@ class _NotifChannelsMixin:
         _bb_dismiss = QPushButton("Dismiss")
         _bb_dismiss.setFixedHeight(22)
         _bb_dismiss.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:#fff;font-size:10px;font-weight:600;"
+            f"QPushButton{{background:{ACCENT};color:{WHITE};font-size:10px;font-weight:600;"
             f"border:none;border-radius:3px;padding:0 10px;}}"
-            f"QPushButton:hover{{background:#006BBD;}}"
+            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _bb_dismiss.clicked.connect(self._bulk_dismiss)
@@ -1109,9 +1112,9 @@ class _NotifChannelsMixin:
         self._log_detail_retry_btn = QPushButton("Retry →")
         self._log_detail_retry_btn.setFixedHeight(24)
         self._log_detail_retry_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; padding:0 12px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _det_close_btn = QPushButton("Close")
@@ -1372,7 +1375,7 @@ class _NotifChannelsMixin:
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
             f" font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{ACCENT}; color:#fff; }}"
+            f"QMenu::item:selected {{ background:{ACCENT}; color:{WHITE}; }}"
         )
         _col = self._alert_history_table.currentColumn()
         act_copy_cell = menu.addAction("Copy cell")

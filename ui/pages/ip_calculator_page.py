@@ -23,14 +23,16 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    BG_CARD, BG_DARK, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, GREEN, IP_CALC_ALT_ROW, IP_CALC_HOST_BIT_BG,
+    IP_CALC_HOST_FG, IP_CALC_NET_FG, RED, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, WHITE,
 )
 
 # ── palette shortcuts ─────────────────────────────────────────────────────────
-_NET_BIT_BG  = "#1A3A5C"   # blue tint for network bits
-_HOST_BIT_BG = "#2D4A2D"   # green tint for host bits
+_NET_BIT_BG  = TH_BG   # blue tint for network bits
+_HOST_BIT_BG = IP_CALC_HOST_BIT_BG   # green tint for host bits
 _MONO = "Consolas, Courier New, monospace"
 
 
@@ -253,7 +255,7 @@ class IpCalculatorPage(QWidget):
             row, col = divmod(idx, cols)
             cell = QWidget()
             cell.setStyleSheet(
-                f"background:{'#1A2435' if (idx // cols) % 2 == 0 else BG_CARD};"
+                f"background:{IP_CALC_ALT_ROW if (idx // cols) % 2 == 0 else BG_CARD};"
                 f"border-radius:2px;"
             )
             cl2 = QVBoxLayout(cell)
@@ -361,10 +363,10 @@ class IpCalculatorPage(QWidget):
                 is_net_bit = i < prefix
                 if is_net_bit:
                     bg = _NET_BIT_BG
-                    fg = "#7EB8F7"
+                    fg = IP_CALC_NET_FG
                 else:
                     bg = _HOST_BIT_BG
-                    fg = "#88CC88"
+                    fg = IP_CALC_HOST_FG
                 lbl.setStyleSheet(
                     f"color:{fg};font-size:10px;font-family:{_MONO};"
                     f"background:{bg};border-radius:1px;"
@@ -564,7 +566,7 @@ class IpCalculatorPage(QWidget):
 
     @staticmethod
     def _ipv6_row(prop: str, v4: str, v6: str, alt: bool) -> str:
-        bg = "#1A2435" if alt else BG_CARD
+        bg = IP_CALC_ALT_ROW if alt else BG_CARD
         return (
             f"<tr style='background:{bg};'>"
             f"<td style='padding:4px 8px 4px 0;color:{TEXT_MUTED};"

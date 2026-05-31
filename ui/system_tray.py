@@ -27,6 +27,8 @@ from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
+from ui.styles import ACCENT, RED
+
 # ── Startup registry helpers (Windows only) ───────────────────────────────────
 
 _STARTUP_KEY  = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -97,7 +99,7 @@ def _build_badge_icon(base_icon: QIcon, count: int) -> QIcon:
     badge_size = 13
     x = px.width()  - badge_size
     y = 0
-    painter.setBrush(QColor("#D93025"))
+    painter.setBrush(QColor(RED))
     painter.setPen(Qt.PenStyle.NoPen)
     painter.drawEllipse(x, y, badge_size, badge_size)
 
@@ -179,7 +181,7 @@ class SystemTrayManager:
                 return QIcon(str(p))
         # 3. Fallback: plain blue square
         px = QPixmap(32, 32)
-        px.fill(QColor("#0078D4"))
+        px.fill(QColor(ACCENT))
         return QIcon(px)
 
     def _build_menu(self) -> QMenu:

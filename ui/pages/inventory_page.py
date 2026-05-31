@@ -32,8 +32,12 @@ from ui.expanding_table import ExpandingTable
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, CARD_RADIUS, GREEN, RED, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, BTN_DISABLED_BORDER,
+    CARD_RADIUS, CRITICAL, GREEN, RED,
+    TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, TH_BG, TH_BORDER, TH_TEXT,
+    WHITE,
 )
 
 if TYPE_CHECKING:
@@ -105,7 +109,7 @@ class _DeviceLabelDialog(QDialog):
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
         btns.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT}dd; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
@@ -371,7 +375,7 @@ class _ScanCompareDialog(QDialog):
         )
         btns.button(QDialogButtonBox.StandardButton.Ok).setText("Compare")
         btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT}dd; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
@@ -634,14 +638,14 @@ class InventoryPage(QWidget):
                 background:{BG_CARD}; gridline-color:{BORDER};
                 border:none; outline:none;
             }}
-            QTableWidget::item {{ padding:3px 5px; border-bottom:1px solid #EAEAEA; }}
+            QTableWidget::item {{ padding:3px 5px; border-bottom:1px solid TABLE_ROW_BORDER; }}
             QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}
             QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}
             QHeaderView::section {{
                 background:{TH_BG}; color:{TH_TEXT};
                 font-size:11px; font-weight:bold;
                 padding:4px 5px; border:none;
-                border-right:1px solid #2A4A6A;
+                border-right:1px solid TH_BORDER;
             }}
             """
         )
@@ -749,13 +753,13 @@ class InventoryPage(QWidget):
                 background:{BG_CARD}; border:none; outline:none;
                 gridline-color:{BORDER};
             }}
-            QTableWidget::item {{ padding:3px 5px; border-bottom:1px solid #EAEAEA; }}
+            QTableWidget::item {{ padding:3px 5px; border-bottom:1px solid TABLE_ROW_BORDER; }}
             QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}
             QHeaderView::section {{
                 background:{TH_BG}; color:{TH_TEXT};
                 font-size:11px; font-weight:bold;
                 padding:4px 5px; border:none;
-                border-right:1px solid #2A4A6A;
+                border-right:1px solid TH_BORDER;
             }}
             """
         )
@@ -844,12 +848,12 @@ class InventoryPage(QWidget):
     def _zoom_style(active: bool) -> str:
         if active:
             return (
-                f"QPushButton {{ font-size:11px; background:{ACCENT}; color:#FFFFFF;"
+                f"QPushButton {{ font-size:11px; background:{ACCENT}; color:{WHITE};"
                 f" border:1px solid {ACCENT}; border-radius:3px; }}"
             )
         return (
             f"QPushButton {{ font-size:11px; background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid #B0C4D8; border-radius:3px; }}"
+            f" border:1px solid {BTN_DISABLED_BORDER}; border-radius:3px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
 

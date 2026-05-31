@@ -29,9 +29,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, GREEN, AMBER, RED,
-    CHART_GRID, CHART_PLOT_BG, CHART_PURPLE,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    ACCENT, AMBER, BG_CARD, BG_DARK,
+    BG_HOVER, BORDER, BTN_DISABLED_BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, CHART_PURPLE,
+    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, TH_BG, WHITE,
 )
 
 if TYPE_CHECKING:
@@ -113,7 +115,7 @@ class _ChartCard(QFrame):
         hdr = QWidget()
         hdr.setFixedHeight(32)
         hdr.setStyleSheet(
-            f"background:{BG_CARD}; border-bottom:1px solid #ECECEC;"
+            f"background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
         )
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(12, 0, 12, 0)
@@ -418,12 +420,12 @@ class HistoryPage(QWidget):
     def _zoom_btn_style(active: bool) -> str:
         if active:
             return (
-                f"QPushButton {{ font-size:11px; background:{ACCENT}; color:#FFFFFF;"
+                f"QPushButton {{ font-size:11px; background:{ACCENT}; color:{WHITE};"
                 f" border:1px solid {ACCENT}; border-radius:3px; }}"
             )
         return (
             f"QPushButton {{ font-size:11px; background:{BG_CARD}; color:{ACCENT};"
-            f" border:1px solid #B0C4D8; border-radius:3px; }}"
+            f" border:1px solid {BTN_DISABLED_BORDER}; border-radius:3px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
         )
 

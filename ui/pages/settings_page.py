@@ -37,10 +37,11 @@ from PyQt6.QtWidgets import (
 
 import ui.styles as _styles
 from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_ALT_ROW, BG_CARD, BG_DARK, BORDER,
-    BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN, NAV_BAR, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
-    BG_HOVER,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    BG_CARD, BG_DARK, BG_HOVER, BORDER,
+    BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN,
+    NAV_BAR, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, WHITE,
 )
 
 from ui.pages.settings_cards import (
@@ -92,7 +93,7 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         )
         self._dirty_dot = QLabel("● Unsaved changes")
         self._dirty_dot.setStyleSheet(
-            f"font-size:10px; color:#F59E0B; background:transparent; border:none;"
+            f"font-size:10px; color:{AMBER}; background:transparent; border:none;"
         )
         self._dirty_dot.setVisible(False)
         hdr_lay.addWidget(hdr_title)

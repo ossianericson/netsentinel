@@ -15,9 +15,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BORDER, BTN_HOVER_BG,
-    CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
+    BG_CARD, BORDER, BTN_HOVER_BG, CARD_HDR_BORDER,
+    CARD_RADIUS, GREEN, PRO_WARN_BG, RED,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 
@@ -207,7 +208,7 @@ class RestApiPage(QWidget):
         )
         self._lbl_warning.setWordWrap(True)
         self._lbl_warning.setStyleSheet(
-            f"font-size:11px; color:{AMBER}; background:#FFF8E7;"
+            f"font-size:11px; color:{AMBER}; background:{AMBER_BG};"
             f" border:1px solid {AMBER}; padding:6px 8px;"
         )
         self._lbl_warning.setVisible(self._chk_external.isChecked())
@@ -245,7 +246,7 @@ class RestApiPage(QWidget):
             f"QPushButton{{background:{BG_CARD};color:{RED};"
             f"border:1px solid {RED};border-radius:2px;"
             f"padding:0 10px;font-size:11px;}}"
-            f"QPushButton:hover{{background:#FFF0F0;}}"
+            f"QPushButton:hover{{background:{PRO_WARN_BG};}}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_regen_key.clicked.connect(self._regen_api_key)
@@ -277,10 +278,10 @@ class RestApiPage(QWidget):
         self._btn_action = QPushButton("Start API")
         self._btn_action.setFixedHeight(26)
         self._btn_action.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:#FFFFFF;"
+            f"QPushButton{{background:{ACCENT};color:{WHITE};"
             f"border:1px solid {ACCENT};border-radius:2px;"
             f"padding:0 12px;font-size:11px;font-weight:bold;}}"
-            f"QPushButton:hover{{background:#005A9E;}}"
+            f"QPushButton:hover{{background:{ACCENT_DARK};}}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_action.clicked.connect(self._on_action)

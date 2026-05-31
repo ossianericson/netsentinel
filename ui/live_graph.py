@@ -8,15 +8,17 @@ from typing import Dict, List, Optional
 from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
-    BG_CARD, ACCENT, ACCENT_LITE, BORDER, RED, GREEN, TEXT_PRIMARY, TEXT_SECONDARY,
-    CHART_BG, CHART_PLOT_BG, CHART_GRID, CHART_TITLE,
+    ACCENT, ACCENT_LITE, AMBER, BG_CARD,
+    BORDER, CHART_BG, CHART_GRID, CHART_PLOT_BG,
+    CHART_TITLE, GREEN, RED, TEXT_PRIMARY,
+    TEXT_SECONDARY,
 )
 
 TARGET_COLORS = {
-    "1.1.1.1":  "#0078D4",
-    "8.8.8.8":  "#2E7D32",
-    "gateway":  "#F59E0B",
-    "default":  "#5A6A7A",
+    "1.1.1.1":  ACCENT,
+    "8.8.8.8":  GREEN,
+    "gateway":  AMBER,
+    "default":  TEXT_SECONDARY,
 }
 
 

@@ -26,6 +26,10 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QWidget
 
 from modules.protocol_animator import AnimNode, AnimStep, ProtocolSceneData
+from ui.styles import (
+    CANVAS_ACCENT, CANVAS_AMBER, CANVAS_BG, CANVAS_DIM,
+    CANVAS_FG, CANVAS_GRAY, CANVAS_GREEN,
+)
 
 # ── Timing ─────────────────────────────────────────────────────────────────────
 _FPS      = 30
@@ -33,7 +37,7 @@ _ANIM_MS  = 900    # ms for the dot to travel from src to dst
 _HOLD_MS  = 1400   # ms to pause after arrival before advancing
 
 # ── Visual constants ──────────────────────────────────────────────────────────
-_BG          = QColor("#0D1117")
+_BG          = QColor(CANVAS_BG)
 _NODE_W      = 110
 _NODE_H      = 58
 _FONT_NODE   = QFont("Segoe UI", 8)
@@ -41,16 +45,16 @@ _FONT_PKT    = QFont("Segoe UI", 8, QFont.Weight.Bold)
 _FONT_DETAIL = QFont("Segoe UI", 7)
 
 _ROLE_COLOR: dict[str, str] = {
-    "client":    "#2F81F7",
-    "gateway":   "#3FB950",
-    "dns":       "#E3B341",
-    "server":    "#8B949E",
-    "broadcast": "#484F58",
-    "switch":    "#8B949E",
-    "root":      "#3FB950",
+    "client":    CANVAS_ACCENT,
+    "gateway":   CANVAS_GREEN,
+    "dns":       CANVAS_AMBER,
+    "server":    CANVAS_GRAY,
+    "broadcast": CANVAS_DIM,
+    "switch":    CANVAS_GRAY,
+    "root":      CANVAS_GREEN,
 }
-_REPLY_COLOR  = QColor("#3FB950")
-_REQUEST_COLOR = QColor("#2F81F7")
+_REPLY_COLOR  = QColor(CANVAS_GREEN)
+_REQUEST_COLOR = QColor(CANVAS_ACCENT)
 
 
 class ProtocolCanvas(QWidget):
@@ -185,7 +189,7 @@ class ProtocolCanvas(QWidget):
         p.fillRect(self.rect(), _BG)
 
         if not self._scene or not self._scene.nodes:
-            p.setPen(QPen(QColor("#484F58")))
+            p.setPen(QPen(QColor(CANVAS_DIM)))
             p.setFont(QFont("Segoe UI", 11))
             p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No data — run a scan first")
             p.end()
@@ -261,7 +265,7 @@ class ProtocolCanvas(QWidget):
             ry = cy - _NODE_H / 2
             rect = QRectF(rx, ry, _NODE_W, _NODE_H)
 
-            border_hex = _ROLE_COLOR.get(node.role, "#484F58")
+            border_hex = _ROLE_COLOR.get(node.role, CANVAS_DIM)
             border = QColor(border_hex)
             is_active = node.id in active_ids
 
@@ -279,7 +283,7 @@ class ProtocolCanvas(QWidget):
             p.drawPath(path)
 
             # Label text
-            p.setPen(QPen(QColor("#E6EDF3")))
+            p.setPen(QPen(QColor(CANVAS_FG)))
             p.setFont(_FONT_NODE)
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, node.label)
 
@@ -344,18 +348,18 @@ class ProtocolCanvas(QWidget):
         det_rect = QRectF(ox - hw, oy + 3,  hw * 2, 13)
 
         # Single pill covering both rows — arrow line cannot cut between them
-        bg = QColor("#0D1117")
+        bg = QColor(CANVAS_BG)
         bg.setAlpha(210)
         pill = QRectF(ox - hw, oy - 15, hw * 2, 34)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(bg))
         p.drawRoundedRect(pill, 5, 5)
 
-        p.setPen(QPen(QColor("#E6EDF3")))
+        p.setPen(QPen(QColor(CANVAS_FG)))
         p.setFont(_FONT_PKT)
         p.drawText(lbl_rect, Qt.AlignmentFlag.AlignCenter, step.packet_label)
 
-        p.setPen(QPen(QColor("#8B949E")))
+        p.setPen(QPen(QColor(CANVAS_GRAY)))
         p.setFont(_FONT_DETAIL)
         p.drawText(det_rect, Qt.AlignmentFlag.AlignCenter, step.frame_detail)
 

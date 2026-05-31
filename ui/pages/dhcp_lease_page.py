@@ -34,19 +34,24 @@ from modules.dhcp_lease_scanner import DhcpLease
 from workers.dhcp_lease_worker import DhcpLeaseWorker
 from ui.styles import (
     ACCENT,
+    ACCENT_DARK,
     AMBER,
     BG_ALT_ROW,
     BG_CARD,
     BG_DARK,
     BG_HOVER,
     BORDER,
+    BTN_DISABLED_BORDER,
+    CARD_HDR_BORDER,
     GREEN,
+    INPUT_PLACEHOLDER,
     RED,
     TABLE_SEL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TH_BG,
     TH_TEXT,
+    WHITE,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
 
@@ -150,10 +155,10 @@ class DhcpLeasePage(QWidget):
         self._refresh_btn = QPushButton("Refresh")
         self._refresh_btn.setFixedHeight(30)
         self._refresh_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:12px;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
             f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:#006BBD; }}"
-            f"QPushButton:disabled {{ background:#B0C4D8; color:#9BA8B4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._refresh_btn.clicked.connect(self._run_scan)
@@ -194,7 +199,7 @@ class DhcpLeasePage(QWidget):
         card_title.setFixedHeight(32)
         card_title.setStyleSheet(
             f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" border-bottom:1px solid #ECECEC; background:{BG_CARD};"
+            f" border-bottom:1px solid {CARD_HDR_BORDER}; background:{BG_CARD};"
         )
         card_lay.addWidget(card_title)
 
@@ -234,9 +239,9 @@ class DhcpLeasePage(QWidget):
         _btn_empty_scan = QPushButton("▶  Scan DHCP Leases")
         _btn_empty_scan.setFixedHeight(32)
         _btn_empty_scan.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:12px;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
             f" font-weight:bold; border:none; border-radius:4px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:#006BBD; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _btn_empty_scan.clicked.connect(self._run_scan)

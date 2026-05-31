@@ -29,10 +29,12 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, AMBER_BG, BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_RADIUS, NAV_DIVIDER, RED,
-    SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, SIDEBAR_SECTION_FG,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    ACCENT, AMBER, AMBER_BG, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, CARD_RADIUS,
+    INLINE_WARN_BG, INLINE_WARN_FG, NAV_DIVIDER, RED,
+    SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG,
+    SIDEBAR_SECTION_FG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE,
 )
 from ui.nav.rail import _RailButton, _FlyoutPanel, _CanvasClickFilter, _make_nav_icon
 
@@ -714,7 +716,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin):
         _rail_search_btn.setFixedSize(56, 36)
         _rail_search_btn.setToolTip("Search all pages  (Ctrl+K)")
         _rail_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _rail_search_btn.setIcon(_make_nav_icon("search", 18, "#6B7A8D"))
+        _rail_search_btn.setIcon(_make_nav_icon("search", 18, TEXT_MUTED))
         _rail_search_btn.setIconSize(QSize(18, 18))
         _rail_search_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; border: none; outline: none;"
@@ -875,13 +877,13 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin):
         _lan_icon = QLabel("⚠")
         _lan_icon.setStyleSheet(f"font-size:13px; color:{AMBER}; border:none; background:transparent;")
         _lan_lbl = QLabel("No internet connection detected — operating in offline mode.")
-        _lan_lbl.setStyleSheet(f"font-size:11px; color:#92400E; border:none; background:transparent;")
+        _lan_lbl.setStyleSheet(f"font-size:11px; color:{INLINE_WARN_FG}; border:none; background:transparent;")
         _lan_dismiss = QPushButton("Dismiss")
         _lan_dismiss.setFixedHeight(22)
         _lan_dismiss.setStyleSheet(
-            f"QPushButton {{ font-size:10px; color:#92400E; background:transparent;"
-            f" border:1px solid #F59E0B; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:#FEF3C7; }}"
+            f"QPushButton {{ font-size:10px; color:{INLINE_WARN_FG}; background:transparent;"
+            f" border:1px solid {AMBER}; border-radius:3px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{INLINE_WARN_BG}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         _lan_dismiss.clicked.connect(lambda: (

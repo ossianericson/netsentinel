@@ -27,8 +27,10 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, BG_CARD, BG_DARK, BORDER, CARD_RADIUS, GREEN, RED, AMBER,
-    TABLE_SEL, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT, BG_HOVER, BG_ALT_ROW,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, GREEN, RED, TABLE_SEL,
+    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 
 
@@ -67,7 +69,7 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
 
     title_bar = QLabel(title)
     title_bar.setStyleSheet(
-        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid #ECECEC;"
+        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
         f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}"
     )
     outer_lay.addWidget(title_bar)

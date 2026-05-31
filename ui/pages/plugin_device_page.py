@@ -27,9 +27,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, AMBER_BG, BORDER, BG_CARD, BG_DARK,
-    BG_ALT_ROW, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE, BG_HOVER,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
+    AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
+    BG_HOVER, BLACK, BORDER, GREEN,
+    ORANGE, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, WHITE,
 )
 
 log = logging.getLogger(__name__)
@@ -163,7 +165,7 @@ def _quality_color(rsrp: Optional[float]) -> str:
     if rsrp >= -80:
         return GREEN
     if rsrp >= -90:
-        return "#FFA726"
+        return ORANGE
     if rsrp >= -100:
         return AMBER
     return RED
@@ -387,7 +389,7 @@ class PluginDevicePage(QWidget):
         self._cred_forget_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
             " border-radius:3px; font-size:11px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{AMBER}; color:#000; }}"
+            f"QPushButton:hover {{ background:{AMBER}; color:{BLACK}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )

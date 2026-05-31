@@ -22,17 +22,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    AMBER,
-    BG_CARD,
-    BG_DARK,
-    BORDER,
-    CARD_RADIUS,
-    GREEN,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
+    ACCENT, ACCENT_DARK, AMBER, BG_CARD,
+    BG_DARK, BORDER, CARD_RADIUS, GREEN,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.hub_card import (
     _btn,
@@ -303,7 +295,7 @@ class _HardwareBrowseMixin:
         add_btn.setFixedHeight(26)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             " border-radius:3px; font-size:11px; padding:0 12px; }}"
             f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"

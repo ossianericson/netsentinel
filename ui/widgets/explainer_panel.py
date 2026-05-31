@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
+from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER, WHITE
 
 
 # ── Per-page content ──────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ class ExplainerPanel(QFrame):
                 f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
                 f" color:{ACCENT}; border-radius:4px; font-size:11px; font-weight:600;"
                 f" padding:0 12px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:#FFFFFF; }}"
+                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
             viz_btn.setCursor(Qt.CursorShape.PointingHandCursor)

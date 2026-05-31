@@ -35,66 +35,66 @@ _UI_BUDGETS: dict[str, int] = {
     # Canonical source — always exempt
     "ui/styles.py": 9999,
 
-    # Files with violations (exact counts as of Sprint 10-1 baseline)
-    # Lower these numbers as each purge PR lands.
-    "ui/widgets/protocol_canvas.py": 16,
-    "ui/pages/settings_cards.py": 16,
-    "ui/pages/threat_intel_page.py": 16,
-    "ui/first_run_dialog.py": 18,
-    "ui/pages/home_page.py": 13,
-    "ui/pages/dns_zone_page.py": 13,
-    "ui/pages/ookla_cli_banner.py": 12,
-    "ui/pages/baseline_page.py": 11,
-    "ui/widgets/coach_mark.py": 10,
-    "ui/pages/inventory_page.py": 8,
-    "ui/widgets/overview_tile.py": 8,
-    "ui/dashboard.py": 7,
-    "ui/pages/reports_page.py": 7,
-    "ui/pages/dhcp_lease_page.py": 7,
-    "ui/pages/cve_page.py": 6,
-    "ui/pages/geo_map_page.py": 6,
-    "ui/pages/ip_calculator_page.py": 6,
-    "ui/pages/log_source_panel.py": 6,
-    "ui/pages/notif_channel_panels.py": 6,
-    "ui/pages/diagnosis_page.py": 9,
-    "ui/pages/trigger_builder_page.py": 5,
-    "ui/pages/protocol_viz_page.py": 5,
-    "ui/pages/log_hub_page.py": 5,
-    "ui/nav/rail.py": 5,
-    "ui/tabs.py": 5,
-    "ui/tabs_scan.py": 4,
-    "ui/pages/automation_page.py": 4,
-    "ui/pages/lab_mode_page.py": 4,
-    "ui/pages/overview_page.py": 4,
-    "ui/pages/rest_api_page.py": 4,
-    "ui/pages/speed_test_page.py": 4,
-    "ui/pages/wifi_heatmap_page.py": 4,
-    "ui/live_graph.py": 4,
-    "ui/pages/history_page.py": 3,
-    "ui/pages/home_automation_page.py": 3,
-    "ui/pages/syslog_page.py": 3,
-    "ui/widgets/home_widgets.py": 3,
-    "ui/widgets/hub_card.py": 3,
-    "ui/npcap_banner.py": 2,
-    "ui/pages/cert_page.py": 2,
-    "ui/pages/connections_page.py": 2,
-    "ui/pages/discover_page.py": 2,
-    "ui/pages/live_bandwidth_page.py": 2,
-    "ui/pages/plugin_device_page.py": 2,
-    "ui/pages/security_overview_page.py": 2,
-    "ui/pages/service_page.py": 2,
-    "ui/pages/uptime_page.py": 2,
-    "ui/system_tray.py": 2,
-    "ui/tabs_helpers.py": 2,
-    "ui/pages/hardware_browse_mixin.py": 1,
-    "ui/pages/mqtt_page.py": 1,
-    "ui/pages/settings_page.py": 1,
-    "ui/pages/snmp_trap_page.py": 1,
-    "ui/pages/timeline_page.py": 1,
-    "ui/widgets/density_toggle.py": 1,
-    "ui/widgets/explainer_panel.py": 1,
-    "ui/widgets/page_header.py": 1,
-    "ui/widgets/pulsing_dot.py": 1,
+    # Sprint 12: all previously-budgeted UI files purged to 0.
+    # Budgets lowered from Sprint 10-1 baseline → 0 (ratchet locked).
+    "ui/widgets/protocol_canvas.py": 0,    # was 16
+    "ui/pages/settings_cards.py": 0,       # was 16
+    "ui/pages/threat_intel_page.py": 0,
+    "ui/first_run_dialog.py": 0,           # was 18
+    "ui/pages/home_page.py": 0,
+    "ui/pages/dns_zone_page.py": 0,
+    "ui/pages/ookla_cli_banner.py": 0,     # was 12
+    "ui/pages/baseline_page.py": 0,        # was 11
+    "ui/widgets/coach_mark.py": 0,         # was 10
+    "ui/pages/inventory_page.py": 0,       # was 8
+    "ui/widgets/overview_tile.py": 0,      # was 8
+    "ui/dashboard.py": 0,                  # was 7
+    "ui/pages/reports_page.py": 0,         # was 7
+    "ui/pages/dhcp_lease_page.py": 0,
+    "ui/pages/cve_page.py": 0,             # was 6
+    "ui/pages/geo_map_page.py": 0,         # was 6
+    "ui/pages/ip_calculator_page.py": 0,   # was 6
+    "ui/pages/log_source_panel.py": 0,     # was 6
+    "ui/pages/notif_channel_panels.py": 0, # was 6
+    "ui/pages/diagnosis_page.py": 0,
+    "ui/pages/trigger_builder_page.py": 0, # was 5
+    "ui/pages/protocol_viz_page.py": 0,    # was 5
+    "ui/pages/log_hub_page.py": 0,         # was 5
+    "ui/nav/rail.py": 0,                   # was 5
+    "ui/tabs.py": 0,                        # was 5
+    "ui/tabs_scan.py": 0,                  # was 4
+    "ui/pages/automation_page.py": 0,      # was 4
+    "ui/pages/lab_mode_page.py": 0,        # was 4
+    "ui/pages/overview_page.py": 0,        # was 4
+    "ui/pages/rest_api_page.py": 0,        # was 4
+    "ui/pages/speed_test_page.py": 0,      # was 4
+    "ui/pages/wifi_heatmap_page.py": 0,    # was 4
+    "ui/live_graph.py": 0,                 # was 4
+    "ui/pages/history_page.py": 0,         # was 3
+    "ui/pages/home_automation_page.py": 0, # was 3
+    "ui/pages/syslog_page.py": 0,          # was 3
+    "ui/widgets/home_widgets.py": 0,       # was 3
+    "ui/widgets/hub_card.py": 0,           # was 3
+    "ui/npcap_banner.py": 0,               # was 2
+    "ui/pages/cert_page.py": 0,            # was 2
+    "ui/pages/connections_page.py": 0,     # was 2
+    "ui/pages/discover_page.py": 0,        # was 2
+    "ui/pages/live_bandwidth_page.py": 0,  # was 2
+    "ui/pages/plugin_device_page.py": 0,   # was 2
+    "ui/pages/security_overview_page.py": 0, # was 2
+    "ui/pages/service_page.py": 0,         # was 2
+    "ui/pages/uptime_page.py": 0,          # was 2
+    "ui/system_tray.py": 0,                # was 2
+    "ui/tabs_helpers.py": 0,               # was 2
+    "ui/pages/hardware_browse_mixin.py": 0, # was 1
+    "ui/pages/mqtt_page.py": 0,            # was 1
+    "ui/pages/settings_page.py": 0,        # was 1
+    "ui/pages/snmp_trap_page.py": 0,       # was 1
+    "ui/pages/timeline_page.py": 0,        # was 1
+    "ui/widgets/density_toggle.py": 0,     # was 1
+    "ui/widgets/explainer_panel.py": 0,    # was 1
+    "ui/widgets/page_header.py": 0,        # was 1
+    "ui/widgets/pulsing_dot.py": 0,        # was 1
 }
 
 _MODULE_BUDGETS: dict[str, int] = {

@@ -7,9 +7,9 @@ Shows:
   • Recent reports list (last N)
 
 Conforms to the NetSentinel enterprise UI design system:
-  • Light content area (#F4F4F4)
-  • Cards with #FFFFFF background, 1px #D4D4D4 border, 0px radius
-  • Table header #1A3A5C / white, 11px rows, zebra striping
+  • Light content area (BG_DARK)
+  • Cards with WHITE background, 1px BORDER border, 0px radius
+  • Table header TH_BG / white, 11px rows, zebra striping
 """
 
 from __future__ import annotations
@@ -32,9 +32,12 @@ from PyQt6.QtWidgets import (
 from modules.metric_store      import MetricStore
 from modules.report_scheduler  import ReportConfig, ReportScheduler
 from ui.styles                 import (
-    ACCENT, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS, CHART_BG, CHART_GRID,
-    CHART_PLOT_BG, GREEN, RED, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, TH_BG, TH_TEXT,
+    ACCENT, BG_CARD, BG_DARK, BG_HOVER,
+    BORDER, CARD_HDR_BORDER, CARD_RADIUS, CHART_BG,
+    CHART_GRID, CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER,
+    RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    WHITE,
 )
 
 
@@ -53,7 +56,7 @@ def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     # Title bar
     title_bar = QLabel(title)
     title_bar.setStyleSheet(
-        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid #ECECEC;"
+        f"QLabel {{ background:{BG_CARD}; border-bottom:1px solid {CARD_HDR_BORDER};"
         f" padding:4px 12px; font-size:13px; font-weight:bold; color:{TEXT_PRIMARY}; }}"
     )
     outer_lay.addWidget(title_bar)
@@ -253,7 +256,7 @@ class ReportsPage(QWidget):
         self._report_list.setStyleSheet(
             f"QListWidget {{ font-size:11px; color:{TEXT_PRIMARY}; border:none;"
             f" background:{BG_CARD}; }}"
-            f"QListWidget::item {{ padding:4px 8px; border-bottom:1px solid #EAEAEA; }}"
+            f"QListWidget::item {{ padding:4px 8px; border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
             f"QListWidget::item:hover {{ background:{BG_HOVER}; }}"
             f"QListWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         )
@@ -261,7 +264,7 @@ class ReportsPage(QWidget):
         self._report_list.itemDoubleClicked.connect(self._open_report)
         hist_lay.addWidget(self._report_list)
         self._lbl_empty = QLabel("No reports generated yet. Click \"Generate Now\" to create one.")
-        self._lbl_empty.setStyleSheet(f"font-size:11px; color:#9BA8B4; padding:8px;")
+        self._lbl_empty.setStyleSheet(f"font-size:11px; color:{INPUT_PLACEHOLDER}; padding:8px;")
         self._lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hist_lay.addWidget(self._lbl_empty)
         root.addWidget(hist_card)

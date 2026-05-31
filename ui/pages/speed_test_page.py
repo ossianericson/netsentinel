@@ -41,26 +41,12 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_DARK,
-    BG_HOVER,
-    BORDER,
-    CARD_HDR_BORDER,
-    CARD_RADIUS,
-    GREEN,
-    PROGRESS_TRACK,
-    RED,
-    TABLE_ROW_BORDER,
-    TABLE_SEL,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
-    TH_BORDER,
-    TH_TEXT,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, GREEN,
+    PROGRESS_TRACK, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
+    TH_BORDER, TH_TEXT,
 )
 
 from ui.pages.ookla_cli_banner import OoklaCliBanner
@@ -1340,13 +1326,13 @@ class SpeedTestPage(QWidget):
         fig = self._hist_chart_fig
         fig.clear()
         ax = fig.add_subplot(111)
-        ax.set_facecolor("#FAFBFC")
+        ax.set_facecolor(CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["bottom"].set_color("#D4D4D4")
-        ax.spines["left"].set_color("#D4D4D4")
+        ax.spines["bottom"].set_color(BORDER)
+        ax.spines["left"].set_color(BORDER)
         ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
-        ax.grid(True, color="#E8EDF2", linewidth=0.8, linestyle="-")
+        ax.grid(True, color=CHART_GRID, linewidth=0.8, linestyle="-")
         ax.set_ylabel("Mbps", fontsize=8, color=TEXT_SECONDARY)
 
         if not self._store:

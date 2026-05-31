@@ -39,9 +39,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, CARD_RADIUS, GREEN, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, AMBER, BG_CARD, BG_DARK,
+    BG_HOVER, BORDER, CARD_RADIUS, GREEN,
+    LOG_SOURCE_PLUGIN, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, WHITE,
 )
 
 # ── Module-level constants (imported by log_hub_page.py too) ─────────────────
@@ -55,7 +56,7 @@ _SOURCES: dict[str, tuple[str, str]] = {
     "mesh":   ("Mesh Router", AMBER),
     "syslog": ("Syslog",      TEXT_SECONDARY),
     "snmp":   ("SNMP Traps",  RED),
-    "plugin": ("PLUGIN",      "#A78BFA"),
+    "plugin": ("PLUGIN",      LOG_SOURCE_PLUGIN),
 }
 _LABEL_TO_KEY = {label: key for key, (label, _) in _SOURCES.items()}
 
@@ -380,7 +381,7 @@ class _LogSourcePanelMixin:
         _pill_lay.setContentsMargins(2, 2, 2, 2)
         _pill_lay.setSpacing(0)
         _pill_seg_on = (
-            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
             f" border:none; border-radius:11px; padding:2px 12px; }}"
         )
         _pill_seg_off = (
@@ -504,7 +505,7 @@ class _LogSourcePanelMixin:
         lay.setContentsMargins(10, 5, 10, 5)
         lay.setSpacing(4)
         _seg_on = (
-            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
             f" border:none; border-radius:3px; padding:2px 14px; }}"
         )
         _seg_off = (
@@ -630,7 +631,7 @@ class _LogSourcePanelMixin:
 
     def _on_mode_live(self) -> None:
         self._is_history_mode = False
-        _on  = (f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+        _on  = (f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
                 f" border:none; border-radius:11px; padding:2px 12px; }}")
         _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
                 f" border:none; border-radius:11px; padding:2px 12px; }}"
@@ -642,7 +643,7 @@ class _LogSourcePanelMixin:
 
     def _on_mode_history(self) -> None:
         self._is_history_mode = True
-        _on  = (f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:11px; font-weight:bold;"
+        _on  = (f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px; font-weight:bold;"
                 f" border:none; border-radius:11px; padding:2px 12px; }}")
         _off = (f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:11px;"
                 f" border:none; border-radius:11px; padding:2px 12px; }}"
@@ -851,7 +852,7 @@ class _LogSourcePanelMixin:
             src_lbl = QLabel(f"● {name}")
             src_lbl.setFixedWidth(120)
             src_lbl.setStyleSheet(
-                "color:#A78BFA; font-size:11px; font-weight:bold;"
+                "color:LOG_SOURCE_PLUGIN; font-size:11px; font-weight:bold;"
                 " background:transparent; border:none;"
             )
             row_l.addWidget(src_lbl)

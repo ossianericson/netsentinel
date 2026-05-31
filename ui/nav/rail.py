@@ -239,7 +239,7 @@ _LUCIDE: dict = {
 }
 
 
-def _make_nav_icon(icon_name: str, size: int = 20, color: str = "#A8B8C8") -> QIcon:
+def _make_nav_icon(icon_name: str, size: int = 20, color: str = SIDEBAR_ITEM_FG) -> QIcon:
     """Render a Lucide SVG string to a QIcon at the given pixel size and colour."""
     from PyQt6.QtSvg import QSvgRenderer
     svg_str = _LUCIDE.get(icon_name, _LUCIDE["activity"])
@@ -266,9 +266,9 @@ class _NavEntry:
 class _RailButton(QPushButton):
     """48×58 icon + label button for the activity rail."""
 
-    _COLOR_NORMAL = "#A8B8C8"
-    _COLOR_ACTIVE = "#FFFFFF"
-    _LABEL_COLOR  = "#6B7A8D"
+    _COLOR_NORMAL = SIDEBAR_ITEM_FG
+    _COLOR_ACTIVE = WHITE
+    _LABEL_COLOR  = TEXT_MUTED
 
     def __init__(self, icon_name: str, tooltip: str, parent=None):
         super().__init__(parent)
@@ -424,7 +424,7 @@ class _RailButton(QPushButton):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(RED))
             p.drawRoundedRect(QRectF(pill_x, pill_y, pill_w, pill_h), 7, 7)
-            p.setPen(QColor("#FFFFFF"))
+            p.setPen(QColor(WHITE))
             p.drawText(QRect(pill_x, pill_y, pill_w, pill_h),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
                        self._badge_count)

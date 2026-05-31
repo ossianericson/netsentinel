@@ -24,8 +24,9 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, AMBER, BG_CARD, BG_DARK,
+    BG_HOVER, BORDER, GREEN, RED,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 _SOURCE_PAGE_MAP = {
@@ -188,7 +189,7 @@ class TimelinePage(QWidget):
         self._tl_search.setFixedWidth(180)
         self._tl_search.setStyleSheet(
             f"QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            f" font-size:10px; color:{TEXT_PRIMARY}; background:#fff; }}"
+            f" font-size:10px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
             f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         self._tl_search.textChanged.connect(lambda: self._tl_search_timer.start())

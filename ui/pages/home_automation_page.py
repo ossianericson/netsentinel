@@ -49,23 +49,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_DARK,
-    BG_HOVER,
-    BORDER,
-    CARD_HDR_BORDER,
-    CHART_GRID,
-    CHART_PLOT_BG,
-    GREEN,
-    RED,
-    TABLE_SEL,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    BG_CARD, BG_DARK, BG_HOVER, BORDER,
+    CARD_HDR_BORDER, CHART_GRID, CHART_PLOT_BG, GREEN,
+    RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_BORDER,
     TH_TEXT,
 )
 
@@ -529,11 +517,11 @@ class HomeAutomationPage(QWidget):
             f"QHeaderView::section {{"
             f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
             f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid #254A6E;"
+            f"  border-right:1px solid {TH_BORDER};"
             f"}}"
             f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
             f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid #EAEAEA; }}"
+            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
         )
         self._tbl.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tbl.customContextMenuRequested.connect(self._context_menu)
@@ -566,7 +554,7 @@ class HomeAutomationPage(QWidget):
         _btn_mqtt.setStyleSheet(
             f"QPushButton{{color:{ACCENT};font-size:11px;background:transparent;"
             f"border:none;padding:4px 0;}}"
-            f"QPushButton:hover{{color:#005A9E;}}"
+            f"QPushButton:hover{{color:{ACCENT_DARK};}}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _btn_mqtt.clicked.connect(

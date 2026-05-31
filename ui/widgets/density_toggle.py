@@ -11,13 +11,13 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QTableView
 
-from ui.styles import ACCENT, ACCENT_DARK, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY
+from ui.styles import ACCENT, ACCENT_DARK, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, WHITE
 
 _COMPACT_PX     = 24
 _COMFORTABLE_PX = 36
 
 _SS_ACTIVE = (
-    f"QPushButton{{background:{ACCENT_DARK};color:#fff;border:none;"
+    f"QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
     f"border-radius:3px;padding:0 8px;font-size:10px;}}"
     f"QPushButton:hover{{background:{ACCENT};}}"
 )

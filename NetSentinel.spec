@@ -156,6 +156,10 @@ hiddenimports: list = [
     "ui.scan_wiring",
     "ui.header",
     "ui.tabs",
+    "ui.tabs_helpers",
+    "ui.tabs_scan",
+    "ui.tabs_network",
+    "ui.tabs_diag",
     "ui.nav",
     "ui.nav.rail",
     "ui.command_palette",
@@ -276,6 +280,9 @@ hiddenimports: list = [
     "workers.wifi_monitor_worker",
     "ui.pages.hardware_integration_page",
     "ui.pages.plugin_guide",
+    "ui.pages.plugin_wizard_mixin",
+    "ui.pages.hardware_browse_mixin",
+    "ui.widgets.credential_dialog",
 ]
 
 for _pkg in ("scapy", "PyQt6", "matplotlib", "flask", "keyring"):

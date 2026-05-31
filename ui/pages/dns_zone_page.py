@@ -37,18 +37,25 @@ from modules.dns_zone_scanner import DnsRecord, DnsZoneResult, MdnsService
 from workers.dns_zone_worker import DnsZoneWorker
 from ui.styles import (
     ACCENT,
+    ACCENT_DARK,
     AMBER,
     BG_ALT_ROW,
     BG_CARD,
+    BG_DARK,
     BG_HOVER,
     BORDER,
+    BTN_DISABLED_BORDER,
+    CARD_HDR_BORDER,
     GREEN,
+    INPUT_PLACEHOLDER,
+    PROGRESS_TRACK,
     RED,
     TABLE_SEL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TH_BG,
     TH_TEXT,
+    WHITE,
 )
 
 
@@ -93,7 +100,7 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     hdr.setFixedHeight(32)
     hdr.setStyleSheet(
         f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-        f" border-bottom:1px solid #ECECEC; background:{BG_CARD};"
+        f" border-bottom:1px solid {CARD_HDR_BORDER}; background:{BG_CARD};"
     )
     lay.addWidget(hdr)
     return frame, lay
@@ -124,18 +131,18 @@ def _btn(text: str, primary: bool = True) -> QPushButton:
     b.setFixedHeight(30)
     if primary:
         b.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:12px;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
             f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:#006BBD; }}"
-            f"QPushButton:disabled {{ background:#B0C4D8; color:#9BA8B4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+            f"QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     else:
         b.setStyleSheet(
-            f"QPushButton {{ background:#fff; color:{ACCENT}; font-size:12px;"
+            f"QPushButton {{ background:{WHITE}; color:{ACCENT}; font-size:12px;"
             f" border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-            f"QPushButton:disabled {{ background:#F4F4F4; color:#9BA8B4; border-color:#B0C4D8; }}"
+            f"QPushButton:disabled {{ background:{BG_DARK}; color:{INPUT_PLACEHOLDER}; border-color:{BTN_DISABLED_BORDER}; }}"
             f"QPushButton:pressed {{ color:{ACCENT}; }}"
         )
     return b
@@ -148,7 +155,7 @@ def _field(placeholder: str, width: int = 180) -> QLineEdit:
     e.setFixedWidth(width)
     e.setStyleSheet(
         f"QLineEdit {{ border:1px solid {BORDER}; border-radius:4px; padding:0 8px;"
-        f" font-size:11px; color:{TEXT_PRIMARY}; background:#fff; }}"
+        f" font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
         f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
     )
     return e
@@ -216,14 +223,14 @@ class DnsZonePage(QWidget):
         # Content — horizontal splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(4)
-        splitter.setStyleSheet("QSplitter::handle { background:#E0E7F0; }")
+        splitter.setStyleSheet(f"QSplitter::handle {{ background:{PROGRESS_TRACK}; }}")
 
         # Left: AXFR records
         left_card, left_lay = _card("DNS Zone Records (AXFR)")
         self._rec_table = _make_table(["Name", "Type", "Value", "TTL"])
         self._rec_empty = QLabel("No records — run AXFR or server refused transfer.")
         self._rec_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._rec_empty.setStyleSheet(f"font-size:12px; color:#9BA8B4;")
+        self._rec_empty.setStyleSheet(f"font-size:12px; color:{INPUT_PLACEHOLDER};")
         left_lay.addWidget(self._rec_table)
         left_lay.addWidget(self._rec_empty)
         splitter.addWidget(left_card)
@@ -235,7 +242,7 @@ class DnsZonePage(QWidget):
         )
         self._svc_empty = QLabel("No mDNS services discovered. Click 'Enumerate mDNS'.")
         self._svc_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._svc_empty.setStyleSheet(f"font-size:12px; color:#9BA8B4;")
+        self._svc_empty.setStyleSheet(f"font-size:12px; color:{INPUT_PLACEHOLDER};")
         right_lay.addWidget(self._svc_table)
         right_lay.addWidget(self._svc_empty)
         splitter.addWidget(right_card)

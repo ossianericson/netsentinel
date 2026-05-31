@@ -61,6 +61,7 @@ _ARCTIC_CLEAN = {
     "BTN_DISABLED_BORDER":"#B0C4D8",
     "BTN_DISABLED_FG":    "#7A8A9A",
     "INPUT_BTN_BG":       "#EEF2F6",
+    "INPUT_PLACEHOLDER":  "#9BA8B4",
     # Scrollbar / progress
     "PROGRESS_TRACK":     "#E0E8EF",
     "SCROLLBAR_TRACK":    "#E8EDF2",
@@ -152,6 +153,7 @@ _DARK_PRO = {
     "BTN_DISABLED_BORDER":"#30363D",
     "BTN_DISABLED_FG":    "#6E7681",
     "INPUT_BTN_BG":       "#21262D",
+    "INPUT_PLACEHOLDER":  "#484F58",
     # Scrollbar / progress
     "PROGRESS_TRACK":     "#0D1117",
     "SCROLLBAR_TRACK":    "#0D1117",
@@ -241,6 +243,7 @@ _OBSIDIAN_NEON = {
     "BTN_DISABLED_BORDER":"#302040",
     "BTN_DISABLED_FG":    "#6C7086",
     "INPUT_BTN_BG":       "#262638",
+    "INPUT_PLACEHOLDER":  "#4A3065",
     # Scrollbar / progress
     "PROGRESS_TRACK":     "#181825",
     "SCROLLBAR_TRACK":    "#181825",
@@ -378,6 +381,74 @@ CHART_DOWN   = "#2196F3"   # bandwidth download line (Material Blue)
 CHART_UP     = "#4CAF50"   # bandwidth upload line (Material Green)
 CHART_AXIS   = "#888888"   # matplotlib axis tick / label text
 CHART_PURPLE = "#8E44AD"   # 6th data-series colour (history charts)
+
+# ── Theme-independent visualization constants ─────────────────────────────────────
+# Fixed semantic colours for specific visualizations and status indicators.
+MAP_LAND_BG        = "#1E2D3D"   # geo map — land fill (dark ocean-contrast)
+MAP_LAND_BORDER    = "#3A4F63"   # geo map — land border (subtle outline)
+
+IP_CALC_ALT_ROW    = "#1A2435"   # ip calculator — alternating dark row background
+IP_CALC_NET_BIT_BG = "#1A3A5C"   # ip calculator — network bit cell (reuses TH_BG value)
+IP_CALC_HOST_BIT_BG = "#2D4A2D"  # ip calculator — host bit cell (green tint)
+IP_CALC_NET_FG     = "#7EB8F7"   # ip calculator — network bit foreground (light blue)
+IP_CALC_HOST_FG    = "#88CC88"   # ip calculator — host bit foreground (light green)
+
+LOG_SOURCE_PLUGIN  = "#A78BFA"   # log hub — plugin source label colour (violet)
+
+GRADE_B_COLOR      = "#4CAF8A"   # network grade — B grade colour (green-teal)
+
+BLACK              = "#000000"   # pure black (specific UI use cases)
+ORANGE             = "#FFA726"   # orange (plugin device type indicator)
+STATUS_OFFLINE     = "#636366"   # status dot — offline/inactive (neutral gray)
+
+INLINE_WARN_FG     = "#92400E"   # inline warning text (dark amber)
+INLINE_WARN_BG     = "#FEF3C7"   # inline warning background (pale amber)
+
+# ── Status badge colours (notification channel enabled/disabled indicators) ───
+BADGE_OK_FG        = "#065F46"   # enabled-state badge text (dark teal)
+BADGE_OK_BG        = "#D1FAE5"   # enabled-state badge background (light teal)
+BADGE_OK_BORDER    = "#10B981"   # enabled-state badge border (medium teal)
+BADGE_OFF_FG       = "#6B7280"   # disabled-state badge text (neutral gray)
+BADGE_OFF_BG       = "#F3F4F6"   # disabled-state badge background
+BADGE_OFF_BORDER   = "#D1D5DB"   # disabled-state badge border
+
+# ── Accent colour presets (user-selectable colours in Settings) ────────────────
+TEAL               = "#00897B"   # teal preset accent
+DEEP_ORANGE        = "#E65100"   # deep orange preset accent
+ACCENT_PURPLE      = "#7C3AED"   # purple preset accent (also Obsidian Neon ACCENT)
+
+# ── Ookla CLI / info-box banner colours ───────────────────────────────────────
+INFO_BOX_BG        = "#EBF4FF"   # info banner light blue background
+INFO_BOX_BORDER    = "#B3D4F5"   # info banner border
+INFO_BOX_FG        = "#1A4A7A"   # info banner dark blue text
+
+# ── HTML report export colours (embedded in generated HTML/CSS strings) ───────
+HTML_GREEN         = "#27AE60"   # positive / pass row
+HTML_RED           = "#E74C3C"   # negative / fail row
+HTML_AMBER         = "#F39C12"   # warning row
+HTML_TEXT          = "#333333"   # primary HTML body text
+HTML_MUTED         = "#CCCCCC"   # muted border / box-shadow
+HTML_BG_LIGHT      = "#F5F5F5"   # HTML page background
+HTML_BG_ALT        = "#F9F9F9"   # HTML alternate row background
+
+# ── Dark overlay / dialog colours (first-run wizard, coach-mark overlay) ─────
+OVERLAY_BG         = "#1C1C1E"   # dark modal background
+OVERLAY_BG2        = "#2C2C2E"   # dark modal card fill
+OVERLAY_BG3        = "#3A3A3C"   # dark modal hover / border
+OVERLAY_FG2        = "#8E8E93"   # dark modal secondary text
+OVERLAY_FG3        = "#AEAEB2"   # dark modal tertiary text
+OVERLAY_BLUE       = "#0A84FF"   # dark modal primary action (iOS-style blue)
+OVERLAY_BLUE2      = "#409CFF"   # dark modal hover/active blue
+OVERLAY_ORANGE     = "#FF9F0A"   # dark modal highlight / feature colour
+
+# ── Protocol canvas colours (fixed dark background regardless of theme) ───────
+CANVAS_BG          = "#0D1117"   # canvas background
+CANVAS_FG          = "#E6EDF3"   # canvas text / packet labels
+CANVAS_ACCENT      = "#2F81F7"   # canvas accent — client node / request packets
+CANVAS_GREEN       = "#3FB950"   # canvas green — gateway / success / root bridge
+CANVAS_AMBER       = "#E3B341"   # canvas amber — DNS / warning packets
+CANVAS_GRAY        = "#8B949E"   # canvas gray — server / switch nodes
+CANVAS_DIM         = "#484F58"   # canvas dim — broadcast / inactive border
 
 # ── Layout / typography tokens ────────────────────────────────────────────────
 # Theme-independent. Import these instead of hardcoding values in page files.

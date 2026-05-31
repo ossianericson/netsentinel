@@ -24,9 +24,9 @@ from PyQt6.QtWidgets import (
 from modules.lab_scenarios import LabResult, LabScenario, LabStep, SCENARIOS
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY,
-    BG_HOVER,
+    ACCENT, AMBER, BG_CARD, BG_DARK,
+    BG_HOVER, BORDER, GREEN, RED,
+    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 _PICKER  = 0
@@ -256,7 +256,7 @@ class LabModePage(QWidget):
         btn = QPushButton("Start Exercise")
         btn.setFixedHeight(28)
         btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; }}"
             f"QPushButton:hover {{ background:{ACCENT}cc; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
@@ -373,7 +373,7 @@ class LabModePage(QWidget):
         self._run_btn = QPushButton("Run Check")
         self._run_btn.setFixedHeight(30)
         self._run_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
             f"QPushButton:hover:!disabled {{ background:{ACCENT}cc; }}"
@@ -406,7 +406,7 @@ class LabModePage(QWidget):
         self._next_btn.setFixedHeight(30)
         self._next_btn.setEnabled(False)
         self._next_btn.setStyleSheet(
-            f"QPushButton {{ background:{GREEN}; color:#fff; border:none;"
+            f"QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
             f"QPushButton:hover:!disabled {{ opacity:0.9; }}"
@@ -498,7 +498,7 @@ class LabModePage(QWidget):
         export_btn = QPushButton("Export Report (HTML)")
         export_btn.setFixedHeight(30)
         export_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:hover {{ background:{ACCENT}cc; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"

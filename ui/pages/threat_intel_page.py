@@ -44,18 +44,23 @@ from workers.threat_intel_worker import AbuseIpDbWorker, ThreatFeedRefreshWorker
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from ui.styles import (
     ACCENT,
+    ACCENT_DARK,
     AMBER,
     BG_ALT_ROW,
     BG_CARD,
     BG_DARK,
     BG_HOVER,
     BORDER,
+    BTN_DISABLED_BORDER,
+    CARD_HDR_BORDER,
     GREEN,
+    INPUT_PLACEHOLDER,
     RED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     TH_BG,
     TH_TEXT,
+    WHITE,
 )
 
 # ── Keyring helpers (RULE 22-A) ───────────────────────────────────────────────
@@ -108,7 +113,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
         f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
         f" font-weight:bold; padding:4px 8px; border:none; }}"
         f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:{ACCENT}; color:#fff; }}"
+        f"QTableWidget::item:selected {{ background:{ACCENT}; color:{WHITE}; }}"
     )
     return t
 
@@ -150,7 +155,7 @@ def _card_frame(title: str) -> tuple[QFrame, QVBoxLayout]:
     hdr.setFixedHeight(32)
     hdr.setStyleSheet(
         f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-        f" border-bottom:1px solid #ECECEC; background:{BG_CARD};"
+        f" border-bottom:1px solid {CARD_HDR_BORDER}; background:{BG_CARD};"
     )
     lay.addWidget(hdr)
     return frame, lay
@@ -160,10 +165,10 @@ def _primary_btn(text: str) -> QPushButton:
     b = QPushButton(text)
     b.setFixedHeight(30)
     b.setStyleSheet(
-        f"QPushButton {{ background:{ACCENT}; color:#fff; font-size:12px;"
+        f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
         f" font-weight:bold; border:none; border-radius:4px; padding:0 14px; }}"
-        f"QPushButton:hover {{ background:#006BBD; }}"
-        f"QPushButton:disabled {{ background:#B0C4D8; color:#9BA8B4; }}"
+        f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
+        f"QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{INPUT_PLACEHOLDER}; }}"
         f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
     )
     return b
@@ -173,10 +178,10 @@ def _secondary_btn(text: str) -> QPushButton:
     b = QPushButton(text)
     b.setFixedHeight(30)
     b.setStyleSheet(
-        f"QPushButton {{ background:#fff; color:{ACCENT}; font-size:12px;"
+        f"QPushButton {{ background:{WHITE}; color:{ACCENT}; font-size:12px;"
         f" border:1px solid {ACCENT}; border-radius:4px; padding:0 14px; }}"
         f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-        f"QPushButton:disabled {{ background:#F4F4F4; color:#9BA8B4; border-color:#B0C4D8; }}"
+        f"QPushButton:disabled {{ background:{BG_DARK}; color:{INPUT_PLACEHOLDER}; border-color:{BTN_DISABLED_BORDER}; }}"
         f"QPushButton:pressed {{ color:{ACCENT}; }}"
     )
     return b
@@ -255,7 +260,7 @@ class ThreatIntelPage(QWidget):
         self._threat_search.setFixedWidth(220)
         self._threat_search.setStyleSheet(
             f"QLineEdit {{ border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
-            f" font-size:11px; color:{TEXT_PRIMARY}; background:#fff; }}"
+            f" font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
             f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         self._threat_search.textChanged.connect(lambda: self._threat_timer.start())
@@ -305,9 +310,9 @@ class ThreatIntelPage(QWidget):
         _el_cta.setFixedHeight(28)
         _el_cta.setCursor(Qt.CursorShape.PointingHandCursor)
         _el_cta.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _el_cta.clicked.connect(self._run_refresh)
@@ -349,7 +354,7 @@ class ThreatIntelPage(QWidget):
         self._api_key_field.setFixedHeight(26)
         self._api_key_field.setStyleSheet(
             f"QLineEdit {{ border:1px solid {BORDER}; border-radius:2px; padding:0 6px;"
-            f" font-size:11px; color:{TEXT_PRIMARY}; background:#fff; }}"
+            f" font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
             f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         self._api_key_field.editingFinished.connect(self._save_settings)
@@ -385,7 +390,7 @@ class ThreatIntelPage(QWidget):
         self._lookup_field.setFixedWidth(240)
         self._lookup_field.setStyleSheet(
             f"QLineEdit {{ border:1px solid {BORDER}; border-radius:4px; padding:0 8px;"
-            f" font-size:11px; color:{TEXT_PRIMARY}; background:#fff; }}"
+            f" font-size:11px; color:{TEXT_PRIMARY}; background:{WHITE}; }}"
             f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         self._lookup_field.returnPressed.connect(self._run_lookup)
@@ -436,7 +441,7 @@ class ThreatIntelPage(QWidget):
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
             f" font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{ACCENT}; color:#fff; }}"
+            f"QMenu::item:selected {{ background:{ACCENT}; color:{WHITE}; }}"
             f"QMenu::separator {{ height:1px; background:{BORDER}; margin:2px 0; }}"
         )
 

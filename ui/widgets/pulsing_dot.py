@@ -6,6 +6,8 @@ from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget
 
+from ui.styles import STATUS_OFFLINE
+
 
 class PulsingDot(QWidget):
     """12×12 coloured circle. Call set_status() to change colour and trigger a pulse."""
@@ -17,7 +19,7 @@ class PulsingDot(QWidget):
         super().__init__(parent)
         self.setFixedSize(14, 14)
         self._radius: float = self._BASE_RADIUS
-        self._color: QColor = QColor("#636366")
+        self._color: QColor = QColor(STATUS_OFFLINE)
         self._anim = QPropertyAnimation(self, b"dot_radius", self)
         self._anim.setDuration(400)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)

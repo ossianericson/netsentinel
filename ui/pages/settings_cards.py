@@ -41,9 +41,14 @@ from PyQt6.QtWidgets import (
 
 import ui.styles as _styles
 from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_ALT_ROW, BG_CARD, BG_DARK, BORDER,
-    BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN, NAV_BAR, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE, BG_HOVER,
+    ACCENT, ACCENT_DARK, ACCENT_PURPLE, AMBER,
+    BADGE_OFF_BG, BADGE_OFF_BORDER, BADGE_OFF_FG, BADGE_OK_BG,
+    BADGE_OK_BORDER, BADGE_OK_FG, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BG_HOVER, BORDER, BTN_HOVER_BG,
+    CARD_HDR_BORDER, CARD_RADIUS, DEEP_ORANGE, GREEN,
+    INLINE_WARN_BG, INLINE_WARN_FG, NAV_BAR, PRO_WARN_BG,
+    RED, TEAL, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, WHITE,
 )
 
 
@@ -329,19 +334,19 @@ class _SettingsCardsMixin:
     def _chip_style(self, state: str) -> str:
         if state == "green":
             return (
-                "font-size:10px; font-weight:bold; color:#065F46;"
-                " background:#D1FAE5; border:1px solid #10B981; border-radius:10px;"
+                "font-size:10px; font-weight:bold; color:BADGE_OK_FG;"
+                " background:BADGE_OK_BG; border:1px solid BADGE_OK_BORDER; border-radius:10px;"
                 " padding:0 10px;"
             )
         if state == "amber":
             return (
-                "font-size:10px; font-weight:bold; color:#92400E;"
-                " background:#FEF3C7; border:1px solid #F59E0B; border-radius:10px;"
+                "font-size:10px; font-weight:bold; color:INLINE_WARN_FG;"
+                " background:INLINE_WARN_BG; border:1px solid AMBER; border-radius:10px;"
                 " padding:0 10px;"
             )
         return (
-            "font-size:10px; font-weight:bold; color:#6B7280;"
-            " background:#F3F4F6; border:1px solid #D1D5DB; border-radius:10px;"
+            "font-size:10px; font-weight:bold; color:BADGE_OFF_FG;"
+            " background:BADGE_OFF_BG; border:1px solid BADGE_OFF_BORDER; border-radius:10px;"
             " padding:0 10px;"
         )
 
@@ -544,8 +549,8 @@ class _SettingsCardsMixin:
         )
         bl.addWidget(accent_desc)
         _ACCENT_PRESETS = [
-            ("#0078D4", "Blue"), ("#7C3AED", "Purple"), ("#2E7D32", "Green"),
-            ("#00897B", "Teal"), ("#D93025", "Red"),    ("#E65100", "Orange"),
+            (ACCENT, "Blue"), (ACCENT_PURPLE, "Purple"), (GREEN, "Green"),
+            (TEAL, "Teal"), (RED, "Red"),    (DEEP_ORANGE, "Orange"),
         ]
         swatch_row = QHBoxLayout()
         swatch_row.setSpacing(6)
@@ -975,7 +980,7 @@ class _SettingsCardsMixin:
             f"QPushButton{{background:{BG_CARD};color:{RED};"
             f"border:1px solid {RED};border-radius:2px;"
             f"padding:0 12px;font-size:11px;height:26px;}}"
-            f"QPushButton:hover{{background:#FFF0F0;}}"
+            f"QPushButton:hover{{background:{PRO_WARN_BG};}}"
             f"QPushButton:disabled{{color:{TEXT_MUTED};border-color:{BORDER};}}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )

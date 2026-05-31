@@ -20,9 +20,10 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_RADIUS, GREEN, NAV_BAR, PRO_WARN_BG, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
+    CARD_RADIUS, GRADE_B_COLOR, GREEN, NAV_BAR,
+    PRO_WARN_BG, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG,
+    WHITE,
 )
 
 
@@ -776,7 +777,7 @@ class _GradeBreakdownDialog:
         )
 
         _GRADE_COLOR = {
-            "A": GREEN, "B": "#4CAF8A", "C": AMBER, "D": RED, "F": RED,
+            "A": GREEN, "B": GRADE_B_COLOR, "C": AMBER, "D": RED, "F": RED,
         }
 
         dlg = QDialog(parent)
@@ -941,9 +942,9 @@ class _GradeBreakdownDialog:
         close_btn.setFixedHeight(28)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         close_btn.clicked.connect(dlg.accept)

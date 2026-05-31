@@ -30,20 +30,10 @@ from ui.expanding_table import ExpandingTable
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_HOVER,
-    BORDER,
-    CARD_RADIUS,
-    GREEN,
-    RED,
-    TABLE_SEL,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
+    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )
 
@@ -148,7 +138,7 @@ class UptimePage(QWidget):
 
         title_bar = QFrame()
         title_bar.setFixedHeight(32)
-        title_bar.setStyleSheet(f"background: {BG_CARD}; border-bottom: 1px solid #ECECEC;")
+        title_bar.setStyleSheet(f"background: {BG_CARD}; border-bottom: 1px solid {CARD_HDR_BORDER};")
         tb_layout = QHBoxLayout(title_bar)
         tb_layout.setContentsMargins(10, 0, 10, 0)
         lbl = QLabel("Device Uptime Summary")
@@ -183,7 +173,7 @@ class UptimePage(QWidget):
         self._table.setStyleSheet(
             f"""
             QTableWidget {{
-                border: none; gridline-color: #EAEAEA;
+                border: none; gridline-color: TABLE_ROW_BORDER;
                 font-size: 11px; color: {TEXT_PRIMARY};
                 alternate-background-color: {BG_ALT_ROW};
             }}

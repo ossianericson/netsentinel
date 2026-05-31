@@ -39,27 +39,12 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QColor
 
 from ui.styles import (
-    ACCENT,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BG_DARK,
-    BORDER,
-    CHART_AXIS,
-    CHART_BG,
-    CHART_DOWN,
-    CHART_GRID,
-    CHART_PLOT_BG,
-    CHART_TITLE,
-    CHART_UP,
-    GREEN,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TABLE_SEL,
-    TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
+    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    BG_DARK, BORDER, CHART_AXIS, CHART_BG,
+    CHART_DOWN, CHART_GRID, CHART_PLOT_BG, CHART_TITLE,
+    CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
+    TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    TH_BG, TH_BORDER, TH_TEXT,
 )
 
 _HISTORY_LEN  = 60          # seconds of rolling history
@@ -215,11 +200,11 @@ class LiveBandwidthPage(QWidget):
             f"QHeaderView::section {{"
             f"  background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
             f"  font-weight:bold; padding:4px 5px; border:none;"
-            f"  border-right:1px solid #254A6E;"
+            f"  border-right:1px solid {TH_BORDER};"
             f"}}"
             f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
             f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-            f"QTableWidget::item {{ border-bottom:1px solid #EAEAEA; }}"
+            f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
         )
         root.addWidget(self._tbl)
 

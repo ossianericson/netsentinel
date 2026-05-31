@@ -33,22 +33,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT,
-    ACCENT_DARK,
-    ACCENT_LITE,
-    AMBER,
-    BG_ALT_ROW,
-    BG_CARD,
-    BORDER,
-    CARD_HDR_BORDER,
-    CARD_RADIUS,
-    GREEN,
-    RED,
-    TEXT_MUTED,
-    TEXT_PRIMARY,
-    TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
+    BG_ALT_ROW, BG_CARD, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, GREEN, RED, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    WHITE,
 )
 
 try:
@@ -126,7 +115,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
         f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT};"
         f" font-size:10px; font-weight:600; border:none; padding:3px 6px; }}"
         f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-        f"QTableWidget::item:selected {{ background:{ACCENT}; color:#fff; }}"
+        f"QTableWidget::item:selected {{ background:{ACCENT}; color:{WHITE}; }}"
     )
     return t
 
@@ -234,7 +223,7 @@ class SecurityOverviewPage(QWidget):
         self._scan_btn.setMinimumWidth(165)
         self._scan_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._scan_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" font-size:13px; font-weight:bold; padding:0 22px; border-radius:5px; }}"
             f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
             f"QPushButton:pressed {{ background:{ACCENT_DARK}; }}"

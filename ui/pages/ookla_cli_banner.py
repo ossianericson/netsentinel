@@ -24,17 +24,20 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QWidget,
 )
-from ui.styles import BG_HOVER, TEXT_PRIMARY
+from ui.styles import (
+    ACCENT, ACCENT_DARK, BG_HOVER, BTN_DISABLED_BORDER, INFO_BOX_BG,
+    INFO_BOX_BORDER, INFO_BOX_FG, RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+)
 
 # Self-contained colours (no ui.styles import needed — banner is standalone)
-_BLUE_BG   = "#EBF4FF"
-_BLUE_BDR  = "#B3D4F5"
-_BLUE_TEXT = "#1A4A7A"
-_LINK_CLR  = "#0078D4"
-_BTN_BG    = "#0078D4"
-_BTN_TEXT  = "#FFFFFF"
-_BTN_HOVER = "#005A9E"
-_DIM_TEXT  = "#5A6A7A"
+_BLUE_BG   = INFO_BOX_BG
+_BLUE_BDR  = INFO_BOX_BORDER
+_BLUE_TEXT = INFO_BOX_FG
+_LINK_CLR  = ACCENT
+_BTN_BG    = ACCENT
+_BTN_TEXT  = WHITE
+_BTN_HOVER = ACCENT_DARK
+_DIM_TEXT  = TEXT_SECONDARY
 
 
 class _OoklaInstallWorker(QThread):
@@ -135,7 +138,7 @@ class OoklaCliBanner(QFrame):
             f"  border:none; border-radius:3px; padding:4px 12px; font-size:11px;"
             f"}}"
             f"QPushButton:hover {{ background:{_BTN_HOVER}; }}"
-            f"QPushButton:disabled {{ background:#B0C4D8; color:#FFFFFF; }}"
+            f"QPushButton:disabled {{ background:{BTN_DISABLED_BORDER}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_install.setFixedHeight(28)
@@ -143,7 +146,7 @@ class OoklaCliBanner(QFrame):
 
         # "Manual install" link
         self._btn_manual = QLabel(
-            '<a href="https://www.speedtest.net/apps/cli" style="color:#0078D4;">Manual install</a>'
+            '<a href="https://www.speedtest.net/apps/cli" style="color:ACCENT;">Manual install</a>'
         )
         self._btn_manual.setStyleSheet("background:transparent; border:none; font-size:11px;")
         self._btn_manual.setOpenExternalLinks(True)
@@ -210,7 +213,7 @@ class OoklaCliBanner(QFrame):
             QTimer.singleShot(6000, self.hide)
         else:
             self._msg.setText(
-                f"<span style='color:#D93025;'>\u26a0 Installation failed:</span> {message}"
+                f"<span style='color:{RED};'>\u26a0 Installation failed:</span> {message}"
             )
             self._btn_install.setEnabled(True)
             self._btn_install.setText("Retry")

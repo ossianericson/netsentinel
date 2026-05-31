@@ -16,8 +16,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, AMBER, BG_CARD, BG_DARK,
+    BG_HOVER, BORDER, CARD_RADIUS, CRITICAL,
+    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, WHITE,
 )
 
 # ── Feature registry ───────────────────────────────────────────────────────────
@@ -1305,7 +1307,7 @@ class FeatureGuidePage(QWidget):
                 badge_color = GREEN if badge == "new" else AMBER
                 badge_lbl = QLabel("New" if badge == "new" else "Updated")
                 badge_lbl.setStyleSheet(
-                    f"font-size:9px; font-weight:bold; color:#fff;"
+                    f"font-size:9px; font-weight:bold; color:{WHITE};"
                     f" background:{badge_color}; border-radius:3px; padding:0 5px;"
                 )
                 name_row.addWidget(badge_lbl)
@@ -1328,7 +1330,7 @@ class FeatureGuidePage(QWidget):
             btn.setStyleSheet(
                 f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
                 f" color:{ACCENT}; border-radius:4px; font-size:11px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:#FFFFFF; }}"
+                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
             btn.setCursor(Qt.CursorShape.PointingHandCursor)

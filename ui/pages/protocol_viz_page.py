@@ -28,8 +28,9 @@ from modules.protocol_animator import (
     build_tcp_scene,
 )
 from ui.styles import (
-    ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    BG_HOVER,
+    ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER,
+    BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE,
 )
 from ui.widgets.protocol_canvas import ProtocolCanvas
 
@@ -157,7 +158,7 @@ class _ContextPanel(QFrame):
             f"QPushButton {{ background:transparent; border:1px solid {ACCENT};"
             f" color:{ACCENT}; border-radius:4px; font-size:11px; font-weight:600;"
             f" padding:0 12px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}; color:#FFFFFF; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._nav_btn.setVisible(False)
@@ -358,9 +359,9 @@ class ProtocolVizPage(QWidget):
         _ph_cta.setFixedHeight(30)
         _ph_cta.setCursor(Qt.CursorShape.PointingHandCursor)
         _ph_cta.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _ph_cta.clicked.connect(lambda: self.navigate_to.emit("Home"))
@@ -464,9 +465,9 @@ class ProtocolVizPage(QWidget):
             btn.setStyleSheet(
                 f"QPushButton {{ border-radius:4px; font-size:11px; font-weight:bold; padding:0 8px;"
                 f" background:{'%s' % ACCENT if active else 'transparent'};"
-                f" color:{'#ffffff' if active else TEXT_SECONDARY};"
+                f" color:{WHITE if active else TEXT_SECONDARY};"
                 f" border:1px solid {'%s' % ACCENT if active else BORDER}; }}"
-                f"QPushButton:hover {{ background:{ACCENT}; color:#ffffff; }}"
+                f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
                 f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
             btn.setChecked(active)

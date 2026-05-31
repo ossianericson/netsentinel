@@ -404,9 +404,9 @@ class HomePage(QWidget):
         _ds_open.setFixedHeight(24)
         _ds_open.setCursor(Qt.CursorShape.PointingHandCursor)
         _ds_open.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:3px; font-size:11px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _ds_open.clicked.connect(self._open_dashboard)
@@ -644,7 +644,7 @@ class HomePage(QWidget):
         _diag_open.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
             f" border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _diag_open.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
@@ -799,9 +799,9 @@ class HomePage(QWidget):
         )
         self._btn_diagnose.setStyleSheet(
             f"QPushButton {{ min-height: 34px; font-size: 12px; font-weight: 600;"
-            f" background: {ACCENT}; color: #ffffff;"
+            f" background: {ACCENT}; color: {WHITE};"
             f" border: none; border-radius: 4px; padding: 0 14px; }}"
-            f"QPushButton:hover {{ background: #005A9E; }}"
+            f"QPushButton:hover {{ background: {ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn_row.addWidget(self._btn_scan)
@@ -913,7 +913,7 @@ class HomePage(QWidget):
         self._sheet_grade_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
             f" font-size:11px; padding:0; }}"
-            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sheet_grade_btn.clicked.connect(
@@ -925,7 +925,7 @@ class HomePage(QWidget):
         self._sheet_action_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
             f" font-size:11px; padding:0; }}"
-            f"QPushButton:hover {{ color:#1a6fc4; text-decoration:underline; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sheet_action_btn.clicked.connect(
@@ -1048,9 +1048,9 @@ class HomePage(QWidget):
         self._btn_mon_start = QPushButton("Start Monitoring")
         self._btn_mon_start.setFixedHeight(28)
         self._btn_mon_start.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
-            f"QPushButton:hover {{ background:#1a6fc4; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         self._btn_mon_start.clicked.connect(self.start_monitoring_requested)
@@ -1061,7 +1061,7 @@ class HomePage(QWidget):
         self._btn_mon_view.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px;"
             f" background:transparent; border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:#005A9E; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._btn_mon_view.clicked.connect(lambda: self.navigate_to.emit("Network Logger"))
@@ -2092,9 +2092,9 @@ class HomePage(QWidget):
             )
             self._btn_mon_start.setText("Start Monitoring")
             self._btn_mon_start.setStyleSheet(
-                f"QPushButton {{ background:{ACCENT}; color:#ffffff; border:none;"
+                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
                 f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
-                f"QPushButton:hover {{ background:#1a6fc4; }}"
+                f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
                 f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
 
@@ -2158,7 +2158,7 @@ class HomePage(QWidget):
             btn.setStyleSheet(
                 f"QPushButton {{ color:{ACCENT}; font-size:11px;"
                 f" background:transparent; border:none; padding:0; }}"
-                f"QPushButton:hover {{ color:#005A9E; }}"
+                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             if target == "__live__":

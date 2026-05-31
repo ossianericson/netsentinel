@@ -4,7 +4,7 @@ Npcap (Windows) or libpcap (macOS/Linux) when the driver is absent.
 
 Conforms to the NetSentinel design system:
   • Height: 28px fixed (Rule 7 — admin warning is thin, never a card)
-  • Background: ADMIN_WARN_BG (#FFF3CD), bottom border ADMIN_WARN_BORDER (#F0A500)
+  • Background: ADMIN_WARN_BG, bottom border ADMIN_WARN_BORDER
   • ⚠ icon + message text + clickable download link (QDesktopServices)
 
 Usage::

@@ -22,9 +22,10 @@ from PyQt6.QtWidgets import (
 from ui.live_graph import LiveGraphWidget
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
-    ACCENT, ACCENT_DARK, BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_RADIUS, CHART_PURPLE, GREEN,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, ACCENT_DARK, BG_CARD, BG_DARK,
+    BG_HOVER, BORDER, CARD_RADIUS, CHART_PURPLE,
+    GREEN, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE,
 )
 from ui.tabs_helpers import _make_card, _page_header, _table
 
@@ -65,7 +66,7 @@ class _ScanTabsMixin:
 
         # Segmented view control — always enabled, no plugin gate
         self._m1_seg_active_ss = (
-            f"QPushButton{{background:{ACCENT_DARK};color:#fff;border:none;"
+            f"QPushButton{{background:{ACCENT_DARK};color:{WHITE};border:none;"
             f"border-radius:3px;padding:0 10px;font-size:10px;}}"
             f"QPushButton:hover{{background:{ACCENT};}}"
         )
@@ -131,9 +132,9 @@ class _ScanTabsMixin:
         _int_cfg_btn.setFixedHeight(22)
         _int_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _int_cfg_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             " border-radius:3px; font-size:10px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:#005A9E; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _int_cfg_btn.clicked.connect(
@@ -208,7 +209,7 @@ class _ScanTabsMixin:
         _frow.addWidget(self._m1_search, 1)
 
         self._m1_chip_active_ss = (
-            f"QPushButton {{ background:{ACCENT}; color:#fff; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:3px; padding:0 8px; font-size:10px; }}"
         )
         self._m1_chip_inactive_ss = (

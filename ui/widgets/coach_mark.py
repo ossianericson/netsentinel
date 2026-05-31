@@ -34,7 +34,10 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
-from ui.styles import ACCENT_DARK, BG_HOVER, TEXT_PRIMARY, WHITE
+from ui.styles import (
+    ACCENT_DARK, BG_HOVER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
+    OVERLAY_BLUE2, OVERLAY_FG2, STATUS_OFFLINE, TEXT_PRIMARY, WHITE,
+)
 
 
 # ── Single overlay ────────────────────────────────────────────────────────────
@@ -72,7 +75,7 @@ class CoachMarkOverlay(QWidget):
         self._bubble = QWidget(self)
         self._bubble.setFixedSize(self._BUBBLE_W, self._BUBBLE_H)
         self._bubble.setStyleSheet(
-            "QWidget { background: #1C1C1E; border: 1px solid #3A3A3C;"
+            "QWidget { background: OVERLAY_BG; border: 1px solid OVERLAY_BG3;"
             " border-radius: 12px; }"
         )
 
@@ -84,7 +87,7 @@ class CoachMarkOverlay(QWidget):
         )
         title_lbl.setStyleSheet(
             "QLabel { background: transparent; border: none;"
-            " color: #FFFFFF; font-size: 14px; font-weight: 600; }"
+            " color: WHITE; font-size: 14px; font-weight: 600; }"
         )
 
         # Body
@@ -96,7 +99,7 @@ class CoachMarkOverlay(QWidget):
         body_lbl.setWordWrap(True)
         body_lbl.setStyleSheet(
             "QLabel { background: transparent; border: none;"
-            " color: #8E8E93; font-size: 12px; }"
+            " color: OVERLAY_FG2; font-size: 12px; }"
         )
 
         # Dismiss × button
@@ -104,8 +107,8 @@ class CoachMarkOverlay(QWidget):
         close_btn.setGeometry(self._BUBBLE_W - 28, 8, 22, 22)
         close_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none;"
-            " color: #636366; font-size: 16px; }"
-            "QPushButton:hover { color: #FFFFFF; }"
+            " color: STATUS_OFFLINE; font-size: 16px; }"
+            "QPushButton:hover { color: WHITE; }"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         close_btn.clicked.connect(self.dismissed)
@@ -117,9 +120,9 @@ class CoachMarkOverlay(QWidget):
             self._BUBBLE_W - self._PADDING - 90, self._BUBBLE_H - 38, 90, 26,
         )
         action_btn.setStyleSheet(
-            "QPushButton { background: #0A84FF; border: none; border-radius: 6px;"
-            " color: #FFFFFF; font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { background: #409CFF; }"
+            "QPushButton { background: OVERLAY_BLUE; border: none; border-radius: 6px;"
+            " color: WHITE; font-size: 12px; font-weight: 600; }"
+            "QPushButton:hover { background: OVERLAY_BLUE2; }"
             f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         if is_last:
@@ -170,7 +173,7 @@ class CoachMarkOverlay(QWidget):
             full_path = full_path.subtracted(hole)
 
             # Highlight ring around the hole
-            p.setPen(QPen(QColor("#0A84FF"), 1.5))
+            p.setPen(QPen(QColor(OVERLAY_BLUE), 1.5))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawRoundedRect(hole_rect, self._HOLE_R, self._HOLE_R)
 
