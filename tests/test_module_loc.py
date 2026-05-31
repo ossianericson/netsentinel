@@ -64,7 +64,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Tighten after S13-1: 7,200; S13-2: 6,500; S13-3: 6,000; S13-4: 5,700
     # S13-1 delivered: TabBuilderMixin extracted to ui/tabs.py (3,302 lines).
     # Next target: ≤3,000 lines once remaining recon tab builders are extracted.
-    "dashboard.py": 6740,  # actual 6,540 + 200 margin (S13-1: TabBuilderMixin → tabs.py)
+    "dashboard.py": 6672,  # actual 6,472 + 200 margin (Sprint 13 tighten)
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -133,13 +133,18 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     "pages/hardware_browse_mixin.py": 701,       # actual 501 + 200 margin
     "widgets/credential_dialog.py": 490,         # actual 290 + 200 margin
 
-    # Speed test page + modem signal panel.  Split target (S14-3):
-    #   extract modem signal panel → modem_signal_panel.py
-    "pages/speed_test_page.py": 1600,  # actual 1,537 + margin (S14-3 tracking)
+    # Speed test page shell — modem signal panel extracted to ui/widgets/modem_signal_panel.py
+    # in Sprint 13. If still large, extract history table → speed_test_history.py.
+    "pages/speed_test_page.py": 1723,  # actual 1,523 + 200 margin
 
-    # Feature guide with filter bar + feature card widget.  Split target (S14-3):
-    #   extract feature card widget → feature_card.py
-    "pages/discover_page.py": 1400,  # actual 1,358 + margin (S14-3 tracking)
+    # Feature guide shell — card widget + data list still in page.
+    # Sprint 13 extracted pure _FEATURES data to discover_data.py.
+    "pages/discover_page.py": 429,  # actual 229 + 200 margin (Sprint 13 extraction)
+
+    # Pure data file: _FEATURES list + _GROUPS_ORDER for Feature Guide page.
+    # 1,142 lines is expected for a 24-entry feature descriptor list with full docstrings.
+    # If grows past 1,400, split by group into discover_data_security.py etc.
+    "pages/discover_data.py": 1342,  # actual 1,142 + 200 margin (Sprint 13 new file)
 
     # Landing page — hero, suggestions, tips, dashboard strip, GettingStartedCard, FreshnessStrip.
     # Sprint 7 (S14-1): FreshnessStrip + GettingStartedCard + 3 standalone classes extracted
@@ -150,6 +155,46 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # home_widgets.py grew in Sprint 7 (S14-1) to hold extracted classes.
     # Further split: move welcome pages to their own files if > 1,500 lines.
     "widgets/home_widgets.py": 1370,  # actual 1,166 + 200 margin (Sprint 7 S14-1)
+
+    # ── Sprint 13 new files ────────────────────────────────────────────────────
+    # _PAGE_HELP dict — all page help strings for the tip bar.
+    "pages/help_content.py": 688,  # actual 488 + 200 margin (Sprint 13 new file)
+
+    # _HomeSuggestionsMixin — 'What to do next' strip logic.
+    "pages/home_suggestions.py": 283,  # actual 83 + 200 margin (Sprint 13 new file)
+
+    # _NotifExtraChannelsMixin — Pushover/Ntfy/Telegram/Escalation/WeeklyDigest builders.
+    "pages/notif_extra_channels.py": 595,  # actual 395 + 200 margin (Sprint 13 new file)
+
+    # _SettingsAppearanceMixin — appearance + display card builders.
+    "pages/settings_appearance.py": 406,  # actual 206 + 200 margin (Sprint 13 new file)
+
+    # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers.
+    # If grows past 900, split by domain: mesh_enrichment.py, plugin_enrichment.py.
+    "scan_enrichment.py": 834,  # actual 634 + 200 margin (Sprint 13 new file)
+
+    # _AnalysisTabsMixin — IPv6/Cloud/Correlator/IoT/Benchmark tab builders.
+    # Natural split: extract IoT + Benchmark tabs → tabs_analysis_extra.py if > 1,000.
+    "tabs_analysis.py": 1047,  # actual 847 + 200 margin (Sprint 13 new file)
+
+    # _DiagExtraTabsMixin — MTR tab + advanced tools tab + handlers.
+    "tabs_diag_extra.py": 949,  # actual 749 + 200 margin (Sprint 13 new file)
+
+    # _DeviceLabelDialog, _DeviceDrawer, _ScanCompareDialog — InventoryPage helper dialogs.
+    "widgets/device_detail_pane.py": 580,  # actual 380 + 200 margin (Sprint 13 new file)
+
+    # _ModemDetailPanel, _RouterDetailPanel — hardware detail panels.
+    "widgets/device_detail_panels.py": 736,  # actual 536 + 200 margin (Sprint 13 new file)
+
+    # _KpiBarMixin — four KPI tiles for the Devices page.
+    "widgets/kpi_bar.py": 341,  # actual 141 + 200 margin (Sprint 13 new file)
+
+    # _ModemSignalPanelMixin — modem signal panel builder/updater for SpeedTestPage.
+    "widgets/modem_signal_panel.py": 422,  # actual 222 + 200 margin (Sprint 13 new file)
+
+    # Monitoring-domain tiles: LiveBandwidth, DnsStability, ModemSignal, TopTalkers, etc.
+    # If grows past 1,100, split by tile domain: overview_tile_network.py etc.
+    "widgets/overview_tile_monitor.py": 1007,  # actual 807 + 200 margin (Sprint 13 new file)
 }
 
 UI_DEFAULT_BUDGET = 1000  # stricter than modules for new UI files

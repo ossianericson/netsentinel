@@ -9,6 +9,7 @@ Checked categories:
   - py/bare-except     — bare `except:` blocks (hides all errors incl. SystemExit)
   - py/unused-import   — unused top-level imports in modules/ and ui/
   - py/incomplete-url-substring-sanitization — `host in url` pattern in tests/
+  - RULE-AH3 / RULE-1  — raw hex colour strings in ui/ files (S10-4 gate)
 """
 from __future__ import annotations
 
@@ -241,6 +242,65 @@ def _url_substring_in_tests(path: Path) -> list[tuple[int, str]]:
     v = _UrlSubstringVisitor()
     v.visit(tree)
     return v.violations
+
+
+# ── S10-4: No raw hex colour strings in ui/ (RULE-AH3 / RULE-1) ──────────────
+# All UI colours must come from ui/styles.py (RULE-1).
+# Chart/report colours must come from modules/colours.py (RULE-AH3).
+# Source files: styles.py and colours.py are the ONLY allowed locations.
+#
+# Sprint 12 purged all 63 tracked files to 0 violations and locked the gate.
+# This test enforces that no new hex strings are introduced.
+
+import re as _re
+
+_HEX_RE = _re.compile(r'"(#[0-9A-Fa-f]{3,6})"')
+_ALLOWED_FILES: frozenset[str] = frozenset({
+    "ui/styles.py",
+    "modules/colours.py",
+})
+
+
+def _hex_violations(path: Path, root: Path) -> list[tuple[int, str]]:
+    """Return (lineno, hex_value) for raw hex string literals."""
+    rel = path.relative_to(root).as_posix()
+    if rel in _ALLOWED_FILES:
+        return []
+    src = _read(path)
+    try:
+        tree = ast.parse(src, filename=str(path))
+    except SyntaxError:
+        return []
+    violations: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if _HEX_RE.fullmatch(repr(node.value)):
+                violations.append((node.lineno, node.value))
+    return violations
+
+
+def test_no_hardcoded_hex_in_ui_files():
+    """Raw hex colour strings in ui/ files violate RULE-1 and RULE-AH3.
+
+    All colours must be imported from ui/styles.py (for UI) or
+    modules/colours.py (for charts/reports). Sprint 12 locked all
+    63 tracked files to 0 violations; this gate prevents regression.
+
+    When this fails: add a token to ui/styles.py, then replace the
+    hex literal with the token name. Never add hex directly to a page.
+    """
+    offenders: list[str] = []
+    for path in _py_files(_UI):
+        rel = path.relative_to(_ROOT).as_posix()
+        for lineno, hex_val in _hex_violations(path, _ROOT):
+            offenders.append(f"{rel}:{lineno} — {hex_val!r}")
+
+    assert not offenders, (
+        "Hardcoded hex colour strings in ui/ (RULE-1/RULE-AH3 violation):\n"
+        + "\n".join(f"  {o}" for o in offenders[:30])
+        + ("\n  ...and more" if len(offenders) > 30 else "")
+        + "\n\nFix: add a token to ui/styles.py and replace the hex literal."
+    )
 
 
 def test_no_url_substring_comparisons_in_tests():

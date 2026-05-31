@@ -72,7 +72,7 @@ try:
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.63")
+    app.setApplicationVersion("1.9.64")
     app.setOrganizationName("netsentinel")
 
     _w("QApplication created OK")

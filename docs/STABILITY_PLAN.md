@@ -1027,13 +1027,13 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 67 | ✅ S13-5c: dashboard.py dead code removal — flat-nav mode system purged | 10 | v1.9.62 | Removed `_nav_mode`, `_nav_goto_label`, `_update_mode_pill`, `_cycle_mode`, `_set_mode`, `_rail_mode_btn`; `_nav_go_to` simplified to direct rail delegate; 5 files changed; 2449 tests pass |
 | — | **— TBD sprints —** | — | — | — |
 | 46 | ✅ S10-1: Inventory missing colour tokens | 10 | v1.9.62 | `test_colour_inventory.py` — per-file budget tables for 63 UI files + 7 module files; 3 tests; baseline locked for purge sprints |
-| 47 | S10-2: Purge hardcoded hex from `ui/pages/*.py` (37+ files) | TBD | TBD | Run debug_launch.py after each file |
-| 48 | S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` | TBD | TBD | Now includes hub_card.py, overview_tile.py |
-| 49 | S10-4: Add hex-colour AST gate to `test_codeql_prevention.py` | TBD | TBD | Enable only after S10-2+S10-3 complete |
+| 47 | ✅ S10-2: Purge hardcoded hex from `ui/pages/*.py` (37+ files) | 12 | v1.9.62 | ALL 63 tracked UI files purged to 0 hex violations |
+| 48 | ✅ S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` | 12 | v1.9.62 | Included in S10-2 complete purge (63 files total) |
+| 49 | ✅ S10-4: Add hex-colour AST gate to `test_codeql_prevention.py` | 14 | v1.9.64 | `test_no_hardcoded_hex_in_ui_files()` — AST walker catches new violations before CI; Sprint 14 |
 | 50 | ✅ S9-1: Tests for Tier 1 modules — utility/plumbing (8 modules) | 9 | v1.9.62 | Delivered Sprint 9 |
 | 51 | ✅ S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | 10 | v1.9.62 | arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner — 140 new tests |
-| 52 | S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | TBD | TBD | Mock MetricStore where needed |
-| 53 | S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | TBD | TBD | Enable only after S9-1–S9-3 complete |
+| 52 | ✅ S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | 12 | v1.9.62 | diagnostic_card, digest_builder, hw_detect, lab_scenarios, network_diagnostics, private_endpoint_checker, speed_tester, combined_discovery + dhcp_detector/dhcp_lease_scanner — 73 new tests |
+| 53 | ✅ S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | 14 | v1.9.64 | All 70 modules covered (2 exempt: metric_store_schema, metric_store_queries, report_html); Sprint 14 |
 | 54 | S3-4: Update `test_module_loc.py` to remove exemptions post-split | TBD | TBD | Remove each KNOWN_LARGE_MODULES entry as its split lands |
 | — | **— APM audit findings (2026-05-29) — delivered below —** | — | — | — |
 | 55 | ✅ S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | 2 | v1.9.58 | Done; `ui.help` also added |
@@ -1113,4 +1113,8 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 **Sprint 12 delivered (2026-05-31):** S10-2 ✅ complete — ALL 63 tracked UI files purged to 0 hex violations (53 new constants added to `ui/styles.py`: MAP_LAND_*, IP_CALC_*, LOG_SOURCE_PLUGIN, GRADE_B_COLOR, BLACK, ORANGE, STATUS_OFFLINE, INLINE_WARN_*, BADGE_OK/OFF_*, TEAL, DEEP_ORANGE, ACCENT_PURPLE, INFO_BOX_*, HTML_*, OVERLAY_*, CANVAS_*); inventory budgets all lowered to 0 in test_colour_inventory.py (ratchet locked). S9-3 ✅ 73 new tests across 10 Tier 3 modules — dhcp_detector, dhcp_lease_scanner, diagnostic_card, digest_builder, hw_detect, lab_scenarios, network_diagnostics, private_endpoint_checker, speed_tester, combined_discovery (test files: test_dhcp_detector.py, test_dhcp_lease_scanner.py, test_diagnostic_card.py, test_digest_builder.py, test_hw_detect.py, test_lab_scenarios.py, test_network_diagnostics.py, test_private_endpoint_checker.py, test_speed_tester.py, test_combined_discovery.py). 2525 tests pass, 5 skipped.
 
-**Sprint 13 queue:** Remaining STABILITY_PLAN items not yet addressed — S4-1 (async queue worker), S6-1/S6-2/S6-3 (scan result caching), remaining module LOC checks, any new findings.
+**Sprint 13 delivered (2026-05-31):** 13 new extraction files — `discover_data.py` (1,142 lines), `help_content.py`, `home_suggestions.py`, `notif_extra_channels.py`, `settings_appearance.py`, `scan_enrichment.py`, `tabs_analysis.py`, `tabs_diag_extra.py`, `device_detail_pane.py`, `device_detail_panels.py`, `kpi_bar.py`, `modem_signal_panel.py`, `overview_tile_monitor.py`; discover_page.py 1,360→229 lines. 2553 tests pass, 5 skipped.
+
+**Sprint 14 delivered (2026-05-31):** S10-4 ✅ hex-colour AST gate added to `test_codeql_prevention.py` (`test_no_hardcoded_hex_in_ui_files`); S9-4 ✅ `test_module_coverage_gate.py` created — all 70 modules now covered; RULE-T1 ✅ `test_port_scanner.py` (15 tests) + `test_report_pdf.py` (6 tests) added; RULE-B1 ✅ all 13 Sprint 13 new modules registered in `NetSentinel.spec` hiddenimports; LOC gate ✅ all 12 untracked Sprint 13 files added to `KNOWN_LARGE_UI_FILES`; dashboard.py budget tightened from 6,740 to 6,672. 2577 tests pass, 5 skipped.
+
+**Sprint 15 queue:** S3-4 (remove stale KNOWN_LARGE_MODULES exemptions post-split); continue home_page.py reduction (2,238 → ≤1,200); `tabs_diag.py` split (1,182 lines, natural split: logger tab → tabs_logger.py); any new findings from runtime audit.

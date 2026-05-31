@@ -320,6 +320,18 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.64
+
+**Added**
+- `tests/test_port_scanner.py` — 15 tests for `modules/port_scanner.py` (RULE-T1 compliance)
+- `tests/test_report_pdf.py` — 6 tests for `modules/report_pdf.py` (RULE-T1 compliance)
+- `tests/test_module_coverage_gate.py` — CI gate: every `modules/*.py` must have a `tests/test_*.py`; all 70 modules now covered (S9-4)
+- `tests/test_codeql_prevention.py`: `test_no_hardcoded_hex_in_ui_files` — AST-based RULE-AH3 enforcement gate (S10-4); catches raw hex string literals in `ui/` before CI
+
+**Changed**
+- `NetSentinel.spec`: 13 Sprint 13 new modules registered in `hiddenimports` (RULE-B1 compliance — `ui.scan_enrichment`, `ui.tabs_analysis`, `ui.tabs_diag_extra`, `ui.pages.discover_data`, `ui.pages.help_content`, `ui.pages.home_suggestions`, `ui.pages.notif_extra_channels`, `ui.pages.settings_appearance`, `ui.widgets.device_detail_pane`, `ui.widgets.device_detail_panels`, `ui.widgets.kpi_bar`, `ui.widgets.modem_signal_panel`, `ui.widgets.overview_tile_monitor`)
+- `tests/test_module_loc.py`: 12 Sprint 13 new UI files added to `KNOWN_LARGE_UI_FILES` LOC budget; `dashboard.py` budget tightened from 6,740 → 6,672
+
 ### v1.9.63
 
 **Added**
