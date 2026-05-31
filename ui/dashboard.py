@@ -327,26 +327,15 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
         self._nav_label_to_widget: dict = {}
         self._nav_history: list = []  # NAV-5: back-stack; direct rail clicks clear it
 
-        # ── Progressive-disclosure nav mode ───────────────────────────────────
-        self._nav_mode: str = "home"
+        # ── Rail nav state ────────────────────────────────────────────────────
         self._nav_admin_rows: set = set()   # rows requiring admin — get ·admin badge
         self._nav_audit_rows: set = set()   # Security Audit section rows — rendered in RED
         self._nav_action_rows: dict = {}
-        # Rail-mode state (Standard/Pro)
         self._nav_sections: list = []        # [{name, icon, entries:[_NavEntry]}]
         self._nav_open_section: str = ""     # name of currently expanded flyout section
         self._nav_rail_buttons: dict = {}    # section_name -> _RailButton
         self._nav_page_to_section: dict = {} # page_label -> section_name
         self._nav_current_page_label: str = ""
-        # Read saved mode before building the UI so _build_tabs() uses it
-        try:
-            from PyQt6.QtCore import QSettings as _QS
-            _s = _QS(str(Dashboard._settings_path()), _QS.Format.IniFormat)
-            _m = _s.value("nav/mode", "home")
-            if _m in ("home", "standard", "pro"):
-                self._nav_mode = _m
-        except Exception:
-            pass
 
         self._build_ui()
 
@@ -751,17 +740,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
                     if sub_item:
                         sub_item.setHidden(effective_hide)
 
-    def _nav_goto_label(self, label: str):
-        """Navigate to the sidebar page whose label matches exactly."""
-        if self._nav_mode != "home":
-            self._nav_rail_go_to(label)
-            return
-        for row, lbl in self._nav_item_labels.items():
-            if lbl == label and row not in self._nav_header_rows:
-                self._nav.setCurrentRow(row)
-                self._nav_set_page(row)
-                return
-
     @pyqtSlot()
     def _toggle_sidebar(self):
         """Show/hide the rail sidebar (VSCode-style: toggle entire panel)."""
@@ -819,60 +797,14 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
             self._tray_manager.reset_badge()
 
     def _nav_go_to(self, label: str) -> None:
-        """Programmatically navigate to the page with the given sidebar label."""
-        if self._nav_mode != "home":
-            self._nav_rail_go_to(label)
-            return
-        for row, lbl in self._nav_item_labels.items():
-            if lbl == label:
-                self._nav.setCurrentRow(row)
-                return
-
-    # ── Progressive-disclosure nav ────────────────────────────────────────────
-
-    def _update_mode_pill(self) -> None:
-        """Highlight the active segment in the mode segmented control."""
-        if hasattr(self, "_mode_seg_btns"):
-            for _mk, _mb in self._mode_seg_btns.items():
-                _mb.setChecked(_mk == self._nav_mode)
-        if hasattr(self, "_header_mode_lbl"):
-            self._header_mode_lbl.setVisible(False)
-        # Rail mode button shows the current mode letter
-        if hasattr(self, "_rail_mode_btn"):
-            _short = {"home": "H", "standard": "S", "pro": "P"}.get(self._nav_mode, "?")
-            _accent = {"home": ACCENT, "standard": "#2E7D32", "pro": "#C62828"}.get(
-                self._nav_mode, ACCENT
-            )
-            self._rail_mode_btn.setText(_short)
-            self._rail_mode_btn.setStyleSheet(
-                f"QPushButton {{ background: transparent; border: none;"
-                f" color: {_accent}; font-size: 11px; font-weight: bold; }}"
-                f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{_accent}; }}"
-            )
-
-    def _cycle_mode(self) -> None:
-        """Cycle through home → standard → pro → home on pill click."""
-        _order = ["home", "standard", "pro"]
-        _idx = _order.index(self._nav_mode) if self._nav_mode in _order else 0
-        self._set_mode(_order[(_idx + 1) % len(_order)])
-
-    def _set_mode(self, mode: str) -> None:
-        """Switch to mode, persist, and rebuild the nav."""
-        self._nav_mode = mode
-        from PyQt6.QtCore import QSettings
-        s = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
-        s.setValue("nav/mode", mode)
-        s.sync()
-        self._rebuild_nav_for_mode()
+        """Programmatically navigate to the page with the given rail label."""
+        self._nav_rail_go_to(label)
 
     def _open_isp_from_home(self) -> None:
-        if self._nav_mode == "home":
-            self._set_mode("standard")
-        self._nav_go_to("Network Health Report")
+        self._nav_rail_go_to("Network Health Report")
 
     def _rebuild_nav_for_mode(self) -> None:
-        """Clear sidebar and rebuild it for the current _nav_mode."""
+        """Clear all nav state and rebuild the full Pro rail."""
         # ── Reset flat-nav state ───────────────────────────────────────────────
         self._nav.clear()
         self._nav_row_to_page.clear()
@@ -940,8 +872,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
             _sec = next((s for s in self._nav_sections if s["name"] == _open), None)
             if _sec and _sec["entries"]:
                 self._nav_rail_go_to(_sec["entries"][0].label)
-
-        self._update_mode_pill()
 
         # Final pass: guarantee all audit rows are red regardless of build order
         from PyQt6.QtGui import QColor as _QColor

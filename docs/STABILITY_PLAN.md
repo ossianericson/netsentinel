@@ -1016,14 +1016,22 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 42 | ✅ S14-3a: notifications_page.py → notif_channel_panels.py (2,025 → 296 lines) | 7 | v1.9.62 | _NotifChannelsMixin with all card builders, log panel, test helpers |
 | 43 | ✅ S14-3b: log_hub_page.py → log_source_panel.py (1,848 → 892 lines) | 7 | v1.9.62 | _LogSourcePanelMixin + shared constants/helpers in log_source_panel.py |
 | 44 | ✅ S14-3c: settings_page.py → settings_cards.py (1,730 → 275 lines) | 7 | v1.9.62 | _SettingsCardsMixin + workers + helpers in settings_cards.py |
-| 45 | S13-5c: Tighten dashboard.py budget to 5,000 | 7 | v1.9.62 | After all S13 and S14 splits land |
+| 45 | S13-5c: Tighten dashboard.py budget to 5,000 | 7 | v1.9.62 | After all S13 and S14 splits land — dashboard at 6,540; further extraction needed |
+| — | **— Sprint 8 (target v1.9.62) —** | — | — | — |
+| 62 | ✅ LOC budget tightening — Sprint 7 follow-up | 8 | v1.9.62 | notifications_page→496, settings_page→482, log_hub_page→1092, hardware_integration_page added at 1986; 4 new Sprint 7 files tracked (notif_channel_panels 1843, log_source_panel 1137, settings_cards 1533) |
+| 63 | ✅ tabs.py sub-mixin split (3,302→949 lines) | 8 | v1.9.62 | `_ScanTabsMixin`→`ui/tabs_scan.py` (739 lines); `_NetworkTabsMixin`→`ui/tabs_network.py` (347 lines); `_DiagTabsMixin`→`ui/tabs_diag.py` (1,182 lines); helper functions→`ui/tabs_helpers.py` (222 lines); tabs.py budget tightened to 1,149 |
+| 64 | ✅ NetSentinel.spec: add 4 new tabs sub-modules | 8 | v1.9.62 | `ui.tabs_helpers`, `ui.tabs_scan`, `ui.tabs_network`, `ui.tabs_diag` added to hiddenimports (RULE-B1) |
+| — | **— Sprint 9 (target v1.9.62) —** | — | — | — |
+| 65 | ✅ S14-2 complete: hardware_integration_page.py (1,786→741 lines) | 9 | v1.9.62 | credential_dialog.py + plugin_wizard_mixin.py + hardware_browse_mixin.py extracted; 3 test files updated; spec + architecture docs updated |
+| 66 | ✅ S9-1: Tests for Tier 1 modules (8 modules) | 9 | v1.9.62 | test_colours.py, test_exporter.py, test_log_chart.py, test_mac_lookup.py, test_name_resolver.py, test_nl_query.py, test_protocol_animator.py, test_web_dashboard.py — 54 new tests |
+| 67 | ✅ S13-5c: dashboard.py dead code removal — flat-nav mode system purged | 10 | v1.9.62 | Removed `_nav_mode`, `_nav_goto_label`, `_update_mode_pill`, `_cycle_mode`, `_set_mode`, `_rail_mode_btn`; `_nav_go_to` simplified to direct rail delegate; 5 files changed; 2449 tests pass |
 | — | **— TBD sprints —** | — | — | — |
-| 46 | S10-1: Inventory missing colour tokens | TBD | TBD | Must precede S10-2/S10-3 |
+| 46 | ✅ S10-1: Inventory missing colour tokens | 10 | v1.9.62 | `test_colour_inventory.py` — per-file budget tables for 63 UI files + 7 module files; 3 tests; baseline locked for purge sprints |
 | 47 | S10-2: Purge hardcoded hex from `ui/pages/*.py` (37+ files) | TBD | TBD | Run debug_launch.py after each file |
 | 48 | S10-3: Purge hardcoded hex from `ui/widgets/*.py` + root `ui/` | TBD | TBD | Now includes hub_card.py, overview_tile.py |
 | 49 | S10-4: Add hex-colour AST gate to `test_codeql_prevention.py` | TBD | TBD | Enable only after S10-2+S10-3 complete |
-| 50 | S9-1: Tests for Tier 1 modules — utility/plumbing (8 modules) | TBD | TBD | No network mocks needed |
-| 51 | S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | TBD | TBD | Use `@pytest.mark.live` for real-network tests |
+| 50 | ✅ S9-1: Tests for Tier 1 modules — utility/plumbing (8 modules) | 9 | v1.9.62 | Delivered Sprint 9 |
+| 51 | ✅ S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | 10 | v1.9.62 | arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner — 140 new tests |
 | 52 | S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | TBD | TBD | Mock MetricStore where needed |
 | 53 | S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | TBD | TBD | Enable only after S9-1–S9-3 complete |
 | 54 | S3-4: Update `test_module_loc.py` to remove exemptions post-split | TBD | TBD | Remove each KNOWN_LARGE_MODULES entry as its split lands |
@@ -1083,7 +1091,7 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 *Plan created 2026-05-29.  Continues from PLUGIN_ROBUSTNESS_PLAN.md (v1.9.54).*
 *Re-audited 2026-05-30 post-Sprint-4 (13 new findings added, S13/S14/S15 sections added).*
-*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6: v1.9.61.  Sprint 7: v1.9.62 (S14-1 through S14-3c complete 2026-05-30).*
+*Sprint 1: v1.9.57.  Sprint 2: v1.9.58.  Sprint 3: v1.9.58.  Sprint 4: v1.9.59.  Sprint 5: v1.9.60.  Sprint 6: v1.9.61.  Sprint 7: v1.9.61.  Sprint 8: v1.9.62 (tabs.py split complete 2026-05-31).*
 
 **Sprint 3 delivered (2026-05-30):** S1-1 (nav widget classes → `ui/nav/rail.py`; −683 lines), S11-1 (PAGE_HELP duplicate key fixed), S11-4 (CI parity gates added).
 
@@ -1093,4 +1101,12 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 
 **Sprint 6 delivered (2026-05-30):** S13-1 (TabBuilderMixin → `ui/tabs.py`; dashboard.py 9,776→6,540 lines, −3,236), S13-2 (build_help_tab → `ui/help.py`; −587 lines), S13-3 (AppHeaderMixin → `ui/header.py`; −659 lines), S13-4 (settings persistence → `ui/app_settings.py`; −166 lines), S13-5b (dashboard budget tightened to 6,740), S15-2 (hub_helpers.py from hub_card.py; hub_card.py 2,209→1,665), S15-3 (mock-patch docs in tests/CLAUDE.md), S7-1 (lazy-import audit — clean), S7-2 (tools/startup_profile.py), S7-3 (debug_launch.py log rotation), S4-2 (Step 0 pre-commit gate), S8-3 (version history table in CLAUDE.md). 2231 tests pass, 4 skipped.
 
-**Sprint 7 complete (2026-05-30):** S14-1 ✅ home_page.py 3,032→2,238 lines; S14-2 ✅ hardware_integration_page.py 1,934→1,782 lines (plugin_guide.py extracted); S14-3a ✅ notifications_page.py 2,025→296 lines (notif_channel_panels.py); S14-3b ✅ log_hub_page.py 1,848→892 lines (log_source_panel.py); S14-3c ✅ settings_page.py 1,730→275 lines (settings_cards.py). **Sprint 8 queue:** S13-5c (tighten dashboard budget toward 5,000), remaining recon tab builder extractions from tabs.py (3,302 lines), S14-2 further reduction of hardware_integration_page.py below 900 lines.
+**Sprint 7 delivered (2026-05-30):** S14-1 ✅ home_page.py 3,032→2,238 lines; S14-2 ✅ hardware_integration_page.py 1,934→1,782 lines (plugin_guide.py extracted); S14-3a ✅ notifications_page.py 2,025→296 lines (notif_channel_panels.py); S14-3b ✅ log_hub_page.py 1,848→892 lines (log_source_panel.py); S14-3c ✅ settings_page.py 1,730→275 lines (settings_cards.py). 2243 tests pass, 4 skipped.
+
+**Sprint 8 delivered (2026-05-31):** LOC budget tightening for all Sprint 7 splits (notifications→496, settings→482, log_hub→1092, hardware_integration added at 1986, notif_channel_panels+log_source_panel+settings_cards all tracked); tabs.py sub-mixin split (3,302→949 lines) — `_ScanTabsMixin` → `ui/tabs_scan.py` (739 lines), `_NetworkTabsMixin` → `ui/tabs_network.py` (347 lines), `_DiagTabsMixin` → `ui/tabs_diag.py` (1,182 lines), helper functions → `ui/tabs_helpers.py` (222 lines); spec updated with 4 new hiddenimports. 2247 tests pass, 4 skipped.
+
+**Sprint 9 delivered (2026-05-31):** S14-2 complete ✅ hardware_integration_page.py 1,786→741 lines — `ui/widgets/credential_dialog.py` (show_credential_dialog + show_unsigned_warning), `ui/pages/plugin_wizard_mixin.py` (_PluginWizardMixin), `ui/pages/hardware_browse_mixin.py` (_HardwareBrowseMixin) extracted; S9-1 ✅ 54 new tests across 8 Tier 1 modules; S13-5c deferred (old flat-nav + tabs.py intertwined; needs coordinated removal). 2309 tests pass, 4 skipped.
+
+**Sprint 10 delivered (2026-05-31):** S13-5c ✅ flat-nav dead-code removal — `_nav_mode`, `_nav_goto_label`, `_update_mode_pill`, `_cycle_mode`, `_set_mode`, `_rail_mode_btn` removed; `_nav_go_to` simplified to rail delegate; 5 files (dashboard.py, tabs.py, header.py, app_settings.py + ui/); S9-2 ✅ 18 Tier 2 scan/detection module tests — 140 new tests across arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner; S10-1 ✅ colour token inventory — test_colour_inventory.py with per-file budgets for 63 UI files + 7 module files. 2452 tests pass, 4 skipped.
+
+**Sprint 11 queue:** S10-2 (purge hardcoded hex from `ui/pages/*.py` — 37 files, lower budgets to 0); S9-3 (Tier 3 tests — report/enrichment modules, 10 modules); S14-3d/S14-3e (further page splits if any remain above LOC budget).

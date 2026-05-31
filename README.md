@@ -320,6 +320,15 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.62
+
+**Added**
+- `tests/test_colour_inventory.py` — per-file hardcoded-hex budget tables for 63 UI files + 7 module files; locks the S10-1 baseline for purge sprints (S10-1)
+- 18 new Tier 2 scan/detection module test files — `test_arp_monitor.py`, `test_bandwidth_monitor.py`, `test_cloud_metadata.py`, `test_dns_correlator.py`, `test_dns_zone_scanner.py`, `test_ha_detector.py`, `test_internet_exposure.py`, `test_os_fingerprint.py`, `test_port_scanner_module.py`, `test_process_monitor.py`, `test_rogue_device.py`, `test_smb_enumerator.py`, `test_snmp_poller.py`, `test_storm_analyser.py`, `test_stp_detector.py`, `test_syn_scanner.py`, `test_threat_intel.py`, `test_wifi_scanner.py` — 140 new tests (S9-2)
+
+**Changed**
+- `ui/dashboard.py`, `ui/tabs.py`, `ui/header.py`, `ui/app_settings.py` — removed dead flat-nav mode system: `_nav_mode`, `_nav_goto_label`, `_update_mode_pill`, `_cycle_mode`, `_set_mode`, hidden `_rail_mode_btn`; `_nav_go_to` simplified to direct rail delegate (S13-5c)
+
 ### v1.9.61
 
 **Added**

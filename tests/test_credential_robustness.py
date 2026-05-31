@@ -97,23 +97,19 @@ def test_on_update_credentials_reads_ip_from_instance_registry(tmp_path, monkeyp
 
     captured: list[str] = []
 
-    def _fake_dialog(self_, name, default_ip, cred_label, plugin_path=""):
+    def _fake_dialog(parent, name, default_ip, cred_label, plugin_path=""):
         captured.append(default_ip)
         return False, ""   # user cancels — no side effects
 
+    from ui.pages.hardware_integration_page import HardwareIntegrationPage
     with patch("ui.pages.hardware_integration_page._load_instances",
-               return_value=[fake_instance]):
-        with patch.object(
-            __import__("ui.pages.hardware_integration_page",
-                        fromlist=["HardwareIntegrationPage"]).HardwareIntegrationPage,
-            "_show_credential_dialog",
-            _fake_dialog,
-        ):
-            from ui.pages.hardware_integration_page import HardwareIntegrationPage
-            page = HardwareIntegrationPage.__new__(HardwareIntegrationPage)
-            page._cards = {}
-            page._poll_workers = {}
-            page._on_update_credentials("testinst001")
+               return_value=[fake_instance]), \
+         patch("ui.pages.hardware_integration_page.show_credential_dialog",
+               side_effect=_fake_dialog):
+        page = HardwareIntegrationPage.__new__(HardwareIntegrationPage)
+        page._cards = {}
+        page._poll_workers = {}
+        page._on_update_credentials("testinst001")
 
     assert len(captured) == 1, "Dialog should have been called once"
     assert captured[0] == stored_ip, (

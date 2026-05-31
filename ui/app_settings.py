@@ -63,7 +63,6 @@ def save_settings(window) -> None:
         s.setValue("window/normal_height", r.height())
     # Sidebar nav state
     s.setValue("nav/collapsed", str(window._nav_collapsed))
-    s.setValue("nav/mode", window._nav_mode)
     for _hrow, _grp in window._nav_section_groups.items():
         if _grp["level"] == 0:
             s.setValue(f"nav/section_{_hrow}_collapsed", str(_grp["collapsed"]))
@@ -168,10 +167,6 @@ def restore_settings(window) -> None:
         udp_host = s.value("scan/last_udp_host", "")
         if udp_host:
             window._udp_host.setText(udp_host)
-    # Apply saved nav mode — must be last so sidebar is fully built
-    _saved_mode = s.value("nav/mode", "home")
-    if _saved_mode in ("home", "standard", "pro"):
-        window._nav_mode = _saved_mode
     window._rebuild_nav_for_mode()
 
     # On first launch, default the logger to auto-start so monitoring begins immediately.

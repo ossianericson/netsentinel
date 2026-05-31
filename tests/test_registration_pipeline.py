@@ -5,6 +5,9 @@ instance-registry entries, and that the credential dialog return type is
 correct.
 
 No QApplication required: all Qt/QSettings calls are patched out.
+
+Note: _show_credential_dialog was extracted to ui.widgets.credential_dialog as
+show_credential_dialog() in S14-2. Signature tests now target that module.
 """
 from __future__ import annotations
 
@@ -50,41 +53,22 @@ class _PageStub:
         self._start_poll_worker_inst = MagicMock()
         self.plugin_page_added = MagicMock()
         self.plugin_page_added.emit = MagicMock()
-        self._show_credential_dialog = MagicMock(return_value=(True, "192.168.1.1"))
 
     def _register_plugin(self, path: str, source: str = "browse") -> None:
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         HardwareIntegrationPage._register_plugin(self, path, source)
 
 
-def _qs_store() -> dict:
-    """Return a simple in-memory QSettings-like store and a patch factory."""
-    store: dict = {}
-
-    class _FakeQS:
-        def __init__(self, *a, **kw):
-            pass
-        def value(self, key, default=None, **kw):
-            return store.get(key, default)
-        def setValue(self, key, val):
-            store[key] = val
-        def remove(self, key):
-            store.pop(key, None)
-
-    return store, _FakeQS
-
-
-# ── _show_credential_dialog return type ───────────────────────────────────────
+# ── show_credential_dialog return type ───────────────────────────────────────
 
 def test_credential_dialog_return_annotation_is_tuple():
-    """_show_credential_dialog must declare a tuple return annotation."""
-    from ui.pages.hardware_integration_page import HardwareIntegrationPage
-    sig = inspect.signature(HardwareIntegrationPage._show_credential_dialog)
+    """show_credential_dialog must declare a tuple return annotation."""
+    from ui.widgets.credential_dialog import show_credential_dialog
+    sig = inspect.signature(show_credential_dialog)
     ann = sig.return_annotation
     assert ann is not inspect.Parameter.empty, (
-        "_show_credential_dialog must have a return annotation"
+        "show_credential_dialog must have a return annotation"
     )
-    # The annotation should be tuple[bool, str] or equivalent
     ann_str = str(ann)
     assert "tuple" in ann_str.lower() or "Tuple" in ann_str, (
         f"Expected tuple return annotation, got: {ann_str}"
@@ -97,11 +81,10 @@ def test_credential_dialog_signature_has_two_elements():
     When from __future__ import annotations is in effect the annotation is
     stored as a string literal; we parse it rather than introspecting __args__.
     """
-    from ui.pages.hardware_integration_page import HardwareIntegrationPage
-    sig = inspect.signature(HardwareIntegrationPage._show_credential_dialog)
+    from ui.widgets.credential_dialog import show_credential_dialog
+    sig = inspect.signature(show_credential_dialog)
     ann = sig.return_annotation
     ann_str = str(ann)
-    # Accept both "tuple[bool, str]" and "Tuple[bool, str]" forms
     assert "bool" in ann_str and "str" in ann_str, (
         f"Return annotation must reference bool and str, got: {ann_str}"
     )
@@ -112,7 +95,6 @@ def test_credential_dialog_signature_has_two_elements():
 def test_register_plugin_writes_instance_registry(tmp_path):
     """_register_plugin must write exactly one instance-registry entry."""
     plugin = _make_minimal_plugin(tmp_path, cred_label="")  # no cred needed
-    store, FakeQS = _qs_store()
     page = _PageStub()
 
     saved_instances: list = []
@@ -120,8 +102,7 @@ def test_register_plugin_writes_instance_registry(tmp_path):
     def fake_save(instances):
         saved_instances.extend(instances)
 
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
-         patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
+    with patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
          patch("ui.pages.hardware_integration_page._save_instances",
                side_effect=fake_save), \
          patch("ui.pages.hardware_integration_page._instance_id",
@@ -140,7 +121,6 @@ def test_register_plugin_writes_instance_registry(tmp_path):
 def test_browse_and_bundled_produce_identical_instance_entries(tmp_path):
     """browse and bundled sources must call _save_instances with identical schema."""
     plugin = _make_minimal_plugin(tmp_path, cred_label="")
-    store, FakeQS = _qs_store()
 
     browse_calls: list = []
     bundled_calls: list = []
@@ -152,8 +132,7 @@ def test_browse_and_bundled_produce_identical_instance_entries(tmp_path):
         bundled_calls.extend(instances)
 
     page_browse = _PageStub()
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
-         patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
+    with patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
          patch("ui.pages.hardware_integration_page._save_instances",
                side_effect=fake_save_browse), \
          patch("ui.pages.hardware_integration_page._instance_id", return_value="xid"), \
@@ -161,8 +140,7 @@ def test_browse_and_bundled_produce_identical_instance_entries(tmp_path):
         page_browse._register_plugin(str(plugin), source="browse")
 
     page_bundled = _PageStub()
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
-         patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
+    with patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
          patch("ui.pages.hardware_integration_page._save_instances",
                side_effect=fake_save_bundled), \
          patch("ui.pages.hardware_integration_page._instance_id", return_value="xid"), \
@@ -171,7 +149,6 @@ def test_browse_and_bundled_produce_identical_instance_entries(tmp_path):
 
     assert len(browse_calls) == 1
     assert len(bundled_calls) == 1
-    # Same keys present regardless of source
     assert set(browse_calls[0].keys()) == set(bundled_calls[0].keys())
 
 
@@ -179,15 +156,15 @@ def test_cancel_credential_dialog_does_not_write_registry(tmp_path):
     """Cancelling the credential dialog must NOT write to the instance registry."""
     plugin = _make_minimal_plugin(tmp_path, cred_label="Password",
                                   ip="192.168.1.1")
-    store, FakeQS = _qs_store()
     save_mock = MagicMock()
 
     page = _PageStub()
-    page._show_credential_dialog = MagicMock(return_value=(False, ""))  # cancelled
 
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
+    with patch("ui.pages.hardware_integration_page.show_credential_dialog",
+               return_value=(False, "")), \
          patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
          patch("ui.pages.hardware_integration_page._save_instances", save_mock), \
+         patch("keyring.get_password", return_value=None), \
          patch("shutil.copy2"):
         page._register_plugin(str(plugin), source="browse")
 
@@ -197,13 +174,10 @@ def test_cancel_credential_dialog_does_not_write_registry(tmp_path):
 def test_no_credential_label_skips_dialog(tmp_path):
     """Plugin without CREDENTIAL_LABEL must not trigger the credential dialog."""
     plugin = _make_minimal_plugin(tmp_path, cred_label="")
-    store, FakeQS = _qs_store()
 
     page = _PageStub()
-    dialog_mock = MagicMock(return_value=(True, ""))
-    page._show_credential_dialog = dialog_mock
 
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
+    with patch("ui.pages.hardware_integration_page.show_credential_dialog") as dialog_mock, \
          patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
          patch("ui.pages.hardware_integration_page._save_instances"), \
          patch("ui.pages.hardware_integration_page._instance_id", return_value="noid"), \
@@ -216,12 +190,10 @@ def test_no_credential_label_skips_dialog(tmp_path):
 def test_register_plugin_emits_page_added_for_new_instance(tmp_path):
     """plugin_page_added must be emitted exactly once for a new instance."""
     plugin = _make_minimal_plugin(tmp_path, cred_label="")
-    store, FakeQS = _qs_store()
 
     page = _PageStub()
 
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
-         patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
+    with patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
          patch("ui.pages.hardware_integration_page._save_instances"), \
          patch("ui.pages.hardware_integration_page._instance_id", return_value="uid1"), \
          patch("shutil.copy2"):
@@ -233,14 +205,12 @@ def test_register_plugin_emits_page_added_for_new_instance(tmp_path):
 def test_register_plugin_does_not_emit_for_duplicate(tmp_path):
     """plugin_page_added must NOT be emitted if the instance already exists."""
     plugin = _make_minimal_plugin(tmp_path, cred_label="")
-    store, FakeQS = _qs_store()
 
     page = _PageStub()
     existing = [{"id": "uid1", "path": str(plugin), "ip": "192.168.1.1",
                  "name": "TestRouter"}]
 
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
-         patch("ui.pages.hardware_integration_page._load_instances",
+    with patch("ui.pages.hardware_integration_page._load_instances",
                return_value=existing), \
          patch("ui.pages.hardware_integration_page._save_instances"), \
          patch("ui.pages.hardware_integration_page._instance_id", return_value="uid1"), \
@@ -254,7 +224,6 @@ def test_register_plugin_uses_confirmed_ip_from_dialog(tmp_path):
     """The confirmed IP from the dialog must be used in the instance registry."""
     plugin = _make_minimal_plugin(tmp_path, cred_label="Password",
                                   ip="192.168.1.1")
-    store, FakeQS = _qs_store()
 
     saved_instances: list = []
 
@@ -262,19 +231,18 @@ def test_register_plugin_uses_confirmed_ip_from_dialog(tmp_path):
         saved_instances.extend(instances)
 
     page = _PageStub()
-    # User changed the IP in the dialog to something different from meta default
-    page._show_credential_dialog = MagicMock(return_value=(True, "10.0.0.254"))
 
-    with patch("ui.pages.hardware_integration_page.QSettings", FakeQS), \
+    with patch("ui.pages.hardware_integration_page.show_credential_dialog",
+               return_value=(True, "10.0.0.254")), \
          patch("ui.pages.hardware_integration_page._load_instances", return_value=[]), \
          patch("ui.pages.hardware_integration_page._save_instances",
                side_effect=fake_save), \
          patch("ui.pages.hardware_integration_page._instance_id",
                side_effect=lambda path, ip: f"id_{ip}"), \
+         patch("keyring.get_password", return_value=None), \
          patch("shutil.copy2"):
         page._register_plugin(str(plugin), source="browse")
 
     assert len(saved_instances) == 1
-    # The instance must record the IP the user actually entered
     assert saved_instances[0]["ip"] == "10.0.0.254"
     assert saved_instances[0]["id"] == "id_10.0.0.254"

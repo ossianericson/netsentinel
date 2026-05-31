@@ -66,9 +66,15 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Next target: ≤3,000 lines once remaining recon tab builders are extracted.
     "dashboard.py": 6740,  # actual 6,540 + 200 margin (S13-1: TabBuilderMixin → tabs.py)
 
-    # TabBuilderMixin: _build_tabs + all scan/log/net/tools tab content builders.
-    # Next split: extract large scan_tabs (recon) and advanced_tools groups.
-    "tabs.py": 3400,  # actual 3,302 + margin (S13-1 extraction)
+    # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
+    # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
+    # tabs.py now 949 lines — tighten further as _build_tabs() is decomposed.
+    "tabs.py": 1149,  # actual 949 + 200 margin (Sprint 8 sub-mixin extraction)
+
+    # _DiagTabsMixin — diagnostics, logger, MTR, advanced tools, event handlers.
+    # Large because it combines four tab builders + all associated handlers.
+    # Next split: extract logger tab + handlers → tabs_logger.py (~700 lines).
+    "tabs_diag.py": 1382,  # actual 1,182 + 200 margin (Sprint 8 new file)
 
     # Help panel: _PAGE_HELP dict + build_help_tab() + _page_header helper.
     "help.py": 1200,  # actual 1,133 + margin (S13-2 extraction)
@@ -91,17 +97,41 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
     "scan_wiring.py": 1300,  # actual 1,274 + margin (Sprint 4 new file; S15-1)
 
-    # Notification channel config panels.  Split target (S14-3):
-    #   extract per-channel config panels → notifications_channels.py
-    "pages/notifications_page.py": 2050,  # actual 2,025 + margin (S14-3 tracking)
+    # Notification channel config panels.  Split delivered S14-3a: all card builders,
+    # log panel, and test helpers → notif_channel_panels.py (_NotifChannelsMixin).
+    # notifications_page.py is now 296 lines (shell only).
+    "pages/notifications_page.py": 496,  # actual 296 + 200 margin (S14-3a delivered)
 
-    # Log Hub unified chronological monitor.  Split target (S14-3):
-    #   extract LogSourcePanel base class → log_source_panel.py
-    "pages/log_hub_page.py": 1900,  # actual 1,848 + margin (S14-3 tracking)
+    # _NotifChannelsMixin — all card builders + log panel + test helpers.
+    # Still large; next split: extract per-channel QWidget classes.
+    "pages/notif_channel_panels.py": 1843,  # actual 1,643 + 200 margin (S14-3a new file)
 
-    # Settings page with per-section panels.  Split target (S14-3):
-    #   extract per-section QWidget subclasses → settings_sections.py
-    "pages/settings_page.py": 1750,  # actual 1,730 + margin (S14-3 tracking)
+    # Log Hub unified chronological monitor.  Split delivered S14-3b:
+    # _LogSourcePanelMixin + shared constants/helpers → log_source_panel.py.
+    # log_hub_page.py is now 892 lines.
+    "pages/log_hub_page.py": 1092,  # actual 892 + 200 margin (S14-3b delivered)
+
+    # _LogSourcePanelMixin — panel builders + source management for LogHubPage.
+    # Single concern; watch for growth.
+    "pages/log_source_panel.py": 1137,  # actual 937 + 200 margin (S14-3b new file)
+
+    # Settings page with per-section panels.  Split delivered S14-3c:
+    # _SettingsCardsMixin + workers + helpers → settings_cards.py.
+    # settings_page.py is now 282 lines (shell only).
+    "pages/settings_page.py": 482,  # actual 282 + 200 margin (S14-3c delivered)
+
+    # _SettingsCardsMixin — all card builder methods + workers.
+    # Still large; next split: extract per-section QWidget subclasses.
+    "pages/settings_cards.py": 1533,  # actual 1,333 + 200 margin (S14-3c new file)
+
+    # Hardware integration page — plugin hub shell + worker management.
+    # S14-2 complete: plugin_guide.py + credential_dialog.py + plugin_wizard_mixin.py +
+    #   hardware_browse_mixin.py all extracted; 1,786 → 741 lines.
+    "pages/hardware_integration_page.py": 941,   # actual 741 + 200 margin (S14-2 complete)
+    # New files from S14-2 extractions:
+    "pages/plugin_wizard_mixin.py": 460,         # actual 260 + 200 margin
+    "pages/hardware_browse_mixin.py": 701,       # actual 501 + 200 margin
+    "widgets/credential_dialog.py": 490,         # actual 290 + 200 margin
 
     # Speed test page + modem signal panel.  Split target (S14-3):
     #   extract modem signal panel → modem_signal_panel.py

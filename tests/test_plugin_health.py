@@ -151,7 +151,7 @@ def test_reset_health_clears_disabled_and_consecutive():
 
 
 def test_load_health_fresh_path_returns_defaults():
-    with patch("ui.pages.hardware_integration_page.QSettings") as mock_qs:
+    with patch("ui.widgets.hub_helpers.QSettings") as mock_qs:
         mock_qs.return_value.value.return_value = None
         from ui.pages.hardware_integration_page import _load_health
         h = _load_health("/fresh/path.py")

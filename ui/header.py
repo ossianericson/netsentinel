@@ -46,7 +46,6 @@ class AppHeaderMixin:
     _maximize_btn           QPushButton  — created by _build_header()
     _pre_maximize_geo       QRect|None   — saved before showMaximized()
     _verdict_badge          QLabel       — network-status badge in header
-    _header_mode_lbl        QLabel       — hidden; used by _update_mode_pill
     _btn_scan               QPushButton  — logical scan trigger (hidden)
     _btn_export             QPushButton  — logical export trigger (hidden)
     _time_range_combo       QComboBox    — global time-range picker
@@ -173,11 +172,6 @@ class AppHeaderMixin:
         lay.addWidget(self._verdict_badge)
 
         lay.addStretch(1)
-
-        # _header_mode_lbl kept as hidden attribute — used by _update_mode_pill
-        self._header_mode_lbl = QLabel()
-        self._header_mode_lbl.setVisible(False)
-        # (not added to layout — Pro mode context is shown in the sidebar pill)
 
         # Hidden logical widgets — keep as attributes so _set_scanning can enable/disable
         self._btn_scan = QPushButton()

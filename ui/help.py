@@ -822,10 +822,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Dashboard architecture (Sprint 6)", "dashboard.py split from 9,776 → 6,540 lines via four mixin extractions: TabBuilderMixin (ui/tabs.py), AppHeaderMixin (ui/header.py), settings persistence (ui/app_settings.py), and help tab (ui/help.py)."),
-        ("Hub card helpers split", "Pure data-persistence and utility helpers extracted from hub_card.py to hub_helpers.py (hub_card.py: 2,209 → 1,665 lines, S15-2)."),
-        ("Startup profiler", "tools/startup_profile.py times each startup stage. tools/debug_launch.py now rotates logs — keeps last 5 timestamped runs."),
-        ("Pre-commit static checks", "Commit gate now includes Step 0: run test_codeql_prevention.py + test_interactive_states.py before tests. Mock-patch canonical locations documented in tests/CLAUDE.md."),
+        ("Flat-nav dead code removed (S13-5c)", "Removed the old progressive-disclosure nav mode system (_nav_mode, _cycle_mode, _set_mode, _rail_mode_btn). Navigation always uses the activity rail — no more silent no-ops when mode was 'home'."),
+        ("18 Tier 2 scan/detection module tests (S9-2)", "140 new unit tests covering arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner."),
+        ("Colour token inventory (S10-1)", "test_colour_inventory.py locks per-file hardcoded-hex budgets for 70 files. No new raw #RRGGBB strings can be introduced without updating the budget — prereq for the S10-2 purge sprint."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

@@ -143,8 +143,10 @@ netsentinel/
 │   │   ├── dns_zone_page.py
 │   │   ├── geo_map_page.py         # Offline MaxMind geolocation map
 │   │   ├── hardware_integration_page.py  # Hardware — USB/serial/GPIO device integration (Extend section)
+│   │   ├── hardware_browse_mixin.py  # _HardwareBrowseMixin — community browse tab, catalog, and detection (S14-2 split)
 │   │   ├── history_page.py
 │   │   ├── plugin_guide.py         # PluginGuide widget — collapsible 4-step plugin authoring guide (S14-2 split)
+│   │   ├── plugin_wizard_mixin.py  # _PluginWizardMixin — "New Plugin" template wizard (S14-2 split)
 │   │   ├── home_automation_page.py
 │   │   ├── home_page.py            # Landing page — hero, suggestions, tips, dashboard strip
 │   │   ├── inventory_page.py
@@ -189,6 +191,7 @@ netsentinel/
 │       ├── device_popover.py       # Hover popover showing quick device info
 │       ├── explainer_panel.py      # Reusable inline explanation panel (Lab Mode, Protocol Viz)
 │       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers
+│       ├── credential_dialog.py    # show_credential_dialog() + show_unsigned_warning() — standalone plugin credential dialogs (S14-2 split)
 │       ├── hub_card.py             # HubCard, _ModemDetailPanel, _RouterDetailPanel, PipInstallDialog and all plugin helpers
 │       ├── hub_helpers.py          # Pure data-persistence and utility helpers extracted from hub_card.py (no widget logic)
 │       ├── overview_tile.py        # All Overview tile classes (_BaseTile subclasses) and _TILE_CLASSES/_DEFAULT_ORDER
