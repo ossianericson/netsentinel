@@ -320,6 +320,28 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.63
+
+**Added**
+- `ui/tabs_analysis.py` — `_AnalysisTabsMixin`: IPv6, Cloud Metadata, Root Cause Correlator, IoT Baseline, and Benchmark tab builders extracted from `ui/dashboard.py`
+- `ui/widgets/kpi_bar.py` — `_KpiBarMixin`: KPI bar widget + update logic extracted from `ui/dashboard.py`
+- `ui/pages/discover_data.py` — `_FEATURES` list and `_GROUPS_ORDER` data extracted from `ui/pages/discover_page.py` (page reduced from 1,360 → 229 lines)
+- `ui/pages/help_content.py` — `_PAGE_HELP` dict extracted from `ui/help.py`
+- `ui/pages/home_suggestions.py` — `_HomeSuggestionsMixin` extracted from `ui/pages/home_page.py`
+- `ui/pages/settings_appearance.py` — `_SettingsAppearanceMixin` extracted from `ui/pages/settings_cards.py`
+- `ui/pages/notif_extra_channels.py` — `_NotifExtraChannelsMixin` extracted from `ui/pages/notif_channel_panels.py`
+- `ui/scan_enrichment.py` — `ScanEnrichmentMixin` extracted from `ui/scan_wiring.py`
+- `ui/widgets/overview_tile_monitor.py` — monitoring tile classes extracted from `ui/widgets/overview_tile.py`
+- `ui/widgets/device_detail_panels.py` — `_ModemDetailPanel`, `_RouterDetailPanel` extracted from `ui/widgets/hub_card.py`
+- `ui/widgets/device_detail_pane.py` — device detail widgets extracted from `ui/pages/inventory_page.py`
+- `ui/widgets/modem_signal_panel.py` — `_ModemSignalPanelMixin` extracted from `ui/pages/speed_test_page.py`
+- `ui/tabs_diag_extra.py` — `_DiagExtraTabsMixin`: MTR, advanced tools, logger handlers extracted from `ui/tabs_diag.py`
+
+**Changed**
+- `ui/pages/discover_page.py` — 1,360 → 229 lines; `_FEATURES` data moved to `ui/pages/discover_data.py`
+- `NetSentinel.spec` — 13 new `hiddenimports` entries for all extracted modules
+- `tests/test_module_loc.py` — LOC budgets tightened for 12 split files; 14 new file entries added
+
 ### v1.9.62
 
 **Added**
