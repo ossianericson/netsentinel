@@ -38,9 +38,12 @@ import sys
 
 try:
     from modules.utils import is_store_app as _is_store_app
+    from modules.utils import get_app_data_dir as _get_app_data_dir
 except ImportError:
     def _is_store_app() -> bool:  # type: ignore[misc]
         return False
+    def _get_app_data_dir() -> Path:  # type: ignore[misc]
+        return Path.home() / ".config" / "NetSentinel"
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -49,7 +52,7 @@ except ImportError:
 class PluginResult:
     plugin_name: str
     findings:    List[str] = field(default_factory=list)
-    risk_level:  str = "LOW"           # LOW / MEDIUM / HIGH / CRITICAL
+    risk_level:  str = "LOW"           # LOW / MEDIUM / HIGH / CLEAN / CRITICAL
     raw_data:    Dict[str, Any] = field(default_factory=dict)
     error:       str = ""
 
@@ -80,7 +83,13 @@ class PluginInfo:
 # ── Plugin directory ─────────────────────────────────────────────────────────
 
 def plugins_dir() -> Path:
-    """Return the active plugins directory, creating it if needed."""
+    """Return the active plugins directory, creating it if needed.
+
+    Search order:
+    1. Sibling ``plugins/`` next to the exe / app.py (portable / dev installs)
+    2. ``get_app_data_dir() / "plugins"`` — writable user dir (matches where
+       the plugin wizard and .nspkg installer write new plugins)
+    """
     # Next to exe/app.py
     if getattr(sys, "frozen", False):
         base = Path(sys.executable).parent
@@ -93,9 +102,10 @@ def plugins_dir() -> Path:
         except OSError:
             candidate = None
 
-    # Fallback to ~/.config/NetSentinel/plugins/
+    # Fallback: use the same AppData location the wizard writes to, so
+    # user-created plugins are always visible to the loader.
     if not candidate or not candidate.exists():
-        candidate = Path.home() / ".config" / "NetSentinel" / "plugins"
+        candidate = _get_app_data_dir() / "plugins"
         candidate.mkdir(parents=True, exist_ok=True)
 
     return candidate
