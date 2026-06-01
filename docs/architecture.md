@@ -16,7 +16,7 @@
                             ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │  UI Layer  (ui/)                                                              │
-│  dashboard.py  ←  QMainWindow, collapsible sidebar nav, QStackedWidget       │
+│  dashboard.py  ←  QMainWindow shell (1,967 L); nav/monitor/plugin via mixins │
 │  ui/pages/*.py ←  one QWidget per feature page                               │
 │  ui/styles.py  ←  all colours / QSS (no hex literals elsewhere)              │
 └───────────────────────────┬──────────────────────────────────────────────────┘
@@ -69,7 +69,13 @@
 
 | File/Directory | Role |
 |---|---|
-| `ui/dashboard.py` | `Dashboard(QMainWindow)` — top bar, collapsible sidebar nav, `QStackedWidget` content area, verdict strip |
+| `ui/dashboard.py` | `Dashboard(QMainWindow)` — 1,967-line shell; inherits `ScanResultMixin`, `AppHeaderMixin`, `TabBuilderMixin`, `_NavBuilderMixin`, `_MonitorStateMixin`, `_PluginPageMixin` |
+| `ui/nav/builder.py` | `_NavBuilderMixin` — all nav structure building, runtime switching, command palette, pin management |
+| `ui/monitor_state.py` | `_MonitorStateMixin` — verdict/badge/pill display, KPI tiles, `VerdictPanel`, `RiskBadge` |
+| `ui/plugin_page_mixin.py` | `_PluginPageMixin` — plugin page lifecycle, hardware auto-detect, `_launch_modules_impl` |
+| `ui/scan_wiring.py` | `ScanResultMixin` — all `_on_*_result` scan handlers |
+| `ui/header.py` | `AppHeaderMixin` — frameless top bar, drag/snap, update bar |
+| `ui/tabs.py` | `TabBuilderMixin` — all feature tab builders (inherits scan/network/diag/analysis/recon sub-mixins) |
 | `ui/pages/*.py` | One `QWidget` per feature page; receives shared singletons; manages its own workers |
 | `ui/styles.py` | Single source of truth for all colour tokens and global QSS |
 | `ui/live_graph.py` | Reusable rolling time-series chart widget |
@@ -118,7 +124,7 @@ This is the universal data-flow pattern for every feature in NetSentinel.
 **1. User clicks "Run Scan" in `Dashboard`**
 
 ```python
-# ui/dashboard.py
+# ui/plugin_page_mixin.py  (_PluginPageMixin — inherited by Dashboard)
 worker = Module1Worker(offenders_path=self._offenders_path, parent=self)
 worker.result.connect(self._on_m1_result)   # slot on Dashboard
 worker.status.connect(self._set_status)
@@ -138,7 +144,7 @@ self.result.emit(data)                    # signal crosses thread boundary safel
 **3. Page slot receives the result on the UI thread**
 
 ```python
-# ui/dashboard.py
+# ui/scan_wiring.py  (ScanResultMixin — inherited by Dashboard)
 @pyqtSlot(dict)
 def _on_m1_result(self, data: dict):
     self._m1_result = data
@@ -335,7 +341,8 @@ MeshRouterPage  (user-triggered OR silent auto-run after every ARP scan)
 | `workers/mesh_worker.py` | `QThread` wrapping `DecoMeshClient`; emits `result`, `error`, `status` |
 | `ui/pages/mesh_router_page.py` | Config card (gateway IP + password + keyring), nodes table, clients table; emits `scan_done` |
 | `ui/topology_widget.py` | `TopologyWidget.render()` — flat star without mesh data; 3-tier mesh tree when `mesh_units` + `mesh_enrichment` are passed |
-| `ui/dashboard.py` | `_on_mesh_result` / `_apply_mesh_enrichment` / `_check_mesh_autorun` / `_update_m4_deco_chips` |
+| `ui/scan_enrichment.py` | `_apply_mesh_enrichment` / `_check_mesh_autorun` / `_update_m4_deco_chips` (extracted from `dashboard.py` Sprint 18) |
+| `ui/scan_wiring.py` | `_on_mesh_result` handler |
 
 ### TP-Link Deco auth notes
 

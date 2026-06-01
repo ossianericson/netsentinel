@@ -260,6 +260,8 @@ See [docs/architecture.md](docs/architecture.md) for module layout, data flow, a
 
 The short version: [app.py](app.py) is the GUI entry point; [cli.py](cli.py) is the headless CLI; all detection logic is in [modules/](modules/); UI pages are in [ui/pages/](ui/pages/); background threads are in [workers/](workers/). All colour and style values live in [ui/styles.py](ui/styles.py) — no hex values appear elsewhere in the UI code.
 
+`ui/dashboard.py` is the main window shell (1,967 lines). Its functionality is split across six inherited mixins: `ScanResultMixin` ([scan_wiring.py](ui/scan_wiring.py)), `AppHeaderMixin` ([header.py](ui/header.py)), `TabBuilderMixin` ([tabs.py](ui/tabs.py)), `_NavBuilderMixin` ([nav/builder.py](ui/nav/builder.py)), `_MonitorStateMixin` ([monitor_state.py](ui/monitor_state.py)), and `_PluginPageMixin` ([plugin_page_mixin.py](ui/plugin_page_mixin.py)).
+
 ---
 
 ## Contributing
@@ -323,12 +325,17 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 ### v1.9.66
 
 **Changed**
-- `ui/dashboard.py`: 6,472→4,092 lines (−2,380) — `_AnalysisTabsMixin` and `ScanEnrichmentMixin` wired into inheritance chain; 31 duplicate methods removed from `dashboard.py` and `scan_wiring.py`; mesh enrichment + M1 table helpers moved to `scan_enrichment.py`; all recon security tab builders extracted to `ui/tabs_recon.py` (Sprint 18)
-- `ui/scan_wiring.py`: 1,279→676 lines — inherits `ScanEnrichmentMixin`; 12 duplicate enrichment methods removed
-- `ui/scan_enrichment.py`: 634→1,230 lines — `_apply_mesh_enrichment`, `_regroup_m1_by_satellite`, `_filter_m1_by_nl`, and 7 M1 table helpers added from `dashboard.py`
+- `ui/dashboard.py`: 6,472→**1,967 lines** (−4,505 total across Sprints 16–19) — three further mixin extractions complete the STABILITY_PLAN.md final goal; inherits `ScanResultMixin`, `AppHeaderMixin`, `TabBuilderMixin`, `_NavBuilderMixin`, `_MonitorStateMixin`, `_PluginPageMixin`, `QMainWindow` (Sprint 19)
+- `ui/scan_wiring.py`: 1,279→676 lines — inherits `ScanEnrichmentMixin`; 12 duplicate enrichment methods removed (Sprint 18)
+- `ui/scan_enrichment.py`: 634→1,230 lines — `_apply_mesh_enrichment`, `_regroup_m1_by_satellite`, `_filter_m1_by_nl`, and 7 M1 table helpers added from `dashboard.py` (Sprint 18)
+- `ui/tabs_diag_extra.py`: 749→346 lines — `_DiagExtraTabsMixin` inheritance wired; `_DiagTabsMixin` now inherits `(_DiagExtraTabsMixin, _LoggerTabMixin)` (Sprint 16)
+- `ui/nav/__init__.py`: re-exports `_NavBuilderMixin` and `_AUTO_HELP_PAGES` from new `builder.py` (Sprint 19)
 
 **Added**
-- `ui/tabs_recon.py` — `_ReconTabsMixin`: 29 security-audit recon tab builders and handlers (SYN scan, UDP scan, OS fingerprint, Risk Score, CVE, Exposure, Credentialed SSH, Full Discovery, SMB, Plugins, Private Endpoint); wired into `TabBuilderMixin` (Sprint 18)
+- `ui/tabs_recon.py` — `_ReconTabsMixin`: 29 security-audit recon tab builders (SYN, UDP, OS, Risk, CVE, Exposure, Credentialed, Discovery, SMB, Plugins, Private Endpoint); wired into `TabBuilderMixin` (Sprint 18)
+- `ui/nav/builder.py` — `_NavBuilderMixin`: all nav structure building, runtime switching, command palette, pin management, page-visit tracking (Sprint 19)
+- `ui/monitor_state.py` — `_MonitorStateMixin`: verdict/badge/pill display, KPI tiles, `VerdictPanel`, `RiskBadge`, `_color_for_level` (Sprint 19)
+- `ui/plugin_page_mixin.py` — `_PluginPageMixin`: plugin page lifecycle, hardware auto-detect, integration banner, `_launch_modules_impl` (Sprint 19)
 
 ### v1.9.65
 
