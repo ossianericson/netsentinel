@@ -1034,7 +1034,16 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 51 | ✅ S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | 10 | v1.9.62 | arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner — 140 new tests |
 | 52 | ✅ S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | 12 | v1.9.62 | diagnostic_card, digest_builder, hw_detect, lab_scenarios, network_diagnostics, private_endpoint_checker, speed_tester, combined_discovery + dhcp_detector/dhcp_lease_scanner — 73 new tests |
 | 53 | ✅ S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | 14 | v1.9.64 | All 70 modules covered (2 exempt: metric_store_schema, metric_store_queries, report_html); Sprint 14 |
-| 54 | ⏳ S3-4: Remove KNOWN_LARGE_MODULES exemptions when files reach ≤600 lines | ongoing | — | 7 modules still 623–741 lines (metric_store, report_exporter, speed_tester, network_logger, alert_engine, notification_router, credentialed_scan); exemptions remain valid until further splits land — this is the only open item in the plan |
+| 54 | ⏳ S3-4: Remove KNOWN_LARGE_MODULES exemptions when files reach ≤600 lines | 20 | v1.9.67 | Closes when all 7 Sprint 20 splits land (see Sprint 20 queue below) |
+| — | **— Sprint 20 (target v1.9.67) —** | — | — | — |
+| 68 | S20-1: `metric_store.py` 623→≤600 | 20 | v1.9.67 | Move helpers to `metric_store_queries.py` (already exists); remove KNOWN_LARGE_MODULES entry |
+| 69 | S20-2: `credentialed_scan.py` 649→≤600 | 20 | v1.9.67 | Extract per-protocol helper fns → `credentialed_scan_helpers.py` |
+| 70 | S20-3: `notification_router.py` 655→≤600 | 20 | v1.9.67 | Extract per-channel dispatch classes → `notification_channels.py` |
+| 71 | S20-4: `alert_engine.py` 673→≤600 | 20 | v1.9.67 | Extract suppression + digest pipeline → `alert_suppressor.py` |
+| 72 | S20-5: `report_exporter.py` 716→≤600 | 20 | v1.9.67 | Extract ISP report builder → `report_isp.py` |
+| 73 | S20-6: `network_logger.py` 718→≤600 | 20 | v1.9.67 | Extract CSV writer + file-rotation logic → `network_log_writer.py` |
+| 74 | S20-7: `speed_tester.py` 741→≤600 | 20 | v1.9.67 | Extract backend implementations → `speed_tester_backends.py` |
+| 75 | S20-8: Remove all 7 KNOWN_LARGE_MODULES exemptions; verify LOC gate enforces default 600 | 20 | v1.9.67 | S3-4 closes here — plan 100% complete |
 | — | **— APM audit findings (2026-05-29) — delivered below —** | — | — | — |
 | 55 | ✅ S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | 2 | v1.9.58 | Done; `ui.help` also added |
 | 56 | ✅ S12-2: Deduplicate 4 duplicate spec entries | 2 | v1.9.58 | Removed deco_client, diagnostic_card, wifi_heatmap, trigger_builder_page duplicates |
@@ -1126,3 +1135,18 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 **Sprint 18 delivered (2026-06-01):** `_AnalysisTabsMixin` wired into `TabBuilderMixin` ✅ — 19 duplicate methods removed from `dashboard.py` (808 lines); `ScanEnrichmentMixin` wired into `ScanResultMixin` ✅ — 12 duplicate methods removed from `scan_wiring.py` (603 lines); mesh enrichment methods moved to `scan_enrichment.py` ✅ — `_apply_mesh_enrichment` + 9 `_m1_*` helpers extracted (592 lines from dashboard.py); `ui/tabs_recon.py` created ✅ — `_ReconTabsMixin` with 29 recon security tab builders (SYN/UDP/OS/Risk/CVE/Exposure/Cred/Discovery/SMB/Plugin/PE); `TabBuilderMixin` now inherits `_ScanTabsMixin`, `_NetworkTabsMixin`, `_DiagTabsMixin`, `_AnalysisTabsMixin`, `_ReconTabsMixin`; LOC budgets tightened (dashboard.py 6,672→4,292, scan_wiring.py 1,300→876, scan_enrichment.py 834→1,429); `ui.tabs_recon` registered in spec. **dashboard.py: 6,472→4,092 lines (−2,380). 2588 tests pass, 5 skipped.**
 
 **Sprint 19 delivered (2026-06-01):** `_NavBuilderMixin` ✅ extracted to `ui/nav/builder.py` (1,200+ lines) — all 30+ nav methods, pin management, command palette, visit tracking; `_MonitorStateMixin` ✅ extracted to `ui/monitor_state.py` — verdict/badge/pill/KPI methods + `VerdictPanel`/`RiskBadge` widget classes; `_PluginPageMixin` ✅ extracted to `ui/plugin_page_mixin.py` — plugin page lifecycle, HW auto-detect, integration banner, `_launch_modules_impl`; Dashboard inheritance chain updated to include all 3 new mixins; spec + LOC budgets + architecture docs updated. **dashboard.py: 4,092→1,967 lines (−2,125). FINAL GOAL ACHIEVED. 2591 tests pass, 5 skipped.**
+
+**Sprint 20 queue (target v1.9.67):** Close S3-4 — split the 7 remaining KNOWN_LARGE_MODULES entries below the 600-line default budget so their exemptions can be removed. Work in ascending gap order:
+
+| # | Item | Lines now | Target | Split plan |
+|---|---|---|---|---|
+| S20-1 | `modules/metric_store.py` 623→≤600 | 623 | ≤600 | Move 25+ lines of helper methods to `metric_store_queries.py` (already exists) |
+| S20-2 | `modules/credentialed_scan.py` 649→≤600 | 649 | ≤600 | Extract per-protocol helper fns → `credentialed_scan_helpers.py` |
+| S20-3 | `modules/notification_router.py` 655→≤600 | 655 | ≤600 | Extract per-channel dispatch classes → `notification_channels.py` |
+| S20-4 | `modules/alert_engine.py` 673→≤600 | 673 | ≤600 | Extract suppression + digest pipeline → `alert_suppressor.py` |
+| S20-5 | `modules/report_exporter.py` 716→≤600 | 716 | ≤600 | Extract ISP report builder → `report_isp.py` (already has html/pdf split) |
+| S20-6 | `modules/network_logger.py` 718→≤600 | 718 | ≤600 | Extract CSV writer + file-rotation logic → `network_log_writer.py` |
+| S20-7 | `modules/speed_tester.py` 741→≤600 | 741 | ≤600 | Extract backend implementations → `speed_tester_backends.py` (Ookla + lib + pure-HTTP) |
+| S20-8 | Remove all 7 entries from `KNOWN_LARGE_MODULES`; verify default budget enforces them | — | — | After all splits: remove exemptions, run `python -m pytest tests/test_module_loc.py` |
+
+Each split follows the S2-1/S2-2/S2-3 pattern: new file, re-export all public names from original for backwards compat, add import test + behavioural test for new file (RULE-T1), add hiddenimport to `NetSentinel.spec` (RULE-B1).
