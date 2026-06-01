@@ -128,21 +128,27 @@ def snapshot(
 
     results: list[Connection] = []
 
+    # Normalise both collection paths into (pid, conn) pairs up front.
+    # psutil.net_connections() returns sconn objects that carry .pid;
+    # proc.connections() returns pconn objects with no .pid attribute.
+    conn_pid_pairs: list[tuple[int, object]] = []
     try:
-        conns = psutil.net_connections(kind="inet")
+        for c in psutil.net_connections(kind="inet"):
+            conn_pid_pairs.append((c.pid or 0, c))
     except psutil.AccessDenied:
-        # On Windows, non-admin cannot enumerate all-user connections;
-        # fall back to per-process iteration which only gives own-user
-        conns = []
+        # On Windows/macOS, non-admin cannot enumerate all-user connections;
+        # fall back to per-process iteration which only gives own-user sockets.
         for proc in psutil.process_iter(["pid"]):
             try:
-                conns.extend(proc.connections(kind="inet"))
+                p_pid = proc.info["pid"] or 0
+                for c in proc.net_connections(kind="inet"):
+                    conn_pid_pairs.append((p_pid, c))
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
 
     seen: set[tuple] = set()
 
-    for c in conns:
+    for c_pid, c in conn_pid_pairs:
         status = (c.status or "").upper()
 
         # Filter out LISTEN sockets unless requested
@@ -157,12 +163,12 @@ def snapshot(
 
         # Dedup by (proto, local, remote, pid)
         proto = "UDP" if c.type == socket.SOCK_DGRAM else "TCP"
-        key   = (proto, local, remote, c.pid or 0)
+        key   = (proto, local, remote, c_pid)
         if key in seen:
             continue
         seen.add(key)
 
-        pid = c.pid or 0
+        pid = c_pid
         exe_name, exe_path = pid_info.get(pid, ("<unknown>", ""))
 
         conn = Connection(
