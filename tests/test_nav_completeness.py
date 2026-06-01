@@ -21,6 +21,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 SRC  = (ROOT / "ui" / "dashboard.py").read_text(encoding="utf-8")
+# _build_pro_nav was extracted to nav/builder.py (Sprint 19); include it for nav tests
+_NAV_BUILDER_SRC = (ROOT / "ui" / "nav" / "builder.py").read_text(encoding="utf-8")
+_COMBINED_SRC = SRC + "\n" + _NAV_BUILDER_SRC
 
 
 def _static_nav_labels() -> list[str]:
@@ -30,10 +33,14 @@ def _static_nav_labels() -> list[str]:
 
 
 def _method_body(method_name: str) -> str:
-    """Return the full source of a method (up to the next same-indent def)."""
+    """Return the full source of a method (up to the next same-indent def).
+
+    Searches dashboard.py first; falls back to nav/builder.py so that
+    _build_pro_nav (Sprint 19 extraction) is still found.
+    """
     pattern = rf"(    def {re.escape(method_name)}\(.*?)(?=\n    def |\Z)"
-    m = re.search(pattern, SRC, re.DOTALL)
-    assert m, f"Method {method_name!r} not found in ui/dashboard.py"
+    m = re.search(pattern, _COMBINED_SRC, re.DOTALL)
+    assert m, f"Method {method_name!r} not found in ui/dashboard.py or ui/nav/builder.py"
     return m.group(1)
 
 

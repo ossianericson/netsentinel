@@ -64,8 +64,9 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Tighten after S13-1: 7,200; S13-2: 6,500; S13-3: 6,000; S13-4: 5,700
     # Sprint 18: _AnalysisTabsMixin + ScanEnrichmentMixin wired; recon tabs → tabs_recon.py;
     # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
-    # Next target: ≤3,000 lines (remaining: nav helpers, verdict/badge methods, misc handlers).
-    "dashboard.py": 4292,  # actual 4,092 + 200 margin (Sprint 18)
+    # Sprint 19: _NavBuilderMixin → nav/builder.py; _MonitorStateMixin → monitor_state.py;
+    # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines. FINAL GOAL ACHIEVED.
+    "dashboard.py": 2167,  # actual 1,967 + 200 margin (Sprint 19 final extraction)
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -224,6 +225,19 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Monitoring-domain tiles: LiveBandwidth, DnsStability, ModemSignal, TopTalkers, etc.
     # If grows past 1,100, split by tile domain: overview_tile_network.py etc.
     "widgets/overview_tile_monitor.py": 1007,  # actual 807 + 200 margin (Sprint 13 new file)
+
+    # _NavBuilderMixin — all nav structure building + runtime + command palette + pin management.
+    # Extracted from dashboard.py (Sprint 19). If grows past 1,500, split: nav_palette.py.
+    "nav/builder.py": 1400,  # actual ~1,200 + 200 margin (Sprint 19 new file)
+
+    # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, pulse bar, overall verdict.
+    # Also contains RiskBadge, VerdictPanel, _color_for_level, _bg_for_level.
+    # Extracted from dashboard.py (Sprint 19).
+    "monitor_state.py": 680,  # actual ~480 + 200 margin (Sprint 19 new file)
+
+    # _PluginPageMixin — plugin page lifecycle, HW auto-detect, integration banner, scan launch.
+    # Extracted from dashboard.py (Sprint 19).
+    "plugin_page_mixin.py": 480,  # actual ~280 + 200 margin (Sprint 19 new file)
 }
 
 UI_DEFAULT_BUDGET = 1000  # stricter than modules for new UI files

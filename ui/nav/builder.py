@@ -1,0 +1,1204 @@
+"""
+nav/builder.py — _NavBuilderMixin.
+
+Extracted from ui/dashboard.py (Sprint 19).
+Covers: nav structure building (sections, rail items, flyout), nav runtime
+(switching, crossfade, keyboard), help panel wiring, page-visit tracking,
+pin management, command palette, and recent-action wiring.
+"""
+from __future__ import annotations
+
+from PyQt6.QtCore import Qt, QSettings, pyqtSlot
+from PyQt6.QtWidgets import QLabel, QWidget
+
+from ui.help import _PAGE_HELP
+from ui.nav.rail import _LUCIDE, _NavEntry, _RailButton
+from ui.styles import (
+    ACCENT,
+    AUDIT_RED,
+    BORDER,
+    SIDEBAR_BG,
+    SIDEBAR_ITEM_FG,
+    SIDEBAR_SECTION_BG,
+    SIDEBAR_SECTION_FG,
+    TEXT_MUTED,
+    WHITE,
+)
+
+# Pages that auto-expand the tip bar on first visit (non-obvious interactions)
+_AUTO_HELP_PAGES: frozenset[str] = frozenset({
+    "Network Logger", "Lab Mode", "Protocol Visualizer",
+    "Automation Hooks", "MQTT / Home Assistant", "TLS & Exposure",
+    "Service Heartbeat", "SNMP Trap Receiver", "Syslog Viewer",
+    "IoT Behaviour", "Scheduled Scans",
+})
+
+
+class _NavBuilderMixin:
+    """
+    Navigation building and runtime methods extracted from Dashboard.
+
+    State variables (all created in Dashboard.__init__ / _build_ui):
+        _nav            QListWidget — flat sidebar list
+        _stack          QStackedWidget — page stack
+        _nav_row_to_page        dict[int, int]
+        _nav_item_icons         dict[int, str]
+        _nav_item_labels        dict[int, str]
+        _nav_label_to_widget    dict[str, QWidget]
+        _nav_header_rows        set[int]
+        _nav_section_groups     dict[int, dict]
+        _nav_separators         set[int]
+        _nav_action_rows        dict[int, Callable]
+        _nav_admin_rows         set[int]
+        _nav_audit_rows         set[int]
+        _nav_current_section    int
+        _nav_current_subgroup   int
+        _nav_collapsed          bool
+        _nav_sections           list[dict]
+        _nav_page_to_section    dict[str, str]
+        _nav_open_section       str
+        _nav_flyout             _FlyoutPanel
+        _nav_rail_buttons       dict[str, _RailButton]
+        _nav_pinned_labels      set[str]
+        _nav_current_page_label str
+        _nav_history            list[str]
+        _fade_anim              QPropertyAnimation | None
+    """
+
+    # ── Flat-nav structure helpers ────────────────────────────────────────────
+
+    def _nav_add_section(self, label: str, icon: str = "■",
+                         collapsed_by_default: bool = False,
+                         fg_color: str = None) -> int:
+        """Add a collapsible section header row."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QFont as _QFont, QBrush
+        from PyQt6.QtWidgets import QListWidgetItem
+        # Insert 8px air-gap + 1px divider before every non-first section
+        if self._nav.count() > 0:
+            _div = QListWidgetItem()
+            _div.setFlags(Qt.ItemFlag.NoItemFlags)
+            _div.setSizeHint(QSize(0, 9))
+            _div.setBackground(QBrush(QColor(BORDER)))
+            self._nav.addItem(_div)
+            self._nav_separators.add(self._nav.count() - 1)
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)   # clickable but not selectable
+        item.setSizeHint(QSize(0, 28))
+        item.setBackground(QBrush(QColor(SIDEBAR_SECTION_BG)))
+        f = _QFont("Segoe UI", 9)
+        f.setBold(True)
+        item.setFont(f)
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]    = icon
+        self._nav_item_labels[row]   = label
+        self._nav_header_rows.add(row)
+        self._nav_section_groups[row] = {
+            "children": [], "collapsed": collapsed_by_default, "level": 0,
+            "fg_color": fg_color,
+        }
+        self._nav_current_section  = row
+        self._nav_current_subgroup = -1
+        self._nav_separators.add(row)          # legacy compat
+        self._nav_refresh_item_text(row)
+        return row
+
+    def _nav_add_subgroup(self, label: str, icon: str = "▸",
+                          collapsed_by_default: bool = True) -> int:
+        """Add an indented collapsible sub-group header under the current section."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QBrush
+        from PyQt6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        item.setSizeHint(QSize(0, 26))
+        item.setBackground(QBrush(QColor(SIDEBAR_SECTION_BG)))
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]    = icon
+        self._nav_item_labels[row]   = label
+        self._nav_header_rows.add(row)
+        self._nav_section_groups[row] = {
+            "children": [], "collapsed": collapsed_by_default, "level": 1
+        }
+        self._nav_section_groups[self._nav_current_section]["children"].append(row)
+        self._nav_separators.add(row)          # legacy compat
+        self._nav_current_subgroup = row
+        self._nav_refresh_item_text(row)
+        return row
+
+    def _nav_add_page(self, icon: str, label: str, widget: QWidget) -> int:
+        """Add a page entry to the sidebar and the stacked widget. Returns nav row index."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        item.setSizeHint(QSize(0, 30))
+        self._nav.addItem(item)
+        page_idx = self._stack.addWidget(widget)
+        row = self._nav.count() - 1
+        self._nav_row_to_page[row] = page_idx
+        self._nav_item_icons[row]  = icon
+        self._nav_item_labels[row] = label
+        self._nav_label_to_widget[label] = widget
+        parent = (self._nav_current_subgroup if self._nav_current_subgroup >= 0
+                  else self._nav_current_section)
+        if parent >= 0:
+            self._nav_section_groups[parent]["children"].append(row)
+        self._nav_refresh_item_text(row)
+        return row
+
+    def _nav_add_alias(self, icon: str, label: str, page_idx: int) -> int:
+        """Add a nav entry that points to an already-registered page stack index."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        item.setSizeHint(QSize(0, 30))
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_row_to_page[row] = page_idx
+        self._nav_item_icons[row]  = icon
+        self._nav_item_labels[row] = label
+        parent = (self._nav_current_subgroup if self._nav_current_subgroup >= 0
+                  else self._nav_current_section)
+        if parent >= 0:
+            self._nav_section_groups[parent]["children"].append(row)
+        self._nav_refresh_item_text(row)
+        return row
+
+    def _nav_set_page(self, nav_row: int):
+        from PyQt6.QtCore import QPropertyAnimation
+        if nav_row not in self._nav_row_to_page:
+            return
+        if self._fade_anim is not None and self._fade_anim.state() == QPropertyAnimation.State.Running:
+            self._fade_anim.stop()
+            w = self._stack.currentWidget()
+            if w:
+                w.setGraphicsEffect(None)
+            self._fade_anim = None
+        self._stack.setCurrentIndex(self._nav_row_to_page[nav_row])
+        label = self._nav_item_labels.get(nav_row, "")
+        if label:
+            self.setWindowTitle(f"NetSentinel — {label}")
+
+    def _nav_crossfade_to(self, target_widget) -> None:
+        from PyQt6.QtWidgets import QGraphicsOpacityEffect
+        from PyQt6.QtCore import QPropertyAnimation, QEasingCurve
+
+        if self._fade_anim is not None and self._fade_anim.state() == QPropertyAnimation.State.Running:
+            self._fade_anim.stop()
+            cur = self._stack.currentWidget()
+            if cur:
+                cur.setGraphicsEffect(None)
+            self._fade_anim = None
+
+        if self._stack.currentWidget() is target_widget:
+            return
+
+        cur = self._stack.currentWidget()
+        if cur is None:
+            self._stack.setCurrentWidget(target_widget)
+            return
+
+        effect = QGraphicsOpacityEffect(cur)
+        cur.setGraphicsEffect(effect)
+
+        fade_out = QPropertyAnimation(effect, b"opacity", cur)
+        fade_out.setDuration(80)
+        fade_out.setStartValue(1.0)
+        fade_out.setEndValue(0.0)
+        fade_out.setEasingCurve(QEasingCurve.Type.InQuad)
+        self._fade_anim = fade_out
+
+        def _on_fade_out_done():
+            cur.setGraphicsEffect(None)
+            self._stack.setCurrentWidget(target_widget)
+            in_effect = QGraphicsOpacityEffect(target_widget)
+            target_widget.setGraphicsEffect(in_effect)
+            fade_in = QPropertyAnimation(in_effect, b"opacity", target_widget)
+            fade_in.setDuration(80)
+            fade_in.setStartValue(0.0)
+            fade_in.setEndValue(1.0)
+            fade_in.setEasingCurve(QEasingCurve.Type.OutQuad)
+            fade_in.finished.connect(lambda: target_widget.setGraphicsEffect(None))
+            self._fade_anim = fade_in
+            fade_in.start()
+
+        fade_out.finished.connect(_on_fade_out_done)
+        fade_out.start()
+
+    def _nav_refresh_item_text(self, row: int):
+        """Rewrite displayed text for a nav row based on collapsed/expanded mode."""
+        item = self._nav.item(row)
+        if item is None:
+            return
+        icon  = self._nav_item_icons.get(row, "")
+        label = self._nav_item_labels.get(row, "")
+        if self._nav_collapsed:
+            item.setText(icon)
+            if row not in self._nav_header_rows:
+                item.setToolTip(label)
+        elif row in self._nav_section_groups:
+            grp   = self._nav_section_groups[row]
+            arrow = "▶" if grp["collapsed"] else "▼"
+            from PyQt6.QtGui import QColor
+            if grp["level"] == 0:
+                item.setText(f" {arrow}  {label.upper()}")
+            else:
+                item.setText(f"     {arrow}  {label}")
+            _fg = grp.get("fg_color") or SIDEBAR_SECTION_FG
+            item.setForeground(QColor(_fg))
+            item.setToolTip("")
+        else:
+            star = " ★" if label in self._nav_pinned_labels else ""
+            item.setText(f"  {icon}  {label}{star}")
+            item.setToolTip("")
+            from PyQt6.QtGui import QColor
+            if row in self._nav_audit_rows:
+                item.setForeground(QColor(AUDIT_RED))
+            else:
+                item.setForeground(QColor(SIDEBAR_ITEM_FG))
+
+    def _nav_toggle_section(self, header_row: int):
+        """Collapse or expand a section / sub-group header."""
+        if header_row not in self._nav_section_groups:
+            return
+        grp = self._nav_section_groups[header_row]
+        grp["collapsed"] = not grp["collapsed"]
+        self._nav_refresh_item_text(header_row)
+        self._nav_apply_section_visibility(header_row, grp["collapsed"])
+        from PyQt6.QtCore import QSettings as _QS
+        _s = _QS(str(self._settings_path()), _QS.Format.IniFormat)
+        _s.setValue(f"nav/group_{header_row}_collapsed", str(grp["collapsed"]))
+
+    def _nav_apply_section_visibility(self, header_row: int, hide: bool):
+        """Show/hide direct children; recurse into sub-group children."""
+        for child_row in self._nav_section_groups[header_row]["children"]:
+            child_item = self._nav.item(child_row)
+            if child_item:
+                child_item.setHidden(hide)
+            if child_row in self._nav_section_groups:
+                child_grp    = self._nav_section_groups[child_row]
+                effective_hide = hide or child_grp["collapsed"]
+                for sub_row in child_grp["children"]:
+                    sub_item = self._nav.item(sub_row)
+                    if sub_item:
+                        sub_item.setHidden(effective_hide)
+
+    @pyqtSlot()
+    def _toggle_sidebar(self):
+        """Show/hide the rail sidebar (VSCode-style: toggle entire panel)."""
+        visible = not self._nav_rail_panel.isVisible()
+        self._nav_rail_panel.setVisible(visible)
+        self._sidebar_toggle_btn.setText("▶" if not visible else "◀")
+
+    def _focus_nav_search(self) -> None:
+        """Expand sidebar if collapsed, then focus the search box."""
+        if self._nav_collapsed:
+            self._toggle_sidebar()
+        self._nav_search.setFocus()
+        self._nav_search.selectAll()
+
+    @pyqtSlot(str)
+    def _on_nav_search_changed(self, text: str):
+        """Filter sidebar items to those whose label contains text."""
+        text = text.strip().lower()
+        if not text:
+            for row in range(self._nav.count()):
+                item = self._nav.item(row)
+                if item:
+                    item.setHidden(False)
+            for hrow, grp in self._nav_section_groups.items():
+                if grp["collapsed"]:
+                    self._nav_apply_section_visibility(hrow, True)
+            return
+        for row in range(self._nav.count()):
+            if row in self._nav_header_rows:
+                continue
+            label = self._nav_item_labels.get(row, "").lower()
+            item  = self._nav.item(row)
+            if item:
+                item.setHidden(text not in label)
+
+    def _on_nav_item_clicked(self, item):
+        """Toggle section/sub-group headers when clicked."""
+        row = self._nav.row(item)
+        if row in self._nav_section_groups:
+            self._nav_toggle_section(row)
+
+    @pyqtSlot(int)
+    def _on_nav_row_changed(self, row: int):
+        """Navigate to the page for the selected nav row."""
+        if row < 0 or row in self._nav_header_rows:
+            return
+        if row in self._nav_action_rows:
+            self._nav_action_rows[row]()
+            return
+        self._nav_set_page(row)
+        if hasattr(self, "_tray_manager"):
+            self._tray_manager.reset_badge()
+
+    def _nav_go_to(self, label: str) -> None:
+        """Programmatically navigate to the page with the given rail label."""
+        self._nav_rail_go_to(label)
+
+    def _open_isp_from_home(self) -> None:
+        self._nav_rail_go_to("Network Health Report")
+
+    def _rebuild_nav_for_mode(self) -> None:
+        """Clear all nav state and rebuild the full Pro rail."""
+        # ── Reset flat-nav state ───────────────────────────────────────────────
+        self._nav.clear()
+        self._nav_row_to_page.clear()
+        self._nav_item_icons.clear()
+        self._nav_item_labels.clear()
+        self._nav_header_rows.clear()
+        self._nav_section_groups.clear()
+        self._nav_separators.clear()
+        self._nav_action_rows.clear()
+        self._nav_admin_rows.clear()
+        self._nav_audit_rows.clear()
+        self._nav_current_section  = -1
+        self._nav_current_subgroup = -1
+        self._adv_tab_index_adv = -1
+        self._adv_tab_index_mtr = -1
+
+        # ── Reset rail-nav state ───────────────────────────────────────────────
+        self._nav_sections.clear()
+        self._nav_page_to_section.clear()
+        self._nav_open_section = ""
+        if hasattr(self, "_nav_flyout") and self._nav_flyout.maximumWidth() > 0:
+            self._nav_flyout.close_panel()
+
+        self._nav_flat_panel.setFixedWidth(0)
+        self._nav_flat_panel.setVisible(False)
+        self._nav_rail_panel.setVisible(True)
+
+        self._build_pro_nav()
+
+        if self._nav_pinned_labels:
+            _pinned_entries = []
+            for _lbl in sorted(self._nav_pinned_labels):
+                _w = self._nav_label_to_widget.get(_lbl)
+                if _w is not None:
+                    _pinned_entries.append(_NavEntry(
+                        label=_lbl, page=_w,
+                        admin_required=False, audit_item=False, pinned=True,
+                    ))
+            if _pinned_entries and len(_pinned_entries) > 4:
+                self._nav_sections.insert(0, {
+                    "name": "Pinned", "icon": "pin", "entries": _pinned_entries,
+                })
+            self._nav_direct_pins: list = _pinned_entries if len(_pinned_entries) <= 4 else []
+        else:
+            self._nav_direct_pins = []
+
+        self._nav_finalize_rail()
+        _qs = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
+        _last = _qs.value("nav/last_section", "")
+        _open = _last if any(s["name"] == _last for s in self._nav_sections) \
+                else (self._nav_sections[0]["name"] if self._nav_sections else "")
+        if _open:
+            self._nav_rail_toggle(_open)
+            _sec = next((s for s in self._nav_sections if s["name"] == _open), None)
+            if _sec and _sec["entries"]:
+                self._nav_rail_go_to(_sec["entries"][0].label)
+
+        from PyQt6.QtGui import QColor as _QColor
+        for _arow in self._nav_audit_rows:
+            _aitem = self._nav.item(_arow)
+            if _aitem:
+                _aitem.setForeground(_QColor(AUDIT_RED))
+
+    def _nav_ref(self, icon: str, label: str, widget: "QWidget") -> int:
+        """Add a nav alias entry for a widget already registered in the stack."""
+        idx = self._stack.indexOf(widget)
+        if idx < 0:
+            idx = self._stack.addWidget(widget)
+        self._nav_label_to_widget[label] = widget
+        return self._nav_add_alias(icon, label, idx)
+
+    def _nav_flat_item(self, icon: str, label: str, widget: "QWidget",
+                       admin_required: bool = False, audit_item: bool = False) -> int:
+        """Add a flat-nav item and optionally mark it admin/audit for red styling."""
+        row = self._nav_ref(icon, label, widget)
+        if admin_required:
+            self._nav_admin_rows.add(row)
+        if audit_item:
+            self._nav_audit_rows.add(row)
+        return row
+
+    def _nav_add_action(self, icon: str, label: str, action) -> int:
+        """Add a nav item that calls *action* instead of navigating to a page."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+        item.setSizeHint(QSize(0, 30))
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]  = icon
+        self._nav_item_labels[row] = label
+        parent = (self._nav_current_subgroup if self._nav_current_subgroup >= 0
+                  else self._nav_current_section)
+        if parent >= 0:
+            self._nav_section_groups[parent]["children"].append(row)
+        self._nav_refresh_item_text(row)
+        self._nav_action_rows[row] = action
+        return row
+
+    def _nav_add_spacer(self) -> None:
+        """Add a non-selectable visual spacer row in the nav list."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QBrush
+        from PyQt6.QtWidgets import QListWidgetItem
+        sep = QListWidgetItem()
+        sep.setFlags(Qt.ItemFlag.NoItemFlags)
+        sep.setSizeHint(QSize(0, 10))
+        sep.setBackground(QBrush(QColor(SIDEBAR_BG)))
+        self._nav.addItem(sep)
+        self._nav_header_rows.add(self._nav.count() - 1)
+
+    def _nav_add_section_label(self, label: str, fg_color: str = None) -> int:
+        """Add a NON-collapsible ALL-CAPS section divider label (not interactive)."""
+        from PyQt6.QtCore import QSize
+        from PyQt6.QtGui import QColor, QFont as _QFont
+        from PyQt6.QtWidgets import QListWidgetItem
+        item = QListWidgetItem()
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        item.setSizeHint(QSize(0, 26))
+        f = _QFont("Segoe UI", 9)
+        f.setBold(True)
+        item.setFont(f)
+        item.setText(f"  {label.upper()}")
+        _fg = fg_color or SIDEBAR_SECTION_FG
+        item.setForeground(QColor(_fg))
+        self._nav.addItem(item)
+        row = self._nav.count() - 1
+        self._nav_item_icons[row]  = ""
+        self._nav_item_labels[row] = label
+        self._nav_header_rows.add(row)
+        return row
+
+    # ── Rail-mode nav helpers ─────────────────────────────────────────────────
+
+    def _nav_begin_section(self, name: str, icon: str) -> None:
+        """Start a new section in rail mode."""
+        self._nav_sections.append({"name": name, "icon": icon, "entries": []})
+
+    def _nav_add_rail_item(
+        self,
+        label: str,
+        widget: "QWidget",
+        pinned: bool = False,
+        admin_required: bool = False,
+        audit_item: bool = False,
+    ) -> None:
+        """Register a page under the current rail section."""
+        if not self._nav_sections:
+            return
+        if self._stack.indexOf(widget) < 0:
+            self._stack.addWidget(widget)
+        self._nav_label_to_widget[label] = widget
+        entry = _NavEntry(
+            label=label,
+            page=widget,
+            admin_required=admin_required,
+            audit_item=audit_item,
+            pinned=label in self._nav_pinned_labels or pinned,
+        )
+        self._nav_sections[-1]["entries"].append(entry)
+        self._nav_page_to_section[label] = self._nav_sections[-1]["name"]
+
+    def _nav_finalize_rail(self) -> None:
+        """Build _RailButton widgets from _nav_sections and wire them up."""
+        stretch_idx = None
+        for i in range(self._nav_rail_lay.count()):
+            item = self._nav_rail_lay.itemAt(i)
+            if item and item.spacerItem():
+                stretch_idx = i
+                break
+        while stretch_idx and stretch_idx > 1:
+            item = self._nav_rail_lay.takeAt(1)
+            if item and item.widget():
+                item.widget().deleteLater()
+            stretch_idx -= 1
+
+        self._nav_rail_buttons.clear()
+        self._nav_rail_pin_buttons: dict = {}
+
+        direct_pins = getattr(self, "_nav_direct_pins", [])
+        if direct_pins:
+            qa_lbl = QLabel("QUICK\nACCESS")
+            from PyQt6.QtCore import Qt as _Qt
+            qa_lbl.setAlignment(_Qt.AlignmentFlag.AlignHCenter | _Qt.AlignmentFlag.AlignVCenter)
+            qa_lbl.setFixedSize(56, 24)
+            qa_lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:7px; font-weight:bold;"
+                f" letter-spacing:0.5px; background:transparent;"
+            )
+            insert_at = self._nav_rail_lay.count() - 2
+            self._nav_rail_lay.insertWidget(insert_at, qa_lbl)
+
+            for entry in direct_pins:
+                lbl = entry.label
+                short = lbl.split()[0][:8]
+                pin_btn = _RailButton("star", lbl)
+                pin_btn._short_label = short
+                pin_btn.setToolTip(lbl)
+                pin_btn.clicked.connect(
+                    lambda _c, label=lbl: (
+                        self._nav_rail_go_to(label),
+                        self._nav_flyout.close_panel() if hasattr(self, "_nav_flyout") else None,
+                    )
+                )
+                insert_at = self._nav_rail_lay.count() - 2
+                self._nav_rail_lay.insertWidget(insert_at, pin_btn)
+                self._nav_rail_pin_buttons[lbl] = pin_btn
+
+        _SECTION_HINTS: dict = {
+            "Monitor":        "Monitor  ·  Ctrl+L → Network Logger",
+            "Security Audit": (
+                "Security Audit\n"
+                "Items shown in red require admin rights or run\n"
+                "active probes against devices on your network."
+            ),
+        }
+        for sec in self._nav_sections:
+            btn = _RailButton(sec["icon"], sec["name"])
+            btn.clicked.connect(lambda _c, s=sec["name"]: self._nav_rail_toggle(s))
+            if sec["name"] in _SECTION_HINTS:
+                btn.setToolTip(_SECTION_HINTS[sec["name"]])
+            insert_at = self._nav_rail_lay.count() - 2
+            self._nav_rail_lay.insertWidget(insert_at, btn)
+            self._nav_rail_buttons[sec["name"]] = btn
+
+    def _nav_rail_toggle(self, section_name: str) -> None:
+        """Toggle the flyout for the given section; close if already open."""
+        if self._nav_open_section == section_name and self._nav_flyout.maximumWidth() > 0:
+            if not self._nav_flyout.is_pinned:
+                self._nav_flyout.close_panel()
+                self._nav_open_section = ""
+                self._nav_rail_buttons[section_name].setChecked(False)
+            return
+        self._nav_open_section = section_name
+        for name, btn in self._nav_rail_buttons.items():
+            btn.setChecked(name == section_name)
+        sec = next((s for s in self._nav_sections if s["name"] == section_name), None)
+        if sec is None:
+            return
+        entries = [
+            (e.label, e.label in self._nav_pinned_labels, e.admin_required or e.audit_item)
+            for e in sec["entries"]
+        ]
+        self._nav_flyout.load_section(
+            title=section_name,
+            entries=entries,
+            active_label=self._nav_current_page_label,
+            on_click=self._nav_rail_go_to,
+            on_pin_toggle=self._on_rail_pin_toggle,
+        )
+        for _lbl, _color in getattr(self, "_flyout_dots", {}).items():
+            if _color:
+                self._nav_flyout.apply_dot(_lbl, _color)
+        self._nav_flyout.open()
+        _qs = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
+        _qs.setValue("nav/last_section", section_name)
+
+    def _nav_rail_go_to(self, label: str, _push_history: bool = False) -> None:
+        """Navigate to a page by label in rail mode. Flyout stays open."""
+        widget = self._nav_label_to_widget.get(label)
+        if widget is None:
+            return
+        if (
+            label != "Settings"
+            and hasattr(self, "_settings_page")
+            and self._settings_page.is_dirty()
+            and not self._settings_page.confirm_leave()
+        ):
+            return
+        if _push_history and hasattr(self, "_nav_history"):
+            current = getattr(self, "_nav_current_page_label", None)
+            if current and current != label:
+                self._nav_history.append(current)
+        elif hasattr(self, "_nav_history"):
+            self._nav_history.clear()
+        if hasattr(self, "_back_btn"):
+            self._back_btn.setVisible(bool(self._nav_history))
+        self._nav_current_page_label = label
+        self._nav_crossfade_to(widget)
+        self._nav_flyout.set_active(label)
+        section = self._nav_page_to_section.get(label, "")
+        if hasattr(self, "_breadcrumb_lbl"):
+            self._breadcrumb_lbl.setText(f"{section}  ›  {label}" if section else label)
+        if hasattr(self, "_help_panel"):
+            self._update_help_panel(label)
+        if hasattr(self, "_tray_manager"):
+            self._tray_manager.reset_badge()
+        if label in _AUTO_HELP_PAGES and _PAGE_HELP.get(label) and hasattr(self, "_tip_bar"):
+            import json as _json
+            _qs2 = QSettings("NetSentinel", "NetSentinel")
+            try:
+                _visited2 = _json.loads(_qs2.value("discover/visited_pages", "[]"))
+            except Exception:
+                _visited2 = []
+            if label not in _visited2:
+                self._tip_bar.setChecked(True)
+        self._track_page_visit(label)
+
+    def _nav_deep_link_go_to(self, label: str) -> None:
+        """Navigate via a deep link — pushes the current page onto the back stack."""
+        self._nav_rail_go_to(label, _push_history=True)
+
+    @pyqtSlot()
+    def _nav_go_back(self) -> None:
+        if not self._nav_history:
+            return
+        prev = self._nav_history.pop()
+        widget = self._nav_label_to_widget.get(prev)
+        if widget is None:
+            return
+        self._nav_current_page_label = prev
+        self._nav_crossfade_to(widget)
+        self._nav_flyout.set_active(prev)
+        section = self._nav_page_to_section.get(prev, "")
+        if hasattr(self, "_breadcrumb_lbl"):
+            self._breadcrumb_lbl.setText(f"{section}  ›  {prev}" if section else prev)
+        if hasattr(self, "_back_btn"):
+            self._back_btn.setVisible(bool(self._nav_history))
+
+    def keyPressEvent(self, event) -> None:
+        from PyQt6.QtCore import Qt as _Qt
+        if event.key() == _Qt.Key.Key_Escape and self._nav_history:
+            self._nav_go_back()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+    # ── Page-navigation shortcuts ─────────────────────────────────────────────
+
+    @pyqtSlot()
+    def _on_modem_tile_clicked(self) -> None:
+        label = getattr(self, "_active_modem_plugin_label", "")
+        if label:
+            self._nav_rail_go_to(label)
+        else:
+            self._nav_rail_go_to("Hardware")
+
+    @pyqtSlot(str)
+    def _on_inventory_device_selected(self, mac: str) -> None:
+        """Navigate to Devices and scroll/select the row matching this MAC."""
+        self._nav_rail_go_to("Devices")
+        self._m1_highlight_mac(mac)
+
+    @pyqtSlot(str)
+    def _on_config_drift_detected(self, message: str) -> None:
+        """Show a status-bar and tray notification when snapshot comparison finds drift."""
+        self._baseline_has_drift = True
+        self._refresh_section_badges()
+        self._set_status(f"⚠ {message}")
+        if self._tray_manager.is_available():
+            self._tray_manager.show_notification(
+                "Config Drift Detected", message, "WARNING"
+            )
+
+    # ── Help panel wiring ─────────────────────────────────────────────────────
+
+    def _wire_page_help_btn(self, label: str, info: dict) -> None:
+        """EDU-1: attach ? help button to the current page's PageHeaderBar (once)."""
+        from ui.widgets.page_header import PageHeaderBar
+        page = self._stack.currentWidget()
+        if page is None:
+            return
+        hdr = page.findChild(PageHeaderBar)
+        if hdr is None or hasattr(hdr, "_help_btn"):
+            return
+        what = info.get("what", "")
+        if what:
+            hdr.set_help(label, what)
+
+    def _update_help_panel(self, label: str) -> None:
+        """Refresh tip bar text and collapse the help panel when the page changes."""
+        info = _PAGE_HELP.get(label, {})
+        self._tip_bar_has_content = bool(info)
+
+        if hasattr(self, "_tip_bar"):
+            self._tip_bar.blockSignals(True)
+            self._tip_bar.setChecked(False)
+            self._tip_bar.blockSignals(False)
+        if hasattr(self, "_help_panel"):
+            self._help_panel.setVisible(False)
+
+        if not info:
+            if hasattr(self, "_tip_bar"):
+                self._tip_bar.setText("ⓘ  Keyboard Shortcuts  ▾")
+            if hasattr(self, "_help_what_lbl"):
+                self._help_what_lbl.setText("")
+            if hasattr(self, "_help_hidden_lbl"):
+                self._help_hidden_lbl.setVisible(False)
+            return
+
+        if hasattr(self, "_tip_bar"):
+            self._tip_bar.setText(f"ⓘ  Tips for {label}  ▾")
+
+        what = info.get("what", "")
+        bullets = info.get("hidden", [])
+        if hasattr(self, "_help_what_lbl"):
+            self._help_what_lbl.setText(what)
+        if hasattr(self, "_help_hidden_lbl"):
+            if bullets:
+                hidden_text = "\n".join(f"  •  {b}" for b in bullets)
+                self._help_hidden_lbl.setText(f"Hidden interactions:\n{hidden_text}")
+                self._help_hidden_lbl.setVisible(True)
+            else:
+                self._help_hidden_lbl.setVisible(False)
+
+        self._wire_page_help_btn(label, info)
+
+    def _toggle_help_panel(self, checked: bool) -> None:
+        if hasattr(self, "_help_panel"):
+            self._help_panel.setVisible(checked)
+
+    # ── Visited-feature tracking ──────────────────────────────────────────────
+
+    _DISCOVERY_PAGES = [
+        ("Protocol Visualizer", "See animated diagrams of ARP, DNS, TCP and more — using your real devices"),
+        ("Lab Mode",            "Try a guided exercise: find a rogue device or diagnose slow DNS on your live network"),
+        ("Network Grade",       "Get an A–F score for your network health across 8 dimensions"),
+        ("Network Health Report", "Generate a network health report — great for ISP support tickets"),
+        ("What's Wrong?",       "Pick a symptom and get a plain-English verdict with a prioritised fix list"),
+        ("Feature Guide",       "See everything this app can do — including features most users never find"),
+        ("Network Logger",      "Configure log sources and view the live activity log — all in one place"),
+    ]
+
+    def _track_page_visit(self, label: str) -> None:
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        raw = qs.value("discover/visited_pages", "[]")
+        try:
+            visited: list = _json.loads(raw)
+        except Exception:
+            visited = []
+        if label not in visited:
+            visited.append(label)
+            qs.setValue("discover/visited_pages", _json.dumps(visited))
+            self._refresh_home_suggestions()
+            if not qs.value("nav/pin_hint_shown", False, type=bool):
+                analysis_sec = next(
+                    (s for s in self._nav_sections if s["name"] == "Analysis"), None
+                )
+                if analysis_sec:
+                    analysis_labels = {e.label for e in analysis_sec["entries"]}
+                    visited_analysis = [p for p in visited if p in analysis_labels]
+                    if len(visited_analysis) >= 3:
+                        qs.setValue("nav/pin_hint_shown", True)
+                        self._set_status(
+                            "Tip: right-click any page in the menu to pin it ★ for faster access"
+                        )
+
+    def _refresh_home_suggestions(self) -> None:
+        if not hasattr(self, "_home_page"):
+            return
+        if getattr(self, "_pending_live_scenario", None) is not None:
+            return
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        raw = qs.value("discover/visited_pages", "[]")
+        try:
+            visited: set = set(_json.loads(raw))
+        except Exception:
+            visited = set()
+        suggestions = []
+        for page_label, description in self._DISCOVERY_PAGES:
+            if page_label not in visited:
+                suggestions.append({
+                    "text": description,
+                    "action_label": "Try it →",
+                    "target": page_label,
+                    "priority": "low",
+                })
+            if len(suggestions) >= 3:
+                break
+        self._home_page.set_suggestions(suggestions)
+
+    # ── Pin management ────────────────────────────────────────────────────────
+
+    def _on_rail_pin_toggle(self, label: str, is_pinned: bool) -> None:
+        """Update pinned set, persist, and rebuild nav so Pinned section appears/disappears."""
+        if is_pinned:
+            self._nav_pinned_labels.add(label)
+        else:
+            self._nav_pinned_labels.discard(label)
+        self._save_pinned_labels()
+        self._rebuild_nav_for_mode()
+
+    def _on_canvas_click(self) -> None:
+        """Close flyout on canvas click (only if not pinned)."""
+        if hasattr(self, "_nav_flyout") and not self._nav_flyout.is_pinned:
+            if self._nav_flyout.maximumWidth() > 0:
+                self._nav_flyout.close_panel()
+                self._nav_open_section = ""
+                for btn in self._nav_rail_buttons.values():
+                    btn.setChecked(False)
+
+    def _build_pro_nav(self) -> None:
+        """Full nav — activity rail + flyout. No mode switcher; this is the only nav."""
+        self._nav_begin_section("Getting Started", "grid")
+        self._nav_add_rail_item("Home",               self._home_page)
+        self._nav_add_rail_item("Overview",            self._overview_page)
+        self._nav_add_rail_item("Speed Test",          self._speed_test_page)
+        self._nav_add_rail_item("DNS & Stability",     self._m5_tab)
+        self._nav_add_rail_item("What's Wrong?",       self._diagnosis_page)
+
+        self._nav_begin_section("Discover", "network")
+        self._nav_add_rail_item("Devices",             self._m1_tab)
+        self._nav_add_rail_item("Network Map",         self._topology_tab_widget)
+        self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
+        self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
+        self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
+        self._nav_add_rail_item("Home Automation",     self._ha_page)
+
+        self._nav_begin_section("Monitor", "monitor")
+        self._nav_add_rail_item("Network Logger",      self._logging_container)
+        self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
+        self._nav_add_rail_item("Active Connections",  self._connections_page)
+        self._nav_add_rail_item("Availability History", self._history_page)
+        self._nav_add_rail_item("Inventory Changes",   self._inventory_page)
+        self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
+        self._nav_add_rail_item("Service Heartbeat",   self._service_page)
+        self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
+
+        self._nav_begin_section("Reports", "bar-chart")
+        self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)
+        self._nav_add_rail_item("Network Health Report", self._reports_page)
+        self._nav_add_rail_item("Network Doc",         self._network_doc_page)
+        self._nav_add_rail_item("IP Calculator",       self._ip_calc_page)
+        self._nav_add_rail_item("Notifications",       self._notifications_page)
+
+        self._nav_begin_section("Analysis", "cpu")
+        self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
+        self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
+        self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
+        self._nav_add_rail_item("Monitor Overview",    self._monitor_overview_page)
+        self._nav_add_rail_item("802.11 Monitor",      self._wifi_monitor_page)
+        self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
+        self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
+        self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
+        self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
+        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
+        self._nav_add_rail_item("Trend Forecasts",     self._trend_page)
+
+        self._nav_begin_section("Automation", "zap")
+        self._nav_add_rail_item("Automation Hooks",    self._automation_page)
+        self._nav_add_rail_item("Scheduled Scans",     self._sched_tab_widget)
+        self._nav_add_rail_item("Custom Triggers",     self._trigger_page)
+        self._nav_add_rail_item("MQTT / Home Assistant", self._mqtt_page)
+        self._nav_add_rail_item("REST API",            self._rest_api_page)
+        self._nav_add_rail_item("Config Snapshots",    self._baseline_page)
+        self._nav_add_rail_item("Maintenance Windows", self._maintenance_page)
+
+        self._nav_begin_section("Security Audit", "shield")
+        self._nav_add_rail_item("Security Overview",    self._security_overview_page,     audit_item=True)
+        self._nav_add_rail_item("Port Scan (TCP)",      self._recon_syn_tab_widget,       admin_required=True, audit_item=True)
+        self._nav_add_rail_item("Port Scan (UDP)",      self._recon_udp_tab_widget,       admin_required=True, audit_item=True)
+        self._nav_add_rail_item("CVE Lookup",           self._recon_cve_tab_widget,       audit_item=True)
+        self._nav_add_rail_item("Threat Intel",         self._threat_intel_page,          audit_item=True)
+        self._nav_add_rail_item("TLS & Exposure",       self._cert_page,                  audit_item=True)
+        self._nav_add_rail_item("Login Test",           self._recon_cred_tab_widget,      admin_required=True, audit_item=True)
+        self._nav_add_rail_item("OS Detection",         self._recon_os_tab_widget,        audit_item=True)
+        self._nav_add_rail_item("Device Risk Score",    self._recon_risk_tab_widget,      audit_item=True)
+        self._nav_add_rail_item("CVE Tracker",          self._cve_page,                   audit_item=True)
+        self._nav_add_rail_item("Exposed to Internet",  self._recon_exposure_tab_widget,  audit_item=True)
+        self._nav_add_rail_item("Full Device Discovery", self._recon_discovery_tab_widget, audit_item=True)
+        self._nav_add_rail_item("Windows Shares (SMB)", self._recon_smb_tab_widget,       audit_item=True)
+        self._nav_add_rail_item("Recon Plugins",         self._recon_plugin_tab_widget,    audit_item=True)
+        self._nav_add_rail_item("Private Endpoint Check", self._recon_pe_tab_widget,      audit_item=True)
+        self._nav_add_rail_item("Cloud Metadata Probe", self._recon_cloud_tab_widget,     audit_item=True)
+        self._nav_add_rail_item("DHCP Rogue Monitor",   self._dhcp_tab_widget,            audit_item=True)
+
+        self._nav_begin_section("Education", "book-open")
+        self._nav_add_rail_item("Protocol Visualizer", self._protocol_viz_page)
+        self._nav_add_rail_item("Lab Mode",            self._lab_mode_page)
+        self._nav_add_rail_item("Feature Guide",       self._discover_page)
+        self._nav_add_rail_item("Help & Reference",    self._help_tab_widget)
+
+        self._nav_begin_section("Extend", "plug")
+        self._nav_add_rail_item("Hardware",        self._hardware_integration_page)
+        for _hw_p, _pg in getattr(self, "_plugin_pages", {}).items():
+            self._nav_add_rail_item(_pg._label, _pg)
+
+    def _load_pinned_labels(self) -> set:
+        try:
+            from PyQt6.QtCore import QSettings as _QS
+            s = _QS(str(self._settings_path()), _QS.Format.IniFormat)
+            raw = s.value("nav/pinned_labels", "")
+            return set(filter(None, raw.split("|||"))) if raw else set()
+        except Exception:
+            return set()
+
+    def _save_pinned_labels(self) -> None:
+        try:
+            from PyQt6.QtCore import QSettings as _QS
+            s = _QS(str(self._settings_path()), _QS.Format.IniFormat)
+            s.setValue("nav/pinned_labels", "|||".join(sorted(self._nav_pinned_labels)))
+        except Exception:
+            pass
+
+    def _build_favourites_section(self) -> None:
+        """Prepend a Favourites section when the user has pinned at least one page."""
+        if not self._nav_pinned_labels:
+            return
+        self._nav_add_section_label("Favourites")
+        for label in sorted(self._nav_pinned_labels):
+            widget = self._nav_label_to_widget.get(label)
+            if widget is not None:
+                self._nav_ref("★", label, widget)
+
+    def _toggle_pin_label(self, label: str) -> None:
+        if label in self._nav_pinned_labels:
+            self._nav_pinned_labels.discard(label)
+        else:
+            self._nav_pinned_labels.add(label)
+        self._save_pinned_labels()
+        self._rebuild_nav_for_mode()
+
+    def _nav_context_menu(self, pos) -> None:
+        from PyQt6.QtWidgets import QMenu
+        item = self._nav.itemAt(pos)
+        if item is None:
+            return
+        row = self._nav.row(item)
+        if row in self._nav_header_rows or row in self._nav_action_rows:
+            return
+        label = self._nav_item_labels.get(row, "")
+        if not label:
+            return
+        menu = QMenu()
+        if label in self._nav_pinned_labels:
+            act = menu.addAction("★  Remove from Favourites")
+        else:
+            act = menu.addAction("☆  Pin to Favourites")
+        chosen = menu.exec(self._nav.viewport().mapToGlobal(pos))
+        if chosen is act:
+            self._toggle_pin_label(label)
+
+    # ── Monitoring state helpers (NAV-2) ──────────────────────────────────────
+
+    _MONITOR_PAGES: dict = {
+        "ARP Spoof Watch":     "_arp_worker",
+        "DHCP Rogue Monitor":  "_dhcp_worker",
+        "Bandwidth Monitor":   "_bw_worker",
+    }
+
+    def _is_monitor_running(self, worker_attr: str) -> bool:
+        w = getattr(self, worker_attr, None)
+        return bool(w and w.isRunning())
+
+    # ── Recent-action recording (RECUR-3) ─────────────────────────────────────
+
+    def _record_recent_action(self, action_id: str, label: str, page: str, params: dict) -> None:
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            existing: list = _json.loads(qs.value("recur/recent_actions", "[]"))
+        except Exception:
+            existing = []
+        existing = [a for a in existing if a.get("id") != action_id]
+        existing.insert(0, {"id": action_id, "label": label, "page": page, "params": params})
+        qs.setValue("recur/recent_actions", _json.dumps(existing[:10]))
+
+    def _build_palette_items(self) -> list:
+        import json as _json
+
+        recent_items: list = []
+        try:
+            recent = _json.loads(
+                QSettings("NetSentinel", "NetSentinel").value("recur/recent_actions", "[]")
+            )
+        except Exception:
+            recent = []
+        if recent:
+            recent_items.append({"label": "Recent", "kind": "separator"})
+            for a in recent[:5]:
+                recent_items.append({
+                    "icon": "⟳", "label": a["label"], "kind": "recent",
+                    "id": a["id"], "page": a["page"], "params": a.get("params", {}),
+                })
+
+        _PAGE_SHORTCUTS: dict[str, str] = {
+            "Log Hub":  "Ctrl+L",
+            "Settings": "Ctrl+,",
+        }
+        seen: set = set()
+        pages = []
+        for sec in self._nav_sections:
+            for entry in sec["entries"]:
+                if entry.label and entry.label not in seen:
+                    seen.add(entry.label)
+                    worker_attr = self._MONITOR_PAGES.get(entry.label)
+                    sc = _PAGE_SHORTCUTS.get(entry.label, "")
+                    if worker_attr:
+                        running = self._is_monitor_running(worker_attr)
+                        state = "● Monitoring" if running else "○ Not running"
+                        pages.append({
+                            "icon": "◎",
+                            "label": f"{entry.label}  {state}",
+                            "kind": "page",
+                            "real_label": entry.label,
+                            "shortcut": sc,
+                        })
+                        if not running:
+                            pages.append({
+                                "icon": "▶",
+                                "label": f"Start {entry.label}",
+                                "kind": "action",
+                            })
+                    else:
+                        pages.append({"icon": "◎", "label": entry.label, "kind": "page", "shortcut": sc})
+
+        if recent_items:
+            pages_section = [{"label": "Pages", "kind": "separator"}] + pages
+        else:
+            pages_section = pages
+
+        actions = [
+            {"icon": "⟳", "label": "Run Full Scan",    "kind": "action"},
+            {"icon": "⚙", "label": "Open Settings",    "kind": "action"},
+            {"icon": "◄", "label": "Toggle Sidebar",   "kind": "action"},
+            {"icon": "◈", "label": "Diagnose Network", "kind": "action"},
+        ]
+        return recent_items + pages_section + actions
+
+    def _open_command_palette(self) -> None:
+        from ui.command_palette import CommandPalette
+        items = self._build_palette_items()
+        pal = CommandPalette(items, parent=self)
+        pal.load_recent_data(self._store)
+        pal.page_requested.connect(self._nav_rail_go_to)
+        pal.action_requested.connect(self._on_palette_action)
+        pal.exec()
+
+    def _open_shortcut_overlay(self) -> None:
+        """Show the keyboard shortcut reference overlay (KEYBOARD-1)."""
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox
+        from ui.styles import BG_CARD, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, ACCENT, WHITE
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Keyboard Shortcuts")
+        dlg.setMinimumWidth(420)
+        dlg.setModal(True)
+        dlg.setStyleSheet(
+            f"QDialog {{ background:{BG_CARD}; }}"
+            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+        from PyQt6.QtWidgets import QVBoxLayout as _QVL, QWidget as _QW, QHBoxLayout as _QHL
+        vlay = _QVL(dlg)
+        vlay.setContentsMargins(20, 16, 20, 16)
+        vlay.setSpacing(8)
+        hdr = QLabel("Keyboard Shortcuts")
+        hdr.setStyleSheet(f"font-size:15px; font-weight:bold; color:{TEXT_PRIMARY};")
+        vlay.addWidget(hdr)
+        shortcuts = [
+            ("?",           "Show this reference"),
+            ("Ctrl+K",      "Command palette"),
+            ("Ctrl+F",      "Focus nav search"),
+            ("Ctrl+R",      "Run full scan"),
+            ("Ctrl+,",      "Settings"),
+            ("Ctrl+L",      "Log Hub"),
+            ("Ctrl+Q",      "Quit"),
+            ("J / K",       "Next / previous row in tables"),
+            ("Escape",      "Close panel / flyout"),
+        ]
+        for key, desc in shortcuts:
+            row_w = _QW()
+            row_w.setStyleSheet("background:transparent;")
+            row_lay = _QHL(row_w)
+            row_lay.setContentsMargins(0, 2, 0, 2)
+            key_lbl = QLabel(key)
+            key_lbl.setFixedWidth(110)
+            key_lbl.setStyleSheet(
+                f"font-family:monospace; font-size:11px; font-weight:bold;"
+                f" color:{ACCENT}; background:{BORDER}22;"
+                f" border:1px solid {BORDER}; border-radius:3px; padding:1px 5px;"
+            )
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+            row_lay.addWidget(key_lbl)
+            row_lay.addSpacing(12)
+            row_lay.addWidget(desc_lbl, 1)
+            vlay.addWidget(row_w)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        btns.rejected.connect(dlg.accept)
+        btns.button(QDialogButtonBox.StandardButton.Close).setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        vlay.addSpacing(4)
+        vlay.addWidget(btns)
+        dlg.exec()
+
+    def _on_palette_action(self, action: str) -> None:
+        if action.startswith("__device__"):
+            ip_or_mac = action[len("__device__"):]
+            self._nav_rail_go_to("Inventory Changes")
+            if hasattr(self, "_inventory_page"):
+                self._inventory_page.select_device(ip_or_mac)
+        elif action.startswith("__alert__"):
+            import json as _json
+            try:
+                alert_dict = _json.loads(action[len("__alert__"):])
+                if hasattr(self, "_notifications_page"):
+                    self._nav_rail_go_to("Notifications")
+                    self._notifications_page._alert_drawer.open(alert_dict)
+            except Exception:
+                pass
+        elif action.startswith("__recent__"):
+            self._replay_recent_action(action[len("__recent__"):])
+        elif action == "Run Full Scan":
+            self._start_full_scan()
+        elif action == "Open Settings":
+            self._open_settings_dialog()
+        elif action == "Toggle Sidebar":
+            self._toggle_sidebar()
+        elif action == "Diagnose Network":
+            self._open_diagnosis()
+        elif action == "Start ARP Spoof Watch":
+            self._nav_rail_go_to("ARP Spoof Watch")
+            self._start_arp_monitor()
+        elif action == "Start DHCP Rogue Monitor":
+            self._nav_rail_go_to("DHCP Rogue Monitor")
+            self._start_dhcp_scan()
+        elif action == "Start Bandwidth Monitor":
+            self._nav_rail_go_to("Live Bandwidth")
+            self._start_bandwidth_monitor()
+
+    def _replay_recent_action(self, action_id: str) -> None:
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            recent: list = _json.loads(qs.value("recur/recent_actions", "[]"))
+        except Exception:
+            return
+        action = next((a for a in recent if a.get("id") == action_id), None)
+        if action is None:
+            return
+        page = action.get("page", "")
+        params = action.get("params", {})
+        self._nav_rail_go_to(page)
+        if page == "Port Scan (TCP)" and hasattr(self, "_syn_host"):
+            self._syn_host.setText(params.get("host", ""))
+        elif page == "Tools & Wake-on-LAN" and hasattr(self, "_ps_host"):
+            self._ps_host.setText(params.get("host", ""))
+        elif page == "Hop-by-Hop Trace" and hasattr(self, "_mtr_target"):
+            self._mtr_target.setText(params.get("target", ""))
+
+    def _on_overview_navigate(self, label: str) -> None:
+        if label == "Diagnose Network":
+            self._open_diagnosis()
+        else:
+            self._nav_rail_go_to(label)
+
+    def _open_diagnosis(self) -> None:
+        self._nav_rail_go_to("What's Wrong?")
