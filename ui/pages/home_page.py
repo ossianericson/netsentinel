@@ -1,13 +1,13 @@
 """
-HomePage â€” introductory landing page shown in Home mode.
+HomePage — introductory landing page shown in Home mode.
 
 Hero card (network grade), three mini metric cards (speed / stability / devices),
 and a recent-alerts strip.
 
 Architecture rules observed:
-  Ã¢â‚¬Â¢ All colours from ui.styles â€” no hardcoded hex values.
-  Ã¢â‚¬Â¢ No blocking I/O. Pure display widget; all data arrives via public slots.
-  Ã¢â‚¬Â¢ Outer scroll area so the content is never clipped on small windows.
+  • All colours from ui.styles — no hardcoded hex values.
+  • No blocking I/O. Pure display widget; all data arrives via public slots.
+  • Outer scroll area so the content is never clipped on small windows.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     start_monitoring_requested = pyqtSignal()
     #: Emitted when the user clicks the refresh icon on the freshness strip.
     rescan_requested = pyqtSignal()
-    #: Emitted when the user clicks "Investigate â†’" on a live challenge suggestion.
+    #: Emitted when the user clicks "Investigate →" on a live challenge suggestion.
     investigate_live_requested = pyqtSignal()
     #: Emitted when the user clicks an alert row; carries the raw alert object.
     alert_view_requested = pyqtSignal(object)
@@ -88,7 +88,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     add_plugin_requested = pyqtSignal(str)
 
 
-    # Ã¢â€â‚¬Ã¢â€â‚¬ Constructor Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    # â”€â”€ Constructor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def __init__(self, store=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -116,7 +116,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             _t.timeout.connect(self._preload_from_store)
             _t.start(0)
 
-    # Ã¢â€â‚¬Ã¢â€â‚¬ Theme nudge banner Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    # â”€â”€ Theme nudge banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def _build_theme_banner(self) -> "QFrame | None":
         qs = QSettings("NetSentinel", "NetSentinel")
@@ -141,15 +141,15 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         row.addWidget(lbl)
 
         _THEMES = [
-            ("Arctic Clean",  "â˜€  Light"),
-            ("Midnight Pro",  "Ã°Å¸Å’â„¢  Dark"),
-            ("Obsidian Neon", "âœ¦  Neon"),
+            ("Arctic Clean",  "☀  Light"),
+            ("Midnight Pro",  "ðŸŒ™  Dark"),
+            ("Obsidian Neon", "✦  Neon"),
         ]
 
         def _dismiss(save_theme: str | None = None) -> None:
             if save_theme:
                 _styles.set_active_theme_name(save_theme)
-                lbl.setText(f"Theme '{save_theme}' saved â€” restart NetSentinel to apply.")
+                lbl.setText(f"Theme '{save_theme}' saved — restart NetSentinel to apply.")
                 for b in _btn_refs:
                     b.setEnabled(False)
                 close_btn.setVisible(False)
@@ -186,7 +186,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         row.addStretch()
 
-        close_btn = QPushButton("Ãƒâ€”")
+        close_btn = QPushButton("×")
         close_btn.setFixedSize(22, 22)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setToolTip("Dismiss")
@@ -209,13 +209,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Theme nudge banner (one-time, dismissed via QSettings) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Theme nudge banner (one-time, dismissed via QSettings) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         _banner = self._build_theme_banner()
         if _banner is not None:
             outer.addWidget(_banner)
-        # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Freshness strip â€” always visible above scroll area Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Freshness strip — always visible above scroll area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._freshness_strip = FreshnessStrip()
         self._freshness_strip.rescan_requested.connect(self.rescan_requested)
         outer.addWidget(self._freshness_strip)
@@ -235,7 +235,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSpacing(10)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Browser dashboard strip (visible when API enabled + not dismissed) Ã¢â€â‚¬
+        # â”€â”€ Browser dashboard strip (visible when API enabled + not dismissed) â”€
         self._dashboard_strip = QFrame()
         self._dashboard_strip.setObjectName("dashboardStrip")
         self._dashboard_strip.setStyleSheet(
@@ -246,7 +246,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ds_lay = QHBoxLayout(self._dashboard_strip)
         _ds_lay.setContentsMargins(12, 5, 8, 5)
         _ds_lay.setSpacing(8)
-        _ds_icon = QLabel("Ã°Å¸Å’Â")
+        _ds_icon = QLabel("ðŸŒ")
         _ds_icon.setFixedWidth(18)
         _ds_icon.setStyleSheet(
             f"font-size:12px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
@@ -255,7 +255,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._ds_text.setStyleSheet(
             f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
         )
-        _ds_open = QPushButton("Open â†—")
+        _ds_open = QPushButton("Open ↗")
         _ds_open.setFixedHeight(24)
         _ds_open.setCursor(Qt.CursorShape.PointingHandCursor)
         _ds_open.setStyleSheet(
@@ -265,7 +265,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _ds_open.clicked.connect(self._open_dashboard)
-        _ds_dismiss = QPushButton("Ãƒâ€”")
+        _ds_dismiss = QPushButton("×")
         _ds_dismiss.setFixedSize(20, 20)
         _ds_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _ds_dismiss.setStyleSheet(
@@ -281,13 +281,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ds_lay.addWidget(_ds_dismiss)
         lay.addWidget(self._dashboard_strip)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ GETTING STARTED checklist (replaces separate hw strip) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ GETTING STARTED checklist (replaces separate hw strip) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._setup_card_top = GettingStartedCard()
         self._setup_card_top.add_plugin_requested.connect(self.add_plugin_requested)
         self._setup_card_top.navigate_to.connect(self.navigate_to)
         lay.addWidget(self._setup_card_top)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Since you were last here (hidden until data loaded) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Since you were last here (hidden until data loaded) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._last_visit_card = QFrame()
         self._last_visit_card.setObjectName("lastVisitCard")
         self._last_visit_card.setStyleSheet(
@@ -298,7 +298,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lv_lay = QHBoxLayout(self._last_visit_card)
         lv_lay.setContentsMargins(12, 8, 12, 8)
         lv_lay.setSpacing(10)
-        _lv_icon = QLabel("â—·")
+        _lv_icon = QLabel("◷")
         _lv_icon.setFixedWidth(18)
         _lv_icon.setStyleSheet(
             f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
@@ -312,7 +312,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lv_lay.addWidget(self._lv_text, 1)
         lay.addWidget(self._last_visit_card)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ DASH-1: "Action needed" card Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ DASH-1: "Action needed" card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._action_card = QFrame()
         self._action_card.setObjectName("actionCard")
         self._action_card.setStyleSheet(
@@ -324,7 +324,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ac_outer.setContentsMargins(14, 10, 14, 10)
         _ac_outer.setSpacing(6)
         _ac_hdr_row = QHBoxLayout()
-        _ac_hdr_lbl = QLabel("âš   Action needed")
+        _ac_hdr_lbl = QLabel("⚠  Action needed")
         _ac_hdr_lbl.setStyleSheet(
             f"font-size:12px; font-weight:bold; color:{RED};"
             " background:transparent; border:none;"
@@ -333,7 +333,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ac_hdr_row.addStretch()
         _ac_outer.addLayout(_ac_hdr_row)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ ALERT-3: per-alert rows with inline ack Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ ALERT-3: per-alert rows with inline ack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._ac_alert_rows_widget = QWidget()
         self._ac_alert_rows_widget.setStyleSheet("background:transparent;")
         self._ac_alert_rows_lay = QVBoxLayout(self._ac_alert_rows_widget)
@@ -342,7 +342,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._ac_alert_rows_widget.setVisible(False)
         _ac_outer.addWidget(self._ac_alert_rows_widget)
 
-        self._ac_view_all_btn = QPushButton("View all alerts â†’")
+        self._ac_view_all_btn = QPushButton("View all alerts →")
         self._ac_view_all_btn.setFixedHeight(22)
         self._ac_view_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._ac_view_all_btn.setStyleSheet(
@@ -355,14 +355,14 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._ac_view_all_btn.setVisible(False)
         _ac_outer.addWidget(self._ac_view_all_btn)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Offline devices row (separate concern, unchanged) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Offline devices row (separate concern, unchanged) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         _ac_devices_row = QHBoxLayout()
         _ac_devices_row.setSpacing(8)
         self._ac_devices_lbl = QLabel("")
         self._ac_devices_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
-        _ac_devices_btn = QPushButton("View Devices â†’")
+        _ac_devices_btn = QPushButton("View Devices →")
         _ac_devices_btn.setFixedHeight(24)
         _ac_devices_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _ac_devices_btn.setStyleSheet(
@@ -380,7 +380,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._ac_offline_count = 0  # track so ack-all can decide whether to hide card
         lay.addWidget(self._action_card)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Post-scan delta banner (hidden until 2nd+ scan) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Post-scan delta banner (hidden until 2nd+ scan) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._delta_banner = QFrame()
         self._delta_banner.setObjectName("deltaBanner")
         self._delta_banner.setStyleSheet(
@@ -395,7 +395,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._delta_chips_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
         )
-        _db_dismiss = QPushButton("Ãƒâ€”")
+        _db_dismiss = QPushButton("×")
         _db_dismiss.setFixedSize(20, 20)
         _db_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _db_dismiss.setStyleSheet(
@@ -409,7 +409,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _db_lay.addWidget(_db_dismiss)
         lay.addWidget(self._delta_banner)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Recurring-user top section (hidden until conditions met) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Recurring-user top section (hidden until conditions met) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._recurring_section = QFrame()
         self._recurring_section.setObjectName("recurringSection")
         self._recurring_section.setStyleSheet(
@@ -428,13 +428,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         _rec_outer.addWidget(_rec_mon_hdr)
 
-        # Pill row â€” separate instances synced by set_monitor_pills()
+        # Pill row — separate instances synced by set_monitor_pills()
         _rec_pills_row = QHBoxLayout()
         _rec_pills_row.setSpacing(6)
         _rec_pills_row.setContentsMargins(0, 0, 0, 0)
 
         def _rec_pill(label: str, target: str) -> QPushButton:
-            b = QPushButton(f"â—‹  {label}")
+            b = QPushButton(f"○  {label}")
             b.setFixedHeight(22)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(
@@ -460,17 +460,17 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _rec_status_row = QHBoxLayout()
         _rec_status_row.setSpacing(12)
         _rec_status_row.setContentsMargins(0, 0, 0, 0)
-        self._rec_grade_lbl = QLabel("Network Grade: â€”")
+        self._rec_grade_lbl = QLabel("Network Grade: —")
         self._rec_grade_lbl.setStyleSheet(
             f"font-size:11px; font-weight:600; color:{TEXT_SECONDARY};"
             " background:transparent; border:none;"
         )
         self._grade_sparkline = _GradeSparkline()
-        self._rec_scan_time_lbl = QLabel("Last scan: â€”")
+        self._rec_scan_time_lbl = QLabel("Last scan: —")
         self._rec_scan_time_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
         )
-        self._btn_rescan_compact = QPushButton("â–¶  Rescan")
+        self._btn_rescan_compact = QPushButton("▶  Rescan")
         self._btn_rescan_compact.setFixedHeight(26)
         self._btn_rescan_compact.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_rescan_compact.setStyleSheet(
@@ -493,7 +493,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._rec_diag_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
         )
-        _diag_open = QPushButton("What's Wrong? â†’")
+        _diag_open = QPushButton("What's Wrong? →")
         _diag_open.setFlat(True)
         _diag_open.setCursor(Qt.CursorShape.PointingHandCursor)
         _diag_open.setStyleSheet(
@@ -513,7 +513,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._events_ticker.navigate_to.connect(self.navigate_to)
         _rec_outer.addWidget(self._events_ticker)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ This Week card (DASH-2) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ This Week card (DASH-2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._this_week_card = QFrame()
         self._this_week_card.setObjectName("thisWeekCard")
         self._this_week_card.setStyleSheet(
@@ -545,7 +545,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             chip_lay = QVBoxLayout(chip)
             chip_lay.setContentsMargins(10, 6, 10, 6)
             chip_lay.setSpacing(2)
-            val_lbl = QLabel("â€”")
+            val_lbl = QLabel("—")
             val_lbl.setStyleSheet(
                 f"font-size:16px; font-weight:bold; color:{color};"
                 " background:transparent; border:none;"
@@ -580,7 +580,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _stats_hbox.addWidget(self._this_week_card, 2)
         lay.addLayout(_stats_hbox)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Hero card Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Hero card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         hero = QFrame()
         hero.setObjectName("heroCard")
         hero.setStyleSheet(
@@ -635,7 +635,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             " background:transparent; border:none;"
         )
         self._hero_sub = QLabel(
-            "Discover devices Â· check stability Â· detect threats"
+            "Discover devices · check stability · detect threats"
         )
         self._hero_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY};"
@@ -686,7 +686,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         hero_lay.addLayout(right, 1)
         lay.addWidget(hero)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Feature search bar Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Feature search bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         search_card = QFrame()
         search_card.setObjectName("searchCard")
         search_card.setStyleSheet(
@@ -699,7 +699,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         self._home_search = QLineEdit()
         self._home_search.setPlaceholderText(
-            "Search features â€” try 'wifi', 'arp', 'heatmap', 'dns'â€¦"
+            "Search features — try 'wifi', 'arp', 'heatmap', 'dns'…"
         )
         self._home_search.setFixedHeight(30)
         self._home_search.setStyleSheet(
@@ -721,7 +721,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         lay.addWidget(search_card)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Post-scan summary sheet (NUX-2, one-time) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Post-scan summary sheet (NUX-2, one-time) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._post_scan_sheet = QFrame()
         self._post_scan_sheet.setObjectName("postScanSheet")
         self._post_scan_sheet.setStyleSheet(
@@ -742,7 +742,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         _sheet_hdr.addWidget(_sheet_title_lbl)
         _sheet_hdr.addStretch()
-        _sheet_x = QPushButton("Ãƒâ€”")
+        _sheet_x = QPushButton("×")
         _sheet_x.setFixedSize(20, 20)
         _sheet_x.setCursor(Qt.CursorShape.PointingHandCursor)
         _sheet_x.setStyleSheet(
@@ -763,7 +763,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         _sheet_cta = QHBoxLayout()
         _sheet_cta.setSpacing(16)
-        self._sheet_grade_btn = QPushButton("Run a Network Grade â†’")
+        self._sheet_grade_btn = QPushButton("Run a Network Grade →")
         self._sheet_grade_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sheet_grade_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
@@ -775,7 +775,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             lambda: self.navigate_to.emit("Network Grade")
         )
         _sheet_cta.addWidget(self._sheet_grade_btn)
-        self._sheet_action_btn = QPushButton("Set up notifications â†’")
+        self._sheet_action_btn = QPushButton("Set up notifications →")
         self._sheet_action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._sheet_action_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; border:none;"
@@ -791,7 +791,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _sheet_lay.addLayout(_sheet_cta)
         lay.addWidget(self._post_scan_sheet)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ "Three things" section label Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ "Three things" section label â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._sec1_lbl = QLabel("THE THREE THINGS THAT MATTER")
         self._sec1_lbl.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
@@ -799,7 +799,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         lay.addWidget(self._sec1_lbl)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Mini-card row â€” three equal-width columns Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Mini-card row — three equal-width columns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._mini_cards_widget = QWidget()
         self._mini_cards_widget.setStyleSheet("background:transparent;")
         card_row = QHBoxLayout(self._mini_cards_widget)
@@ -809,7 +809,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._stability_card = _MiniCard("\u25ce", "Stability", "\u2013", "\u2013")
         self._devices_card   = _MiniCard("\u2295", "Devices",   "\u2013", "\u2013")
         for _card in (self._speed_card, self._stability_card, self._devices_card):
-            card_row.addWidget(_card, 1)  # stretch=1 â†’ equal width
+            card_row.addWidget(_card, 1)  # stretch=1 → equal width
         self._speed_card.clicked.connect(
             lambda: self.navigate_to.emit("Speed Test"))
         self._stability_card.clicked.connect(
@@ -818,7 +818,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             lambda: self.navigate_to.emit("Devices"))
         lay.addWidget(self._mini_cards_widget)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Monitoring status pills (NUX-3) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Monitoring status pills (NUX-3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._monitoring_pills_row = QWidget()
         self._monitoring_pills_row.setStyleSheet("background:transparent;")
         _pills_lay = QHBoxLayout(self._monitoring_pills_row)
@@ -834,7 +834,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _pills_lay.addSpacing(4)
 
         def _pill(label: str, target: str) -> QPushButton:
-            b = QPushButton(f"â—‹  {label}")
+            b = QPushButton(f"○  {label}")
             b.setFixedHeight(22)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(
@@ -856,7 +856,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lay.addWidget(self._monitoring_pills_row)
 
         self._monitoring_nudge = QLabel(
-            "Monitoring is off â€” turn it on in 10 seconds â†’"
+            "Monitoring is off — turn it on in 10 seconds →"
         )
         self._monitoring_nudge.setVisible(False)
         self._monitoring_nudge.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -869,7 +869,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         lay.addWidget(self._monitoring_nudge)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Stability monitoring card Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Stability monitoring card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._sec_mon_lbl = QLabel("STABILITY MONITORING")
         self._sec_mon_lbl.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
@@ -887,13 +887,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         mon_lay.setContentsMargins(14, 10, 14, 10)
         mon_lay.setSpacing(10)
 
-        self._mon_dot = QLabel("â—Â")
+        self._mon_dot = QLabel("●")
         self._mon_dot.setFixedWidth(12)
         self._mon_dot.setStyleSheet(
             f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
         self._mon_status_lbl = QLabel(
-            "Not running â€” start to log connection stability over time."
+            "Not running — start to log connection stability over time."
         )
         self._mon_status_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
@@ -910,7 +910,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         self._btn_mon_start.clicked.connect(self.start_monitoring_requested)
 
-        self._btn_mon_view = QPushButton("View Log â†’")
+        self._btn_mon_view = QPushButton("View Log →")
         self._btn_mon_view.setFlat(True)
         self._btn_mon_view.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_mon_view.setStyleSheet(
@@ -927,7 +927,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         mon_lay.addWidget(self._btn_mon_view)
         lay.addWidget(self._mon_card)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Post-scan results strip (hidden until first scan completes) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Post-scan results strip (hidden until first scan completes) â”€â”€â”€â”€â”€â”€â”€â”€
         self._results_strip = QFrame()
         self._results_strip.setObjectName("resultsStrip")
         self._results_strip.setStyleSheet(
@@ -951,7 +951,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             rl = QHBoxLayout(rw)
             rl.setContentsMargins(0, 0, 0, 0)
             rl.setSpacing(8)
-            dot = QLabel("â—Â")
+            dot = QLabel("●")
             dot.setFixedWidth(12)
             dot.setStyleSheet(
                 f"font-size:8px; color:{TEXT_SECONDARY};"
@@ -978,18 +978,18 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             return rw, lbl, dot
 
         _dev_row, self._res_devices_lbl, self._res_devices_dot = \
-            _result_row("â€”", "View Devices â†’", "Devices")
+            _result_row("—", "View Devices →", "Devices")
         _conn_row, self._res_conn_lbl, self._res_conn_dot = \
-            _result_row("â€”", "View Connection â†’", "DNS & Stability")
+            _result_row("—", "View Connection →", "DNS & Stability")
         _sec_row, self._res_security_lbl, self._res_security_dot = \
-            _result_row("â€”", "View Overview â†’", "Overview")
+            _result_row("—", "View Overview →", "Overview")
 
         _strip_lay.addWidget(_dev_row)
         _strip_lay.addWidget(_conn_row)
         _strip_lay.addWidget(_sec_row)
         lay.addWidget(self._results_strip)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Suggested next steps (hidden until computed) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Suggested next steps (hidden until computed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._suggestions_sec = QLabel("WHAT TO DO NEXT")
         self._suggestions_sec.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
@@ -1010,7 +1010,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._suggestions_inner.setSpacing(4)
         lay.addWidget(self._suggestions_card)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Recent alerts section label (+ "View all â†’" in recurring mode) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Recent alerts section label (+ "View all →" in recurring mode) â”€â”€â”€â”€
         self._alerts_hdr_row = QWidget()
         self._alerts_hdr_row.setStyleSheet("background:transparent;")
         _ahr_lay = QHBoxLayout(self._alerts_hdr_row)
@@ -1021,7 +1021,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
             " border:none; letter-spacing:1px;"
         )
-        self._btn_view_all_alerts = QPushButton("View all â†’")
+        self._btn_view_all_alerts = QPushButton("View all →")
         self._btn_view_all_alerts.setFlat(True)
         self._btn_view_all_alerts.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_view_all_alerts.setVisible(False)
@@ -1039,7 +1039,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ahr_lay.addWidget(self._btn_view_all_alerts)
         lay.addWidget(self._alerts_hdr_row)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Alert card Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Alert card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._alert_card = QFrame()
         self._alert_card.setObjectName("alertCard")
         self._alert_card.setStyleSheet(
@@ -1056,7 +1056,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             " background:transparent; border:none;"
         )
         self._alert_inner.addWidget(self._no_alerts_lbl)
-        # Permanent footer â€” always visible; text changes to "No other alerts" once rows appear
+        # Permanent footer — always visible; text changes to "No other alerts" once rows appear
         self._no_other_alerts_lbl = QLabel()
         self._no_other_alerts_lbl.setVisible(False)
         self._no_other_alerts_lbl.setStyleSheet(
@@ -1066,7 +1066,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._alert_inner.addWidget(self._no_other_alerts_lbl)
         lay.addWidget(self._alert_card)
 
-        # Ã¢â€â‚¬Ã¢â€â‚¬ Quick tips card (dismissible; hidden once user dismisses) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+        # â”€â”€ Quick tips card (dismissible; hidden once user dismisses) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         self._tips_card = QFrame()
         self._tips_card.setObjectName("tipsCard")
         self._tips_card.setStyleSheet(
@@ -1086,7 +1086,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
             " border:none; letter-spacing:1px;"
         )
-        _tips_x = QPushButton("Ãƒâ€”")
+        _tips_x = QPushButton("×")
         _tips_x.setFixedSize(18, 18)
         _tips_x.setCursor(Qt.CursorShape.PointingHandCursor)
         _tips_x.setStyleSheet(
@@ -1119,10 +1119,10 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             rl.addWidget(lb, 1)
             return w
 
-        _tips_lay.addWidget(_tip_row("Ã¢Å’Â¨", "Press  Ctrl+K  to open the command palette â€” search any page instantly."))
-        _tips_lay.addWidget(_tip_row("Ã°Å¸â€œÅ’", "Right-click any nav item to pin it to the sidebar for quick access."))
-        _tips_lay.addWidget(_tip_row("Ã¢Å¡â„¢", "Right-click a device row for quick actions: block, How to Fix, history."))
-        self._tip_row_rest_api = _tip_row("Ã°Å¸Å’Â", "Enable the REST API in  Settings â†’ REST API  for a live browser dashboard at localhost:8765/dashboard.")
+        _tips_lay.addWidget(_tip_row("⌨", "Press  Ctrl+K  to open the command palette — search any page instantly."))
+        _tips_lay.addWidget(_tip_row("ðŸ“Œ", "Right-click any nav item to pin it to the sidebar for quick access."))
+        _tips_lay.addWidget(_tip_row("⚙", "Right-click a device row for quick actions: block, How to Fix, history."))
+        self._tip_row_rest_api = _tip_row("ðŸŒ", "Enable the REST API in  Settings → REST API  for a live browser dashboard at localhost:8765/dashboard.")
         _tips_lay.addWidget(self._tip_row_rest_api)
 
         lay.addWidget(self._tips_card)
