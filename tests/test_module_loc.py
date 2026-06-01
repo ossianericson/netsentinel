@@ -71,13 +71,13 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # tabs.py now 949 lines — tighten further as _build_tabs() is decomposed.
     "tabs.py": 1149,  # actual 949 + 200 margin (Sprint 8 sub-mixin extraction)
 
-    # _DiagTabsMixin — diagnostics, MTR, advanced tools, alert routing.
-    # Logger tab + retention helpers extracted to tabs_logger.py (Sprint 15).
-    "tabs_diag.py": 650,  # actual 448 + 200 margin (Sprint 15 logger extraction)
+    # _DiagTabsMixin — diagnostics tab only; MTR/tools inherited from _DiagExtraTabsMixin,
+    # logger inherited from _LoggerTabMixin. Sprint 16: inheritance wired, duplicates removed.
+    "tabs_diag.py": 333,  # actual 133 + 200 margin (Sprint 16 duplicate removal)
 
     # _LoggerTabMixin — network logger tab builder + handlers + retention helpers.
     # Extracted from tabs_diag.py (Sprint 15).
-    "tabs_logger.py": 975,  # actual 772 + 200 margin (Sprint 15 new file)
+    "tabs_logger.py": 972,  # actual 772 + 200 margin (Sprint 15 new file; tightened Sprint 16)
 
     # Help panel: _PAGE_HELP dict + build_help_tab() + _page_header helper.
     "help.py": 1200,  # actual 1,133 + margin (S13-2 extraction)
@@ -184,7 +184,8 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     "tabs_analysis.py": 1047,  # actual 847 + 200 margin (Sprint 13 new file)
 
     # _DiagExtraTabsMixin — MTR tab + advanced tools tab + handlers.
-    "tabs_diag_extra.py": 949,  # actual 749 + 200 margin (Sprint 13 new file)
+    # Logger methods removed (Sprint 16) — now inherits into _DiagTabsMixin cleanly.
+    "tabs_diag_extra.py": 546,  # actual 346 + 200 margin (Sprint 16 logger dead-code removal)
 
     # _DeviceLabelDialog, _DeviceDrawer, _ScanCompareDialog — InventoryPage helper dialogs.
     "widgets/device_detail_pane.py": 580,  # actual 380 + 200 margin (Sprint 13 new file)
