@@ -3954,7 +3954,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin, QMainWindow):
 
     def _build_help_tab(self) -> QWidget:
         """Static Help & Shortcuts reference page (body delegated to ui.help)."""
-        from ui.help import build_help_tab
+        from ui.help_tab import build_help_tab
         return build_help_tab(self)
 
     def _check_for_updates(self):

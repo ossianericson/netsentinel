@@ -64,7 +64,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Tighten after S13-1: 7,200; S13-2: 6,500; S13-3: 6,000; S13-4: 5,700
     # S13-1 delivered: TabBuilderMixin extracted to ui/tabs.py (3,302 lines).
     # Next target: ≤3,000 lines once remaining recon tab builders are extracted.
-    "dashboard.py": 6672,  # actual 6,472 + 200 margin (Sprint 13 tighten)
+    "dashboard.py": 6672,  # actual 6,472 + 200 margin (Sprint 17 — no further extraction this sprint)
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -79,8 +79,12 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Extracted from tabs_diag.py (Sprint 15).
     "tabs_logger.py": 972,  # actual 772 + 200 margin (Sprint 15 new file; tightened Sprint 16)
 
-    # Help panel: _PAGE_HELP dict + build_help_tab() + _page_header helper.
-    "help.py": 1200,  # actual 1,133 + margin (S13-2 extraction)
+    # Help panel: _PAGE_HELP dict only (build_help_tab extracted to help_tab.py, Sprint 17).
+    "help.py": 684,   # actual 484 + 200 margin (Sprint 17)
+
+    # build_help_tab() + _page_header() + _section/_entry/_subsection helpers.
+    # Extracted from help.py (Sprint 17).
+    "help_tab.py": 857,  # actual 657 + 200 margin (Sprint 17 new file)
 
     # AppHeaderMixin: header bar + frameless-window + update-check methods.
     "header.py": 700,  # actual 659 + margin (S13-3 extraction)
@@ -100,14 +104,18 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
     "scan_wiring.py": 1300,  # actual 1,274 + margin (Sprint 4 new file; S15-1)
 
-    # Notification channel config panels.  Split delivered S14-3a: all card builders,
-    # log panel, and test helpers → notif_channel_panels.py (_NotifChannelsMixin).
-    # notifications_page.py is now 296 lines (shell only).
-    "pages/notifications_page.py": 496,  # actual 296 + 200 margin (S14-3a delivered)
+    # Notification channel config panels.  Sprint 17: duplicates removed, log panel
+    # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.
+    "pages/notifications_page.py": 500,  # actual 300 + 200 margin
 
-    # _NotifChannelsMixin — all card builders + log panel + test helpers.
-    # Still large; next split: extract per-channel QWidget classes.
-    "pages/notif_channel_panels.py": 1843,  # actual 1,643 + 200 margin (S14-3a new file)
+    # _NotifChannelsMixin — keychain helpers + alert-rules + toast/webhook/email + test helpers.
+    # Sprint 17: pushover/ntfy/telegram/escalation/digest removed (were duplicates);
+    # log card + history methods extracted to notif_alert_history.py.
+    "pages/notif_channel_panels.py": 814,  # actual 614 + 200 margin (Sprint 17)
+
+    # _NotifAlertHistoryMixin — alert history table + delivery/retry log + bulk actions.
+    # Extracted from notif_channel_panels.py (Sprint 17).
+    "pages/notif_alert_history.py": 961,  # actual 761 + 200 margin (Sprint 17 new file)
 
     # Log Hub unified chronological monitor.  Split delivered S14-3b:
     # _LogSourcePanelMixin + shared constants/helpers → log_source_panel.py.
@@ -158,9 +166,14 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Natural split if needed: split update vs. scan result methods.
     "pages/home_data_mixin.py": 1107,  # actual 907 + 200 margin (Sprint 15 new file)
 
-    # home_widgets.py grew in Sprint 7 (S14-1) and Sprint 15 (_MiniCard, _AlertRow).
-    # Further split: move _MiniCard/_AlertRow to mini_card.py if > 1,600 lines.
-    "widgets/home_widgets.py": 1516,  # actual 1,316 + 200 margin (Sprint 15)
+    # home_widgets.py — core animated widgets + grade helpers + _MiniCard/_AlertRow.
+    # Sprint 17: FreshnessStrip/GettingStartedCard/_GradeBreakdownDialog/Welcome pages
+    #   extracted to home_session_widgets.py; 1,316 → 524 lines.
+    "widgets/home_widgets.py": 724,  # actual 524 + 200 margin (Sprint 17)
+
+    # home_session_widgets.py — FreshnessStrip, GettingStartedCard, _GradeBreakdownDialog,
+    #   StandardWelcomePage, ProWelcomePage. Extracted from home_widgets.py (Sprint 17).
+    "widgets/home_session_widgets.py": 1013,  # actual 813 + 200 margin (Sprint 17 new file)
 
     # ── Sprint 13 new files ────────────────────────────────────────────────────
     # _PAGE_HELP dict — all page help strings for the tip bar.

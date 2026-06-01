@@ -62,6 +62,8 @@ from ui.widgets.home_widgets import (
     _GradeRing, _MiniCard, _AlertRow, _MiniSparkline, _GradeSparkline, _EventsTicker,
     _GRADE_HISTORY_KEY, _GRADE_HISTORY_MAX,
     _append_grade_history, _load_grade_history, _bundled_plugin_path,
+)
+from ui.widgets.home_session_widgets import (
     FreshnessStrip, GettingStartedCard,
     _GradeBreakdownDialog, StandardWelcomePage, ProWelcomePage,
 )

@@ -33,9 +33,13 @@ from ui.pages.notif_channel_panels import (
     _ALERT_RULE_DEFS,
     _page_header,
 )
+from ui.pages.notif_extra_channels import _NotifExtraChannelsMixin
+from ui.pages.notif_alert_history import _NotifAlertHistoryMixin
 
 
-class NotificationsPage(_NotifChannelsMixin, QWidget):
+class NotificationsPage(
+    _NotifAlertHistoryMixin, _NotifExtraChannelsMixin, _NotifChannelsMixin, QWidget
+):
     """Notification routing configuration and delivery log page."""
 
     navigate_to              = pyqtSignal(str)

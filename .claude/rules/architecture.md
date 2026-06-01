@@ -125,7 +125,8 @@ netsentinel/
 │   ├── expanding_table.py      # ExpandingTable — inline master-detail row expansion
 │   ├── first_run_dialog.py     # First-run setup wizard
 │   ├── live_graph.py           # Matplotlib RTT line chart
-│   ├── help.py                 # build_help_tab() + _PAGE_HELP re-export (data in pages/help_content.py)
+│   ├── help.py                 # _PAGE_HELP dict — page help data for tip bar (Sprint 17: build_help_tab extracted to help_tab.py)
+│   ├── help_tab.py             # build_help_tab() + _page_header() + _section/_entry/_subsection helpers (Sprint 17)
 │   ├── npcap_banner.py         # Npcap install required banner (Store context)
 │   ├── skeleton.py             # Skeleton loading placeholder (root-level variant)
 │   ├── system_tray.py
@@ -164,7 +165,8 @@ netsentinel/
 │   │   ├── monitor_overview_page.py # Monitor Overview — aggregated view of all monitoring streams
 │   │   ├── mqtt_page.py            # MQTT/Home Assistant — broker config, discovery payloads, test publish
 │   │   ├── network_doc_page.py     # Network Doc — one-click HTML/Markdown snapshot
-│   │   ├── notif_channel_panels.py  # _NotifChannelsMixin — email/toast/webhook/log/alert-rules card builders (S14-3a)
+│   │   ├── notif_alert_history.py   # _NotifAlertHistoryMixin — alert history table + delivery/retry log + bulk actions (Sprint 17)
+│   │   ├── notif_channel_panels.py  # _NotifChannelsMixin — email/toast/webhook/alert-rules card builders + test helpers (S14-3a)
 │   │   ├── notif_extra_channels.py  # _NotifExtraChannelsMixin — Pushover/Ntfy/Telegram/Escalation/WeeklyDigest builders (Sprint 13)
 │   │   ├── notifications_page.py
 │   │   ├── ookla_cli_banner.py     # Dismissible install banner for Ookla CLI
@@ -201,7 +203,8 @@ netsentinel/
 │       ├── density_toggle.py       # Compact/comfortable row density toggle widget
 │       ├── device_popover.py       # Hover popover showing quick device info
 │       ├── explainer_panel.py      # Reusable inline explanation panel (Lab Mode, Protocol Viz)
-│       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers
+│       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers, _MiniCard, _AlertRow
+│       ├── home_session_widgets.py # FreshnessStrip, GettingStartedCard, _GradeBreakdownDialog, StandardWelcomePage, ProWelcomePage (Sprint 17)
 │       ├── credential_dialog.py    # show_credential_dialog() + show_unsigned_warning() — standalone plugin credential dialogs (S14-2 split)
 │       ├── device_detail_pane.py   # _DeviceLabelDialog, _DeviceDrawer, _ScanCompareDialog — InventoryPage helper dialogs (Sprint 13)
 │       ├── device_detail_panels.py # _ModemDetailPanel, _RouterDetailPanel — hardware detail panels (Sprint 13 split)

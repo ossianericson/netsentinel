@@ -20,9 +20,9 @@ from ui.styles import (
     GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.home_widgets import (
-    _load_grade_history, _GRADE_HISTORY_KEY,
-    _GradeBreakdownDialog, _AlertRow,
+    _load_grade_history, _GRADE_HISTORY_KEY, _AlertRow,
 )
+from ui.widgets.home_session_widgets import _GradeBreakdownDialog
 
 try:
     from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES

@@ -56,6 +56,7 @@ _UI_BUDGETS: dict[str, int] = {
     "ui/pages/ip_calculator_page.py": 0,   # was 6
     "ui/pages/log_source_panel.py": 0,     # was 6
     "ui/pages/notif_channel_panels.py": 0, # was 6
+    "ui/pages/notif_alert_history.py": 0,  # Sprint 17 new file
     "ui/pages/diagnosis_page.py": 0,
     "ui/pages/trigger_builder_page.py": 0, # was 5
     "ui/pages/protocol_viz_page.py": 0,    # was 5
@@ -74,6 +75,7 @@ _UI_BUDGETS: dict[str, int] = {
     "ui/pages/home_automation_page.py": 0, # was 3
     "ui/pages/syslog_page.py": 0,          # was 3
     "ui/widgets/home_widgets.py": 0,       # was 3
+    "ui/widgets/home_session_widgets.py": 0,  # Sprint 17 new file
     "ui/widgets/hub_card.py": 0,           # was 3
     "ui/npcap_banner.py": 0,               # was 2
     "ui/pages/cert_page.py": 0,            # was 2
