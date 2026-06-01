@@ -39,7 +39,7 @@ from modules.metric_store_schema import (
     KnownDevice, MeshSignalPoint, ModemSignalPoint, RttPoint,
     ServiceCheckPoint, SpeedTestPoint,
 )
-from modules.metric_store_queries import MetricStoreQueryMixin
+from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
 
 
 class MetricStore(MetricStoreQueryMixin):
@@ -74,7 +74,7 @@ class MetricStore(MetricStoreQueryMixin):
             self._db_path   = None
         else:
             self._backend   = "sqlite"
-            self._db_path   = Path(db_path) if db_path else self._default_path()
+            self._db_path   = Path(db_path) if db_path else _default_db_path()
             self._local     = threading.local()
             self._sa_engine = None
             # S6-1: checkpoint WAL if it has grown large before opening
@@ -595,29 +595,3 @@ class MetricStore(MetricStoreQueryMixin):
             (int(_time.time()), grade, score, verdict),
         )
 
-    # ── Path resolution (three-tier) ─────────────────────────────────────────
-
-    @staticmethod
-    def _default_path() -> Path:
-        """
-        Resolve the default DB path:
-          1. Same directory as the running exe (portable)
-          2. %LOCALAPPDATA%\\NetSentinel\\NetSentinel.db  (installed build)
-          3. ~/.config/NetSentinel/metrics.db  (Linux / macOS)
-        """
-        import sys as _sys
-        from modules.utils import get_app_data_dir
-
-        if getattr(_sys, "frozen", False):
-            exe_dir = Path(_sys.executable).parent
-        else:
-            exe_dir = Path(__file__).resolve().parent.parent
-
-        candidate = exe_dir / "NetSentinel.db"
-        try:
-            candidate.touch(exist_ok=True)
-            return candidate
-        except OSError:
-            pass
-
-        return get_app_data_dir() / "NetSentinel.db"

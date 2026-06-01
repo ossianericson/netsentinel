@@ -110,7 +110,8 @@ _MODULE_BUDGETS: dict[str, int] = {
     "modules/web_dashboard.py": 21,
     "modules/report_html.py": 22,
     "modules/net_doc_generator.py": 13,
-    "modules/report_exporter.py": 4,
+    "modules/report_exporter.py": 0,
+    "modules/report_isp.py": 4,   # inherited from report_exporter.py split (S20-5)
     "modules/network_benchmark.py": 1,
 }
 

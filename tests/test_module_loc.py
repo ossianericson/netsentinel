@@ -20,31 +20,8 @@ DEFAULT_BUDGET = 600
 # Each entry documents WHY and WHAT the split should be.
 # Budgets are set to current actuals + a small margin; tighten as splits land.
 KNOWN_LARGE_MODULES: dict[str, int] = {
-    # Write methods + connection management + S6 health improvements.
-    # Schema/DDL/dataclasses → metric_store_schema.py (S2-1).
-    # Read/query methods → metric_store_queries.py via MetricStoreQueryMixin (S2-1).
-    # Slightly over 600; trim record_speed_test args or split HA methods to hit 600.
-    "metric_store.py": 650,  # actual 623 + margin (was 1700; tightened S2-1)
-    # Public API: save_report, save_json/csv/nmap_xml, ISP report, card, lab HTML.
-    # HTML helpers → report_html.py (S2-2); PDF layout → report_pdf.py (S2-2).
-    # Further split target: extract generate_isp_report → report_isp.py.
-    "report_exporter.py": 750,  # actual 716 + margin (was 1300; tightened S2-2)
-    # Three-tier speed test cascade (Ookla CLI + speedtest-cli + pure-Python).
-    # Natural split: each backend → speed_tester_ookla.py,
-    # speed_tester_lib.py, speed_tester_http.py.
-    "speed_tester.py": 760,
-    # Background ping logger + CSV rotation + file management.
-    # Natural split: CSV writer → network_log_writer.py.
-    "network_logger.py": 740,
-    # AlertEngine rule evaluation + suppression + digest pipeline.
-    # Natural split: suppression logic → alert_suppressor.py.
-    "alert_engine.py": 700,
-    # Multi-channel notification dispatch (Email/Webhook/Pushover/Ntfy/Telegram).
-    # Natural split: per-channel classes → notification_channels.py.
-    "notification_router.py": 680,
-    # SSH/SMB/FTP/Telnet credentialed scan logic.
-    # Natural split: per-protocol probers → credentialed_scan_ssh.py etc.
-    "credentialed_scan.py": 670,
+    # All 7 previously-exempted modules were split in Sprint 20 (S20-1 through S20-7).
+    # No modules currently exceed the 600-line default budget.
 }
 
 

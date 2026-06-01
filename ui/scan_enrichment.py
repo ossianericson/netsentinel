@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import QTableWidgetItem
 from ui.tabs import _add_row
 from ui.styles import (
     ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER,
-    BG_CARD, BORDER, BLUE, GREEN, RED,
+    BG_CARD, BG_DARK, BORDER, BLUE, GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
 )
 

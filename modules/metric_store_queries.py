@@ -6,6 +6,7 @@ MetricStoreQueryMixin is used via multiple inheritance in MetricStore.
 All symbols are accessible through MetricStore instances as before.
 """
 import time
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from modules.metric_store_schema import (
@@ -13,6 +14,31 @@ from modules.metric_store_schema import (
     KnownDevice, MeshSignalPoint, ModemSignalPoint, RttPoint,
     ServiceCheckPoint, SpeedTestPoint,
 )
+
+
+def _default_db_path() -> Path:
+    """
+    Resolve the default DB path:
+      1. Same directory as the running exe (portable)
+      2. %LOCALAPPDATA%\\NetSentinel\\NetSentinel.db  (installed build)
+      3. ~/.config/NetSentinel/metrics.db  (Linux / macOS)
+    """
+    import sys as _sys
+    from modules.utils import get_app_data_dir
+
+    if getattr(_sys, "frozen", False):
+        exe_dir = Path(_sys.executable).parent
+    else:
+        exe_dir = Path(__file__).resolve().parent.parent
+
+    candidate = exe_dir / "NetSentinel.db"
+    try:
+        candidate.touch(exist_ok=True)
+        return candidate
+    except OSError:
+        pass
+
+    return get_app_data_dir() / "NetSentinel.db"
 
 
 class MetricStoreQueryMixin:

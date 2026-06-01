@@ -1034,16 +1034,16 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 51 | ✅ S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | 10 | v1.9.62 | arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner — 140 new tests |
 | 52 | ✅ S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | 12 | v1.9.62 | diagnostic_card, digest_builder, hw_detect, lab_scenarios, network_diagnostics, private_endpoint_checker, speed_tester, combined_discovery + dhcp_detector/dhcp_lease_scanner — 73 new tests |
 | 53 | ✅ S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | 14 | v1.9.64 | All 70 modules covered (2 exempt: metric_store_schema, metric_store_queries, report_html); Sprint 14 |
-| 54 | ⏳ S3-4: Remove KNOWN_LARGE_MODULES exemptions when files reach ≤600 lines | 20 | v1.9.67 | Closes when all 7 Sprint 20 splits land (see Sprint 20 queue below) |
+| 54 | ✅ S3-4: Remove KNOWN_LARGE_MODULES exemptions when files reach ≤600 lines | 20 | v1.9.67 | All 7 splits landed in Sprint 20; LOC gate now enforces default 600 for all modules |
 | — | **— Sprint 20 (target v1.9.67) —** | — | — | — |
-| 68 | S20-1: `metric_store.py` 623→≤600 | 20 | v1.9.67 | Move helpers to `metric_store_queries.py` (already exists); remove KNOWN_LARGE_MODULES entry |
-| 69 | S20-2: `credentialed_scan.py` 649→≤600 | 20 | v1.9.67 | Extract per-protocol helper fns → `credentialed_scan_helpers.py` |
-| 70 | S20-3: `notification_router.py` 655→≤600 | 20 | v1.9.67 | Extract per-channel dispatch classes → `notification_channels.py` |
-| 71 | S20-4: `alert_engine.py` 673→≤600 | 20 | v1.9.67 | Extract suppression + digest pipeline → `alert_suppressor.py` |
-| 72 | S20-5: `report_exporter.py` 716→≤600 | 20 | v1.9.67 | Extract ISP report builder → `report_isp.py` |
-| 73 | S20-6: `network_logger.py` 718→≤600 | 20 | v1.9.67 | Extract CSV writer + file-rotation logic → `network_log_writer.py` |
-| 74 | S20-7: `speed_tester.py` 741→≤600 | 20 | v1.9.67 | Extract backend implementations → `speed_tester_backends.py` |
-| 75 | S20-8: Remove all 7 KNOWN_LARGE_MODULES exemptions; verify LOC gate enforces default 600 | 20 | v1.9.67 | S3-4 closes here — plan 100% complete |
+| 68 | ✅ S20-1: `metric_store.py` 623→597 | 20 | v1.9.67 | `_default_db_path()` moved to `metric_store_queries.py`; metric_store.py now 597 lines |
+| 69 | ✅ S20-2: `credentialed_scan.py` 649→140 | 20 | v1.9.67 | Dataclasses + SSH backends + parsers → `credentialed_scan_helpers.py` (467 lines) |
+| 70 | ✅ S20-3: `notification_router.py` 655→454 | 20 | v1.9.67 | 7 delivery functions → `notification_channels.py` (220 lines) |
+| 71 | ✅ S20-4: `alert_engine.py` 673→569 | 20 | v1.9.67 | EscalationPolicy + _default_rules + rule_settings_key → `alert_suppressor.py` (122 lines) |
+| 72 | ✅ S20-5: `report_exporter.py` 716→464 | 20 | v1.9.67 | ISP report builder → `report_isp.py` (269 lines); re-exported from report_exporter |
+| 73 | ✅ S20-6: `network_logger.py` 718→356 | 20 | v1.9.67 | Dataclasses + reader + summary + analysis → `network_log_writer.py` (369 lines) |
+| 74 | ✅ S20-7: `speed_tester.py` 741→143 | 20 | v1.9.67 | All 3 backends + dataclasses → `speed_tester_backends.py` (539 lines) |
+| 75 | ✅ S20-8: Remove all 7 KNOWN_LARGE_MODULES exemptions; LOC gate enforces default 600 | 20 | v1.9.67 | S3-4 closed — STABILITY_PLAN 100% complete |
 | — | **— APM audit findings (2026-05-29) — delivered below —** | — | — | — |
 | 55 | ✅ S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | 2 | v1.9.58 | Done; `ui.help` also added |
 | 56 | ✅ S12-2: Deduplicate 4 duplicate spec entries | 2 | v1.9.58 | Removed deco_client, diagnostic_card, wifi_heatmap, trigger_builder_page duplicates |
@@ -1150,3 +1150,5 @@ These augment the principles in `PLUGIN_ROBUSTNESS_PLAN.md`:
 | S20-8 | Remove all 7 entries from `KNOWN_LARGE_MODULES`; verify default budget enforces them | — | — | After all splits: remove exemptions, run `python -m pytest tests/test_module_loc.py` |
 
 Each split follows the S2-1/S2-2/S2-3 pattern: new file, re-export all public names from original for backwards compat, add import test + behavioural test for new file (RULE-T1), add hiddenimport to `NetSentinel.spec` (RULE-B1).
+
+**Sprint 20 delivered (2026-06-01):** All 7 module splits complete ✅ — `metric_store.py` 623→597 (`_default_db_path` → `metric_store_queries`), `credentialed_scan.py` 649→140 (dataclasses+SSH backends → `credentialed_scan_helpers.py`), `notification_router.py` 655→454 (delivery fns → `notification_channels.py`), `alert_engine.py` 673→569 (EscalationPolicy+rules → `alert_suppressor.py`), `report_exporter.py` 716→464 (ISP builder → `report_isp.py`), `network_logger.py` 718→356 (dataclasses+analysis → `network_log_writer.py`), `speed_tester.py` 741→143 (all 3 backends+dataclasses → `speed_tester_backends.py`). KNOWN_LARGE_MODULES cleared. S3-4 closed. Architecture docs + spec hiddenimports + 7 new test files added. **STABILITY_PLAN 100% COMPLETE. 2649 tests pass, 5 skipped.**
