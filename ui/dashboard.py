@@ -1646,11 +1646,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             try:
                 gw_ip  = self._net_info.get("gateway")     if self._net_info else None
                 gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+                _mu, _me = self._effective_mesh_render_params()
                 self._topology_widget.render(
                     self._m1_result.get("devices", []), gw_ip, gw_mac,
-                    mesh_units=getattr(self, "_mesh_units", None),
-                    mesh_enrichment=getattr(self, "_mesh_enrichment", None),
-                    modem_data=data,
+                    mesh_units=_mu, mesh_enrichment=_me, modem_data=data,
                 )
             except Exception:
                 pass

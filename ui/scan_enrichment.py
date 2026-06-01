@@ -649,6 +649,42 @@ class ScanEnrichmentMixin:
                 )
                 break
 
+    def _effective_mesh_render_params(self) -> tuple:
+        """Return (mesh_units, mesh_enrichment) merging native and plugin sources.
+
+        Native MeshWorker data takes priority; plugin node/client data is used
+        as fallback so topology renders correctly for plugin-only mesh users.
+        """
+        _all_plugin: dict = {}
+        for _pe in self._plugin_enrichments.values():
+            _all_plugin.update(_pe)
+
+        _eff_units  = getattr(self, "_mesh_units", None)
+        _eff_enrich = self._mesh_enrichment or None
+
+        if not _eff_units and _all_plugin:
+            from types import SimpleNamespace as _SN
+            from modules.deco_client import _norm_mac
+            _pnodes_flat: list = []
+            for _pnlist in getattr(self, "_plugin_nodes", {}).values():
+                for _n in _pnlist:
+                    _pnodes_flat.append(_SN(
+                        name=_n.get("name", ""), role=_n.get("role", "satellite"),
+                        mac=_norm_mac(_n.get("mac", "")), online=True,
+                    ))
+            if _pnodes_flat:
+                _eff_units = _pnodes_flat
+                _single = _pnodes_flat[0].name if len(_pnodes_flat) == 1 else ""
+                _eff_enrich = {
+                    mac: _SN(mac=mac, ip=c.get("ip", ""), name=c.get("hostname", ""),
+                             band=c.get("band", ""),
+                             unit_name=c.get("unit", "") or _single,
+                             upload_kbps=0, download_kbps=0)
+                    for mac, c in _all_plugin.items()
+                }
+
+        return _eff_units, _eff_enrich
+
     def _apply_mesh_enrichment(self) -> None:
         """Merge MeshClient and plugin client data into the M1 table rows."""
         # Build the full plugin MAC→client map first so the guard below can
@@ -837,30 +873,7 @@ class ScanEnrichmentMixin:
         try:
             gw_ip  = self._net_info.get("gateway")     if self._net_info else None
             gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
-            _eff_units  = getattr(self, "_mesh_units", None)
-            _eff_enrich = self._mesh_enrichment or None
-            if not _eff_units and _all_plugin:
-                from types import SimpleNamespace as _SN
-                _pnodes_flat: list = []
-                for _pnlist in getattr(self, "_plugin_nodes", {}).values():
-                    for _n in _pnlist:
-                        _pnodes_flat.append(_SN(
-                            name=_n.get("name", ""), role=_n.get("role", "satellite"),
-                            mac=_norm_mac(_n.get("mac", "")), online=True,
-                        ))
-                if _pnodes_flat:
-                    _eff_units = _pnodes_flat
-                    # When there is exactly one AP node and plugins don't tag clients
-                    # with a "unit" field, default unit_name to that node's name so
-                    # _render_mesh can group clients under the satellite correctly.
-                    _single_node_name = _pnodes_flat[0].name if len(_pnodes_flat) == 1 else ""
-                    _eff_enrich = {
-                        mac: _SN(mac=mac, ip=c.get("ip", ""), name=c.get("hostname", ""),
-                                 band=c.get("band", ""),
-                                 unit_name=c.get("unit", "") or _single_node_name,
-                                 upload_kbps=0, download_kbps=0)
-                        for mac, c in _all_plugin.items()
-                    }
+            _eff_units, _eff_enrich = self._effective_mesh_render_params()
             self._topology_widget.render(
                 self._m1_result.get("devices", []), gw_ip, gw_mac,
                 mesh_units=_eff_units,
@@ -960,6 +973,7 @@ class ScanEnrichmentMixin:
     def _m1_flatten_table(self) -> None:
         """Strip satellite section headers — restore flat device list."""
         from PyQt6.QtGui import QColor as _QC
+        from ui.dashboard import _color_for_level
         rows_data = []
         for row in range(self._m1_table.rowCount()):
             first = self._m1_table.item(row, 0)
@@ -999,6 +1013,7 @@ class ScanEnrichmentMixin:
     def _regroup_m1_by_satellite(self) -> None:
         """Rebuild M1 table with collapsible satellite section header rows."""
         from PyQt6.QtGui import QColor, QFont
+        from ui.dashboard import _color_for_level
 
         # Collect device row data — skip any existing header rows
         rows_data = []
