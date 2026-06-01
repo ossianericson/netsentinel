@@ -1016,7 +1016,7 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 42 | ✅ S14-3a: notifications_page.py → notif_channel_panels.py (2,025 → 296 lines) | 7 | v1.9.62 | _NotifChannelsMixin with all card builders, log panel, test helpers |
 | 43 | ✅ S14-3b: log_hub_page.py → log_source_panel.py (1,848 → 892 lines) | 7 | v1.9.62 | _LogSourcePanelMixin + shared constants/helpers in log_source_panel.py |
 | 44 | ✅ S14-3c: settings_page.py → settings_cards.py (1,730 → 275 lines) | 7 | v1.9.62 | _SettingsCardsMixin + workers + helpers in settings_cards.py |
-| 45 | S13-5c: Tighten dashboard.py budget to 5,000 | 7 | v1.9.62 | After all S13 and S14 splits land — dashboard at 6,540; further extraction needed |
+| 45 | ✅ S13-5c: Tighten dashboard.py budget (target 5,000 → actual 2,167) | 7–19 | v1.9.66 | Sprint 19 far exceeded target: dashboard.py 6,540→1,967 lines; budget set to 2,167 (actual+200) |
 | — | **— Sprint 8 (target v1.9.62) —** | — | — | — |
 | 62 | ✅ LOC budget tightening — Sprint 7 follow-up | 8 | v1.9.62 | notifications_page→496, settings_page→482, log_hub_page→1092, hardware_integration_page added at 1986; 4 new Sprint 7 files tracked (notif_channel_panels 1843, log_source_panel 1137, settings_cards 1533) |
 | 63 | ✅ tabs.py sub-mixin split (3,302→949 lines) | 8 | v1.9.62 | `_ScanTabsMixin`→`ui/tabs_scan.py` (739 lines); `_NetworkTabsMixin`→`ui/tabs_network.py` (347 lines); `_DiagTabsMixin`→`ui/tabs_diag.py` (1,182 lines); helper functions→`ui/tabs_helpers.py` (222 lines); tabs.py budget tightened to 1,149 |
@@ -1034,7 +1034,7 @@ then worker coverage (S5), then test/prevention coverage (S9, S10).
 | 51 | ✅ S9-2: Tests for Tier 2 modules — scan/detection (18 modules) | 10 | v1.9.62 | arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner — 140 new tests |
 | 52 | ✅ S9-3: Tests for Tier 3 modules — report/enrichment (10 modules) | 12 | v1.9.62 | diagnostic_card, digest_builder, hw_detect, lab_scenarios, network_diagnostics, private_endpoint_checker, speed_tester, combined_discovery + dhcp_detector/dhcp_lease_scanner — 73 new tests |
 | 53 | ✅ S9-4: `test_module_coverage_gate.py` — CI gate for module test completeness | 14 | v1.9.64 | All 70 modules covered (2 exempt: metric_store_schema, metric_store_queries, report_html); Sprint 14 |
-| 54 | S3-4: Update `test_module_loc.py` to remove exemptions post-split | TBD | TBD | Remove each KNOWN_LARGE_MODULES entry as its split lands |
+| 54 | ⏳ S3-4: Remove KNOWN_LARGE_MODULES exemptions when files reach ≤600 lines | ongoing | — | 7 modules still 623–741 lines (metric_store, report_exporter, speed_tester, network_logger, alert_engine, notification_router, credentialed_scan); exemptions remain valid until further splits land — this is the only open item in the plan |
 | — | **— APM audit findings (2026-05-29) — delivered below —** | — | — | — |
 | 55 | ✅ S12-1: Add `modules.nspkg` + `modules.plugin_tools` to spec hiddenimports | 2 | v1.9.58 | Done; `ui.help` also added |
 | 56 | ✅ S12-2: Deduplicate 4 duplicate spec entries | 2 | v1.9.58 | Removed deco_client, diagnostic_card, wifi_heatmap, trigger_builder_page duplicates |
