@@ -62,9 +62,10 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     #   ui/app_settings.py  — _restore_settings, _save_settings (S13-4)
     # Target after all splits: ≤3,000 lines.
     # Tighten after S13-1: 7,200; S13-2: 6,500; S13-3: 6,000; S13-4: 5,700
-    # S13-1 delivered: TabBuilderMixin extracted to ui/tabs.py (3,302 lines).
-    # Next target: ≤3,000 lines once remaining recon tab builders are extracted.
-    "dashboard.py": 6672,  # actual 6,472 + 200 margin (Sprint 17 — no further extraction this sprint)
+    # Sprint 18: _AnalysisTabsMixin + ScanEnrichmentMixin wired; recon tabs → tabs_recon.py;
+    # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
+    # Next target: ≤3,000 lines (remaining: nav helpers, verdict/badge methods, misc handlers).
+    "dashboard.py": 4292,  # actual 4,092 + 200 margin (Sprint 18)
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -101,8 +102,9 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     "widgets/overview_tile.py": 1950,  # actual 1,867 + margin (Sprint 4 new file; S15-1)
 
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
+    # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1300,  # actual 1,274 + margin (Sprint 4 new file; S15-1)
+    "scan_wiring.py": 876,  # actual 676 + margin (Sprint 18 duplicate removal)
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.
@@ -188,13 +190,20 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # _SettingsAppearanceMixin — appearance + display card builders.
     "pages/settings_appearance.py": 406,  # actual 206 + 200 margin (Sprint 13 new file)
 
-    # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers.
-    # If grows past 900, split by domain: mesh_enrichment.py, plugin_enrichment.py.
-    "scan_enrichment.py": 834,  # actual 634 + 200 margin (Sprint 13 new file)
+    # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers + M1 table helpers.
+    # Sprint 18: _apply_mesh_enrichment + _m1_* + _filter_m1_by_nl moved here from dashboard.py.
+    # If grows past 1,500, split: mesh_enrichment.py (apply + m1 helpers), plugin_enrichment.py.
+    "scan_enrichment.py": 1429,  # actual 1,229 + 200 margin (Sprint 18)
 
     # _AnalysisTabsMixin — IPv6/Cloud/Correlator/IoT/Benchmark tab builders.
+    # Sprint 18: wired into TabBuilderMixin; duplicates removed from dashboard.py.
     # Natural split: extract IoT + Benchmark tabs → tabs_analysis_extra.py if > 1,000.
     "tabs_analysis.py": 1047,  # actual 847 + 200 margin (Sprint 13 new file)
+
+    # _ReconTabsMixin — security-audit recon tab builders (SYN/UDP/OS/Risk/CVE/Exposure/
+    # Cred/Discovery/SMB/Plugin/PE).  Extracted from dashboard.py (Sprint 18).
+    # If grows past 1,300, split into tabs_recon_network.py + tabs_recon_access.py.
+    "tabs_recon.py": 1185,  # actual 985 + 200 margin (Sprint 18 new file)
 
     # _DiagExtraTabsMixin — MTR tab + advanced tools tab + handlers.
     # Logger methods removed (Sprint 16) — now inherits into _DiagTabsMixin cleanly.

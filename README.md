@@ -320,6 +320,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.66
+
+**Changed**
+- `ui/dashboard.py`: 6,472→4,092 lines (−2,380) — `_AnalysisTabsMixin` and `ScanEnrichmentMixin` wired into inheritance chain; 31 duplicate methods removed from `dashboard.py` and `scan_wiring.py`; mesh enrichment + M1 table helpers moved to `scan_enrichment.py`; all recon security tab builders extracted to `ui/tabs_recon.py` (Sprint 18)
+- `ui/scan_wiring.py`: 1,279→676 lines — inherits `ScanEnrichmentMixin`; 12 duplicate enrichment methods removed
+- `ui/scan_enrichment.py`: 634→1,230 lines — `_apply_mesh_enrichment`, `_regroup_m1_by_satellite`, `_filter_m1_by_nl`, and 7 M1 table helpers added from `dashboard.py`
+
+**Added**
+- `ui/tabs_recon.py` — `_ReconTabsMixin`: 29 security-audit recon tab builders and handlers (SYN scan, UDP scan, OS fingerprint, Risk Score, CVE, Exposure, Credentialed SSH, Full Discovery, SMB, Plugins, Private Endpoint); wired into `TabBuilderMixin` (Sprint 18)
+
 ### v1.9.65
 
 **Changed**

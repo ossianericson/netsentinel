@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
 
@@ -632,3 +632,598 @@ class ScanEnrichmentMixin:
             self._recon_smb_users_table.insertRow(r)
             for c, v in enumerate([u.username, u.uid, u.full_name, u.last_logon]):
                 self._recon_smb_users_table.setItem(r, c, _TWI(v))
+
+    # ── M1 table / mesh enrichment helpers (Sprint 18) ─────────────────────────
+
+    def _m1_highlight_mac(self, mac: str) -> None:
+        """Scroll the Devices table to the row matching `mac` and select it."""
+        if not hasattr(self, "_m1_table"):
+            return
+        mac_lower = mac.lower()
+        for row in range(self._m1_table.rowCount()):
+            item = self._m1_table.item(row, 2)  # MAC Address column
+            if item and item.text().lower() == mac_lower:
+                self._m1_table.selectRow(row)
+                self._m1_table.scrollToItem(
+                    item, self._m1_table.ScrollHint.PositionAtCenter
+                )
+                break
+
+    def _apply_mesh_enrichment(self) -> None:
+        """Merge MeshClient and plugin client data into the M1 table rows."""
+        # Build the full plugin MAC→client map first so the guard below can
+        # check whether there is any data to apply (RULE-PL4).
+        _all_plugin: dict = {}
+        for _pe in self._plugin_enrichments.values():
+            _all_plugin.update(_pe)
+        # Only proceed if there is a scan result AND at least one enrichment source.
+        if not self._m1_result or (not self._mesh_enrichment and not _all_plugin):
+            return
+
+        from PyQt6.QtGui import QColor
+        from modules.deco_client import _norm_mac
+
+        _mac_re = __import__("re").compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", __import__("re").I)
+        any_matched = False
+        plugin_any_matched = False
+
+        for row in range(self._m1_table.rowCount()):
+            mac_item = self._m1_table.item(row, 2)
+            if not mac_item:
+                continue
+            mc = self._mesh_enrichment.get(_norm_mac(mac_item.text()))
+            if not mc:
+                continue
+
+            any_matched = True
+
+            # Override hostname (col 1) with Deco-assigned name when it looks like a real name
+            if mc.name and not _mac_re.match(mc.name):
+                name_item = QTableWidgetItem(mc.name)
+                name_item.setForeground(QColor(TEXT_PRIMARY))
+                name_item.setToolTip("Name assigned in Deco app")
+                self._m1_table.setItem(row, 1, name_item)
+
+            # Node column (col 6)
+            node_item = QTableWidgetItem(mc.unit_name)
+            node_item.setForeground(QColor(TEXT_PRIMARY))
+            self._m1_table.setItem(row, 6, node_item)
+
+            # Band column (col 7) with speed tooltip
+            band_item = QTableWidgetItem(mc.band)
+            band_item.setForeground(QColor(TEXT_PRIMARY))
+            band_item.setToolTip(
+                f"Upload:   {mc.upload_kbps} KB/s\n"
+                f"Download: {mc.download_kbps} KB/s"
+            )
+            self._m1_table.setItem(row, 7, band_item)
+
+        # Reveal Node and Band columns once any Deco data is present
+        if any_matched:
+            self._m1_table.setColumnHidden(6, False)
+            self._m1_table.setColumnHidden(7, False)
+            if self._m1_group_by_node:
+                self._regroup_m1_by_satellite()
+
+        # Plugin enrichment — update hostname column for any matching MAC or IP
+        plugin_enrichment = _all_plugin
+        plugin_name = getattr(self, "_plugin_hardware_name", "plugin")
+        if plugin_enrichment:
+            # Build IP index as fallback for MAC-randomized devices (iOS/Android)
+            plugin_by_ip = {c.get("ip"): c for c in plugin_enrichment.values() if c.get("ip")}
+            for row in range(self._m1_table.rowCount()):
+                mac_item = self._m1_table.item(row, 2)
+                pc = plugin_enrichment.get(_norm_mac(mac_item.text())) if mac_item else None
+                if pc is None:
+                    ip_item = self._m1_table.item(row, 0)
+                    if ip_item:
+                        pc = plugin_by_ip.get(ip_item.text())
+                if not pc:
+                    continue
+                plugin_any_matched = True
+                # Backfill MAC into the table row when ARP scan left it blank
+                if (not mac_item or not mac_item.text()) and pc.get("mac"):
+                    _mac_fill = QTableWidgetItem(pc["mac"])
+                    _mac_fill.setForeground(QColor(TEXT_PRIMARY))
+                    _mac_fill.setToolTip(f"MAC from {plugin_name}")
+                    self._m1_table.setItem(row, 2, _mac_fill)
+                hostname = pc.get("hostname", "")
+                if hostname and not _mac_re.match(hostname):
+                    name_item = QTableWidgetItem(hostname)
+                    name_item.setForeground(QColor(TEXT_PRIMARY))
+                    name_item.setToolTip(f"Name from {plugin_name}")
+                    self._m1_table.setItem(row, 1, name_item)
+                # Fall back to hw name so single-AP plugins still enable grouping
+                unit = pc.get("unit", "") or plugin_name
+                if unit:
+                    node_item = QTableWidgetItem(unit)
+                    node_item.setForeground(QColor(TEXT_PRIMARY))
+                    node_item.setToolTip(f"Node from {plugin_name}")
+                    self._m1_table.setItem(row, 6, node_item)
+                    self._m1_table.setColumnHidden(6, False)
+                band = pc.get("band", "")
+                if band:
+                    band_item = QTableWidgetItem(band)
+                    band_item.setForeground(QColor(TEXT_PRIMARY))
+                    band_item.setToolTip(f"Band from {plugin_name}")
+                    self._m1_table.setItem(row, 7, band_item)
+                    self._m1_table.setColumnHidden(7, False)
+
+        if plugin_any_matched and self._m1_group_by_node:
+            self._regroup_m1_by_satellite()
+
+        # Mirror enrichment onto DeviceInfo objects so exports include it
+        for d in self._m1_result.get("devices", []):
+            mac = _norm_mac(d.mac if not isinstance(d, dict) else d.get("mac", ""))
+            mc = self._mesh_enrichment.get(mac)
+            if mc:
+                if isinstance(d, dict):
+                    d["mesh_unit"]      = mc.unit_name
+                    d["mesh_band"]      = mc.band
+                    d["mesh_up_kbps"]   = mc.upload_kbps
+                    d["mesh_down_kbps"] = mc.download_kbps
+                else:
+                    d.mesh_unit      = mc.unit_name
+                    d.mesh_band      = mc.band
+                    d.mesh_up_kbps   = mc.upload_kbps
+                    d.mesh_down_kbps = mc.download_kbps
+
+        # Mirror plugin band/unit onto DeviceInfo objects so exports include them
+        for d in self._m1_result.get("devices", []):
+            _dmac = _norm_mac(d.mac if not isinstance(d, dict) else d.get("mac", ""))
+            _pc = _all_plugin.get(_dmac)
+            if not _pc:
+                continue
+            _pu, _pb = _pc.get("unit", ""), _pc.get("band", "")
+            if _pu:
+                if isinstance(d, dict): d["mesh_unit"] = _pu
+                else: d.mesh_unit = _pu
+            if _pb:
+                if isinstance(d, dict): d["mesh_band"] = _pb
+                else: d.mesh_band = _pb
+
+        # Sync every enriched hostname from the table back onto the DeviceInfo
+        # objects so the topology render sees the same names as the Devices table.
+        # This captures all enrichment sources (mesh, mDNS, DHCP, NetBIOS).
+        _mac_to_host: dict = {}
+        for _r in range(self._m1_table.rowCount()):
+            _h = self._m1_table.item(_r, 1)
+            _m = self._m1_table.item(_r, 2)
+            if _h and _m and _m.text():
+                txt = _h.text().strip()
+                if txt and txt != "—":
+                    _mac_to_host[_norm_mac(_m.text())] = txt
+        for _d in self._m1_result.get("devices", []):
+            _dmac = _norm_mac(_d.mac if not isinstance(_d, dict) else _d.get("mac", ""))
+            if _dmac in _mac_to_host:
+                if isinstance(_d, dict):
+                    _d["hostname"] = _mac_to_host[_dmac]
+                else:
+                    _d.hostname = _mac_to_host[_dmac]
+
+        # Refresh the Network Info tab device table with enriched hostnames
+        try:
+            self._net_devices_table.setRowCount(0)
+            for _d in self._m1_result.get("devices", []):
+                _level  = _d.risk_level if not isinstance(_d, dict) else _d.get("risk_level", "UNKNOWN")
+                _ip     = _d.ip         if not isinstance(_d, dict) else _d.get("ip", "?")
+                _host   = _d.hostname   if not isinstance(_d, dict) else _d.get("hostname", "")
+                _mac    = _d.mac        if not isinstance(_d, dict) else _d.get("mac", "?")
+                _vendor = _d.vendor     if not isinstance(_d, dict) else _d.get("vendor", "Unknown")
+                _add_row(self._net_devices_table, [_ip, _host or "—", _mac, _vendor, _level], _level)
+        except Exception:
+            pass
+
+        # Refresh AvailabilityWorker targets so Uptime page labels use enriched names
+        try:
+            if hasattr(self, "_avail_worker") and self._m1_result:
+                from modules.availability_monitor import TargetConfig
+                _targets = []
+                for _d in self._m1_result.get("devices", []):
+                    _ip  = _d.ip       if not isinstance(_d, dict) else _d.get("ip", "")
+                    _mac = _d.mac      if not isinstance(_d, dict) else _d.get("mac", "")
+                    _hn  = _d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")
+                    if _ip:
+                        _targets.append(TargetConfig(
+                            host=_ip, mac=_mac or None,
+                            hostname=_hn or None, label=_hn or _ip,
+                        ))
+                if _targets:
+                    self._avail_worker.set_targets(_targets)
+        except Exception:
+            pass
+
+        # Re-render topology — native mesh preferred; fall back to plugin node data
+        try:
+            gw_ip  = self._net_info.get("gateway")     if self._net_info else None
+            gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+            _eff_units  = getattr(self, "_mesh_units", None)
+            _eff_enrich = self._mesh_enrichment or None
+            if not _eff_units and _all_plugin:
+                from types import SimpleNamespace as _SN
+                _pnodes_flat: list = []
+                for _pnlist in getattr(self, "_plugin_nodes", {}).values():
+                    for _n in _pnlist:
+                        _pnodes_flat.append(_SN(
+                            name=_n.get("name", ""), role=_n.get("role", "satellite"),
+                            mac=_norm_mac(_n.get("mac", "")), online=True,
+                        ))
+                if _pnodes_flat:
+                    _eff_units = _pnodes_flat
+                    # When there is exactly one AP node and plugins don't tag clients
+                    # with a "unit" field, default unit_name to that node's name so
+                    # _render_mesh can group clients under the satellite correctly.
+                    _single_node_name = _pnodes_flat[0].name if len(_pnodes_flat) == 1 else ""
+                    _eff_enrich = {
+                        mac: _SN(mac=mac, ip=c.get("ip", ""), name=c.get("hostname", ""),
+                                 band=c.get("band", ""),
+                                 unit_name=c.get("unit", "") or _single_node_name,
+                                 upload_kbps=0, download_kbps=0)
+                        for mac, c in _all_plugin.items()
+                    }
+            self._topology_widget.render(
+                self._m1_result.get("devices", []), gw_ip, gw_mac,
+                mesh_units=_eff_units,
+                mesh_enrichment=_eff_enrich,
+                modem_data=getattr(self, "_last_modem_data", None),
+            )
+        except Exception:
+            pass
+
+        # Update the Deco band-usage chips on the WiFi Networks page
+        self._update_m4_deco_chips()
+
+        # Synthesize M1 rows for mesh clients that ARP scan did not see
+        # (e.g. phones connected to a satellite that did not respond to ARP)
+        _existing_macs: set = set()
+        _existing_ips: set = set()
+        for _r in range(self._m1_table.rowCount()):
+            _mi = self._m1_table.item(_r, 2)
+            if _mi and _mi.text():
+                _existing_macs.add(_norm_mac(_mi.text()))
+            _ii = self._m1_table.item(_r, 0)
+            if _ii and _ii.text() and _ii.text() != "—":
+                _existing_ips.add(_ii.text().strip())
+        _synth_added = False
+        for _mc in self._mesh_enrichment.values():
+            if _norm_mac(_mc.mac) in _existing_macs:
+                continue
+            # Also skip if the device's IP is already in the table (ARP found it without MAC)
+            if _mc.ip and _mc.ip in _existing_ips:
+                continue
+            _add_row(
+                self._m1_table,
+                [_mc.ip or "—", _mc.name or "—", _mc.mac, "", "CLEAN",
+                 "Wireless Client", _mc.unit_name, _mc.band,
+                 "Mesh-only — not visible to ARP scan"],
+                "CLEAN",
+            )
+            _synth_item = self._m1_table.item(self._m1_table.rowCount() - 1, 0)
+            if _synth_item:
+                _synth_item.setData(Qt.ItemDataRole.UserRole + 10, "__mesh_synth__")
+            _existing_macs.add(_norm_mac(_mc.mac))
+            _synth_added = True
+        if _synth_added:
+            self._m1_table.setColumnHidden(6, False)
+            self._m1_table.setColumnHidden(7, False)
+
+        # Synthesize rows for plugin-only clients not seen by ARP scan
+        # (e.g. a phone connected to the router that didn't reply to ARP)
+        _plugin_synth_added = False
+        for _pmac, _pc in _all_plugin.items():
+            if not _pmac or _pmac in _existing_macs:
+                continue
+            _pip   = _pc.get("ip", "") or "—"
+            _phn   = _pc.get("hostname", "") or "—"
+            if _pip == "—" and _phn == "—":
+                continue  # nothing useful to show
+            # Skip if the device's IP is already in the table (ARP found it without MAC)
+            if _pip != "—" and _pip in _existing_ips:
+                continue
+            _add_row(
+                self._m1_table,
+                [_pip, _phn, _pmac, "", "CLEAN",
+                 "Wireless Client", _pc.get("unit", ""), _pc.get("band", ""),
+                 "Plugin-only — not visible to ARP scan"],
+                "CLEAN",
+            )
+            _psi = self._m1_table.item(self._m1_table.rowCount() - 1, 0)
+            if _psi:
+                _psi.setData(Qt.ItemDataRole.UserRole + 10, "__plugin_synth__")
+            _existing_macs.add(_pmac)
+            _plugin_synth_added = True
+        if _plugin_synth_added:
+            self._m1_table.setColumnHidden(6, False)
+            self._m1_table.setColumnHidden(7, False)
+
+        # Regroup M1 table into collapsible satellite sections (only when toggle is ON)
+        if (any_matched or _synth_added or plugin_any_matched or _plugin_synth_added) \
+                and getattr(self, "_m1_group_by_node", False):
+            self._regroup_m1_by_satellite()
+
+    @pyqtSlot(bool)
+    def _on_node_group_toggled(self, checked: bool) -> None:
+        self._m1_group_by_node = checked
+        QSettings("NetSentinel", "NetSentinel").setValue("devices/group_by_node", checked)
+        if hasattr(self, "_m1_seg_list"):
+            self._m1_seg_list.setStyleSheet(
+                self._m1_seg_inactive_ss if checked else self._m1_seg_active_ss
+            )
+            self._m1_seg_node.setStyleSheet(
+                self._m1_seg_active_ss if checked else self._m1_seg_inactive_ss
+            )
+        if checked:
+            self._regroup_m1_by_satellite()
+        else:
+            self._m1_flatten_table()
+
+    def _m1_flatten_table(self) -> None:
+        """Strip satellite section headers — restore flat device list."""
+        from PyQt6.QtGui import QColor as _QC
+        rows_data = []
+        for row in range(self._m1_table.rowCount()):
+            first = self._m1_table.item(row, 0)
+            if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                continue
+            cells, risk = [], "CLEAN"
+            for col in range(self._m1_table.columnCount()):
+                item = self._m1_table.item(row, col)
+                cells.append({
+                    "text":    item.text()    if item else "",
+                    "tooltip": item.toolTip() if item else "",
+                })
+            risk_item = self._m1_table.item(row, 4)
+            if risk_item:
+                risk = risk_item.text().strip()
+            rows_data.append({"cells": cells, "risk": risk})
+
+        if not rows_data:
+            return
+        self._m1_table.setSortingEnabled(False)
+        self._m1_table.setRowCount(0)
+        self._m1_group_btn.setVisible(False)
+        for rd in rows_data:
+            r = self._m1_table.rowCount()
+            self._m1_table.insertRow(r)
+            rc = _color_for_level(rd["risk"])
+            high = rd["risk"] in ("HIGH", "STORM")
+            for col, cell in enumerate(rd["cells"]):
+                item = QTableWidgetItem(cell["text"])
+                item.setForeground(_QC(rc if (col == 4 or high) else TEXT_PRIMARY))
+                if cell["tooltip"]:
+                    item.setToolTip(cell["tooltip"])
+                self._m1_table.setItem(r, col, item)
+        self._m1_table.resizeColumnsToContents()
+        self._m1_table.setSortingEnabled(True)
+
+    def _regroup_m1_by_satellite(self) -> None:
+        """Rebuild M1 table with collapsible satellite section header rows."""
+        from PyQt6.QtGui import QColor, QFont
+
+        # Collect device row data — skip any existing header rows
+        rows_data = []
+        for row in range(self._m1_table.rowCount()):
+            first = self._m1_table.item(row, 0)
+            if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                continue
+            cells = []
+            for col in range(self._m1_table.columnCount()):
+                item = self._m1_table.item(row, col)
+                cells.append({
+                    "text":    item.text() if item else "",
+                    "tooltip": item.toolTip() if item else "",
+                })
+            node_item = self._m1_table.item(row, 6)
+            node = (node_item.text().strip() if node_item else "") or "__unassigned__"
+            risk_item = self._m1_table.item(row, 4)
+            risk = risk_item.text().strip() if risk_item else "CLEAN"
+            rows_data.append({"cells": cells, "node": node, "risk": risk})
+
+        if not rows_data:
+            return
+
+        # Group by node
+        groups: dict = {}
+        for rd in rows_data:
+            groups.setdefault(rd["node"], []).append(rd)
+
+        sorted_nodes = sorted(k for k in groups if k != "__unassigned__")
+        has_named_nodes = bool(sorted_nodes)
+        self._m1_has_named_nodes = has_named_nodes
+        if "__unassigned__" in groups:
+            sorted_nodes.append("__unassigned__")
+
+        # Rebuild table — sorting must be off to prevent sentinel rows from scrambling
+        self._m1_table.setSortingEnabled(False)
+        self._m1_table.setRowCount(0)
+        n_cols = self._m1_table.columnCount()
+
+        for node_name in sorted_nodes:
+            device_rows = groups[node_name]
+            if node_name == "__unassigned__":
+                display_name = "Other / Direct" if has_named_nodes else "All devices"
+            else:
+                display_name = node_name
+            expanded = self._m1_sat_expanded.get(node_name, True)
+            arrow = "▼" if expanded else "▶"
+            nc = len(device_rows)
+
+            # Header row
+            hdr_row = self._m1_table.rowCount()
+            self._m1_table.insertRow(hdr_row)
+            hdr_text = f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}"
+            hdr_item = QTableWidgetItem(hdr_text)
+            hdr_item.setData(Qt.ItemDataRole.UserRole, "__sat_header__")
+            hdr_item.setData(Qt.ItemDataRole.UserRole + 1, node_name)
+            hdr_item.setForeground(QColor(TEXT_PRIMARY))
+            hdr_item.setBackground(QColor(BG_DARK))
+            f = QFont()
+            f.setBold(True)
+            f.setItalic(True)
+            hdr_item.setFont(f)
+            hdr_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            self._m1_table.setItem(hdr_row, 0, hdr_item)
+            self._m1_table.setSpan(hdr_row, 0, 1, n_cols)
+            self._m1_table.setRowHeight(hdr_row, 26)
+
+            # Device rows
+            for rd in device_rows:
+                dev_row = self._m1_table.rowCount()
+                self._m1_table.insertRow(dev_row)
+                risk_color = _color_for_level(rd["risk"])
+                high_risk = rd["risk"] in ("HIGH", "STORM")
+                for col, cell in enumerate(rd["cells"]):
+                    item = QTableWidgetItem(cell["text"])
+                    if col == 4:
+                        item.setForeground(QColor(risk_color))
+                    elif high_risk:
+                        item.setForeground(QColor(risk_color))
+                    else:
+                        item.setForeground(QColor(TEXT_PRIMARY))
+                    if cell["tooltip"]:
+                        item.setToolTip(cell["tooltip"])
+                    self._m1_table.setItem(dev_row, col, item)
+                if not expanded:
+                    self._m1_table.setRowHidden(dev_row, True)
+
+        self._m1_grouping_active = True
+        self._m1_group_btn.setVisible(True)
+        # Sorting stays OFF in grouped mode — re-enabled by _m1_flatten_table on switch back
+        # Connect click handler once
+        if not getattr(self, "_m1_group_click_connected", False):
+            self._m1_table.cellClicked.connect(self._m1_toggle_sat_section)
+            self._m1_group_click_connected = True
+
+    def _m1_toggle_sat_section(self, row: int, col: int) -> None:
+        """Toggle a satellite section open/closed when its header row is clicked."""
+        first = self._m1_table.item(row, 0)
+        if not first or first.data(Qt.ItemDataRole.UserRole) != "__sat_header__":
+            return
+        node_name = first.data(Qt.ItemDataRole.UserRole + 1)
+        expanded = not self._m1_sat_expanded.get(node_name, False)
+        self._m1_sat_expanded[node_name] = expanded
+
+        # Count device rows in this section (rows until next header or end)
+        nc = 0
+        next_row = row + 1
+        while next_row < self._m1_table.rowCount():
+            r_first = self._m1_table.item(next_row, 0)
+            if r_first and r_first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                break
+            nc += 1
+            next_row += 1
+
+        _hn = getattr(self, "_m1_has_named_nodes", False)
+        if node_name == "__unassigned__":
+            display_name = "Other / Direct" if _hn else "All devices"
+        else:
+            display_name = node_name
+        arrow = "▼" if expanded else "▶"
+        first.setText(f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}")
+
+        for dev_row in range(row + 1, next_row):
+            self._m1_table.setRowHidden(dev_row, not expanded)
+
+        # Update button label
+        self._m1_update_group_btn()
+
+    def _m1_set_all_expanded(self, expanded: bool) -> None:
+        """Show or hide all satellite sections without rebuilding the table."""
+        for row in range(self._m1_table.rowCount()):
+            first = self._m1_table.item(row, 0)
+            if not first or first.data(Qt.ItemDataRole.UserRole) != "__sat_header__":
+                continue
+            node_name = first.data(Qt.ItemDataRole.UserRole + 1)
+            self._m1_sat_expanded[node_name] = expanded
+
+            # Count and show/hide following device rows
+            nc = 0
+            next_row = row + 1
+            while next_row < self._m1_table.rowCount():
+                r_first = self._m1_table.item(next_row, 0)
+                if r_first and r_first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                    break
+                nc += 1
+                next_row += 1
+
+            _hn = getattr(self, "_m1_has_named_nodes", False)
+            if node_name == "__unassigned__":
+                display_name = "Other / Direct" if _hn else "All devices"
+            else:
+                display_name = node_name
+            arrow = "▼" if expanded else "▶"
+            first.setText(f"   {arrow}  {display_name}   ·   {nc} device{'s' if nc != 1 else ''}")
+            for dev_row in range(row + 1, next_row):
+                self._m1_table.setRowHidden(dev_row, not expanded)
+
+    def _m1_toggle_all_groups(self) -> None:
+        """Expand all if any are collapsed; collapse all if all are expanded."""
+        all_expanded = bool(self._m1_sat_expanded) and all(
+            self._m1_sat_expanded.get(n, False) for n in self._m1_sat_expanded
+        )
+        self._m1_set_all_expanded(not all_expanded)
+        self._m1_update_group_btn()
+
+    def _m1_update_group_btn(self) -> None:
+        """Sync the expand/collapse button label with current state."""
+        all_expanded = bool(self._m1_sat_expanded) and all(
+            self._m1_sat_expanded.get(n, False) for n in self._m1_sat_expanded
+        )
+        self._m1_group_btn.setText("▼▼  Collapse All" if all_expanded else "▶▶  Expand All")
+
+    @pyqtSlot(str)
+    def _filter_m1_by_nl(self, text: str):
+        """Filter Device Fingerprinter rows using the NL query engine."""
+        text = text.strip()
+        # Clear filter — restore each section's individual collapsed/expanded state
+        if not text:
+            if self._m1_grouping_active:
+                for row in range(self._m1_table.rowCount()):
+                    first = self._m1_table.item(row, 0)
+                    if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                        self._m1_table.setRowHidden(row, False)
+                        node_name = first.data(Qt.ItemDataRole.UserRole + 1)
+                        exp = self._m1_sat_expanded.get(node_name, False)
+                        next_row = row + 1
+                        while next_row < self._m1_table.rowCount():
+                            r = self._m1_table.item(next_row, 0)
+                            if r and r.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                                break
+                            self._m1_table.setRowHidden(next_row, not exp)
+                            next_row += 1
+            else:
+                for row in range(self._m1_table.rowCount()):
+                    self._m1_table.setRowHidden(row, False)
+            if self._m1_result:
+                self._m1_status.setText(
+                    f"✓  {self._m1_result.get('total_count', 0)} devices scanned — "
+                    f"{self._m1_result.get('high_risk_count', 0)} HIGH RISK"
+                )
+            return
+        if not self._m1_result:
+            return
+        try:
+            from modules.nl_query import query as _nl_query
+            devices = self._m1_result.get("devices", [])
+            result = _nl_query(devices, text)
+            if result.error:
+                self._m1_status.setText(f"⚠  {result.error}")
+                return
+            matched_ips = {
+                (m.device.ip if not isinstance(m.device, dict) else m.device.get("ip", ""))
+                for m in result.matches
+            }
+            for row in range(self._m1_table.rowCount()):
+                first = self._m1_table.item(row, 0)
+                if first and first.data(Qt.ItemDataRole.UserRole) == "__sat_header__":
+                    self._m1_table.setRowHidden(row, False)  # always keep headers visible
+                    continue
+                ip_item = first
+                ip = ip_item.text() if ip_item else ""
+                self._m1_table.setRowHidden(row, ip not in matched_ips)
+            self._m1_status.setText(
+                f"Filter: {len(matched_ips)} match(es) — {result.explanation}"
+            )
+        except Exception as exc:
+            self._m1_status.setText(f"Filter error: {exc}")
+

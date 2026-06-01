@@ -54,9 +54,11 @@ from ui.tabs_helpers import (  # noqa: F401 — intentional re-export
 from ui.tabs_scan import _ScanTabsMixin
 from ui.tabs_network import _NetworkTabsMixin
 from ui.tabs_diag import _DiagTabsMixin
+from ui.tabs_analysis import _AnalysisTabsMixin
+from ui.tabs_recon import _ReconTabsMixin
 
 
-class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin):
+class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _AnalysisTabsMixin, _ReconTabsMixin):
     """Mixin providing all tab/page content builders for Dashboard.
 
     Extracted from ui/dashboard.py (Sprint 6, S13-1).
