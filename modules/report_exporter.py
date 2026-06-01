@@ -22,8 +22,15 @@ from modules.report_html import (
     _CSS,
     _badge,
 )
-from modules.report_pdf import save_pdf_report  # noqa: F401 (re-export)
-from modules.report_isp import generate_isp_report, save_isp_report  # noqa: F401 (re-export)
+from modules.report_pdf import save_pdf_report
+from modules.report_isp import generate_isp_report, save_isp_report
+
+__all__ = [
+    "save_report", "save_json_report", "save_csv_report",
+    "save_nmap_report", "save_lab_report",
+    "generate_html", "save_pdf_report",
+    "generate_isp_report", "save_isp_report",
+]
 
 from modules.colours import (
     EXPORT_BG, EXPORT_TEXT, EXPORT_HEADING_FG, EXPORT_META,

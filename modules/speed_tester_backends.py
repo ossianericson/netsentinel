@@ -11,6 +11,7 @@ from __future__ import annotations
 import concurrent.futures
 import datetime
 import json
+import logging
 import os
 import platform
 import shutil
@@ -21,6 +22,8 @@ import threading
 import time
 import urllib.error
 import urllib.request
+
+_log = logging.getLogger(__name__)
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -105,8 +108,8 @@ def _find_ookla_cli() -> Optional[Path]:
         try:
             if p.exists() and p.is_file():
                 return p
-        except OSError:
-            pass
+        except OSError as exc:
+            _log.debug("CLI path check failed for %s: %s", p, exc)
     return None
 
 

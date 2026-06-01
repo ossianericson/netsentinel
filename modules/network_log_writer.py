@@ -7,10 +7,13 @@ backwards compatibility via re-exports in that module.
 """
 
 import csv
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 import time
+
+_log = logging.getLogger(__name__)
 
 
 # ── Data structures ───────────────────────────────────────────────────────────
@@ -91,8 +94,8 @@ def load_log_file(path: Path) -> LogSummary:
                     ))
                 except (ValueError, KeyError):
                     continue
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.debug("could not read log file %s: %s", path, exc)
     return _compute_summary(entries, str(path))
 
 
@@ -144,8 +147,8 @@ def _compute_summary(entries: List[LogEntry], log_path: str) -> LogSummary:
                 for e in host_entries:
                     try:
                         all_ts.append(_dt.datetime.fromisoformat(e.timestamp))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        _log.debug("bad timestamp %r: %s", e.timestamp, exc)
                 if len(all_ts) > 1:
                     gaps = [(all_ts[i+1] - all_ts[i]).total_seconds()
                             for i in range(len(all_ts) - 1)]
@@ -162,8 +165,8 @@ def _compute_summary(entries: List[LogEntry], log_path: str) -> LogSummary:
                     peak_latency_ms=peak,
                     consecutive_fails=len(group_list),
                 ))
-            except Exception:
-                pass
+            except Exception as exc:
+                _log.debug("outage group calculation failed: %s", exc)
 
     return summary
 
@@ -225,8 +228,8 @@ def analyse_log(summary: LogSummary) -> List[AnalysisFinding]:
                             "Possible ISP maintenance window or a scheduled task causing traffic disruption."
                         ),
                     ))
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("time-of-day analysis failed: %s", exc)
 
     if n_out >= 1:
         tracked_hosts = {e.host for e in summary.entries}
@@ -265,8 +268,8 @@ def analyse_log(summary: LogSummary) -> List[AnalysisFinding]:
                             "Possible causes: STP reconvergence cycle, DHCP renewal loop, or a device rebooting on schedule."
                         ),
                     ))
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("recurrence analysis failed: %s", exc)
 
     if summary.avg_dns_ms > 0 and summary.avg_rtt_ms > 0:
         ratio = summary.avg_dns_ms / summary.avg_rtt_ms

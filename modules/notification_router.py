@@ -27,9 +27,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
-from modules.alert_engine import AlertEngine, AlertFired
+from modules.alert_engine import AlertFired
 from modules.notification_channels import (
-    _build_payload,
     _deliver_webhook_tracked, _deliver_email_tracked,
     _deliver_pushover_tracked, _deliver_ntfy_tracked, _deliver_telegram_tracked,
 )

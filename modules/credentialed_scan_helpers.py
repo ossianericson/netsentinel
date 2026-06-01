@@ -8,6 +8,7 @@ backwards compatibility via re-exports in that module.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import shutil
 import subprocess
@@ -21,9 +22,19 @@ try:
     import paramiko  # type: ignore
     PARAMIKO_AVAILABLE = True
 except ImportError:
-    pass
+    PARAMIKO_AVAILABLE = False  # optional dependency
 
 ProgressCB = Optional[Callable[[str], None]]
+
+# Public API — _LINUX_CMDS/_WINDOWS_CMDS are imported by credentialed_scan.py
+__all__ = [
+    "PARAMIKO_AVAILABLE", "ProgressCB",
+    "SoftwareEntry", "ServiceEntry", "UserEntry", "PatchInfo",
+    "ListeningPort", "CredScanResult",
+    "_LINUX_CMDS", "_WINDOWS_CMDS",
+    "_parse_linux", "_parse_windows",
+    "run_ssh_commands",
+]
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
@@ -314,10 +325,8 @@ def _parse_linux(outputs: dict[str, str]) -> CredScanResult:
 
     for key in outputs:
         if "Failed password" in key or "auth.log" in key or "secure" in key:
-            try:
+            with contextlib.suppress(ValueError):
                 result.failed_logins += int(outputs[key].strip() or "0")
-            except ValueError:
-                pass
 
     for key in outputs:
         if "NOPASSWD" in key:
@@ -329,12 +338,10 @@ def _parse_linux(outputs: dict[str, str]) -> CredScanResult:
 
     for key in outputs:
         if "apt-get" in key or "yum check" in key:
-            try:
+            with contextlib.suppress(ValueError):
                 n = int(outputs[key].strip() or "0")
                 if n > 0:
                     result.patch_info.pending_updates = max(result.patch_info.pending_updates, n)
-            except ValueError:
-                pass
 
     return result
 
@@ -424,7 +431,7 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
 
     for key in outputs:
         if "Win32_UserAccount" in key:
-            name = sid = disabled = ""
+            name = sid = ""
             for line in outputs[key].splitlines():
                 m = re.match(r'Name=(.+)', line)
                 if m:
@@ -432,12 +439,9 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
                 m = re.match(r'SID=(.+)', line)
                 if m:
                     sid = m.group(1).strip()
-                m = re.match(r'Disabled=(.+)', line)
-                if m:
-                    disabled = m.group(1).strip()
                 if name and sid:
                     result.users.append(UserEntry(username=name, uid=sid))
-                    name = sid = disabled = ""
+                    name = sid = ""
             break
 
     for key in outputs:
@@ -452,16 +456,12 @@ def _parse_windows(outputs: dict[str, str]) -> CredScanResult:
 
     for key in outputs:
         if "Measure-Object" in key or "Measure-Line" in key:
-            try:
+            with contextlib.suppress(ValueError):
                 result.patch_info.pending_updates = int(outputs[key].strip() or "0")
-            except ValueError:
-                pass
 
     for key in outputs:
         if "4625" in key:
-            try:
+            with contextlib.suppress(ValueError):
                 result.failed_logins = int(outputs[key].strip() or "0")
-            except ValueError:
-                pass
 
     return result

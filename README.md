@@ -331,6 +331,8 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 - `maintenance_window.py`: documented UTC requirement for `start_ts`/`end_ts` in `is_currently_active` docstring
 - `test_source_encoding.py`: extended mojibake detection to cover 4-byte emoji sequences (`ðŸ` prefix, e.g. 🌙→ðŸŒ™)
 - Added RULE-ENC2 — agents must re-read files before editing when an external process may have modified them since last read
+- `requirements.txt`: bumped `pytest-cov` from ~=5.0 to ~=7.1 (Dependabot PR #8)
+- Resolved 30 CodeQL code-scanning alerts: removed unused imports across 7 modules, replaced empty `except` blocks with `contextlib.suppress()` or `logging.debug()` calls, removed dead `disabled` variable in Windows user parser, added `__all__` for intentional re-exports
 
 ### v1.9.66
 

@@ -1,5 +1,4 @@
 """Tests for modules/alert_suppressor.py — see also test_sprint20_splits.py."""
-import pytest
 
 
 def test_import():

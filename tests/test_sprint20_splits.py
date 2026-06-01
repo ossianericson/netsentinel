@@ -4,8 +4,6 @@ Sprint 20 split tests — import + smoke tests for all 7 new modules.
 RULE-T1: every new module/ file needs at least one import and one behavioural test.
 """
 
-import pytest
-
 
 # ── S20-1: metric_store_queries._default_db_path ──────────────────────────────
 

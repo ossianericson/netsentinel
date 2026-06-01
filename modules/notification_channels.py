@@ -9,12 +9,15 @@ backwards compatibility via re-exports in that module.
 from __future__ import annotations
 
 import json
+import logging
 import smtplib
 import ssl
 import time
 import urllib.error
 import urllib.request
 from typing import Callable
+
+_log = logging.getLogger(__name__)
 
 from modules.alert_engine import AlertFired
 
@@ -43,8 +46,8 @@ def _deliver_webhook(channel, alert: AlertFired) -> None:
     try:
         with urllib.request.urlopen(req, timeout=channel.timeout_s):
             pass
-    except (urllib.error.URLError, OSError):
-        pass
+    except (urllib.error.URLError, OSError) as exc:
+        _log.debug("webhook delivery failed: %s", exc)
 
 
 def _deliver_email(channel, alert: AlertFired) -> None:
@@ -80,8 +83,8 @@ def _deliver_email(channel, alert: AlertFired) -> None:
                 if channel.username:
                     smtp.login(channel.username, channel.password)
                 smtp.sendmail(msg["From"], channel.to_addrs, msg.as_string())
-    except (smtplib.SMTPException, OSError):
-        pass
+    except (smtplib.SMTPException, OSError) as exc:
+        _log.debug("email delivery failed: %s", exc)
 
 
 def _deliver_pushover(channel, alert: AlertFired) -> None:
@@ -105,8 +108,8 @@ def _deliver_pushover(channel, alert: AlertFired) -> None:
     try:
         with urllib.request.urlopen(req, timeout=channel.timeout_s):
             pass
-    except (urllib.error.URLError, OSError):
-        pass
+    except (urllib.error.URLError, OSError) as exc:
+        _log.debug("pushover delivery failed: %s", exc)
 
 
 def _deliver_ntfy(channel, alert: AlertFired) -> None:
@@ -128,8 +131,8 @@ def _deliver_ntfy(channel, alert: AlertFired) -> None:
     try:
         with urllib.request.urlopen(req, timeout=channel.timeout_s):
             pass
-    except (urllib.error.URLError, OSError):
-        pass
+    except (urllib.error.URLError, OSError) as exc:
+        _log.debug("ntfy delivery failed: %s", exc)
 
 
 def _deliver_telegram(channel, alert: AlertFired) -> None:
@@ -156,8 +159,8 @@ def _deliver_telegram(channel, alert: AlertFired) -> None:
     try:
         with urllib.request.urlopen(req, timeout=channel.timeout_s):
             pass
-    except (urllib.error.URLError, OSError):
-        pass
+    except (urllib.error.URLError, OSError) as exc:
+        _log.debug("telegram delivery failed: %s", exc)
 
 
 # ── Status-tracked delivery wrappers ─────────────────────────────────────────

@@ -19,6 +19,7 @@ modules/network_log_writer.py (S20-6 sprint split).
 """
 
 import csv
+import logging
 import platform
 import re
 import socket
@@ -29,12 +30,14 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+_log = logging.getLogger(__name__)
 from typing import Callable, Dict, List, Optional, Tuple
 
 from modules.network_log_writer import (
     LogEntry, LogSummary, OutageSummary,
     AnalysisFinding,
-    _default_log_dir, _log_path_for_session,
+    _log_path_for_session,
     load_log_file, list_log_files,
     _compute_summary, analyse_log,
 )
@@ -152,8 +155,8 @@ def _get_arp_snapshot() -> Dict[str, str]:
                 m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+\S+\s+([\da-fA-F:]{17})", line)
                 if m:
                     result[m.group(1)] = m.group(2).lower()
-    except Exception:
-        pass
+    except Exception as exc:
+        _log.debug("ARP table read failed: %s", exc)
     return result
 
 

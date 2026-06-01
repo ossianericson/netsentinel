@@ -50,11 +50,14 @@ Parent/child dependency suppression (T3#12):
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 from modules.metric_store import MetricStore
 from modules.alert_suppressor import EscalationPolicy, _default_rules, rule_settings_key
+
+# Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
+__all__ = ["AlertRule", "AlertFired", "AlertEngine", "EscalationPolicy", "rule_settings_key"]
 
 
 # ── Valid rule types ──────────────────────────────────────────────────────────
