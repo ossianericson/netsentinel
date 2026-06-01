@@ -35,6 +35,7 @@ netsentinel/
 │       └── release.yml     # CI: build → release → winget submit (RULE 20)
 ├── modules/                # All backend logic (no PyQt imports)
 │   ├── alert_engine.py
+│   ├── alert_suppressor.py     # EscalationPolicy + _default_rules + rule_settings_key (S20-4 split)
 │   ├── arp_monitor.py          # Real-time ARP packet monitor
 │   ├── automation_hooks.py     # Event-to-action pipeline and hook dispatcher
 │   ├── availability_monitor.py
@@ -45,6 +46,7 @@ netsentinel/
 │   ├── combined_discovery.py   # Main scan orchestrator
 │   ├── config_baseline.py
 │   ├── credentialed_scan.py    # Authenticated login test scanner (SSH, SMB, FTP, Telnet)
+│   ├── credentialed_scan_helpers.py  # Dataclasses + SSH backends + parsers (S20-2 split)
 │   ├── cve_lookup.py
 │   ├── deco_client.py          # TP-Link Deco XE75 mesh router API client
 │   ├── device_classifier.py    # OUI → device type + risk score
@@ -75,8 +77,10 @@ netsentinel/
 │   ├── network_benchmark.py
 │   ├── network_diagnostics.py  # Health check routines (ping, traceroute, DNS leak, HTTP)
 │   ├── network_infrastructure.py  # VLAN, gateway, routing table helpers
+│   ├── network_log_writer.py   # Log dataclasses, file reader, summary + analysis engine (S20-6 split)
 │   ├── network_logger.py       # Background ping logger (CSV → ~/Documents/NetSentinel/logs)
 │   ├── nl_query.py             # Natural language query parser for device and event search
+│   ├── notification_channels.py    # Per-channel delivery functions (S20-3 split)
 │   ├── notification_router.py
 │   ├── os_fingerprint.py
 │   ├── plugin_registry.py      # Plugin discovery, metadata, enable/disable registry
@@ -87,7 +91,8 @@ netsentinel/
 │   ├── private_endpoint_checker.py  # RFC 1918 boundary exposure checker
 │   ├── process_monitor.py      # Active process-to-socket correlation (psutil-based)
 │   ├── protocol_animator.py    # AnimNode/AnimStep scene builders for protocol viz
-│   ├── report_exporter.py      # Public API: save_*() entry points, JSON/CSV/NMap/ISP/card/lab
+│   ├── report_exporter.py      # Public API: save_*() entry points, JSON/CSV/NMap/card/lab
+│   ├── report_isp.py           # ISP Accountability Report builder (S20-5 split)
 │   ├── report_html.py          # HTML generation helpers — CSS, _badge, module HTML builders (S2-2 split)
 │   ├── report_pdf.py           # PDF generation — weasyprint/headless-browser cascade (S2-2 split)
 │   ├── report_scheduler.py     # Scheduled report generation and delivery logic
@@ -101,7 +106,8 @@ netsentinel/
 │   ├── smb_enumerator.py       # SMB/Windows Share enumeration
 │   ├── snmp_poller.py
 │   ├── snmp_trap_receiver.py
-│   ├── speed_tester.py         # 3-tier: Ookla CLI → speedtest-cli → pure-Python
+│   ├── speed_tester.py         # 3-tier cascade public API (S20-7 split)
+│   ├── speed_tester_backends.py  # Dataclasses + Ookla CLI + speedtest-cli + pure-Python backends (S20-7 split)
 │   ├── storm_analyser.py
 │   ├── stp_detector.py
 │   ├── syn_scanner.py

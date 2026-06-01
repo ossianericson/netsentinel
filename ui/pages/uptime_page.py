@@ -251,22 +251,24 @@ class UptimePage(QWidget):
         self._table.clear_detail()
         self._table.setRowCount(0)
 
-        pct_24h_list = [r.get("24.0", 100.0) for r in rows]
-        fleet_avg   = round(sum(pct_24h_list) / len(pct_24h_list), 1)
-        best_pct    = max(pct_24h_list)
-        worst_pct   = min(pct_24h_list)
-        worst_ip    = rows[pct_24h_list.index(worst_pct)]["ip"]
+        pct_24h_list = [r.get("24.0") for r in rows]
+        known_24h   = [p for p in pct_24h_list if p is not None]
+        fleet_avg   = round(sum(known_24h) / len(known_24h), 1) if known_24h else None
+        best_pct    = max(known_24h) if known_24h else None
+        worst_pct   = min(known_24h) if known_24h else None
+        worst_ip    = rows[pct_24h_list.index(worst_pct)]["ip"] if worst_pct is not None else "—"
 
         for r in rows:
             row_idx = self._table.rowCount()
             self._table.insertRow(row_idx)
 
-            pct_24  = r.get("24.0", 100.0)
-            pct_7d  = r.get("168.0", 100.0)
-            pct_30d = r.get("720.0", 100.0)
+            pct_24  = r.get("24.0")
+            pct_7d  = r.get("168.0")
+            pct_30d = r.get("720.0")
 
-            # Worst window drives the row status
-            worst_window = min(pct_24, pct_7d, pct_30d)
+            # Worst window drives the row status (exclude None — no data yet)
+            known_windows = [p for p in (pct_24, pct_7d, pct_30d) if p is not None]
+            worst_window = min(known_windows) if known_windows else None
 
             self._table.setItem(row_idx, 0, self._cell(r["ip"]))
             self._table.setItem(row_idx, 1, self._cell(r.get("hostname") or "—"))
@@ -275,7 +277,10 @@ class UptimePage(QWidget):
             self._table.setItem(row_idx, 4, self._pct_cell(pct_30d))
 
             # Status dot
-            if worst_window < _CRIT:
+            if worst_window is None:
+                status_text  = "  NO DATA"
+                status_color = TEXT_SECONDARY
+            elif worst_window < _CRIT:
                 status_text  = "  DEGRADED"
                 status_color = RED
             elif worst_window < _WARN:
@@ -295,10 +300,12 @@ class UptimePage(QWidget):
 
         # Update KPIs
         self._set_kpi(self._kpi_devices, "DEVICES MONITORED", str(len(rows)))
-        self._set_kpi(self._kpi_fleet,   "FLEET AVG (24H)",   f"{fleet_avg}%")
-        self._set_kpi(self._kpi_best,    "BEST DEVICE (24H)", f"{best_pct}%")
+        self._set_kpi(self._kpi_fleet,   "FLEET AVG (24H)",
+                      f"{fleet_avg}%" if fleet_avg is not None else "—")
+        self._set_kpi(self._kpi_best,    "BEST DEVICE (24H)",
+                      f"{best_pct}%" if best_pct is not None else "—")
         self._set_kpi(self._kpi_worst,   "WORST DEVICE",
-                      f"{worst_pct}% ({worst_ip})")
+                      f"{worst_pct}% ({worst_ip})" if worst_pct is not None else "—")
 
         self._table.setSortingEnabled(True)
 
@@ -309,12 +316,16 @@ class UptimePage(QWidget):
             return QWidget()
         r = self._rows[logical_row]
 
-        pct_24  = r.get("24.0",  100.0)
-        pct_7d  = r.get("168.0", 100.0)
-        pct_30d = r.get("720.0", 100.0)
-        worst   = min(pct_24, pct_7d, pct_30d)
+        pct_24  = r.get("24.0")
+        pct_7d  = r.get("168.0")
+        pct_30d = r.get("720.0")
+        known   = [p for p in (pct_24, pct_7d, pct_30d) if p is not None]
+        worst   = min(known) if known else None
 
-        if worst < _CRIT:
+        if worst is None:
+            status_text  = "NO DATA"
+            status_color = TEXT_SECONDARY
+        elif worst < _CRIT:
             status_text  = "DEGRADED"
             status_color = RED
         elif worst < _WARN:
@@ -359,9 +370,11 @@ class UptimePage(QWidget):
         g2.setContentsMargins(0, 0, 0, 0)
         g2.setSpacing(3)
         g2.setHorizontalSpacing(12)
-        g2.addRow(_hdr("Uptime 24h"),  _val(f"{pct_24:.1f}%",  _uptime_color(pct_24)))
-        g2.addRow(_hdr("Uptime 7d"),   _val(f"{pct_7d:.1f}%",  _uptime_color(pct_7d)))
-        g2.addRow(_hdr("Uptime 30d"),  _val(f"{pct_30d:.1f}%", _uptime_color(pct_30d)))
+        def _pct_str(p): return f"{p:.1f}%" if p is not None else "—"
+        def _pct_col(p): return _uptime_color(p) if p is not None else TEXT_SECONDARY
+        g2.addRow(_hdr("Uptime 24h"),  _val(_pct_str(pct_24),  _pct_col(pct_24)))
+        g2.addRow(_hdr("Uptime 7d"),   _val(_pct_str(pct_7d),  _pct_col(pct_7d)))
+        g2.addRow(_hdr("Uptime 30d"),  _val(_pct_str(pct_30d), _pct_col(pct_30d)))
 
         lay.addWidget(col1)
         lay.addWidget(col2)
@@ -370,14 +383,21 @@ class UptimePage(QWidget):
 
     # ── Table helpers ─────────────────────────────────────────────────────────
 
-    def _pct_cell(self, pct: float) -> QTableWidgetItem:
+    def _pct_cell(self, pct) -> QTableWidgetItem:
+        if pct is None:
+            item = QTableWidgetItem("—")
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            item.setData(Qt.ItemDataRole.UserRole, -1.0)
+            return item
         item = QTableWidgetItem(f"{pct:.1f}%")
         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         item.setForeground(QColor(_uptime_color(pct)))
         item.setTextAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-        # Store numeric value for sort
         item.setData(Qt.ItemDataRole.UserRole, pct)
         return item
 

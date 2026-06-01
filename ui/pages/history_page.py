@@ -583,8 +583,9 @@ class HistoryPage(QWidget):
             all_rtts.extend(ok)
             uptimes.append(self._store.query_uptime_pct(host, hours=self._window_h))
 
-        avg_uptime = sum(uptimes) / len(uptimes) if uptimes else 100.0
-        self._kpi_uptime.set_value(f"{avg_uptime:.1f}%")
+        known = [u for u in uptimes if u is not None]
+        avg_uptime = sum(known) / len(known) if known else None
+        self._kpi_uptime.set_value(f"{avg_uptime:.1f}%" if avg_uptime is not None else "—")
 
         if all_rtts:
             self._kpi_avg_rtt.set_value(f"{sum(all_rtts)/len(all_rtts):.0f} ms")

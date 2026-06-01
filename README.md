@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.67
+**Fixed**
+- `notification_channels.py`: Pushover, ntfy, and Telegram delivery failures now reported in alert history (`_deliver_pushover_tracked`, `_deliver_ntfy_tracked`, `_deliver_telegram_tracked`); removed optimistic mark-delivered and dead untracked imports from router
+- `metric_store_queries.py`: `query_uptime_table()` reduced from N+1+N×M queries to 1+len(windows) GROUP BY queries; `query_uptime_pct()` now returns `None` (not `100.0`) when no samples exist; uptime page and history page handle `None` with `"—"` placeholder
+- `metric_store_queries.py`: replaced `SELECT *` with explicit column lists in `list_cve_lifecycles()`, `get_unacked_alerts()`, `get_recent_alerts()`
+- `home_page.py`: un-parented `QTimer.singleShot(2500, banner.hide)` replaced with parented `QTimer(banner)` to prevent crash on early widget deletion
+- `maintenance_window.py`: documented UTC requirement for `start_ts`/`end_ts` in `is_currently_active` docstring
+- `test_source_encoding.py`: extended mojibake detection to cover 4-byte emoji sequences (`ðŸ` prefix, e.g. 🌙→ðŸŒ™)
+- Added RULE-ENC2 — agents must re-read files before editing when an external process may have modified them since last read
+
 ### v1.9.66
 
 **Changed**

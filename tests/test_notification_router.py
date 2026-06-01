@@ -144,21 +144,18 @@ class TestRouterDispatch(unittest.TestCase):
             ToastChannel(enabled=True, min_severity="INFO"),
             WebhookChannel(enabled=True, url="http://example.com", min_severity="INFO"),
         ])
-        with patch("modules.notification_router._deliver_webhook") as mock_wh:
-            # Override the thread delivery to run synchronously for testing
-            import threading
-            original = threading.Thread
+        # Override thread delivery to run synchronously for testing
+        class SyncThread:
+            def __init__(self, target, args=(), daemon=True, **kw):
+                self._target = target
+                self._args = args
 
-            class SyncThread:
-                def __init__(self, target, args, daemon=True):
-                    self._target = target
-                    self._args = args
+            def start(self):
+                self._target(*self._args)
 
-                def start(self):
-                    self._target(*self._args)
-
-            with patch("modules.notification_router.threading") as mock_th:
-                mock_th.Thread.side_effect = SyncThread
+        with patch("modules.notification_router.threading") as mock_th:
+            mock_th.Thread.side_effect = SyncThread
+            with patch("modules.notification_channels._deliver_webhook_tracked"):
                 r.dispatch(_alert("WARNING"))
 
         log = r.get_delivery_log()

@@ -31,8 +31,8 @@ def test_query_all_rtt_hosts(store):
     assert "host2" in hosts
 
 
-def test_query_uptime_pct_no_data_returns_100(store):
-    assert store.query_uptime_pct("192.168.1.1") == 100.0
+def test_query_uptime_pct_no_data_returns_none(store):
+    assert store.query_uptime_pct("192.168.1.1") is None
 
 
 def test_query_uptime_pct_all_up(store):

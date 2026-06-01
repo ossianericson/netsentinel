@@ -20,8 +20,10 @@ DEFAULT_BUDGET = 600
 # Each entry documents WHY and WHAT the split should be.
 # Budgets are set to current actuals + a small margin; tighten as splits land.
 KNOWN_LARGE_MODULES: dict[str, int] = {
-    # All 7 previously-exempted modules were split in Sprint 20 (S20-1 through S20-7).
-    # No modules currently exceed the 600-line default budget.
+    # metric_store_queries.py grew past 600 when SELECT * was replaced with explicit
+    # column lists and query_uptime_table was rewritten to batch queries.
+    # Natural split: extract CVE/alert query methods → metric_store_queries_cve.py.
+    "metric_store_queries.py": 650,
 }
 
 

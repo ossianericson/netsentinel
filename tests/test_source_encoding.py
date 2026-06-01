@@ -6,12 +6,18 @@ editor that misreads multi-byte sequences as individual characters and saves the
 back as UTF-8.  The result: characters like —, →, ·, ☀, ×, ⚠ are replaced by
 sequences of Latin supplement and Windows-1252 code points.
 
-Canonical signatures (all three must appear together to flag a sequence):
-  • U+00C3 (Ã) or U+00E2 (â) followed immediately by a Windows-1252 code point
-    in the range 0x80–0x9F (mapped to special chars like €, ‚, ƒ, „, …, †, ‡,
-    ˆ, ‰, Š, ‹, Œ, Ž, ', ', ", ", •, –, —, ˜, ™, š, ›, œ, ž, Ÿ).
-  • OR: Latin capital with tilde/ring (Ã) followed by Latin-1 byte values
-    (°, ², ³, ¶, ·, ¸, ¹, º, etc.).
+Two classes of mojibake are detected:
+
+2–3-byte UTF-8 sequences (BMP characters):
+  U+00C3 (Ã) or U+00E2 (â) followed immediately by a Windows-1252 code point
+  in the range 0x80–0x9F (mapped to special chars like €, ‚, ƒ, „, …, †, ‡,
+  ˆ, ‰, Š, ‹, Œ, Ž, ', ', ", ", •, –, —, ˜, ™, š, ›, œ, ž, Ÿ).
+
+4-byte UTF-8 sequences (emoji and supplementary plane characters):
+  Byte F0 9F... (U+1Fxxx emoji range, e.g. 🌙 🔌 📌 ⚡) is misread as cp1252:
+    F0 → ð (U+00F0 LATIN SMALL LETTER ETH)
+    9F → Ÿ (cp1252 0x9F → U+0178 LATIN CAPITAL LETTER Y WITH DIAERESIS)
+  The two-char prefix ðŸ (U+00F0 + U+0178) is a reliable signature for this class.
 
 This test scans all .py source files in ui/ and modules/ for known mojibake
 sequences inside string literals.  Comments are excluded from the check.
@@ -53,6 +59,11 @@ _MOJIBAKE_PATTERNS: list[str] = [
     r'âš',    # â + š — warning/gear mojibake
     # ── Sequences starting with Â (U+00C2) ──────────────────────────────────
     r'Â[·°¨]',  # Â + middle dot / degree / diaeresis — middle-dot mojibake
+    # ── 4-byte emoji mojibake (F0 9F... → U+1Fxxx range) ────────────────────
+    # UTF-8 byte F0 maps to ð (U+00F0) in cp1252; the following byte 9F maps to
+    # Ÿ (U+0178).  Together "ðŸ" is the canonical prefix for any U+1Fxxx emoji
+    # that has been double-encoded.  Examples: 🌙→ðŸŒ™, 📌→ðŸ"Œ, 🔌→ðŸ"Œ
+    'ðŸ',  # U+00F0 + U+0178 — 4-byte emoji mojibake prefix
 ]
 
 _COMBINED = re.compile('|'.join(_MOJIBAKE_PATTERNS))

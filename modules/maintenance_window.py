@@ -47,8 +47,8 @@ class MaintenanceWindow:
     active      : True = enabled; False = manually disabled without deletion
     """
     label:      str
-    start_ts:   int
-    end_ts:     int
+    start_ts:   int   # UTC Unix epoch seconds — MUST be stored as UTC, not local time
+    end_ts:     int   # UTC Unix epoch seconds — MUST be stored as UTC, not local time
     hosts:      List[str]  = field(default_factory=list)
     id:         str        = field(default_factory=lambda: str(uuid.uuid4()))
     created_ts: int        = field(default_factory=lambda: int(time.time()))
@@ -56,7 +56,15 @@ class MaintenanceWindow:
 
     @property
     def is_currently_active(self) -> bool:
-        """True if this window is enabled and right now falls inside the window."""
+        """True if this window is enabled and right now falls inside the window.
+
+        Comparison is UTC-vs-UTC: time.time() always returns UTC epoch seconds,
+        and start_ts/end_ts must also be UTC epoch seconds.  The UI layer must
+        convert local QDateTimeEdit values with:
+            dt.replace(tzinfo=timezone.utc).timestamp()
+        or equivalent — never with naive datetime.timestamp() which interprets
+        the value in the local timezone and shifts by the UTC offset.
+        """
         if not self.active:
             return False
         now = int(time.time())

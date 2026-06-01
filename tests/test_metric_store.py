@@ -190,8 +190,8 @@ class TestUptimePct:
         pct = store.query_uptime_pct("10.0.0.7", hours=2)
         assert pct == pytest.approx(50.0)
 
-    def test_no_records_returns_100(self, store):
-        assert store.query_uptime_pct("unknown.host", hours=24) == pytest.approx(100.0)
+    def test_no_records_returns_none(self, store):
+        assert store.query_uptime_pct("unknown.host", hours=24) is None
 
     def test_degraded_not_counted_as_up(self, store):
         base = int(time.time()) - 600

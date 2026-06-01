@@ -734,6 +734,85 @@ This rule covers **flyout item labels only**. Rail section icons (the 48 px perm
 
 ---
 
+## Source File Encoding
+
+### RULE-ENC1 (blocking): Python source files must be saved as UTF-8 — never open and resave in Windows-1252
+Mojibake occurs when a file correctly encoded as UTF-8 is opened by a Windows text editor
+that defaults to Windows-1252 / Latin-1, misreads the multi-byte sequences as individual
+characters, and resaves. The result: characters like —, →, ·, ☀, ×, ⚠, ⚙, ⌨ are
+replaced by garbled sequences such as â€", â†', Â·, â˜€, Ãƒâ€", âš .
+
+**Canonical symptoms:**
+- Close buttons show as garbled sequences instead of ×
+- Em dashes show as â€" or Ã—
+- Arrows show as â†' instead of →
+- Icons show as multi-char garbage instead of ☀, ⚠, 🌙
+- Emoji (4-byte UTF-8) show as 4-char garbage: 🌙→ðŸŒ™, 📌→ðŸ"Œ
+
+**Two classes of mojibake:**
+
+*2–3-byte (BMP characters):* `â€"` for `—`, `â†'` for `→`, `Â·` for `·`, etc.
+*4-byte (emoji / supplementary plane):* Byte F0 9F... becomes `ðŸ` prefix + 2 more chars.
+  - `🌙` (U+1F319) → `ðŸŒ™` — the moon emoji in theme buttons
+  - `📌` (U+1F4CC) → `ðŸ"Œ` — pin emoji in Quick Tips
+
+**Prevention:**
+- Always save .py files with UTF-8 encoding in your editor
+- VS Code: set `"files.encoding": "utf8"` in settings (this is the default)
+- Never open NetSentinel source files in Notepad (Windows 10 and earlier uses ANSI/cp1252)
+- Git: `git config core.autocrlf` should be `true` (Windows) or `input` (macOS/Linux)
+- **AI agents: always re-read a file with the Read tool before calling Edit if any external**
+  **process (fix_encoding.py, another chat session, git operation) may have modified it.**
+  **The Edit tool writes based on the agent's cached content — a stale cache silently**
+  **overwrites external repairs.** (See RULE-ENC2.)
+
+**Detection:** `test_source_encoding.py` automatically detects both classes of mojibake in
+string literals, including the 4-byte emoji prefix `ðŸ` (U+00F0 + U+0178).
+Run before committing:
+```powershell
+python -m pytest tests/test_source_encoding.py -v
+```
+
+**Fix:** Re-encode the garbled characters back to their correct Unicode equivalents.
+The decode procedure: encode each garbled char as cp1252, decode the resulting bytes as
+UTF-8. Example:
+```python
+# Quick repair of a garbled string — run once, not in production code
+garbled = 'â€"'           # garbled em dash
+fixed   = garbled.encode('cp1252').decode('utf-8')  # → '—'
+```
+
+### RULE-ENC2 (blocking): Re-read any file before editing it if an external process may have modified it
+The Edit tool applies changes against the agent's cached file content and writes the full
+modified buffer back to disk.  If any external process has modified the file since the last
+Read — another chat session, `fix_encoding.py`, a git operation, a linter — the Edit will
+silently overwrite those external changes.
+
+**This is how encoding repairs get undone:** fix_encoding.py repairs a file, but the agent's
+context still has the pre-repair version. The next Edit call writes the old content + the
+change, discarding the fix.
+
+**Rule:** Before calling Edit on any file, call Read on it first (even if you have read it
+earlier in the session) when any of these conditions are true:
+- Another chat session or tool has been running concurrently
+- A repair or formatting tool (`fix_encoding.py`, `black`, `isort`, etc.) was run
+- A git operation (`checkout`, `reset`, `rebase`) has occurred
+- The user mentions the file was just fixed or changed externally
+
+```python
+# Wrong — stale context may overwrite external repairs:
+Edit(file="ui/pages/home_page.py", old_string="...", new_string="...")
+
+# Correct — re-read first to refresh context:
+Read("ui/pages/home_page.py")   # even if read earlier in the session
+Edit(file="ui/pages/home_page.py", old_string="...", new_string="...")
+```
+
+After any repair tool runs, also verify with `python -m pytest tests/test_source_encoding.py -v`
+before proceeding to ensure the repair is intact.
+
+---
+
 ## APM Source File Hygiene
 
 ### RULE-APM1 (blocking): Never edit CLAUDE.md or .claude/rules/ directly — edit .apm/instructions/ only

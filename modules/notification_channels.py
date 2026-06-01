@@ -162,6 +162,103 @@ def _deliver_telegram(channel, alert: AlertFired) -> None:
 
 # ── Status-tracked delivery wrappers ─────────────────────────────────────────
 
+def _deliver_pushover_tracked(
+    channel,
+    alert: AlertFired,
+    entry: dict,
+    on_ok: Callable,
+    on_err: Callable,
+) -> None:
+    """POST to Pushover API with success/failure callbacks."""
+    if not channel.api_token or not channel.user_key:
+        on_err(entry, "Pushover not configured (missing api_token or user_key)")
+        return
+    priority = {"INFO": -1, "WARNING": 0, "CRITICAL": 1}.get(alert.severity, 0)
+    payload = json.dumps({
+        "token":    channel.api_token,
+        "user":     channel.user_key,
+        "title":    f"NetSentinel — {alert.rule_name}",
+        "message":  f"{alert.host}: {alert.message}",
+        "priority": priority,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.pushover.net/1/messages.json",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=channel.timeout_s):
+            on_ok(entry)
+    except Exception as exc:
+        on_err(entry, str(exc))
+
+
+def _deliver_ntfy_tracked(
+    channel,
+    alert: AlertFired,
+    entry: dict,
+    on_ok: Callable,
+    on_err: Callable,
+) -> None:
+    """POST to ntfy.sh (or self-hosted) with success/failure callbacks."""
+    if not channel.topic_url:
+        on_err(entry, "ntfy not configured (missing topic_url)")
+        return
+    priority = {"INFO": "2", "WARNING": "3", "CRITICAL": "5"}.get(alert.severity, "3")
+    headers = {
+        "Title":    f"NetSentinel — {alert.rule_name}",
+        "Priority": priority,
+        "Tags":     f"netsentinel,{alert.severity.lower()}",
+    }
+    if channel.access_token:
+        headers["Authorization"] = f"Bearer {channel.access_token}"
+    body = f"{alert.host}: {alert.message}".encode()
+    req = urllib.request.Request(
+        channel.topic_url, data=body, headers=headers, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=channel.timeout_s):
+            on_ok(entry)
+    except Exception as exc:
+        on_err(entry, str(exc))
+
+
+def _deliver_telegram_tracked(
+    channel,
+    alert: AlertFired,
+    entry: dict,
+    on_ok: Callable,
+    on_err: Callable,
+) -> None:
+    """POST to Telegram Bot API with success/failure callbacks."""
+    if not channel.bot_token or not channel.chat_id:
+        on_err(entry, "Telegram not configured (missing bot_token or chat_id)")
+        return
+    text = (
+        f"*NetSentinel — {alert.rule_name}*\n"
+        f"Severity: `{alert.severity}`\n"
+        f"Host: `{alert.host}`\n"
+        f"{alert.message}"
+    )
+    payload = json.dumps({
+        "chat_id":    channel.chat_id,
+        "text":       text,
+        "parse_mode": "Markdown",
+    }).encode()
+    url = f"https://api.telegram.org/bot{channel.bot_token}/sendMessage"
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=channel.timeout_s):
+            on_ok(entry)
+    except Exception as exc:
+        on_err(entry, str(exc))
+
+
 def _deliver_webhook_tracked(
     channel,
     alert: AlertFired,

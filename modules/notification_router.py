@@ -30,9 +30,8 @@ from typing import Callable, Dict, List, Optional
 from modules.alert_engine import AlertEngine, AlertFired
 from modules.notification_channels import (
     _build_payload,
-    _deliver_webhook, _deliver_email, _deliver_pushover,
-    _deliver_ntfy, _deliver_telegram,
     _deliver_webhook_tracked, _deliver_email_tracked,
+    _deliver_pushover_tracked, _deliver_ntfy_tracked, _deliver_telegram_tracked,
 )
 
 # ── Severity ordering ─────────────────────────────────────────────────────────
@@ -298,32 +297,31 @@ class NotificationRouter:
                     t.start()
 
             elif isinstance(ch, PushoverChannel):
-                if ch.api_token and ch.user_key:
-                    entry = self._log_delivery(ch.name, "PUSHOVER", alert)
-                    t = threading.Thread(
-                        target=_deliver_pushover, args=(ch, alert), daemon=True
-                    )
-                    t.start()
-                    # Pushover has no error feedback path — mark delivered optimistically
-                    self._mark_delivered(entry)
+                entry = self._log_delivery(ch.name, "PUSHOVER", alert)
+                t = threading.Thread(
+                    target=_deliver_pushover_tracked,
+                    args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                    daemon=True,
+                )
+                t.start()
 
             elif isinstance(ch, NtfyChannel):
-                if ch.topic_url:
-                    entry = self._log_delivery(ch.name, "NTFY", alert)
-                    t = threading.Thread(
-                        target=_deliver_ntfy, args=(ch, alert), daemon=True
-                    )
-                    t.start()
-                    self._mark_delivered(entry)
+                entry = self._log_delivery(ch.name, "NTFY", alert)
+                t = threading.Thread(
+                    target=_deliver_ntfy_tracked,
+                    args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                    daemon=True,
+                )
+                t.start()
 
             elif isinstance(ch, TelegramChannel):
-                if ch.bot_token and ch.chat_id:
-                    entry = self._log_delivery(ch.name, "TELEGRAM", alert)
-                    t = threading.Thread(
-                        target=_deliver_telegram, args=(ch, alert), daemon=True
-                    )
-                    t.start()
-                    self._mark_delivered(entry)
+                entry = self._log_delivery(ch.name, "TELEGRAM", alert)
+                t = threading.Thread(
+                    target=_deliver_telegram_tracked,
+                    args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                    daemon=True,
+                )
+                t.start()
 
     # ── Delivery log ──────────────────────────────────────────────────────────
 
@@ -382,6 +380,27 @@ class NotificationRouter:
                 elif isinstance(ch, EmailChannel) and ch.smtp_host and ch.to_addrs:
                     t = threading.Thread(
                         target=_deliver_email_tracked,
+                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                        daemon=True,
+                    )
+                    t.start()
+                elif isinstance(ch, PushoverChannel):
+                    t = threading.Thread(
+                        target=_deliver_pushover_tracked,
+                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                        daemon=True,
+                    )
+                    t.start()
+                elif isinstance(ch, NtfyChannel):
+                    t = threading.Thread(
+                        target=_deliver_ntfy_tracked,
+                        args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
+                        daemon=True,
+                    )
+                    t.start()
+                elif isinstance(ch, TelegramChannel):
+                    t = threading.Thread(
+                        target=_deliver_telegram_tracked,
                         args=(ch, alert, entry, self._mark_delivered, self._mark_failed),
                         daemon=True,
                     )

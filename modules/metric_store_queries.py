@@ -176,21 +176,54 @@ class MetricStoreQueryMixin:
     def query_uptime_table(
         self, hours_list: Optional[List[float]] = None,
     ) -> List[Dict]:
-        """Return one row per monitored IP with uptime % for each window."""
+        """Return one row per monitored IP with uptime % for each window.
+
+        Uses 1 + len(hours_list) queries total (not N+1+N*M) by aggregating
+        all IPs in a single GROUP BY pass per window.
+        """
         if hours_list is None:
             hours_list = [24.0, 168.0, 720.0]
-        ips = self.query_all_state_ips(hours=720.0)
-        rows = []
-        for ip in ips:
-            hn_rows = self._execute_read(
-                "SELECT hostname FROM device_state WHERE ip = ? AND hostname IS NOT NULL "
-                "ORDER BY ts DESC LIMIT 1",
-                (ip,),
+        now = int(time.time())
+        max_hours = max(hours_list)
+        since_max = now - int(max_hours * 3600)
+
+        # Query 1: latest hostname per IP — SQLite's max-row selection rule
+        # picks the non-aggregated column from the row with MAX(ts).
+        hn_rows = self._execute_read(
+            "SELECT ip, MAX(ts) AS last_ts, hostname "
+            "FROM device_state "
+            "WHERE ts >= ? AND hostname IS NOT NULL "
+            "GROUP BY ip",
+            (since_max,),
+        )
+        hostnames: Dict[str, str] = {r["ip"]: r["hostname"] for r in hn_rows}
+
+        # Queries 2..N: one GROUP BY per window — all IPs aggregated at once.
+        window_data: Dict[str, Dict[str, float]] = {}
+        for h in hours_list:
+            since_h = now - int(h * 3600)
+            agg_rows = self._execute_read(
+                "SELECT ip, COUNT(*) AS total, "
+                "SUM(CASE WHEN state = 'UP' THEN 1 ELSE 0 END) AS up_count "
+                "FROM device_state WHERE ts >= ? GROUP BY ip",
+                (since_h,),
             )
-            hostname = hn_rows[0]["hostname"] if hn_rows else None
-            entry: Dict = {"ip": ip, "hostname": hostname}
+            for r in agg_rows:
+                ip = r["ip"]
+                if ip not in window_data:
+                    window_data[ip] = {}
+                total = r["total"] or 0
+                up = r["up_count"] or 0
+                window_data[ip][str(h)] = (
+                    round(100.0 * up / total, 2) if total else None
+                )
+
+        all_ips = set(hostnames.keys()) | set(window_data.keys())
+        rows = []
+        for ip in sorted(all_ips):
+            entry: Dict = {"ip": ip, "hostname": hostnames.get(ip)}
             for h in hours_list:
-                entry[str(h)] = self.query_uptime_pct(ip, hours=h)
+                entry[str(h)] = window_data.get(ip, {}).get(str(h))
             rows.append(entry)
         return rows
 
@@ -212,8 +245,13 @@ class MetricStoreQueryMixin:
             for r in rows
         ]
 
-    def query_uptime_pct(self, ip: str, hours: float = 24.0) -> float:
-        """Return uptime % for `ip` in the given window. Returns 100.0 if no samples."""
+    def query_uptime_pct(self, ip: str, hours: float = 24.0) -> Optional[float]:
+        """Return uptime % for `ip` in the given window.
+
+        Returns None when there are no samples (device not yet monitored or
+        outside the window), so callers can display '—' rather than a
+        misleading '100%'.
+        """
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
             "SELECT COUNT(*) AS total, "
@@ -223,7 +261,7 @@ class MetricStoreQueryMixin:
         )
         row = rows[0] if rows else None
         if not row or not row["total"]:
-            return 100.0
+            return None
         return round(100.0 * row["up_count"] / row["total"], 2)
 
     # ── Read: device events ───────────────────────────────────────────────────
@@ -375,14 +413,20 @@ class MetricStoreQueryMixin:
 
     def list_cve_lifecycles(self, state_filter: Optional[str] = None) -> List[dict]:
         """Return all CVE lifecycle rows, optionally filtered by state."""
+        _CVE_COLS = (
+            "id, cve_id, service, host, state, owner, notes, "
+            "cvss_score, severity, description, opened_ts, updated_ts"
+        )
         if state_filter:
             rows = self._execute_read(
-                "SELECT * FROM cve_lifecycle WHERE state=? ORDER BY cvss_score DESC, opened_ts ASC",
+                f"SELECT {_CVE_COLS} FROM cve_lifecycle "
+                "WHERE state=? ORDER BY cvss_score DESC, opened_ts ASC",
                 (state_filter,),
             )
         else:
             rows = self._execute_read(
-                "SELECT * FROM cve_lifecycle ORDER BY cvss_score DESC, opened_ts ASC",
+                f"SELECT {_CVE_COLS} FROM cve_lifecycle "
+                "ORDER BY cvss_score DESC, opened_ts ASC",
                 (),
             )
         return [dict(r) for r in rows]
@@ -393,7 +437,8 @@ class MetricStoreQueryMixin:
         """Return alerts that have not been acknowledged."""
         cutoff = int(time.time()) - older_than_s
         rows = self._execute_read(
-            "SELECT * FROM alert_fired WHERE acked_ts IS NULL AND ts <= ? "
+            "SELECT id, ts, rule_name, host, severity, message, acked_ts, acked_by, escalated "
+            "FROM alert_fired WHERE acked_ts IS NULL AND ts <= ? "
             "ORDER BY ts ASC",
             (cutoff,),
         )
@@ -403,7 +448,8 @@ class MetricStoreQueryMixin:
         """Return recent fired alerts, newest first."""
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
-            "SELECT * FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+            "SELECT id, ts, rule_name, host, severity, message, acked_ts, acked_by, escalated "
+            "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         )
         return [dict(r) for r in rows]

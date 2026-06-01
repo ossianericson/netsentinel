@@ -347,9 +347,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Flat-nav dead code removed (S13-5c)", "Removed the old progressive-disclosure nav mode system (_nav_mode, _cycle_mode, _set_mode, _rail_mode_btn). Navigation always uses the activity rail — no more silent no-ops when mode was 'home'."),
-        ("18 Tier 2 scan/detection module tests (S9-2)", "140 new unit tests covering arp_monitor, bandwidth_monitor, cloud_metadata, dns_correlator, dns_zone_scanner, ha_detector, internet_exposure, os_fingerprint, port_scanner, process_monitor, rogue_device, smb_enumerator, snmp_poller, storm_analyser, stp_detector, syn_scanner, threat_intel, wifi_scanner."),
-        ("Colour token inventory (S10-1)", "test_colour_inventory.py locks per-file hardcoded-hex budgets for 70 files. No new raw #RRGGBB strings can be introduced without updating the budget — prereq for the S10-2 purge sprint."),
+        ("Notification delivery tracking", "Pushover, ntfy, and Telegram alerts now report success or failure in the alert history — no more silent drops when a channel is misconfigured or unreachable."),
+        ("Uptime page accuracy", "Devices with no monitoring samples now show '—' instead of a misleading '100%' uptime figure. Fleet average and worst-device KPIs exclude unmonitored devices."),
+        ("Uptime query performance", "The uptime table query was reduced from N×M+1 individual lookups to a fixed 4 GROUP BY queries regardless of device count — noticeable on larger networks."),
+        ("Encoding detection hardened", "test_source_encoding.py now catches 4-byte emoji mojibake (e.g. 🌙→ðŸŒ™) in addition to the existing 2–3-byte BMP character checks."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
