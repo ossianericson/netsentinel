@@ -63,6 +63,7 @@ class RegistryEntry:
     tags:        List[str] = field(default_factory=list)
     url:         str       = ""           # raw URL of the .py file
     homepage:    str       = ""           # human-readable project page
+    sha256:      str       = ""           # optional hex digest; verified if non-empty
 
     @property
     def tag_str(self) -> str:
@@ -120,6 +121,7 @@ def fetch_registry(
             tags        = [str(t) for t in item.get("tags", [])],
             url         = str(item["url"]),
             homepage    = str(item.get("homepage",    "")),
+            sha256      = str(item.get("sha256",      "")),
         ))
     return entries
 
@@ -185,6 +187,16 @@ def install_plugin(
             f"Downloaded file for '{entry.name}' does not contain PLUGIN_META — "
             "refusing to install an unrecognised file."
         )
+
+    # SHA-256 integrity check (when the registry entry provides a digest)
+    if entry.sha256:
+        import hashlib
+        actual = hashlib.sha256(buf).hexdigest()
+        if actual.lower() != entry.sha256.lower():
+            raise ValueError(
+                f"SHA-256 mismatch for '{entry.name}': "
+                f"expected {entry.sha256}, got {actual}"
+            )
 
     dest.write_bytes(buf)
     log.info("Plugin installed: %s → %s", entry.name, dest)

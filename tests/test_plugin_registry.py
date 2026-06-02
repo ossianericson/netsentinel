@@ -227,6 +227,69 @@ def test_uninstall_noop_when_absent(tmp_path, monkeypatch):
     uninstall_plugin(entry)   # should not raise
 
 
+# ── SHA-256 verification (PB-8) ───────────────────────────────────────────────
+
+def test_entry_sha256_default_empty():
+    """RegistryEntry sha256 defaults to empty string."""
+    e = RegistryEntry(name="X")
+    assert e.sha256 == ""
+
+
+def test_fetch_registry_parses_sha256():
+    """fetch_registry must populate sha256 when present in JSON."""
+    data = [{"name": "Hashed", "url": "https://example.com/hashed.py",
+             "sha256": "abc123def456"}]
+    with patch("urllib.request.urlopen", return_value=_make_response(data)):
+        entries = fetch_registry()
+    assert entries[0].sha256 == "abc123def456"
+
+
+def test_fetch_registry_sha256_defaults_empty():
+    """fetch_registry must default sha256 to '' when absent from JSON."""
+    data = [{"name": "NoHash", "url": "https://example.com/nohash.py"}]
+    with patch("urllib.request.urlopen", return_value=_make_response(data)):
+        entries = fetch_registry()
+    assert entries[0].sha256 == ""
+
+
+def test_install_plugin_sha256_match_succeeds(tmp_path, monkeypatch):
+    """install_plugin must succeed when sha256 matches the downloaded content."""
+    import hashlib
+    monkeypatch.setattr("modules.plugin_registry.plugins_dir", lambda: tmp_path)
+    expected_sha = hashlib.sha256(_FAKE_PLUGIN_PY).hexdigest()
+    entry = RegistryEntry(
+        name="Hashed", url="https://example.com/hashed_plugin.py",
+        sha256=expected_sha,
+    )
+    with patch("urllib.request.urlopen", side_effect=_mock_urlopen_download):
+        dest = install_plugin(entry)
+    assert dest.exists()
+
+
+def test_install_plugin_sha256_mismatch_raises(tmp_path, monkeypatch):
+    """install_plugin must raise ValueError when sha256 does not match."""
+    monkeypatch.setattr("modules.plugin_registry.plugins_dir", lambda: tmp_path)
+    entry = RegistryEntry(
+        name="Tampered", url="https://example.com/tampered_plugin.py",
+        sha256="a" * 64,   # wrong digest
+    )
+    with patch("urllib.request.urlopen", side_effect=_mock_urlopen_download):
+        with pytest.raises(ValueError, match="mismatch"):
+            install_plugin(entry)
+
+
+def test_install_plugin_no_sha256_skips_check(tmp_path, monkeypatch):
+    """install_plugin must succeed without verifying when sha256 is empty."""
+    monkeypatch.setattr("modules.plugin_registry.plugins_dir", lambda: tmp_path)
+    entry = RegistryEntry(
+        name="NoHash", url="https://example.com/nohash_plugin.py",
+        sha256="",   # empty = no verification
+    )
+    with patch("urllib.request.urlopen", side_effect=_mock_urlopen_download):
+        dest = install_plugin(entry)
+    assert dest.exists()
+
+
 # ── REGISTRY_URL ──────────────────────────────────────────────────────────────
 
 def test_registry_url_is_https():

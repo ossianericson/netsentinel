@@ -8,24 +8,60 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton,
-    QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
+    QScrollArea, QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, AMBER_BG,
-    AUDIT_RED, BG_CARD, BORDER, CARD_RADIUS, GREEN, RED, RED_BG, RISK_BG, RISK_COLORS,
+    AUDIT_RED, BG_CARD, BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG, RISK_BG, RISK_COLORS,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.tabs_helpers import _table, _make_card, _empty_state_widget
 
 if TYPE_CHECKING:
     from ui.dashboard import Dashboard
+
+
+# ── Community scan plugin registry threads (PB-8) ─────────────────────────────
+
+class _ScanPluginRegistryFetchThread(QThread):
+    """Fetches the scan plugin community index in a background thread."""
+    done  = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, url: str, parent=None) -> None:
+        super().__init__(parent)
+        self._url = url
+
+    def run(self) -> None:
+        try:
+            from modules.plugin_registry import fetch_registry
+            self.done.emit(fetch_registry(self._url))
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _ScanPluginInstallThread(QThread):
+    """Downloads and installs one scan plugin entry in a background thread."""
+    done  = pyqtSignal(str)   # installed file path
+    error = pyqtSignal(str)
+
+    def __init__(self, entry, parent=None) -> None:
+        super().__init__(parent)
+        self._entry = entry
+
+    def run(self) -> None:
+        try:
+            from modules.plugin_registry import install_plugin
+            self.done.emit(str(install_plugin(self._entry)))
+        except Exception as exc:
+            self.error.emit(str(exc))
 
 
 class _ReconTabsMixin:
@@ -754,10 +790,18 @@ class _ReconTabsMixin:
         self._btn_plugin_new.setObjectName("btnNetRefresh")
         self._btn_plugin_new.clicked.connect(self._new_scan_plugin_wizard)
 
+        self._btn_plugin_community = QPushButton("⬇  Get Plugins")
+        self._btn_plugin_community.setObjectName("btnNetRefresh")
+        self._btn_plugin_community.setToolTip(
+            "Browse and install scan plugins from the community registry"
+        )
+        self._btn_plugin_community.clicked.connect(self._browse_community_plugins)
+
         ctrl.addWidget(self._btn_plugin_reload)
         ctrl.addWidget(self._btn_plugin_open_dir)
         ctrl.addWidget(self._btn_plugin_run)
         ctrl.addWidget(self._btn_plugin_new)
+        ctrl.addWidget(self._btn_plugin_community)
         ctrl.addStretch()
 
         self._plugin_dir_lbl = QLabel("")
@@ -956,6 +1000,122 @@ class _ReconTabsMixin:
         self._plugin_status.setText(
             f"Created '{dest.name}' — open the plugins folder to edit it."
         )
+
+    def _browse_community_plugins(self) -> None:
+        """Browse and install community scan plugins from the registry (PB-8)."""
+        from modules.plugin_registry import REGISTRY_URL, is_installed
+
+        dlg = QDialog(self._plugin_list_table.window())
+        dlg.setWindowTitle("Community Scan Plugins")
+        dlg.setMinimumSize(560, 440)
+        vlay = QVBoxLayout(dlg)
+        vlay.setContentsMargins(12, 10, 12, 10)
+        vlay.setSpacing(6)
+
+        top = QHBoxLayout()
+        reg_status = QLabel("Press Refresh to fetch available plugins.")
+        reg_status.setStyleSheet(f"color:{TEXT_MUTED};font-size:10px;")
+        top.addWidget(reg_status, 1)
+        btn_refresh = QPushButton("↻  Refresh")
+        btn_refresh.setObjectName("btnNetRefresh")
+        top.addWidget(btn_refresh)
+        vlay.addLayout(top)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea{border:none;}")
+        inner = QWidget()
+        inner.setStyleSheet(f"background:{BG_CARD};")
+        cards_lay = QVBoxLayout(inner)
+        cards_lay.setContentsMargins(0, 4, 0, 4)
+        cards_lay.setSpacing(4)
+        cards_lay.addStretch()
+        scroll.setWidget(inner)
+        vlay.addWidget(scroll, 1)
+
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        bb.rejected.connect(dlg.reject)
+        vlay.addWidget(bb)
+
+        _active_threads: list = []
+
+        def _rebuild_cards(entries: list) -> None:
+            while cards_lay.count() > 1:
+                item = cards_lay.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            reg_status.setText(f"{len(entries)} plugin(s) available.")
+            for entry in entries:
+                row = QFrame()
+                row.setStyleSheet(
+                    f"QFrame{{background:{BG_CARD};border:1px solid {BORDER};"
+                    f"border-radius:{CARD_RADIUS};}}"
+                )
+                rlay = QHBoxLayout(row)
+                rlay.setContentsMargins(10, 6, 10, 6)
+                rlay.setSpacing(8)
+                info_col = QVBoxLayout()
+                name_lbl = QLabel(
+                    f"<b>{entry.name}</b>  "
+                    f"<span style='color:{TEXT_MUTED};font-size:9px;'>"
+                    f"v{entry.version}  by {entry.author}</span>"
+                )
+                name_lbl.setTextFormat(Qt.TextFormat.RichText)
+                name_lbl.setStyleSheet(f"color:{TEXT_PRIMARY};border:none;")
+                info_col.addWidget(name_lbl)
+                if entry.description:
+                    desc_lbl = QLabel(entry.description)
+                    desc_lbl.setStyleSheet(
+                        f"color:{TEXT_SECONDARY};font-size:10px;border:none;"
+                    )
+                    desc_lbl.setWordWrap(True)
+                    info_col.addWidget(desc_lbl)
+                rlay.addLayout(info_col, 1)
+                installed = is_installed(entry)
+                btn_inst = QPushButton("✓ Installed" if installed else "⬇ Install")
+                btn_inst.setEnabled(not installed)
+                btn_inst.setFixedHeight(26)
+                _inst_bg = GREEN_BG if installed else ACCENT
+                _inst_fg = GREEN if installed else WHITE
+                btn_inst.setStyleSheet(
+                    f"QPushButton{{background:{_inst_bg};color:{_inst_fg};"
+                    f"border:none;border-radius:3px;font-size:11px;padding:0 10px;}}"
+                    f"QPushButton:hover{{background:{ACCENT_DARK};color:{WHITE};}}"
+                    f"QPushButton:pressed{{background:{ACCENT_DARK};color:{WHITE};}}"
+                    f"QPushButton:disabled{{background:{GREEN_BG};color:{GREEN};}}"
+                )
+                if not installed:
+                    def _on_install(_, e=entry, b=btn_inst) -> None:
+                        b.setText("Installing…")
+                        b.setEnabled(False)
+                        t = _ScanPluginInstallThread(e, parent=dlg)
+                        t.done.connect(
+                            lambda _p, _b=b: (_b.setText("✓ Installed"), self._reload_plugins()),
+                            Qt.ConnectionType.QueuedConnection,
+                        )
+                        t.error.connect(
+                            lambda msg, _b=b: _b.setText("Error"),
+                            Qt.ConnectionType.QueuedConnection,
+                        )
+                        _active_threads.append(t)
+                        t.start()
+                    btn_inst.clicked.connect(_on_install)
+                rlay.addWidget(btn_inst)
+                cards_lay.insertWidget(cards_lay.count() - 1, row)
+
+        def _fetch() -> None:
+            reg_status.setText("Fetching registry…")
+            t = _ScanPluginRegistryFetchThread(REGISTRY_URL, parent=dlg)
+            t.done.connect(_rebuild_cards, Qt.ConnectionType.QueuedConnection)
+            t.error.connect(
+                lambda msg: reg_status.setText(f"Error: {msg}"),
+                Qt.ConnectionType.QueuedConnection,
+            )
+            _active_threads.append(t)
+            t.start()
+
+        btn_refresh.clicked.connect(_fetch)
+        dlg.exec()
 
     @pyqtSlot()
     def _run_selected_plugin(self):

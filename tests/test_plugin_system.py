@@ -681,3 +681,51 @@ class TestPluginErrorDisplay:
         assert "details_toggle" in src, "Dialog must have an error details toggle button"
         assert "details_text" in src, "Dialog must have a details QTextEdit"
         assert "Show error details" in src, "Toggle button must have 'Show error details' label"
+
+
+# ── PB-8 — Community scan plugin registry browse ─────────────────────────────
+
+class TestCommunityPluginBrowse:
+    def test_get_plugins_button_exists_in_source(self):
+        """tabs_recon.py must have a 'Get Plugins' button wired to community browse (PB-8)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "Get Plugins" in src, "'Get Plugins' button label must be present"
+        assert "_btn_plugin_community" in src, "_btn_plugin_community widget must be created"
+        assert "_browse_community_plugins" in src, "_browse_community_plugins method must exist"
+
+    def test_get_plugins_button_wired_to_method(self):
+        """'Get Plugins' button must be connected to _browse_community_plugins (PB-8)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "_btn_plugin_community.clicked.connect(self._browse_community_plugins)" in src
+
+    def test_fetch_thread_class_defined(self):
+        """_ScanPluginRegistryFetchThread must be defined in tabs_recon.py (PB-8)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "_ScanPluginRegistryFetchThread" in src
+        assert "fetch_registry" in src
+
+    def test_install_thread_class_defined(self):
+        """_ScanPluginInstallThread must be defined in tabs_recon.py (PB-8)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "_ScanPluginInstallThread" in src
+        assert "install_plugin" in src
+
+    def test_fetch_thread_importable(self):
+        """_ScanPluginRegistryFetchThread must be importable from tabs_recon (PB-8)."""
+        from ui.tabs_recon import _ScanPluginRegistryFetchThread
+        assert _ScanPluginRegistryFetchThread is not None
+
+    def test_install_thread_importable(self):
+        """_ScanPluginInstallThread must be importable from tabs_recon (PB-8)."""
+        from ui.tabs_recon import _ScanPluginInstallThread
+        assert _ScanPluginInstallThread is not None
+
+    def test_browse_uses_registry_url(self):
+        """Community browse must reference REGISTRY_URL from plugin_registry (PB-8)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "REGISTRY_URL" in src, "Community browse must use REGISTRY_URL from plugin_registry"

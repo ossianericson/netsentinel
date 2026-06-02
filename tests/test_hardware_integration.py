@@ -539,3 +539,58 @@ def test_hubcard_update_result_modem(monkeypatch):
     card.update_result(data, time.time())  # must not raise
     card.deleteLater()
     QApplication.instance().processEvents()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. PB-9 — .nspkg import button and Browse tab (page-level integration)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_hardware_page_has_nspkg_button(page):
+    """HardwareIntegrationPage must expose a _btn_nspkg widget (PB-9)."""
+    assert hasattr(page, "_btn_nspkg"), "_btn_nspkg button is missing from HardwareIntegrationPage"
+    from PyQt6.QtWidgets import QPushButton
+    assert isinstance(page._btn_nspkg, QPushButton)
+
+
+def test_hardware_page_nspkg_button_not_hidden(page):
+    """_btn_nspkg must not be explicitly hidden (visible once page is shown)."""
+    assert not page._btn_nspkg.isHidden()
+
+
+def test_hardware_page_has_browse_tab(page):
+    """Hardware page must have a 'Browse' tab (PB-8 community index)."""
+    assert page._tabs is not None
+    tab_labels = [page._tabs.tabText(i) for i in range(page._tabs.count())]
+    assert "Browse" in tab_labels, f"Expected 'Browse' tab, got tabs: {tab_labels}"
+
+
+def test_hardware_page_browse_tab_has_status_label(page):
+    """Browse tab must expose _browse_status label for fetch feedback."""
+    assert hasattr(page, "_browse_status"), "_browse_status label is missing"
+    from PyQt6.QtWidgets import QLabel
+    assert isinstance(page._browse_status, QLabel)
+
+
+def test_on_import_nspkg_cancelled_when_no_file(page, monkeypatch):
+    """_on_import_nspkg must silently return when the file dialog is cancelled."""
+    monkeypatch.setattr(
+        "ui.pages.hardware_integration_page.QFileDialog.getOpenFileName",
+        lambda *a, **kw: ("", ""),
+    )
+    called = []
+    monkeypatch.setattr(page, "_import_bundled", lambda p: called.append(p))
+    page._on_import_nspkg()
+    assert not called, "_import_bundled must not be called when dialog is cancelled"
+
+
+def test_on_import_nspkg_invalid_bundle_sets_status(page, monkeypatch, tmp_path):
+    """_on_import_nspkg must show an error status when unpack_nspkg raises."""
+    fake_zip = tmp_path / "bad.nspkg"
+    fake_zip.write_bytes(b"not a zip")
+    monkeypatch.setattr(
+        "ui.pages.hardware_integration_page.QFileDialog.getOpenFileName",
+        lambda *a, **kw: (str(fake_zip), ""),
+    )
+    page._on_import_nspkg()
+    # Status label should contain an error message
+    assert page._status_lbl.text() != "", "Status label must show an error for invalid bundle"
