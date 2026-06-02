@@ -180,3 +180,89 @@ class TestFindingStructure:
             for attr in required:
                 val = getattr(f, attr, None)
                 assert val is not None, f"CorrelatedFinding missing attribute: {attr}"
+
+
+# ── A3: verify_step field ─────────────────────────────────────────────────────
+
+class TestVerifyStep:
+    def test_finding_has_verify_step_field(self):
+        f = CorrelatedFinding(
+            source="test", category="test", severity="INFO",
+            headline="h", detail="d", remediation="r",
+        )
+        assert hasattr(f, "verify_step")
+        assert f.verify_step == ""
+
+    def test_verify_step_custom_value(self):
+        f = CorrelatedFinding(
+            source="test", category="test", severity="INFO",
+            headline="h", detail="d", remediation="r",
+            verify_step="Go to DNS & Stability to confirm.",
+        )
+        assert f.verify_step == "Go to DNS & Stability to confirm."
+
+    def test_isp_finding_has_verify_step(self):
+        hop = types.SimpleNamespace(rtt_ms=1.0)
+        bad_hops = [types.SimpleNamespace(rtt_ms=-1) for _ in range(4)]
+        dr = types.SimpleNamespace(
+            trace_hops=[hop] + bad_hops, ping_results=[], dns_results=[],
+            download_mbps=50.0, dns_leak=None,
+        )
+        result = correlate(diag_result=dr)
+        isp_findings = [f for f in result.findings if "ISP" in f.category]
+        for f in isp_findings:
+            assert hasattr(f, "verify_step")
+
+    def test_stp_finding_has_verify_step(self):
+        result = correlate(stp_bpdus=_rogue_bpdus())
+        for f in result.findings:
+            assert hasattr(f, "verify_step")
+
+
+# ── A3: gateway_ip threading ──────────────────────────────────────────────────
+
+class TestGatewayIpThreading:
+    def test_correlate_accepts_gateway_ip(self):
+        result = correlate(gateway_ip="192.168.1.1")
+        assert isinstance(result, CorrelationResult)
+
+    def test_dns_failure_remediation_uses_gateway_ip(self):
+        import types as _t
+        dns_fail = _t.SimpleNamespace(status="FAIL", server="8.8.8.8")
+        dr = _t.SimpleNamespace(
+            trace_hops=[], ping_results=[], dns_results=[dns_fail],
+            download_mbps=50.0, dns_leak=None,
+        )
+        result = correlate(diag_result=dr, gateway_ip="192.168.0.1")
+        dns_findings = [f for f in result.findings if "DNS" in f.category]
+        assert dns_findings, "Expected at least one DNS finding"
+        from urllib.parse import urlparse
+        remedy = dns_findings[0].remediation
+        urls = [tok for tok in remedy.split() if "://" in tok]
+        assert any(urlparse(u).hostname == "192.168.0.1" for u in urls), (
+            f"gateway_ip not present in DNS remediation: {remedy}"
+        )
+
+    def test_no_cli_commands_in_remediations(self):
+        import types as _t
+        dns_fail = _t.SimpleNamespace(status="FAIL", server="8.8.8.8")
+        dr = _t.SimpleNamespace(
+            trace_hops=[], ping_results=[], dns_results=[dns_fail],
+            download_mbps=1.0, dns_leak=None,
+        )
+        result = correlate(
+            diag_result=dr,
+            storm_result=_storm_result(level="STORM"),
+            stp_bpdus=_rogue_bpdus(),
+            log_summary=_log_summary(uptime=50.0),
+        )
+        _BAD_PHRASES = [
+            "nslookup", "ipconfig", "ping -t", "ping -c",
+            "speedtest.net", "Network Adapter settings", "IPv4 Properties",
+        ]
+        for f in result.findings:
+            for phrase in _BAD_PHRASES:
+                assert phrase not in f.remediation, (
+                    f"CLI reference '{phrase}' found in {f.category} remediation: "
+                    f"{f.remediation!r}"
+                )

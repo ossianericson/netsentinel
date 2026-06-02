@@ -48,6 +48,7 @@ class CorrelatedFinding:
     headline: str        # one-line plain-English summary
     detail: str          # longer explanation
     remediation: str     # plain-English fix — written for a home user
+    verify_step: str = ""  # "To confirm this is fixed: [step]" — shown below remediation
 
 
 @dataclass
@@ -115,6 +116,10 @@ def _correlate_isp(
                 "If that does not help, connect directly to it with an Ethernet "
                 "cable and check its admin page."
             ),
+            verify_step=(
+                "After restarting your router, run What's Wrong? again in "
+                "NetSentinel to confirm the gateway is responding."
+            ),
         ))
         return False  # local problem, do not suppress other local alerts
 
@@ -134,6 +139,10 @@ def _correlate_isp(
                 "Contact your ISP and quote this trace result. "
                 "While waiting, try restarting your modem (the box that "
                 "connects to the street, not the Wi-Fi router)."
+            ),
+            verify_step=(
+                "NetSentinel's Connection Monitor will automatically detect "
+                "when the ISP issue is resolved."
             ),
         ))
         return True  # suppress unrelated local noise
@@ -200,6 +209,10 @@ def _correlate_storm(
                         "separate guest Wi-Fi network so it cannot affect your main "
                         "devices. Check the manufacturer's website for a firmware update."
                     ),
+                    verify_step=(
+                        "Go to Broadcast Storm in NetSentinel — the storm level "
+                        "should return to CLEAN after isolating or restarting the device."
+                    ),
                 ))
 
         if not any(f.category.startswith("Degraded IoT") for f in findings):
@@ -220,6 +233,10 @@ def _correlate_storm(
                     "Analyser tab). Disconnect it temporarily to confirm. Look for "
                     "any Ethernet cables plugged into two ports on the same switch "
                     "(network loop)."
+                ),
+                verify_step=(
+                    "Go to Broadcast Storm in NetSentinel — the storm level "
+                    "should return to CLEAN after disconnecting the culprit device."
                 ),
             ))
 
@@ -254,6 +271,10 @@ def _correlate_stp(
                     "If it is a mesh Wi-Fi node, switch it to wireless backhaul mode "
                     "only. If it is a switch or hub, enable Rapid STP (RSTP) and "
                     "set a lower bridge priority on your main router."
+                ),
+                verify_step=(
+                    "Go to Rogue Bridge (STP) in NetSentinel — the device "
+                    "should no longer appear in the list after disconnecting it."
                 ),
             ))
 
@@ -295,6 +316,10 @@ def _correlate_logger(
                 "modem. If the drops happen on Wi-Fi, try a wired connection to "
                 "confirm whether the fault is in your router or ISP line."
             ),
+            verify_step=(
+                "NetSentinel's Connection Monitor will automatically detect "
+                "when the drops stop. Check Availability for an updated timeline."
+            ),
         ))
 
     if jitter > 20.0:
@@ -316,6 +341,10 @@ def _correlate_logger(
                 "prioritise video-call traffic. If jitter is only high at peak "
                 "times, your ISP line may be congested — contact them."
             ),
+            verify_step=(
+                "Go to DNS & Stability in NetSentinel to see if jitter has "
+                "improved after making changes. After the fix, click Rescan."
+            ),
         ))
 
 
@@ -324,6 +353,7 @@ def _correlate_logger(
 def _correlate_diagnostics(
     diag_result,
     findings: List[CorrelatedFinding],
+    gateway_ip: Optional[str] = None,
 ) -> None:
     """Translate raw DiagnosticsResult checks into plain-English findings."""
     if diag_result is None:
@@ -345,9 +375,14 @@ def _correlate_diagnostics(
                 "connectivity works. Affected resolvers: " + servers
             ),
             remediation=(
-                "In your router settings, change the DNS server to 1.1.1.1 "
-                "(Cloudflare) or 8.8.8.8 (Google). On Windows, open Network "
-                "Adapter settings → IPv4 Properties and set the DNS manually."
+                "Open your router settings"
+                + (f" at http://{gateway_ip}" if gateway_ip else "")
+                + " and change the DNS server to 1.1.1.1 (Cloudflare) or 8.8.8.8 "
+                "(Google). This fixes every device on your network at once."
+            ),
+            verify_step=(
+                "Go to DNS & Stability in NetSentinel and run a fresh DNS test. "
+                "After making this change, click Rescan to confirm the problem is gone."
             ),
         ))
 
@@ -365,11 +400,14 @@ def _correlate_diagnostics(
                 "This will cause severe buffering and call quality issues."
             ),
             remediation=(
-                "Run a speed test at speedtest.net from the same device. "
-                "If speed is also low there, contact your ISP. "
-                "If speedtest is fine, the problem is local — restart your "
-                "router and check for devices consuming all the bandwidth "
-                "(see Bandwidth Monitor tab)."
+                f"NetSentinel measured {dl:.1f} Mbps download on this device. "
+                "Open the Bandwidth Monitor in NetSentinel to check if other "
+                "devices are using all the bandwidth. If the problem persists "
+                "after a router restart, call your ISP and quote this measurement."
+            ),
+            verify_step=(
+                "Go to Speed Test in NetSentinel and run a new test to confirm "
+                "speed has improved. After the fix, click Rescan."
             ),
         ))
 
@@ -388,8 +426,13 @@ def _correlate_diagnostics(
             ),
             remediation=(
                 "In your VPN client settings, enable 'DNS Leak Protection' or "
-                "'Block DNS outside VPN'. Alternatively, configure your router "
-                "to use only your VPN provider's DNS servers."
+                "'Block DNS outside VPN'. Alternatively, configure your router"
+                + (f" at http://{gateway_ip}" if gateway_ip else "")
+                + " to use only your VPN provider's DNS servers."
+            ),
+            verify_step=(
+                "Go to DNS & Stability in NetSentinel and run a fresh DNS leak "
+                "test to confirm the leak is gone."
             ),
         ))
 
@@ -403,6 +446,7 @@ def correlate(
     fingerprint_devices: Optional[list] = None,
     log_summary=None,
     gateway_mac: Optional[str] = None,
+    gateway_ip: Optional[str] = None,
 ) -> CorrelationResult:
     """
     Run all correlation passes and return a CorrelationResult.
@@ -431,7 +475,7 @@ def correlate(
     _correlate_stp(stp_bpdus or [], gateway_mac, findings)
     _correlate_logger(log_summary, findings)
     if not isp_to_blame:
-        _correlate_diagnostics(diag_result, findings)
+        _correlate_diagnostics(diag_result, findings, gateway_ip)
 
     # Sort by severity (highest first)
     findings.sort(key=lambda f: _severity_rank(f.severity), reverse=True)

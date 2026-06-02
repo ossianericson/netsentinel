@@ -366,7 +366,8 @@ class HomeAutomationPage(QWidget):
     Home Automation Hub — discover, label, and monitor HA devices.
     """
 
-    navigate_to = pyqtSignal(str)
+    navigate_to    = pyqtSignal(str)
+    scan_requested = pyqtSignal()  # emitted when user clicks Scan Network
 
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -460,6 +461,7 @@ class HomeAutomationPage(QWidget):
         btn_scan.setFixedHeight(30)
         btn_scan.setToolTip("Scan all known devices for HA protocol signatures")
         btn_scan.clicked.connect(self._run_ha_scan)
+        btn_scan.clicked.connect(lambda: self.scan_requested.emit())
 
         btn_add = QPushButton("＋  Add Device")
         btn_add.setObjectName("btnNetRefresh")

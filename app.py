@@ -644,6 +644,14 @@ def main():
     window._history_page.scan_requested.connect(window._start_full_scan)
     window._uptime_page.scan_requested.connect(window._start_full_scan)
     window._inventory_page.scan_requested.connect(window._start_full_scan)
+    # E2: wire newly-added scan_requested signals
+    window._home_automation_page.scan_requested.connect(window._start_full_scan)
+    window._cert_page.scan_requested.connect(window._start_full_scan)
+    window._service_page.scan_requested.connect(window._start_full_scan)
+    window._speed_test_page.scan_requested.connect(window._start_full_scan)
+    window._lab_mode_page.scan_requested.connect(window._start_full_scan)
+    window._trigger_builder_page.scan_requested.connect(window._start_full_scan)
+    window._diagnosis_page.scan_requested.connect(window._start_full_scan)
 
     # ── Show window / close splash ────────────────────────────────────────────
     if not _start_minimised:

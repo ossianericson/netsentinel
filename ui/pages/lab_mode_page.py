@@ -164,6 +164,8 @@ class _LabScanWorker(QThread):
 
 class LabModePage(QWidget):
 
+    scan_requested = pyqtSignal()  # emitted when user starts a lab exercise
+
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store            = store
@@ -262,6 +264,7 @@ class LabModePage(QWidget):
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btn.clicked.connect(lambda _, s=scenario: self._start_scenario(s))
+        btn.clicked.connect(lambda: self.scan_requested.emit())
         lay.addWidget(btn)
         return card
 

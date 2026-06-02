@@ -397,6 +397,7 @@ class SpeedTestPage(QWidget):
 
     modem_pause_requested  = pyqtSignal()  # pause ZteWorker before capturing signal
     modem_resume_requested = pyqtSignal()  # restart ZteWorker after test finishes
+    scan_requested         = pyqtSignal()  # emitted when the user clicks Run Speed Test
 
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -531,6 +532,7 @@ class SpeedTestPage(QWidget):
         self._btn_run.setMinimumWidth(180)
         self._btn_run.setFixedHeight(34)
         self._btn_run.clicked.connect(self._run_test)
+        self._btn_run.clicked.connect(lambda: self.scan_requested.emit())
 
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet(

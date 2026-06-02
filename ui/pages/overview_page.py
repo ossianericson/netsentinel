@@ -222,6 +222,24 @@ class OverviewPage(QWidget):
         hero.addStretch()
         root.addLayout(hero)
 
+        # ── Grade explanation panel ───────────────────────────────────────────
+        self._grade_toggle = QPushButton("▶  How is this grade calculated?")
+        self._grade_toggle.setFlat(True)
+        self._grade_toggle.setCheckable(True)
+        self._grade_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._grade_toggle.setStyleSheet(
+            f"QPushButton {{ color:{TEXT_SECONDARY}; font-size:10px; background:transparent;"
+            f" border:none; padding:0; text-align:left; }}"
+            f"QPushButton:hover {{ color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
+        )
+        self._grade_toggle.toggled.connect(self._toggle_grade_panel)
+        root.addWidget(self._grade_toggle)
+
+        self._grade_panel = self._build_grade_panel()
+        self._grade_panel.hide()
+        root.addWidget(self._grade_panel)
+
         # Add-tile strip — only visible in edit mode when tiles are hidden
         self._add_strip = QWidget()
         self._add_strip.setStyleSheet(
@@ -344,6 +362,80 @@ class OverviewPage(QWidget):
         for tile in self._tiles.values():
             if tile is not expanding_tile and tile._expanded:
                 tile.toggle_expand()
+
+    # ── Grade explanation panel ───────────────────────────────────────────────
+
+    _GRADE_DIMENSIONS = [
+        ("Uptime",               "% of ping probes that succeed over 24 hours. Failures indicate outages.",
+         "Availability"),
+        ("Latency",              "Average round-trip time to your gateway. High latency causes delays in every app.",
+         "DNS & Stability"),
+        ("Jitter",               "How much your latency varies. High jitter causes choppy voice and video calls.",
+         "DNS & Stability"),
+        ("DNS Speed",            "How quickly your DNS resolver turns domain names into IP addresses.",
+         "DNS & Stability"),
+        ("Download Speed",       "Measured download bandwidth compared to your plan speed.",
+         "Speed Test"),
+        ("Device Safety",        "Risk score across all discovered devices based on open ports and known CVEs.",
+         "Risk Score"),
+        ("STP Health",           "Spanning Tree Protocol integrity — detects rogue network bridges causing outage cycles.",
+         "Rogue Bridge (STP)"),
+        ("Broadcast Storm Level","Rate of broadcast/multicast packets — high rates slow every device on the network.",
+         "Broadcast Storm"),
+    ]
+
+    def _build_grade_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("gradePanel")
+        panel.setStyleSheet(
+            f"QFrame#gradePanel {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:4px; }}"
+        )
+        lay = QVBoxLayout(panel)
+        lay.setContentsMargins(14, 10, 14, 10)
+        lay.setSpacing(6)
+
+        hdr = QLabel("How the Network Grade is calculated")
+        hdr.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f" background:transparent; border:none;"
+        )
+        lay.addWidget(hdr)
+
+        for name, desc, target in self._GRADE_DIMENSIONS:
+            row = QHBoxLayout()
+            row.setSpacing(6)
+
+            link_btn = QPushButton(name)
+            link_btn.setFlat(True)
+            link_btn.setFixedWidth(148)
+            link_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            link_btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:10px; font-weight:bold;"
+                f" background:transparent; border:none; padding:0; text-align:left; }}"
+                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+                f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
+            )
+            link_btn.clicked.connect(
+                lambda _=False, t=target: self.navigate_to.emit(t)
+            )
+
+            desc_lbl = QLabel(desc)
+            desc_lbl.setWordWrap(True)
+            desc_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+
+            row.addWidget(link_btn)
+            row.addWidget(desc_lbl, 1)
+            lay.addLayout(row)
+
+        return panel
+
+    def _toggle_grade_panel(self, checked: bool) -> None:
+        self._grade_panel.setVisible(checked)
+        arrow = "▼" if checked else "▶"
+        self._grade_toggle.setText(f"{arrow}  How is this grade calculated?")
 
     def _on_scan_clicked(self) -> None:
         if not self._scanning:

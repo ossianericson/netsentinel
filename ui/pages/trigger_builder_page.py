@@ -319,6 +319,8 @@ class _RuleEditorDialog(QDialog):
 class TriggerBuilderPage(QWidget):
     """Custom trigger expression rule builder."""
 
+    scan_requested = pyqtSignal()  # emitted when user creates their first trigger rule
+
     def __init__(self, store: Optional[object] = None,
                  parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -393,6 +395,7 @@ class TriggerBuilderPage(QWidget):
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _btn_template.clicked.connect(self._on_add_template)
+        _btn_template.clicked.connect(lambda: self.scan_requested.emit())
         _el.addWidget(_empty_desc)
         _el.addSpacing(4)
         _el.addWidget(_btn_template, alignment=Qt.AlignmentFlag.AlignCenter)

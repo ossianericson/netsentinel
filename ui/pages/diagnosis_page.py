@@ -52,10 +52,11 @@ _CTA_MAP: dict[str, tuple[str, str]] = {
 
 _REMEDIATION: dict[str, list[str]] = {
     "DNS Resolution Failure": [
-        "1. Open Command Prompt and run: nslookup google.com",
-        "2. If it times out, try setting your DNS to 8.8.8.8 in network adapter settings.",
-        "3. Restart your router and retry.",
-        "4. If still failing, contact your ISP.",
+        "1. NetSentinel has already tested your DNS — see the result above.",
+        "2. To fix slow or failing DNS, open your router's settings page and change the DNS server to 1.1.1.1 (Cloudflare) or 8.8.8.8 (Google). This fixes every device on your network at once.",
+        "3. Restart your router after making the change.",
+        "4. If still failing after a restart, contact your ISP.",
+        "5. After the fix, go to DNS & Stability in NetSentinel and run a fresh test to confirm.",
     ],
     "DNS Leak Detected": [
         "1. Check your VPN settings — leaks often occur when split tunnelling is enabled.",
@@ -63,10 +64,10 @@ _REMEDIATION: dict[str, list[str]] = {
         "3. Verify with dnsleaktest.com after each change.",
     ],
     "Chronic Connectivity Loss": [
-        "1. Run a ping -t 8.8.8.8 in Command Prompt and watch for dropped replies.",
+        "1. NetSentinel's Connection Monitor is already tracking your packet loss. Check the Availability page for a full timeline of drops.",
         "2. Check all cable connections between your device, switch, and router.",
         "3. Look for interference on 2.4 GHz Wi-Fi — switch to 5 GHz if possible.",
-        "4. If only one device is affected, try a different NIC or cable.",
+        "4. If only one device is affected, try a different cable or switch to wired Ethernet.",
     ],
     "High Jitter — Unstable Latency": [
         "1. Run a speed test — high jitter often signals congestion on the WAN link.",
@@ -88,9 +89,9 @@ _REMEDIATION: dict[str, list[str]] = {
     ],
     "Local Network / Router Unreachable": [
         "1. Check the physical connection between your device and the router.",
-        "2. Try releasing and renewing your IP: run ipconfig /release then ipconfig /renew.",
+        "2. Disconnect from Wi-Fi and reconnect, or unplug and replug the Ethernet cable.",
         "3. Reboot the router.",
-        "4. If the router admin page (192.168.1.1) is also unreachable, factory-reset it.",
+        "4. If the router admin page is also unreachable, factory-reset it.",
     ],
     "Broadcast Storm": [
         "1. Open the Broadcast Storm page to see which devices are flooding.",
@@ -144,6 +145,7 @@ class DiagnosisPage(QWidget):
 
     navigate_to     = pyqtSignal(str)  # emits "Overview" when back link is clicked
     diagnosis_saved = pyqtSignal()     # emitted after each completed run
+    scan_requested  = pyqtSignal()     # emitted when user clicks Run Diagnosis
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -569,6 +571,7 @@ class DiagnosisPage(QWidget):
     # ── State machine ─────────────────────────────────────────────────────────
 
     def _start(self) -> None:
+        self.scan_requested.emit()
         from workers.diagnosis_worker import DiagnosisWorker
         self._stack.setCurrentIndex(_RUNNING)
         self._progress_bar.setValue(0)

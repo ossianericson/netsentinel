@@ -59,6 +59,7 @@ class ServicePage(QWidget):
     """Displays TCP service/port heartbeat status for all monitored services."""
 
     services_changed = pyqtSignal(list)   # list[ServiceTarget]
+    scan_requested   = pyqtSignal()       # emitted when first service added from empty state
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -165,6 +166,7 @@ class ServicePage(QWidget):
             self._add_service(e0_host.text(), e0_port.value(), e0_label.text())
             e0_host.clear()
             e0_label.clear()
+            self.scan_requested.emit()
 
         e0_add.clicked.connect(_add_from_empty)
         e0_host.returnPressed.connect(_add_from_empty)

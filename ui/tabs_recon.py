@@ -1184,6 +1184,7 @@ class _ReconTabsMixin:
         vlay.addWidget(bb)
         dlg.exec()
 
+    @pyqtSlot("QPoint")
     def _on_plugin_table_context(self, pos) -> None:
         """Right-click context menu for the plugin list table (PB-5)."""
         row = self._plugin_list_table.rowAt(pos.y())

@@ -48,7 +48,8 @@ _QS_KEY = "cert_monitor/targets"
 class CertPage(QWidget):
     """Displays TLS certificate expiry status for all monitored hosts."""
 
-    certs_changed = pyqtSignal(list)   # list[CertTarget]
+    certs_changed   = pyqtSignal(list)   # list[CertTarget]
+    scan_requested  = pyqtSignal()       # emitted when first host added from empty state
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -147,6 +148,7 @@ class CertPage(QWidget):
         def _add_from_empty():
             self._add_host(e0_host.text(), e0_port.value())
             e0_host.clear()
+            self.scan_requested.emit()
 
         e0_add.clicked.connect(_add_from_empty)
         e0_host.returnPressed.connect(_add_from_empty)
