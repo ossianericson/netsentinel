@@ -47,7 +47,7 @@ from ui.styles import (
     BG_DARK, BG_HOVER, BORDER, BTN_HOVER_BG,
     CARD_HDR_BORDER, CARD_RADIUS, DEEP_ORANGE, GREEN,
     INLINE_WARN_BG, INLINE_WARN_FG, NAV_BAR, PRO_WARN_BG,
-    RED, TEAL, TEXT_MUTED, TEXT_PRIMARY,
+    RED, RED_BG, TEAL, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, WHITE,
 )
 
@@ -1253,6 +1253,44 @@ class _SettingsCardsMixin:
         setup_btn.setStyleSheet(exp_btn.styleSheet())
         setup_btn.clicked.connect(self.run_setup_requested.emit)
         bl.addWidget(setup_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet(f"color:{BORDER}; background:{BORDER}; max-height:1px; border:none;")
+        bl.addWidget(sep2)
+
+        reset_hdr = QLabel("Danger Zone")
+        reset_hdr.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{RED}; background:transparent;"
+        )
+        bl.addWidget(reset_hdr)
+        reset_desc = QLabel(
+            "Clear all application settings and restore factory defaults. "
+            "Secrets stored in the OS keychain are not affected."
+        )
+        reset_desc.setWordWrap(True)
+        reset_desc.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        bl.addWidget(reset_desc)
+
+        reset_all_btn = QPushButton("Reset all settings to defaults")
+        reset_all_btn.setFixedWidth(240)
+        reset_all_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{RED};"
+            f" border:1px solid {RED}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{PRO_WARN_BG}; color:{RED}; }}"
+            f"QPushButton:pressed {{ background:{RED_BG}; color:{RED}; }}"
+        )
+        reset_all_btn.clicked.connect(self._on_reset_settings)
+        bl.addWidget(reset_all_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        self._reset_settings_status = QLabel("")
+        self._reset_settings_status.setStyleSheet(
+            f"font-size:11px; color:{RED}; background:transparent;"
+        )
+        bl.addWidget(self._reset_settings_status)
         return card
 
     def _on_export_settings(self) -> None:
@@ -1295,6 +1333,47 @@ class _SettingsCardsMixin:
             )
         except Exception as exc:
             self._settings_io_status.setText(f"Import failed: {exc}")
+
+    def _on_reset_settings(self) -> None:
+        result = QMessageBox.warning(
+            self,
+            "Reset all settings to defaults",
+            "This will clear ALL application settings, including:\n"
+            "  • Display and theme preferences\n"
+            "  • Scanning and schedule configuration\n"
+            "  • Notification and tray options\n"
+            "  • All other stored preferences\n\n"
+            "Secrets (passwords, API keys) stored in the OS keychain are NOT affected.\n\n"
+            "This cannot be undone. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if result != QMessageBox.StandardButton.Yes:
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.clear()
+        qs.sync()
+        # Restore visible checkboxes to their factory defaults without marking dirty
+        for attr, default in [
+            ("_chk_compact",           True),
+            ("_chk_tooltips",          True),
+            ("_chk_auto_snap",         False),
+            ("_chk_sched_scan",        False),
+            ("_chk_tray",              True),
+            ("_chk_minimize_tray",     False),
+            ("_chk_notify_new_device", False),
+            ("_chk_notify_gone",       False),
+        ]:
+            if hasattr(self, attr):
+                cb = getattr(self, attr)
+                cb.blockSignals(True)
+                cb.setChecked(default)
+                cb.blockSignals(False)
+        if hasattr(self, "_reset_settings_status"):
+            self._reset_settings_status.setText(
+                "All settings reset to defaults — restart NetSentinel to apply."
+            )
+        self.clear_dirty()
 
     # ── App Health ────────────────────────────────────────────────────────────
 

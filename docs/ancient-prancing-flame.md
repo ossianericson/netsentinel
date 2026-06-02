@@ -304,8 +304,10 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 - F3: `_proactive_wire_page_help_btns()` added to `ui/nav/builder.py`; called after `_nav_finalize_rail()` so every page with a `_PAGE_HELP` entry gets its `?` button at startup, not lazily on first visit
 - F4: `_all_cards` extended to 3-tuple `(card, title, keywords)`; `_on_search_changed` now matches against keywords string as well as title — covers theme names, notification channels, shortcut terms, and other in-card content
 
-**Next sprint: F5 (settings reset) or new backlog items**
-- F5 (small): "Reset all settings to defaults" in Settings — confirmation dialog required
+**✅ Sprint F5 — COMPLETED 2026-06-02**
+- F5: "Reset all settings to defaults" button added to the Maintenance card in Settings; double-confirmation `QMessageBox.warning` dialog; `QSettings.clear()` + `sync()`; visible checkboxes restored to factory defaults without marking dirty; RED-styled destructive button with `PRO_WARN_BG`/`RED_BG` hover/pressed states; status label confirms reset
+
+**No further backlog items — sprint series complete**
 
 ---
 
