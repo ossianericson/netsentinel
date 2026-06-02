@@ -70,7 +70,9 @@ netsentinel/
 │   ├── maintenance_window.py   # Maintenance window schedule and suppression logic
 │   ├── metric_store.py         # SQLite time-series DB (singleton, WAL mode, schema v8)
 │   ├── metric_store_schema.py  # DDL, schema version, column migrations, dataclasses (S2-1 split)
-│   ├── metric_store_queries.py # MetricStoreQueryMixin — all read/query methods (S2-1 split)
+│   ├── metric_store_queries.py # MetricStoreQueryMixin — cert/service/device/HA/snapshot/grade queries (E3 split)
+│   ├── metric_store_queries_uptime.py  # _UptimeQueriesMixin — uptime/device-state query methods (E3 split)
+│   ├── metric_store_queries_metrics.py # _MetricsQueriesMixin — RTT/speed/CVE/alert/modem/mesh queries (E3 split)
 │   ├── mqtt_publisher.py       # MQTT broker client + Home Assistant Discovery payloads
 │   ├── name_resolver.py        # Hostname resolution cascade (mDNS, NetBIOS, rDNS)
 │   ├── net_doc_generator.py    # Network documentation HTML/Markdown snapshot generator

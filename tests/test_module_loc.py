@@ -20,10 +20,6 @@ DEFAULT_BUDGET = 600
 # Each entry documents WHY and WHAT the split should be.
 # Budgets are set to current actuals + a small margin; tighten as splits land.
 KNOWN_LARGE_MODULES: dict[str, int] = {
-    # metric_store_queries.py grew past 600 when SELECT * was replaced with explicit
-    # column lists and query_uptime_table was rewritten to batch queries.
-    # Natural split: extract CVE/alert query methods → metric_store_queries_cve.py.
-    "metric_store_queries.py": 650,
 }
 
 

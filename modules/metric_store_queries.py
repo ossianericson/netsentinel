@@ -2,6 +2,8 @@
 MetricStore query mixin — all read-only query methods for MetricStore.
 
 Extracted from modules/metric_store.py (S2-1 sprint split).
+E3 sprint split: time-series metrics → metric_store_queries_metrics.py,
+                 uptime/device-state  → metric_store_queries_uptime.py.
 MetricStoreQueryMixin is used via multiple inheritance in MetricStore.
 All symbols are accessible through MetricStore instances as before.
 """
@@ -10,10 +12,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from modules.metric_store_schema import (
-    CertCheckPoint, DeviceEvent, DeviceStatePoint, HaDetectedPoint,
-    KnownDevice, MeshSignalPoint, ModemSignalPoint, RttPoint,
-    ServiceCheckPoint, SpeedTestPoint,
+    CertCheckPoint, HaDetectedPoint, KnownDevice, ServiceCheckPoint,
 )
+from modules.metric_store_queries_uptime import _UptimeQueriesMixin
+from modules.metric_store_queries_metrics import _MetricsQueriesMixin
 
 
 def _default_db_path() -> Path:
@@ -41,7 +43,7 @@ def _default_db_path() -> Path:
     return get_app_data_dir() / "NetSentinel.db"
 
 
-class MetricStoreQueryMixin:
+class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
     """Read-only query methods for MetricStore.
 
     Requires self._execute_read(sql, params) to be provided by the host class.
@@ -144,155 +146,6 @@ class MetricStoreQueryMixin:
             up=bool(r["up"]), rtt_ms=r["rtt_ms"], error=r["error"],
         )
 
-    # ── Read: RTT history ─────────────────────────────────────────────────────
-
-    def query_rtt_history(self, host: str, hours: float = 24.0) -> List[RttPoint]:
-        """Return RTT samples for `host` over the last `hours`, oldest first."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT ts, host, rtt_ms, loss_pct, jitter_ms FROM rtt_sample "
-            "WHERE host = ? AND ts >= ? ORDER BY ts ASC",
-            (host, since),
-        )
-        return [RttPoint(r["ts"], r["host"], r["rtt_ms"], r["loss_pct"], r["jitter_ms"])
-                for r in rows]
-
-    def query_all_rtt_hosts(self, hours: float = 24.0) -> List[str]:
-        """Return distinct host names with RTT samples in the window."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT DISTINCT host FROM rtt_sample WHERE ts >= ?", (since,)
-        )
-        return [r["host"] for r in rows]
-
-    def query_all_state_ips(self, hours: float = 720.0) -> List[str]:
-        """Return distinct IPs with device_state samples in the window."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT DISTINCT ip FROM device_state WHERE ts >= ?", (since,)
-        )
-        return [r["ip"] for r in rows]
-
-    def query_uptime_table(
-        self, hours_list: Optional[List[float]] = None,
-    ) -> List[Dict]:
-        """Return one row per monitored IP with uptime % for each window.
-
-        Uses 1 + len(hours_list) queries total (not N+1+N*M) by aggregating
-        all IPs in a single GROUP BY pass per window.
-        """
-        if hours_list is None:
-            hours_list = [24.0, 168.0, 720.0]
-        now = int(time.time())
-        max_hours = max(hours_list)
-        since_max = now - int(max_hours * 3600)
-
-        # Query 1: latest hostname per IP — SQLite's max-row selection rule
-        # picks the non-aggregated column from the row with MAX(ts).
-        hn_rows = self._execute_read(
-            "SELECT ip, MAX(ts) AS last_ts, hostname "
-            "FROM device_state "
-            "WHERE ts >= ? AND hostname IS NOT NULL "
-            "GROUP BY ip",
-            (since_max,),
-        )
-        hostnames: Dict[str, str] = {r["ip"]: r["hostname"] for r in hn_rows}
-
-        # Queries 2..N: one GROUP BY per window — all IPs aggregated at once.
-        window_data: Dict[str, Dict[str, float]] = {}
-        for h in hours_list:
-            since_h = now - int(h * 3600)
-            agg_rows = self._execute_read(
-                "SELECT ip, COUNT(*) AS total, "
-                "SUM(CASE WHEN state = 'UP' THEN 1 ELSE 0 END) AS up_count "
-                "FROM device_state WHERE ts >= ? GROUP BY ip",
-                (since_h,),
-            )
-            for r in agg_rows:
-                ip = r["ip"]
-                if ip not in window_data:
-                    window_data[ip] = {}
-                total = r["total"] or 0
-                up = r["up_count"] or 0
-                window_data[ip][str(h)] = (
-                    round(100.0 * up / total, 2) if total else None
-                )
-
-        all_ips = set(hostnames.keys()) | set(window_data.keys())
-        rows = []
-        for ip in sorted(all_ips):
-            entry: Dict = {"ip": ip, "hostname": hostnames.get(ip)}
-            for h in hours_list:
-                entry[str(h)] = window_data.get(ip, {}).get(str(h))
-            rows.append(entry)
-        return rows
-
-    # ── Read: device state history ────────────────────────────────────────────
-
-    def query_device_state_history(
-        self, ip: str, hours: float = 24.0,
-    ) -> List[DeviceStatePoint]:
-        """Return device state snapshots for `ip` over the last `hours`."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT ts, ip, mac, hostname, state, rtt_ms FROM device_state "
-            "WHERE ip = ? AND ts >= ? ORDER BY ts ASC",
-            (ip, since),
-        )
-        return [
-            DeviceStatePoint(r["ts"], r["ip"], r["mac"], r["hostname"],
-                             r["state"], r["rtt_ms"])
-            for r in rows
-        ]
-
-    def query_uptime_pct(self, ip: str, hours: float = 24.0) -> Optional[float]:
-        """Return uptime % for `ip` in the given window.
-
-        Returns None when there are no samples (device not yet monitored or
-        outside the window), so callers can display '—' rather than a
-        misleading '100%'.
-        """
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT COUNT(*) AS total, "
-            "SUM(CASE WHEN state = 'UP' THEN 1 ELSE 0 END) AS up_count "
-            "FROM device_state WHERE ip = ? AND ts >= ?",
-            (ip, since),
-        )
-        row = rows[0] if rows else None
-        if not row or not row["total"]:
-            return None
-        return round(100.0 * row["up_count"] / row["total"], 2)
-
-    # ── Read: device events ───────────────────────────────────────────────────
-
-    def query_device_events(
-        self,
-        hours: float = 24.0,
-        ip: Optional[str] = None,
-        event_types: Optional[List[str]] = None,
-    ) -> List[DeviceEvent]:
-        """Return device events filtered by time window, IP, and/or event type."""
-        since = int(time.time()) - int(hours * 3600)
-        params: list = [since]
-        clauses = ["ts >= ?"]
-        if ip:
-            clauses.append("ip = ?")
-            params.append(ip)
-        if event_types:
-            placeholders = ",".join("?" * len(event_types))
-            clauses.append(f"event_type IN ({placeholders})")
-            params.extend([e.upper() for e in event_types])
-        sql = (
-            "SELECT ts, ip, mac, event_type, detail FROM device_event "
-            f"WHERE {' AND '.join(clauses)} ORDER BY ts DESC"
-        )
-        rows = self._execute_read(sql, tuple(params))
-        return [
-            DeviceEvent(r["ts"], r["ip"], r["mac"], r["event_type"], r["detail"])
-            for r in rows
-        ]
-
     # ── Read: known device inventory ─────────────────────────────────────────
 
     def get_known_devices(self) -> Dict[str, KnownDevice]:
@@ -372,179 +225,6 @@ class MetricStoreQueryMixin:
             )
             for r in rows
         ]
-
-    # ── Read: speed test history ──────────────────────────────────────────────
-
-    def query_speed_test_history(
-        self, hours: float = 168.0, limit: int = 200,
-    ) -> List[SpeedTestPoint]:
-        """Return speed test results within the last `hours`, newest first."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT ts, download_mbps, upload_mbps, ping_ms, "
-            "server_name, server_city, server_country,"
-            " network_type, signal_bars, nr5g_rsrp, nr5g_sinr, nr5g_band, lte_rsrp, lte_band,"
-            " cell_id, enb_id, mcc, mnc, wan_ip,"
-            " nr5g_rsrq, nr5g_pci, nr5g_arfcn, lte_snr, lte_rsrq, lte_pci, lte_earfcn "
-            "FROM speed_test WHERE ts >= ? "
-            "ORDER BY ts DESC LIMIT ?",
-            (since, limit),
-        )
-        return [
-            SpeedTestPoint(
-                ts=r["ts"], download_mbps=r["download_mbps"],
-                upload_mbps=r["upload_mbps"], ping_ms=r["ping_ms"],
-                server_name=r["server_name"], server_city=r["server_city"],
-                server_country=r["server_country"],
-                network_type=r["network_type"], signal_bars=r["signal_bars"],
-                nr5g_rsrp=r["nr5g_rsrp"], nr5g_sinr=r["nr5g_sinr"],
-                nr5g_band=r["nr5g_band"], lte_rsrp=r["lte_rsrp"],
-                lte_band=r["lte_band"], cell_id=r["cell_id"],
-                enb_id=r["enb_id"], mcc=r["mcc"], mnc=r["mnc"],
-                wan_ip=r["wan_ip"], nr5g_rsrq=r["nr5g_rsrq"],
-                nr5g_pci=r["nr5g_pci"], nr5g_arfcn=r["nr5g_arfcn"],
-                lte_snr=r["lte_snr"], lte_rsrq=r["lte_rsrq"],
-                lte_pci=r["lte_pci"], lte_earfcn=r["lte_earfcn"],
-            )
-            for r in rows
-        ]
-
-    # ── Read: CVE lifecycle ───────────────────────────────────────────────────
-
-    def list_cve_lifecycles(self, state_filter: Optional[str] = None) -> List[dict]:
-        """Return all CVE lifecycle rows, optionally filtered by state."""
-        _CVE_COLS = (
-            "id, cve_id, service, host, state, owner, notes, "
-            "cvss_score, severity, description, opened_ts, updated_ts"
-        )
-        if state_filter:
-            rows = self._execute_read(
-                f"SELECT {_CVE_COLS} FROM cve_lifecycle "
-                "WHERE state=? ORDER BY cvss_score DESC, opened_ts ASC",
-                (state_filter,),
-            )
-        else:
-            rows = self._execute_read(
-                f"SELECT {_CVE_COLS} FROM cve_lifecycle "
-                "ORDER BY cvss_score DESC, opened_ts ASC",
-                (),
-            )
-        return [dict(r) for r in rows]
-
-    # ── Read: alert tracking ──────────────────────────────────────────────────
-
-    def get_unacked_alerts(self, older_than_s: int = 0) -> List[dict]:
-        """Return alerts that have not been acknowledged."""
-        cutoff = int(time.time()) - older_than_s
-        rows = self._execute_read(
-            "SELECT id, ts, rule_name, host, severity, message, acked_ts, acked_by, escalated "
-            "FROM alert_fired WHERE acked_ts IS NULL AND ts <= ? "
-            "ORDER BY ts ASC",
-            (cutoff,),
-        )
-        return [dict(r) for r in rows]
-
-    def get_recent_alerts(self, hours: float = 24.0, limit: int = 200) -> List[dict]:
-        """Return recent fired alerts, newest first."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT id, ts, rule_name, host, severity, message, acked_ts, acked_by, escalated "
-            "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
-            (since, limit),
-        )
-        return [dict(r) for r in rows]
-
-    def get_last_event_time(self, rule_prefix: str) -> Optional[float]:
-        """Return Unix timestamp of the most recent matching alert, or None."""
-        rows = self._execute_read(
-            "SELECT MAX(ts) AS t FROM alert_fired WHERE rule_name LIKE ?",
-            (f"{rule_prefix}%",),
-        )
-        val = rows[0]["t"] if rows else None
-        return float(val) if val is not None else None
-
-    # ── Read: modem signal log ────────────────────────────────────────────────
-
-    def query_modem_signal_log(
-        self, hours: float = 168.0, limit: int = 500,
-    ) -> List[ModemSignalPoint]:
-        """Return modem signal log entries within the last `hours`, newest first."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT ts, network_type, signal_bars, cell_id, enb_id, mcc, mnc, wan_ip,"
-            " nr5g_band, nr5g_rsrp, nr5g_sinr, nr5g_rsrq, nr5g_pci, nr5g_arfcn,"
-            " lte_band, lte_rsrp, lte_snr, lte_rsrq, lte_pci, lte_earfcn "
-            "FROM modem_signal_log WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
-            (since, limit),
-        )
-        return [
-            ModemSignalPoint(
-                ts=r["ts"], network_type=r["network_type"], signal_bars=r["signal_bars"],
-                cell_id=r["cell_id"], enb_id=r["enb_id"], mcc=r["mcc"], mnc=r["mnc"],
-                wan_ip=r["wan_ip"], nr5g_band=r["nr5g_band"], nr5g_rsrp=r["nr5g_rsrp"],
-                nr5g_sinr=r["nr5g_sinr"], nr5g_rsrq=r["nr5g_rsrq"], nr5g_pci=r["nr5g_pci"],
-                nr5g_arfcn=r["nr5g_arfcn"], lte_band=r["lte_band"], lte_rsrp=r["lte_rsrp"],
-                lte_snr=r["lte_snr"], lte_rsrq=r["lte_rsrq"], lte_pci=r["lte_pci"],
-                lte_earfcn=r["lte_earfcn"],
-            )
-            for r in rows
-        ]
-
-    # ── Read: mesh signal log ─────────────────────────────────────────────────
-
-    def query_mesh_signal_log(
-        self, hours: float = 168.0, limit: int = 500,
-    ) -> List[MeshSignalPoint]:
-        """Return mesh signal log entries within the last `hours`, newest first."""
-        since = int(time.time()) - int(hours * 3600)
-        rows = self._execute_read(
-            "SELECT ts, unit_count, online_count, worst_unit, worst_rssi "
-            "FROM mesh_signal_log WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
-            (since, limit),
-        )
-        return [
-            MeshSignalPoint(
-                ts=r["ts"], unit_count=r["unit_count"], online_count=r["online_count"],
-                worst_unit=r["worst_unit"], worst_rssi=r["worst_rssi"],
-            )
-            for r in rows
-        ]
-
-    # ── Read: plugin log ──────────────────────────────────────────────────────
-
-    def query_plugin_log(
-        self,
-        plugin_name: Optional[str] = None,
-        hours: float = 168.0,
-        limit: int = 500,
-    ) -> List[dict]:
-        """Return plugin log entries within the last `hours`, newest first."""
-        import json
-        since = int(time.time()) - int(hours * 3600)
-        if plugin_name:
-            rows = self._execute_read(
-                "SELECT ts, plugin_name, data FROM plugin_log "
-                "WHERE ts >= ? AND plugin_name = ? ORDER BY ts DESC LIMIT ?",
-                (since, plugin_name, limit),
-            )
-        else:
-            rows = self._execute_read(
-                "SELECT ts, plugin_name, data FROM plugin_log "
-                "WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
-                (since, limit),
-            )
-        result = []
-        for row in rows:
-            try:
-                data_dict = json.loads(row["data"])
-            except Exception:
-                data_dict = {}
-            result.append({
-                "ts": row["ts"],
-                "plugin_name": row["plugin_name"],
-                "data": data_dict,
-            })
-        return result
 
     # ── Read: config snapshots ────────────────────────────────────────────────
 

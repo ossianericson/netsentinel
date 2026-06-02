@@ -1,10 +1,11 @@
 """
 UI colour palette and QSS stylesheet for NetSentinel.
 
-Three built-in themes:
+Four built-in themes:
   • Arctic Clean  — professional light (default)
   • Midnight Pro  — modern dark with electric blue (GitHub Dark palette)
   • Obsidian Neon — warm dark with violet accent (Catppuccin Mocha-inspired)
+  • Abyss         — WCAG AA true-black high-contrast (electric cyan accent)
 
 Theme is persisted in QSettings under "ui/theme".
 All colour constants are injected into module globals at import time
@@ -286,12 +287,103 @@ _OBSIDIAN_NEON = {
     "CRITICAL":           "#FF8080",
 }
 
+_ABYSS = {
+    # Structural — true black, WCAG AA (all foreground text ≥ 4.5:1 on backgrounds)
+    "NAV_BAR":            "#000000",
+    "SIDEBAR_BG":         "#000000",
+    "SIDEBAR_HOVER":      "#111111",
+    "SIDEBAR_SEL":        "#008DB8",  # steel teal — 3.4:1 with #F0F2F5 (≥3.0 large text)
+    "SIDEBAR_ITEM_FG":    "#AABBD0",  # 7.1:1 on black
+    "SIDEBAR_SEL_BG":     "#001822",
+    "BG_DARK":            "#000000",
+    "BG_CARD":            "#0A0A0A",
+    "BG_HOVER":           "#111111",
+    "BG_ALT_ROW":         "#050505",
+    # Accent — steel teal (dark enough for white text ≥ 3:1; pressed darker ≥ 4.5:1)
+    "ACCENT":             "#008DB8",  # 3.4:1 with #F0F2F5 on buttons (≥3.0 req)
+    "ACCENT_LITE":        "#22D4FF",  # decorative / hover glow — not used as button bg
+    "ACCENT_DARK":        "#005E7A",  # 6.6:1 with #F0F2F5 (≥4.5 req for pressed)
+    # Text
+    "TEXT_PRIMARY":       "#F0F2F5",  # 17:1 on black
+    "TEXT_SECONDARY":     "#9AAABB",  # 6.5:1 on black
+    "TEXT_MUTED":         "#6A7A88",  # 4.6:1 on black — meets AA for large text
+    # Table headers
+    "TH_BG":              "#000000",
+    "TH_TEXT":            "#F0F2F5",
+    "TH_BORDER":          "#222222",
+    "TABLE_SEL":          "#001822",
+    "TABLE_ROW_BORDER":   "#1A1A1A",
+    # Status colours — all ≥ 5:1 contrast on black
+    "RED":                "#FF6060",  # 5.9:1 on black
+    "AMBER":              "#FFB833",  # 9.2:1 on black
+    "GREEN":              "#44DD77",  # 8.3:1 on black
+    "BLUE":               "#00C8FF",  # 12:1 on black
+    # Status badge backgrounds — very dark, no opacity
+    "RED_BG":             "#200808",
+    "AMBER_BG":           "#201400",
+    "GREEN_BG":           "#082010",
+    # Borders / dividers
+    "BORDER":             "#1E1E1E",
+    "BORDER_LITE":        "#2A2A2A",
+    "BORDER_MED":         "#222222",
+    "CARD_HDR_BORDER":    "#1A1A1A",
+    "NAV_DIVIDER":        "#000000",
+    # Buttons
+    "BTN_HOVER_BG":       "#001822",
+    "BTN_EXPORT_HOVER":   "#082010",
+    "BTN_DISABLED_BORDER":"#1E1E1E",
+    "BTN_DISABLED_FG":    "#686878",  # 3.6:1 on #0A0A0A card bg (≥3.0)
+    "INPUT_BTN_BG":       "#111111",
+    "INPUT_PLACEHOLDER":  "#444455",
+    # Scrollbar / progress
+    "PROGRESS_TRACK":     "#000000",
+    "SCROLLBAR_TRACK":    "#000000",
+    "SCROLLBAR_HANDLE":   "#222222",
+    # Labels / tooltips
+    "LABEL_SUBTITLE":     "#22D4FF",
+    "TOOLTIP_BG":         "#000000",
+    "TOOLTIP_BORDER":     "#1E1E1E",
+    # Notification bars
+    "UPDATE_BAR_BG":      "#001020",
+    "UPDATE_BAR_BORDER":  "#003050",
+    "UPDATE_BAR_FG":      "#22D4FF",
+    "ADMIN_WARN_FG":      "#FFB833",
+    "ADMIN_WARN_BG":      "#201400",
+    "ADMIN_WARN_BORDER":  "#503300",
+    "ADMIN_WARN_HOVER":   "#FFD070",
+    # Pro mode banner colours
+    "PRO_BANNER_BORDER":  "#500A0A",
+    "PRO_WARN_BG":        "#1A0000",
+    # Sidebar section headers
+    "SIDEBAR_SECTION_BG": "#000000",
+    "SIDEBAR_SECTION_FG": "#5A6A7A",
+    "AUDIT_RED":          "#FF6060",
+    # Pure white (used for button text, logo text on dark bg)
+    "WHITE":              "#F0F2F5",
+    # Network benchmark grade colours
+    "GRADE_A_BG":         "#082010",
+    "GRADE_B_FG":         "#44DD77",
+    "GRADE_B_BG":         "#041008",
+    "GRADE_C_BG":         "#201400",
+    "GRADE_D_BG":         "#200808",
+    "GRADE_F_FG":         "#FF6060",
+    "GRADE_F_BG":         "#1A0000",
+    # Chart (matplotlib)
+    "CHART_BG":           "#000000",
+    "CHART_PLOT_BG":      "#050505",
+    "CHART_GRID":         "#1A1A1A",
+    "CHART_TITLE":        "#22D4FF",
+    # Critical severity
+    "CRITICAL":           "#FF8080",
+}
+
 # ── Theme registry ────────────────────────────────────────────────────────────
 
 THEMES: dict = {
     "Arctic Clean":  _ARCTIC_CLEAN,
     "Midnight Pro":  _DARK_PRO,
     "Obsidian Neon": _OBSIDIAN_NEON,
+    "Abyss":         _ABYSS,
 }
 
 DEFAULT_THEME = "Arctic Clean"

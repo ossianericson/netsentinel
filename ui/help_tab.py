@@ -347,9 +347,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("10 Lab Mode scenarios", "Six new guided exercises: Measure DNS Resolver Speed, Find an Open Port, Detect a DHCP Conflict, Measure Network Jitter, Identify Device Manufacturers, and Read a Network Topology Map."),
-        ("Monitoring pill tooltips", "The ARP Watch, DHCP Watch, Broadcast Storm, and Network Logger status pills on the Home page now show plain-English hover tooltips explaining what each monitor does and how to enable it."),
-        ("Actionable alert drawer", "The alert drawer now shows a 'WHAT TO DO' section with specific, router-focused fix instructions for each alert type — ARP spoofing, rogue DHCP, open ports, outages, CVEs, and more."),
+        ("Abyss theme", "A new WCAG AA high-contrast theme with a true black background and electric steel teal accent. Switch to it in Settings → Appearance or via the theme toggle in the top bar."),
+        ("MetricStore query split", "Internal query methods reorganised into focused mixins (uptime/device-state and time-series metrics) for faster navigation and lower LOC per file."),
+        ("Worker lifecycle test coverage", "SpeedTestWorker, CombinedDiscoveryWorker, and BandwidthWorker now have full RULE-T2 start/stop lifecycle tests."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

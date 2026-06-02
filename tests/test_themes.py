@@ -72,7 +72,7 @@ def _is_hex(val: str) -> bool:
 class TestThemeRegistry:
     def test_three_themes_present(self):
         from ui.styles import THEMES
-        assert len(THEMES) == 3
+        assert len(THEMES) >= 3
 
     def test_arctic_clean_present(self):
         from ui.styles import THEMES
@@ -280,12 +280,12 @@ class TestThemeCharacter:
     def test_themes_have_distinct_accents(self):
         from ui.styles import THEMES
         accents = [t["ACCENT"] for t in THEMES.values()]
-        assert len(set(accents)) == 3, "Each theme should have a unique ACCENT"
+        assert len(set(accents)) == len(THEMES), "Each theme should have a unique ACCENT"
 
     def test_themes_have_distinct_bg_dark(self):
         from ui.styles import THEMES
         bgs = [t["BG_DARK"] for t in THEMES.values()]
-        assert len(set(bgs)) == 3
+        assert len(set(bgs)) == len(THEMES)
 
     def test_obsidian_neon_red_is_pink(self):
         """Obsidian Neon uses Catppuccin Mocha pink-red for alerts."""

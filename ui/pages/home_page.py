@@ -144,6 +144,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             ("Arctic Clean",  "☀  Light"),
             ("Midnight Pro",  "🌙  Dark"),
             ("Obsidian Neon", "✦  Neon"),
+            ("Abyss",         "◼  Abyss"),
         ]
 
         def _dismiss(save_theme: str | None = None) -> None:

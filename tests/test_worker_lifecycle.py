@@ -349,6 +349,19 @@ class TestSpeedTestWorker:
             _start_stop(w)
             assert not w.isRunning()
 
+    def test_speed_test_worker_start_stop(self, qt_app):
+        from workers.speed_test_worker import SpeedTestWorker
+        from modules.speed_tester_backends import SpeedTestResult
+        fake_result = SpeedTestResult(
+            download_mbps=100.0, upload_mbps=50.0, ping_ms=10.0,
+            server_name="Test", server_city="City", server_country="US",
+            backend="pure_python",
+        )
+        with patch("modules.speed_tester.run_test", return_value=fake_result):
+            w = SpeedTestWorker()
+            _start_stop(w)
+            assert not w.isRunning()
+
 
 # ── 14. ThreatFeedRefreshWorker / AbuseIpDbWorker ────────────────────────────
 
@@ -423,6 +436,25 @@ class TestScanWorkerImport:
         w = BandwidthWorker(interval_s=3600)
         assert hasattr(w, "snapshot")
         assert hasattr(w, "stop")
+
+    def test_bandwidth_worker_start_stop(self, qt_app):
+        from workers.scan_worker import BandwidthWorker
+        with patch("modules.bandwidth_monitor.BandwidthMonitor") as MockBM:
+            MockBM.return_value.run = MagicMock(side_effect=lambda: None)
+            w = BandwidthWorker(interval_s=3600)
+            _start_stop(w)
+            assert not w.isRunning()
+
+    def test_combined_discovery_worker_start_stop(self, qt_app):
+        from workers.scan_worker import CombinedDiscoveryWorker
+        fake_result = MagicMock()
+        fake_result.devices = []
+        with patch("modules.combined_discovery.discover", return_value=fake_result):
+            w = CombinedDiscoveryWorker(cidr="127.0.0.1/32",
+                                        passive_only=True,
+                                        resolve_hostnames=False)
+            _start_stop(w)
+            assert not w.isRunning()
 
 
 # ── DiagnosisWorker ───────────────────────────────────────────────────────────

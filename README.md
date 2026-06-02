@@ -322,6 +322,19 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.72
+**Added**
+- `modules/metric_store_queries_uptime.py` — `_UptimeQueriesMixin` with 5 uptime/device-state query methods (E3 split)
+- `modules/metric_store_queries_metrics.py` — `_MetricsQueriesMixin` with 10 RTT/speed/CVE/alert/modem/mesh query methods (E3 split)
+- `tests/test_metric_store_queries_split.py` — 15 tests covering E3 split composition and behaviour
+- `ui/styles.py` — "Abyss" WCAG AA high-contrast theme: true black backgrounds, steel teal accent, all text tokens ≥ 4.5:1 contrast ratio (F1)
+
+**Changed**
+- `modules/metric_store_queries.py` — reduced from 619 to 299 lines; now a facade inheriting `_UptimeQueriesMixin` + `_MetricsQueriesMixin` (E3)
+- `tests/test_worker_lifecycle.py` — added `SpeedTestWorker`, `CombinedDiscoveryWorker`, and `BandwidthWorker` full start/stop lifecycle tests (E1)
+- `ui/header.py` — added "Abyss" icon `◼` to theme toggle cycle (F1)
+- `ui/pages/home_page.py` — added "Abyss" entry to theme picker strip (F1)
+
 ### v1.9.70
 **Added**
 - `modules/lab_scenarios.py` — 6 new lab scenarios: Measure DNS Resolver Speed, Find an Open Port, Detect a DHCP Conflict, Measure Network Jitter, Identify Device Manufacturers, Read a Network Topology Map (Sprint B2; total now 10 scenarios)

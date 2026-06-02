@@ -1,5 +1,5 @@
 # NetSentinel — Product Backlog Audit & Prioritized Plan
-*Audit date: 2026-06-02 | Revised: 2026-06-02 | Session: Sprint C2+C4+B3 complete | Version at audit: v1.9.71*
+*Audit date: 2026-06-02 | Revised: 2026-06-02 | Session: Sprint E1+E3+F1 complete | Version at audit: v1.9.71*
 
 ---
 
@@ -295,10 +295,16 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 - C4: `generate_isp_complaint_text()` added to `modules/report_isp.py`; "Copy ISP Complaint" button added in `tabs_analysis.py` alongside existing "Network Health Report"; dialog includes ISP name, account ref, and UK/EU legal statement checkbox; all measurements from NetSentinel (Principles 1–4)
 - B3: `data/curriculum_map.json` — 7 lab scenarios, 5 protocols, 4 pages mapped to N+/CCNA/Sec+ objectives with study notes; `ui/widgets/objective_badge.py` — `ObjectiveBadge` QLabel pill; applied to Lab Mode scenario cards and Protocol Viz title bar with per-protocol badge refresh; `CERT_NETPLUS_BG / CERT_CISCO_BG / CERT_SEC_BG` tokens added to `ui/styles.py`
 
-**Next sprint: E1 + F1 (or D1 if ISP comparison is prioritised)**
-- E1 (medium): Worker lifecycle tests (RULE-T2) for 5 highest-impact workers: scan_worker, threat_intel_worker, plugin_worker, availability_worker, speed_test_worker
-- E3 (small): Split `metric_store_queries.py` (619 lines) into `metric_store_queries_uptime.py` + `metric_store_queries_metrics.py`
-- F1 (medium): "Abyss" WCAG AA high-contrast theme — true black, no low-opacity elements, all text ≥ 4.5:1 contrast
+**✅ Sprint E1 + E3 + F1 — COMPLETED 2026-06-02**
+- E1: `SpeedTestWorker.test_start_stop` + `CombinedDiscoveryWorker.test_start_stop` + `BandwidthWorker.test_start_stop` added to `test_worker_lifecycle.py`; all priority workers now have full RULE-T2 lifecycle coverage
+- E3: `metric_store_queries.py` (619 lines) split into `metric_store_queries_uptime.py` (_UptimeQueriesMixin — 5 uptime/device-state methods) + `metric_store_queries_metrics.py` (_MetricsQueriesMixin — 10 RTT/speed/CVE/alert/modem/mesh methods); facade reduced to 299 lines; `test_metric_store_queries_split.py` added; LOC budget exception removed from `test_module_loc.py`
+- F1: `_ABYSS` palette added to `ui/styles.py` — true black backgrounds, electric steel teal accent (#008DB8, 3.4:1 with white), ACCENT_DARK (#005E7A, 6.6:1 with white), all text ≥ 4.5:1 WCAG AA compliant; "Abyss" registered in THEMES dict; theme toggle icon "◼" added to header; home page theme picker updated; settings buttons auto-populated from THEMES
+
+**Next sprint: D1 (ISP comparison) or F2+F3+F4 (polish)**
+- D1 (large): Anonymous opt-in ISP comparison — `modules/isp_telemetry.py`; submits ISP+country+anonymised speed/latency once per day; shows comparison against ISP+country median in Speed Test page
+- F2 (small): Keyboard shortcut reference card in Help panel
+- F3 (small): Per-page `?` documentation link on each PageHeader
+- F4 (small): Settings search — full-text match on setting labels and help text
 
 ---
 

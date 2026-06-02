@@ -18,6 +18,9 @@ EXEMPT: set[str] = {
     # Split fragments re-exported by metric_store.py; covered by test_metric_store.py
     "metric_store_schema",
     "metric_store_queries",
+    # E3 split: uptime and metrics sub-mixins; covered by test_metric_store_queries_split.py
+    "metric_store_queries_uptime",
+    "metric_store_queries_metrics",
     # Split fragments re-exported by report_exporter.py; covered by test_report_exporter.py
     # report_html has its own test; report_pdf now has test_report_pdf.py
     "report_html",

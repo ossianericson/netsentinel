@@ -111,6 +111,8 @@ hiddenimports: list = [
     "modules.metric_store",
     "modules.metric_store_schema",
     "modules.metric_store_queries",
+    "modules.metric_store_queries_uptime",
+    "modules.metric_store_queries_metrics",
     "modules.name_resolver",
     "modules.network_benchmark",
     "modules.network_diagnostics",

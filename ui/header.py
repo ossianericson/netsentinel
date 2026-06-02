@@ -250,7 +250,7 @@ class AppHeaderMixin:
         # ── POLISH-5: Theme toggle — cycles through all 3 themes, toast + restart ──
         from ui.styles import THEMES, get_active_theme_name, set_active_theme_name
         _theme_names = list(THEMES.keys())
-        _theme_icons = {"Arctic Clean": "☀", "Midnight Pro": "🌙", "Obsidian Neon": "✦"}
+        _theme_icons = {"Arctic Clean": "☀", "Midnight Pro": "🌙", "Obsidian Neon": "✦", "Abyss": "◼"}
         _current_theme = get_active_theme_name()
         _theme_btn = QPushButton(_theme_icons.get(_current_theme, "☀"))
         _theme_btn.setObjectName("themeToggleBtn")
