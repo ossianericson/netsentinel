@@ -322,6 +322,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.68
+**Added**
+- `modules/plugin_registry.py`: Windows MAX_PATH guard — `install_plugin()` truncates filename stems to 80 chars before writing (PB-12)
+- `tests/test_hardware_integration.py`: 8 new tests covering `CONFIG_SCHEMA` end-to-end — AST extraction, configure button visibility, widget types (int/bool/str), config save roundtrip, worker poll-interval override, and config kwarg injection into `get_status()` (PB-7)
+- `ui/widgets/hub_helpers.py`: `CONFIG_SCHEMA` commented example added to hardware plugin template so the New Plugin wizard shows users how to declare a typed config schema
+
 ### v1.9.67
 **Fixed**
 - `notification_channels.py`: Pushover, ntfy, and Telegram delivery failures now reported in alert history (`_deliver_pushover_tracked`, `_deliver_ntfy_tracked`, `_deliver_telegram_tracked`); removed optimistic mark-delivered and dead untracked imports from router
