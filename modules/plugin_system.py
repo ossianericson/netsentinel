@@ -29,7 +29,9 @@ Public API:
 
 from __future__ import annotations
 
+import ast as _ast
 import importlib.util
+import inspect as _inspect
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -73,6 +75,7 @@ class PluginInfo:
     author:      str
     tags:        List[str]
     path:        Path
+    api_version: str = ""
     _run_fn:     Optional[Callable] = field(default=None, repr=False)
 
     @property
@@ -144,6 +147,7 @@ PLUGIN_META = {
     "description": "Lists all devices with HIGH-risk ports open (Telnet, RDP, VNC, SMB, MQTT).",
     "author":      "NetSentinel built-in example",
     "tags":        ["ports", "risk"],
+    "api_version": "1",
 }
 
 HIGH_RISK = {23: "Telnet", 445: "SMB", 1883: "MQTT", 3389: "RDP", 5900: "VNC", 7547: "CWMP"}
@@ -175,6 +179,87 @@ def run(devices, **kwargs):
 ''',
         encoding="utf-8",
     )
+
+
+# ── Scan plugin validator ─────────────────────────────────────────────────────
+
+def validate_scan_plugin(path: Path) -> List[str]:
+    """Validate a scan plugin file.
+
+    Checks:
+      1. File is readable and has valid Python syntax.
+      2. Module imports without errors.
+      3. ``PLUGIN_META`` is present and a dict with required keys.
+      4. ``PLUGIN_META`` has an ``api_version`` key (advisory warning if absent).
+      5. ``run()`` is present, callable, and accepts ``(devices, **kwargs)``.
+
+    Returns a list of issue strings.  An empty list means all checks pass.
+    """
+    issues: List[str] = []
+
+    try:
+        source = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"Cannot read file: {exc}"]
+
+    try:
+        _ast.parse(source, filename=str(path))
+    except SyntaxError as exc:
+        return [f"Syntax error at line {exc.lineno}: {exc.msg}"]
+
+    try:
+        spec = importlib.util.spec_from_file_location(f"_scan_validate_{path.stem}", path)
+        if spec is None or spec.loader is None:
+            return ["Cannot create module spec — file may not be a valid Python module."]
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # type: ignore[attr-defined]
+    except Exception as exc:
+        return [f"Import/runtime error: {exc}"]
+
+    meta = getattr(mod, "PLUGIN_META", None)
+    if meta is None:
+        issues.append("PLUGIN_META dict is missing — scan plugins must declare PLUGIN_META.")
+    elif not isinstance(meta, dict):
+        issues.append(f"PLUGIN_META must be a dict, got {type(meta).__name__}.")
+    else:
+        for key in ("name", "version", "description"):
+            if key not in meta:
+                issues.append(f"PLUGIN_META is missing required key: '{key}'.")
+        if "api_version" not in meta:
+            issues.append(
+                "PLUGIN_META is missing 'api_version'. "
+                "Add: \"api_version\": \"1\"."
+            )
+
+    run_fn = getattr(mod, "run", None)
+    if run_fn is None:
+        issues.append("run() function is missing — scan plugins must define run(devices, **kwargs).")
+    elif not callable(run_fn):
+        issues.append("run is defined but is not callable.")
+    else:
+        try:
+            sig = _inspect.signature(run_fn)
+            params = list(sig.parameters.values())
+            positional = [
+                p for p in params
+                if p.kind in (
+                    _inspect.Parameter.POSITIONAL_ONLY,
+                    _inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                )
+            ]
+            has_var_keyword = any(
+                p.kind == _inspect.Parameter.VAR_KEYWORD for p in params
+            )
+            if not positional:
+                issues.append(
+                    "run() must accept at least one positional argument: run(devices, **kwargs)."
+                )
+            if not has_var_keyword:
+                issues.append("run() must accept **kwargs: run(devices, **kwargs).")
+        except (TypeError, ValueError) as exc:
+            issues.append(f"run() signature could not be inspected: {exc}.")
+
+    return issues
 
 
 # ── Loader ────────────────────────────────────────────────────────────────────
@@ -212,6 +297,7 @@ def load_plugins() -> List[PluginInfo]:
                 author      = str(meta.get("author",      "Unknown")),
                 tags        = list(meta.get("tags",        [])),
                 path        = path,
+                api_version = str(meta.get("api_version", "")),
                 _run_fn     = run_fn,
             ))
         except Exception:

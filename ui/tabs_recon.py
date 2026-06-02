@@ -758,13 +758,15 @@ class _ReconTabsMixin:
         self._plugin_dir_lbl = QLabel("")
         self._plugin_dir_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
 
-        self._plugin_list_table = _table(["Plugin", "Version", "Tags", "Description", "Author"])
+        self._plugin_list_table = _table(["Plugin", "Version", "Status", "Tags", "Description", "Author"])
         self._plugin_list_table.setColumnWidth(0, 180)
         self._plugin_list_table.setColumnWidth(1, 60)
-        self._plugin_list_table.setColumnWidth(2, 120)
-        self._plugin_list_table.setColumnWidth(3, 300)
+        self._plugin_list_table.setColumnWidth(2, 55)
+        self._plugin_list_table.setColumnWidth(3, 120)
+        self._plugin_list_table.setColumnWidth(4, 280)
         self._plugin_list_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._plugin_list_table.customContextMenuRequested.connect(self._on_plugin_table_context)
+        self._plugin_list_table.cellClicked.connect(self._on_plugin_status_cell_clicked)
 
         self._plugin_status = QLabel("Click Reload Plugins to discover .py files in the plugins folder.")
         self._plugin_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
@@ -787,22 +789,49 @@ class _ReconTabsMixin:
         lay.addWidget(self._plugin_result_text)
 
         self._plugins: list = []
+        self._plugin_validation: list = []  # List[List[str]] — issues per plugin index
         self._plugin_worker = None
         self._reload_plugins()
         return w
 
     @pyqtSlot()
     def _reload_plugins(self):
-        from modules.plugin_system import load_plugins, plugins_dir
+        from modules.plugin_system import load_plugins, plugins_dir, validate_scan_plugin
         self._plugins = load_plugins()
+        self._plugin_validation = []
         d = plugins_dir()
         self._plugin_dir_lbl.setText(f"Plugins folder: {d}")
         self._plugin_list_table.setRowCount(0)
         for p in self._plugins:
+            if p._run_fn is None:
+                issues = ["Plugin failed to load — check file for syntax or import errors."]
+            else:
+                issues = validate_scan_plugin(p.path)
+            self._plugin_validation.append(issues)
+
             r = self._plugin_list_table.rowCount()
             self._plugin_list_table.insertRow(r)
-            for c, v in enumerate([p.name, p.version, p.tag_str, p.description, p.author]):
+
+            for c, v in enumerate([p.name, p.version]):
                 self._plugin_list_table.setItem(r, c, QTableWidgetItem(v))
+
+            # Status badge: green = OK, amber = advisory only, red = error
+            if not issues:
+                dot_color = GREEN
+                tooltip = "All validation checks passed."
+            else:
+                api_only = all("api_version" in i for i in issues)
+                dot_color = AMBER if api_only else RED
+                tooltip = "\n".join(issues)
+            status_item = QTableWidgetItem("●")
+            status_item.setForeground(QColor(dot_color))
+            status_item.setToolTip(tooltip)
+            status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._plugin_list_table.setItem(r, 2, status_item)
+
+            for c, v in enumerate([p.tag_str, p.description, p.author]):
+                self._plugin_list_table.setItem(r, 3 + c, QTableWidgetItem(v))
+
         n = len(self._plugins)
         self._plugin_status.setText(
             f"{n} plugin{'s' if n != 1 else ''} loaded. Select one and click Run Selected."
@@ -848,6 +877,32 @@ class _ReconTabsMixin:
         self._plugin_status.setText("Plugin failed — see output above.")
         self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
 
+    def _on_plugin_status_cell_clicked(self, row: int, col: int) -> None:
+        """Show validation issues when the Status column cell is clicked (PB-4)."""
+        if col != 2:
+            return
+        if row < 0 or row >= len(self._plugin_validation):
+            return
+        issues = self._plugin_validation[row]
+        if not issues:
+            return
+        dlg = QDialog(self._plugin_list_table.window())
+        dlg.setWindowTitle("Plugin Validation Issues")
+        dlg.setMinimumWidth(440)
+        vlay = QVBoxLayout(dlg)
+        txt = QTextEdit()
+        txt.setReadOnly(True)
+        txt.setPlainText("\n".join(f"• {i}" for i in issues))
+        txt.setStyleSheet(
+            f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
+            f"border:1px solid {BORDER};padding:6px;"
+        )
+        vlay.addWidget(txt)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        bb.rejected.connect(dlg.reject)
+        vlay.addWidget(bb)
+        dlg.exec()
+
     def _on_plugin_table_context(self, pos) -> None:
         """Right-click context menu for the plugin list table (PB-5)."""
         row = self._plugin_list_table.rowAt(pos.y())
@@ -856,10 +911,14 @@ class _ReconTabsMixin:
         menu = QMenu(self._plugin_list_table)
         act_test = menu.addAction("▶  Test with last scan")
         menu.addSeparator()
+        act_validate = menu.addAction("▣  Show validation")
+        menu.addSeparator()
         act_copy = menu.addAction("Copy name")
         action = menu.exec(self._plugin_list_table.viewport().mapToGlobal(pos))
         if action == act_test:
             self._run_plugin_in_dialog(row)
+        elif action == act_validate:
+            self._on_plugin_status_cell_clicked(row, 2)
         elif action == act_copy:
             info = self._plugins[row]
             QApplication.clipboard().setText(info.name)

@@ -378,3 +378,199 @@ class TestPluginTableContextMenu:
         src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
         assert "Test with last scan" in src, "Context menu must have 'Test with last scan' action"
         assert "Copy name" in src, "Context menu must have 'Copy name' action (RULE-UX3 minimum)"
+
+
+# ── PB-2 — validate_scan_plugin ───────────────────────────────────────────────
+
+class TestValidateScanPlugin:
+    def test_valid_plugin_returns_empty_list(self, tmp_path):
+        """A fully compliant plugin returns no issues."""
+        f = tmp_path / "good.py"
+        f.write_text(
+            'PLUGIN_META = {\n'
+            '    "name": "Good", "version": "1.0", "description": "Test",\n'
+            '    "author": "Me", "tags": [], "api_version": "1",\n'
+            '}\n'
+            'def run(devices, **kwargs):\n'
+            '    from modules.plugin_system import PluginResult\n'
+            '    return PluginResult(plugin_name="Good")\n',
+            encoding="utf-8",
+        )
+        from modules.plugin_system import validate_scan_plugin
+        assert validate_scan_plugin(f) == []
+
+    def test_syntax_error_returns_issue(self, tmp_path):
+        """A file with a syntax error returns a syntax-error issue."""
+        f = tmp_path / "bad_syntax.py"
+        f.write_text("def this is broken!!!\n", encoding="utf-8")
+        from modules.plugin_system import validate_scan_plugin
+        issues = validate_scan_plugin(f)
+        assert len(issues) == 1
+        assert "Syntax error" in issues[0]
+
+    def test_missing_plugin_meta_returns_issue(self, tmp_path):
+        """A plugin without PLUGIN_META gets an issue."""
+        f = tmp_path / "no_meta.py"
+        f.write_text("def run(devices, **kwargs): pass\n", encoding="utf-8")
+        from modules.plugin_system import validate_scan_plugin
+        issues = validate_scan_plugin(f)
+        assert any("PLUGIN_META" in i for i in issues)
+
+    def test_missing_run_returns_issue(self, tmp_path):
+        """A plugin without run() gets an issue."""
+        f = tmp_path / "no_run.py"
+        f.write_text(
+            'PLUGIN_META = {"name": "X", "version": "1", "description": "", "author": "", "api_version": "1"}\n',
+            encoding="utf-8",
+        )
+        from modules.plugin_system import validate_scan_plugin
+        issues = validate_scan_plugin(f)
+        assert any("run()" in i for i in issues)
+
+    def test_missing_api_version_returns_advisory(self, tmp_path):
+        """Missing api_version is flagged as an advisory (only) issue."""
+        f = tmp_path / "no_apiversion.py"
+        f.write_text(
+            'PLUGIN_META = {"name": "X", "version": "1", "description": "", "author": ""}\n'
+            'def run(devices, **kwargs):\n'
+            '    from modules.plugin_system import PluginResult\n'
+            '    return PluginResult(plugin_name="X")\n',
+            encoding="utf-8",
+        )
+        from modules.plugin_system import validate_scan_plugin
+        issues = validate_scan_plugin(f)
+        assert len(issues) == 1
+        assert "api_version" in issues[0]
+
+    def test_run_missing_kwargs_returns_issue(self, tmp_path):
+        """A run() without **kwargs gets an issue."""
+        f = tmp_path / "no_kwargs.py"
+        f.write_text(
+            'PLUGIN_META = {"name": "X", "version": "1", "description": "", "author": "", "api_version": "1"}\n'
+            'def run(devices):\n'
+            '    from modules.plugin_system import PluginResult\n'
+            '    return PluginResult(plugin_name="X")\n',
+            encoding="utf-8",
+        )
+        from modules.plugin_system import validate_scan_plugin
+        issues = validate_scan_plugin(f)
+        assert any("**kwargs" in i for i in issues)
+
+    def test_run_missing_positional_arg_returns_issue(self, tmp_path):
+        """A run() with no positional args gets an issue."""
+        f = tmp_path / "no_positional.py"
+        f.write_text(
+            'PLUGIN_META = {"name": "X", "version": "1", "description": "", "author": "", "api_version": "1"}\n'
+            'def run(**kwargs):\n'
+            '    from modules.plugin_system import PluginResult\n'
+            '    return PluginResult(plugin_name="X")\n',
+            encoding="utf-8",
+        )
+        from modules.plugin_system import validate_scan_plugin
+        issues = validate_scan_plugin(f)
+        assert any("positional" in i.lower() for i in issues)
+
+    def test_example_plugin_template_passes_validation(self, tmp_path):
+        """The bundled example plugin template must pass all validation checks (PB-2 + api_version)."""
+        from modules.plugin_system import _ensure_example_plugin, validate_scan_plugin
+        _ensure_example_plugin(tmp_path)
+        example_path = tmp_path / "example_open_ports_report.py"
+        assert example_path.exists(), "Example plugin template was not written"
+        issues = validate_scan_plugin(example_path)
+        assert issues == [], f"Bundled example plugin template has validation issues: {issues}"
+
+    def test_unreadable_file_returns_issue(self, tmp_path):
+        """A non-existent path returns a 'Cannot read file' issue."""
+        from modules.plugin_system import validate_scan_plugin
+        issues = validate_scan_plugin(tmp_path / "does_not_exist.py")
+        assert len(issues) == 1
+        assert "Cannot read file" in issues[0]
+
+
+# ── PB-11 — api_version field on PluginInfo ───────────────────────────────────
+
+class TestPluginInfoApiVersion:
+    def test_api_version_field_exists(self):
+        """PluginInfo must have an api_version field (PB-11)."""
+        from modules.plugin_system import PluginInfo
+        import dataclasses
+        fields = {f.name for f in dataclasses.fields(PluginInfo)}
+        assert "api_version" in fields, "PluginInfo must have api_version field"
+
+    def test_api_version_defaults_to_empty_string(self):
+        """api_version defaults to empty string when not supplied."""
+        from modules.plugin_system import PluginInfo
+        info = PluginInfo(
+            name="X", version="1.0", description="D",
+            author="A", tags=[], path=Path("/tmp/x.py"),
+        )
+        assert info.api_version == ""
+
+    def test_load_plugins_populates_api_version(self, tmp_path):
+        """load_plugins() must populate api_version from PLUGIN_META."""
+        f = tmp_path / "versioned.py"
+        f.write_text(
+            'PLUGIN_META = {"name": "V", "version": "2.0", "description": "d",'
+            ' "author": "a", "api_version": "1"}\n'
+            'def run(devices, **kwargs):\n'
+            '    from modules.plugin_system import PluginResult\n'
+            '    return PluginResult(plugin_name="V")\n',
+            encoding="utf-8",
+        )
+        with patch("modules.plugin_system.plugins_dir", return_value=tmp_path):
+            from modules.plugin_system import load_plugins
+            plugins = load_plugins()
+        versioned = next((p for p in plugins if p.name == "V"), None)
+        assert versioned is not None
+        assert versioned.api_version == "1"
+
+    def test_load_plugins_api_version_empty_when_absent(self, tmp_path):
+        """api_version is empty string when PLUGIN_META omits it."""
+        f = tmp_path / "no_ver.py"
+        f.write_text(
+            'PLUGIN_META = {"name": "N", "version": "1.0", "description": "d", "author": "a"}\n'
+            'def run(devices, **kwargs):\n'
+            '    from modules.plugin_system import PluginResult\n'
+            '    return PluginResult(plugin_name="N")\n',
+            encoding="utf-8",
+        )
+        with patch("modules.plugin_system.plugins_dir", return_value=tmp_path):
+            from modules.plugin_system import load_plugins
+            plugins = load_plugins()
+        no_ver = next((p for p in plugins if p.name == "N"), None)
+        assert no_ver is not None
+        assert no_ver.api_version == ""
+
+
+# ── PB-4 — status column + validation badge in UI ─────────────────────────────
+
+class TestPluginStatusBadge:
+    def test_status_column_in_plugin_table_header(self):
+        """tabs_recon.py plugin table must have a 'Status' column (PB-4)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert '"Status"' in src, "Plugin list table must declare a Status column"
+
+    def test_validate_scan_plugin_called_in_reload(self):
+        """_reload_plugins() must call validate_scan_plugin for each plugin (PB-4)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "validate_scan_plugin" in src, (
+            "_reload_plugins() must import and call validate_scan_plugin"
+        )
+
+    def test_plugin_status_cell_click_handler_exists(self):
+        """tabs_recon.py must define _on_plugin_status_cell_clicked for PB-4."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "_on_plugin_status_cell_clicked" in src, (
+            "Status cell click handler must exist"
+        )
+
+    def test_context_menu_has_show_validation_action(self):
+        """Right-click context menu must include a Show validation action (PB-4)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "Show validation" in src, (
+            "Context menu must have 'Show validation' action (PB-4)"
+        )
