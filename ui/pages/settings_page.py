@@ -137,21 +137,32 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         bl.setContentsMargins(0, 0, 12, 20)
         bl.setSpacing(12)
 
-        for builder, title in [
-            (self._build_config_completeness_card, "Configuration Status"),
-            (self._build_integrations_card,        "Active Integrations"),
-            (self._build_appearance_card,          "Appearance — Colour Theme"),
-            (self._build_display_card,             "Display"),
-            (self._build_scanning_card,            "Network Scanning"),
-            (self._build_sched_scan_card,          "Scheduled Full Scan"),
-            (self._build_tray_card,                "Notifications & Tray"),
-            (self._build_plugin_marketplace_card,  "Plugin Marketplace"),
-            (self._build_shortcuts_card,           "Keyboard Shortcuts"),
-            (self._build_health_card,              "App Health"),
-            (self._build_maintenance_card,         "Maintenance"),
+        for builder, title, keywords in [
+            (self._build_config_completeness_card, "Configuration Status",
+             "setup npcap admin scan status network ready"),
+            (self._build_integrations_card,        "Active Integrations",
+             "modem mesh mqtt rest api speedtest ookla certificate service monitor"),
+            (self._build_appearance_card,          "Appearance — Colour Theme",
+             "theme arctic midnight obsidian abyss colour color dark light mode"),
+            (self._build_display_card,             "Display",
+             "compact rows density tooltips table font size"),
+            (self._build_scanning_card,            "Network Scanning",
+             "subnet range timeout arp interval ping sweep"),
+            (self._build_sched_scan_card,          "Scheduled Full Scan",
+             "schedule automatic cron interval repeat timer"),
+            (self._build_tray_card,                "Notifications & Tray",
+             "email smtp toast webhook pushover ntfy telegram alert notify tray"),
+            (self._build_plugin_marketplace_card,  "Plugin Marketplace",
+             "plugin extension install hub community"),
+            (self._build_shortcuts_card,           "Keyboard Shortcuts",
+             "ctrl cmd keyboard hotkey shortcut key binding"),
+            (self._build_health_card,              "App Health",
+             "version update database log debug about"),
+            (self._build_maintenance_card,         "Maintenance",
+             "reset export import oui backup restore data"),
         ]:
             card = builder()
-            self._all_cards.append((card, title))
+            self._all_cards.append((card, title, keywords))
             bl.addWidget(card)
         bl.addStretch()
 
@@ -185,7 +196,7 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
             btn.setFlat(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet(_btn_base)
-            for card, title in self._all_cards:
+            for card, title, _kw in self._all_cards:
                 if title == full_title:
                     btn.clicked.connect(
                         lambda _, c=card: self._settings_scroll.ensureWidgetVisible(c)
@@ -225,7 +236,7 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         )
         active_title = ""
         best_y = -1
-        for card, title in self._all_cards:
+        for card, title, _kw in self._all_cards:
             if not card.isVisible():
                 continue
             card_y = card.mapTo(body, card.rect().topLeft()).y()
@@ -240,11 +251,11 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
     def _on_search_changed(self, text: str) -> None:
         q = text.strip().lower()
         if len(q) < 3:
-            for card, _ in self._all_cards:
+            for card, _t, _kw in self._all_cards:
                 card.setVisible(True)
         else:
-            for card, title in self._all_cards:
-                card.setVisible(q in title.lower())
+            for card, title, keywords in self._all_cards:
+                card.setVisible(q in title.lower() or q in keywords.lower())
 
     def _mark_dirty(self) -> None:
         self._dirty = True

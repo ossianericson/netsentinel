@@ -396,6 +396,7 @@ class _NavBuilderMixin:
             self._nav_direct_pins = []
 
         self._nav_finalize_rail()
+        self._proactive_wire_page_help_btns()
         _qs = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
         _last = _qs.value("nav/last_section", "")
         _open = _last if any(s["name"] == _last for s in self._nav_sections) \
@@ -706,10 +707,15 @@ class _NavBuilderMixin:
 
     # ── Help panel wiring ─────────────────────────────────────────────────────
 
-    def _wire_page_help_btn(self, label: str, info: dict) -> None:
-        """EDU-1: attach ? help button to the current page's PageHeaderBar (once)."""
+    def _wire_page_help_btn(self, label: str, info: dict, page=None) -> None:
+        """Attach ? help button to a page's PageHeaderBar (once).
+
+        ``page`` defaults to the current stack widget so existing call-sites
+        (lazy wiring on navigation) continue to work unchanged.
+        """
         from ui.widgets.page_header import PageHeaderBar
-        page = self._stack.currentWidget()
+        if page is None:
+            page = self._stack.currentWidget()
         if page is None:
             return
         hdr = page.findChild(PageHeaderBar)
@@ -718,6 +724,17 @@ class _NavBuilderMixin:
         what = info.get("what", "")
         if what:
             hdr.set_help(label, what)
+
+    def _proactive_wire_page_help_btns(self) -> None:
+        """Wire ? buttons on all registered pages that have a _PAGE_HELP entry.
+
+        Called once after _nav_finalize_rail() so every page header has its ?
+        button without the user needing to navigate there first.
+        """
+        for label, widget in self._nav_label_to_widget.items():
+            info = _PAGE_HELP.get(label, {})
+            if info.get("what"):
+                self._wire_page_help_btn(label, info, page=widget)
 
     def _update_help_panel(self, label: str) -> None:
         """Refresh tip bar text and collapse the help panel when the page changes."""

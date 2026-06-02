@@ -278,12 +278,25 @@ def build_help_tab(window) -> QWidget:
 
     # ── Keyboard shortcuts ───────────────────────────────────────────────
     bl.addWidget(_section("Keyboard Shortcuts", [
+        # Navigation
+        ("Ctrl + K",           "Open command palette — fuzzy-search any page or action"),
+        ("Ctrl + F",           "Focus sidebar search"),
+        ("Escape",             "Close flyout panel / dismiss command palette"),
+        # Scanning
         ("Ctrl + R",           "Run full scan"),
-        ("Ctrl + Shift + M",   "Visual Diagnostic Overlay (Matrix)"),
         ("Ctrl + E",           "Export last scan results"),
+        # Application
         ("Ctrl + Q",           "Quit application"),
-        ("F5",                 "Refresh current tab"),
-        ("Right-click",        "Context menu on any table row"),
+        ("F5",                 "Refresh current page"),
+        ("Ctrl + Shift + M",   "Visual Diagnostic Overlay (Matrix mode)"),
+        # Tables & rows
+        ("Right-click row",    "Context menu: Copy IP / Copy MAC / How to Fix / Port Scan / WoL"),
+        ("Click column header","Sort table by that column"),
+        # macOS equivalents
+        ("⌘ + K",             "Command palette (macOS)"),
+        ("⌘ + R",             "Run full scan (macOS)"),
+        ("⌘ + E",             "Export (macOS)"),
+        ("⌘ + Q",             "Quit (macOS)"),
     ]))
 
     # ── Feature reference ────────────────────────────────────────────────
@@ -347,9 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Abyss theme", "A new WCAG AA high-contrast theme with a true black background and electric steel teal accent. Switch to it in Settings → Appearance or via the theme toggle in the top bar."),
-        ("MetricStore query split", "Internal query methods reorganised into focused mixins (uptime/device-state and time-series metrics) for faster navigation and lower LOC per file."),
-        ("Worker lifecycle test coverage", "SpeedTestWorker, CombinedDiscoveryWorker, and BandwidthWorker now have full RULE-T2 start/stop lifecycle tests."),
+        ("Full keyboard shortcut reference", "The Keyboard Shortcuts card (here and in Settings) now lists all 15 shortcuts including navigation (Ctrl+K, Ctrl+F, Escape), scanning, tables, and macOS platform variants."),
+        ("? help button on every page", "Every page with help content now shows its ? button in the page header from startup — no need to visit the page first."),
+        ("Settings full-text search", "The search bar in Settings now matches against in-card keywords. Try typing 'smtp', 'dark', 'ctrl', or 'ookla' to jump straight to the relevant card."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

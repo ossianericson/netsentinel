@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.73
+**Added**
+- `ui/nav/builder.py` — `_proactive_wire_page_help_btns()` wires the `?` help button on every page at startup rather than lazily on first visit (F3)
+
+**Changed**
+- `ui/help_tab.py` — keyboard shortcuts table expanded to 15 entries with navigation, scan, app, table, and macOS platform variants (F2)
+- `ui/pages/settings_cards.py` — keyboard shortcuts card expanded to 11 entries with grouped categories (F2)
+- `ui/pages/settings_page.py` — settings search now performs full-text match against per-card keyword strings in addition to card titles; typing "smtp", "dark", or "ctrl" now surfaces the relevant card (F4)
+- `app.py` — fixed `_home_automation_page` → `_ha_page` and `_trigger_builder_page` → `_trigger_page` in E2 scan_requested wiring
+
 ### v1.9.72
 **Added**
 - `modules/metric_store_queries_uptime.py` — `_UptimeQueriesMixin` with 5 uptime/device-state query methods (E3 split)

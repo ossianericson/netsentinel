@@ -270,7 +270,6 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 | **E2** | RULE-UX5 blocking violations (7 pages) | XS | ★★☆☆☆ (internal) |
 | **B** | Educational scaffolding | M | ★★★★☆ |
 | **C** | Real-world alerting & monitoring UX | S | ★★★★☆ |
-| **D** | ISP comparison | L | ★★★★★ (differentiator) |
 | **E1+E3** | Remaining technical debt | S | ★★☆☆☆ (internal) |
 | **F** | Polish & retention | S | ★★★☆☆ |
 
@@ -300,11 +299,13 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 - E3: `metric_store_queries.py` (619 lines) split into `metric_store_queries_uptime.py` (_UptimeQueriesMixin — 5 uptime/device-state methods) + `metric_store_queries_metrics.py` (_MetricsQueriesMixin — 10 RTT/speed/CVE/alert/modem/mesh methods); facade reduced to 299 lines; `test_metric_store_queries_split.py` added; LOC budget exception removed from `test_module_loc.py`
 - F1: `_ABYSS` palette added to `ui/styles.py` — true black backgrounds, electric steel teal accent (#008DB8, 3.4:1 with white), ACCENT_DARK (#005E7A, 6.6:1 with white), all text ≥ 4.5:1 WCAG AA compliant; "Abyss" registered in THEMES dict; theme toggle icon "◼" added to header; home page theme picker updated; settings buttons auto-populated from THEMES
 
-**Next sprint: D1 (ISP comparison) or F2+F3+F4 (polish)**
-- D1 (large): Anonymous opt-in ISP comparison — `modules/isp_telemetry.py`; submits ISP+country+anonymised speed/latency once per day; shows comparison against ISP+country median in Speed Test page
-- F2 (small): Keyboard shortcut reference card in Help panel
-- F3 (small): Per-page `?` documentation link on each PageHeader
-- F4 (small): Settings search — full-text match on setting labels and help text
+**✅ Sprint F2 + F3 + F4 — COMPLETED 2026-06-02**
+- F2: Keyboard shortcut tables expanded in `help_tab.py` and `settings_cards.py` — 15 entries with navigation, scan, app, table, and macOS platform variants (⌘ equivalents)
+- F3: `_proactive_wire_page_help_btns()` added to `ui/nav/builder.py`; called after `_nav_finalize_rail()` so every page with a `_PAGE_HELP` entry gets its `?` button at startup, not lazily on first visit
+- F4: `_all_cards` extended to 3-tuple `(card, title, keywords)`; `_on_search_changed` now matches against keywords string as well as title — covers theme names, notification channels, shortcut terms, and other in-card content
+
+**Next sprint: F5 (settings reset) or new backlog items**
+- F5 (small): "Reset all settings to defaults" in Settings — confirmation dialog required
 
 ---
 
@@ -340,7 +341,6 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 | C2 | `ui/first_run_dialog.py` |
 | C3 | `ui/widgets/alert_drawer.py` |
 | C4 | `modules/report_isp.py`, `ui/pages/reports_page.py` |
-| D1 | new `modules/isp_telemetry.py`, `ui/pages/speed_test_page.py` |
 | E1 | new `tests/test_*_worker.py` (21 files) |
 | E2 | 7 page files (cert, diagnosis, home_automation, lab_mode, service, speed_test, trigger_builder) |
 | E3 | `modules/metric_store_queries.py` → split into 2 files |

@@ -1138,12 +1138,20 @@ class _SettingsCardsMixin:
     def _build_shortcuts_card(self) -> QFrame:
         card, bl = _card("Keyboard Shortcuts")
         shortcuts = [
+            # Navigation
+            ("Ctrl + K",           "Open command palette — fuzzy-search any page or action"),
+            ("Ctrl + F",           "Focus sidebar search"),
+            ("Escape",             "Close flyout panel / dismiss command palette"),
+            # Scanning & data
             ("Ctrl + R",           "Run full scan"),
             ("Ctrl + E",           "Export last scan results"),
+            # Application
             ("Ctrl + Q",           "Quit application"),
             ("F5",                 "Refresh current page"),
-            ("Right-click",        "Context menu on any table row"),
             ("Ctrl + Shift + M",   "Visual Diagnostic Overlay (Matrix mode)"),
+            # Tables
+            ("Right-click row",    "Context menu: Copy IP / Copy MAC / How to Fix / Port Scan / WoL"),
+            ("Click column header","Sort table by that column"),
         ]
         for i, (key, desc) in enumerate(shortcuts):
             row_w = QWidget()
