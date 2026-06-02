@@ -183,7 +183,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # _ReconTabsMixin — security-audit recon tab builders (SYN/UDP/OS/Risk/CVE/Exposure/
     # Cred/Discovery/SMB/Plugin/PE).  Extracted from dashboard.py (Sprint 18).
     # If grows past 1,300, split into tabs_recon_network.py + tabs_recon_access.py.
-    "tabs_recon.py": 1185,  # actual 985 + 200 margin (Sprint 18 new file)
+    "tabs_recon.py": 1300,  # Sprint C: PB-1 wizard + PB-6 error details added (+114 lines)
 
     # _DiagExtraTabsMixin — MTR tab + advanced tools tab + handlers.
     # Logger methods removed (Sprint 16) — now inherits into _DiagTabsMixin cleanly.

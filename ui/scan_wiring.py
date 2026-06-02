@@ -636,6 +636,24 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 pass
 
     def _on_plugin_result(self, res):
+        if res.error:
+            tb_lines = res.error.strip().splitlines()
+            if len(tb_lines) > 10:
+                tb_lines = ["(… truncated …)"] + tb_lines[-10:]
+            lines = [
+                f"Plugin: {res.plugin_name}",
+                "",
+                "The plugin encountered an error while running.",
+                "Likely cause: a coding error in the plugin or missing expected device data.",
+                "What to try:  right-click the plugin row and choose 'Show validation',",
+                "              or open the plugins folder to edit the file.",
+                "",
+                "— Error details —",
+            ] + tb_lines
+            self._plugin_result_text.setPlainText("\n".join(lines))
+            self._plugin_status.setText(f"'{res.plugin_name}' failed — see output below.")
+            self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+            return
         lines = [f"Plugin: {res.plugin_name}", f"Risk: {res.risk_level}"]
         if res.findings:
             lines.append(f"Findings ({len(res.findings)}):")

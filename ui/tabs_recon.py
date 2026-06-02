@@ -750,9 +750,14 @@ class _ReconTabsMixin:
         self._btn_plugin_run.setObjectName("btnNetRefresh")
         self._btn_plugin_run.clicked.connect(self._run_selected_plugin)
 
+        self._btn_plugin_new = QPushButton("⬡  New Scan Plugin")
+        self._btn_plugin_new.setObjectName("btnNetRefresh")
+        self._btn_plugin_new.clicked.connect(self._new_scan_plugin_wizard)
+
         ctrl.addWidget(self._btn_plugin_reload)
         ctrl.addWidget(self._btn_plugin_open_dir)
         ctrl.addWidget(self._btn_plugin_run)
+        ctrl.addWidget(self._btn_plugin_new)
         ctrl.addStretch()
 
         self._plugin_dir_lbl = QLabel("")
@@ -849,6 +854,109 @@ class _ReconTabsMixin:
         else:
             subprocess.Popen(["xdg-open", d])
 
+    def _new_scan_plugin_wizard(self) -> None:
+        """Open a wizard to create a new scan plugin template (PB-1)."""
+        dlg = QDialog(self._plugin_list_table.window())
+        dlg.setWindowTitle("New Scan Plugin")
+        dlg.setMinimumWidth(440)
+        vlay = QVBoxLayout(dlg)
+        vlay.setContentsMargins(16, 16, 16, 8)
+        vlay.setSpacing(8)
+
+        form_w = QWidget()
+        form = QFormLayout(form_w)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(8)
+
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("My Custom Check")
+        desc_edit = QLineEdit()
+        desc_edit.setPlaceholderText("Describe what this plugin checks")
+        tags_edit = QLineEdit()
+        tags_edit.setPlaceholderText("ports, risk  (comma-separated, optional)")
+
+        form.addRow("Plugin name *:", name_edit)
+        form.addRow("Description:", desc_edit)
+        form.addRow("Tags:", tags_edit)
+        vlay.addWidget(form_w)
+
+        note = QLabel(
+            "A .py template will be created in the plugins folder ready to edit. "
+            "It comes with PLUGIN_META + a run(devices) stub that passes validation."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;padding:4px 0;")
+        vlay.addWidget(note)
+
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        vlay.addWidget(bb)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        plugin_name = name_edit.text().strip()
+        if not plugin_name:
+            return
+
+        description = desc_edit.text().strip() or f"Custom scan plugin: {plugin_name}"
+        tags_raw = [t.strip() for t in tags_edit.text().split(",") if t.strip()]
+        tags_py = ", ".join(f'"{t}"' for t in tags_raw)
+
+        import re
+        slug = re.sub(r"[^a-zA-Z0-9_]", "_", plugin_name.lower()).strip("_") or "custom_plugin"
+
+        from modules.plugin_system import plugins_dir
+        d = plugins_dir()
+        dest = d / f"{slug}.py"
+        counter = 1
+        while dest.exists():
+            dest = d / f"{slug}_{counter}.py"
+            counter += 1
+
+        template = (
+            f'"""\n{description}\n"""\n\n'
+            f"PLUGIN_META = {{\n"
+            f'    "name":        "{plugin_name}",\n'
+            f'    "version":     "1.0.0",\n'
+            f'    "description": "{description}",\n'
+            f'    "author":      "Custom",\n'
+            f'    "tags":        [{tags_py}],\n'
+            f'    "api_version": "1",\n'
+            f"}}\n\n\n"
+            f"def run(devices, **kwargs):\n"
+            f"    from modules.plugin_system import PluginResult\n"
+            f"    findings = []\n"
+            f"    for device in devices:\n"
+            f"        ip = getattr(device, 'ip', None) or "
+            f"(device.get('ip') if isinstance(device, dict) else '?')\n"
+            f"        # TODO: add your checks here\n"
+            f"        pass\n\n"
+            f"    risk = 'HIGH' if findings else 'CLEAN'\n"
+            f"    return PluginResult(\n"
+            f"        plugin_name=PLUGIN_META['name'],\n"
+            f"        findings=findings,\n"
+            f"        risk_level=risk,\n"
+            f"    )\n"
+        )
+
+        try:
+            dest.write_text(template, encoding="utf-8")
+        except OSError as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(
+                self._plugin_list_table.window(),
+                "Write Error",
+                f"Could not write plugin file:\n{exc}",
+            )
+            return
+
+        self._reload_plugins()
+        self._plugin_status.setText(
+            f"Created '{dest.name}' — open the plugins folder to edit it."
+        )
+
     @pyqtSlot()
     def _run_selected_plugin(self):
         from workers.scan_worker import PluginWorker
@@ -873,8 +981,21 @@ class _ReconTabsMixin:
 
     @pyqtSlot(str)
     def _on_plugin_error(self, msg: str):
-        self._plugin_result_text.setPlainText(f"ERROR:\n{msg}")
-        self._plugin_status.setText("Plugin failed — see output above.")
+        tb_lines = msg.strip().splitlines()
+        if len(tb_lines) > 10:
+            tb_lines = ["(… truncated …)"] + tb_lines[-10:]
+        lines = [
+            "Plugin failed to execute.",
+            "",
+            "What happened: the plugin raised an unhandled exception or could not start.",
+            "Likely cause:  a missing dependency, import error, or syntax problem.",
+            "What to try:   right-click the plugin and choose 'Show validation', or",
+            "               open the plugins folder to edit the file.",
+            "",
+            "— Error details —",
+        ] + tb_lines
+        self._plugin_result_text.setPlainText("\n".join(lines))
+        self._plugin_status.setText("Plugin failed — see output below.")
         self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
 
     def _on_plugin_status_cell_clicked(self, row: int, col: int) -> None:
@@ -924,7 +1045,7 @@ class _ReconTabsMixin:
             QApplication.clipboard().setText(info.name)
 
     def _run_plugin_in_dialog(self, row: int) -> None:
-        """Run a scan plugin against the last scan result; show output in a dialog (PB-5)."""
+        """Run a scan plugin against the last scan result; show output in a dialog (PB-5/PB-6)."""
         from workers.scan_worker import PluginWorker as _ScanPluginWorker
         if self._plugin_worker and self._plugin_worker.isRunning():
             self._plugin_status.setText("⚠ A plugin is already running — wait for it to finish.")
@@ -946,6 +1067,33 @@ class _ReconTabsMixin:
         )
         vlay.addWidget(output, 1)
 
+        # Collapsible error details section (PB-6)
+        details_toggle = QPushButton("▼  Show error details")
+        details_toggle.setFlat(True)
+        details_toggle.setStyleSheet(f"color:{AMBER};font-size:10px;text-align:left;")
+        details_toggle.hide()
+        vlay.addWidget(details_toggle)
+
+        details_text = QTextEdit()
+        details_text.setReadOnly(True)
+        details_text.setMaximumHeight(120)
+        details_text.setStyleSheet(
+            f"background:{BG_CARD};color:{TEXT_MUTED};font-size:10px;"
+            f"font-family:'Courier New';border:1px solid {BORDER};padding:4px;"
+        )
+        details_text.hide()
+        vlay.addWidget(details_text)
+
+        def _toggle_details() -> None:
+            if details_text.isVisible():
+                details_text.hide()
+                details_toggle.setText("▼  Show error details")
+            else:
+                details_text.show()
+                details_toggle.setText("▲  Hide error details")
+
+        details_toggle.clicked.connect(_toggle_details)
+
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         bb.rejected.connect(dlg.reject)
         vlay.addWidget(bb)
@@ -954,10 +1102,24 @@ class _ReconTabsMixin:
         self._plugin_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
 
         def _on_result(res) -> None:
-            lines = [f"Plugin:  {res.plugin_name}", f"Risk:    {res.risk_level}", ""]
             if res.error:
-                lines += ["Error:", res.error]
-            elif res.findings:
+                output.setPlainText(
+                    f"Plugin:  {res.plugin_name}\n\n"
+                    "The plugin encountered an error while running.\n"
+                    "Likely cause: a coding error in the plugin or missing expected data.\n"
+                    "What to try:  close this dialog, right-click the plugin row, and\n"
+                    "             choose 'Show validation' for a static analysis report."
+                )
+                tb_lines = res.error.strip().splitlines()
+                if len(tb_lines) > 15:
+                    tb_lines = ["(… truncated …)"] + tb_lines[-15:]
+                details_text.setPlainText("\n".join(tb_lines))
+                details_toggle.show()
+                self._plugin_status.setText(f"'{res.plugin_name}' failed — error details available.")
+                self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+                return
+            lines = [f"Plugin:  {res.plugin_name}", f"Risk:    {res.risk_level}", ""]
+            if res.findings:
                 lines += [f"Findings ({len(res.findings)}):"]
                 lines += [f"  • {f}" for f in res.findings]
             else:
@@ -973,8 +1135,19 @@ class _ReconTabsMixin:
             self._plugin_status.setStyleSheet(f"color:{color};font-size:11px;")
 
         def _on_err(msg: str) -> None:
-            output.setPlainText(f"ERROR:\n{msg}")
-            self._plugin_status.setText("Plugin failed.")
+            output.setPlainText(
+                "Plugin failed to execute.\n\n"
+                "What happened: the plugin raised an unhandled exception or could not start.\n"
+                "Likely cause:  a missing dependency, import error, or syntax problem.\n"
+                "What to try:   close this dialog, right-click the plugin row, and\n"
+                "               choose 'Show validation' for a static analysis report."
+            )
+            tb_lines = msg.strip().splitlines()
+            if len(tb_lines) > 15:
+                tb_lines = ["(… truncated …)"] + tb_lines[-15:]
+            details_text.setPlainText("\n".join(tb_lines))
+            details_toggle.show()
+            self._plugin_status.setText("Plugin failed — error details available.")
             self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
 
         worker = _ScanPluginWorker(info, devices)

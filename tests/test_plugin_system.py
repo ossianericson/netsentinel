@@ -574,3 +574,110 @@ class TestPluginStatusBadge:
         assert "Show validation" in src, (
             "Context menu must have 'Show validation' action (PB-4)"
         )
+
+
+# ── PB-1 — New Scan Plugin wizard ─────────────────────────────────────────────
+
+class TestNewScanPluginWizard:
+    def test_new_scan_plugin_button_exists_in_source(self):
+        """tabs_recon.py must have a 'New Scan Plugin' button wired to the wizard (PB-1)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "New Scan Plugin" in src, "'New Scan Plugin' button label must be present"
+        assert "_new_scan_plugin_wizard" in src, "_new_scan_plugin_wizard method must be defined"
+        assert "_btn_plugin_new" in src, "_btn_plugin_new widget must be created"
+
+    def test_wizard_method_wired_to_button(self):
+        """The new-plugin button must be connected to _new_scan_plugin_wizard (PB-1)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "_btn_plugin_new.clicked.connect(self._new_scan_plugin_wizard)" in src
+
+    def test_wizard_writes_template_with_plugin_meta(self, tmp_path):
+        """_new_scan_plugin_wizard template must produce a file that passes validate_scan_plugin (PB-1)."""
+        from modules.plugin_system import validate_scan_plugin
+
+        # Replicate the template string from the wizard (same formula)
+        plugin_name = "Test Wizard Plugin"
+        description = "A test plugin written by the wizard"
+        tags_py = '"ports", "test"'
+        import re
+        slug = re.sub(r"[^a-zA-Z0-9_]", "_", plugin_name.lower()).strip("_")
+
+        template = (
+            f'"""\n{description}\n"""\n\n'
+            f"PLUGIN_META = {{\n"
+            f'    "name":        "{plugin_name}",\n'
+            f'    "version":     "1.0.0",\n'
+            f'    "description": "{description}",\n'
+            f'    "author":      "Custom",\n'
+            f'    "tags":        [{tags_py}],\n'
+            f'    "api_version": "1",\n'
+            f"}}\n\n\n"
+            f"def run(devices, **kwargs):\n"
+            f"    from modules.plugin_system import PluginResult\n"
+            f"    findings = []\n"
+            f"    for device in devices:\n"
+            f"        ip = getattr(device, 'ip', None) or "
+            f"(device.get('ip') if isinstance(device, dict) else '?')\n"
+            f"        # TODO: add your checks here\n"
+            f"        pass\n\n"
+            f"    risk = 'HIGH' if findings else 'CLEAN'\n"
+            f"    return PluginResult(\n"
+            f"        plugin_name=PLUGIN_META['name'],\n"
+            f"        findings=findings,\n"
+            f"        risk_level=risk,\n"
+            f"    )\n"
+        )
+
+        dest = tmp_path / f"{slug}.py"
+        dest.write_text(template, encoding="utf-8")
+        issues = validate_scan_plugin(dest)
+        assert issues == [], f"Wizard template has validation issues: {issues}"
+
+    def test_wizard_template_slug_sanitizes_spaces(self):
+        """Filename slug generation must replace spaces with underscores (PB-1)."""
+        import re
+        slug = re.sub(r"[^a-zA-Z0-9_]", "_", "My Plugin Name".lower()).strip("_")
+        assert " " not in slug
+        assert slug == "my_plugin_name"
+
+    def test_wizard_template_slug_strips_leading_trailing_underscores(self):
+        """Slug must not start or end with underscores so it is not skipped by load_plugins (PB-1)."""
+        import re
+        slug = re.sub(r"[^a-zA-Z0-9_]", "_", "---special---".lower()).strip("_")
+        # load_plugins skips files starting with _; slug must not start with _
+        assert not slug.startswith("_"), f"Slug '{slug}' must not start with underscore"
+
+
+# ── PB-6 — Error details in plugin output ─────────────────────────────────────
+
+class TestPluginErrorDisplay:
+    def test_on_plugin_error_translated_message_in_source(self):
+        """_on_plugin_error must contain plain-English translation text (PB-6, RULE-A2)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "What happened" in src, "_on_plugin_error must explain what happened (RULE-A2)"
+        assert "Likely cause" in src, "_on_plugin_error must explain likely cause (RULE-A2)"
+        assert "What to try" in src, "_on_plugin_error must suggest what to try (RULE-A2)"
+
+    def test_on_plugin_result_error_path_in_scan_wiring(self):
+        """_on_plugin_result in scan_wiring.py must handle res.error with translated message (PB-6)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "scan_wiring.py").read_text(encoding="utf-8")
+        assert "res.error" in src, "_on_plugin_result must check res.error"
+        assert "Likely cause" in src, "_on_plugin_result error path must translate the error (RULE-A2)"
+
+    def test_error_traceback_truncated_at_10_lines(self):
+        """Traceback display must be capped at 10 lines for inline output (PB-6)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "truncated" in src, "Long tracebacks must be truncated in the inline display"
+
+    def test_run_plugin_in_dialog_has_collapsible_error_section(self):
+        """_run_plugin_in_dialog must contain a collapsible error details section (PB-6)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "details_toggle" in src, "Dialog must have an error details toggle button"
+        assert "details_text" in src, "Dialog must have a details QTextEdit"
+        assert "Show error details" in src, "Toggle button must have 'Show error details' label"

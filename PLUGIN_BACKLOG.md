@@ -84,9 +84,8 @@ The validator CLI (`python -m modules.plugin_tools validate`) validates **hardwa
 
 ### Priority 1 — User can actually create a working scan plugin
 
-**PB-1** — End-to-end scan plugin creation guide in the UI  
-*Current state:* There is no wizard or "New Plugin" button for scan plugins. The only wizard creates hardware plugins. A user wanting to write a scan plugin has to find the auto-generated `example_open_ports_report.py` file manually.  
-*Required:* Add a "New Scan Plugin" button on the Plugins page (Security Audit section) that opens a simplified wizard (name, description, tags, output fields) and writes a scan-plugin template with `PLUGIN_META` + `run()`.  
+**PB-1** ✅ — End-to-end scan plugin creation guide in the UI  
+*Implemented:* Added `"⬡  New Scan Plugin"` button to the Plugins tab toolbar in `ui/tabs_recon.py`. Clicking it opens a `QDialog` wizard (name, description, tags). On OK, writes a scan-plugin template with `PLUGIN_META` (all required keys + `api_version: "1"`) + `run(devices, **kwargs)` stub to `plugins_dir()`, then auto-reloads the plugin list. Template is validated to pass `validate_scan_plugin()` with zero issues. Filename is slug-sanitized and collision-safe. 5 new tests in `TestNewScanPluginWizard`.  
 *Effort:* M  
 
 **PB-2** ✅ — Scan plugin validator (separate from hardware plugin validator)  
@@ -107,9 +106,12 @@ The validator CLI (`python -m modules.plugin_tools validate`) validates **hardwa
 *Implemented:* Right-click → `▶ Test with last scan` runs the plugin in `_run_plugin_in_dialog()` and shows `PluginResult` in a `QDialog`. Right-click → `Copy name` copies the plugin name to the clipboard.  
 *Effort:* S  
 
-**PB-6** — Plugin sandbox output log  
-*Current state:* If a scan plugin raises an error, the error appears in `PluginResult.error` but is never surfaced in the UI.  
-*Required:* Show a truncated traceback in a collapsed "Error details" section in the plugin result row. Map to RULE-A2 (translate errors to plain English where possible).  
+**PB-6** ✅ — Plugin sandbox output log  
+*Implemented:* Three-point error display upgrade across the plugin UI (RULE-A2 compliance):
+1. `_on_plugin_error` (worker-level error): shows plain-English translation (What happened / Likely cause / What to try) + truncated traceback (last 10 lines) in `_plugin_result_text`.
+2. `_on_plugin_result` in `scan_wiring.py`: when `res.error` is set, shows the same plain-English translation + truncated traceback inline.
+3. `_run_plugin_in_dialog` (dry-run dialog): shows plain-English summary in the main output area + a hidden "▼ Show error details" `QPushButton` that reveals a collapsed `QTextEdit` with the raw traceback (last 15 lines). Toggle shows "▲ Hide error details" when expanded.
+4 new tests in `TestPluginErrorDisplay`.  
 *Effort:* S  
 
 ### Priority 3 — Plugin Ecosystem (remaining P-items from main backlog)
@@ -170,7 +172,7 @@ Full suite: **2675 passed, 5 skipped** (was 2664 before this session).
 |---|---|---|---|
 | Sprint A | PB-3 (reload button), PB-5 (dry-run), PB-10 (cache dir) | S+S+XS | ✅ Done 2026-06-02 |
 | Sprint B | PB-2 (scan validator), PB-4 (inline validator badge), PB-11 (api_version) | S+M+XS | ✅ Done 2026-06-02 |
-| Sprint C | PB-1 (scan plugin wizard), PB-6 (error log) | M+S | |
+| Sprint C | PB-1 (scan plugin wizard), PB-6 (error log) | M+S | ✅ Done 2026-06-02 |
 | Sprint D | PB-8 (community index UI), PB-9 (nspkg install UI) | M+S | |
 | Sprint E | PB-7 (CONFIG_SCHEMA UI), PB-12 (path length guard) | M+XS | |
 
@@ -216,12 +218,22 @@ Full suite: **2675 passed, 5 skipped** (was 2664 before this session).
 
 ---
 
-## Next Sprint: Sprint C
+## Sprint C Completion Notes (2026-06-02)
+
+**PB-1 ✅** — Added `"⬡  New Scan Plugin"` button to the Plugins tab in `ui/tabs_recon.py`. `_new_scan_plugin_wizard()` opens a QDialog with name/description/tags fields. On accept, slug-sanitizes the name to a Python filename, writes a compliant template (PLUGIN_META + run stub + api_version "1") to `plugins_dir()`, then calls `_reload_plugins()`. Note: `@pyqtSlot()` decorator intentionally omitted — PyQt6 metaclass interference with `customContextMenuRequested` in the same mixin class causes TypeError (same issue as PB-4 fix in Sprint B). 5 new tests: `TestNewScanPluginWizard`.
+
+**PB-6 ✅** — Three-point error display upgrade: (1) `_on_plugin_error` in `tabs_recon.py` now shows plain-English "What happened / Likely cause / What to try" header + truncated traceback; (2) `_on_plugin_result` in `scan_wiring.py` checks `res.error` first and shows the same translation; (3) `_run_plugin_in_dialog` gains a collapsible "▼ Show error details" toggle that reveals a `QTextEdit` with the raw traceback. 4 new tests: `TestPluginErrorDisplay`.
+
+**Suite after sprint:** 2706 passed, 5 skipped (was 2697 before Sprint C; +9 tests).
+
+---
+
+## Next Sprint: Sprint D
 
 | Item | File(s) to create/modify | Key detail |
 |---|---|---|
-| PB-1 | `ui/tabs_recon.py` | "New Scan Plugin" button on Plugins tab → wizard dialog (name, description, tags, output fields) → writes scan-plugin template with `PLUGIN_META` + `run()` + `api_version: "1"` |
-| PB-6 | `ui/tabs_recon.py` | Show truncated traceback in collapsed "Error details" section in plugin result row (map to RULE-A2) |
+| PB-8 | `ui/pages/hardware_integration_page.py` | "Browse" tab in Hardware page showing community plugin index (GitHub-hosted JSON); SHA-256 verify before install; `plugin_registry.py` already has network layer |
+| PB-9 | `ui/pages/hardware_integration_page.py` | "Install from .nspkg" button; `.nspkg` ZIP format implemented in `modules/nspkg.py`; missing only the UI trigger |
 
 ---
-*Generated by end-to-end plugin audit, 2026-06-01. Sprint A completed 2026-06-02. Sprint B completed 2026-06-02.*
+*Generated by end-to-end plugin audit, 2026-06-01. Sprint A completed 2026-06-02. Sprint B completed 2026-06-02. Sprint C completed 2026-06-02.*
