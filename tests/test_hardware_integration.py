@@ -17,6 +17,7 @@ Covers:
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -594,3 +595,147 @@ def test_on_import_nspkg_invalid_bundle_sets_status(page, monkeypatch, tmp_path)
     page._on_import_nspkg()
     # Status label should contain an error message
     assert page._status_lbl.text() != "", "Status label must show an error for invalid bundle"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. CONFIG_SCHEMA support — PB-7
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PLUGIN_WITH_SCHEMA = (
+    "HARDWARE_NAME = 'Schema Plugin'\n"
+    "HARDWARE_TYPE = 'router'\n"
+    "HARDWARE_IP   = '192.168.1.1'\n"
+    "CONFIG_SCHEMA = {\n"
+    "    'poll_interval': {'type': 'int',  'default': 60, 'min': 10, 'max': 600},\n"
+    "    'verify_ssl':    {'type': 'bool', 'default': True},\n"
+    "    'base_url':      {'type': 'str',  'default': 'http://192.168.1.1'},\n"
+    "}\n"
+    "def get_info(): return {}\n"
+    "def get_status(): return {}\n"
+)
+
+_PLUGIN_NO_SCHEMA = (
+    "HARDWARE_NAME = 'Bare Plugin'\n"
+    "HARDWARE_TYPE = 'router'\n"
+    "HARDWARE_IP   = '192.168.1.1'\n"
+    "def get_info(): return {}\n"
+    "def get_status(): return {}\n"
+)
+
+
+def test_validate_script_extracts_config_schema(tmp_path):
+    """_validate_script must return a non-empty config_schema when plugin declares it."""
+    p = tmp_path / "schema_plugin.py"
+    p.write_text(_PLUGIN_WITH_SCHEMA, encoding="utf-8")
+    ok, _, meta = _validate_script(str(p))
+    assert ok
+    cs = meta.get("config_schema", {})
+    assert "poll_interval" in cs
+    assert cs["poll_interval"]["type"] == "int"
+    assert "verify_ssl" in cs
+    assert cs["verify_ssl"]["type"] == "bool"
+
+
+def test_validate_script_no_schema_returns_empty(tmp_path):
+    """_validate_script returns an empty config_schema when plugin omits CONFIG_SCHEMA."""
+    p = tmp_path / "bare_plugin.py"
+    p.write_text(_PLUGIN_NO_SCHEMA, encoding="utf-8")
+    ok, _, meta = _validate_script(str(p))
+    assert ok
+    assert meta.get("config_schema") == {}
+
+
+def test_hubcard_configure_button_hidden_no_schema():
+    """Configure button must be invisible when config_schema is empty (PB-7)."""
+    meta = {"name": "T", "type": "router", "ip": "1.2.3.4", "config_schema": {}}
+    card = HubCard("dummy.py", meta, None)
+    try:
+        assert not card._btn_configure.isVisible()
+    finally:
+        card.deleteLater()
+        QApplication.instance().processEvents()
+
+
+def test_hubcard_configure_button_visible_with_schema():
+    """Configure button must NOT be hidden when config_schema is non-empty (PB-7)."""
+    schema = {"poll_interval": {"type": "int", "default": 60}}
+    meta = {"name": "T", "type": "router", "ip": "1.2.3.4", "config_schema": schema}
+    card = HubCard("dummy.py", meta, None)
+    try:
+        assert not card._btn_configure.isHidden()
+    finally:
+        card.deleteLater()
+        QApplication.instance().processEvents()
+
+
+def test_build_config_panel_widget_types():
+    """int → QSpinBox, bool → QCheckBox, str → QLineEdit (PB-7)."""
+    from PyQt6.QtWidgets import QSpinBox, QCheckBox, QLineEdit
+    schema = {
+        "count":  {"type": "int",  "default": 10},
+        "active": {"type": "bool", "default": False},
+        "label":  {"type": "str",  "default": "hello"},
+    }
+    meta = {"name": "T", "type": "router", "ip": "1.2.3.4", "config_schema": schema}
+    card = HubCard("dummy.py", meta, None)
+    try:
+        assert isinstance(card._config_fields["count"],  QSpinBox)
+        assert isinstance(card._config_fields["active"], QCheckBox)
+        assert isinstance(card._config_fields["label"],  QLineEdit)
+    finally:
+        card.deleteLater()
+        QApplication.instance().processEvents()
+
+
+def test_apply_config_persists_values(monkeypatch):
+    """_apply_config persists field values via _save_instance_config (PB-7)."""
+    from PyQt6.QtWidgets import QSpinBox
+    saved = {}
+    monkeypatch.setattr(
+        "ui.widgets.hub_card._save_instance_config",
+        lambda iid, cfg: saved.update(cfg),
+    )
+    schema = {"poll_interval": {"type": "int", "default": 60}}
+    meta = {"name": "T", "type": "router", "ip": "1.2.3.4", "config_schema": schema}
+    card = HubCard("dummy.py", meta, None)
+    try:
+        spin = card._config_fields["poll_interval"]
+        assert isinstance(spin, QSpinBox)
+        spin.setValue(120)
+        card._apply_config()
+        assert saved.get("poll_interval") == 120
+    finally:
+        card.deleteLater()
+        QApplication.instance().processEvents()
+
+
+def test_plugin_polling_worker_interval_from_config():
+    """poll_interval in config overrides the hardware-type default interval (PB-7)."""
+    from workers.plugin_polling_worker import PluginPollingWorker
+    w = PluginPollingWorker("dummy.py", "router", config={"poll_interval": 15})
+    assert w._interval_s == 15
+
+
+def test_plugin_polling_worker_passes_config_to_get_status(tmp_path):
+    """Worker passes config dict as get_status(config=...) kwarg (PB-7)."""
+    out_file = tmp_path / "config_call.json"
+    plugin = tmp_path / "spy_hw.py"
+    plugin.write_text(
+        "HARDWARE_NAME = 'Spy'\n"
+        "HARDWARE_TYPE = 'router'\n"
+        "HARDWARE_IP   = '1.2.3.4'\n"
+        "def get_info(): return {'name': 'Spy', 'type': 'router'}\n"
+        "def get_status(config=None):\n"
+        "    import json as _j\n"
+        "    from pathlib import Path\n"
+        f"    Path({str(out_file)!r}).write_text(_j.dumps(config))\n"
+        "    return {'connected_clients': 0, 'extra': {}}\n",
+        encoding="utf-8",
+    )
+    from workers.plugin_polling_worker import PluginPollingWorker
+    cfg = {"poll_interval": 10, "verify_ssl": True}
+    w = PluginPollingWorker(str(plugin), "router", config=cfg)
+    w._run_once()
+    assert out_file.exists(), "get_status(config=...) was not called by the worker"
+    received = json.loads(out_file.read_text())
+    assert received == cfg

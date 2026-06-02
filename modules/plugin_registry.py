@@ -157,7 +157,13 @@ def install_plugin(
 
     dest_dir = plugins_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / entry.filename
+    # Windows MAX_PATH guard — truncate stem to 80 chars so the full
+    # AppData path stays well under 260 characters.
+    _fn   = entry.filename
+    _stem = _fn[:-3] if _fn.endswith(".py") else _fn
+    if len(_stem) > 80:
+        _stem = _stem[:80]
+    dest = dest_dir / (_stem + ".py")
 
     req = urllib.request.Request(
         entry.url,

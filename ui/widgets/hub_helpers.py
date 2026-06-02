@@ -66,6 +66,21 @@ HARDWARE_IP   = "192.168.1.1"       # your device\'s LAN address
 USERNAME      = "admin"
 
 
+# ── Optional: Typed configuration schema (P2-2) ───────────────────────────────
+# Uncomment and fill in CONFIG_SCHEMA to enable the ⚙ Configure button in the
+# Hub card.  The card auto-generates a settings panel; saved values are passed
+# to get_status() as the keyword argument: get_status(config={"poll_interval": 60})
+#
+# CONFIG_SCHEMA = {
+#     "poll_interval": {"type": "int",  "default": 60, "min": 10, "max": 600,
+#                       "label": "Poll interval (s)"},
+#     "verify_ssl":    {"type": "bool", "default": True,
+#                       "label": "Verify SSL certificate"},
+#     "base_url":      {"type": "str",  "default": "http://192.168.1.1",
+#                       "label": "Device URL"},
+# }
+
+
 # ── Credentials (read from OS keychain — never hard-code passwords) ───────────
 
 def _load_password() -> str:

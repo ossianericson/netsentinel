@@ -290,6 +290,29 @@ def test_install_plugin_no_sha256_skips_check(tmp_path, monkeypatch):
     assert dest.exists()
 
 
+# ── PB-12: Windows path-length guard ─────────────────────────────────────────
+
+def test_install_plugin_truncates_long_filename(tmp_path, monkeypatch):
+    """Filename stems longer than 80 chars are truncated to 80 chars (PB-12)."""
+    monkeypatch.setattr("modules.plugin_registry.plugins_dir", lambda: tmp_path)
+    long_stem = "a" * 200
+    entry = RegistryEntry(name="Long", url=f"https://example.com/{long_stem}.py")
+    with patch("urllib.request.urlopen", side_effect=_mock_urlopen_download):
+        dest = install_plugin(entry)
+    assert dest.exists()
+    assert dest.suffix == ".py"
+    assert len(dest.stem) <= 80, f"stem '{dest.stem}' is {len(dest.stem)} chars, expected ≤ 80"
+
+
+def test_install_plugin_short_filename_unchanged(tmp_path, monkeypatch):
+    """Filename stems ≤ 80 chars are written unchanged (PB-12)."""
+    monkeypatch.setattr("modules.plugin_registry.plugins_dir", lambda: tmp_path)
+    entry = RegistryEntry(name="Short", url="https://example.com/short_plugin.py")
+    with patch("urllib.request.urlopen", side_effect=_mock_urlopen_download):
+        dest = install_plugin(entry)
+    assert dest.stem == "short_plugin"
+
+
 # ── REGISTRY_URL ──────────────────────────────────────────────────────────────
 
 def test_registry_url_is_https():
