@@ -317,3 +317,64 @@ class TestWizardTemplateValidation:
         assert plugins == [], (
             "Hardware plugin template must not be loaded by the scan-plugin loader"
         )
+
+
+# ── PB-10 — plugins_dir() caching ─────────────────────────────────────────────
+
+class TestPluginsDirCache:
+    def test_plugins_dir_returns_same_object_on_repeated_calls(self, monkeypatch):
+        """plugins_dir() must return the same Path object on consecutive calls (PB-10 cache)."""
+        import modules.plugin_system as ps
+        monkeypatch.setattr(ps, "_plugins_dir_cache", None)
+
+        d1 = ps.plugins_dir()
+        d2 = ps.plugins_dir()
+        d3 = ps.plugins_dir()
+
+        assert d1 is d2, "plugins_dir() must return the cached object on 2nd call"
+        assert d2 is d3, "plugins_dir() must return the cached object on 3rd call"
+
+    def test_plugins_dir_cache_attribute_is_set_after_first_call(self, monkeypatch):
+        """_plugins_dir_cache must be non-None after the first plugins_dir() call."""
+        import modules.plugin_system as ps
+        monkeypatch.setattr(ps, "_plugins_dir_cache", None)
+
+        d = ps.plugins_dir()
+        assert ps._plugins_dir_cache is not None
+        assert ps._plugins_dir_cache is d
+
+
+# ── PB-3 — reload button regression ───────────────────────────────────────────
+
+class TestPluginReloadButton:
+    def test_reload_button_and_method_exist_in_source(self):
+        """tabs_recon.py must contain a Reload Plugins button wired to _reload_plugins (PB-3)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "Reload Plugins" in src, "Reload Plugins button label must be present"
+        assert "_reload_plugins" in src, "_reload_plugins slot must be defined"
+        assert "load_plugins" in src, "_reload_plugins must call load_plugins()"
+
+
+# ── PB-5 — right-click context menu ───────────────────────────────────────────
+
+class TestPluginTableContextMenu:
+    def test_context_menu_policy_and_signal_wired(self):
+        """Plugin list table must have CustomContextMenu policy connected to handler (PB-5)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "CustomContextMenu" in src, (
+            "tabs_recon.py must set Qt.ContextMenuPolicy.CustomContextMenu on _plugin_list_table"
+        )
+        assert "customContextMenuRequested" in src, (
+            "tabs_recon.py must connect customContextMenuRequested signal"
+        )
+        assert "_on_plugin_table_context" in src, "_on_plugin_table_context handler must exist"
+        assert "_run_plugin_in_dialog" in src, "_run_plugin_in_dialog must exist for PB-5"
+
+    def test_context_menu_has_required_actions(self):
+        """Right-click menu must have Test-with-last-scan and Copy-name actions (RULE-UX3 + PB-5)."""
+        from pathlib import Path
+        src = (Path(__file__).parent.parent / "ui" / "tabs_recon.py").read_text(encoding="utf-8")
+        assert "Test with last scan" in src, "Context menu must have 'Test with last scan' action"
+        assert "Copy name" in src, "Context menu must have 'Copy name' action (RULE-UX3 minimum)"

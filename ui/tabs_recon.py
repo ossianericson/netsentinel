@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QFileDialog, QFormLayout, QFrame,
+    QApplication,
+    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton,
     QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
@@ -762,6 +763,8 @@ class _ReconTabsMixin:
         self._plugin_list_table.setColumnWidth(1, 60)
         self._plugin_list_table.setColumnWidth(2, 120)
         self._plugin_list_table.setColumnWidth(3, 300)
+        self._plugin_list_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._plugin_list_table.customContextMenuRequested.connect(self._on_plugin_table_context)
 
         self._plugin_status = QLabel("Click Reload Plugins to discover .py files in the plugins folder.")
         self._plugin_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
@@ -844,6 +847,83 @@ class _ReconTabsMixin:
         self._plugin_result_text.setPlainText(f"ERROR:\n{msg}")
         self._plugin_status.setText("Plugin failed — see output above.")
         self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+
+    def _on_plugin_table_context(self, pos) -> None:
+        """Right-click context menu for the plugin list table (PB-5)."""
+        row = self._plugin_list_table.rowAt(pos.y())
+        if row < 0 or row >= len(self._plugins):
+            return
+        menu = QMenu(self._plugin_list_table)
+        act_test = menu.addAction("▶  Test with last scan")
+        menu.addSeparator()
+        act_copy = menu.addAction("Copy name")
+        action = menu.exec(self._plugin_list_table.viewport().mapToGlobal(pos))
+        if action == act_test:
+            self._run_plugin_in_dialog(row)
+        elif action == act_copy:
+            info = self._plugins[row]
+            QApplication.clipboard().setText(info.name)
+
+    def _run_plugin_in_dialog(self, row: int) -> None:
+        """Run a scan plugin against the last scan result; show output in a dialog (PB-5)."""
+        from workers.scan_worker import PluginWorker as _ScanPluginWorker
+        if self._plugin_worker and self._plugin_worker.isRunning():
+            self._plugin_status.setText("⚠ A plugin is already running — wait for it to finish.")
+            return
+        info = self._plugins[row]
+        devices = (self._m1_result or {}).get("devices", [])
+
+        dlg = QDialog(self._plugin_list_table.window())
+        dlg.setWindowTitle(f"Plugin Result — {info.name}")
+        dlg.setMinimumSize(500, 320)
+        vlay = QVBoxLayout(dlg)
+
+        output = QTextEdit()
+        output.setReadOnly(True)
+        output.setPlainText("Running…")
+        output.setStyleSheet(
+            f"background:{BG_CARD};color:{TEXT_PRIMARY};font-size:11px;"
+            f"border:1px solid {BORDER};padding:6px;"
+        )
+        vlay.addWidget(output, 1)
+
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        bb.rejected.connect(dlg.reject)
+        vlay.addWidget(bb)
+
+        self._plugin_status.setText(f"Running '{info.name}'…")
+        self._plugin_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
+
+        def _on_result(res) -> None:
+            lines = [f"Plugin:  {res.plugin_name}", f"Risk:    {res.risk_level}", ""]
+            if res.error:
+                lines += ["Error:", res.error]
+            elif res.findings:
+                lines += [f"Findings ({len(res.findings)}):"]
+                lines += [f"  • {f}" for f in res.findings]
+            else:
+                lines.append("No findings.")
+            output.setPlainText("\n".join(lines))
+            color = RED if res.risk_level in ("HIGH", "CRITICAL") else (
+                AMBER if res.risk_level == "MEDIUM" else GREEN
+            )
+            self._plugin_status.setText(
+                f"'{res.plugin_name}' complete — {res.risk_level} "
+                f"({len(res.findings)} finding{'s' if len(res.findings) != 1 else ''})"
+            )
+            self._plugin_status.setStyleSheet(f"color:{color};font-size:11px;")
+
+        def _on_err(msg: str) -> None:
+            output.setPlainText(f"ERROR:\n{msg}")
+            self._plugin_status.setText("Plugin failed.")
+            self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+
+        worker = _ScanPluginWorker(info, devices)
+        worker.result.connect(_on_result)
+        worker.error.connect(_on_err)
+        worker.start()
+        self._plugin_worker = worker
+        dlg.exec()
 
     def _build_recon_pe_tab(self) -> QWidget:
         w = QWidget()

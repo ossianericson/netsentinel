@@ -82,6 +82,9 @@ class PluginInfo:
 
 # ── Plugin directory ─────────────────────────────────────────────────────────
 
+_plugins_dir_cache: Optional[Path] = None
+
+
 def plugins_dir() -> Path:
     """Return the active plugins directory, creating it if needed.
 
@@ -89,7 +92,14 @@ def plugins_dir() -> Path:
     1. Sibling ``plugins/`` next to the exe / app.py (portable / dev installs)
     2. ``get_app_data_dir() / "plugins"`` — writable user dir (matches where
        the plugin wizard and .nspkg installer write new plugins)
+
+    Result is cached after the first successful resolution to avoid repeated
+    mkdir() calls on every plugin API invocation.
     """
+    global _plugins_dir_cache
+    if _plugins_dir_cache is not None:
+        return _plugins_dir_cache
+
     # Next to exe/app.py
     if getattr(sys, "frozen", False):
         base = Path(sys.executable).parent
@@ -108,6 +118,7 @@ def plugins_dir() -> Path:
         candidate = _get_app_data_dir() / "plugins"
         candidate.mkdir(parents=True, exist_ok=True)
 
+    _plugins_dir_cache = candidate
     return candidate
 
 
