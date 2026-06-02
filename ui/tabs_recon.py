@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QPoint, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -1184,7 +1184,7 @@ class _ReconTabsMixin:
         vlay.addWidget(bb)
         dlg.exec()
 
-    @pyqtSlot("QPoint")
+    @pyqtSlot(QPoint)
     def _on_plugin_table_context(self, pos) -> None:
         """Right-click context menu for the plugin list table (PB-5)."""
         row = self._plugin_list_table.rowAt(pos.y())

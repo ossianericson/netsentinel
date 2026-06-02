@@ -347,10 +347,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Notification delivery tracking", "Pushover, ntfy, and Telegram alerts now report success or failure in the alert history — no more silent drops when a channel is misconfigured or unreachable."),
-        ("Uptime page accuracy", "Devices with no monitoring samples now show '—' instead of a misleading '100%' uptime figure. Fleet average and worst-device KPIs exclude unmonitored devices."),
-        ("Uptime query performance", "The uptime table query was reduced from N×M+1 individual lookups to a fixed 4 GROUP BY queries regardless of device count — noticeable on larger networks."),
-        ("Encoding detection hardened", "test_source_encoding.py now catches 4-byte emoji mojibake (e.g. 🌙→ðŸŒ™) in addition to the existing 2–3-byte BMP character checks."),
+        ("Informative empty states", "The five most-visited pages (Devices, Uptime, TLS Certs, Security Overview, Overview) now show a structured empty state explaining what the page shows and why it matters, with a primary CTA button."),
+        ("Network glossary tooltips", "30 technical terms (ARP, STP, Jitter, DNS, CVSS, etc.) now show plain-English hover definitions across the Protocol Visualizer, grade panel, and diagnosis findings."),
+        ("Lab Mode ↔ Protocol Visualizer", "Each Lab Mode exercise now has a 'See how X works →' button that navigates to the Protocol Visualizer with the relevant protocol pre-selected (ARP, DNS, STP)."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

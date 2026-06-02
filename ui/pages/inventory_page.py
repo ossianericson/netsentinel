@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from ui.styles import (
@@ -459,24 +460,17 @@ class InventoryPage(QWidget):
         self._content_stack = QStackedWidget()
 
         # ── Page 0: empty state ───────────────────────────────────────────────
-        empty = QWidget()
-        evl = QVBoxLayout(empty)
-        evl.addStretch()
-        em_desc = QLabel(
-            "No device events recorded yet.\n"
-            "Run a scan to start tracking devices joining, leaving, or going down."
+        empty = EmptyStateCard(
+            icon="◆",
+            title="Device Inventory",
+            what_it_shows=(
+                "Every device currently connected to your network — phones, laptops, smart TVs, "
+                "routers — with their IP address, MAC address, and manufacturer."
+            ),
+            why_it_matters="You can't secure a device you don't know exists.",
+            btn_label="Run Scan",
         )
-        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
-        em_btn = QPushButton("Run Scan")
-        em_btn.setObjectName("btnScan")
-        em_btn.setFixedWidth(160)
-        em_btn.clicked.connect(self.scan_requested)
-        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
-        evl.addSpacing(12)
-        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-        evl.addStretch()
+        empty.clicked.connect(self.scan_requested)
         self._content_stack.addWidget(empty)
 
         # ── Page 1: content ───────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 # NetSentinel — Product Backlog Audit & Prioritized Plan
-*Audit date: 2026-06-02 | Revised: 2026-06-02 | Session: Sprint A1+A3+E2 complete | Version at audit: v1.9.68*
+*Audit date: 2026-06-02 | Revised: 2026-06-02 | Session: Sprint A2+A4+B1 complete | Version at audit: v1.9.69*
 
 ---
 
@@ -78,7 +78,7 @@ score with zero context.
   Go to Rogue Bridge (STP) to investigate.")
 - Clicking a dimension name navigates to the relevant page
 
-### A2 — Unified empty state component
+### ✅ A2 — Unified empty state component *(done 2026-06-02)*
 **Problem:** All major pages show a blank table or bare CTA when no scan has run. Users don't
 understand what the page will show them, so the CTA has no motivation.
 
@@ -132,7 +132,7 @@ visit external websites, violating Principles 1–3.
   - Connectivity drops → "NetSentinel's Connection Monitor will automatically detect when the drops stop"
   - Rogue bridge → "Go to Rogue Bridge (STP) — the device should no longer appear in the list"
 
-### A4 — Jargon glossary: tooltip definitions for technical terms
+### ✅ A4 — Jargon glossary: tooltip definitions for technical terms *(done 2026-06-02)*
 **Problem:** Terms like "STP", "BPDU", "RFC 1918", "DHCP offer", "CVSS score", "Jitter", "QoS"
 appear in the UI without definitions. Advanced users know them; everyone else is lost.
 
@@ -149,7 +149,7 @@ appear in the UI without definitions. Advanced users know them; everyone else is
 ## Sprint B — Educational Scaffolding
 *Impact: high. Makes the educational use-case viable for structured learning contexts.*
 
-### B1 — Connect Lab Mode ↔ Protocol Visualizer
+### ✅ B1 — Connect Lab Mode ↔ Protocol Visualizer *(done 2026-06-02)*
 **Problem:** Lab Mode exercises tell you *that* ARP spoofing happened but don't explain *how* it
 works. The Protocol Visualizer animates ARP perfectly but is unreachable from inside a lab exercise.
 
@@ -310,10 +310,16 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 - A1: Collapsible "How is this grade calculated?" panel added to Overview page with 8 dimension descriptions + nav links
 - E2: `scan_requested = pyqtSignal()` added to all 7 pages; wired in `app.py` to `_start_full_scan`
 
-**Next sprint: A2 + A4 + B1**
-- A2 (medium): Unified EmptyStateCard widget applied to 5 most-visited pages
-- A4 (small): Jargon tooltip widget + glossary.json for 20+ technical terms
-- B1 (small): Connect Lab Mode ↔ Protocol Visualizer with "See how this works →" buttons
+**✅ Sprint A2 + A4 + B1 — COMPLETED 2026-06-02**
+- A2: `ui/widgets/empty_state_card.py` created; applied to inventory, uptime, cert, security_overview pages; overview CTA copy improved
+- A4: `data/glossary.json` (30 terms); `ui/widgets/jargon_tooltip.py`; applied to protocol_viz (button tooltips), overview (grade panel), diagnosis (finding card chips)
+- B1: `LabScenario.protocol` field; `explore_protocol` signal + "See how X works →" buttons on all 4 scenario cards; `select_protocol()` public API on `ProtocolVizPage`; wired in `app.py`
+- Also fixed: `ui/tabs_recon.py` crash (`@pyqtSlot("QPoint")` → `@pyqtSlot(QPoint)`); `test_colours.py` theme-independence fix
+
+**Next sprint: B2 + C1 + C3**
+- B2 (medium): 6 new lab scenarios (DNS trace, port scan, DHCP conflict, jitter measure, OUI lookup, topology walkthrough)
+- C1 (small): Monitoring status tooltips/popovers on Home page monitoring pills
+- C3 (medium): Actionable alert drawer — "Fix this" buttons for top 5 alert types with navigate + highlight
 
 ---
 

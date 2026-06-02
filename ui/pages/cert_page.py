@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 from modules.cert_monitor import CertTarget
 from modules.metric_store import CertCheckPoint, MetricStore
 from ui.widgets.context_menu import install_copy_menu
+from ui.widgets.empty_state_card import EmptyStateCard
 from PyQt6.QtWidgets import QMenu
 
 from ui.styles import (
@@ -120,17 +121,22 @@ class CertPage(QWidget):
         # ── Page 0: empty state ───────────────────────────────────────────────
         empty = QWidget()
         evl = QVBoxLayout(empty)
-        evl.addStretch()
+        evl.setContentsMargins(0, 0, 0, 0)
+        evl.setSpacing(0)
 
-        em_desc = QLabel(
-            "No hosts configured.\n"
-            "Add a hostname below to start monitoring TLS certificate expiry."
+        e0_card = EmptyStateCard(
+            icon="◈",
+            title="TLS Certificate Monitor",
+            what_it_shows=(
+                "Days remaining until the TLS certificate expires for each site you monitor, "
+                "plus whether the certificate chain is valid and trusted."
+            ),
+            why_it_matters=(
+                "An expired certificate makes your site unreachable with a scary error message "
+                "— NetSentinel alerts you 30 days before expiry so you never get caught out."
+            ),
+            btn_label="Add a Host to Monitor",
         )
-        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
-        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
-        evl.addSpacing(16)
 
         e0_host = QLineEdit()
         e0_host.setPlaceholderText("Hostname  (e.g. example.com)")
@@ -150,6 +156,7 @@ class CertPage(QWidget):
             e0_host.clear()
             self.scan_requested.emit()
 
+        e0_card.clicked.connect(e0_host.setFocus)
         e0_add.clicked.connect(_add_from_empty)
         e0_host.returnPressed.connect(_add_from_empty)
 
@@ -161,6 +168,9 @@ class CertPage(QWidget):
         center.addStretch()
         center.addLayout(form_row)
         center.addStretch()
+
+        evl.addWidget(e0_card)
+        evl.addSpacing(8)
         evl.addLayout(center)
         evl.addStretch()
         self._content_stack.addWidget(empty)

@@ -216,6 +216,7 @@ netsentinel/
 │       ├── context_menu.py         # Reusable right-click context menu builder
 │       ├── density_toggle.py       # Compact/comfortable row density toggle widget
 │       ├── device_popover.py       # Hover popover showing quick device info
+│       ├── empty_state_card.py     # EmptyStateCard — reusable empty state with icon, what/why copy, and CTA button (Sprint A2)
 │       ├── explainer_panel.py      # Reusable inline explanation panel (Lab Mode, Protocol Viz)
 │       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers, _MiniCard, _AlertRow
 │       ├── home_session_widgets.py # FreshnessStrip, GettingStartedCard, _GradeBreakdownDialog, StandardWelcomePage, ProWelcomePage (Sprint 17)
@@ -224,6 +225,7 @@ netsentinel/
 │       ├── device_detail_panels.py # _ModemDetailPanel, _RouterDetailPanel — hardware detail panels (Sprint 13 split)
 │       ├── hub_card.py             # HubCard, PipInstallDialog and all plugin helpers
 │       ├── hub_helpers.py          # Pure data-persistence and utility helpers extracted from hub_card.py (no widget logic)
+│       ├── jargon_tooltip.py       # JargonTooltip — underlined QLabel with hover definition from glossary.json (Sprint A4)
 │       ├── kpi_bar.py              # _KpiBarMixin — four KPI tiles for the Devices page (Sprint 13 split)
 │       ├── modem_signal_panel.py   # _ModemSignalPanelMixin — modem signal panel builder/updater for SpeedTestPage (Sprint 13)
 │       ├── overview_tile.py        # Core tile classes (_BaseTile subclasses), _TILE_CLASSES/_DEFAULT_ORDER

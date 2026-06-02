@@ -38,11 +38,19 @@ def test_all_colour_values_are_valid_hex():
 
 
 def test_semantic_colours_match_ui_styles():
+    # modules/colours.py uses fixed Arctic Clean (light-mode) values for HTML reports.
+    # Compare against the Arctic Clean palette directly — not the active (possibly dark) theme.
     from modules.colours import RED as MOD_RED, GREEN as MOD_GREEN, ACCENT as MOD_ACCENT
-    from ui.styles import RED as UI_RED, GREEN as UI_GREEN, ACCENT as UI_ACCENT
-    assert MOD_RED == UI_RED, "colours.RED must match ui/styles.RED"
-    assert MOD_GREEN == UI_GREEN, "colours.GREEN must match ui/styles.GREEN"
-    assert MOD_ACCENT == UI_ACCENT, "colours.ACCENT must match ui/styles.ACCENT"
+    from ui.styles import _ARCTIC_CLEAN
+    assert MOD_RED == _ARCTIC_CLEAN["RED"], (
+        f"colours.RED ({MOD_RED}) must match Arctic Clean RED ({_ARCTIC_CLEAN['RED']})"
+    )
+    assert MOD_GREEN == _ARCTIC_CLEAN["GREEN"], (
+        f"colours.GREEN ({MOD_GREEN}) must match Arctic Clean GREEN ({_ARCTIC_CLEAN['GREEN']})"
+    )
+    assert MOD_ACCENT == _ARCTIC_CLEAN["ACCENT"], (
+        f"colours.ACCENT ({MOD_ACCENT}) must match Arctic Clean ACCENT ({_ARCTIC_CLEAN['ACCENT']})"
+    )
 
 
 def test_no_duplicate_values():

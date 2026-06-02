@@ -27,6 +27,18 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK, BORDER, BG_HOVER, GREEN, RED,
     PROGRESS_TRACK, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
+from ui.widgets.jargon_tooltip import JargonTooltip
+
+# Maps finding category names to the primary glossary term to show inline
+_CATEGORY_TERM: dict[str, str] = {
+    "DNS Resolution Failure":                    "DNS",
+    "DNS Leak Detected":                         "DNS",
+    "High Jitter — Unstable Latency":            "Jitter",
+    "Rogue Network Bridge":                      "STP",
+    "Broadcast Storm":                           "Broadcast Storm",
+    "External ISP Issue":                        "Latency",
+    "Chronic Connectivity Loss":                 "Packet Loss",
+}
 
 _SEV_COLOR = {
     "CRITICAL": RED,
@@ -458,6 +470,7 @@ class DiagnosisPage(QWidget):
         sev      = getattr(finding, "severity",    "INFO")
         headline = getattr(finding, "headline",    "")
         remedy   = getattr(finding, "remediation", "")
+        category = getattr(finding, "category",    "")
         color    = _SEV_COLOR.get(sev, ACCENT)
 
         card = QFrame()
@@ -498,6 +511,15 @@ class DiagnosisPage(QWidget):
         )
         hdr.addWidget(badge)
         hdr.addWidget(hl, 1)
+        # Show a jargon tooltip chip for the primary technical term in this finding
+        _term = _CATEGORY_TERM.get(category)
+        if _term:
+            _jt = JargonTooltip(_term)
+            _jt.setStyleSheet(
+                f"font-size:9px; color:{ACCENT}; text-decoration:underline dotted;"
+                f" background:transparent; padding:0 2px;"
+            )
+            hdr.addWidget(_jt)
         lay.addLayout(hdr)
 
         if remedy:
@@ -508,8 +530,6 @@ class DiagnosisPage(QWidget):
                 f"font-size:{rem_size}; color:{TEXT_SECONDARY}; border:none; background:transparent;"
             )
             lay.addWidget(rem)
-
-        category = getattr(finding, "category", "")
 
         # EXPLAIN-3: collapsible "▶ What to do" remediation expander
         steps = _REMEDIATION.get(category) or _REMEDIATION.get(headline)

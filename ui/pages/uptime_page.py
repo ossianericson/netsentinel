@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.widgets.empty_state_card import EmptyStateCard
 
 from modules.metric_store import MetricStore
 from ui.styles import (
@@ -91,24 +92,20 @@ class UptimePage(QWidget):
         self._content_stack = QStackedWidget()
 
         # ── Page 0: empty state ───────────────────────────────────────────────
-        empty = QWidget()
-        evl = QVBoxLayout(empty)
-        evl.addStretch()
-        em_desc = QLabel(
-            "No availability data yet.\n"
-            "Start monitoring and NetSentinel will build per-device uptime percentages automatically."
+        empty = EmptyStateCard(
+            icon="▲",
+            title="Device Uptime Monitor",
+            what_it_shows=(
+                "Uptime percentage for every device on your network over the last 24 hours, "
+                "7 days, and 30 days — updated automatically by the background availability monitor."
+            ),
+            why_it_matters=(
+                "Chronic 99.9% uptime sounds good until you realise it means 8 hours of downtime "
+                "per year — catch intermittent devices before they become critical failures."
+            ),
+            btn_label="Start Monitoring",
         )
-        em_desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        em_desc.setWordWrap(True)
-        em_desc.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
-        em_btn = QPushButton("Start Monitoring")
-        em_btn.setObjectName("btnScan")
-        em_btn.setFixedWidth(180)
-        em_btn.clicked.connect(self.scan_requested)
-        evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
-        evl.addSpacing(12)
-        evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-        evl.addStretch()
+        empty.clicked.connect(self.scan_requested)
         self._content_stack.addWidget(empty)
 
         # ── Page 1: content ───────────────────────────────────────────────────

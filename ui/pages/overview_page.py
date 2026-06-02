@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.metric_store import MetricStore
+from ui.widgets.jargon_tooltip import get_definition
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
@@ -275,7 +276,10 @@ class OverviewPage(QWidget):
             f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
             f" border:none; background:transparent;"
         )
-        self._scan_sub = QLabel("Discover devices  ·  check stability  ·  detect threats")
+        self._scan_sub = QLabel(
+            "Discover every device on your network, measure DNS and connection stability, "
+            "and surface active threats — all in one scan."
+        )
         self._scan_sub.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
         )
@@ -402,6 +406,11 @@ class OverviewPage(QWidget):
         )
         lay.addWidget(hdr)
 
+        # Glossary lookup: map dimension names to glossary keys for tooltip enrichment
+        _GLOSS_KEYS = {
+            "Jitter": "Jitter", "Latency": "Latency", "Uptime": "Uptime",
+            "STP Health": "STP", "DNS Speed": "DNS",
+        }
         for name, desc, target in self._GRADE_DIMENSIONS:
             row = QHBoxLayout()
             row.setSpacing(6)
@@ -416,6 +425,11 @@ class OverviewPage(QWidget):
                 f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
                 f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
             )
+            _gloss_key = _GLOSS_KEYS.get(name)
+            if _gloss_key:
+                _defn = get_definition(_gloss_key)
+                if _defn:
+                    link_btn.setToolTip(_defn)
             link_btn.clicked.connect(
                 lambda _=False, t=target: self.navigate_to.emit(t)
             )

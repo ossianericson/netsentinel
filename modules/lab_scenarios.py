@@ -24,6 +24,7 @@ class LabScenario:
     goal: str
     effort: str  # "S" | "M" | "L"
     steps: List[LabStep]
+    protocol: Optional[str] = None  # "ARP" | "DNS" | "TCP" | "DHCP" | "STP" | None
 
 
 @dataclass
@@ -59,6 +60,7 @@ SCENARIOS: List[LabScenario] = [
         title="Find the Rogue Device",
         goal="Discover all devices on your network and identify any that are unknown or suspicious.",
         effort="M",
+        protocol="ARP",
         steps=[
             LabStep(
                 instruction="Click 'Run Check' to scan your network. NetSentinel will read the ARP table and check each device against its database.",
@@ -79,6 +81,7 @@ SCENARIOS: List[LabScenario] = [
         title="Diagnose Slow DNS",
         goal="Measure your DNS response times and identify whether slow name resolution is contributing to connectivity problems.",
         effort="M",
+        protocol="DNS",
         steps=[
             LabStep(
                 instruction="Click 'Run Check' to probe your DNS resolver. The scan runs for 60 seconds and measures ping and DNS latency in parallel.",
@@ -99,6 +102,7 @@ SCENARIOS: List[LabScenario] = [
         title="Identify the Broadcast Storm Source",
         goal="Listen for abnormal broadcast traffic and identify whether a broadcast storm is degrading your network.",
         effort="M",
+        protocol="STP",
         steps=[
             LabStep(
                 instruction="Click 'Run Check' to listen for broadcast packets for 6 seconds. Requires Npcap on Windows.",
@@ -119,6 +123,7 @@ SCENARIOS: List[LabScenario] = [
         title="Map Your Subnet",
         goal="Build a complete picture of every device on your network: IP, MAC, vendor, and role.",
         effort="S",
+        protocol="ARP",
         steps=[
             LabStep(
                 instruction="Click 'Run Check' to load all devices from your most recent scan. If no scan has run yet, go to Overview and start one first.",

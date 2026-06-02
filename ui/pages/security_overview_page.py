@@ -256,17 +256,50 @@ class SecurityOverviewPage(QWidget):
             ["Indicator", "Type", "Categories", "Confidence", "Source"]
         )
         self._findings_table.setFixedHeight(260)
-        self._empty_lbl = QLabel(
-            "No threat data loaded yet.\n"
-            "Go to Threat Intelligence → Update Feeds to download the latest blocklists."
+
+        # Informative empty state for the findings section
+        self._empty_widget = QWidget()
+        ew_lay = QVBoxLayout(self._empty_widget)
+        ew_lay.setContentsMargins(20, 20, 20, 20)
+        ew_lay.setSpacing(6)
+        ew_lay.addStretch()
+        _show_hdr = QLabel("What this section shows")
+        _show_hdr.setStyleSheet(
+            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
+            f" text-transform:uppercase; letter-spacing:0.5px; background:transparent;"
         )
-        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet(
-            f"font-size:12px; color:{TEXT_SECONDARY}; padding:30px;"
+        _show_body = QLabel(
+            "High-risk IP addresses and domains found on your network, cross-referenced against "
+            "threat intelligence feeds — malware, botnets, spam sources, and known attackers."
         )
-        self._empty_lbl.setWordWrap(True)
+        _show_body.setWordWrap(True)
+        _show_body.setStyleSheet(f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;")
+        _why_hdr = QLabel("Why it matters")
+        _why_hdr.setStyleSheet(
+            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
+            f" text-transform:uppercase; letter-spacing:0.5px; background:transparent;"
+        )
+        _why_body = QLabel(
+            "Knowing which device contacted a known C2 server turns an abstract alert into an "
+            "immediate incident response action."
+        )
+        _why_body.setWordWrap(True)
+        _why_body.setStyleSheet(f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;")
+        _nav_btn = QPushButton("Go to Threat Intelligence →")
+        _nav_btn.setFlat(True)
+        _nav_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; text-align:left; }}"
+            f"QPushButton:hover {{ color:{ACCENT_LITE}; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
+        )
+        _nav_btn.clicked.connect(lambda: self.navigate_to.emit("Threat Intel"))
+        for _w in (_show_hdr, _show_body, _why_hdr, _why_body, _nav_btn):
+            ew_lay.addWidget(_w)
+        ew_lay.addStretch()
+
         findings_lay.addWidget(self._findings_table)
-        findings_lay.addWidget(self._empty_lbl)
+        findings_lay.addWidget(self._empty_widget)
         return findings_card
 
     # ── Data loading ──────────────────────────────────────────────────────────
@@ -310,10 +343,10 @@ class SecurityOverviewPage(QWidget):
         entries = self._entries
         if not entries:
             self._findings_table.setVisible(False)
-            self._empty_lbl.setVisible(True)
+            self._empty_widget.setVisible(True)
             return
 
-        self._empty_lbl.setVisible(False)
+        self._empty_widget.setVisible(False)
         self._findings_table.setVisible(True)
 
         sorted_entries = sorted(
@@ -359,8 +392,7 @@ class SecurityOverviewPage(QWidget):
 
     def _show_empty(self, msg: str) -> None:
         self._findings_table.setVisible(False)
-        self._empty_lbl.setText(msg)
-        self._empty_lbl.setVisible(True)
+        self._empty_widget.setVisible(True)
 
     # ── Public API ────────────────────────────────────────────────────────────
 

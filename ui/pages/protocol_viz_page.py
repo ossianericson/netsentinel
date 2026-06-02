@@ -33,6 +33,7 @@ from ui.styles import (
     WHITE,
 )
 from ui.widgets.protocol_canvas import ProtocolCanvas
+from ui.widgets.jargon_tooltip import get_definition
 
 # ── Protocol descriptors ───────────────────────────────────────────────────────
 
@@ -302,7 +303,8 @@ class ProtocolVizPage(QWidget):
         for key, title, sub in _PROTOCOLS:
             btn = QPushButton(title)
             btn.setCheckable(True)
-            btn.setToolTip(sub)
+            _defn = get_definition(key)
+            btn.setToolTip(f"{sub}\n\n{_defn}" if _defn else sub)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.setFixedHeight(36)
             btn.clicked.connect(lambda _checked, k=key: self._select_protocol(k))
@@ -473,6 +475,10 @@ class ProtocolVizPage(QWidget):
             btn.setChecked(active)
 
     # ── Protocol selection ─────────────────────────────────────────────────────
+
+    def select_protocol(self, key: str) -> None:
+        """Public API: navigate to and pre-select a protocol by key (e.g. "ARP", "DNS")."""
+        self._select_protocol(key)
 
     def _select_protocol(self, key: str) -> None:
         self._active_key = key

@@ -369,7 +369,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.68")
+    app.setApplicationVersion("1.9.69")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -402,7 +402,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.68")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.69")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -650,6 +650,12 @@ def main():
     window._service_page.scan_requested.connect(window._start_full_scan)
     window._speed_test_page.scan_requested.connect(window._start_full_scan)
     window._lab_mode_page.scan_requested.connect(window._start_full_scan)
+
+    def _on_explore_protocol(proto_key: str) -> None:
+        window._nav_rail_go_to("Protocol Visualizer")
+        window._protocol_viz_page.select_protocol(proto_key)
+
+    window._lab_mode_page.explore_protocol.connect(_on_explore_protocol)
     window._trigger_builder_page.scan_requested.connect(window._start_full_scan)
     window._diagnosis_page.scan_requested.connect(window._start_full_scan)
 

@@ -164,7 +164,8 @@ class _LabScanWorker(QThread):
 
 class LabModePage(QWidget):
 
-    scan_requested = pyqtSignal()  # emitted when user starts a lab exercise
+    scan_requested   = pyqtSignal()    # emitted when user starts a lab exercise
+    explore_protocol = pyqtSignal(str) # emitted when user clicks "See how this works →"; carries protocol key
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -255,17 +256,36 @@ class LabModePage(QWidget):
         steps_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
         lay.addWidget(steps_lbl)
 
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
         btn = QPushButton("Start Exercise")
         btn.setFixedHeight(28)
         btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}cc; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{ACCENT}cc; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT}; color:{WHITE}; }}"
         )
         btn.clicked.connect(lambda _, s=scenario: self._start_scenario(s))
         btn.clicked.connect(lambda: self.scan_requested.emit())
-        lay.addWidget(btn)
+        btn_row.addWidget(btn)
+
+        if scenario.protocol:
+            viz_btn = QPushButton(f"See how {scenario.protocol} works →")
+            viz_btn.setFixedHeight(28)
+            viz_btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{ACCENT};"
+                f" border:1px solid {ACCENT}; border-radius:4px; font-size:11px; }}"
+                f"QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            )
+            _proto = scenario.protocol
+            viz_btn.clicked.connect(lambda _, p=_proto: self.explore_protocol.emit(p))
+            btn_row.addWidget(viz_btn)
+
+        btn_row.addStretch()
+        lay.addLayout(btn_row)
         return card
 
     # ── Runner ──────────────────────────────────────────────────────────

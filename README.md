@@ -322,6 +322,28 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.69
+**Added**
+- `ui/widgets/empty_state_card.py` — reusable `EmptyStateCard` widget with icon, "What this page shows", "Why it matters", and CTA button (Sprint A2)
+- `data/glossary.json` — 30 plain-English definitions for network terminology (ARP, STP, Jitter, DNS, CVSS, DHCP, Latency, etc.) (Sprint A4)
+- `ui/widgets/jargon_tooltip.py` — `JargonTooltip` QLabel subclass: underlines a term and shows its definition on hover (Sprint A4)
+- `tests/test_empty_state_card.py` — widget construction, signal emission, and content tests
+- `tests/test_jargon_tooltip.py` — glossary file validation and widget behaviour tests
+
+**Changed**
+- `ui/pages/inventory_page.py`, `uptime_page.py`, `cert_page.py` — bare empty states replaced with `EmptyStateCard` (informative what/why copy and CTA) (Sprint A2)
+- `ui/pages/security_overview_page.py` — findings section empty message replaced with structured "What this shows / Why it matters" widget with Threat Intelligence navigation link
+- `ui/pages/overview_page.py` — CTA bar description updated to explain what the scan discovers; grade panel dimension buttons enriched with glossary tooltip definitions
+- `ui/pages/protocol_viz_page.py` — protocol selector button tooltips enriched with glossary definitions; `select_protocol(key)` public API added (Sprint B1)
+- `ui/pages/lab_mode_page.py` — `explore_protocol = pyqtSignal(str)` added; "See how X works →" button on each scenario card navigates to Protocol Visualizer pre-selected to the relevant protocol (Sprint B1)
+- `ui/pages/diagnosis_page.py` — `JargonTooltip` chip shown on finding cards for DNS, Jitter, STP, Packet Loss categories; `category` extracted at card-build time
+- `modules/lab_scenarios.py` — `LabScenario.protocol` optional field added; all 4 built-in scenarios populated (ARP, DNS, STP)
+- `app.py` — `explore_protocol` signal from `LabModePage` wired: navigates to Protocol Visualizer and pre-selects the protocol
+
+**Fixed**
+- `ui/tabs_recon.py` — `@pyqtSlot("QPoint")` replaced with `@pyqtSlot(QPoint)` (string-form type resolution fails in PyQt6 without QPoint import; crashed Dashboard on startup)
+- `tests/test_colours.py` — `test_semantic_colours_match_ui_styles` now compares against the Arctic Clean palette directly (not the active theme) so the test passes regardless of which theme is persisted in QSettings
+
 ### v1.9.68
 **Added**
 - `modules/plugin_registry.py`: Windows MAX_PATH guard — `install_plugin()` truncates filename stems to 80 chars before writing (PB-12)
