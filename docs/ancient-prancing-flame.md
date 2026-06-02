@@ -162,33 +162,20 @@ works. The Protocol Visualizer animates ARP perfectly but is unreachable from in
 - Mirror for other protocols: DNS exercise → DNS diagram, DHCP exercise → DHCP diagram
 - Note: Lab Mode exercises *may* show CLI commands as learning content (Principle 5) — preserve these
 
-### B2 — More lab scenarios (target: 10 total, currently ~4)
-**Problem:** Only ~4 lab exercises exist. A student completing a CompTIA Network+ unit needs
-at least one exercise per major topic area.
-
-**Proposed new scenarios** (add to `modules/lab_scenarios.py`):
-1. "Trace a slow DNS lookup" — runs DNS benchmark, compares resolvers
-2. "Find an open port" — runs port scan on gateway, identifies service names
-3. "Detect a DHCP conflict" — runs DHCP lease scan, flags duplicate IPs
-4. "Measure network jitter" — runs RTT logger, identifies unstable connection
-5. "Identify device manufacturers" — OUI lookup exercise
-6. "Read a network topology map" — guided topology page walkthrough
-
-Each needs: goal, 3–5 steps, hint per step, solution reveal, PASS/PARTIAL scoring.
-Each may include CLI commands where the goal is to teach what a tool does.
+### ✅ B2 — More lab scenarios (10 total) *(done 2026-06-02)*
+**Work done:**
+- Added 6 new scenarios: Measure DNS Resolver Speed, Find an Open Port, Detect a DHCP Conflict,
+  Measure Network Jitter, Identify Device Manufacturers, Read a Network Topology Map
+- Added `_run_port()` and `_run_dhcp()` scan runners to `_LabScanWorker` (`"port"` and `"dhcp"` scan types)
+- Total: 10 scenarios across ARP, DNS, TCP, DHCP, STP protocols
 
 ## Sprint C — Real-World Alerting & Monitoring UX
 *Impact: high for daily use. The monitoring features exist but the feedback loop is weak.*
 
-### C1 — Monitoring status explainer on Home page
-**Problem:** Monitoring pills (ARP Watch, DHCP Watch, etc.) are grey/offline by default.
-A novice user doesn't know if they're broken, intentionally off, or need setup steps.
-
-**Work:**
-- Add a tooltip/popover to each monitoring pill in `ui/pages/home_page.py`:
-  "ARP Watch continuously monitors for MAC address impersonation. Click to enable."
-- Distinguish visually between "off by design" (grey, with toggle) and "running" (green dot)
-- Add a "Start all monitoring" button when all are off (visible only on first launch, dismissible)
+### ✅ C1 — Monitoring status explainer on Home page *(done 2026-06-02)*
+**Work done:**
+- Added `setToolTip()` to all 8 monitoring pills (4 main + 4 recap) explaining what each monitor does
+- "Monitoring is off" nudge replaced with a clearer label + "▶ Start Network Logger" button
 
 ### C2 — Notification setup in onboarding
 **Problem:** `ui/first_run_dialog.py` has 3 slides but never asks the user to set up notifications.
@@ -198,16 +185,12 @@ A novice user doesn't know if they're broken, intentionally off, or need setup s
 - Show three options: Desktop notification (on by default), Email (enter address), Skip
 - Wire selection to the same backend as `ui/pages/notifications_page.py`
 
-### C3 — Actionable alert drawer
-**Problem:** The alert drawer shows details but "What to do" likely links to a page without
-explaining what to do *on that page*.
-
-**Work:**
-- Audit `alert_drawer.py` — verify each alert type has a "next action" CTA
-- For the 5 most common alert types (new device, rogue device, DNS slow, port exposed, outage):
-  add a "Fix this" button that opens the relevant page AND highlights the flagged item
-- All "what to do" copy must follow Principles 1–4 (no CLI, router fix, app-measured data,
-  rescan to close)
+### ✅ C3 — Actionable alert drawer *(done 2026-06-02)*
+**Work done:**
+- "WHAT TO DO" section added to drawer body with per-alert-type fix text for 10 rule prefixes
+  (PORT_SCAN, ARP, DHCP, DEVICE, HOST_DOWN, SERVICE_DOWN, RTT_THRESHOLD, THREAT_INTEL, CVE, BANDWIDTH)
+- All copy follows Principles 1–4: router fix, app-measured data, no CLI, rescan to close
+- "Fix this →" primary CTA button replaces "Go to page →" when fix text is available
 
 ### C4 — ISP Accountability Report: shareable with evidence
 **Problem:** `modules/report_isp.py` exists but needs to be genuinely useful for a non-technical
@@ -223,7 +206,6 @@ user to send to their ISP.
 - Add a "Legal statement" checkbox for UK/EU users invoking ISP SLA rights
 
 ---
-
 
 ## Sprint E — Technical Debt (RULE violations)
 *These are blocking by project rules but lower user-facing priority.*
@@ -303,10 +285,16 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 - B1: `LabScenario.protocol` field; `explore_protocol` signal + "See how X works →" buttons on all 4 scenario cards; `select_protocol()` public API on `ProtocolVizPage`; wired in `app.py`
 - Also fixed: `ui/tabs_recon.py` crash (`@pyqtSlot("QPoint")` → `@pyqtSlot(QPoint)`); `test_colours.py` theme-independence fix
 
-**Next sprint: B2 + C1 + C3**
-- B2 (medium): 6 new lab scenarios (DNS trace, port scan, DHCP conflict, jitter measure, OUI lookup, topology walkthrough)
-- C1 (small): Monitoring status tooltips/popovers on Home page monitoring pills
-- C3 (medium): Actionable alert drawer — "Fix this" buttons for top 5 alert types with navigate + highlight
+**✅ Sprint B2 + C1 + C3 — COMPLETED 2026-06-02**
+- B2: 6 new lab scenarios added (DNS resolver speed, find open port, DHCP conflict, jitter, OUI lookup, topology map); `_run_port()` + `_run_dhcp()` scan runners added; total 10 scenarios
+- C1: Tooltips on all 8 monitoring pills; "Monitoring is off" nudge → "▶ Start Network Logger" button
+- C3: "WHAT TO DO" section in alert drawer for 10 rule prefixes; "Fix this →" primary button; all copy follows Principles 1–4
+
+**Next sprint: C2 + C4 + B3 (or E1 if technical debt is prioritised)**
+- C2 (small): Notification setup in onboarding — 4th first-run slide
+- C4 (medium): ISP Accountability Report — "Copy summary for ISP" button with app-measured data
+- B3 (small): CompTIA Network+ / CCNA curriculum alignment — `data/curriculum_map.json` + `ui/widgets/objective_badge.py`
+- E1 (small, 5 workers first): Worker lifecycle tests for scan_worker, threat_intel_worker, plugin_worker, availability_worker, speed_test_worker
 
 ---
 
