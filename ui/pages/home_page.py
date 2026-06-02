@@ -450,6 +450,26 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._rec_pill_dhcp   = _rec_pill("DHCP Watch",      "DHCP Rogue Monitor")
         self._rec_pill_storm  = _rec_pill("Broadcast Storm", "Broadcast Storm")
         self._rec_pill_logger = _rec_pill("Network Logger",  "Network Logger")
+        self._rec_pill_arp.setToolTip(
+            "ARP Watch monitors for MAC address impersonation (ARP spoofing).\n"
+            "Attackers use this to intercept traffic on your network.\n"
+            "Click to open ARP Spoof Watch and enable monitoring."
+        )
+        self._rec_pill_dhcp.setToolTip(
+            "DHCP Watch detects rogue DHCP servers that could redirect your traffic.\n"
+            "A rogue server assigns itself as your DNS, intercepting all lookups.\n"
+            "Click to open DHCP Rogue Monitor."
+        )
+        self._rec_pill_storm.setToolTip(
+            "Broadcast Storm monitor listens for flood-level broadcast traffic\n"
+            "that can slow or freeze your entire network.\n"
+            "Requires Npcap and administrator rights. Click to open."
+        )
+        self._rec_pill_logger.setToolTip(
+            "Network Logger records your connection stability (RTT, jitter, packet loss)\n"
+            "continuously in the background. Start it once to build a history timeline.\n"
+            "Click to open Network Logger and start recording."
+        )
         for _rp in (self._rec_pill_arp, self._rec_pill_dhcp,
                     self._rec_pill_storm, self._rec_pill_logger):
             _rec_pills_row.addWidget(_rp)
@@ -850,24 +870,59 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._pill_dhcp   = _pill("DHCP Watch",      "DHCP Rogue Monitor")
         self._pill_storm  = _pill("Broadcast Storm", "Broadcast Storm")
         self._pill_logger = _pill("Network Logger",  "Network Logger")
+        self._pill_arp.setToolTip(
+            "ARP Watch monitors for MAC address impersonation (ARP spoofing).\n"
+            "Attackers use this to intercept traffic on your network.\n"
+            "Click to open ARP Spoof Watch and enable monitoring."
+        )
+        self._pill_dhcp.setToolTip(
+            "DHCP Watch detects rogue DHCP servers that could redirect your traffic.\n"
+            "A rogue server assigns itself as your DNS, intercepting all lookups.\n"
+            "Click to open DHCP Rogue Monitor."
+        )
+        self._pill_storm.setToolTip(
+            "Broadcast Storm monitor listens for flood-level broadcast traffic\n"
+            "that can slow or freeze your entire network.\n"
+            "Requires Npcap and administrator rights. Click to open."
+        )
+        self._pill_logger.setToolTip(
+            "Network Logger records your connection stability (RTT, jitter, packet loss)\n"
+            "continuously in the background. Start it once to build a history timeline.\n"
+            "Click to open Network Logger and start recording."
+        )
         for _p in (self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger):
             _pills_lay.addWidget(_p)
         _pills_lay.addStretch()
         lay.addWidget(self._monitoring_pills_row)
 
-        self._monitoring_nudge = QLabel(
-            "Monitoring is off � turn it on in 10 seconds →"
-        )
+        _nudge_row = QHBoxLayout()
+        _nudge_row.setContentsMargins(0, 2, 0, 0)
+        _nudge_row.setSpacing(8)
+        self._monitoring_nudge = QLabel("Monitoring is off.")
         self._monitoring_nudge.setVisible(False)
-        self._monitoring_nudge.setCursor(Qt.CursorShape.PointingHandCursor)
         self._monitoring_nudge.setStyleSheet(
-            f"font-size:11px; color:{ACCENT}; background:transparent;"
-            " border:none; padding-top:2px;"
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+            " border:none;"
         )
-        self._monitoring_nudge.mousePressEvent = (  # type: ignore[method-assign]
-            lambda _e: self._scroll_to_setup_card()
+        _nudge_row.addWidget(self._monitoring_nudge)
+        self._btn_start_all_monitoring = QPushButton("▶  Start Network Logger")
+        self._btn_start_all_monitoring.setFixedHeight(22)
+        self._btn_start_all_monitoring.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_start_all_monitoring.setVisible(False)
+        self._btn_start_all_monitoring.setToolTip(
+            "Start the Network Logger to record connection stability in the background.\n"
+            "It logs RTT, jitter, and packet loss continuously so you can spot patterns."
         )
-        lay.addWidget(self._monitoring_nudge)
+        self._btn_start_all_monitoring.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:10px;"
+            f" border:1px solid {ACCENT}; border-radius:11px; padding:1px 10px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._btn_start_all_monitoring.clicked.connect(self.start_monitoring_requested)
+        _nudge_row.addWidget(self._btn_start_all_monitoring)
+        _nudge_row.addStretch()
+        lay.addLayout(_nudge_row)
 
         # ── Stability monitoring card ─────────────────────────────────────────
         self._sec_mon_lbl = QLabel("STABILITY MONITORING")

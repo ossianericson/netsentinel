@@ -63,6 +63,10 @@ class _LabScanWorker(QThread):
                 self._run_storm()
             elif self._scan_type == "subnet":
                 self._run_subnet()
+            elif self._scan_type == "port":
+                self._run_port()
+            elif self._scan_type == "dhcp":
+                self._run_dhcp()
             else:
                 self.finished.emit({"ok": False, "findings": [], "summary": "Unknown scan type"})
         except Exception as exc:
@@ -131,6 +135,66 @@ class _LabScanWorker(QThread):
             "findings": findings,
             "summary":  result.plain_verdict or f"Storm level: {result.storm_level}",
         })
+
+    def _run_port(self) -> None:
+        from modules import port_scanner
+        from modules.utils_net import get_network_info
+        self.progress.emit("Detecting gateway IP…")
+        net_info = get_network_info()
+        gateway = net_info.get("gateway") if net_info else None
+        if not gateway:
+            self.finished.emit({
+                "ok": False,
+                "findings": [],
+                "summary": "Could not determine gateway IP. Check your network connection.",
+            })
+            return
+        self.progress.emit(f"Scanning ports on gateway {gateway}…")
+        result = port_scanner.scan(gateway, mode="fast")
+        findings = [
+            {
+                "port":    p.port,
+                "name":    p.name,
+                "risk":    p.risk,
+                "banner":  p.banner or "—",
+            }
+            for p in result.open_ports
+        ]
+        high_risk = [p for p in result.open_ports if p.risk == "HIGH"]
+        if not result.open_ports:
+            summary = f"No open ports found on {gateway} ({result.scanned} ports scanned)."
+        elif high_risk:
+            names = ", ".join(str(p.port) for p in high_risk)
+            summary = f"{len(result.open_ports)} open port(s) on {gateway} — HIGH RISK: {names}"
+        else:
+            summary = f"{len(result.open_ports)} open port(s) on {gateway}, none flagged high risk."
+        self.finished.emit({"ok": True, "findings": findings, "summary": summary})
+
+    def _run_dhcp(self) -> None:
+        from modules import dhcp_lease_scanner
+        self.progress.emit("Reading DHCP lease records…")
+        leases = dhcp_lease_scanner.scan()
+        verdict_str = dhcp_lease_scanner.verdict(leases)
+        findings = [
+            {
+                "ip":       le.ip or "—",
+                "mac":      le.mac or "—",
+                "hostname": le.hostname or "—",
+                "server":   le.server or "—",
+                "source":   le.source or "—",
+            }
+            for le in leases
+        ]
+        ip_counts: dict[str, int] = {}
+        for le in leases:
+            if le.ip:
+                ip_counts[le.ip] = ip_counts.get(le.ip, 0) + 1
+        conflicts = [ip for ip, cnt in ip_counts.items() if cnt > 1]
+        if conflicts:
+            summary = f"{len(leases)} lease(s) — CONFLICT detected on: {', '.join(conflicts)}"
+        else:
+            summary = verdict_str or f"{len(leases)} lease(s) found, no conflicts detected."
+        self.finished.emit({"ok": True, "findings": findings, "summary": summary})
 
     def _run_subnet(self) -> None:
         if not self._store:

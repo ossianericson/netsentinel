@@ -347,9 +347,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Informative empty states", "The five most-visited pages (Devices, Uptime, TLS Certs, Security Overview, Overview) now show a structured empty state explaining what the page shows and why it matters, with a primary CTA button."),
-        ("Network glossary tooltips", "30 technical terms (ARP, STP, Jitter, DNS, CVSS, etc.) now show plain-English hover definitions across the Protocol Visualizer, grade panel, and diagnosis findings."),
-        ("Lab Mode ↔ Protocol Visualizer", "Each Lab Mode exercise now has a 'See how X works →' button that navigates to the Protocol Visualizer with the relevant protocol pre-selected (ARP, DNS, STP)."),
+        ("10 Lab Mode scenarios", "Six new guided exercises: Measure DNS Resolver Speed, Find an Open Port, Detect a DHCP Conflict, Measure Network Jitter, Identify Device Manufacturers, and Read a Network Topology Map."),
+        ("Monitoring pill tooltips", "The ARP Watch, DHCP Watch, Broadcast Storm, and Network Logger status pills on the Home page now show plain-English hover tooltips explaining what each monitor does and how to enable it."),
+        ("Actionable alert drawer", "The alert drawer now shows a 'WHAT TO DO' section with specific, router-focused fix instructions for each alert type — ARP spoofing, rogue DHCP, open ports, outages, CVEs, and more."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

@@ -57,6 +57,7 @@ class LabResult:
 SCENARIOS: List[LabScenario] = [
     LabScenario(
         id="rogue_device",
+
         title="Find the Rogue Device",
         goal="Discover all devices on your network and identify any that are unknown or suspicious.",
         effort="M",
@@ -136,6 +137,132 @@ SCENARIOS: List[LabScenario] = [
                 scan_type=None,
                 hint="The gateway has 'router' or 'gateway' in its hostname, or its IP ends in .1. Unknown devices have vendor = 'Unknown' or a blank hostname.",
                 solution="Unknown devices should be investigated — they may be a neighbour on an open Wi-Fi, or a misconfigured IoT device. Authorise or block them from the Devices page.",
+            ),
+        ],
+    ),
+    LabScenario(
+        id="trace_dns_resolvers",
+        title="Measure Your DNS Resolver Speed",
+        goal="Compare your DNS resolver's latency and understand why DNS speed affects every website you visit.",
+        effort="M",
+        protocol="DNS",
+        steps=[
+            LabStep(
+                instruction="Click 'Run Check' to measure your current DNS resolver's latency. The scan runs for 30–60 seconds and samples DNS lookups in parallel with ping.",
+                scan_type="dns",
+                hint="DNS resolvers translate domain names (google.com) into IP addresses. Every new website visit starts with a DNS lookup — even on a fast connection, a slow resolver adds noticeable delay.",
+                solution="Average DNS latency under 50 ms is excellent. 50–150 ms is normal. Above 150 ms, a faster resolver like 1.1.1.1 (Cloudflare) or 8.8.8.8 (Google) will noticeably improve browsing speed.",
+            ),
+            LabStep(
+                instruction="Review the results. Is DNS latency higher than ping latency? A large gap means the resolver is slow. Note what DNS resolver IP your network is currently using.",
+                scan_type=None,
+                hint="Your DNS resolver IP is shown on the DNS & Stability page. ISP-assigned resolvers are often slower than public alternatives because they do not use Anycast routing.",
+                solution="To change DNS: log in to your router's admin page and update the DNS server field to 1.1.1.1 (primary) and 8.8.8.8 (secondary). Changing it on the router fixes all devices at once.",
+            ),
+        ],
+    ),
+    LabScenario(
+        id="find_open_port",
+        title="Find an Open Port",
+        goal="Run a port scan against your gateway and identify which services are accessible from inside your network.",
+        effort="M",
+        protocol="TCP",
+        steps=[
+            LabStep(
+                instruction="Click 'Run Check' to scan common TCP ports on your gateway. NetSentinel tests well-known ports without requiring administrator privileges.",
+                scan_type="port",
+                hint="A port is an endpoint number that allows multiple services to share one IP address. Port 80 is HTTP, 443 is HTTPS, 22 is SSH, 23 is Telnet. Open ports are potential attack surfaces.",
+                solution="Every open port is a service accepting connections. Ports 80/443 on a router usually mean the admin panel is exposed. Port 23 (Telnet) is critical risk — it sends credentials in plain text.",
+            ),
+            LabStep(
+                instruction="Review the open ports found. Which services do you recognise? Are any flagged HIGH risk? What would you do about them?",
+                scan_type=None,
+                hint="HIGH risk ports are ones with known vulnerabilities or weak authentication defaults: Telnet (23), FTP (21), SNMP (161). Log in to your router to disable any services you do not use.",
+                solution="Disable unused services on your router: go to Administration > Services and disable anything you do not need. If Telnet is open, disable remote admin entirely or switch to SSH.",
+            ),
+        ],
+    ),
+    LabScenario(
+        id="dhcp_conflict",
+        title="Detect a DHCP Conflict",
+        goal="Scan DHCP lease records and identify whether any two devices share the same IP address.",
+        effort="S",
+        protocol="DHCP",
+        steps=[
+            LabStep(
+                instruction="Click 'Run Check' to read DHCP lease records. NetSentinel reads the ARP table and lease files to build a map of IP-to-MAC assignments.",
+                scan_type="dhcp",
+                hint="DHCP assigns IP addresses automatically. A conflict occurs when two devices claim the same IP — usually because a device was given a static IP that overlaps the DHCP pool. Symptoms include random disconnections.",
+                solution="A conflict appears as two different MAC addresses assigned to the same IP. Look for rows where the same IP appears more than once with different MAC addresses.",
+            ),
+            LabStep(
+                instruction="Review the lease list. Are there duplicate IPs? Is the server column consistent? Multiple DHCP server IPs could indicate a rogue DHCP server.",
+                scan_type=None,
+                hint="A rogue DHCP server shows a different server IP than your router's IP. It can redirect traffic by assigning different DNS settings to clients. Check the 'server' column in the results.",
+                solution="If you see a rogue DHCP server IP that is not your router: locate and disconnect the device providing it. On managed switches, enable DHCP Snooping to block unauthorised DHCP offers.",
+            ),
+        ],
+    ),
+    LabScenario(
+        id="measure_jitter",
+        title="Measure Network Jitter",
+        goal="Record ping round-trip times over 60 seconds and identify whether jitter is affecting your connection quality.",
+        effort="M",
+        protocol="DNS",
+        steps=[
+            LabStep(
+                instruction="Click 'Run Check' to log RTT (round-trip time) and DNS latency over 60 seconds. NetSentinel samples both in parallel to separate network instability from DNS resolver problems.",
+                scan_type="dns",
+                hint="Jitter is the variation in packet arrival time. 20 ms ± 2 ms is stable. 20 ms ± 40 ms is high jitter — causing choppy VoIP, lag spikes in games, and video call stuttering.",
+                solution="High jitter alongside normal average RTT means the link is congested or unstable. Check how many devices are downloading concurrently. On Wi-Fi, interference from neighbouring networks also causes jitter.",
+            ),
+            LabStep(
+                instruction="Look at the outages count and DNS-only failures. If DNS failures appear without ping outages, the DNS resolver is intermittent. If both fail together, the network itself is dropping packets.",
+                scan_type=None,
+                hint="'DNS-only failures' = ping worked but DNS did not — points to a slow or flaky resolver, not the network. 'Outages' = both ping and DNS failed simultaneously — points to a connectivity problem.",
+                solution="For DNS failures with ping success: change your DNS resolver on the router to 1.1.1.1. For simultaneous outages: contact your ISP with the outage count and timestamps from this scan as evidence.",
+            ),
+        ],
+    ),
+    LabScenario(
+        id="identify_vendors",
+        title="Identify Device Manufacturers",
+        goal="Use OUI (Organisationally Unique Identifier) lookup to identify what kind of device each MAC address belongs to.",
+        effort="S",
+        protocol="ARP",
+        steps=[
+            LabStep(
+                instruction="Click 'Run Check' to load all known devices and their manufacturer data. NetSentinel matches the first 3 bytes of each MAC address against its OUI database.",
+                scan_type="subnet",
+                hint="The first 3 octets of a MAC address (the OUI) identify the manufacturer. For example, B4:E9:4A belongs to Ubiquiti. Unknown vendor means the OUI is not in the database — common with newer IoT devices.",
+                solution="Every device on your network should be identifiable. An 'Unknown' vendor combined with no hostname is a red flag — it may be a misconfigured IoT device or an intruder.",
+            ),
+            LabStep(
+                instruction="From the list, find the vendor for each device. Can you match every device to something physical in your home or office? Note any you cannot explain.",
+                scan_type=None,
+                hint="Look for unexpected vendors: a phone manufacturer you do not own, an industrial IoT vendor, or a virtual machine platform (VMware, Parallels). These all have distinct OUI prefixes.",
+                solution="Devices you cannot identify should be investigated. Go to the Devices page, right-click the device, and choose 'Block' to quarantine it while you investigate. Check your router's wireless client list for when it joined.",
+            ),
+        ],
+    ),
+    LabScenario(
+        id="topology_walkthrough",
+        title="Read a Network Topology Map",
+        goal="Interpret the network topology diagram and identify the role of each device — gateway, client, server, and unknown.",
+        effort="S",
+        protocol="ARP",
+        steps=[
+            LabStep(
+                instruction="Click 'Run Check' to load your network's device list. Once loaded, navigate to the Network Map page (Discover section) to see the topology diagram.",
+                scan_type="subnet",
+                hint="The topology diagram shows your network as a graph. The central node is usually your gateway (router). Devices connect through it. A device with many connections but no known hostname could be an undocumented switch.",
+                solution="Your gateway is the device with the most connections and typically has an IP ending in .1. Workstations and phones connect through it. Devices with many connections may be secondary switches or access points.",
+            ),
+            LabStep(
+                instruction="In the device list below, identify: (1) your gateway IP, (2) any device with vendor 'Unknown', (3) a device whose role you cannot determine. Record its IP and MAC.",
+                scan_type=None,
+                hint="On the Network Map page, you can hover over any node to see its IP, MAC, and vendor. Nodes not directly connected to the gateway may be behind a secondary switch or access point.",
+                solution="Unknown devices at the network edge are often IoT devices like smart TVs or security cameras. Go to the Devices page to label and track them. Labelling all devices is the first step in a network audit.",
             ),
         ],
     ),

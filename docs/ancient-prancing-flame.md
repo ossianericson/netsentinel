@@ -224,19 +224,6 @@ user to send to their ISP.
 
 ---
 
-## Sprint D — ISP Comparison (Priority 1 roadmap item)
-*Impact: killer differentiator. Makes NetSentinel genuinely unique vs every other network scanner.*
-
-### D1 — Anonymous opt-in ISP telemetry
-**Work** (from BACKLOG Priority 1):
-- Create `modules/isp_telemetry.py`:
-  - Collects: ISP name, country (GeoIP), anonymised speed (±15% noise), latency median, uptime%, loss%
-  - Submits once per day, opt-in only, no IP address, no device data
-- MVP (no backend): show "Your download this week vs your own 30-day average" on Speed Test page
-  — uses NetSentinel's own measurement history, not an external test
-- Full version: backend comparison against ISP+country median (Phase 2, requires infra)
-
----
 
 ## Sprint E — Technical Debt (RULE violations)
 *These are blocking by project rules but lower user-facing priority.*

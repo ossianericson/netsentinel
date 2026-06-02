@@ -168,10 +168,12 @@ class _HomeDataMixin:
         QSettings("NetSentinel", "NetSentinel").setValue(
             "home/post_scan_sheet_dismissed", True
         )
-        if not any(p.text().startswith("●") for p in (
+        all_off = not any(p.text().startswith("●") for p in (
             self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger
-        )):
-            self._monitoring_nudge.setVisible(True)
+        ))
+        self._monitoring_nudge.setVisible(all_off)
+        if hasattr(self, "_btn_start_all_monitoring"):
+            self._btn_start_all_monitoring.setVisible(all_off)
 
     def _maybe_show_post_scan_sheet(
         self, n_total: int, n_new: int, n_at_risk: int
@@ -342,8 +344,10 @@ class _HomeDataMixin:
                     f"QPushButton:hover {{ background:{BG_HOVER}; }}"
                     f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
-        if any([arp, dhcp, storm, logger]):
-            self._monitoring_nudge.setVisible(False)
+        all_off = not any([arp, dhcp, storm, logger])
+        self._monitoring_nudge.setVisible(all_off)
+        if hasattr(self, "_btn_start_all_monitoring"):
+            self._btn_start_all_monitoring.setVisible(all_off)
         self._freshness_strip.update_freshness(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
         _rec_map = [
             (self._rec_pill_arp,    arp,    "ARP Watch"),

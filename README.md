@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.70
+**Added**
+- `modules/lab_scenarios.py` — 6 new lab scenarios: Measure DNS Resolver Speed, Find an Open Port, Detect a DHCP Conflict, Measure Network Jitter, Identify Device Manufacturers, Read a Network Topology Map (Sprint B2; total now 10 scenarios)
+- `ui/pages/lab_mode_page.py` — `_run_port()` and `_run_dhcp()` scan runners added to `_LabScanWorker` for new `"port"` and `"dhcp"` scan types
+
+**Changed**
+- `ui/pages/home_page.py` — monitoring pills (ARP Watch, DHCP Watch, Broadcast Storm, Network Logger) now carry plain-English `setToolTip()` text explaining what each monitor does and how to enable it (Sprint C1)
+- `ui/pages/home_page.py` — "Monitoring is off" nudge replaced with a clearer label + "▶ Start Network Logger" button that emits `start_monitoring_requested` (Sprint C1)
+- `ui/widgets/alert_drawer.py` — "WHAT TO DO" section added to the drawer body with per-alert-type actionable fix text for PORT_SCAN, ARP, DHCP, DEVICE, HOST_DOWN, SERVICE_DOWN, RTT_THRESHOLD, THREAT_INTEL, CVE, BANDWIDTH alerts; "Fix this →" primary button replaces "Go to page →" when fix text is available (Sprint C3)
+
 ### v1.9.69
 **Added**
 - `ui/widgets/empty_state_card.py` — reusable `EmptyStateCard` widget with icon, "What this page shows", "Why it matters", and CTA button (Sprint A2)

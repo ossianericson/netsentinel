@@ -77,8 +77,56 @@ def test_lab_result_verdict_default():
 def test_all_known_scenarios_present():
     from modules.lab_scenarios import SCENARIOS
     ids = {s.id for s in SCENARIOS}
-    expected = {"rogue_device", "slow_dns", "broadcast_storm", "map_subnet"}
+    expected = {
+        "rogue_device", "slow_dns", "broadcast_storm", "map_subnet",
+        # Sprint B2 additions
+        "trace_dns_resolvers", "find_open_port", "dhcp_conflict",
+        "measure_jitter", "identify_vendors", "topology_walkthrough",
+    }
     assert expected.issubset(ids), f"Missing scenarios: {expected - ids}"
+
+
+def test_scenario_count_at_least_ten():
+    from modules.lab_scenarios import SCENARIOS
+    assert len(SCENARIOS) >= 10, f"Expected >= 10 scenarios, got {len(SCENARIOS)}"
+
+
+def test_all_scenarios_have_protocol_field():
+    from modules.lab_scenarios import SCENARIOS
+    for s in SCENARIOS:
+        assert hasattr(s, "protocol"), f"Scenario {s.id!r} missing 'protocol' field"
+
+
+def test_sprint_b2_scan_types():
+    """Each new scenario must have at least one step with a valid scan_type."""
+    from modules.lab_scenarios import SCENARIOS
+    valid_types = {"rogue", "dns", "storm", "subnet", "port", "dhcp", None}
+    b2_ids = {
+        "trace_dns_resolvers", "find_open_port", "dhcp_conflict",
+        "measure_jitter", "identify_vendors", "topology_walkthrough",
+    }
+    for s in SCENARIOS:
+        if s.id not in b2_ids:
+            continue
+        for step in s.steps:
+            assert step.scan_type in valid_types, (
+                f"Scenario {s.id!r} step has unknown scan_type: {step.scan_type!r}"
+            )
+
+
+def test_rule_to_fix_known_types():
+    """_rule_to_fix returns non-empty strings for all five primary alert types."""
+    from ui.widgets.alert_drawer import _rule_to_fix
+    for rule in ("PORT_SCAN_ALERT", "ARP_SPOOF", "DHCP_ROGUE", "DEVICE_NEW",
+                 "HOST_DOWN_1", "RTT_THRESHOLD_BREACH", "THREAT_INTEL_HIT"):
+        result = _rule_to_fix(rule)
+        assert isinstance(result, str), f"_rule_to_fix({rule!r}) did not return str"
+        assert len(result) > 0, f"_rule_to_fix({rule!r}) returned empty string"
+
+
+def test_rule_to_fix_unknown_returns_empty():
+    from ui.widgets.alert_drawer import _rule_to_fix
+    assert _rule_to_fix("COMPLETELY_UNKNOWN_RULE_XYZ") == ""
 
 
 def test_scenario_goal_field():

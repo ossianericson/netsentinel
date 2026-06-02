@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT,
+    ACCENT_DARK,
     AMBER,
     BG_CARD,
     BG_DARK,
@@ -35,6 +36,7 @@ from ui.styles import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     BG_HOVER,
+    WHITE,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -51,6 +53,87 @@ _RULE_PAGE: dict[str, str] = {
     "ARP":         "ARP Spoof Watch",
     "DHCP":        "DHCP Rogue Monitor",
     "SERVICE_DOWN": "Service Heartbeat",
+}
+
+# Per-alert-type fix text following Design Principles 1–4:
+# - No CLI commands
+# - Fix at the router, not the device
+# - Use app-measured data
+# - Close the loop with a rescan
+_RULE_FIX: dict[str, str] = {
+    "PORT_SCAN": (
+        "An unexpected port is open on this device. Open Port Scan to see the full results.\n"
+        "To close it: log in to your router's admin page and disable any services you do not "
+        "recognise. On the device itself, disable the service from its settings.\n"
+        "After making changes, run a new Port Scan in NetSentinel to confirm the port is closed."
+    ),
+    "ARP": (
+        "NetSentinel detected possible MAC address impersonation — a device may be "
+        "intercepting traffic on your network.\n"
+        "Open ARP Spoof Watch to see the full ARP table and identify the suspicious device.\n"
+        "Once identified, block the unknown device from your router's client list, then "
+        "click Rescan in NetSentinel to confirm the alert clears."
+    ),
+    "DHCP": (
+        "A device is responding to DHCP requests from an IP that is not your router. "
+        "This rogue DHCP server could redirect your traffic.\n"
+        "Open DHCP Rogue Monitor to identify it. Then locate and disconnect the device from "
+        "your network, or block it in your router's client list.\n"
+        "Run a new scan in NetSentinel to confirm the rogue server is gone."
+    ),
+    "DEVICE": (
+        "An unknown device joined your network. Open the Devices page to identify it.\n"
+        "If you do not recognise it: block it in your router's wireless client list. "
+        "Look for a setting called 'Block' or 'Deny' next to the device's MAC address.\n"
+        "After blocking, run a new scan in NetSentinel to verify it no longer appears."
+    ),
+    "HOST_DOWN": (
+        "NetSentinel cannot reach this device. Check the Availability page for the full "
+        "outage timeline and when it went offline.\n"
+        "Try restarting the device or checking its network cable. For Wi-Fi devices, "
+        "check whether the device is still connected to your router's client list.\n"
+        "NetSentinel will automatically detect when the device comes back online."
+    ),
+    "SERVICE_DOWN": (
+        "A monitored service is not responding. Open Service Heartbeat to see its history.\n"
+        "Restart the device or service. If the service requires a specific port, verify "
+        "the port has not been blocked by your router's firewall settings.\n"
+        "NetSentinel will automatically show the service as recovered when it responds."
+    ),
+    "RTT_THRESHOLD": (
+        "NetSentinel measured high latency to this device. Open the Log Hub to see "
+        "the full latency timeline and when the problem started.\n"
+        "High latency for all devices usually means the router or ISP link is congested. "
+        "Try changing the DNS server on your router to 1.1.1.1 to rule out DNS delays.\n"
+        "After making changes, run a new DNS test in NetSentinel to confirm improvement."
+    ),
+    "THREAT_INTEL": (
+        "This IP address has been reported for malicious activity in threat intelligence feeds.\n"
+        "Open Threat Intel to see the full report and abuse score.\n"
+        "Block traffic to/from this IP on your router's firewall, then run a new Threat "
+        "Intel scan in NetSentinel to confirm the device is no longer contacting it."
+    ),
+    "CVE": (
+        "A known vulnerability was found on this device. Open CVE Lookup to see full details "
+        "and the CVSS severity score.\n"
+        "Apply the latest firmware or software update for the affected device. Check the "
+        "manufacturer's website for a security advisory.\n"
+        "After updating, run a new scan in NetSentinel to verify the CVE is resolved."
+    ),
+    "CERT": (
+        "A TLS certificate on this host is expired or about to expire. Open TLS & Exposure "
+        "to see the certificate details.\n"
+        "Renew the certificate through the hosting provider or certificate authority. "
+        "If the service is hosted on your network, update the certificate on the server.\n"
+        "After renewal, run a new TLS scan in NetSentinel to confirm the certificate is valid."
+    ),
+    "BANDWIDTH": (
+        "Unusually high bandwidth was detected on this interface. Open Live Bandwidth to "
+        "see a real-time chart of which device is consuming the most traffic.\n"
+        "If a single device is using excessive bandwidth, check for software updates running "
+        "in the background, video streaming, or potential malware.\n"
+        "After investigating, monitor the Live Bandwidth page to confirm usage returns to normal."
+    ),
 }
 
 
@@ -103,6 +186,14 @@ def _rule_to_page(rule: str) -> str:
     for key, page in _RULE_PAGE.items():
         if key in rule_upper:
             return page
+    return ""
+
+
+def _rule_to_fix(rule: str) -> str:
+    rule_upper = rule.upper()
+    for key, fix in _RULE_FIX.items():
+        if key in rule_upper:
+            return fix
     return ""
 
 
@@ -325,6 +416,37 @@ class AlertDrawer(QFrame):
         )
         bl.addWidget(self._msg_lbl)
 
+        fix_sep = QFrame()
+        fix_sep.setFixedHeight(1)
+        fix_sep.setStyleSheet(f"background:{BORDER}; border:none;")
+        bl.addWidget(fix_sep)
+
+        fix_hdr = QLabel("WHAT TO DO")
+        fix_hdr.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:9px; font-weight:bold;"
+            f" letter-spacing:1px; background:transparent; border:none;"
+        )
+        bl.addWidget(fix_hdr)
+
+        self._fix_lbl = QLabel()
+        self._fix_lbl.setWordWrap(True)
+        self._fix_lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        self._fix_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; line-height:140%;"
+            f" background:transparent; border:none;"
+        )
+        self._fix_lbl.setVisible(False)
+        bl.addWidget(self._fix_lbl)
+
+        self._no_fix_lbl = QLabel("No specific remediation available for this alert type.")
+        self._no_fix_lbl.setWordWrap(True)
+        self._no_fix_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:10px; font-style:italic;"
+            f" background:transparent; border:none;"
+        )
+        self._no_fix_lbl.setVisible(False)
+        bl.addWidget(self._no_fix_lbl)
+
         sep = QFrame()
         sep.setFixedHeight(1)
         sep.setStyleSheet(f"background:{BORDER}; border:none;")
@@ -419,6 +541,18 @@ class AlertDrawer(QFrame):
         )
         self._log_btn.clicked.connect(self._on_view_log_hub)
 
+        self._fix_btn = QPushButton("Fix this →")
+        self._fix_btn.setFixedHeight(26)
+        self._fix_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._fix_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        self._fix_btn.clicked.connect(self._on_go)
+        self._fix_btn.setVisible(False)
+
         self._go_btn = QPushButton("Go to page →")
         self._go_btn.setFixedHeight(26)
         self._go_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -435,6 +569,7 @@ class AlertDrawer(QFrame):
         alay.addWidget(self._ack_btn)
         alay.addWidget(self._snooze_btn)
         alay.addWidget(self._log_btn)
+        alay.addWidget(self._fix_btn)
         alay.addWidget(self._go_btn)
         root.addWidget(acts)
 
@@ -474,10 +609,29 @@ class AlertDrawer(QFrame):
 
         self._dev_lbl.setText(self._build_device_context(host))
 
+        fix_text = _rule_to_fix(rule)
+        if fix_text:
+            self._fix_lbl.setText(fix_text)
+            self._fix_lbl.setVisible(True)
+            self._no_fix_lbl.setVisible(False)
+        else:
+            self._fix_lbl.setVisible(False)
+            self._no_fix_lbl.setVisible(True)
+
         page = _rule_to_page(rule)
-        self._go_btn.setVisible(bool(page))
-        if page:
+        has_page = bool(page)
+        if has_page:
             self._go_btn.setProperty("_target_page", page)
+            self._fix_btn.setProperty("_target_page", page)
+        if fix_text and has_page:
+            self._fix_btn.setVisible(True)
+            self._go_btn.setVisible(False)
+        elif has_page:
+            self._fix_btn.setVisible(False)
+            self._go_btn.setVisible(True)
+        else:
+            self._fix_btn.setVisible(False)
+            self._go_btn.setVisible(False)
 
     def _build_device_context(self, host: str) -> str:
         if not self._store:
