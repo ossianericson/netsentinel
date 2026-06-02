@@ -243,6 +243,87 @@ Packet loss first appearing at hop 2+ = ISP infrastructure issue.
 </html>"""
 
 
+def generate_isp_complaint_text(
+    log_summary=None,
+    diag_result=None,
+    benchmark_result=None,
+    isp_name: str = "",
+    account_ref: str = "",
+    include_legal: bool = False,
+) -> str:
+    """
+    Return a plain-text ISP complaint script the user can paste into an email.
+
+    All measurements come from NetSentinel — no "run speedtest.net" (Principle 3).
+    """
+    import datetime as _dt
+    now = _dt.datetime.now().strftime("%d %B %Y, %H:%M")
+
+    uptime  = getattr(log_summary, "uptime_pct",   None) if log_summary else None
+    avg_rtt = getattr(log_summary, "avg_rtt_ms",   -1.0) if log_summary else -1.0
+    jitter  = getattr(log_summary, "avg_jitter_ms",-1.0) if log_summary else -1.0
+    dl_mbps = getattr(diag_result, "download_mbps",-1.0) if diag_result else -1.0
+    outages = getattr(log_summary, "outages",      [])   if log_summary else []
+
+    grade_note = ""
+    if benchmark_result:
+        grade_note = (
+            f" (NetSentinel network health score: "
+            f"{benchmark_result.overall_score:.0f}/100, grade {benchmark_result.overall_grade})"
+        )
+
+    isp_line  = f"To: {isp_name} Support" if isp_name else "To: [Your ISP] Support"
+    ref_line  = f"Account / Ticket Ref: {account_ref}" if account_ref else ""
+
+    def _fmt(val, suffix):
+        return f"{val:.1f}{suffix}" if val and val > 0 else "not measured"
+
+    uptime_line = f"{uptime:.1f}% uptime" if uptime is not None else "uptime not measured"
+    rtt_line    = _fmt(avg_rtt, " ms average latency")
+    jitter_line = _fmt(jitter, " ms average jitter")
+    dl_line     = _fmt(dl_mbps, " Mbps download speed")
+    outage_line = (
+        f"{len(outages)} recorded outage(s)" if outages else "no outages recorded"
+    )
+
+    legal_block = (
+        "\n"
+        "Under the Consumer Rights Act 2015 and Ofcom's General Conditions (UK),\n"
+        "and / or the EU Electronic Communications Code, I am entitled to a service\n"
+        "that meets the agreed performance characteristics. I formally request that\n"
+        "you investigate and resolve the issues above within a reasonable timeframe\n"
+        "and provide a written response with a reference number.\n"
+    ) if include_legal else ""
+
+    lines = [now, "", isp_line]
+    if ref_line:
+        lines.append(ref_line)
+    lines += [
+        "",
+        f"Subject: Service Quality Issue — Measured Evidence{grade_note}",
+        "",
+        "Dear Support Team,",
+        "",
+        "I am experiencing persistent performance issues with my broadband connection. "
+        "I have monitored my connection using NetSentinel (a local network diagnostics tool) "
+        "and recorded the following measurements:",
+        "",
+        f"  • {uptime_line}",
+        f"  • {rtt_line}",
+        f"  • {jitter_line}",
+        f"  • {dl_line}",
+        f"  • {outage_line}",
+        "",
+        "Please investigate the cause of these issues and advise on the expected resolution timeline.",
+        "After any changes on your side, I will re-run NetSentinel diagnostics to confirm improvement.",
+    ]
+    if legal_block:
+        lines += ["", legal_block.rstrip()]
+    lines += ["", "Yours faithfully,", "[Your name]", "[Your address / account number]"]
+
+    return "\n".join(lines)
+
+
 def save_isp_report(
     output_path: Path,
     log_summary=None,

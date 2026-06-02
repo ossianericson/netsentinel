@@ -1,5 +1,5 @@
 # NetSentinel — Product Backlog Audit & Prioritized Plan
-*Audit date: 2026-06-02 | Revised: 2026-06-02 | Session: Sprint A2+A4+B1 complete | Version at audit: v1.9.69*
+*Audit date: 2026-06-02 | Revised: 2026-06-02 | Session: Sprint C2+C4+B3 complete | Version at audit: v1.9.71*
 
 ---
 
@@ -177,7 +177,7 @@ works. The Protocol Visualizer animates ARP perfectly but is unreachable from in
 - Added `setToolTip()` to all 8 monitoring pills (4 main + 4 recap) explaining what each monitor does
 - "Monitoring is off" nudge replaced with a clearer label + "▶ Start Network Logger" button
 
-### C2 — Notification setup in onboarding
+### ✅ C2 — Notification setup in onboarding *(done 2026-06-02)*
 **Problem:** `ui/first_run_dialog.py` has 3 slides but never asks the user to set up notifications.
 
 **Work:**
@@ -192,7 +192,7 @@ works. The Protocol Visualizer animates ARP perfectly but is unreachable from in
 - All copy follows Principles 1–4: router fix, app-measured data, no CLI, rescan to close
 - "Fix this →" primary CTA button replaces "Go to page →" when fix text is available
 
-### C4 — ISP Accountability Report: shareable with evidence
+### ✅ C4 — ISP Accountability Report: shareable with evidence *(done 2026-06-02)*
 **Problem:** `modules/report_isp.py` exists but needs to be genuinely useful for a non-technical
 user to send to their ISP.
 
@@ -290,11 +290,15 @@ Add a "Reset all settings to defaults" option (confirmation dialog required).
 - C1: Tooltips on all 8 monitoring pills; "Monitoring is off" nudge → "▶ Start Network Logger" button
 - C3: "WHAT TO DO" section in alert drawer for 10 rule prefixes; "Fix this →" primary button; all copy follows Principles 1–4
 
-**Next sprint: C2 + C4 + B3 (or E1 if technical debt is prioritised)**
-- C2 (small): Notification setup in onboarding — 4th first-run slide
-- C4 (medium): ISP Accountability Report — "Copy summary for ISP" button with app-measured data
-- B3 (small): CompTIA Network+ / CCNA curriculum alignment — `data/curriculum_map.json` + `ui/widgets/objective_badge.py`
-- E1 (small, 5 workers first): Worker lifecycle tests for scan_worker, threat_intel_worker, plugin_worker, availability_worker, speed_test_worker
+**✅ Sprint C2 + C4 + B3 — COMPLETED 2026-06-02**
+- C2: 4th onboarding slide added to `WelcomeOverlay` — desktop checkbox (on by default) + email address field; saves to `notif/toast_enabled` + `notif/email_enabled` / `notif/email_to` QSettings keys; `_save_notif_prefs()` called before scan is launched; `_TOTAL_SLIDES = 4`
+- C4: `generate_isp_complaint_text()` added to `modules/report_isp.py`; "Copy ISP Complaint" button added in `tabs_analysis.py` alongside existing "Network Health Report"; dialog includes ISP name, account ref, and UK/EU legal statement checkbox; all measurements from NetSentinel (Principles 1–4)
+- B3: `data/curriculum_map.json` — 7 lab scenarios, 5 protocols, 4 pages mapped to N+/CCNA/Sec+ objectives with study notes; `ui/widgets/objective_badge.py` — `ObjectiveBadge` QLabel pill; applied to Lab Mode scenario cards and Protocol Viz title bar with per-protocol badge refresh; `CERT_NETPLUS_BG / CERT_CISCO_BG / CERT_SEC_BG` tokens added to `ui/styles.py`
+
+**Next sprint: E1 + F1 (or D1 if ISP comparison is prioritised)**
+- E1 (medium): Worker lifecycle tests (RULE-T2) for 5 highest-impact workers: scan_worker, threat_intel_worker, plugin_worker, availability_worker, speed_test_worker
+- E3 (small): Split `metric_store_queries.py` (619 lines) into `metric_store_queries_uptime.py` + `metric_store_queries_metrics.py`
+- F1 (medium): "Abyss" WCAG AA high-contrast theme — true black, no low-opacity elements, all text ≥ 4.5:1 contrast
 
 ---
 

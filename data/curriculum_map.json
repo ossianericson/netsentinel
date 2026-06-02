@@ -1,0 +1,141 @@
+{
+  "_comment": "Maps Lab Mode scenarios and Protocol Viz protocols to CompTIA Network+ / CCNA exam objectives.",
+
+  "lab_scenarios": {
+    "Find a Rogue Device": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 2.1 — Compare and contrast OSI model layers",
+        "N10-009 2.3 — Explain the role of ARP in IPv4 communications",
+        "CCNA 2.7 — Configure and verify Layer 2 discovery protocols"
+      ],
+      "study_note": "ARP scanning is the primary technique for discovering Layer 2 devices. A device that appears in ARP replies but not in DHCP leases is a candidate rogue device."
+    },
+    "Measure DNS Resolver Speed": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.5 — Explain DNS record types and resolution",
+        "N10-009 3.3 — Use appropriate tools to troubleshoot DNS issues",
+        "CCNA 1.6 — Configure and verify DNS"
+      ],
+      "study_note": "DNS resolver latency directly impacts application response time. Anything above 100 ms for a local resolver or 200 ms for a public resolver warrants investigation."
+    },
+    "Find an Open Port": {
+      "certifications": ["Network+", "Security+", "CCNA"],
+      "objectives": [
+        "N10-009 1.4 — Explain common TCP/IP protocols and their port numbers",
+        "N10-009 4.2 — Compare and contrast network attacks (port scanning)",
+        "CCNA 5.2 — Configure and verify access control lists"
+      ],
+      "study_note": "A port scan enumerates listening services. Open ports represent potential attack surface — every open port should have a documented business reason."
+    },
+    "Detect a DHCP Conflict": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.5 — Explain the function of DHCP (DORA process)",
+        "N10-009 3.3 — Troubleshoot IP address assignment issues",
+        "CCNA 1.6 — Configure and verify DHCP client and relay"
+      ],
+      "study_note": "Two DHCP servers on the same broadcast domain create IP conflicts. The DORA sequence (Discover → Offer → Request → Acknowledge) is a core exam topic."
+    },
+    "Measure Network Jitter": {
+      "certifications": ["Network+"],
+      "objectives": [
+        "N10-009 3.1 — Explain network performance metrics (latency, jitter, loss)",
+        "N10-009 3.3 — Use appropriate tools to measure network performance"
+      ],
+      "study_note": "Jitter is the variation in packet arrival times. High jitter (>30 ms) degrades real-time traffic such as VoIP and video calls even when average latency is acceptable."
+    },
+    "Identify Device Manufacturers": {
+      "certifications": ["Network+"],
+      "objectives": [
+        "N10-009 2.1 — Explain the purpose and function of MAC addresses",
+        "N10-009 2.3 — Explain the role of the OUI in MAC address allocation"
+      ],
+      "study_note": "The first 24 bits of a MAC address (OUI — Organisationally Unique Identifier) identify the manufacturer. This is used in asset management and anomaly detection."
+    },
+    "Read a Network Topology Map": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.2 — Explain network topologies (star, mesh, ring, bus)",
+        "N10-009 1.3 — Summarise cloud concepts and connectivity",
+        "CCNA 1.1 — Explain the role of network components"
+      ],
+      "study_note": "Topology maps show the logical and physical relationships between network nodes. Being able to read and draw these diagrams is tested in both exams."
+    }
+  },
+
+  "protocol_viz": {
+    "ARP": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 2.3 — Explain the role of ARP",
+        "CCNA 2.7 — ARP and Layer 2 address resolution"
+      ],
+      "study_note": "ARP resolves IPv4 addresses to MAC addresses within a broadcast domain. ARP spoofing (man-in-the-middle) is a common Layer 2 attack covered in Security+."
+    },
+    "DNS": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.5 — DNS record types and resolution process",
+        "CCNA 1.6 — DNS operation and configuration"
+      ],
+      "study_note": "DNS uses UDP port 53 for queries and TCP port 53 for zone transfers. Recursive and iterative resolution are both exam topics."
+    },
+    "TCP": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.4 — TCP vs UDP: connection-oriented vs connectionless",
+        "CCNA 1.5 — TCP three-way handshake and connection termination"
+      ],
+      "study_note": "SYN → SYN-ACK → ACK is the TCP three-way handshake. Connection teardown uses FIN/FIN-ACK/ACK. Understanding sequence/acknowledgement numbers is essential."
+    },
+    "DHCP": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.5 — DHCP DORA process",
+        "CCNA 1.6 — DHCP client, server and relay agent"
+      ],
+      "study_note": "DHCP uses UDP ports 67 (server) and 68 (client). The DORA sequence (Discover, Offer, Request, Acknowledge) is used to assign IP addresses dynamically."
+    },
+    "STP": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 2.2 — Spanning Tree Protocol and loop prevention",
+        "CCNA 2.5 — Configure and verify STP (802.1D, RSTP)"
+      ],
+      "study_note": "STP prevents Layer 2 broadcast storms by electing a root bridge and placing redundant ports into blocking state. RSTP (802.1w) provides faster convergence."
+    }
+  },
+
+  "pages": {
+    "Port Scan": {
+      "certifications": ["Network+", "Security+", "CCNA"],
+      "objectives": [
+        "N10-009 4.2 — Identify common network attacks",
+        "N10-009 3.3 — Use appropriate tools for network troubleshooting"
+      ]
+    },
+    "CVE": {
+      "certifications": ["Security+"],
+      "objectives": [
+        "SY0-701 1.2 — Summarise vulnerability scanning concepts",
+        "SY0-701 4.3 — Implement vulnerability management activities"
+      ]
+    },
+    "Protocol Viz": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 1.4 — OSI model and protocol operation",
+        "CCNA — Network fundamentals"
+      ]
+    },
+    "Lab Mode": {
+      "certifications": ["Network+", "CCNA"],
+      "objectives": [
+        "N10-009 — All domains (hands-on evidence)",
+        "CCNA — All topics (lab evidence)"
+      ]
+    }
+  }
+}

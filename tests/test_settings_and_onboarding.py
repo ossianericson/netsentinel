@@ -55,6 +55,7 @@ from ui.first_run_dialog import (
     mark_first_run_done,
     _FIRST_RUN_KEY,
     _SLIDES,
+    _TOTAL_SLIDES,
 )
 import ui.styles as _styles
 
@@ -210,7 +211,7 @@ class TestWelcomeOverlay:
         assert not self.overlay._back_btn.isVisible()
 
     def test_next_button_text_changes_on_last_slide(self):
-        self.overlay._slide_idx = len(_SLIDES) - 1
+        self.overlay._slide_idx = _TOTAL_SLIDES - 1
         self.overlay._sync_nav()
         assert "Scan" in self.overlay._next_btn.text()
 
@@ -227,7 +228,7 @@ class TestWelcomeOverlay:
     def test_go_next_on_last_slide_triggers_scan(self):
         received = []
         self.overlay.start_scan_requested.connect(lambda: received.append(True))
-        self.overlay._slide_idx = len(_SLIDES) - 1
+        self.overlay._slide_idx = _TOTAL_SLIDES - 1
         with patch("ui.first_run_dialog.mark_first_run_done"):
             self.overlay.hide_animated = lambda callback=None: (
                 callback() if callback else None
@@ -236,7 +237,7 @@ class TestWelcomeOverlay:
         assert len(received) == 1
 
     def test_progress_dots_count_matches_slides(self):
-        assert len(self.overlay._dots) == len(_SLIDES)
+        assert len(self.overlay._dots) == _TOTAL_SLIDES
 
     def test_scan_signal_emits_on_scan(self):
         received = []

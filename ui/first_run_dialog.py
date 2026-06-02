@@ -30,9 +30,11 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QColor, QPainter, QPixmap
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -98,6 +100,10 @@ _SLIDES = [
         ),
     },
 ]
+
+# Total slide count including the interactive notification slide
+_TOTAL_SLIDES = len(_SLIDES) + 1
+_NOTIF_SLIDE_IDX = len(_SLIDES)   # index 3
 
 
 class WelcomeOverlay(QWidget):
@@ -201,6 +207,7 @@ class WelcomeOverlay(QWidget):
         self._slide_stack.setStyleSheet("background:transparent; border:none;")
         for slide in _SLIDES:
             self._slide_stack.addWidget(self._build_slide(slide))
+        self._slide_stack.addWidget(self._build_notif_slide())
         root.addWidget(self._slide_stack)
         root.addSpacing(24)
 
@@ -209,7 +216,7 @@ class WelcomeOverlay(QWidget):
         dots_row.setSpacing(8)
         dots_row.addStretch()
         self._dots: list[QLabel] = []
-        for i in range(len(_SLIDES)):
+        for i in range(_TOTAL_SLIDES):
             dot = QLabel("●")
             dot.setStyleSheet(
                 f"color:{ACCENT}; font-size:10px; background:transparent; border:none;"
@@ -296,12 +303,13 @@ class WelcomeOverlay(QWidget):
     # ── Navigation ────────────────────────────────────────────────────────────
 
     def _go_next(self) -> None:
-        last = len(_SLIDES) - 1
+        last = _TOTAL_SLIDES - 1
         if self._slide_idx < last:
             self._slide_idx += 1
             self._slide_stack.setCurrentIndex(self._slide_idx)
             self._sync_nav()
         else:
+            self._save_notif_prefs()
             self._on_scan()
 
     def _go_back(self) -> None:
@@ -311,7 +319,7 @@ class WelcomeOverlay(QWidget):
             self._sync_nav()
 
     def _sync_nav(self) -> None:
-        last = len(_SLIDES) - 1
+        last = _TOTAL_SLIDES - 1
         self._back_btn.setVisible(self._slide_idx > 0)
         self._next_btn.setText(
             "Scan my network  →" if self._slide_idx == last else "Next  →"
@@ -322,6 +330,86 @@ class WelcomeOverlay(QWidget):
                 if i == self._slide_idx else
                 "color:OVERLAY_BG3; font-size:10px; background:transparent; border:none;"
             )
+
+    def _build_notif_slide(self) -> QWidget:
+        """Fourth slide: notification preferences (desktop / email / skip)."""
+        w = QWidget()
+        w.setStyleSheet("background:transparent; border:none;")
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        icon_lbl = QLabel("◆")
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_lbl.setStyleSheet(
+            f"color:{ACCENT}; font-size:48px; background:transparent; border:none;"
+        )
+        lay.addWidget(icon_lbl)
+        lay.addSpacing(14)
+
+        title_lbl = QLabel("Get notified when something changes")
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_lbl.setWordWrap(True)
+        title_lbl.setStyleSheet(
+            "color:WHITE; font-size:18px; font-weight:700;"
+            " background:transparent; border:none;"
+        )
+        lay.addWidget(title_lbl)
+        lay.addSpacing(16)
+
+        self._notif_desktop_chk = QCheckBox("Desktop notifications (recommended)")
+        self._notif_desktop_chk.setChecked(True)
+        self._notif_desktop_chk.setStyleSheet(
+            f"color:{OVERLAY_FG2}; font-size:12px; background:transparent; border:none;"
+        )
+        lay.addWidget(self._notif_desktop_chk)
+        lay.addSpacing(10)
+
+        email_row = QHBoxLayout()
+        self._notif_email_chk = QCheckBox("Email alerts — send to:")
+        self._notif_email_chk.setStyleSheet(
+            f"color:{OVERLAY_FG2}; font-size:12px; background:transparent; border:none;"
+        )
+        self._notif_email_edit = QLineEdit()
+        self._notif_email_edit.setPlaceholderText("you@example.com")
+        self._notif_email_edit.setFixedWidth(170)
+        self._notif_email_edit.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:4px; padding:3px 6px;"
+        )
+        self._notif_email_chk.stateChanged.connect(
+            lambda s: self._notif_email_edit.setEnabled(
+                s == 2  # Qt.CheckState.Checked == 2
+            )
+        )
+        self._notif_email_edit.setEnabled(False)
+        email_row.addWidget(self._notif_email_chk)
+        email_row.addWidget(self._notif_email_edit)
+        email_row.addStretch()
+        lay.addLayout(email_row)
+
+        skip_lbl = QLabel("You can always change these in Notifications settings.")
+        skip_lbl.setWordWrap(True)
+        skip_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        skip_lbl.setStyleSheet(
+            f"color:{OVERLAY_FG2}; font-size:10px; background:transparent; border:none;"
+        )
+        lay.addSpacing(12)
+        lay.addWidget(skip_lbl)
+        lay.addStretch()
+
+        return w
+
+    def _save_notif_prefs(self) -> None:
+        """Persist notification preferences from the onboarding slide."""
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if hasattr(self, "_notif_desktop_chk"):
+            qs.setValue("notif/toast_enabled", self._notif_desktop_chk.isChecked())
+        if hasattr(self, "_notif_email_chk") and self._notif_email_chk.isChecked():
+            addr = self._notif_email_edit.text().strip()
+            if addr:
+                qs.setValue("notif/email_enabled", True)
+                qs.setValue("notif/email_to", addr)
 
     # ── Animation ─────────────────────────────────────────────────────────────
 

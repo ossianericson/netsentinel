@@ -320,6 +320,18 @@ class LabModePage(QWidget):
         steps_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
         lay.addWidget(steps_lbl)
 
+        # Curriculum alignment badges
+        try:
+            from ui.widgets.objective_badge import ObjectiveBadge
+            badge_row = QHBoxLayout()
+            badge_row.setSpacing(4)
+            for badge in ObjectiveBadge.for_scenario(scenario.title):
+                badge_row.addWidget(badge)
+            badge_row.addStretch()
+            lay.addLayout(badge_row)
+        except Exception:
+            pass
+
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 

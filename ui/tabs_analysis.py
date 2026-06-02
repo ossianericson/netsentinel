@@ -632,8 +632,16 @@ class _AnalysisTabsMixin:
             "as HTML you can print to PDF and attach to an ISP support ticket."
         )
         btn_isp.clicked.connect(self._export_isp_report)
+        btn_isp_copy = QPushButton("◇  Copy ISP Complaint")
+        btn_isp_copy.setObjectName("btnNetRefresh")
+        btn_isp_copy.setToolTip(
+            "Copy a ready-to-email complaint script to your clipboard. "
+            "Uses NetSentinel's own measurements — no manual steps required."
+        )
+        btn_isp_copy.clicked.connect(self._copy_isp_complaint)
         ctrl.addWidget(btn_grade)
         ctrl.addWidget(btn_isp)
+        ctrl.addWidget(btn_isp_copy)
         ctrl.addStretch()
 
         # Dimension breakdown table
@@ -845,3 +853,72 @@ class _AnalysisTabsMixin:
         except Exception as exc:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Network Health Report Error", str(exc))
+
+    @pyqtSlot()
+    def _copy_isp_complaint(self):
+        """Copy a ready-to-email ISP complaint script using NetSentinel's own measurements."""
+        try:
+            from PyQt6.QtWidgets import (
+                QCheckBox as _QCB, QDialog, QDialogButtonBox,
+                QFormLayout, QLineEdit as _QLE, QMessageBox,
+            )
+            from modules.report_isp import generate_isp_complaint_text
+
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Copy ISP Complaint — Details")
+            dlg.setMinimumWidth(400)
+            dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
+            form = QFormLayout(dlg)
+
+            isp_edit = _QLE()
+            isp_edit.setPlaceholderText("e.g. BT, Virgin Media, Comcast…")
+            isp_edit.setStyleSheet(
+                f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+                f" border-radius:4px; padding:4px;"
+            )
+            ref_edit = _QLE()
+            ref_edit.setPlaceholderText("e.g. REF-123456 (optional)")
+            ref_edit.setStyleSheet(
+                f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+                f" border-radius:4px; padding:4px;"
+            )
+            legal_chk = _QCB("Include UK/EU SLA legal statement (Ofcom / Consumer Rights Act)")
+            legal_chk.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
+
+            form.addRow("ISP Name:", isp_edit)
+            form.addRow("Account / Ticket Ref:", ref_edit)
+            form.addRow("", legal_chk)
+
+            btns = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            )
+            btns.accepted.connect(dlg.accept)
+            btns.rejected.connect(dlg.reject)
+            form.addRow(btns)
+
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
+
+            log_summary = None
+            if self._logger_worker:
+                try:
+                    log_summary = self._logger_worker.get_summary()
+                except Exception:
+                    pass
+            bm_result = getattr(self, "_last_benchmark_result", None)
+
+            text = generate_isp_complaint_text(
+                log_summary=log_summary,
+                diag_result=getattr(self, "_diag_result", None),
+                benchmark_result=bm_result,
+                isp_name=isp_edit.text().strip(),
+                account_ref=ref_edit.text().strip(),
+                include_legal=legal_chk.isChecked(),
+            )
+            from PyQt6.QtWidgets import QApplication
+            QApplication.clipboard().setText(text)
+            from ui.widgets.toast import ToastManager
+            ToastManager.instance().show_toast("ISP complaint copied to clipboard", "info")
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Copy Failed", str(exc))

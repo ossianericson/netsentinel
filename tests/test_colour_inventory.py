@@ -95,6 +95,7 @@ _UI_BUDGETS: dict[str, int] = {
     "ui/pages/timeline_page.py": 0,        # was 1
     "ui/widgets/density_toggle.py": 0,     # was 1
     "ui/widgets/explainer_panel.py": 0,    # was 1
+    "ui/widgets/objective_badge.py": 0,    # Sprint B3 new file
     "ui/widgets/page_header.py": 0,        # was 1
     "ui/widgets/pulsing_dot.py": 0,        # was 1
 }

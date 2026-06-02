@@ -332,6 +332,10 @@ class ProtocolVizPage(QWidget):
         self._canvas_subtitle = _label("", 10, TEXT_MUTED)
         tb_lay.addWidget(self._canvas_title)
         tb_lay.addWidget(self._canvas_subtitle)
+        # Curriculum badges placeholder — populated in _select_protocol
+        self._badge_row = QHBoxLayout()
+        self._badge_row.setSpacing(4)
+        tb_lay.addLayout(self._badge_row)
         tb_lay.addStretch()
         canvas_lay.addWidget(title_bar)
 
@@ -485,6 +489,8 @@ class ProtocolVizPage(QWidget):
         self._style_proto_btns()
         if hasattr(self, "_context_panel"):
             self._context_panel.set_protocol(key, self._on_context_navigate)
+        # Refresh curriculum badges for selected protocol
+        self._refresh_protocol_badges(key)
 
         scene = self._build_scene(key)
 
@@ -510,6 +516,22 @@ class ProtocolVizPage(QWidget):
         # Auto-play
         self._btn_play.setText("⏸  Pause")
         self._canvas.play()
+
+    def _refresh_protocol_badges(self, key: str) -> None:
+        """Update curriculum objective badges in the canvas title bar."""
+        if not hasattr(self, "_badge_row"):
+            return
+        # Clear existing badges
+        while self._badge_row.count():
+            item = self._badge_row.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        try:
+            from ui.widgets.objective_badge import ObjectiveBadge
+            for badge in ObjectiveBadge.for_protocol(key, self):
+                self._badge_row.addWidget(badge)
+        except Exception:
+            pass
 
     def _build_scene(self, key: str) -> ProtocolSceneData:
         if key == "ARP":

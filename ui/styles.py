@@ -422,6 +422,11 @@ INFO_BOX_BG        = "#EBF4FF"   # info banner light blue background
 INFO_BOX_BORDER    = "#B3D4F5"   # info banner border
 INFO_BOX_FG        = "#1A4A7A"   # info banner dark blue text
 
+# ── Certification brand colours (ObjectiveBadge — fixed, not theme-specific) ──
+CERT_NETPLUS_BG    = "#C23B22"   # CompTIA Network+ red
+CERT_CISCO_BG      = "#00BCEB"   # Cisco CCNA teal
+CERT_SEC_BG        = "#6929C4"   # CompTIA Security+ purple
+
 # ── HTML report export colours (embedded in generated HTML/CSS strings) ───────
 HTML_GREEN         = "#27AE60"   # positive / pass row
 HTML_RED           = "#E74C3C"   # negative / fail row
