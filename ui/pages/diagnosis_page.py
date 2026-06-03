@@ -15,7 +15,7 @@ from typing import Optional
 
 import datetime as _dt
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QButtonGroup, QDialog, QDialogButtonBox, QFrame,
     QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
@@ -170,6 +170,38 @@ class DiagnosisPage(QWidget):
         self._last_findings: list = []
         self._verify_workers: list = []  # keeps refs alive until verify completes
         self._setup_ui()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(600, self._maybe_show_coach_diagnosis)
+
+    def _maybe_show_coach_diagnosis(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        key = "coach/diagnosis_shown"
+        if qs.value(key, False, type=bool):
+            return
+        if self._stack.currentIndex() != 0:
+            return
+        win = self.window()
+        if not (win and win.isVisible()):
+            return
+        target_btn = self._symptom_btns.get("slow")
+        if not target_btn:
+            return
+        from ui.widgets.coach_mark import CoachMarkChain
+        CoachMarkChain(
+            win,
+            [{
+                "target": lambda b=target_btn: b,
+                "title": "Describe your symptom",
+                "body": (
+                    "Pick the symptom closest to what you're experiencing. "
+                    "NetSentinel runs targeted checks instead of a full scan "
+                    "— takes 30 seconds."
+                ),
+            }],
+            on_done=lambda: QSettings("NetSentinel", "NetSentinel").setValue(key, True),
+        ).start()
 
     def set_network_info(
         self,

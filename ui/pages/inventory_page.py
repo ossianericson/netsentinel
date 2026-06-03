@@ -442,6 +442,31 @@ class InventoryPage(QWidget):
         if self._table.rowCount() == 0:
             insert_skeleton_rows(self._table, count=6)
 
+    def _maybe_show_coach_devices(self) -> None:
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        key = "coach/devices_rightclick_shown"
+        if qs.value(key, False, type=bool):
+            return
+        if self._table.rowCount() == 0:
+            return
+        win = self.window()
+        if not (win and win.isVisible()):
+            return
+        from ui.widgets.coach_mark import CoachMarkChain
+        CoachMarkChain(
+            win,
+            [{
+                "target": lambda t=self._table: t,
+                "title": "Right-click for actions",
+                "body": (
+                    "Right-click any device row to label it, check its ports, "
+                    "or add it to your watchlist."
+                ),
+            }],
+            on_done=lambda: QSettings("NetSentinel", "NetSentinel").setValue(key, True),
+        ).start()
+
     # ── Build ─────────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
@@ -925,6 +950,7 @@ class InventoryPage(QWidget):
 
         if self._content_stack.currentIndex() == 0:
             self._content_stack.setCurrentIndex(1)
+            QTimer.singleShot(700, self._maybe_show_coach_devices)
 
         # DEVICE-2: build alert host set for dot lookup (one query, reused per row)
         try:

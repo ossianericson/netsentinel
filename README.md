@@ -322,6 +322,11 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.81
+**Added**
+- Contextual coach marks — 5 per-feature one-shot overlays keyed to individual `coach/*` QSettings flags (independent of global first-run onboarding): Log Hub sources bar, Network Grade ring, Diagnosis symptom tiles, Home page monitoring pills, Devices table right-click hint
+- `tests/test_coach_marks.py` — 22 tests covering flag hygiene, skip conditions, and method presence for all 5 coach marks
+
 ### v1.9.80
 **Changed**
 - `overview_page.py` — tile grid wrapped in `QStackedWidget`; shows `EmptyStateCard` on first launch instead of 12 empty tiles

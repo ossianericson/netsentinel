@@ -32,7 +32,7 @@ Three specific user-reported problems drive this plan:
 | ✅ **H4** | Proactive Actionable Insights | M | `ui/pages/home_page.py`, `ui/pages/home_data_mixin.py`, `ui/pages/home_suggestions.py`, `ui/tabs_logger.py`, `tests/test_home_suggestions.py` — completed 2026-06-03 |
 | ✅ **H5** | Diagnosis Fix + Verify Loop | S | `ui/pages/diagnosis_page.py`, `workers/diagnosis_worker.py`, `ui/pages/home_data_mixin.py`, `ui/pages/settings_appearance.py`, `tests/test_diagnosis_page.py` — completed 2026-06-03 |
 | ✅ **H6** | Empty State Consistency Audit | M | `ui/pages/overview_page.py`, `snmp_trap_page.py`, `wifi_monitor_page.py`, `geo_map_page.py`, `timeline_page.py`, `speed_test_page.py`, `trend_page.py`, `app.py` — completed 2026-06-03 |
-| **H7** | Contextual Coach Marks | M | `ui/widgets/coach_mark.py`, 5–6 page files |
+| ✅ **H7** | Contextual Coach Marks | M | `ui/pages/log_hub_page.py`, `ui/pages/diagnosis_page.py`, `ui/pages/home_data_mixin.py`, `ui/pages/home_page.py`, `ui/pages/inventory_page.py`, `tests/test_coach_marks.py` — completed 2026-06-03 |
 | **H8** | Home Page Recurring Mode Polish | S | `ui/pages/home_data_mixin.py`, `ui/widgets/home_session_widgets.py` |
 | **H9** | Page-Level Help & Keyboard Shortcuts | S | `ui/widgets/page_header.py`, `ui/help_tab.py`, `ui/pages/settings_page.py` |
 | **H10** | Terminology, Tone & Milestone Cards | S | String audit across all `ui/` files |

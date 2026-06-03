@@ -116,6 +116,39 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             _t.timeout.connect(self._preload_from_store)
             _t.start(0)
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(700, self._maybe_show_coach_home_pills)
+
+    def _maybe_show_coach_home_pills(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        key = "coach/home_pills_shown"
+        if qs.value(key, False, type=bool):
+            return
+        win = self.window()
+        if not (win and win.isVisible()):
+            return
+        strip = getattr(self, "_freshness_strip", None)
+        if not strip:
+            return
+        arp_pill = getattr(strip, "_fs_pill_arp", None)
+        if not arp_pill:
+            return
+        from ui.widgets.coach_mark import CoachMarkChain
+        CoachMarkChain(
+            win,
+            [{
+                "target": lambda p=arp_pill: p,
+                "title": "Your monitors",
+                "body": (
+                    "These run in the background. Enable ARP Watch to detect "
+                    "spoofing attacks; enable Logger to record stability data."
+                ),
+            }],
+            on_done=lambda: QSettings("NetSentinel", "NetSentinel").setValue(key, True),
+        ).start()
+
     # ── Theme nudge banner ────────────────────────────────────────────────────
 
     def _build_theme_banner(self) -> "QFrame | None":

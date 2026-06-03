@@ -149,6 +149,35 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         from ui.table_utils import restore_column_widths
         restore_column_widths(self._table, "log_hub")
         super().showEvent(event)
+        QTimer.singleShot(600, self._maybe_show_coach_log_hub)
+
+    def _maybe_show_coach_log_hub(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        key = "coach/log_hub_sources_shown"
+        if qs.value(key, False, type=bool):
+            return
+        net_on = qs.value("logging/net_enabled", True, type=bool)
+        if net_on:
+            return
+        win = self.window()
+        if not (win and win.isVisible()):
+            return
+        bar = self.findChild(QFrame, "controlBar")
+        if not bar:
+            return
+        from ui.widgets.coach_mark import CoachMarkChain
+        CoachMarkChain(
+            win,
+            [{
+                "target": lambda b=bar: b,
+                "title": "Choose what to log",
+                "body": (
+                    "Toggle Network RTT to start logging ping latency every "
+                    "30 seconds. Leave it on for 24 hours for the best insights."
+                ),
+            }],
+            on_done=lambda: QSettings("NetSentinel", "NetSentinel").setValue(key, True),
+        ).start()
 
     def set_popover(self, popover) -> None:
         self._popover = popover

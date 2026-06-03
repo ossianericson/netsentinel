@@ -892,6 +892,34 @@ class _HomeDataMixin:
         self._refresh_sparkline()
         if self._recurring_mode:
             self._update_recurring_grade_display()
+        if grade and grade not in ("?", "—", ""):
+            self._maybe_show_coach_grade()
+
+    def _maybe_show_coach_grade(self) -> None:
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        key = "coach/grade_shown"
+        if qs.value(key, False, type=bool):
+            return
+        win = self.window()
+        if not (win and win.isVisible()):
+            return
+        circle = getattr(self, "_grade_circle", None)
+        if not circle:
+            return
+        from ui.widgets.coach_mark import CoachMarkChain
+        CoachMarkChain(
+            win,
+            [{
+                "target": lambda c=circle: c,
+                "title": "Your network grade",
+                "body": (
+                    "This score reflects 8 dimensions of network health. "
+                    "Click the ring to see the breakdown and improve your score."
+                ),
+            }],
+            on_done=lambda: QSettings("NetSentinel", "NetSentinel").setValue(key, True),
+        ).start()
 
     def on_grade_details(self, grade: str, score: float, dimensions: list) -> None:
         """Store grade sub-score dimensions and reveal the (?) button."""
