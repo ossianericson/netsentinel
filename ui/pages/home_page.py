@@ -149,8 +149,9 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         def _dismiss(save_theme: str | None = None) -> None:
             if save_theme:
-                _styles.set_active_theme_name(save_theme)
-                lbl.setText(f"Theme '{save_theme}' saved � restart NetSentinel to apply.")
+                from ui.styles import apply_theme
+                apply_theme(save_theme)
+                lbl.setText(f"'{save_theme}' applied — looks good!")
                 for b in _btn_refs:
                     b.setEnabled(False)
                 close_btn.setVisible(False)

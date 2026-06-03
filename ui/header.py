@@ -266,14 +266,15 @@ class AppHeaderMixin:
         )
 
         def _on_theme_toggle():
-            from ui.styles import THEMES, get_active_theme_name, set_active_theme_name
+            from ui.styles import THEMES, get_active_theme_name, apply_theme
             from ui.widgets.toast import ToastManager
             _names = list(THEMES.keys())
             _cur = get_active_theme_name()
             _next = _names[(_names.index(_cur) + 1) % len(_names)] if _cur in _names else _names[0]
-            set_active_theme_name(_next)
-            _theme_btn.setToolTip(f"Theme: {_next} — restart to apply")
-            ToastManager.show(f"Theme set to {_next} — restart to apply", "info")
+            apply_theme(_next)
+            _theme_btn.setText(_theme_icons.get(_next, "☀"))
+            _theme_btn.setToolTip(f"Theme: {_next} — click to cycle")
+            ToastManager.show(f"Theme: {_next}", "info")
 
         _theme_btn.clicked.connect(_on_theme_toggle)
         lay.addSpacing(4)

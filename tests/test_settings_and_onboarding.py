@@ -75,28 +75,25 @@ class TestSettingsPage:
     def test_object_name(self):
         assert self.page.objectName() == "contentArea"
 
-    def test_theme_buttons_present(self):
-        assert len(self.page._theme_btns) == len(_styles.THEMES)
+    def test_theme_swatches_present(self):
+        assert len(self.page._theme_swatches) == len(_styles.THEMES)
 
-    def test_all_theme_names_have_buttons(self):
+    def test_all_theme_names_have_swatches(self):
         for name in _styles.THEMES:
-            assert name in self.page._theme_btns
+            assert name in self.page._theme_swatches
 
-    def test_active_theme_button_is_filled(self):
+    def test_active_theme_swatch_has_accent_border(self):
         active = _styles.get_active_theme_name()
-        btn = self.page._theme_btns[active]
-        style = btn.styleSheet()
-        # Active button has background set to ACCENT (not BG_CARD)
-        assert _styles.ACCENT in style
+        sw = self.page._theme_swatches[active]
+        own_accent = _styles.THEMES[active]["ACCENT"]
+        assert own_accent in sw.styleSheet()
 
-    def test_inactive_theme_buttons_are_outlined(self):
+    def test_inactive_theme_swatch_has_border_style(self):
         active = _styles.get_active_theme_name()
-        for name, btn in self.page._theme_btns.items():
+        for name, sw in self.page._theme_swatches.items():
             if name != active:
-                style = btn.styleSheet()
-                # Outline buttons set color (text) to ACCENT, bg to BG_CARD
-                assert _styles.BG_CARD in style
-                break  # only need to check one inactive
+                assert "border" in sw.styleSheet()
+                break
 
     def test_on_theme_calls_set_active(self):
         target = [n for n in _styles.THEMES][0]

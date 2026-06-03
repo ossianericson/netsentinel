@@ -360,11 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Hardware plugin reliability", "Plugin instances with stale PyInstaller temp-dir paths are now automatically remapped to the stable AppData copy on startup, eliminating 'Plugin file not found' errors after updates."),
-        ("Deco XE75 HTTPS fallback", "The TP-Link Deco client now retries over HTTPS when HTTP port 80 times out, fixing authentication on firmware versions that require HTTPS for the local API."),
-        ("Extend flyout refreshes on add", "Adding a hardware plugin now immediately shows the new entry in the left rail Extend flyout without requiring a click away and back."),
-        ("Credential dialog always centered", "The plugin credential dialog now centers on the main window instead of the page widget, so it is always fully visible on screen."),
-        ("Configuration Status chips fixed", "The coloured status chips in Settings > Configuration Status now render with the correct badge colours instead of black."),
+        ("Visual theme swatch cards", "Settings > Appearance now shows mini colour-preview cards for each theme — nav bar, sidebar, content and accent colours visible at a glance. Click any card to switch instantly."),
+        ("Instant theme switching everywhere", "The first-run theme banner and the header theme-cycle button now apply themes live without requiring a restart."),
+        ("Header toggle updates immediately", "The theme icon in the top bar updates to reflect the newly selected theme as soon as you click."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

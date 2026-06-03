@@ -291,6 +291,89 @@ def _integr_svc_count(qs: QSettings) -> "tuple[bool, str]":
     return (n > 0, f"{n} target{'s' if n != 1 else ''} configured")
 
 
+# ── Theme swatch widget ───────────────────────────────────────────────────────
+
+class _ThemeSwatch(QFrame):
+    """Clickable mini colour-palette preview card for one theme."""
+
+    clicked = pyqtSignal(str)
+
+    def __init__(self, name: str, colors: dict, parent=None):
+        super().__init__(parent)
+        self._name = name
+        self._colors = colors
+        self.setFixedSize(128, 90)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(f"Apply {name} theme")
+        self._build(colors)
+
+    def _build(self, c: dict) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        nav = QLabel()
+        nav.setFixedHeight(12)
+        nav.setStyleSheet(f"background:{c['NAV_BAR']};border:none;")
+        outer.addWidget(nav)
+
+        body_w = QWidget()
+        body_w.setStyleSheet(f"background:{c['BG_DARK']};border:none;")
+        body_lay = QHBoxLayout(body_w)
+        body_lay.setContentsMargins(0, 0, 0, 0)
+        body_lay.setSpacing(0)
+
+        sb = QLabel()
+        sb.setFixedWidth(8)
+        sb.setStyleSheet(f"background:{c.get('SIDEBAR_BG', c['NAV_BAR'])};border:none;")
+        body_lay.addWidget(sb)
+
+        content_w = QWidget()
+        content_w.setStyleSheet(f"background:{c['BG_DARK']};border:none;")
+        content_lay = QHBoxLayout(content_w)
+        content_lay.setContentsMargins(6, 6, 6, 6)
+        content_lay.setSpacing(5)
+
+        card_lbl = QLabel()
+        card_lbl.setFixedSize(36, 26)
+        card_lbl.setStyleSheet(
+            f"background:{c['BG_CARD']};border:1px solid {c['BORDER']};border-radius:2px;"
+        )
+        content_lay.addWidget(card_lbl)
+
+        dot = QLabel()
+        dot.setFixedSize(8, 8)
+        dot.setStyleSheet(f"background:{c['ACCENT']};border-radius:2px;border:none;")
+        content_lay.addWidget(dot)
+        content_lay.addStretch()
+
+        body_lay.addWidget(content_w, 1)
+        outer.addWidget(body_w, 1)
+
+        name_lbl = QLabel(self._name)
+        name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_lbl.setFixedHeight(18)
+        name_lbl.setStyleSheet(
+            f"font-size:10px;font-weight:500;color:{c['TEXT_PRIMARY']};"
+            f"background:{c['BG_CARD']};border:none;"
+        )
+        outer.addWidget(name_lbl)
+
+    def set_active(self, active: bool) -> None:
+        own_accent = self._colors["ACCENT"]
+        if active:
+            self.setStyleSheet(
+                f"QFrame{{border:2px solid {own_accent};border-radius:4px;}}"
+            )
+        else:
+            self.setStyleSheet(
+                f"QFrame{{border:1px solid {_styles.BORDER};border-radius:4px;}}"
+            )
+
+    def mousePressEvent(self, event) -> None:
+        self.clicked.emit(self._name)
+
+
 # ── Mixin ─────────────────────────────────────────────────────────────────────
 
 class _SettingsCardsMixin:
@@ -512,8 +595,7 @@ class _SettingsCardsMixin:
     def _build_appearance_card(self) -> QFrame:
         card, bl = _card("Appearance — Colour Theme")
         desc = QLabel(
-            "Choose a colour theme for the entire application. "
-            "Changes apply immediately."
+            "Choose a colour theme — switches instantly, no restart needed."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
@@ -522,18 +604,18 @@ class _SettingsCardsMixin:
         self._theme_status_lbl.setStyleSheet(
             f"font-size:11px;color:{ACCENT};background:transparent;"
         )
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-        self._theme_btns: dict = {}
-        for name in _styles.THEMES:
-            btn = QPushButton(name)
-            self._theme_btns[name] = btn
-            btn_row.addWidget(btn)
-            btn.clicked.connect(lambda checked=False, n=name: self._on_theme(n))
-        btn_row.addStretch()
-        bl.addLayout(btn_row)
+        swatch_row = QHBoxLayout()
+        swatch_row.setSpacing(10)
+        self._theme_swatches: dict[str, _ThemeSwatch] = {}
+        for name, colors in _styles.THEMES.items():
+            sw = _ThemeSwatch(name, colors)
+            sw.clicked.connect(self._on_theme)
+            self._theme_swatches[name] = sw
+            swatch_row.addWidget(sw)
+        swatch_row.addStretch()
+        bl.addLayout(swatch_row)
         bl.addWidget(self._theme_status_lbl)
-        self._refresh_theme_buttons()
+        self._refresh_theme_swatches()
         bl.addSpacing(10)
         accent_hdr = QLabel("Accent Colour")
         accent_hdr.setStyleSheet(
@@ -622,30 +704,15 @@ class _SettingsCardsMixin:
         apply_accent_override(None)
         self._accent_status_lbl.setText("Accent reset to theme default.")
 
-    def _refresh_theme_buttons(self) -> None:
-        import ui.styles as _s
-        active = _s.get_active_theme_name()
-        for name, btn in self._theme_btns.items():
-            if name == active:
-                btn.setStyleSheet(
-                    f"QPushButton{{background:{_s.ACCENT};color:{_s.NAV_BAR};"
-                    f"border:1px solid {_s.ACCENT};border-radius:4px;"
-                    f"padding:5px 14px;font-size:11px;font-weight:bold;}}"
-                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
-                )
-            else:
-                btn.setStyleSheet(
-                    f"QPushButton{{background:{_s.BG_CARD};color:{_s.ACCENT};"
-                    f"border:1px solid {_s.ACCENT};border-radius:4px;"
-                    f"padding:5px 14px;font-size:11px;}}"
-                    f"QPushButton:hover{{background:{_s.BTN_HOVER_BG};}}"
-                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
-                )
+    def _refresh_theme_swatches(self) -> None:
+        active = _styles.get_active_theme_name()
+        for name, sw in self._theme_swatches.items():
+            sw.set_active(name == active)
 
     def _on_theme(self, name: str) -> None:
         from ui.styles import apply_theme
         apply_theme(name)
-        self._refresh_theme_buttons()
+        self._refresh_theme_swatches()
         self._theme_status_lbl.setText(f"Theme '{name}' applied.")
 
     # ── Display preferences ───────────────────────────────────────────────────

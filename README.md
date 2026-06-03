@@ -322,6 +322,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.76
+**Changed**
+- Settings > Appearance: theme selector replaced with visual mini swatch cards (128×90 px each) showing a scaled colour preview of each theme — nav bar, sidebar, content area, card and accent colours
+- Theme banner on first run and header theme-cycle button now apply themes instantly via `apply_theme()` instead of persisting only and asking for a restart
+- Header theme toggle button icon updates immediately to reflect the newly selected theme
+
 ### v1.9.75
 **Fixed**
 - `settings_cards.py`: Configuration Status chips were rendering black — `_chip_style()` returned plain strings instead of f-strings so colour variable names were never interpolated
