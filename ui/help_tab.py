@@ -360,11 +360,11 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
+        ("Recurring mode intro card", "Home page shows a one-time 'Home page upgraded' banner the first time recurring layout activates (5th scan), explaining the layout change."),
+        ("Setup completion card", "When all 6 Getting Started steps are done, the checklist is replaced by a celebration card with 'Explore features' and 'View this week's summary' shortcuts."),
+        ("Logger pill tooltip", "The Logger pill in the freshness strip shows 'logging since X' when the Network Logger is active."),
         ("Contextual coach marks", "Five per-feature one-shot overlays guide you through Log Hub sources, Network Grade, Diagnosis symptom tiles, Home monitoring pills, and Devices right-click — each shown once, independently dismissible."),
         ("Empty state consistency", "Overview, SNMP Trap, WiFi Monitor, Geolocation Map, Timeline, Speed Test, and Trend pages all show structured EmptyStateCards with actionable CTAs instead of blank tables or passive labels."),
-        ("Overview empty state", "First launch now shows a clear 'Scan my network' prompt instead of 12 empty tiles with dashes."),
-        ("Geolocation & Timeline scans", "Geolocation Map and Timeline pages now have 'Run a scan' CTAs wired directly to the full network scan."),
-        ("Trend page logger nudge", "Trend Forecasts page shows 'Start Logger' CTA pointing to the Network Logger when no trend data exists yet."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

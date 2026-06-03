@@ -220,6 +220,20 @@ class FreshnessStrip(QFrame):
         if style:
             self._fs_scan_lbl.setStyleSheet(style)
 
+    def update_logger_tooltip(self, since_str: str = "", last_entry_str: str = "",
+                              rtt_str: str = "") -> None:
+        """Update Logger pill tooltip with live data when logger is active."""
+        if not self._fs_pill_active.get(self._fs_pill_log, False):
+            return
+        parts = ["Network Logger is ON"]
+        if since_str:
+            parts.append(f"logging since {since_str}")
+        if last_entry_str:
+            parts.append(f"Last entry: {last_entry_str}")
+        if rtt_str:
+            parts.append(f"RTT: {rtt_str}")
+        self._fs_pill_log.setToolTip("  ·  ".join(parts))
+
 
 # ── GettingStartedCard ────────────────────────────────────────────────────────
 
@@ -228,6 +242,7 @@ class GettingStartedCard(QFrame):
 
     add_plugin_requested = pyqtSignal(str)
     navigate_to = pyqtSignal(str)
+    completion_done = pyqtSignal()  # emitted 2 s after all steps are complete
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -446,7 +461,7 @@ class GettingStartedCard(QFrame):
                 " background:transparent; border:none; letter-spacing:1.5px;"
             )
             from PyQt6.QtCore import QTimer as _QT
-            _QT.singleShot(2000, lambda: self.setVisible(False))
+            _QT.singleShot(2000, self.completion_done.emit)
         else:
             self._setup_hdr_lbl.setText("GETTING STARTED")
             self._setup_hdr_lbl.setStyleSheet(

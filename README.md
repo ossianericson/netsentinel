@@ -322,6 +322,14 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.82
+**Added**
+- `_recurring_intro_card` on `HomePage` — one-time "Home page upgraded" banner shown when recurring mode activates for the first time (5th scan), explaining the layout change; dismissed with × and persisted via `home/recurring_mode_intro_shown`
+- `_setup_complete_card` on `HomePage` — celebration card replacing `GettingStartedCard` once all 6 setup steps are done; two CTAs: "Explore features →" (Feature Guide) and "View this week's summary →" (Overview)
+- `completion_done` signal on `GettingStartedCard` — emitted 2 s after all steps complete; parent handles card swap and sets `setup/all_done`
+- `FreshnessStrip.update_logger_tooltip()` — enriches the Logger pill tooltip with "logging since X" when logger is active
+- Logger "since" tracking in `_HomeDataMixin.set_monitor_pills()` — records `_logger_active_since` on first activation and passes elapsed time to the Logger pill tooltip
+
 ### v1.9.81
 **Added**
 - Contextual coach marks — 5 per-feature one-shot overlays keyed to individual `coach/*` QSettings flags (independent of global first-run onboarding): Log Hub sources bar, Network Grade ring, Diagnosis symptom tiles, Home page monitoring pills, Devices table right-click hint

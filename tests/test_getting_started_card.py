@@ -177,3 +177,90 @@ def test_freshness_strip_pills_are_buttons():
     if app:
         for _ in range(3):
             app.processEvents()
+
+
+# ── Sprint H8 additions ───────────────────────────────────────────────────────
+
+def test_getting_started_card_has_completion_done_signal():
+    """completion_done signal must be declared on GettingStartedCard."""
+    from ui.widgets.home_session_widgets import GettingStartedCard
+    card = GettingStartedCard()
+    assert hasattr(card, "completion_done"), "completion_done signal must exist"
+    try:
+        card.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+def test_getting_started_card_completion_done_is_connectable():
+    """completion_done signal must be connectable without error."""
+    from ui.widgets.home_session_widgets import GettingStartedCard
+    card = GettingStartedCard()
+    received = []
+    card.completion_done.connect(lambda: received.append(True))
+    card.completion_done.emit()
+    assert received == [True], "completion_done signal must be emittable"
+    try:
+        card.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+def test_freshness_strip_has_update_logger_tooltip():
+    """FreshnessStrip must have update_logger_tooltip method."""
+    from ui.widgets.home_session_widgets import FreshnessStrip
+    strip = FreshnessStrip()
+    assert hasattr(strip, "update_logger_tooltip"), "update_logger_tooltip method must exist"
+    strip.update_logger_tooltip("5 min ago", "14:47", "23 ms")  # must not raise
+    try:
+        strip.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+def test_freshness_strip_update_logger_tooltip_when_active():
+    """update_logger_tooltip must set tooltip text when logger pill is active."""
+    from ui.widgets.home_session_widgets import FreshnessStrip
+    strip = FreshnessStrip()
+    strip.update_freshness(logger=True)
+    strip.update_logger_tooltip(since_str="10 min ago", rtt_str="22 ms")
+    tip = strip._fs_pill_log.toolTip()
+    assert "10 min ago" in tip, f"Expected 'since' text in tooltip, got: {tip!r}"
+    try:
+        strip.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+def test_freshness_strip_update_logger_tooltip_noop_when_inactive():
+    """update_logger_tooltip must not change tooltip when logger is off."""
+    from ui.widgets.home_session_widgets import FreshnessStrip
+    strip = FreshnessStrip()
+    strip.update_freshness(logger=False)
+    original_tip = strip._fs_pill_log.toolTip()
+    strip.update_logger_tooltip(since_str="10 min ago")
+    assert strip._fs_pill_log.toolTip() == original_tip
+    try:
+        strip.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()

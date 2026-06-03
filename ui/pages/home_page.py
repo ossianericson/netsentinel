@@ -321,7 +321,63 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._setup_card_top = GettingStartedCard()
         self._setup_card_top.add_plugin_requested.connect(self.add_plugin_requested)
         self._setup_card_top.navigate_to.connect(self.navigate_to)
+        self._setup_card_top.completion_done.connect(self._on_setup_complete)
         lay.addWidget(self._setup_card_top)
+
+        # ── Setup completion celebration card (shown when all steps done) ──────
+        self._setup_complete_card = QFrame()
+        self._setup_complete_card.setObjectName("setupCompleteCard")
+        self._setup_complete_card.setStyleSheet(
+            f"QFrame#setupCompleteCard {{ background:{BG_CARD};"
+            f" border:1px solid {GREEN}44; border-left:3px solid {GREEN};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._setup_complete_card.setVisible(False)
+        _sc_lay = QVBoxLayout(self._setup_complete_card)
+        _sc_lay.setContentsMargins(14, 12, 14, 12)
+        _sc_lay.setSpacing(6)
+        _sc_title = QLabel("✓  All done — your network is set up and monitored")
+        _sc_title.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{GREEN};"
+            " background:transparent; border:none;"
+        )
+        _sc_sub = QLabel(
+            "Network Logger is running · ARP Watch is active · "
+            "Keep scanning weekly for fresh insights"
+        )
+        _sc_sub.setWordWrap(True)
+        _sc_sub.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _sc_btn_row = QHBoxLayout()
+        _sc_btn_row.setSpacing(16)
+        _sc_explore = QPushButton("Explore features →")
+        _sc_explore.setFlat(True)
+        _sc_explore.setCursor(Qt.CursorShape.PointingHandCursor)
+        _sc_explore.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
+        )
+        _sc_explore.clicked.connect(lambda: self.navigate_to.emit("Feature Guide"))
+        _sc_summary = QPushButton("View this week’s summary →")
+        _sc_summary.setFlat(True)
+        _sc_summary.setCursor(Qt.CursorShape.PointingHandCursor)
+        _sc_summary.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
+        )
+        _sc_summary.clicked.connect(lambda: self.navigate_to.emit("Overview"))
+        _sc_btn_row.addWidget(_sc_explore)
+        _sc_btn_row.addWidget(_sc_summary)
+        _sc_btn_row.addStretch()
+        _sc_lay.addWidget(_sc_title)
+        _sc_lay.addWidget(_sc_sub)
+        _sc_lay.addLayout(_sc_btn_row)
+        lay.addWidget(self._setup_complete_card)
 
         # ── Since you were last here (hidden until data loaded) ───────────────
         self._last_visit_card = QFrame()
@@ -628,6 +684,56 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             _tw_chips_row.addWidget(_chip, 1)
 
         _tw_outer.addLayout(_tw_chips_row)
+
+        # ── Recurring mode intro card (one-time, shown when layout first activates) ──
+        self._recurring_intro_card = QFrame()
+        self._recurring_intro_card.setObjectName("recurringIntroCard")
+        self._recurring_intro_card.setStyleSheet(
+            f"QFrame#recurringIntroCard {{ background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-left:3px solid {ACCENT};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._recurring_intro_card.setVisible(False)
+        _ri_outer = QHBoxLayout(self._recurring_intro_card)
+        _ri_outer.setContentsMargins(12, 10, 8, 10)
+        _ri_outer.setSpacing(10)
+        _ri_icon = QLabel("⬡")
+        _ri_icon.setFixedWidth(20)
+        _ri_icon.setStyleSheet(
+            f"font-size:14px; color:{ACCENT}; background:transparent; border:none;"
+        )
+        _ri_text_col = QVBoxLayout()
+        _ri_text_col.setSpacing(2)
+        _ri_title = QLabel("Home page upgraded")
+        _ri_title.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        _ri_body = QLabel(
+            "You've run 5 scans — great work. The home page now shows your monitoring "
+            "status and this week's activity summary. Your devices and grade history are "
+            "still in the Discover and Reports sections. Press Ctrl+K to find any page instantly."
+        )
+        _ri_body.setWordWrap(True)
+        _ri_body.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        _ri_text_col.addWidget(_ri_title)
+        _ri_text_col.addWidget(_ri_body)
+        _ri_x = QPushButton("×")
+        _ri_x.setFixedSize(20, 20)
+        _ri_x.setCursor(Qt.CursorShape.PointingHandCursor)
+        _ri_x.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+        _ri_x.clicked.connect(self._dismiss_recurring_intro)
+        _ri_outer.addWidget(_ri_icon)
+        _ri_outer.addLayout(_ri_text_col, 1)
+        _ri_outer.addWidget(_ri_x)
+        lay.addWidget(self._recurring_intro_card)
 
         # Grade + This Week side-by-side (POLISH-1)
         _stats_hbox = QHBoxLayout()

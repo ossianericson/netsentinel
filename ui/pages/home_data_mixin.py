@@ -149,6 +149,22 @@ class _HomeDataMixin:
         )
         self._dashboard_strip.setVisible(False)
 
+    def _dismiss_recurring_intro(self) -> None:
+        """Dismiss the one-time recurring mode intro card."""
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            "home/recurring_mode_intro_shown", True
+        )
+        if hasattr(self, "_recurring_intro_card"):
+            self._recurring_intro_card.setVisible(False)
+
+    def _on_setup_complete(self) -> None:
+        """Called when all Getting Started steps are complete (via completion_done signal)."""
+        if hasattr(self, "_setup_card_top"):
+            self._setup_card_top.setVisible(False)
+        if hasattr(self, "_setup_complete_card"):
+            self._setup_complete_card.setVisible(True)
+        QSettings("NetSentinel", "NetSentinel").setValue("setup/all_done", True)
+
     @pyqtSlot()
     def refresh_hw_strip(self) -> None:
         """Compatibility shim -- delegates to refresh_checklist."""
@@ -245,6 +261,10 @@ class _HomeDataMixin:
             self._update_recurring_grade_display()
             self._update_recurring_scan_time()
             self._update_this_week()
+            qs = QSettings("NetSentinel", "NetSentinel")
+            if not qs.value("home/recurring_mode_intro_shown", False, type=bool):
+                if hasattr(self, "_recurring_intro_card"):
+                    self._recurring_intro_card.setVisible(True)
 
     def _update_recurring_grade_display(self) -> None:
         if not hasattr(self, "_rec_grade_lbl"):
@@ -314,6 +334,12 @@ class _HomeDataMixin:
         self, arp: bool, dhcp: bool, storm: bool, logger: bool
     ) -> None:
         """Update monitoring pill badges. Called by dashboard on worker state changes."""
+        # Track logger start time for rich tooltip
+        if logger and not getattr(self, "_logger_active_since", None):
+            self._logger_active_since: "datetime.datetime | None" = datetime.datetime.now()
+        elif not logger:
+            self._logger_active_since = None
+
         _pill_map = [
             (self._pill_arp,    arp,    "ARP Watch"),
             (self._pill_dhcp,   dhcp,   "DHCP Watch"),
@@ -343,6 +369,21 @@ class _HomeDataMixin:
         if hasattr(self, "_btn_start_all_monitoring"):
             self._btn_start_all_monitoring.setVisible(all_off)
         self._freshness_strip.update_freshness(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
+        # Enrich logger pill tooltip with "since X ago"
+        if logger and getattr(self, "_logger_active_since", None):
+            _since = self._logger_active_since
+            _delta = datetime.datetime.now() - _since
+            _secs = int(_delta.total_seconds())
+            if _secs < 60:
+                _since_str = "just now"
+            elif _secs < 3600:
+                _since_str = f"{_secs // 60} min ago"
+            else:
+                _h = _secs // 3600
+                _m = (_secs % 3600) // 60
+                _since_str = f"{_h}h {_m}m ago" if _m else f"{_h}h ago"
+            self._freshness_strip.update_logger_tooltip(since_str=_since_str)
+
         _rec_map = [
             (self._rec_pill_arp,    arp,    "ARP Watch"),
             (self._rec_pill_dhcp,   dhcp,   "DHCP Watch"),
