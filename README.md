@@ -322,6 +322,21 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.78
+**Added**
+- `tests/test_getting_started_card.py` — step order, `_checklist_states` keys, `notify_hw_detected` and pill-type assertions
+- `tests/test_log_hub_empty_state.py` — `start_logger_requested` signal, content stack page count, CTA button presence
+
+**Changed**
+- Getting Started card step order: scan is now first, hardware steps second (with updated copy emphasising what you lose without them), logger added as step 6
+- Hardware steps renamed: "Connect your router" and "Connect your modem" with value-focused subtitles
+- `WelcomeOverlay` slide 2 ("Discover & protect") now mentions connecting router and modem
+- FreshnessStrip monitoring pills converted from `QLabel` to `QPushButton` (flat); clicking an inactive pill navigates to the relevant page; on/off tooltips added
+- After a hardware plugin is registered, the Getting Started card updates immediately without a restart
+- When `hw_detect_worker` detects a ZTE modem or Deco router on the network, the corresponding Getting Started card step shows an amber "detected nearby" indicator
+- Log Hub empty state replaced with `EmptyStateCard` + "Start Network Logger →" CTA; page switches to the live table as soon as any source is enabled
+- Diagnosis page shows a dismissible amber warning when the Network Logger has never been started
+
 ### v1.9.77
 **Changed**
 - Architecture documentation corrected to match actual codebase: 7 missing `ui/` files added (`header.py`, `tabs.py`, `tabs_helpers.py`, `tabs_scan.py`, `tabs_network.py`, `tabs_diag.py`, `tabs_recon.py`), 2 duplicate entries removed, `settings_cards.py` and `settings_appearance.py` descriptions fixed, non-existent `mesh_worker.py` and `zte_worker.py` removed from workers layout

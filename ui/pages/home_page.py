@@ -220,6 +220,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         # ── Freshness strip � always visible above scroll area ────────────────
         self._freshness_strip = FreshnessStrip()
         self._freshness_strip.rescan_requested.connect(self.rescan_requested)
+        self._freshness_strip.navigate_to.connect(self.navigate_to)
         outer.addWidget(self._freshness_strip)
 
         scroll = QScrollArea()

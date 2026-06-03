@@ -118,6 +118,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
     live_challenge_detected = pyqtSignal(object)
     logging_active_changed  = pyqtSignal(bool)
     navigate_to             = pyqtSignal(str)
+    start_logger_requested  = pyqtSignal()    # CTA on empty state
 
     _HEADERS = ["Time", "Source", "Host", "Event", "Detail", "Status"]
 
@@ -365,7 +366,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         EmptyStateOverlay(
             self._table, "≡",
             "No log entries yet",
-            "Entries appear here as network events arrive. Enable sources above.",
+            "Sources are enabled — entries will appear as events arrive.",
         )
 
         # ALERT-4: inline alert correlation panel (hidden until triggered)
@@ -398,7 +399,32 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._alert_corr_rows_lay.setSpacing(2)
         _acp_lay.addLayout(self._alert_corr_rows_lay)
         card_lay.addWidget(self._alert_corr_panel)
-        inner_lay.addWidget(card, 1)
+
+        # Content stack: page 0 = empty state (no sources active),
+        #                page 1 = live card with table
+        from PyQt6.QtWidgets import QStackedWidget as _QSW
+        self._content_stack = _QSW()
+        from ui.widgets.empty_state_card import EmptyStateCard
+        _esc = EmptyStateCard(
+            "≡",
+            "No logs yet — start monitoring",
+            "The Network Logger records RTT, jitter and DNS every 30 seconds.",
+            "Leave it running for a few hours to see stability trends and spot outages.",
+            "Start Network Logger →",
+        )
+        _esc.clicked.connect(self.start_logger_requested)
+        self._content_stack.addWidget(_esc)   # page 0
+        self._content_stack.addWidget(card)   # page 1
+        # Check if any source is already enabled (persisted from prior session)
+        from PyQt6.QtCore import QSettings as _QS
+        _qs = _QS()
+        _sources_default_on = {"net", "syslog", "snmp"}
+        _any_on = any(
+            _qs.value(f"logging/{k}_enabled", k in _sources_default_on, type=bool)
+            for k in ("net", "modem", "mesh", "syslog", "snmp")
+        )
+        self._content_stack.setCurrentIndex(1 if _any_on else 0)
+        inner_lay.addWidget(self._content_stack, 1)
 
         scroll = QScrollArea()
         scroll.setWidget(inner)

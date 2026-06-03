@@ -332,6 +332,46 @@ class DiagnosisPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(10)
 
+        # Amber logger warning — shown when logger has never been started
+        self._logger_warn = QFrame()
+        self._logger_warn.setObjectName("loggerWarn")
+        self._logger_warn.setStyleSheet(
+            f"QFrame#loggerWarn {{ background:{AMBER}18; border:1px solid {AMBER}66;"
+            f" border-radius:3px; }}"
+        )
+        _lw_lay = QHBoxLayout(self._logger_warn)
+        _lw_lay.setContentsMargins(10, 6, 10, 6)
+        _lw_lay.setSpacing(8)
+        _lw_icon = QLabel("⚠")
+        _lw_icon.setStyleSheet(
+            f"font-size:13px; color:{AMBER}; background:transparent; border:none;"
+        )
+        _lw_text = QLabel(
+            "Network Logger has no data yet — some findings may be incomplete. "
+            "Start the logger and let it run for a few hours for the best results."
+        )
+        _lw_text.setWordWrap(True)
+        _lw_text.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _lw_dismiss = QPushButton("×")
+        _lw_dismiss.setFixedSize(18, 18)
+        _lw_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+        _lw_dismiss.clicked.connect(lambda: self._logger_warn.setVisible(False))
+        _lw_lay.addWidget(_lw_icon)
+        _lw_lay.addWidget(_lw_text, 1)
+        _lw_lay.addWidget(_lw_dismiss)
+        outer.addWidget(self._logger_warn)
+        # Show only if logger has never been started
+        from PyQt6.QtCore import QSettings as _QS2
+        _logger_started = _QS2().value("logger_started_once", False, type=bool)
+        self._logger_warn.setVisible(not _logger_started)
+
         # Verdict card
         self._verdict_card = QFrame()
         self._verdict_card.setObjectName("verdictCard")

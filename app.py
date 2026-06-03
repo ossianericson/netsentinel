@@ -369,7 +369,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.77")
+    app.setApplicationVersion("1.9.78")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -402,7 +402,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.77")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.78")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -627,6 +627,21 @@ def main():
     # Wire threat intel page → geo map threat overlay
     window._threat_intel_page.entries_updated.connect(
         window._geo_map_page.set_threat_entries
+    )
+
+    # Wire hardware plugin registration → home page getting-started card refresh
+    window._hardware_integration_page.plugin_page_added.connect(
+        window._home_page.on_hardware_added
+    )
+
+    # Wire log hub empty-state CTA → enable Network RTT source
+    window._log_hub_page.start_logger_requested.connect(
+        window._log_hub_page.show_network_log
+    )
+
+    # Wire home page freshness pill navigate_to → dashboard nav
+    window._home_page._freshness_strip.navigate_to.connect(
+        window._nav_rail_go_to
     )
 
     # Wire empty-state CTAs → full scan

@@ -40,6 +40,8 @@ class _PluginPageMixin:
     def _on_hw_detected(self, matches: list) -> None:
         if hasattr(self, "_hardware_integration_page"):
             self._hardware_integration_page.on_hardware_detected(matches)
+        if hasattr(self, "_home_page") and matches:
+            self._home_page.on_hw_detected(matches)
 
     def _plugin_gateway_map(self) -> dict:
         """Return {ip: plugin_name} for all bundled plugins. Cached per session."""

@@ -86,7 +86,8 @@ _SLIDES = [
         "body":  (
             "Every phone, TV, smart speaker and printer appears on your map in "
             "seconds. Rogue devices, open ports and weak credentials are flagged "
-            "the moment they appear."
+            "the moment they appear. Connect your router and modem to unlock real "
+            "device names and signal quality data."
         ),
     },
     {

@@ -909,6 +909,10 @@ class _LogSourcePanelMixin:
         self._style_toggle(btn, checked, color)
         self._sync_all_btn()
         self._apply_filter()
+        # Switch content stack: show card when any source is on, empty state when all off
+        if hasattr(self, "_content_stack"):
+            any_on = any(b.isChecked() for b in self._toggle_btns.values())
+            self._content_stack.setCurrentIndex(1 if any_on else 0)
 
     def _on_all_toggled(self) -> None:
         for key, btn in self._toggle_btns.items():

@@ -909,3 +909,19 @@ class _HomeDataMixin:
             parent=self,
         )
         dlg.exec()
+
+    def on_hardware_added(self, path: str = "", label: str = "") -> None:
+        """Called when a hardware plugin is successfully registered."""
+        card = getattr(self, "_setup_card_top", None)
+        if card and hasattr(card, "refresh_checklist"):
+            card.refresh_checklist(self._device_count)
+
+    def on_hw_detected(self, matches: list) -> None:
+        """Called when hw_detect_worker finds compatible hardware on the network."""
+        card = getattr(self, "_setup_card_top", None)
+        if card is None or not hasattr(card, "notify_hw_detected"):
+            return
+        for match in matches:
+            hw_type = match.get("type", "") if isinstance(match, dict) else ""
+            if hw_type:
+                card.notify_hw_detected(hw_type)

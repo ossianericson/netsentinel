@@ -30,6 +30,7 @@ class FreshnessStrip(QFrame):
     """Top-of-page strip: last-scan timestamp, monitor status pills, scan progress."""
 
     rescan_requested = pyqtSignal()
+    navigate_to      = pyqtSignal(str)   # emitted when an inactive pill is clicked
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -52,11 +53,23 @@ class FreshnessStrip(QFrame):
         _sep.setStyleSheet(f"font-size:11px; color:{BORDER}; background:transparent; border:none;")
         row.addWidget(_sep)
 
+        # Pills are QPushButton (flat) so they support tooltips and click events
         self._fs_pill_arp   = self._make_fs_pill("ARP")
         self._fs_pill_dhcp  = self._make_fs_pill("DHCP")
         self._fs_pill_storm = self._make_fs_pill("Storm")
         self._fs_pill_log   = self._make_fs_pill("Logger")
-        for pill in (self._fs_pill_arp, self._fs_pill_dhcp, self._fs_pill_storm, self._fs_pill_log):
+        _pill_nav = {
+            self._fs_pill_arp:   "ARP Spoof Watch",
+            self._fs_pill_dhcp:  "DHCP Leases",
+            self._fs_pill_storm: "Broadcast Storm",
+            self._fs_pill_log:   "Log Hub",
+        }
+        self._fs_pill_active: dict = {p: False for p in _pill_nav}
+        for pill, nav_label in _pill_nav.items():
+            _nav = nav_label
+            pill.clicked.connect(
+                lambda _=False, p=pill, n=_nav: self._on_pill_clicked(p, n)
+            )
             row.addWidget(pill)
 
         _sep2 = QLabel("|")
@@ -102,12 +115,17 @@ class FreshnessStrip(QFrame):
                 pass
 
     @staticmethod
-    def _make_fs_pill(label: str) -> QLabel:
-        lbl = QLabel(f"○ {label}")
-        lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+    def _make_fs_pill(label: str) -> QPushButton:
+        btn = QPushButton(f"○ {label}")
+        btn.setFlat(True)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet(
+            f"QPushButton {{ font-size:10px; color:{TEXT_MUTED}; background:transparent;"
+            f" border:none; padding:0 2px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
         )
-        return lbl
+        return btn
 
     @staticmethod
     def _fmt_age(dt: datetime.datetime) -> str:
@@ -123,19 +141,46 @@ class FreshnessStrip(QFrame):
         d = secs // 86400
         return f"{d} day{'s' if d != 1 else ''} ago"
 
+    def _on_pill_clicked(self, pill: QPushButton, nav_label: str) -> None:
+        if not self._fs_pill_active.get(pill, True):
+            self.navigate_to.emit(nav_label)
+
     def update_freshness(self, arp: bool = False, dhcp: bool = False,
                           storm: bool = False, logger: bool = False) -> None:
-        def _set_pill(pill: QLabel, active: bool, name: str) -> None:
+        _PILL_OFF_TIPS = {
+            "ARP":    "ARP Spoof Watch is OFF — click to enable real-time spoofing detection.",
+            "DHCP":   "DHCP Rogue detection is OFF — click to go to the DHCP page.",
+            "Storm":  "Broadcast Storm monitor is OFF — click to go to the Storm page.",
+            "Logger": "Network Logger is OFF — click to start recording RTT and DNS every 30 s.",
+        }
+        _PILL_ON_TIPS = {
+            "ARP":    "ARP Spoof Watch is ON — detecting address-spoofing attacks in real time.",
+            "DHCP":   "DHCP Rogue detection is ON — watching for rogue DHCP servers.",
+            "Storm":  "Broadcast Storm monitor is ON — watching for packet storms.",
+            "Logger": "Network Logger is ON — recording RTT and DNS every 30 s.",
+        }
+
+        def _set_pill(pill: QPushButton, active: bool, name: str) -> None:
+            self._fs_pill_active[pill] = active
             if active:
                 pill.setText(f"● {name}")
                 pill.setStyleSheet(
-                    f"font-size:10px; color:{GREEN}; background:transparent; border:none;"
+                    f"QPushButton {{ font-size:10px; color:{GREEN}; background:transparent;"
+                    f" border:none; padding:0 2px; }}"
+                    f"QPushButton:hover {{ color:{GREEN}; background:transparent; }}"
+                    f"QPushButton:pressed {{ color:{GREEN}; background:transparent; }}"
                 )
+                pill.setToolTip(_PILL_ON_TIPS.get(name, ""))
             else:
                 pill.setText(f"○ {name}")
                 pill.setStyleSheet(
-                    f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                    f"QPushButton {{ font-size:10px; color:{TEXT_MUTED}; background:transparent;"
+                    f" border:none; padding:0 2px; }}"
+                    f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
                 )
+                pill.setToolTip(_PILL_OFF_TIPS.get(name, ""))
+
         _set_pill(self._fs_pill_arp,   arp,    "ARP")
         _set_pill(self._fs_pill_dhcp,  dhcp,   "DHCP")
         _set_pill(self._fs_pill_storm, storm,  "Storm")
@@ -237,39 +282,37 @@ class GettingStartedCard(QFrame):
         zte_path  = _bundled_plugin_path("zte_plugin.py")
         deco_path = _bundled_plugin_path("deco_plugin.py")
 
+        # Step order: scan first (gives data), then hardware (enriches data), then grade/arp/logger
         _STEPS = [
-            ("hw_zte",  "Connect 5G Modem",       "ZTE MC889 — signal data in every speed test",  zte_path,  None),
-            ("hw_deco", "Connect Mesh Router",     "Deco XE75 — real hostnames in Devices & Map", deco_path, None),
-            ("scan",    "Run your first scan",     "Discover all devices on your network",              None,     "Devices"),
-            ("grade",   "Run a Network Grade",     "Score your network across 8 dimensions",            None,     "Network Grade"),
-            ("arp",     "Turn on ARP Spoof Watch", "Detect address spoofing in real time",               None,     "ARP Spoof Watch"),
+            ("scan",    "Run your first scan",
+             "Discover all devices on your network",
+             None, "Devices"),
+            ("hw_deco", "Connect your router",
+             "Get real device names, signal strength, and your full network map",
+             deco_path, None),
+            ("hw_zte",  "Connect your modem",
+             "See signal quality in every speed test — critical for ISP accountability",
+             zte_path, None),
+            ("grade",   "Run a Network Grade",
+             "Score your network across 8 dimensions",
+             None, "Network Grade"),
+            ("arp",     "Turn on ARP Spoof Watch",
+             "Detect address spoofing in real time",
+             None, "ARP Spoof Watch"),
+            ("logger",  "Start the Network Logger",
+             "Records RTT and DNS every 30 s — leave it on for daily insights",
+             None, "Log Hub"),
         ]
 
-        self._setup_check_lbls: dict[str, QLabel]       = {}
-        self._setup_step_rows:  dict[str, QWidget]      = {}
-        self._setup_step_btns:  dict[str, QPushButton]  = {}
-        _hw_keys = {"hw_zte", "hw_deco"}
-        prev_section = None
+        self._setup_check_lbls:   dict[str, QLabel]       = {}
+        self._setup_step_rows:    dict[str, QWidget]      = {}
+        self._setup_step_btns:    dict[str, QPushButton]  = {}
+        self._setup_title_lbls:   dict[str, QLabel]       = {}
+        self._setup_plugin_paths: dict[str, str]          = {}
 
         for key, title, subtitle, plugin_path, nav_target in _STEPS:
-            section = "hw" if key in _hw_keys else "core"
-            if section != prev_section:
-                if prev_section == "hw":
-                    sep = QFrame()
-                    sep.setFrameShape(QFrame.Shape.HLine)
-                    sep.setStyleSheet(f"border:none; border-top:1px solid {BORDER};")
-                    sep.setFixedHeight(1)
-                    body_lay.addSpacing(4)
-                    body_lay.addWidget(sep)
-                    body_lay.addSpacing(4)
-                sec_lbl = QLabel("HARDWARE CONNECTIONS" if section == "hw" else "CORE SETUP")
-                sec_lbl.setStyleSheet(
-                    f"font-size:9px; font-weight:600; color:{TEXT_MUTED};"
-                    " background:transparent; border:none; letter-spacing:0.8px;"
-                    " padding-bottom:2px;"
-                )
-                body_lay.addWidget(sec_lbl)
-                prev_section = section
+            if plugin_path:
+                self._setup_plugin_paths[key] = plugin_path
 
             row = QWidget()
             row.setObjectName(f"setupRow_{key}")
@@ -292,6 +335,7 @@ class GettingStartedCard(QFrame):
                 f"font-size:11px; font-weight:500; color:{TEXT_PRIMARY};"
                 " background:transparent; border:none;"
             )
+            self._setup_title_lbls[key] = title_lbl
             sub_lbl = QLabel(subtitle)
             sub_lbl.setStyleSheet(
                 f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
@@ -349,17 +393,19 @@ class GettingStartedCard(QFrame):
         import json as _json
         qs = QSettings("NetSentinel", "NetSentinel")
         try:
-            imported = set(_json.loads(qs.value("hardware/custom_scripts", "[]") or "[]"))
+            raw = qs.value("hardware/custom_scripts", "[]") or "[]"
+            imported = set(_json.loads(raw))
         except Exception:
             imported = set()
         zte_path  = _bundled_plugin_path("zte_plugin.py")
         deco_path = _bundled_plugin_path("deco_plugin.py")
         return {
-            "hw_zte":  zte_path  in imported,
-            "hw_deco": deco_path in imported,
             "scan":    device_count > 0,
+            "hw_deco": deco_path in imported,
+            "hw_zte":  zte_path  in imported,
             "grade":   qs.value("grade/last_run", False, type=bool),
             "arp":     qs.value("home/setup/arp_started", False, type=bool),
+            "logger":  qs.value("logger_started_once", False, type=bool),
         }
 
     def refresh_checklist(self, device_count: int = 0) -> None:
@@ -407,6 +453,26 @@ class GettingStartedCard(QFrame):
                 f"font-size:10px; font-weight:700; color:{ACCENT};"
                 " background:transparent; border:none; letter-spacing:1.5px;"
             )
+
+    def notify_hw_detected(self, hw_type: str) -> None:
+        """Mark a hardware step as 'detected nearby' with amber indicator."""
+        from ui.styles import AMBER
+        key_map = {"modem": "hw_zte", "router": "hw_deco"}
+        key = key_map.get(hw_type)
+        if not key:
+            return
+        states = self._checklist_states()
+        if states.get(key):
+            return  # already added — don't downgrade to detected
+        chk = self._setup_check_lbls.get(key)
+        btn = self._setup_step_btns.get(key)
+        if chk:
+            chk.setText("◉")
+            chk.setStyleSheet(
+                f"font-size:13px; color:{AMBER}; background:transparent; border:none;"
+            )
+        if btn and btn.isEnabled():
+            btn.setText("Add it now →")
 
 
 # ── _GradeBreakdownDialog ─────────────────────────────────────────────────────
