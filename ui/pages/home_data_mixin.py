@@ -827,6 +827,7 @@ class _HomeDataMixin:
         joined_count: int,
         outage_count: int,
         last_visit_str: str,
+        logger_summary: str = "",
     ) -> None:
         """Show or hide the 'Since you were last here' banner."""
         parts = []
@@ -836,6 +837,8 @@ class _HomeDataMixin:
         if outage_count > 0:
             s = "s" if outage_count != 1 else ""
             parts.append(f"{outage_count} outage{s} recorded")
+        if logger_summary:
+            parts.append(logger_summary)
         if not parts:
             self._last_visit_card.setVisible(False)
             return
@@ -903,6 +906,21 @@ class _HomeDataMixin:
             parent=self,
         )
         dlg.exec()
+
+    def on_live_challenge(self, scenario) -> None:
+        """Show persistent amber banner when Log Hub detects a network anomaly."""
+        if not hasattr(self, "_live_challenge_banner"):
+            return
+        import datetime as _dt
+        time_str = _dt.datetime.now().strftime("%H:%M")
+        title = (
+            getattr(scenario, "title", "Network anomaly detected")
+            if scenario else "Network anomaly detected"
+        )
+        self._lc_text.setText(
+            f"Connectivity issue detected at {time_str} — {title.lower()}"
+        )
+        self._live_challenge_banner.setVisible(True)
 
     def on_hardware_added(self, path: str = "", label: str = "") -> None:
         """Called when a hardware plugin is successfully registered."""

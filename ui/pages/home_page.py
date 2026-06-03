@@ -603,6 +603,53 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _stats_hbox.addWidget(self._this_week_card, 2)
         lay.addLayout(_stats_hbox)
 
+        # ── Live challenge banner (hidden until Log Hub detects an anomaly) ───
+        self._live_challenge_banner = QFrame()
+        self._live_challenge_banner.setObjectName("liveChallengeBar")
+        self._live_challenge_banner.setStyleSheet(
+            f"QFrame#liveChallengeBar {{ background:{AMBER}22; border:1px solid {AMBER}88;"
+            f" border-left:3px solid {AMBER}; border-radius:{CARD_RADIUS}; }}"
+        )
+        self._live_challenge_banner.setVisible(False)
+        _lc_lay = QHBoxLayout(self._live_challenge_banner)
+        _lc_lay.setContentsMargins(12, 8, 8, 8)
+        _lc_lay.setSpacing(8)
+        _lc_icon = QLabel("▲")
+        _lc_icon.setFixedWidth(16)
+        _lc_icon.setStyleSheet(
+            f"font-size:11px; color:{AMBER}; background:transparent; border:none;"
+        )
+        self._lc_text = QLabel("")
+        self._lc_text.setWordWrap(True)
+        self._lc_text.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _lc_diagnose = QPushButton("Diagnose now →")
+        _lc_diagnose.setFixedHeight(24)
+        _lc_diagnose.setCursor(Qt.CursorShape.PointingHandCursor)
+        _lc_diagnose.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{AMBER}; font-size:11px;"
+            f" border:1px solid {AMBER}88; border-radius:3px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{AMBER}22; color:{AMBER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
+        )
+        _lc_dismiss = QPushButton("×")
+        _lc_dismiss.setFixedSize(20, 20)
+        _lc_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _lc_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+        )
+        _lc_diagnose.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
+        _lc_dismiss.clicked.connect(lambda: self._live_challenge_banner.setVisible(False))
+        _lc_lay.addWidget(_lc_icon)
+        _lc_lay.addWidget(self._lc_text, 1)
+        _lc_lay.addWidget(_lc_diagnose)
+        _lc_lay.addWidget(_lc_dismiss)
+        lay.addWidget(self._live_challenge_banner)
+
         # ── Hero card ─────────────────────────────────────────────────────────
         hero = QFrame()
         hero.setObjectName("heroCard")

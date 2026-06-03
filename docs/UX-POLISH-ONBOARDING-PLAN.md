@@ -29,7 +29,7 @@ Three specific user-reported problems drive this plan:
 | ✅ **H1** | Guided First-Run Tour | L | `ui/guided_tour.py` (new), `ui/tabs.py`, `ui/scan_wiring.py`, `tests/test_guided_tour.py` — completed 2026-06-03 |
 | ✅ **H2** | Hardware Integration State & Prominence | M | `ui/widgets/home_session_widgets.py`, `ui/pages/home_data_mixin.py`, `ui/plugin_page_mixin.py`, `ui/first_run_dialog.py`, `app.py`, `tests/test_getting_started_card.py` — completed 2026-06-03 |
 | ✅ **H3** | Network Logger as First-Class Citizen | M | `ui/pages/log_hub_page.py`, `ui/pages/log_source_panel.py`, `ui/pages/diagnosis_page.py`, `ui/widgets/home_session_widgets.py`, `app.py`, `tests/test_log_hub_empty_state.py` — completed 2026-06-03 |
-| **H4** | Proactive Actionable Insights | M | `ui/pages/home_page.py`, `ui/pages/home_data_mixin.py`, `ui/pages/home_suggestions.py` |
+| ✅ **H4** | Proactive Actionable Insights | M | `ui/pages/home_page.py`, `ui/pages/home_data_mixin.py`, `ui/pages/home_suggestions.py`, `ui/tabs_logger.py`, `tests/test_home_suggestions.py` — completed 2026-06-03 |
 | ✅ **H5** | Diagnosis Fix + Verify Loop | S | `ui/pages/diagnosis_page.py`, `workers/diagnosis_worker.py`, `ui/pages/home_data_mixin.py`, `ui/pages/settings_appearance.py`, `tests/test_diagnosis_page.py` — completed 2026-06-03 |
 | **H6** | Empty State Consistency Audit | M | ~10 page files with passive empty states |
 | **H7** | Contextual Coach Marks | M | `ui/widgets/coach_mark.py`, 5–6 page files |

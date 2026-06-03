@@ -424,15 +424,10 @@ class _LoggerTabMixin:
 
     @pyqtSlot(object)
     def _on_live_challenge(self, scenario) -> None:
-        """Show an amber suggestion card on Home when a live lab scenario is ready."""
+        """Show amber banner on Home and store scenario for Lab Mode injection."""
         self._pending_live_scenario = scenario
         if hasattr(self, "_home_page"):
-            self._home_page.set_suggestions([{
-                "text": f"Something just happened — {scenario.title.lower()}",
-                "action_label": "Investigate →",
-                "target": "__live__",
-                "priority": "medium",
-            }])
+            self._home_page.on_live_challenge(scenario)
 
     def _on_investigate_live(self) -> None:
         """Navigate to Lab Mode and inject the pending live challenge scenario."""
@@ -539,6 +534,7 @@ class _LoggerTabMixin:
             if high > 0:
                 s = "s" if high != 1 else ""
                 suggestions.append({
+                    "action_key": "high_risk_check",
                     "text": f"{high} high-risk device{s} found — review security findings",
                     "action_label": "View Overview →",
                     "target": "Overview",
@@ -548,6 +544,7 @@ class _LoggerTabMixin:
         # Stability logger not running
         if not (self._logger_worker and self._logger_worker.isRunning()):
             suggestions.append({
+                "action_key": "start_logger",
                 "text": "Network stability is not being monitored — start logging to detect outages",
                 "action_label": "Start Monitoring →",
                 "target": None,
@@ -560,6 +557,7 @@ class _LoggerTabMixin:
                 speed_rows = self._store.query_speed_test_history(hours=168, limit=1)
                 if not speed_rows:
                     suggestions.append({
+                        "action_key": "run_speed_test",
                         "text": "No speed test in the last 7 days — check your internet performance",
                         "action_label": "Run Speed Test →",
                         "target": "Speed Test",
@@ -576,6 +574,7 @@ class _LoggerTabMixin:
                 if n > 0:
                     s = "s" if n != 1 else ""
                     suggestions.append({
+                        "action_key": "view_open_cves",
                         "text": f"{n} open CVE{s} need remediation",
                         "action_label": "View CVEs →",
                         "target": "CVE Tracker",
@@ -590,10 +589,24 @@ class _LoggerTabMixin:
             grade = getattr(bm, "overall_grade", None)
             if grade in ("C", "D", "F"):
                 suggestions.append({
+                    "action_key": "fix_network_grade",
                     "text": f"Your network grade is {grade} — run a health check for recommendations",
                     "action_label": "View Overview →",
                     "target": "Overview",
                     "priority": "medium",
+                })
+
+        # Fallback: always show ≥1 entry after first scan when no other suggestions
+        if not suggestions:
+            from PyQt6.QtCore import QSettings as _QS
+            _qs = _QS("NetSentinel", "NetSentinel")
+            if not _qs.value("logger_started_once", False, type=bool):
+                suggestions.append({
+                    "action_key": "start_logger_fallback",
+                    "text": "Enable the Network Logger to track stability over time",
+                    "action_label": "Start →",
+                    "target": "Log Hub",
+                    "priority": "low",
                 })
 
         self._home_page.set_suggestions(suggestions)
@@ -639,9 +652,57 @@ class _LoggerTabMixin:
             )
             outage_count = len(outage_events)
 
-            self._home_page.set_last_visit_summary(joined_count, outage_count, last_str)
+            # Enrich with logger RTT data if available
+            logger_summary = self._build_logger_summary(hours_since)
+
+            self._home_page.set_last_visit_summary(
+                joined_count, outage_count, last_str, logger_summary
+            )
         except Exception:
             pass
+
+    def _build_logger_summary(self, hours_since: float) -> str:
+        """Return a one-line logger insight string for the 'since you were away' banner."""
+        try:
+            hosts = self._store.query_all_rtt_hosts(hours=hours_since)
+            if not hosts:
+                return ""
+            host = hosts[0]
+            points = self._store.query_rtt_history(host=host, hours=hours_since)
+            if not points:
+                return ""
+
+            total = len(points)
+            fails = sum(1 for p in points if p.loss_pct is not None and p.loss_pct >= 100)
+
+            # Check for ≥3 consecutive complete failures
+            consecutive = 0
+            max_consecutive = 0
+            for p in points:
+                if p.loss_pct is not None and p.loss_pct >= 100:
+                    consecutive += 1
+                    max_consecutive = max(max_consecutive, consecutive)
+                else:
+                    consecutive = 0
+            if max_consecutive >= 3:
+                return f"{fails} of {total} pings failed while away"
+
+            # Check for RTT regression vs baseline (first quarter vs last quarter)
+            valid_rtts = [p.rtt_ms for p in points if p.rtt_ms is not None and p.rtt_ms > 0]
+            if len(valid_rtts) >= 8:
+                mid = len(valid_rtts) // 4
+                baseline_avg = sum(valid_rtts[:mid]) / mid
+                recent_avg = sum(valid_rtts[-mid:]) / mid
+                if baseline_avg > 0 and recent_avg > baseline_avg * 1.5:
+                    return (
+                        f"RTT higher than usual "
+                        f"({recent_avg:.0f} ms vs {baseline_avg:.0f} ms baseline)"
+                    )
+
+            # All clear
+            return f"{total} pings logged, no issues"
+        except Exception:
+            return ""
 
     def _maybe_send_weekly_digest(self) -> None:
         """Show a tray digest notification if 7+ days since the last one."""
