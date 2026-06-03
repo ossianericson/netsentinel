@@ -322,6 +322,17 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.83
+**Added**
+- `_HelpPopover` in `ui/widgets/page_header.py` now shows a three-section layout: "What it does" (from `_PAGE_HELP`), up to two usage tips from the page's `hidden` tips list, and global keyboard shortcuts (Ctrl+K, Ctrl+F, Esc) — wired to every page header via `_proactive_wire_page_help_btns()`
+
+**Changed**
+- `_wire_page_help_btn()` in `ui/nav/builder.py` now passes `hidden` tips to `set_help()` so the ? popover shows contextual tips per page
+- `ui/help_tab.py` "What's New" section updated to reflect H9 changes
+
+**Removed**
+- Quick Tips card (`_tips_card`) removed from `HomePage` — keyboard shortcut hints are now surfaced via the ? button on every page header; `home/tips_dismissed` QSettings key no longer written
+
 ### v1.9.82
 **Added**
 - `_recurring_intro_card` on `HomePage` — one-time "Home page upgraded" banner shown when recurring mode activates for the first time (5th scan), explaining the layout change; dismissed with × and persisted via `home/recurring_mode_intro_shown`

@@ -126,12 +126,6 @@ class _HomeDataMixin:
             self._dashboard_strip.setVisible(True)
         else:
             self._dashboard_strip.setVisible(False)
-        tips_dismissed = qs.value("home/tips_dismissed", False, type=bool)
-        if not tips_dismissed:
-            self._tip_row_rest_api.setVisible(not api_enabled)
-            self._tips_card.setVisible(True)
-        else:
-            self._tips_card.setVisible(False)
         self.refresh_checklist()
         self.refresh_diag_summary()
         self._check_recurring_mode()
@@ -174,10 +168,6 @@ class _HomeDataMixin:
         """Delegate to the GettingStartedCard widget."""
         if hasattr(self, "_setup_card_top"):
             self._setup_card_top.refresh_checklist(self._device_count)
-
-    def _dismiss_tips(self) -> None:
-        QSettings("NetSentinel", "NetSentinel").setValue("home/tips_dismissed", True)
-        self._tips_card.setVisible(False)
 
     def _dismiss_post_scan_sheet(self) -> None:
         self._post_scan_sheet.setVisible(False)
@@ -234,7 +224,6 @@ class _HomeDataMixin:
             )
             self._suggestions_sec.setVisible(False)
             self._suggestions_card.setVisible(False)
-            self._tips_card.setVisible(False)
 
     def _check_recurring_mode(self) -> None:
         """Activate recurring layout if setup is complete and ≥5 scans recorded."""

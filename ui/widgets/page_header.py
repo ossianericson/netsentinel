@@ -93,12 +93,12 @@ class PageHeaderBar(QWidget):
         if key in self._chip_keys:
             self._chip_keys[key].setText(text)
 
-    def set_help(self, title: str, body: str) -> None:
+    def set_help(self, title: str, body: str, tips: list | None = None) -> None:
         """Add a ? button that shows a floating help panel on click."""
         if hasattr(self, "_help_btn"):
             return  # already set
 
-        self._help_popover = _HelpPopover(title, body)
+        self._help_popover = _HelpPopover(title, body, tips=tips)
 
         self._help_btn = QPushButton("?")
         self._help_btn.setFixedSize(22, 22)
@@ -158,19 +158,32 @@ class PageHeaderBar(QWidget):
             )
 
 
-class _HelpPopover(QFrame):
-    """Floating 280px help panel shown below the ? button."""
+_GLOBAL_SHORTCUTS = [
+    ("Ctrl+K", "Command palette"),
+    ("Ctrl+F", "Focus sidebar search"),
+    ("Esc", "Close flyout"),
+]
 
-    def __init__(self, title: str, body: str, parent: QWidget | None = None) -> None:
+
+class _HelpPopover(QFrame):
+    """Floating 300px help panel shown below the ? button."""
+
+    def __init__(
+        self,
+        title: str,
+        body: str,
+        tips: list | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
-        self.setFixedWidth(280)
+        self.setFixedWidth(300)
         self.setStyleSheet(
             f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
             f" border-radius:4px; }}"
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 12)
-        lay.setSpacing(6)
+        lay.setSpacing(8)
 
         title_lbl = QLabel(title)
         title_lbl.setWordWrap(True)
@@ -180,12 +193,60 @@ class _HelpPopover(QFrame):
         )
         lay.addWidget(title_lbl)
 
+        def _section_label(text: str) -> QLabel:
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+                f" background:transparent; border:none; letter-spacing:0.5px;"
+            )
+            return lbl
+
+        lay.addWidget(_section_label("WHAT IT DOES"))
         body_lbl = QLabel(body)
         body_lbl.setWordWrap(True)
         body_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
         )
         lay.addWidget(body_lbl)
+
+        if tips:
+            sep = QFrame()
+            sep.setFrameShape(QFrame.Shape.HLine)
+            sep.setStyleSheet(f"color:{BORDER}; background:{BORDER};")
+            sep.setFixedHeight(1)
+            lay.addWidget(sep)
+            lay.addWidget(_section_label("TIPS"))
+            for tip in tips[:2]:
+                tip_lbl = QLabel(f"▸  {tip}")
+                tip_lbl.setWordWrap(True)
+                tip_lbl.setStyleSheet(
+                    f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+                )
+                lay.addWidget(tip_lbl)
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet(f"color:{BORDER}; background:{BORDER};")
+        sep2.setFixedHeight(1)
+        lay.addWidget(sep2)
+        lay.addWidget(_section_label("SHORTCUTS"))
+        for key, desc in _GLOBAL_SHORTCUTS:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(6)
+            key_lbl = QLabel(key)
+            key_lbl.setFixedWidth(56)
+            key_lbl.setStyleSheet(
+                f"font-size:10px; font-weight:bold; color:{ACCENT};"
+                f" background:transparent; border:none; font-family:Consolas,monospace;"
+            )
+            desc_lbl = QLabel(desc)
+            desc_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            row.addWidget(key_lbl)
+            row.addWidget(desc_lbl, 1)
+            lay.addLayout(row)
 
     def show_at(self, global_pos: QPoint) -> None:
         self.adjustSize()

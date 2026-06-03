@@ -34,7 +34,7 @@ Three specific user-reported problems drive this plan:
 | ✅ **H6** | Empty State Consistency Audit | M | `ui/pages/overview_page.py`, `snmp_trap_page.py`, `wifi_monitor_page.py`, `geo_map_page.py`, `timeline_page.py`, `speed_test_page.py`, `trend_page.py`, `app.py` — completed 2026-06-03 |
 | ✅ **H7** | Contextual Coach Marks | M | `ui/pages/log_hub_page.py`, `ui/pages/diagnosis_page.py`, `ui/pages/home_data_mixin.py`, `ui/pages/home_page.py`, `ui/pages/inventory_page.py`, `tests/test_coach_marks.py` — completed 2026-06-03 |
 | ✅ **H8** | Home Page Recurring Mode Polish | S | `ui/pages/home_data_mixin.py`, `ui/widgets/home_session_widgets.py`, `ui/pages/home_page.py`, `tests/test_getting_started_card.py` — completed 2026-06-03 |
-| **H9** | Page-Level Help & Keyboard Shortcuts | S | `ui/widgets/page_header.py`, `ui/help_tab.py`, `ui/pages/settings_page.py` |
+| ✅ **H9** | Page-Level Help & Keyboard Shortcuts | S | `ui/widgets/page_header.py`, `ui/nav/builder.py`, `ui/pages/home_page.py`, `ui/pages/home_data_mixin.py`, `ui/help_tab.py` — completed 2026-06-03 |
 | **H10** | Terminology, Tone & Milestone Cards | S | String audit across all `ui/` files |
 
 Effort: S = 1–2 days · M = 3–5 days · L = 5–8 days

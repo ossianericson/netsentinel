@@ -723,7 +723,8 @@ class _NavBuilderMixin:
             return
         what = info.get("what", "")
         if what:
-            hdr.set_help(label, what)
+            tips = info.get("hidden") or []
+            hdr.set_help(label, what, tips=tips)
 
     def _proactive_wire_page_help_btns(self) -> None:
         """Wire ? buttons on all registered pages that have a _PAGE_HELP entry.
