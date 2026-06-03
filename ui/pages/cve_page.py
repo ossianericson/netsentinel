@@ -283,7 +283,7 @@ class CvePage(QWidget):
         self._search_box.setPlaceholderText("Filter by CVE ID, service, host…")
         self._search_box.setFixedWidth(240)
         self._search_box.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px;"
+            f"QLineEdit {{ font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 6px; }}"
             f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
         )
         self._search_timer = QTimer(self)
