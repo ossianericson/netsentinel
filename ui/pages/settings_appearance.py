@@ -26,9 +26,6 @@ from ui.styles import (
     DEEP_ORANGE, GREEN, NAV_BAR, RED, TEAL, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, WHITE,
 )
-from ui.pages.settings_cards import _card
-
-
 class _ThemeSwatch(QFrame):
     """Clickable mini colour-palette preview card for one theme."""
 
@@ -118,6 +115,7 @@ class _SettingsAppearanceMixin:
     """
 
     def _build_appearance_card(self) -> QFrame:
+        from ui.pages.settings_cards import _card  # lazy import breaks circular dependency
         card, bl = _card("Appearance — Colour Theme")
         desc = QLabel(
             "Choose a colour theme — switches instantly, no restart needed."
@@ -243,6 +241,7 @@ class _SettingsAppearanceMixin:
     # ── Display preferences ───────────────────────────────────────────────────
 
     def _build_display_card(self) -> QFrame:
+        from ui.pages.settings_cards import _card  # lazy import breaks circular dependency
         card, bl = _card("Display Preferences")
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_compact = QCheckBox("Compact table rows (24 px — more devices visible)")

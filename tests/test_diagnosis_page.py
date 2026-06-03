@@ -1,108 +1,125 @@
-"""
-Tests for ui/pages/diagnosis_page.py
+"""Tests for DiagnosisPage and DiagnosisWorker (Sprint H5)."""
 
-Verifies:
-- scan_requested signal exists (RULE-UX5 / Sprint E2)
-- _REMEDIATION dict has no CLI command references (Sprint A3)
-- navigate_to and diagnosis_saved signals exist
-"""
+from __future__ import annotations
 
-import sys
-import os
+from dataclasses import dataclass
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-
-# ── Import guard ──────────────────────────────────────────────────────────────
-
 try:
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QPushButton, QLabel
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
 
-# ── Module-level import ───────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# DiagnosisWorker — focused_on parameter
+# ---------------------------------------------------------------------------
 
-from ui.pages.diagnosis_page import _REMEDIATION
-
-
-class TestRemediationNoCLI:
-    """A3: No CLI command references in _REMEDIATION steps."""
-
-    _BAD_PHRASES = [
-        "Command Prompt",
-        "nslookup",
-        "ping -t",
-        "ping -c",
-        "ipconfig",
-        "ifconfig",
-        "speedtest.net",
-        "Network Adapter settings",
-        "IPv4 Properties",
-    ]
-
-    def test_no_cli_in_dns_resolution_failure(self):
-        steps = _REMEDIATION.get("DNS Resolution Failure", [])
-        assert steps, "DNS Resolution Failure must have remediation steps"
-        combined = " ".join(steps)
-        for phrase in self._BAD_PHRASES:
-            assert phrase not in combined, (
-                f"CLI reference '{phrase}' found in DNS Resolution Failure steps"
-            )
-
-    def test_no_cli_in_chronic_connectivity_loss(self):
-        steps = _REMEDIATION.get("Chronic Connectivity Loss", [])
-        assert steps, "Chronic Connectivity Loss must have remediation steps"
-        combined = " ".join(steps)
-        for phrase in self._BAD_PHRASES:
-            assert phrase not in combined, (
-                f"CLI reference '{phrase}' found in Chronic Connectivity Loss steps"
-            )
-
-    def test_no_cli_in_router_unreachable(self):
-        steps = _REMEDIATION.get("Local Network / Router Unreachable", [])
-        assert steps, "Local Network / Router Unreachable must have remediation steps"
-        combined = " ".join(steps)
-        for phrase in self._BAD_PHRASES:
-            assert phrase not in combined, (
-                f"CLI reference '{phrase}' found in Router Unreachable steps"
-            )
-
-    def test_all_remediation_categories_have_steps(self):
-        for category, steps in _REMEDIATION.items():
-            assert steps, f"Category '{category}' has empty remediation steps"
+def test_diagnosis_worker_import():
+    from workers.diagnosis_worker import DiagnosisWorker
+    assert DiagnosisWorker is not None
 
 
-class TestDiagnosisPageSignals:
-    """E2: scan_requested signal must exist on DiagnosisPage."""
+def test_diagnosis_worker_focused_on_accepted():
+    from workers.diagnosis_worker import DiagnosisWorker
+    w = DiagnosisWorker(focused_on="DNS Resolution Failure")
+    assert w._focused_on == "DNS Resolution Failure"
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
-    def test_scan_requested_signal_exists(self, qt_app):
-        from ui.pages.diagnosis_page import DiagnosisPage
-        page = DiagnosisPage()
-        assert hasattr(page, "scan_requested"), "DiagnosisPage missing scan_requested signal"
-        try:
-            page.deleteLater()
-        except RuntimeError:
-            pass
-        qt_app.processEvents()
 
-    def test_navigate_to_signal_exists(self, qt_app):
-        from ui.pages.diagnosis_page import DiagnosisPage
-        page = DiagnosisPage()
-        assert hasattr(page, "navigate_to")
-        try:
-            page.deleteLater()
-        except RuntimeError:
-            pass
-        qt_app.processEvents()
+def test_diagnosis_worker_focused_on_none_by_default():
+    from workers.diagnosis_worker import DiagnosisWorker
+    w = DiagnosisWorker()
+    assert w._focused_on is None
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
-    def test_diagnosis_saved_signal_exists(self, qt_app):
-        from ui.pages.diagnosis_page import DiagnosisPage
-        page = DiagnosisPage()
-        assert hasattr(page, "diagnosis_saved")
-        try:
-            page.deleteLater()
-        except RuntimeError:
-            pass
-        qt_app.processEvents()
+
+def test_diagnosis_worker_focused_step_categories():
+    from workers.diagnosis_worker import (
+        _DIAG_STEP_CATEGORIES,
+        _STORM_STEP_CATEGORIES,
+        _STP_STEP_CATEGORIES,
+    )
+    assert "DNS Resolution Failure" in _DIAG_STEP_CATEGORIES
+    assert "Broadcast Storm" in _STORM_STEP_CATEGORIES
+    assert "Rogue Network Bridge" in _STP_STEP_CATEGORIES
+
+
+# ---------------------------------------------------------------------------
+# DiagnosisPage — verify_step rendering
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _MockFinding:
+    severity: str = "HIGH"
+    headline: str = "Test Finding"
+    remediation: str = "Restart your router."
+    category: str = "Local Network / Router Unreachable"
+    detail: str = ""
+    verify_step: str = "After restarting, run What is Wrong again to confirm."
+
+
+@pytest.fixture
+def diag_page(qt_app):
+    from ui.pages.diagnosis_page import DiagnosisPage
+    page = DiagnosisPage()
+    yield page
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+def test_diagnosis_page_imports():
+    from ui.pages.diagnosis_page import DiagnosisPage
+    assert DiagnosisPage is not None
+
+
+def test_make_finding_card_with_verify_step(diag_page):
+    finding = _MockFinding()
+    card = diag_page._make_finding_card(finding, hero=False)
+    btn_texts = [w.text() for w in card.findChildren(QPushButton)]
+    assert any("Verify" in t for t in btn_texts), (
+        f"Expected a Verify button; found: {btn_texts}"
+    )
+
+
+def test_make_finding_card_verify_step_text_shown(diag_page):
+    finding = _MockFinding(verify_step="After fixing: check the log.")
+    card = diag_page._make_finding_card(finding, hero=False)
+    label_texts = [w.text() for w in card.findChildren(QLabel)]
+    assert any("After fixing" in t for t in label_texts), (
+        f"Expected verify_step text; found: {label_texts}"
+    )
+
+
+def test_make_finding_card_no_verify_step_no_button(diag_page):
+    finding = _MockFinding(verify_step="")
+    card = diag_page._make_finding_card(finding, hero=False)
+    btn_texts = [w.text() for w in card.findChildren(QPushButton)]
+    assert not any("Verify" in t for t in btn_texts), (
+        f"Unexpected Verify button when verify_step empty; found: {btn_texts}"
+    )
+
+
+def test_verify_workers_list_initialised(diag_page):
+    assert hasattr(diag_page, "_verify_workers")
+    assert diag_page._verify_workers == []

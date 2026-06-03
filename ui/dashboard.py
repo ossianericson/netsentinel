@@ -830,8 +830,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("home/checklist_done", False)
         qs.setValue("home/scan_count", 0)
-        # Reset post-scan sheet so it fires again on the next scan
-        qs.setValue("home/post_scan_sheet_dismissed", False)
         self._nav_rail_go_to("Home")
         if hasattr(self, "_home_page"):
             self._home_page._recurring_mode = False

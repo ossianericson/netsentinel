@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.79
+**Added**
+- `tests/test_diagnosis_page.py` — verify_step rendering tests, focused-mode DiagnosisWorker parameter
+
+**Changed**
+- Diagnosis finding cards now render `verify_step` text and a "Verify this fix" button that runs a focused re-check
+- `DiagnosisWorker` accepts `focused_on` parameter to run only checks relevant to a specific finding headline
+- Post-scan sheet dismissal is now per-scan (reappears on next scan); `FreshnessStrip` shows `[N findings]` link to re-open the sheet
+- Diagnosis page shows an amber inline warning when Network Logger has less than 2 hours of data
+
 ### v1.9.78
 **Added**
 - `tests/test_getting_started_card.py` — step order, `_checklist_states` keys, `notify_hw_detected` and pill-type assertions

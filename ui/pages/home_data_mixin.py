@@ -165,9 +165,7 @@ class _HomeDataMixin:
 
     def _dismiss_post_scan_sheet(self) -> None:
         self._post_scan_sheet.setVisible(False)
-        QSettings("NetSentinel", "NetSentinel").setValue(
-            "home/post_scan_sheet_dismissed", True
-        )
+        # No permanent QSettings persistence — sheet re-shows on next scan
         all_off = not any(p.text().startswith("●") for p in (
             self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger
         ))
@@ -178,10 +176,6 @@ class _HomeDataMixin:
     def _maybe_show_post_scan_sheet(
         self, n_total: int, n_new: int, n_at_risk: int
     ) -> None:
-        if QSettings("NetSentinel", "NetSentinel").value(
-            "home/post_scan_sheet_dismissed", False, type=bool
-        ):
-            return
         n_recognized = n_total - n_new
         parts = [f"{n_total} device{'s' if n_total != 1 else ''} found"]
         if n_new:
@@ -736,7 +730,7 @@ class _HomeDataMixin:
 
             self._results_strip.setVisible(True)
 
-        if was_first_run and n_total > 0:
+        if n_total > 0:
             self._maybe_show_post_scan_sheet(n_total, n_new, n_at_risk)
         self.refresh_checklist()
         if n_total > 0:

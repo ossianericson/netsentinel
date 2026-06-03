@@ -161,13 +161,14 @@ class DiagnosisPage(QWidget):
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
-        self._store        = store
-        self._worker       = None
-        self._gateway_ip   = None
-        self._gateway_mac  = None
-        self._symptom      = ""   # set by symptom tile before _start()
+        self._store           = store
+        self._worker          = None
+        self._gateway_ip      = None
+        self._gateway_mac     = None
+        self._symptom         = ""   # set by symptom tile before _start()
         self._prev_finding_headlines: set[str] = set()
         self._last_findings: list = []
+        self._verify_workers: list = []  # keeps refs alive until verify completes
         self._setup_ui()
 
     def set_network_info(
@@ -626,7 +627,92 @@ class DiagnosisPage(QWidget):
             )
             lay.addWidget(cta_btn)
 
+        # "Verify this fix" — shows verify_step text + re-check button
+        verify_step = getattr(finding, "verify_step", "")
+        if verify_step:
+            sep = QFrame()
+            sep.setFrameShape(QFrame.Shape.HLine)
+            sep.setStyleSheet(f"color:{BORDER}; background:{BORDER}; border:none; max-height:1px;")
+            lay.addWidget(sep)
+
+            after_lbl = QLabel(f"After fixing: {verify_step}")
+            after_lbl.setWordWrap(True)
+            after_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+            lay.addWidget(after_lbl)
+
+            verify_row = QHBoxLayout()
+            verify_row.setSpacing(8)
+
+            verify_btn = QPushButton("▶  Verify this fix")
+            verify_btn.setFlat(True)
+            verify_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            verify_btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                f" border:none; padding:2px 0; text-align:left; }}"
+                f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            )
+
+            verify_status = QLabel("")
+            verify_status.setStyleSheet(
+                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+
+            verify_row.addWidget(verify_btn)
+            verify_row.addWidget(verify_status)
+            verify_row.addStretch()
+
+            center = QHBoxLayout()
+            center.addLayout(verify_row)
+            lay.addLayout(center)
+
+            verify_btn.clicked.connect(
+                lambda _=False, cat=category, btn=verify_btn, lbl=verify_status:
+                    self._run_verify(cat, btn, lbl)
+            )
+
         return card
+
+    # ── Verify loop ───────────────────────────────────────────────────────────
+
+    def _run_verify(self, category: str, btn: QPushButton, status_lbl: QLabel) -> None:
+        """Run a focused re-check for one finding category and update the inline status."""
+        btn.setEnabled(False)
+        btn.setText("Checking…")
+        status_lbl.setText("")
+
+        from workers.diagnosis_worker import DiagnosisWorker
+        worker = DiagnosisWorker(
+            gateway_ip=self._gateway_ip,
+            gateway_mac=self._gateway_mac,
+            focused_on=category,
+            parent=self,
+        )
+        self._verify_workers.append(worker)
+
+        def _on_done(result, _w=worker, _cat=category, _btn=btn, _lbl=status_lbl):
+            if _w in self._verify_workers:
+                self._verify_workers.remove(_w)
+            _w.deleteLater()
+            _btn.setText("▶  Verify this fix")
+            _btn.setEnabled(True)
+            findings = getattr(result, "findings", []) if result else []
+            still_present = any(getattr(f, "category", "") == _cat for f in findings)
+            if still_present:
+                _lbl.setText("Still present — try next step")
+                _lbl.setStyleSheet(
+                    f"font-size:10px; color:{AMBER}; background:transparent; border:none;"
+                )
+            else:
+                _lbl.setText("✓ Fixed!")
+                _lbl.setStyleSheet(
+                    f"font-size:10px; color:{GREEN}; background:transparent; border:none;"
+                )
+
+        worker.finished.connect(_on_done)
+        worker.start()
 
     # ── State machine ─────────────────────────────────────────────────────────
 

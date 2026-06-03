@@ -13,6 +13,20 @@ from modules.utils import get_offenders_path
 log = logging.getLogger(__name__)
 
 
+_DIAG_STEP_CATEGORIES = frozenset({
+    "DNS Resolution Failure", "DNS Leak Detected", "Very Low Download Speed",
+    "Local Network / Router Unreachable", "External ISP Issue",
+    "Chronic Connectivity Loss", "High Jitter — Unstable Latency",
+})
+_STORM_STEP_CATEGORIES = frozenset({
+    "Broadcast Storm", "Degraded IoT Device — Excessive Broadcasting",
+    "High Jitter — Unstable Latency",
+})
+_STP_STEP_CATEGORIES = frozenset({
+    "Rogue Network Bridge",
+})
+
+
 class DiagnosisWorker(QThread):
     """Runs all detection modules sequentially, skipping any that fail."""
 
@@ -24,12 +38,14 @@ class DiagnosisWorker(QThread):
         gateway_ip: Optional[str] = None,
         gateway_mac: Optional[str] = None,
         symptom: str = "",
+        focused_on: Optional[str] = None,
         parent=None,
     ):
         super().__init__(parent)
         self._gateway_ip  = gateway_ip
         self._gateway_mac = gateway_mac
-        self._symptom     = symptom   # "slow" | "dropping" | "noconn" | ""
+        self._symptom     = symptom      # "slow" | "dropping" | "noconn" | ""
+        self._focused_on  = focused_on   # category name → run only relevant steps
         self._stop        = threading.Event()
 
     def stop(self) -> None:
@@ -38,13 +54,21 @@ class DiagnosisWorker(QThread):
     def run(self) -> None:
         from modules.root_cause_correlator import correlate
 
-        # Symptom routing: skip steps that can't explain the reported symptom.
-        # "noconn" → gateway/DNS are the priority; storm/STP are secondary noise.
-        # "slow"   → diagnostics + storm matter; STP loops are less likely.
-        # "dropping" → all steps relevant; STP/storm are primary suspects.
-        # ""       → run everything (default / command-palette entry).
-        _run_storm = self._symptom in ("dropping", "slow", "")
-        _run_stp   = self._symptom in ("dropping", "")
+        # Focused mode: only run steps relevant to the named finding category.
+        # Used by the "Verify this fix" button to do a fast re-check.
+        if self._focused_on:
+            _run_diag  = self._focused_on in _DIAG_STEP_CATEGORIES
+            _run_storm = self._focused_on in _STORM_STEP_CATEGORIES
+            _run_stp   = self._focused_on in _STP_STEP_CATEGORIES
+        else:
+            # Symptom routing: skip steps that can't explain the reported symptom.
+            # "noconn" → gateway/DNS are the priority; storm/STP are secondary noise.
+            # "slow"   → diagnostics + storm matter; STP loops are less likely.
+            # "dropping" → all steps relevant; STP/storm are primary suspects.
+            # ""       → run everything (default / command-palette entry).
+            _run_diag  = True
+            _run_storm = self._symptom in ("dropping", "slow", "")
+            _run_stp   = self._symptom in ("dropping", "")
 
         diag_result: object          = None
         storm_result: object         = None
@@ -52,19 +76,20 @@ class DiagnosisWorker(QThread):
         fingerprint_devices: list    = []
 
         # ── Step 1: Network diagnostics (~15 s) ───────────────────────────────
-        self.progress.emit(5, "Checking your router…")
-        try:
-            from modules import network_diagnostics
-            diag_result = network_diagnostics.scan(
-                gateway_ip=self._gateway_ip,
-                progress_cb=lambda msg: self.progress.emit(20, msg),
-                stop_event=self._stop,
-            )
-        except Exception:
-            log.exception("diagnosis: network_diagnostics failed, skipping")
-        if self._stop.is_set():
-            self.finished.emit(None)
-            return
+        if _run_diag:
+            self.progress.emit(5, "Checking your router…")
+            try:
+                from modules import network_diagnostics
+                diag_result = network_diagnostics.scan(
+                    gateway_ip=self._gateway_ip,
+                    progress_cb=lambda msg: self.progress.emit(20, msg),
+                    stop_event=self._stop,
+                )
+            except Exception:
+                log.exception("diagnosis: network_diagnostics failed, skipping")
+            if self._stop.is_set():
+                self.finished.emit(None)
+                return
 
         # ── Step 2: Broadcast storm analysis (~6 s) — skipped for "noconn" ───
         if _run_storm:
