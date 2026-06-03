@@ -121,7 +121,7 @@ class _ScanTabsMixin:
         _ib_lay.setSpacing(8)
         self._m1_int_banner.setStyleSheet(
             f"QFrame {{ background:{ACCENT}18; border:1px solid {ACCENT}55;"
-            " border-radius:4px; }}"
+            " border-radius:4px; }"
         )
         self._m1_int_lbl = QLabel()
         self._m1_int_lbl.setStyleSheet(
@@ -133,7 +133,7 @@ class _ScanTabsMixin:
         _int_cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _int_cfg_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            " border-radius:3px; font-size:10px; padding:0 10px; }}"
+            " border-radius:3px; font-size:10px; padding:0 10px; }"
             f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )

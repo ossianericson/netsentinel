@@ -237,7 +237,7 @@ class _HardwareBrowseMixin:
         card.setObjectName("hubCatalogCard")
         card.setStyleSheet(
             f"QFrame#hubCatalogCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }}"
+            " border-radius:4px; }"
         )
         lay = QHBoxLayout(card)
         lay.setContentsMargins(12, 8, 12, 8)
@@ -296,7 +296,7 @@ class _HardwareBrowseMixin:
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            " border-radius:3px; font-size:11px; padding:0 12px; }}"
+            " border-radius:3px; font-size:11px; padding:0 12px; }"
             f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )

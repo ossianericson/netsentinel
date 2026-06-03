@@ -747,6 +747,7 @@ def main():
     if rest_api_worker is not None:
         rest_api_worker.stop()
         rest_api_worker.wait(3000)
+    window._hardware_integration_page.closedown()
     if _instance_server is not None:
         _instance_server.close()
     store.close()

@@ -506,6 +506,12 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         if Path(path).exists() and path not in self._file_watcher.files():
             self._file_watcher.addPath(path)
 
+    def closedown(self) -> None:
+        for w in list(self._poll_workers.values()):
+            w.stop()
+            w.wait(2000)
+        self._poll_workers.clear()
+
     def _stop_poll_worker(self, path_or_id: str) -> None:
         worker = self._poll_workers.pop(path_or_id, None)
         if worker is None:

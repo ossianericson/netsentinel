@@ -85,7 +85,7 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     card.setObjectName("pluginCard")
     card.setStyleSheet(
         f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-        " border-radius:4px; }}"
+        " border-radius:4px; }"
     )
     outer = QVBoxLayout(card)
     outer.setContentsMargins(0, 0, 0, 0)
@@ -279,7 +279,7 @@ class PluginDevicePage(QWidget):
         cred_card.setObjectName("pluginCard")
         cred_card.setStyleSheet(
             f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }}"
+            " border-radius:4px; }"
         )
         cred_outer = QVBoxLayout(cred_card)
         cred_outer.setContentsMargins(0, 0, 0, 0)
@@ -338,7 +338,7 @@ class PluginDevicePage(QWidget):
         self._cred_test_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cred_test_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            " border-radius:3px; font-size:12px; padding:0 16px; }}"
+            " border-radius:3px; font-size:12px; padding:0 16px; }"
             f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
             f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
             f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
@@ -388,7 +388,7 @@ class PluginDevicePage(QWidget):
         self._cred_forget_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._cred_forget_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
-            " border-radius:3px; font-size:11px; padding:0 10px; }}"
+            " border-radius:3px; font-size:11px; padding:0 10px; }"
             f"QPushButton:hover {{ background:{AMBER}; color:{BLACK}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
@@ -509,7 +509,7 @@ class PluginDevicePage(QWidget):
         card2.setObjectName("pluginCard")
         card2.setStyleSheet(
             f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }}"
+            " border-radius:4px; }"
         )
         card2_outer = QVBoxLayout(card2)
         card2_outer.setContentsMargins(0, 0, 0, 0)
@@ -554,7 +554,7 @@ class PluginDevicePage(QWidget):
         card3.setObjectName("pluginCard")
         card3.setStyleSheet(
             f"QFrame#pluginCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            " border-radius:4px; }}"
+            " border-radius:4px; }"
         )
         card3_outer = QVBoxLayout(card3)
         card3_outer.setContentsMargins(0, 0, 0, 0)
