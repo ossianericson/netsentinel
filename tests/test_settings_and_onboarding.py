@@ -99,17 +99,17 @@ class TestSettingsPage:
                 break  # only need to check one inactive
 
     def test_on_theme_calls_set_active(self):
-        with patch.object(_styles, "set_active_theme_name") as mock_set:
-            target = [n for n in _styles.THEMES][0]
+        target = [n for n in _styles.THEMES][0]
+        with patch("ui.styles.apply_theme") as mock_apply:
             self.page._on_theme(target)
-            mock_set.assert_called_once_with(target)
+            mock_apply.assert_called_once_with(target)
 
     def test_on_theme_updates_status_label(self):
         target = [n for n in _styles.THEMES][0]
-        with patch.object(_styles, "set_active_theme_name"):
+        with patch("ui.styles.apply_theme"):
             self.page._on_theme(target)
         assert target in self.page._theme_status_lbl.text()
-        assert "restart" in self.page._theme_status_lbl.text().lower()
+        assert "applied" in self.page._theme_status_lbl.text().lower()
 
     def test_compact_rows_checkbox_exists(self):
         assert self.page._chk_compact is not None

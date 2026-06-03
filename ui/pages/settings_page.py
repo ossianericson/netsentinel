@@ -257,6 +257,9 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
             for card, title, keywords in self._all_cards:
                 card.setVisible(q in title.lower() or q in keywords.lower())
 
+    def refresh_theme(self) -> None:
+        self._refresh_theme_buttons()
+
     def _mark_dirty(self) -> None:
         self._dirty = True
         self._dirty_dot.setVisible(True)

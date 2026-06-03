@@ -295,3 +295,93 @@ class TestThemeCharacter:
     def test_arctic_clean_red_is_standard(self):
         from ui.styles import THEMES
         assert THEMES["Arctic Clean"]["RED"] == "#D93025"
+
+
+# ---------------------------------------------------------------------------
+# apply_theme / apply_accent_override / get_app_qss
+# ---------------------------------------------------------------------------
+class TestApplyTheme:
+    def test_apply_theme_updates_globals(self):
+        import ui.styles as s
+        original = s._ACTIVE_THEME
+        try:
+            target = "Midnight Pro" if original != "Midnight Pro" else "Arctic Clean"
+            from ui.styles import apply_theme
+            apply_theme(target)
+            assert s.ACCENT == s.THEMES[target]["ACCENT"]
+            assert s.BG_DARK == s.THEMES[target]["BG_DARK"]
+        finally:
+            apply_theme(original)
+
+    def test_apply_theme_rebuilds_main_style(self):
+        import ui.styles as s
+        original = s._ACTIVE_THEME
+        try:
+            from ui.styles import apply_theme
+            apply_theme("Abyss")
+            assert s.THEMES["Abyss"]["BG_DARK"] in s.MAIN_STYLE
+        finally:
+            apply_theme(original)
+
+    def test_apply_theme_updates_risk_colors_in_place(self):
+        import ui.styles as s
+        from ui.styles import apply_theme, RISK_COLORS
+        original = s._ACTIVE_THEME
+        ref = RISK_COLORS  # grab reference before switch
+        try:
+            target = "Midnight Pro" if original != "Midnight Pro" else "Arctic Clean"
+            apply_theme(target)
+            assert ref is RISK_COLORS, "RISK_COLORS must be updated in-place"
+            assert RISK_COLORS["HIGH"] == s.RED
+        finally:
+            apply_theme(original)
+
+    def test_apply_theme_emits_signal(self):
+        from unittest.mock import MagicMock
+        from ui.styles import apply_theme, get_theme_manager
+        original = __import__("ui.styles", fromlist=["_ACTIVE_THEME"])._ACTIVE_THEME
+        slot = MagicMock()
+        get_theme_manager().theme_changed.connect(slot)
+        try:
+            target = "Midnight Pro" if original != "Midnight Pro" else "Arctic Clean"
+            apply_theme(target)
+            slot.assert_called_with(target)
+        finally:
+            apply_theme(original)
+            get_theme_manager().theme_changed.disconnect(slot)
+
+    def test_apply_theme_rejects_unknown(self):
+        from ui.styles import apply_theme
+        with pytest.raises(ValueError, match="Unknown theme"):
+            apply_theme("Rainbow Unicorn")
+
+    def test_get_app_qss_reflects_current_theme(self):
+        import ui.styles as s
+        from ui.styles import apply_theme, get_app_qss
+        original = s._ACTIVE_THEME
+        try:
+            target = "Midnight Pro" if original != "Midnight Pro" else "Arctic Clean"
+            apply_theme(target)
+            qss = get_app_qss()
+            assert s.BG_CARD in qss
+            assert s.TEXT_PRIMARY in qss
+        finally:
+            apply_theme(original)
+
+    def test_apply_accent_override_updates_accent(self):
+        import ui.styles as s
+        from ui.styles import apply_accent_override
+        original_accent = s.ACCENT
+        try:
+            apply_accent_override("#FF5500")
+            assert s.ACCENT == "#FF5500"
+        finally:
+            apply_accent_override(None)
+
+    def test_apply_accent_override_none_restores_default(self):
+        import ui.styles as s
+        from ui.styles import apply_accent_override
+        theme_default = s.THEMES[s._ACTIVE_THEME]["ACCENT"]
+        apply_accent_override("#FF5500")
+        apply_accent_override(None)
+        assert s.ACCENT == theme_default

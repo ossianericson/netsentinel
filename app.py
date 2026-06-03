@@ -369,7 +369,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.73")
+    app.setApplicationVersion("1.9.74")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -402,7 +402,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.73")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.74")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -427,20 +427,10 @@ def main():
     # ─────────────────────────────────────────────────────────────────────────
     app.setOrganizationName("netsentinel")
 
-    # Apply QMenu rules at application level so top-level (parentless) menus
-    # are styled — widget-level stylesheets do not reach separate top-level windows.
-    from ui.styles import BG_CARD, TEXT_PRIMARY, BORDER, BG_HOVER, WHITE
-    from ui.styles import TOOLTIP_BG, TOOLTIP_BORDER
-    app.setStyleSheet(
-        f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-        f" border:1px solid {BORDER}; padding:4px; font-size:12px; }}"
-        f"QMenu::item {{ padding:4px 16px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
-        f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-        # QToolTip is a top-level window — must be set at app level to take effect
-        f"QToolTip {{ background:{TOOLTIP_BG}; color:{WHITE};"
-        f" border:1px solid {TOOLTIP_BORDER}; border-radius:3px; padding:4px 8px;"
-        f" font-size:11px; }}"
-    )
+    # Apply QMenu/QToolTip rules at application level so top-level (parentless)
+    # menus are styled — widget-level stylesheets do not reach separate windows.
+    from ui.styles import get_app_qss
+    app.setStyleSheet(get_app_qss())
 
     # ── Single instance guard ─────────────────────────────────────────────────
     # If another instance is running, signal it to restore its window and exit.

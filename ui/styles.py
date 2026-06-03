@@ -1117,3 +1117,84 @@ QLabel#sideNavSection {{
 
 
 MAIN_STYLE: str = _build_qss()
+
+
+# ── Live theme management ─────────────────────────────────────────────────────
+
+_theme_manager = None
+
+
+def get_theme_manager():
+    """Return the lazy singleton ThemeManager QObject (theme_changed signal)."""
+    global _theme_manager
+    if _theme_manager is None:
+        from PyQt6.QtCore import QObject, pyqtSignal as _sig
+        class _ThemeManager(QObject):
+            theme_changed = _sig(str)
+        _theme_manager = _ThemeManager()
+    return _theme_manager
+
+
+def apply_theme(name: str) -> None:
+    """Switch the active theme immediately — no restart required."""
+    if name not in THEMES:
+        raise ValueError(f"Unknown theme {name!r}. Valid: {list(THEMES)}")
+    import sys as _sys
+    _m = _sys.modules[__name__]
+    globals().update(THEMES[name])
+    globals()["_ACTIVE_THEME"] = name
+    _acc = get_accent_override()
+    if _acc:
+        _a, _al, _ad = _compute_accent_variants(_acc)
+        globals().update({"ACCENT": _a, "ACCENT_LITE": _al, "ACCENT_DARK": _ad})
+    _m.RISK_COLORS.clear()
+    _m.RISK_COLORS.update({
+        "HIGH":    _m.RED,    "STORM":   _m.RED,
+        "MEDIUM":  _m.AMBER,  "WARNING": _m.AMBER,
+        "LOW":     _m.BLUE,   "CLEAN":   _m.GREEN,
+        "UNKNOWN": _m.TEXT_SECONDARY,
+    })
+    _m.RISK_BG.clear()
+    _m.RISK_BG.update({
+        "HIGH":    _m.RED_BG,     "STORM":   _m.RED_BG,
+        "MEDIUM":  _m.AMBER_BG,   "WARNING": _m.AMBER_BG,
+        "LOW":     _m.BTN_HOVER_BG, "CLEAN":  _m.GREEN_BG,
+        "UNKNOWN": _m.BG_CARD,
+    })
+    globals()["MAIN_STYLE"] = _build_qss()
+    set_active_theme_name(name)
+    get_theme_manager().theme_changed.emit(name)
+
+
+def apply_accent_override(hex_val: "str | None") -> None:
+    """Apply or clear an accent colour override immediately."""
+    set_accent_override(hex_val)
+    import sys as _sys
+    _m = _sys.modules[__name__]
+    if hex_val:
+        _a, _al, _ad = _compute_accent_variants(hex_val)
+        globals().update({"ACCENT": _a, "ACCENT_LITE": _al, "ACCENT_DARK": _ad})
+    else:
+        _t = _m.THEMES[_m._ACTIVE_THEME]
+        globals().update({
+            "ACCENT":      _t["ACCENT"],
+            "ACCENT_LITE": _t["ACCENT_LITE"],
+            "ACCENT_DARK": _t["ACCENT_DARK"],
+        })
+    globals()["MAIN_STYLE"] = _build_qss()
+    get_theme_manager().theme_changed.emit(_m._ACTIVE_THEME)
+
+
+def get_app_qss() -> str:
+    """Return application-level QSS (QMenu + QToolTip) reading live theme globals."""
+    import sys as _sys
+    _m = _sys.modules[__name__]
+    return (
+        f"QMenu {{ background:{_m.BG_CARD}; color:{_m.TEXT_PRIMARY};"
+        f" border:1px solid {_m.BORDER}; padding:4px; font-size:12px; }}"
+        f"QMenu::item {{ padding:4px 16px; color:{_m.TEXT_PRIMARY}; background:{_m.BG_CARD}; }}"
+        f"QMenu::item:selected {{ background:{_m.BG_HOVER}; color:{_m.TEXT_PRIMARY}; }}"
+        f"QToolTip {{ background:{_m.TOOLTIP_BG}; color:{_m.WHITE};"
+        f" border:1px solid {_m.TOOLTIP_BORDER}; border-radius:3px; padding:4px 8px;"
+        f" font-size:11px; }}"
+    )

@@ -130,6 +130,33 @@ class PageHeaderBar(QWidget):
         if hasattr(self, "_help_btn"):
             self._help_btn.setChecked(False)
 
+    def refresh_theme(self) -> None:
+        import ui.styles as _s
+        PageHeaderBar._CHIP_STYLE = (
+            f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
+            " padding: 0 0 0 0;"
+        )
+        PageHeaderBar._SEP_STYLE = (
+            f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
+        )
+        self.setStyleSheet(
+            f"#PageHeaderBar {{ background: transparent; border-bottom: 1px solid {_s.BORDER}; }}"
+        )
+        self._title_lbl.setStyleSheet(
+            f"color:{_s.TEXT_PRIMARY}; font-size:14px; font-weight:600;"
+            " background:transparent; border:none;"
+        )
+        for chip in self._chips:
+            chip.setStyleSheet(self._CHIP_STYLE)
+        if hasattr(self, "_help_btn"):
+            self._help_btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; font-size:11px;"
+                f" font-weight:bold; border:1px solid {_s.BORDER}; border-radius:11px; padding:0; }}"
+                f"QPushButton:hover {{ border-color:{_s.ACCENT}; color:{_s.ACCENT}; background:transparent; }}"
+                f"QPushButton:checked {{ background:{_s.ACCENT}; color:{_s.WHITE}; border-color:{_s.ACCENT}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
+            )
+
 
 class _HelpPopover(QFrame):
     """Floating 280px help panel shown below the ? button."""

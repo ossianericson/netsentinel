@@ -322,6 +322,18 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.74
+**Added**
+- `ui/styles.py`: `apply_theme()`, `apply_accent_override()`, `get_theme_manager()`, `get_app_qss()` — live theme switching without restart
+- `ui/dashboard.py`: `_on_theme_changed()` slot re-applies MAIN_STYLE cascade, refreshes all stack pages and nav rail
+- `ui/nav/rail.py`: `refresh_theme()` on `_RailButton`, `_FlyoutItem`, `_FlyoutPanel`; `paintEvent` reads live module globals
+- `ui/widgets/page_header.py`: `refresh_theme()` on `PageHeaderBar` and chips
+- `tests/test_themes.py`: `TestApplyTheme` class — 8 new tests for live theme API
+
+**Changed**
+- Settings → Appearance: theme and accent changes now apply immediately (no restart required)
+- `app.py`: QMenu/QToolTip QSS injected via `get_app_qss()` so it reflects the active theme at runtime
+
 ### v1.9.73
 **Added**
 - `ui/nav/builder.py` — `_proactive_wire_page_help_btns()` wires the `?` help button on every page at startup rather than lazily on first visit (F3)

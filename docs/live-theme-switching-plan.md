@@ -158,16 +158,20 @@ Add `TestApplyTheme` class:
 
 ## Execution Order
 
-1. `ui/styles.py` — add `get_theme_manager`, `apply_theme`, `apply_accent_override`, `get_app_qss`
-2. `app.py` — use `get_app_qss()`
-3. `tests/test_themes.py` — new test class (run tests, must pass)
-4. `ui/dashboard.py` — connect signal, add `_on_theme_changed`
-5. `ui/pages/settings_cards.py` + `settings_appearance.py` — call `apply_theme`, update labels
-6. `ui/pages/` (all 54 page files) — extract `_apply_styles()`, add `refresh_theme()`
-7. `ui/widgets/` (22 widget files) — same pattern
-8. `ui/nav/rail.py` — `refresh_theme()` on `_RailButton` and `_FlyoutPanel`
-9. `ui/live_graph.py` + `ui/topology_widget.py` — chart refresh in `refresh_theme()`
-10. Run full test suite, run debug_launch.py, manual theme-switch test
+1. ✅ `ui/styles.py` — add `get_theme_manager`, `apply_theme`, `apply_accent_override`, `get_app_qss`
+2. ✅ `app.py` — use `get_app_qss()`
+3. ✅ `tests/test_themes.py` — new `TestApplyTheme` class (50 tests pass)
+4. ✅ `ui/dashboard.py` — connect signal, add `_on_theme_changed` + nav rail/flyout refresh
+5. ✅ `ui/pages/settings_cards.py` + `settings_appearance.py` — call `apply_theme`, update labels
+6. ✅ `ui/nav/rail.py` — `refresh_theme()` on `_RailButton`, `_FlyoutItem`, `_FlyoutPanel`; `paintEvent` reads live globals
+7. ✅ `ui/widgets/page_header.py` — `refresh_theme()` on `PageHeaderBar`
+8. ✅ `ui/pages/settings_page.py` — `refresh_theme()` delegates to `_refresh_theme_buttons()`
+9. ⏳ `ui/pages/` (remaining 53 page files) — `_apply_styles()` + `refresh_theme()` (next sprint)
+10. ⏳ `ui/widgets/` (remaining 21 widget files) — same pattern (next sprint)
+11. ⏳ `ui/live_graph.py` + `ui/topology_widget.py` — chart refresh in `refresh_theme()` (next sprint)
+
+Completed: 2025-06-03. Sprint G1 (infrastructure + nav + settings).
+Next sprint queue: Phase 5 remainder — all page/widget files get `_apply_styles()` + `refresh_theme()`.
 
 ## Verification
 

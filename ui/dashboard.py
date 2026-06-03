@@ -136,6 +136,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self.setMinimumSize(900, 600)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setStyleSheet(MAIN_STYLE)
+        from ui.styles import get_theme_manager as _gtm
+        _gtm().theme_changed.connect(self._on_theme_changed)
         self._maximize_btn = None   # set by _build_header; updated in changeEvent
         self._pre_maximize_geo: "QRect | None" = None  # saved before showMaximized()
 
@@ -1959,6 +1961,24 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         if self._auto_report_pending and not self._auto_report_diag_done:
             self._auto_report_diag_done = True
             self._maybe_auto_report()
+
+    def _on_theme_changed(self, _name: str) -> None:
+        import ui.styles as _s
+        from PyQt6.QtWidgets import QApplication
+        self.setStyleSheet(_s.MAIN_STYLE)
+        _app = QApplication.instance()
+        if _app:
+            _app.setStyleSheet(_s.get_app_qss())
+        for i in range(self._stack.count()):
+            w = self._stack.widget(i)
+            if w and hasattr(w, "refresh_theme"):
+                w.refresh_theme()
+        for btn in getattr(self, "_nav_rail_buttons", {}).values():
+            if hasattr(btn, "refresh_theme"):
+                btn.refresh_theme()
+        flyout = getattr(self, "_nav_flyout", None)
+        if flyout and hasattr(flyout, "refresh_theme"):
+            flyout.refresh_theme()
 
 
 

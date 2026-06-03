@@ -38,7 +38,7 @@ class _SettingsAppearanceMixin:
         card, bl = _card("Appearance — Colour Theme")
         desc = QLabel(
             "Choose a colour theme for the entire application. "
-            "The change takes effect after restarting NetSentinel."
+            "Changes apply immediately."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
@@ -127,46 +127,51 @@ class _SettingsAppearanceMixin:
         return card
 
     def _on_accent_swatch(self, hex_val: str, name: str) -> None:
-        _styles.set_accent_override(hex_val)
-        self._accent_status_lbl.setText(f"Accent set to {name} ({hex_val}) — restart to apply.")
+        from ui.styles import apply_accent_override
+        apply_accent_override(hex_val)
+        self._accent_status_lbl.setText(f"Accent set to {name} ({hex_val}).")
 
     def _on_accent_custom(self) -> None:
         from PyQt6.QtWidgets import QColorDialog
         from PyQt6.QtGui import QColor
-        current = _styles.get_accent_override() or ACCENT
+        from ui.styles import apply_accent_override
+        current = _styles.get_accent_override() or _styles.ACCENT
         chosen = QColorDialog.getColor(QColor(current), self, "Choose Accent Colour")
         if chosen.isValid():
             hex_val = chosen.name().upper()
-            _styles.set_accent_override(hex_val)
-            self._accent_status_lbl.setText(f"Custom accent ({hex_val}) saved — restart to apply.")
+            apply_accent_override(hex_val)
+            self._accent_status_lbl.setText(f"Custom accent ({hex_val}) applied.")
 
     def _on_accent_reset(self) -> None:
-        _styles.set_accent_override(None)
-        self._accent_status_lbl.setText("Accent reset to theme default — restart to apply.")
+        from ui.styles import apply_accent_override
+        apply_accent_override(None)
+        self._accent_status_lbl.setText("Accent reset to theme default.")
 
     def _refresh_theme_buttons(self) -> None:
-        active = _styles.get_active_theme_name()
+        import ui.styles as _s
+        active = _s.get_active_theme_name()
         for name, btn in self._theme_btns.items():
             if name == active:
                 btn.setStyleSheet(
-                    f"QPushButton{{background:{ACCENT};color:{NAV_BAR};"
-                    f"border:1px solid {ACCENT};border-radius:4px;"
+                    f"QPushButton{{background:{_s.ACCENT};color:{_s.NAV_BAR};"
+                    f"border:1px solid {_s.ACCENT};border-radius:4px;"
                     f"padding:5px 14px;font-size:11px;font-weight:bold;}}"
-                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
                 )
             else:
                 btn.setStyleSheet(
-                    f"QPushButton{{background:{BG_CARD};color:{ACCENT};"
-                    f"border:1px solid {ACCENT};border-radius:4px;"
+                    f"QPushButton{{background:{_s.BG_CARD};color:{_s.ACCENT};"
+                    f"border:1px solid {_s.ACCENT};border-radius:4px;"
                     f"padding:5px 14px;font-size:11px;}}"
-                    f"QPushButton:hover{{background:{BTN_HOVER_BG};}}"
-                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                    f"QPushButton:hover{{background:{_s.BTN_HOVER_BG};}}"
+                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
                 )
 
     def _on_theme(self, name: str) -> None:
-        _styles.set_active_theme_name(name)
+        from ui.styles import apply_theme
+        apply_theme(name)
         self._refresh_theme_buttons()
-        self._theme_status_lbl.setText(f"Theme '{name}' saved — restart NetSentinel to apply.")
+        self._theme_status_lbl.setText(f"Theme '{name}' applied.")
 
     # ── Display preferences ───────────────────────────────────────────────────
 

@@ -360,9 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
+        ("Live theme switching", "Switching colour themes in Settings now applies immediately — no restart required. The nav rail, page headers, and QMenu/tooltip colours all update at once."),
         ("Full keyboard shortcut reference", "The Keyboard Shortcuts card (here and in Settings) now lists all 15 shortcuts including navigation (Ctrl+K, Ctrl+F, Escape), scanning, tables, and macOS platform variants."),
         ("? help button on every page", "Every page with help content now shows its ? button in the page header from startup — no need to visit the page first."),
-        ("Settings full-text search", "The search bar in Settings now matches against in-card keywords. Try typing 'smtp', 'dark', 'ctrl', or 'ookla' to jump straight to the relevant card."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

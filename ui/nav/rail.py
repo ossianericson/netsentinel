@@ -382,6 +382,7 @@ class _RailButton(QPushButton):
         self.update()
 
     def paintEvent(self, event):
+        import ui.styles as _s
         from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen
         from PyQt6.QtCore import QRect, QRectF
         # QSS background + hover/checked effects
@@ -393,7 +394,7 @@ class _RailButton(QPushButton):
         # Accent bar — painted after QSS so it sits on top of background
         if self.isChecked():
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(ACCENT))
+            p.setBrush(QColor(_s.ACCENT))
             p.drawRect(0, 10, 3, 38)   # spans the 48px icon zone, inset 10px top/bottom
 
         # POLISH-1: left-edge monitor state dot — 6px, flush left, icon-zone centre
@@ -422,9 +423,9 @@ class _RailButton(QPushButton):
             p.translate(-cx, -cy)
             p.setOpacity(self._badge_opacity)
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(RED))
+            p.setBrush(QColor(_s.RED))
             p.drawRoundedRect(QRectF(pill_x, pill_y, pill_w, pill_h), 7, 7)
-            p.setPen(QColor(WHITE))
+            p.setPen(QColor(_s.WHITE))
             p.drawText(QRect(pill_x, pill_y, pill_w, pill_h),
                        Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
                        self._badge_count)
@@ -441,7 +442,7 @@ class _RailButton(QPushButton):
         # Short label below the icon
         font = QFont("Segoe UI", 7)
         p.setFont(font)
-        lbl_color = self._COLOR_ACTIVE if self.isChecked() else SIDEBAR_ITEM_FG
+        lbl_color = _s.WHITE if self.isChecked() else _s.SIDEBAR_ITEM_FG
         p.setPen(QColor(lbl_color))
         fm = QFontMetrics(font)
         text = fm.elidedText(self._short_label, Qt.TextElideMode.ElideRight, self.width() - 4)
@@ -451,13 +452,22 @@ class _RailButton(QPushButton):
         p.end()
 
     def _refresh_icon(self):
-        color = self._COLOR_ACTIVE if self.isChecked() else self._COLOR_NORMAL
+        import ui.styles as _s
+        color = _s.WHITE if self.isChecked() else _s.SIDEBAR_ITEM_FG
         self.setIcon(_make_nav_icon(self._icon_name, 20, color))
         self.setIconSize(QSize(20, 20))
 
     def setChecked(self, checked: bool):
         super().setChecked(checked)
         self._refresh_icon()
+
+    def refresh_theme(self) -> None:
+        import ui.styles as _s
+        _RailButton._COLOR_NORMAL = _s.SIDEBAR_ITEM_FG
+        _RailButton._COLOR_ACTIVE = _s.WHITE
+        _RailButton._LABEL_COLOR  = _s.TEXT_MUTED
+        self._refresh_icon()
+        self.update()
 
 
 class _FlyoutItem(QPushButton):
@@ -477,17 +487,25 @@ class _FlyoutItem(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_ctx_menu)
-        _fg = AUDIT_RED if danger else SIDEBAR_ITEM_FG
+        self._danger = danger
+        self._apply_item_style()
+
+    def _apply_item_style(self) -> None:
+        import ui.styles as _s
+        _fg = _s.AUDIT_RED if self._danger else _s.SIDEBAR_ITEM_FG
         self.setStyleSheet(
             f"QPushButton {{"
             f"  text-align: left; padding: 0 14px;"
             f"  background: transparent; color: {_fg};"
             f"  border: none; font-size: 11px;"
             f"}}"
-            f"QPushButton:hover {{ background: {SIDEBAR_HOVER}; color: {WHITE}; }}"
-            f"QPushButton:checked {{ background: {SIDEBAR_SEL_BG}; color: {WHITE}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{_fg}; }}"
+            f"QPushButton:hover {{ background: {_s.SIDEBAR_HOVER}; color: {_s.WHITE}; }}"
+            f"QPushButton:checked {{ background: {_s.SIDEBAR_SEL_BG}; color: {_s.WHITE}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_fg}; }}"
         )
+
+    def refresh_theme(self) -> None:
+        self._apply_item_style()
 
     def set_dot(self, color: str) -> None:
         """Set or clear the status dot. Pass empty string to clear."""
@@ -541,6 +559,7 @@ class _FlyoutPanel(QWidget):
 
         # Header bar: section title + pin toggle
         hdr = QWidget()
+        self._flyout_hdr = hdr
         hdr.setFixedHeight(36)
         hdr.setStyleSheet(
             f"background: {SIDEBAR_SECTION_BG}; border-bottom: 1px solid {NAV_DIVIDER};"
@@ -586,6 +605,7 @@ class _FlyoutPanel(QWidget):
 
         # Pin hint footer
         _hint = QLabel("Right-click any page to pin it ★")
+        self._hint_lbl = _hint
         _hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         _hint.setStyleSheet(
             f"color: {TEXT_MUTED}; font-size: 9px; padding: 4px 0;"
@@ -595,6 +615,31 @@ class _FlyoutPanel(QWidget):
         outer.addWidget(_hint)
 
         self._items: dict = {}   # label -> _FlyoutItem
+
+    def refresh_theme(self) -> None:
+        import ui.styles as _s
+        self.setStyleSheet(f"background: {_s.SIDEBAR_BG};")
+        self._flyout_hdr.setStyleSheet(
+            f"background: {_s.SIDEBAR_SECTION_BG}; border-bottom: 1px solid {_s.NAV_DIVIDER};"
+        )
+        self._title_lbl.setStyleSheet(
+            f"color: {_s.TEXT_MUTED}; font-size: 9px; font-weight: 600;"
+            f" letter-spacing: 1px; background: transparent; border: none;"
+        )
+        self._pin_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none;"
+            f" color: {_s.TEXT_SECONDARY}; font-size: 14px; }}"
+            f"QPushButton:hover {{ color: {_s.WHITE}; }}"
+            f"QPushButton:checked {{ color: {_s.ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_SECONDARY}; }}"
+        )
+        self._hint_lbl.setStyleSheet(
+            f"color: {_s.TEXT_MUTED}; font-size: 9px; padding: 4px 0;"
+            f" background: {_s.SIDEBAR_BG}; border: none;"
+            f" border-top: 1px solid {_s.NAV_DIVIDER};"
+        )
+        for item in self._items.values():
+            item.refresh_theme()
 
     @property
     def is_pinned(self) -> bool:
