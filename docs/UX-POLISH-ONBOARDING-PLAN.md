@@ -26,7 +26,7 @@ Three specific user-reported problems drive this plan:
 
 | Sprint | Theme | Effort | Files Touched |
 |---|---|---|---|
-| **H1** | Guided First-Run Tour | L | `ui/first_run_dialog.py`, `ui/dashboard.py`, new `ui/guided_tour.py` |
+| ✅ **H1** | Guided First-Run Tour | L | `ui/guided_tour.py` (new), `ui/tabs.py`, `ui/scan_wiring.py`, `tests/test_guided_tour.py` — completed 2026-06-03 |
 | **H2** | Hardware Integration State & Prominence | M | `ui/widgets/home_session_widgets.py`, `ui/pages/home_page.py`, `ui/pages/hardware_integration_page.py` |
 | **H3** | Network Logger as First-Class Citizen | M | `ui/pages/log_hub_page.py`, `ui/widgets/home_session_widgets.py`, `ui/pages/home_page.py` |
 | **H4** | Proactive Actionable Insights | M | `ui/pages/home_page.py`, `ui/pages/home_data_mixin.py`, `ui/pages/home_suggestions.py` |
