@@ -92,11 +92,14 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.widgets.empty_state_card import EmptyStateCard
 
 from modules.geo_locator import (
     GEOLITE_MIRROR_URL,
@@ -263,6 +266,7 @@ class GeoMapPage(QWidget):
     """World-map geolocation of internet-facing IPs."""
 
     navigate_requested = pyqtSignal(str)   # page label — emitted by "View in Threat Intel →"
+    scan_requested     = pyqtSignal()      # emitted by empty-state CTA
 
     def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -316,15 +320,41 @@ class GeoMapPage(QWidget):
         self._build_db_card()
         self._build_import_card()
 
-        # Main splitter: map + detail panel
+        # ── Content stack: page 0 = empty state, page 1 = map + table ───────────
+        self._map_stack = QStackedWidget()
+
+        # Page 0 — empty state
+        _empty = EmptyStateCard(
+            icon="⊕",
+            title="No locations to display",
+            what_it_shows=(
+                "Public IP addresses from threat intel, exposure scans, and manual "
+                "entry plotted on a world map with country, city, and ASN data."
+            ),
+            why_it_matters=(
+                "Knowing where external connections originate helps spot "
+                "geo-suspicious traffic and suspicious ISPs at a glance."
+            ),
+            btn_label="Scan to discover IPs →",
+        )
+        _empty.clicked.connect(self.scan_requested.emit)
+        self._map_stack.addWidget(_empty)
+
+        # Page 1 — map + IP table
+        _map_page = QWidget()
+        _map_page_lay = QVBoxLayout(_map_page)
+        _map_page_lay.setContentsMargins(0, 0, 0, 0)
+        _map_page_lay.setSpacing(6)
+
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._build_map_panel())
         splitter.addWidget(self._build_detail_panel())
         splitter.setSizes([900, 280])
-        root.addWidget(splitter, 1)
+        _map_page_lay.addWidget(splitter, 1)
+        _map_page_lay.addWidget(self._build_ip_table_card())
 
-        # IP table
-        root.addWidget(self._build_ip_table_card())
+        self._map_stack.addWidget(_map_page)
+        root.addWidget(self._map_stack, 1)
 
     def _build_db_card(self) -> None:
         row = QHBoxLayout()
@@ -890,6 +920,8 @@ class GeoMapPage(QWidget):
                 links = [links]
             self._points[r.ip] = (r, category, list(links))
             resolved_ips.add(r.ip)
+        if self._points and self._map_stack.currentIndex() == 0:
+            self._map_stack.setCurrentIndex(1)
         self._refresh_table()
         self._redraw_map()
         # If the selected IP just resolved, populate the enriched detail panel

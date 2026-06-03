@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -166,8 +167,9 @@ _METRIC_LABEL = {"rtt_ms": "RTT (ms)", "loss_pct": "Loss (%)", "jitter_ms": "Jit
 class TrendPage(QWidget):
     """Predictive trend alerting page."""
 
-    navigate_to  = pyqtSignal(str)
-    report_ready = pyqtSignal(object)  # TrendReport — for OverviewPage.on_trend_result()
+    navigate_to    = pyqtSignal(str)
+    report_ready   = pyqtSignal(object)  # TrendReport — for OverviewPage.on_trend_result()
+    scan_requested = pyqtSignal()
 
     def __init__(self, store=None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -205,6 +207,26 @@ class TrendPage(QWidget):
         )
         outer.addWidget(self._headline_lbl)
 
+        # ── Content stack: page 0 = empty state, page 1 = analysis controls ─────
+        self._trend_stack = QStackedWidget()
+
+        from ui.widgets.empty_state_card import EmptyStateCard
+        _empty = EmptyStateCard(
+            icon="▲",
+            title="No trend data yet",
+            what_it_shows=(
+                "Linear-regression forecasts for RTT, packet loss, and jitter — "
+                "showing which hosts are trending toward failure and when."
+            ),
+            why_it_matters=(
+                "Run scans daily for at least 3 days and enable the Network Logger "
+                "to build the baseline needed for accurate forecasts."
+            ),
+            btn_label="Start Logger →",
+        )
+        _empty.clicked.connect(lambda: self.navigate_to.emit("Network Logger"))
+        self._trend_stack.addWidget(_empty)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -218,7 +240,9 @@ class TrendPage(QWidget):
         il.addWidget(self._build_results_card())
         il.addStretch()
         scroll.setWidget(inner)
-        outer.addWidget(scroll, 1)
+        self._trend_stack.addWidget(scroll)
+
+        outer.addWidget(self._trend_stack, 1)
 
     # ── Controls card ─────────────────────────────────────────────────────────
 
@@ -352,6 +376,7 @@ class TrendPage(QWidget):
 
     @pyqtSlot(object)
     def _on_result(self, report: TrendReport):
+        self._trend_stack.setCurrentIndex(1)
         self._last_report = report
         self.report_ready.emit(report)
         self._btn_run.setEnabled(True)

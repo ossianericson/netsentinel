@@ -360,11 +360,11 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Smarter Getting Started card", "Step order redesigned: scan first, hardware connections second (with copy explaining what you lose without them), Network Logger added as step 6."),
-        ("Hardware detected instantly", "After adding a ZTE or Deco plugin the Getting Started card updates immediately. When hw_detect finds your device on the network, an amber indicator appears before you add it."),
-        ("Log Hub active empty state", "Log Hub now shows an actionable card with a 'Start Network Logger' button when all sources are off, switching to the live table as soon as any source is enabled."),
-        ("Clickable monitoring pills", "FreshnessStrip pills (ARP, DHCP, Storm, Logger) are now clickable — tapping an inactive pill navigates directly to the relevant page."),
-        ("Diagnosis logger warning", "Diagnosis page shows an amber notice when the Network Logger has never been started, pointing users to enable it for more complete findings."),
+        ("Empty state consistency", "Overview, SNMP Trap, WiFi Monitor, Geolocation Map, Timeline, Speed Test, and Trend pages all show structured EmptyStateCards with actionable CTAs instead of blank tables or passive labels."),
+        ("Overview empty state", "First launch now shows a clear 'Scan my network' prompt instead of 12 empty tiles with dashes."),
+        ("Geolocation & Timeline scans", "Geolocation Map and Timeline pages now have 'Run a scan' CTAs wired directly to the full network scan."),
+        ("Trend page logger nudge", "Trend Forecasts page shows 'Start Logger' CTA pointing to the Network Logger when no trend data exists yet."),
+        ("WiFi Monitor start CTA", "WiFi Monitor page shows 'Start Monitoring' empty state with a CTA that begins capture immediately."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.80
+**Changed**
+- `overview_page.py` — tile grid wrapped in `QStackedWidget`; shows `EmptyStateCard` on first launch instead of 12 empty tiles
+- `snmp_trap_page.py` — custom inline empty state replaced with `EmptyStateCard` ("Waiting for SNMP traps" + "Configure SNMP →")
+- `wifi_monitor_page.py` — frame table wrapped in `QStackedWidget`; shows `EmptyStateCard` with "Start Monitoring →" CTA before first capture
+- `geo_map_page.py` — map + IP table wrapped in `QStackedWidget`; shows `EmptyStateCard` with "Scan to discover IPs →" before any IPs are plotted; `scan_requested` signal wired in `app.py`
+- `timeline_page.py` — event feed wrapped in `QStackedWidget`; shows `EmptyStateCard` with "Run a scan →" before any events exist; `scan_requested` signal wired in `app.py`
+- `speed_test_page.py` — plain-label empty state upgraded to `EmptyStateCard` ("No speed tests recorded yet" + "Run Speed Test →")
+- `trend_page.py` — analysis content wrapped in `QStackedWidget`; shows `EmptyStateCard` with "Start Logger →" before first trend result; `scan_requested` signal wired in `app.py`
+
 ### v1.9.79
 **Added**
 - `tests/test_diagnosis_page.py` — verify_step rendering tests, focused-mode DiagnosisWorker parameter

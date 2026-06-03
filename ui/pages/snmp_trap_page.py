@@ -25,6 +25,8 @@ from PyQt6.QtWidgets import (
     QFrame, QTextEdit,
 )
 
+from ui.widgets.empty_state_card import EmptyStateCard
+
 from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
@@ -171,45 +173,20 @@ class SnmpTrapPage(QWidget):
         card_body.addWidget(self._table)
 
         # Empty state (replaces table when no traps received)
-        self._empty_state = QWidget()
-        _es_lay = QVBoxLayout(self._empty_state)
-        _es_lay.setContentsMargins(32, 32, 32, 32)
-        _es_lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _es_icon = QLabel("⊲")
-        _es_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _es_icon.setStyleSheet(
-            f"font-size:32px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        self._empty_state = EmptyStateCard(
+            icon="⊲",
+            title="Waiting for SNMP traps",
+            what_it_shows=(
+                "Real-time SNMP v1/v2c traps from routers and switches — "
+                "link-up/down events, interface changes, and custom OID alerts."
+            ),
+            why_it_matters=(
+                "SNMP traps let network devices push alerts to you instantly, "
+                "instead of waiting for your next poll cycle."
+            ),
+            btn_label="Configure SNMP →",
         )
-        _es_head = QLabel("No traps received yet")
-        _es_head.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _es_head.setStyleSheet(
-            f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
-        )
-        _es_sub = QLabel("Alerts sent by your routers and switches when something changes.")
-        _es_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _es_sub.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
-        _es_cta = QPushButton("Configure SNMP →")
-        _es_cta.setFixedHeight(28)
-        _es_cta.setCursor(Qt.CursorShape.PointingHandCursor)
-        _es_cta.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
-            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}22; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-        )
-        _es_cta.clicked.connect(self.navigate_to_settings)
-        _es_lay.addWidget(_es_icon)
-        _es_lay.addWidget(_es_head)
-        _es_lay.addSpacing(4)
-        _es_lay.addWidget(_es_sub)
-        _es_lay.addSpacing(10)
-        _es_row = QHBoxLayout()
-        _es_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _es_row.addWidget(_es_cta)
-        _es_lay.addLayout(_es_row)
+        self._empty_state.clicked.connect(self.navigate_to_settings)
         card_body.addWidget(self._empty_state)
 
         root.addWidget(card, 1)

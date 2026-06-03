@@ -36,10 +36,11 @@ from PyQt6.QtGui import QColor, QCursor, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QFileDialog, QMenu,
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore
+from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.jargon_tooltip import get_definition
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
@@ -302,7 +303,28 @@ class OverviewPage(QWidget):
         _cta_lay.addWidget(self._scan_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
         root.addWidget(_cta)
 
-        # Scroll area
+        # ── Content stack: page 0 = empty state, page 1 = tile grid ─────────────
+        self._content_stack = QStackedWidget()
+        self._content_stack.setStyleSheet(f"QStackedWidget {{ background:{BG_DARK}; border:none; }}")
+
+        # Page 0 — empty state
+        _empty_card = EmptyStateCard(
+            icon="⬡",
+            title="Your network at a glance",
+            what_it_shows=(
+                "Devices, network grade, active alerts, and stability metrics — "
+                "all updated live as scans run."
+            ),
+            why_it_matters=(
+                "A single dashboard to know whether your network is healthy right now "
+                "without switching between pages."
+            ),
+            btn_label="Scan my network →",
+        )
+        _empty_card.clicked.connect(self.scan_requested.emit)
+        self._content_stack.addWidget(_empty_card)
+
+        # Page 1 — tile grid (scroll area)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -320,7 +342,9 @@ class OverviewPage(QWidget):
             self._grid_layout.setColumnStretch(c, 1)
 
         scroll.setWidget(self._grid_container)
-        root.addWidget(scroll, 1)
+        self._content_stack.addWidget(scroll)
+
+        root.addWidget(self._content_stack, 1)
 
         # ── Security scan panel — collapsed by default ────────────────────────
         self._security_panel = _SecurityScanPanel(self)
@@ -465,8 +489,15 @@ class OverviewPage(QWidget):
             self._scan_btn.setText("▶  Rescan" if self._has_results else "▶  Scan Network")
             self._scan_sub.setText("Discover devices  ·  check stability  ·  detect threats")
 
+    def _show_tiles(self) -> None:
+        """Switch from empty state to tile grid (one-way; never goes back)."""
+        if self._content_stack.currentIndex() != 1:
+            self._content_stack.setCurrentIndex(1)
+
     def set_has_results(self, has_data: bool) -> None:
         self._has_results = has_data
+        if has_data:
+            self._show_tiles()
         if not self._scanning:
             self._scan_btn.setText("▶  Rescan" if has_data else "▶  Scan Network")
 
@@ -556,6 +587,7 @@ class OverviewPage(QWidget):
 
     @pyqtSlot(dict)
     def on_cycle_done(self, result: dict) -> None:
+        self._show_tiles()
         states = result.get("states", {})
         rtts   = result.get("rtts",   {})
         t = self._tiles.get("device_count")
@@ -808,6 +840,7 @@ class OverviewPage(QWidget):
         if self._store:
             try:
                 devices = self._store.get_known_devices()
-                self.set_has_results(len(devices) > 0)
+                if devices:
+                    self.set_has_results(True)
             except Exception:
                 pass

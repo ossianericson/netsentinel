@@ -20,8 +20,10 @@ from PyQt6.QtCore    import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QFont
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
-    QSizePolicy, QVBoxLayout, QWidget,
+    QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
+
+from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK,
@@ -96,7 +98,8 @@ class _Ev:
 # ── Page ──────────────────────────────────────────────────────────────────────
 
 class TimelinePage(QWidget):
-    navigate_to = pyqtSignal(str)
+    navigate_to    = pyqtSignal(str)
+    scan_requested = pyqtSignal()
 
     def __init__(self, store: "MetricStore", parent=None):
         super().__init__(parent)
@@ -201,7 +204,27 @@ class TimelinePage(QWidget):
 
         outer.addLayout(chip_row)
 
-        # ── Scrollable event feed ─────────────────────────────────────────────
+        # ── Content stack: page 0 = empty state, page 1 = event feed ────────────
+        self._feed_stack = QStackedWidget()
+
+        # Page 0 — empty state
+        _empty = EmptyStateCard(
+            icon="≡",
+            title="No events yet",
+            what_it_shows=(
+                "A reverse-chronological log of device joins/leaves, fired alerts, "
+                "CVE discoveries, and speed test completions — all in one place."
+            ),
+            why_it_matters=(
+                "The timeline is your audit trail — run a scan to populate it "
+                "and leave the logger on to capture events as they happen."
+            ),
+            btn_label="Run a scan →",
+        )
+        _empty.clicked.connect(self.scan_requested.emit)
+        self._feed_stack.addWidget(_empty)
+
+        # Page 1 — scrollable event feed
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -215,7 +238,9 @@ class TimelinePage(QWidget):
         self._feed_layout.addStretch()
 
         scroll.setWidget(self._feed_container)
-        outer.addWidget(scroll, 1)
+        self._feed_stack.addWidget(scroll)
+
+        outer.addWidget(self._feed_stack, 1)
 
         self._reload()
 
@@ -223,6 +248,8 @@ class TimelinePage(QWidget):
 
     def _reload(self) -> None:
         self._events = self._fetch_events()
+        if self._events:
+            self._feed_stack.setCurrentIndex(1)
         self._render()
         self._update_glance()
 

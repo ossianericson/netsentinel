@@ -607,11 +607,21 @@ class SpeedTestPage(QWidget):
         )
 
         # Empty state — shown when no history exists yet
-        _hist_empty = QLabel("No tests recorded yet.\nRun a speed test to start building history.")
-        _hist_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _hist_empty.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:12px; background:transparent; border:none;"
+        from ui.widgets.empty_state_card import EmptyStateCard as _ESC
+        _hist_empty = _ESC(
+            icon="◈",
+            title="No speed tests recorded yet",
+            what_it_shows=(
+                "Download speed, upload speed, ping, and jitter history — "
+                "with a trend chart and per-server breakdown."
+            ),
+            why_it_matters=(
+                "Tracking speeds over time reveals ISP throttling patterns "
+                "and time-of-day degradation that single tests miss."
+            ),
+            btn_label="Run Speed Test →",
         )
+        _hist_empty.clicked.connect(self.scan_requested.emit)
         # Date-range filter (FILTER-13)
         _date_row = QHBoxLayout()
         _date_row.setSpacing(6)

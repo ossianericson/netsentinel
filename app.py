@@ -369,7 +369,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.79")
+    app.setApplicationVersion("1.9.80")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -402,7 +402,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.79")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.80")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -663,6 +663,10 @@ def main():
     window._lab_mode_page.explore_protocol.connect(_on_explore_protocol)
     window._trigger_page.scan_requested.connect(window._start_full_scan)
     window._diagnosis_page.scan_requested.connect(window._start_full_scan)
+    # H6: wire empty-state CTAs added in Sprint H6
+    window._geo_map_page.scan_requested.connect(window._start_full_scan)
+    window._timeline_page.scan_requested.connect(window._start_full_scan)
+    window._trend_page.scan_requested.connect(window._start_full_scan)
 
     # ── Show window / close splash ────────────────────────────────────────────
     if not _start_minimised:

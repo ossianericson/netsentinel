@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import (
-    QComboBox, QHBoxLayout, QLabel, QPushButton, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QComboBox, QHBoxLayout, QLabel, QPushButton, QStackedWidget,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.npcap_banner import NpcapMissingBanner
@@ -20,6 +20,7 @@ from ui.styles import (
     ACCENT, AMBER, BORDER, GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY,
 )
+from ui.widgets.empty_state_card import EmptyStateCard
 
 
 class WiFiMonitorPage(QWidget):
@@ -86,7 +87,32 @@ class WiFiMonitorPage(QWidget):
         self._status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;")
         lay.addWidget(self._status_lbl)
 
-        # Frame table
+        # ── Content stack: page 0 = empty state, page 1 = frame table ───────────
+        self._capture_stack = QStackedWidget()
+
+        # Page 0 — empty state
+        _empty = EmptyStateCard(
+            icon="◆",
+            title="No frames captured yet",
+            what_it_shows=(
+                "Raw 802.11 management frames — beacons, probe requests, "
+                "authentication and deauth frames from nearby wireless devices."
+            ),
+            why_it_matters=(
+                "Passive capture reveals hidden SSIDs, rogue access points, "
+                "and deauth attacks without transmitting any traffic."
+            ),
+            btn_label="Start Monitoring →",
+        )
+        _empty.clicked.connect(self._start)
+        self._capture_stack.addWidget(_empty)
+
+        # Page 1 — frame table + footer
+        _table_page = QWidget()
+        _tlay = QVBoxLayout(_table_page)
+        _tlay.setContentsMargins(0, 0, 0, 0)
+        _tlay.setSpacing(4)
+
         self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(
             ["Time", "Frame Type", "Source MAC", "SSID", "Destination"]
@@ -106,7 +132,7 @@ class WiFiMonitorPage(QWidget):
             f"QHeaderView::section{{background:{ACCENT};color:white;"
             f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
         )
-        lay.addWidget(self._table, 1)
+        _tlay.addWidget(self._table, 1)
 
         bottom = QHBoxLayout()
         self._frame_count_lbl = QLabel("0 frames captured")
@@ -119,7 +145,10 @@ class WiFiMonitorPage(QWidget):
         clear_btn.setFixedWidth(70)
         clear_btn.clicked.connect(self._clear)
         bottom.addWidget(clear_btn)
-        lay.addLayout(bottom)
+        _tlay.addLayout(bottom)
+
+        self._capture_stack.addWidget(_table_page)
+        lay.addWidget(self._capture_stack, 1)
 
     def _populate_interfaces(self) -> None:
         from workers.wifi_monitor_worker import WiFiMonitorWorker
@@ -166,6 +195,8 @@ class WiFiMonitorPage(QWidget):
 
     @pyqtSlot(dict)
     def _on_frame(self, f: dict) -> None:
+        if self._capture_stack.currentIndex() == 0:
+            self._capture_stack.setCurrentIndex(1)
         row = self._table.rowCount()
         if row >= 5000:
             self._table.removeRow(0)
