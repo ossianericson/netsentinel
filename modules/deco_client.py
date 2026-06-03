@@ -126,14 +126,20 @@ class DecoMeshClient:
         clients = c.get_all_clients(units=units)
     """
 
-    def __init__(self, host: str, password: str, timeout: float = 15.0) -> None:
+    def __init__(self, host: str, password: str, timeout: float = 30.0) -> None:
         self.host     = host
         self._timeout = int(timeout)
         self._client  = None
         self._password = password   # kept only until first successful login
 
     def _ensure_client(self) -> None:
-        """Lazy-init and authenticate the underlying library client."""
+        """Lazy-init and authenticate the underlying library client.
+
+        Tries HTTP first; if that times out (newer Deco firmware may only accept
+        HTTPS on port 443 while port 80 silently drops requests) automatically
+        retries over HTTPS with SSL verification disabled (Deco uses a
+        self-signed certificate).
+        """
         if self._client is not None:
             return
         try:
@@ -144,23 +150,41 @@ class DecoMeshClient:
                 "Run: pip install tplinkrouterc6u"
             ) from exc
 
-        client = TPLinkDecoClient(
-            f"http://{self.host}",
-            self._password,
-            timeout=self._timeout,
-        )
-        try:
-            client.authorize()
-        except Exception as exc:
-            raise MeshAuthError(
-                f"Deco login failed for {self.host}: {exc}\n"
-                "Check that the password is correct (local admin password, "
-                "not TP-Link cloud account)."
-            ) from exc
+        _protocols = [
+            (f"http://{self.host}",  True),   # plain HTTP — works on most firmware
+            (f"https://{self.host}", False),  # HTTPS, skip cert verify (self-signed)
+        ]
+        _last_exc: Exception | None = None
+        for _url, _verify in _protocols:
+            _client = TPLinkDecoClient(
+                _url, self._password,
+                timeout=self._timeout,
+                verify_ssl=_verify,
+            )
+            try:
+                _client.authorize()
+            except requests.exceptions.Timeout as exc:
+                _last_exc = exc
+                log.debug("Deco %s timed out, trying next protocol…", _url)
+                continue
+            except Exception as exc:
+                raise MeshAuthError(
+                    f"Deco login failed for {self.host}: {exc}\n"
+                    "Check that the password is correct (local admin password, "
+                    "not TP-Link cloud account)."
+                ) from exc
+            # Success
+            self._client = _client
+            self._password = ""   # discard from memory after login
+            log.debug("Deco authenticated via %s  stok=%.8s...", _url, _client._stok)
+            return
 
-        self._client = client
-        self._password = ""   # discard from memory after login
-        log.debug("Deco authenticated against %s  stok=%.8s...", self.host, client._stok)
+        raise MeshAuthError(
+            f"Cannot reach Deco at {self.host} — timed out on both HTTP and HTTPS.\n"
+            "Check: (1) IP address is correct  "
+            "(2) Deco is online  "
+            "(3) local web interface is not disabled in the TP-Link app."
+        ) from _last_exc
 
     def login(self) -> str:
         """Authenticate and return the stok session token."""

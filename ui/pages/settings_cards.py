@@ -334,19 +334,19 @@ class _SettingsCardsMixin:
     def _chip_style(self, state: str) -> str:
         if state == "green":
             return (
-                "font-size:10px; font-weight:bold; color:BADGE_OK_FG;"
-                " background:BADGE_OK_BG; border:1px solid BADGE_OK_BORDER; border-radius:10px;"
+                f"font-size:10px; font-weight:bold; color:{BADGE_OK_FG};"
+                f" background:{BADGE_OK_BG}; border:1px solid {BADGE_OK_BORDER}; border-radius:10px;"
                 " padding:0 10px;"
             )
         if state == "amber":
             return (
-                "font-size:10px; font-weight:bold; color:INLINE_WARN_FG;"
-                " background:INLINE_WARN_BG; border:1px solid AMBER; border-radius:10px;"
+                f"font-size:10px; font-weight:bold; color:{INLINE_WARN_FG};"
+                f" background:{INLINE_WARN_BG}; border:1px solid {AMBER}; border-radius:10px;"
                 " padding:0 10px;"
             )
         return (
-            "font-size:10px; font-weight:bold; color:BADGE_OFF_FG;"
-            " background:BADGE_OFF_BG; border:1px solid BADGE_OFF_BORDER; border-radius:10px;"
+            f"font-size:10px; font-weight:bold; color:{BADGE_OFF_FG};"
+            f" background:{BADGE_OFF_BG}; border:1px solid {BADGE_OFF_BORDER}; border-radius:10px;"
             " padding:0 10px;"
         )
 

@@ -71,7 +71,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     "widgets/hub_card.py": 1870,  # actual 1,665 + margin (Sprint 6 S15-2 split)
 
     # Pure data-persistence and utility helpers extracted from hub_card.py (Sprint 6, S15-2).
-    "widgets/hub_helpers.py": 620,  # actual 577 + margin
+    "widgets/hub_helpers.py": 660,  # actual 627 + margin (stale-path migration helpers added)
 
     # All Overview tile classes (_BaseTile subclasses) + _TILE_CLASSES/_DEFAULT_ORDER.
     # Single concern, appropriate size for now.  Watch for growth.

@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.75
+**Fixed**
+- `settings_cards.py`: Configuration Status chips were rendering black — `_chip_style()` returned plain strings instead of f-strings so colour variable names were never interpolated
+- `hub_helpers.py`: Plugin instances stored with stale PyInstaller `_MEI` temp-dir paths are now resolved to the stable `AppData/plugins/` copy on load; added `_resolve_path()` helper and updated `_load_instances()` migration to fix paths before saving
+- `hardware_integration_page.py`: Credential dialog was silently skipped when re-registering a plugin after a settings reset (old keyring entry still present); new registrations now always show the dialog
+- `deco_client.py`: Deco XE75 authentication now falls back to HTTPS with `verify_ssl=False` when HTTP times out (newer firmware redirects API traffic to HTTPS); default timeout raised to 30 s
+- `deco_plugin.py`: `_fmt_err` classified timeout errors inside auth calls as `AUTH:` — network keywords now checked before auth keywords so "Read timed out" errors show correctly as "Cannot reach the device"
+- `plugin_page_mixin.py`: `_reload_section` called `load_section` with wrong kwarg `on_navigate=` (correct: `on_click=`); silently swallowed `TypeError` meant the Extend flyout was never updated after adding a plugin
+- `credential_dialog.py`: Dialog positioned relative to the page widget inside a scroll area, causing it to appear off-screen; now uses `QApplication.activeWindow()` so it always centers on the main window
+
 ### v1.9.74
 **Added**
 - `ui/styles.py`: `apply_theme()`, `apply_accent_override()`, `get_theme_manager()`, `get_app_qss()` — live theme switching without restart

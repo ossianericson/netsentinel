@@ -54,7 +54,12 @@ def show_credential_dialog(
     Returns (accepted, confirmed_ip).  confirmed_ip is the IP the user
     actually entered (may differ from default_ip), or "" on cancel.
     """
-    dlg = QDialog(parent)
+    # Use the active top-level window so the dialog centers on the screen
+    # rather than relative to the page widget (which may be inside a scroll area,
+    # causing the dialog to appear partially off-screen).
+    from PyQt6.QtWidgets import QApplication as _QApp
+    _top = _QApp.activeWindow() or parent
+    dlg = QDialog(_top)
     dlg.setWindowTitle(f"Set up {name}")
     dlg.setMinimumWidth(400)
 

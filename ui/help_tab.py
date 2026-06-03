@@ -360,9 +360,11 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Live theme switching", "Switching colour themes in Settings now applies immediately — no restart required. The nav rail, page headers, and QMenu/tooltip colours all update at once."),
-        ("Full keyboard shortcut reference", "The Keyboard Shortcuts card (here and in Settings) now lists all 15 shortcuts including navigation (Ctrl+K, Ctrl+F, Escape), scanning, tables, and macOS platform variants."),
-        ("? help button on every page", "Every page with help content now shows its ? button in the page header from startup — no need to visit the page first."),
+        ("Hardware plugin reliability", "Plugin instances with stale PyInstaller temp-dir paths are now automatically remapped to the stable AppData copy on startup, eliminating 'Plugin file not found' errors after updates."),
+        ("Deco XE75 HTTPS fallback", "The TP-Link Deco client now retries over HTTPS when HTTP port 80 times out, fixing authentication on firmware versions that require HTTPS for the local API."),
+        ("Extend flyout refreshes on add", "Adding a hardware plugin now immediately shows the new entry in the left rail Extend flyout without requiring a click away and back."),
+        ("Credential dialog always centered", "The plugin credential dialog now centers on the main window instead of the page widget, so it is always fully visible on screen."),
+        ("Configuration Status chips fixed", "The coloured status chips in Settings > Configuration Status now render with the correct badge colours instead of black."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

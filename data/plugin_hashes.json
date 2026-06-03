@@ -1,6 +1,6 @@
 {
   "asus_plugin.py": "46e794382b386ecb6f061c6ec4054bdf553ef12da9aec8bf4bfde8d102c90056",
-  "deco_plugin.py": "5ae009a9f55b4ad8c150129e246fa184221885f40e3d7f100183c27e6f526093",
+  "deco_plugin.py": "f2f3cc645bae2d1e2ef38bfd5993b4e1b17e0d43b97defa8e158f19172cdbec8",
   "example_open_ports_report.py": "6180219cad7b4c9734cad515c48095db403a37237a17f0238d40f858cc5ea569",
   "fritzbox_plugin.py": "87d5e80f010ae9254b18a1f7225888aad102153842e2bc3f5a4a314fba3c8499",
   "ha_plugin.py": "16c7af02eb58c3c63a6e58ffb28c6bde6eb7785ea933566aa35d0783a28fe26e",

@@ -85,10 +85,12 @@ def _fmt_err(exc: Exception) -> str:
     if isinstance(exc, ImportError) or 'pip install' in msg:
         return 'DEPS: ' + msg
     lm = msg.lower()
+    # Check network errors BEFORE auth keywords — a timeout inside an auth call
+    # (e.g. "Deco login failed … Read timed out") must be classified as NET, not AUTH.
+    if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network is')):
+        return 'NET: ' + msg
     if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
         return 'AUTH: ' + msg
-    if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network')):
-        return 'NET: ' + msg
     return 'ERR: ' + msg
 
 def get_info() -> dict:

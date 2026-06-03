@@ -284,6 +284,20 @@ def _save_paths(paths: list[str]) -> None:
 # Each entry: {"id": str, "path": str, "ip": str, "name": str}
 # "id" is a short UUID fragment used as the keyring key.
 
+def _resolve_path(p: str) -> str:
+    """Return a stable AppData copy path if *p* no longer exists (e.g. stale _MEI path)."""
+    if Path(p).exists():
+        return p
+    try:
+        from modules.utils import get_app_data_dir as _gad
+        appdata_copy = _gad() / "plugins" / Path(p).name
+        if appdata_copy.exists():
+            return str(appdata_copy)
+    except Exception:
+        pass
+    return p
+
+
 def _load_instances() -> list[dict]:
     s = QSettings("NetSentinel", "NetSentinel")
     raw = s.value(_SETTINGS_INSTANCES, None)
@@ -291,6 +305,15 @@ def _load_instances() -> list[dict]:
         try:
             data = json.loads(raw)
             if isinstance(data, list):
+                # Resolve any stale paths (e.g. PyInstaller _MEI temp dirs that are gone)
+                changed = False
+                for inst in data:
+                    resolved = _resolve_path(inst.get("path", ""))
+                    if resolved != inst.get("path", ""):
+                        inst["path"] = resolved
+                        changed = True
+                if changed:
+                    _save_instances(data)
                 return data
         except Exception:
             pass  # corrupted QSettings value — fall through to migration path
@@ -300,6 +323,7 @@ def _load_instances() -> list[dict]:
         return []
     instances = []
     for p in legacy:
+        p = _resolve_path(p)  # resolve stale _MEI paths before saving
         ok, _, meta = _validate_script(p)
         instances.append({
             "id":   _path_hash(p)[:12],
@@ -366,10 +390,15 @@ def _migrate_stale_paths() -> None:
     get_app_data_dir()/plugins/ and updates QSettings so subsequent launches
     work without user action.
 
+    Also fixes stale paths in the hardware/instances key (the current registry)
+    so plugin device pages built at startup see valid paths.
+
     Extracted from the page method so tests can import and call it directly.
     """
     import shutil as _sh
     from modules.utils import get_app_data_dir as _gad
+
+    # ── Fix legacy hardware/custom_scripts key ────────────────────────────────
     paths = _load_paths()
     changed = False
     new_paths = []
@@ -399,6 +428,12 @@ def _migrate_stale_paths() -> None:
         new_paths.append(p)
     if changed:
         _save_paths(new_paths)
+
+    # ── Fix hardware/instances paths (current registry) ───────────────────────
+    # _load_instances() already calls _resolve_path() on every read, but calling
+    # it here ensures the QSettings value is written back before tabs.py reads
+    # instances at dashboard init time.
+    _load_instances()
 
 
 def _load_last_result(path: str) -> Optional[dict]:

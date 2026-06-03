@@ -249,7 +249,7 @@ class _PluginPageMixin:
                 title=name,
                 entries=entries,
                 active_label=self._nav_current_page_label,
-                on_navigate=self._nav_rail_go_to,
+                on_click=self._nav_rail_go_to,
                 on_pin_toggle=self._on_rail_pin_toggle,
             )
             for _lbl, _clr in getattr(self, "_flyout_dots", {}).items():

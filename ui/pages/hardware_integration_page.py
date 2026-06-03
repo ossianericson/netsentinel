@@ -358,13 +358,20 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
 
         cred_label = meta.get("credential_label", "")
         hw_ip      = meta.get("ip", "")
+
+        # Check whether this is a truly new registration so we know whether to
+        # force the credential dialog (always shown for new instances regardless
+        # of any existing keyring entry — e.g. after a settings reset the
+        # keyring is not cleared, so silently skipping the dialog would leave
+        # the user with no feedback that credentials are being used).
+        instances_pre = _load_instances()
+        inst_id_pre   = _instance_id(path, hw_ip or path)
+        is_new_pre    = not any(i["id"] == inst_id_pre for i in instances_pre)
+
         if cred_label and hw_ip:
-            try:
-                import keyring as _kr
-                existing_pw = _kr.get_password("NetSentinel/hardware", hw_ip)
-            except Exception:
-                existing_pw = None
-            if not existing_pw:
+            if is_new_pre:
+                # New registration — always show the dialog even if keyring has
+                # a leftover credential from a previous install or settings reset.
                 accepted, confirmed_ip = show_credential_dialog(
                     self, meta.get("name", Path(path).stem), hw_ip, cred_label,
                     plugin_path=path,
@@ -373,6 +380,23 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
                     self._set_status("Setup cancelled.", error=True)
                     return
                 hw_ip = confirmed_ip or hw_ip
+            else:
+                # Re-registering an existing instance — only prompt if keyring
+                # has no password (user deleted it manually).
+                try:
+                    import keyring as _kr
+                    existing_pw = _kr.get_password("NetSentinel/hardware", hw_ip)
+                except Exception:
+                    existing_pw = None
+                if not existing_pw:
+                    accepted, confirmed_ip = show_credential_dialog(
+                        self, meta.get("name", Path(path).stem), hw_ip, cred_label,
+                        plugin_path=path,
+                    )
+                    if not accepted:
+                        self._set_status("Setup cancelled.", error=True)
+                        return
+                    hw_ip = confirmed_ip or hw_ip
 
         label   = meta.get("name", Path(path).stem)
         inst_ip = hw_ip
