@@ -581,14 +581,18 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # auto-snapshot errors must never break the scan result handler
 
 
-        # Auto-navigate to Overview on the very first scan only (home page onboarding).
-        # After that the user knows the app — leave them where they are.
+        # After the very first scan: start guided tour (if eligible) or fall back
+        # to Overview.  Subsequent scans leave the user on the current page.
         _qs = QSettings("NetSentinel", "NetSentinel")
         _first_scan = not _qs.value("app/has_scanned_before", False, type=bool)
         if getattr(self, "_scan_from_home", False) and len(devices) > 0 and _first_scan:
             self._scan_from_home = False
             _qs.setValue("app/has_scanned_before", True)
-            self._nav_rail_go_to("Overview")
+            from ui.guided_tour import GuidedTour, should_show_tour
+            if should_show_tour():
+                GuidedTour(self).start()
+            else:
+                self._nav_rail_go_to("Overview")
 
         # Re-apply cached mesh/plugin enrichment immediately so names/nodes are
         # visible without waiting for the async worker.

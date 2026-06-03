@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, AMBER_BG, BG_CARD,
+    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_CARD,
     BG_DARK, BG_HOVER, BORDER, CARD_RADIUS,
     INLINE_WARN_BG, INLINE_WARN_FG, NAV_DIVIDER, RED,
     SIDEBAR_BG, SIDEBAR_HOVER, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG,
@@ -800,6 +800,50 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         bc_row.addWidget(self._breadcrumb_lbl, 1)
 
         cw_lay.addLayout(bc_row)
+
+        # Tour bar — hidden by default; shown/updated by GuidedTour after first scan
+        self._tour_bar = QFrame()
+        self._tour_bar.setObjectName("tourBar")
+        self._tour_bar.setFixedHeight(40)
+        self._tour_bar.setVisible(False)
+        self._tour_bar.setStyleSheet(
+            f"QFrame#tourBar {{ background:{ACCENT}; }}"
+        )
+        _tb_lay = QHBoxLayout(self._tour_bar)
+        _tb_lay.setContentsMargins(12, 0, 12, 0)
+        _tb_lay.setSpacing(10)
+        self._tour_step_lbl = QLabel("Step 1 of 4")
+        self._tour_step_lbl.setStyleSheet(
+            f"color:{WHITE}; font-size:11px; font-weight:600;"
+            f" background:transparent; border:none;"
+        )
+        self._tour_body_lbl = QLabel()
+        self._tour_body_lbl.setStyleSheet(
+            f"color:{WHITE}; font-size:11px; background:transparent; border:none;"
+        )
+        self._tour_next_btn = QPushButton("Next  →")
+        self._tour_next_btn.setFixedHeight(26)
+        self._tour_next_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tour_next_btn.setStyleSheet(
+            f"QPushButton {{ background:{WHITE}; color:{ACCENT}; border:none;"
+            f" border-radius:4px; font-size:11px; font-weight:600; padding:0 10px; }}"
+            f"QPushButton:hover {{ background:{BG_CARD}; color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT_DARK}; }}"
+        )
+        self._tour_skip_btn = QPushButton("Skip tour")
+        self._tour_skip_btn.setFixedHeight(26)
+        self._tour_skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._tour_skip_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{WHITE}; border:none;"
+            f" font-size:11px; padding:0 4px; }}"
+            f"QPushButton:hover {{ color:{BG_CARD}; }}"
+            f"QPushButton:pressed {{ color:{WHITE}; }}"
+        )
+        _tb_lay.addWidget(self._tour_step_lbl)
+        _tb_lay.addWidget(self._tour_body_lbl, 1)
+        _tb_lay.addWidget(self._tour_next_btn)
+        _tb_lay.addWidget(self._tour_skip_btn)
+        cw_lay.addWidget(self._tour_bar)
 
         self._tip_bar = QPushButton("ⓘ  Tips  ▾")
         self._tip_bar.setCheckable(True)
