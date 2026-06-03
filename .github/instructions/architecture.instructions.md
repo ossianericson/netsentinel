@@ -191,8 +191,8 @@ netsentinel/
 │   │   ├── rest_api_page.py        # REST API — enable toggle, port, API key, live status probe, endpoint reference
 │   │   ├── security_overview_page.py # Security Overview — aggregate security findings dashboard
 │   │   ├── service_page.py
-│   │   ├── settings_cards.py       # _SettingsCardsMixin — non-appearance card builders for SettingsPage (S14-3c)
-│   │   ├── settings_appearance.py  # _SettingsAppearanceMixin — appearance + display card builders (Sprint 13)
+│   │   ├── settings_cards.py       # _SettingsCardsMixin — all settings card builders for SettingsPage; includes appearance/display cards (S14-3c)
+│   │   ├── settings_appearance.py  # _SettingsAppearanceMixin — INCOMPLETE SPLIT: appearance card stubs (Sprint 13); not inherited by SettingsPage — appearance methods remain in settings_cards.py
 │   │   ├── settings_page.py
 │   │   ├── snmp_trap_page.py
 │   │   ├── speed_test_page.py      # Speed Test — history rows store full modem signal dict; clicking a row restores signal panel
@@ -204,10 +204,15 @@ netsentinel/
 │   │   ├── uptime_page.py
 │   │   ├── wifi_heatmap_page.py    # Floor plan import + IDW interpolation + PNG export
 │   │   └── wifi_monitor_page.py    # 802.11 Monitor — passive frame capture (Npcap; admin required)
+│   ├── header.py               # AppHeaderMixin — header construction + frameless-window behaviour (S13-3 split)
 │   ├── scan_wiring.py          # ScanResultMixin — scan result handlers (extracted from dashboard.py)
 │   ├── scan_enrichment.py      # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers (Sprint 13)
-│   ├── monitor_state.py        # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, VerdictPanel, RiskBadge (Sprint 19)
-│   ├── plugin_page_mixin.py    # _PluginPageMixin — plugin page lifecycle, HW auto-detect, scan launch (Sprint 19)
+│   ├── tabs.py                 # TabBuilderMixin — page factory and sidebar assembly; inherits all _*TabsMixin sub-mixins (Sprint 6)
+│   ├── tabs_helpers.py         # Shared UI utility functions for tab builders; re-exported via tabs.py (Sprint 8)
+│   ├── tabs_scan.py            # _ScanTabsMixin — scan result tab content builders M1–M5 (Sprint 8 split)
+│   ├── tabs_network.py         # _NetworkTabsMixin — network configuration tab builder (Sprint 8 split)
+│   ├── tabs_diag.py            # _DiagTabsMixin — diagnostics tab builder; inherits _DiagExtraTabsMixin + _LoggerTabMixin (Sprint 8 split)
+│   ├── tabs_recon.py           # _ReconTabsMixin — security-audit recon tab builders (Sprint 18 split)
 │   ├── tabs_analysis.py        # _AnalysisTabsMixin — IPv6/Cloud/Correlator/IoT/Benchmark tab builders (Sprint 13)
 │   ├── tabs_diag_extra.py      # _DiagExtraTabsMixin — MTR tab + advanced tools tab + handlers (Sprint 13)
 │   ├── tabs_logger.py          # _LoggerTabMixin — network logger tab builder + handlers + retention helpers (Sprint 15)
@@ -249,7 +254,6 @@ netsentinel/
 │   ├── ha_worker.py
 │   ├── hw_detect_worker.py     # HwDetectWorker — scans for connected hardware integration devices
 │   ├── iface_bw_worker.py
-│   ├── mesh_worker.py          # MeshWorker — polls Deco XE75 API for mesh node signal/topology
 │   ├── plugin_polling_worker.py  # PluginPollingWorker — periodic data fetch for polling-type plugins
 │   ├── plugin_worker.py        # PluginWorker — event-driven execution runner for active plugins
 │   ├── process_worker.py       # ProcessWorker — snapshots process-to-socket map via psutil
@@ -261,8 +265,7 @@ netsentinel/
 │   ├── speed_test_worker.py    # FetchServersWorker + SpeedTestWorker
 │   ├── syslog_worker.py
 │   ├── threat_intel_worker.py
-│   ├── wifi_monitor_worker.py  # WifiMonitorWorker — passive 802.11 capture thread (Npcap)
-│   └── zte_worker.py           # ZteWorker — polls ZTE MC889 modem for 5G/LTE signal stats
+│   └── wifi_monitor_worker.py  # WifiMonitorWorker — passive 802.11 capture thread (Npcap)
 └── tests/
 ```
 

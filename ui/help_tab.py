@@ -360,9 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Visual theme swatch cards", "Settings > Appearance now shows mini colour-preview cards for each theme — nav bar, sidebar, content and accent colours visible at a glance. Click any card to switch instantly."),
+        ("Architecture docs corrected", "Internal codebase documentation updated to match actual files on disk — 7 previously undocumented ui/ modules added, stale worker entries removed."),
+        ("Visual theme swatch cards", "Settings > Appearance shows mini colour-preview cards for each theme. Click any card to switch instantly."),
         ("Instant theme switching everywhere", "The first-run theme banner and the header theme-cycle button now apply themes live without requiring a restart."),
-        ("Header toggle updates immediately", "The theme icon in the top bar updates to reflect the newly selected theme as soon as you click."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

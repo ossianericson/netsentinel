@@ -322,6 +322,10 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.77
+**Changed**
+- Architecture documentation corrected to match actual codebase: 7 missing `ui/` files added (`header.py`, `tabs.py`, `tabs_helpers.py`, `tabs_scan.py`, `tabs_network.py`, `tabs_diag.py`, `tabs_recon.py`), 2 duplicate entries removed, `settings_cards.py` and `settings_appearance.py` descriptions fixed, non-existent `mesh_worker.py` and `zte_worker.py` removed from workers layout
+
 ### v1.9.76
 **Changed**
 - Settings > Appearance: theme selector replaced with visual mini swatch cards (128×90 px each) showing a scaled colour preview of each theme — nav bar, sidebar, content area, card and accent colours
