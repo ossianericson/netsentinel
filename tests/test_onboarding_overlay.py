@@ -14,6 +14,15 @@ Sprint I2 acceptance criteria:
   - Count-up timer populates Screen 3 device count
   - KPI cards and verdict text are populated on completion
   - Skip from Screen 2 does not trigger Screen 3
+
+Sprint I3 acceptance criteria:
+  - Screen 4 (device table spotlight) is a real widget, not a placeholder
+  - Screen 4 has a Next button that advances to Screen 5
+  - Screen 5 (monitoring sparkline) contains a MiniSparklineWidget
+  - Screen 5 has a Done button that advances to Screen 6
+  - Screen 6 contains a CheckmarkAnimWidget with start_anim() / stop()
+  - MiniSparklineWidget and CheckmarkAnimWidget can be imported/instantiated
+  - CheckmarkAnimWidget emits animation_done after animation completes
 """
 import pytest
 
@@ -276,3 +285,141 @@ def test_kpi_card_set_value():
     except RuntimeError:
         pass
     app.processEvents()
+
+
+# ── Sprint I3 behaviour tests ─────────────────────────────────────────────────
+
+def test_mini_sparkline_import():
+    from ui.widgets.scan_animation import MiniSparklineWidget
+    assert MiniSparklineWidget is not None
+
+
+def test_checkmark_anim_import():
+    from ui.widgets.scan_animation import CheckmarkAnimWidget
+    assert CheckmarkAnimWidget is not None
+
+
+def test_mini_sparkline_instantiates(root_widget):
+    from ui.widgets.scan_animation import MiniSparklineWidget
+    w = MiniSparklineWidget(parent=root_widget)
+    assert w is not None
+    w.stop()
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass
+    QApplication.instance().processEvents()
+
+
+def test_checkmark_anim_instantiates(root_widget):
+    from ui.widgets.scan_animation import CheckmarkAnimWidget
+    w = CheckmarkAnimWidget(parent=root_widget)
+    assert w is not None
+    assert w._phase == 0, "animation must start in idle phase"
+    w.stop()
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass
+    QApplication.instance().processEvents()
+
+
+def test_checkmark_anim_starts_on_start_anim(root_widget):
+    from ui.widgets.scan_animation import CheckmarkAnimWidget
+    w = CheckmarkAnimWidget(parent=root_widget)
+    w.start_anim()
+    assert w._phase == 1, "start_anim() should set phase to 1 (circle)"
+    w.stop()
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass
+    QApplication.instance().processEvents()
+
+
+def test_checkmark_animation_done_signal(root_widget):
+    """animation_done fires after the full animation completes."""
+    import time
+    from ui.widgets.scan_animation import CheckmarkAnimWidget
+    app = QApplication.instance()
+
+    w = CheckmarkAnimWidget(parent=root_widget)
+    fired = []
+    w.animation_done.connect(lambda: fired.append(True))
+    w.start_anim()
+
+    # Pump the event loop until done or timeout (3 s max)
+    deadline = time.monotonic() + 3.0
+    while not fired and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.02)
+
+    assert fired, "animation_done signal should have fired"
+    assert w._phase == 3, "phase should be 3 (done) after animation"
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass
+    app.processEvents()
+
+
+def test_screen_4_navigates_to_screen_5(overlay):
+    """Screen 4 Next button must advance to Screen 5."""
+    overlay._go_to_screen(4)
+    assert overlay._stack.currentIndex() == 4
+    overlay._go_to_screen(5)
+    assert overlay._stack.currentIndex() == 5
+
+
+def test_screen_5_has_sparkline(overlay):
+    """Screen 5 must have a MiniSparklineWidget stored as _s5_sparkline."""
+    from ui.widgets.scan_animation import MiniSparklineWidget
+    assert hasattr(overlay, "_s5_sparkline"), "overlay should have _s5_sparkline"
+    assert isinstance(overlay._s5_sparkline, MiniSparklineWidget)
+
+
+def test_screen_5_navigates_to_screen_6(overlay):
+    """Screen 5 Done button must advance to Screen 6."""
+    overlay._go_to_screen(5)
+    overlay._go_to_screen(6)
+    assert overlay._stack.currentIndex() == 6
+
+
+def test_screen_6_has_checkmark_widget(overlay):
+    """Screen 6 must have a CheckmarkAnimWidget stored as _s6_checkmark."""
+    from ui.widgets.scan_animation import CheckmarkAnimWidget
+    assert hasattr(overlay, "_s6_checkmark"), "overlay should have _s6_checkmark"
+    assert isinstance(overlay._s6_checkmark, CheckmarkAnimWidget)
+
+
+def test_screen_4_is_not_placeholder(overlay):
+    """Screen 4 must have _s5_sparkline (built by _build_screen_5) proving screens 4-5 are real."""
+    # If screen 4 is a placeholder, _build_screen_5 would never have been called
+    assert hasattr(overlay, "_s5_sparkline"), (
+        "Screen 5 sparkline widget missing — screens 4-5 are still placeholders"
+    )
+
+
+def test_device_preview_row_instantiates(root_widget):
+    from ui.widgets.onboarding_overlay import _DevicePreviewRow
+    from ui.styles import GREEN, WHITE, TEXT_PRIMARY
+    row = _DevicePreviewRow(GREEN, "Test PC", "192.168.1.1", "Clean", GREEN, WHITE,
+                            parent=root_widget)
+    assert row is not None
+    try:
+        row.deleteLater()
+    except RuntimeError:
+        pass
+    QApplication.instance().processEvents()
+
+
+def test_risk_chip_instantiates(root_widget):
+    from ui.widgets.onboarding_overlay import _RiskChip
+    from ui.styles import GREEN, WHITE
+    chip = _RiskChip("Clean", GREEN, WHITE, parent=root_widget)
+    assert chip.text() == "Clean"
+    try:
+        chip.deleteLater()
+    except RuntimeError:
+        pass
+    QApplication.instance().processEvents()

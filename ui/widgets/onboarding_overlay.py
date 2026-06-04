@@ -91,10 +91,8 @@ class OnboardingOverlay(QWidget):
         self._build_screen_1()
         self._build_screen_2()
         self._build_screen_3()
-        self._build_placeholder(4, "Every device, in plain English",
-                                "Sprint I3 will show a device table preview here.")
-        self._build_placeholder(5, "Your connection is being watched",
-                                "Sprint I3 will show the RTT sparkline here.")
+        self._build_screen_4()
+        self._build_screen_5()
         self._build_screen_6()
 
         self._stack.setCurrentIndex(0)
@@ -366,58 +364,141 @@ class OnboardingOverlay(QWidget):
         self._s3_count_timer   = QTimer(self)
         self._s3_count_timer.timeout.connect(self._tick_count_up)
 
-    def _build_placeholder(self, idx: int, title: str, body: str) -> None:
-        """Placeholder for Screens 4–5 (implemented in Sprint I3)."""
+    def _build_screen_4(self) -> None:
+        """Screen 4: Device table spotlight — every device in plain English."""
         page = QWidget()
         outer = QVBoxLayout(page)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        outer.addWidget(_TopBar(active_dot=idx - 1, on_skip=self._do_skip))
+        outer.addWidget(_TopBar(active_dot=3, on_skip=self._do_skip))
         outer.addStretch(1)
 
-        card = _CentreCard(400)
+        card = _CentreCard(440)
         lay  = card.inner
 
-        t = QLabel(title)
-        t.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        t.setStyleSheet(
-            f"font-size:20px; font-weight:600; color:{TEXT_PRIMARY};"
+        heading = QLabel("Every device, in plain English")
+        heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        heading.setStyleSheet(
+            f"font-size:22px; font-weight:600; color:{TEXT_PRIMARY};"
             " background:transparent; border:none;"
         )
-        lay.addWidget(t)
-        lay.addSpacing(12)
+        lay.addWidget(heading)
+        lay.addSpacing(8)
 
-        b = QLabel(body)
-        b.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        b.setStyleSheet(
+        sub = QLabel("Your network at a glance — names, types and risk levels.")
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub.setStyleSheet(
             f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
         )
-        lay.addWidget(b)
-        lay.addSpacing(40)
+        lay.addWidget(sub)
+        lay.addSpacing(18)
 
-        # Next button — advances to Screen idx+1; Screen 5 goes to Screen 6 (Done)
-        next_target = idx + 1
-        label = "Done — Start exploring" if idx == 5 else "Next  →"
-        btn_qss_bg = GREEN if idx == 5 else ACCENT
-        btn = QPushButton(label)
-        btn.setFixedHeight(48)
-        btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setStyleSheet(
-            f"QPushButton {{ background:{btn_qss_bg}; color:{WHITE};"
-            f" border:none; border-radius:8px; font-size:15px; font-weight:600; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        # Mini device table
+        table_wrap = QWidget()
+        table_wrap.setStyleSheet(
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:6px;"
         )
-        btn.clicked.connect(lambda checked=False, t=next_target: self._go_to_screen(t))
+        table_lay = QVBoxLayout(table_wrap)
+        table_lay.setContentsMargins(0, 0, 0, 0)
+        table_lay.setSpacing(0)
+
+        rows = [
+            (GREEN,  "Your Computer",  "192.168.1.2",  "Clean",  GREEN,  WHITE),
+            (GREEN,  "iPhone",         "192.168.1.5",  "Clean",  GREEN,  WHITE),
+            (AMBER,  "Unknown device", "192.168.1.12", "Review", AMBER,  TEXT_PRIMARY),
+        ]
+        for i, (dot_col, name, ip, chip_txt, chip_bg, chip_fg) in enumerate(rows):
+            row_w = _DevicePreviewRow(dot_col, name, ip, chip_txt, chip_bg, chip_fg)
+            if i < len(rows) - 1:
+                row_w.setStyleSheet(
+                    f"background:{BG_CARD};"
+                    f" border-bottom:1px solid {BORDER};"
+                )
+            table_lay.addWidget(row_w)
+
+        lay.addWidget(table_wrap)
+        lay.addSpacing(10)
+
+        note = QLabel("Right-click any device for context-sensitive actions.")
+        note.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        note.setStyleSheet(
+            f"font-size:11px; font-style:italic; color:{TEXT_MUTED};"
+            " background:transparent; border:none;"
+        )
+        lay.addWidget(note)
+        lay.addSpacing(28)
+
+        btn = _AccentButton("Next  →")
+        btn.clicked.connect(lambda: self._go_to_screen(5))
         lay.addWidget(btn)
 
         _add_centre(outer, card)
         outer.addStretch(1)
         self._stack.addWidget(page)
 
+    def _build_screen_5(self) -> None:
+        """Screen 5: Monitoring spotlight — live RTT sparkline demo."""
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        outer.addWidget(_TopBar(active_dot=4, on_skip=self._do_skip))
+        outer.addStretch(1)
+
+        card = _CentreCard(420)
+        lay  = card.inner
+
+        heading = QLabel("Your connection, always visible")
+        heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        heading.setStyleSheet(
+            f"font-size:22px; font-weight:600; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        lay.addWidget(heading)
+        lay.addSpacing(8)
+
+        sub = QLabel("Latency, packet loss and outages — tracked in the background.")
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub.setStyleSheet(
+            f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        lay.addWidget(sub)
+        lay.addSpacing(22)
+
+        from ui.widgets.scan_animation import MiniSparklineWidget
+        self._s5_sparkline = MiniSparklineWidget()
+        self._s5_sparkline.setFixedSize(320, 72)
+        lay.addWidget(self._s5_sparkline, alignment=Qt.AlignmentFlag.AlignHCenter)
+        lay.addSpacing(8)
+
+        stats_lbl = QLabel("RTT  ≈ 9 ms  ·  0 packets lost")
+        stats_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        stats_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        lay.addWidget(stats_lbl)
+        lay.addSpacing(28)
+
+        done_btn = QPushButton("Done — Start exploring")
+        done_btn.setFixedHeight(48)
+        done_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        done_btn.setStyleSheet(
+            f"QPushButton {{ background:{GREEN}; color:{WHITE};"
+            f" border:none; border-radius:8px; font-size:15px; font-weight:600; }}"
+            f"QPushButton:hover    {{ background:{GREEN}; color:{WHITE}; }}"
+            f"QPushButton:pressed  {{ background:{GREEN}; color:{WHITE}; }}"
+        )
+        done_btn.clicked.connect(lambda: self._go_to_screen(6))
+        lay.addWidget(done_btn)
+
+        _add_centre(outer, card)
+        outer.addStretch(1)
+        self._stack.addWidget(page)
+
     def _build_screen_6(self) -> None:
-        """Screen 6: Done — auto-dismisses after 1.5 s."""
+        """Screen 6: Done — animated checkmark, auto-dismisses after 2.2 s."""
         page = QWidget()
         outer = QVBoxLayout(page)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -427,14 +508,10 @@ class OnboardingOverlay(QWidget):
         card = _CentreCard(360)
         lay  = card.inner
 
-        check = QLabel("✓")
-        check.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        check.setStyleSheet(
-            f"font-size:80px; font-weight:700; color:{GREEN};"
-            " background:transparent; border:none;"
-        )
-        lay.addWidget(check)
-        lay.addSpacing(18)
+        from ui.widgets.scan_animation import CheckmarkAnimWidget
+        self._s6_checkmark = CheckmarkAnimWidget()
+        lay.addWidget(self._s6_checkmark, alignment=Qt.AlignmentFlag.AlignHCenter)
+        lay.addSpacing(22)
 
         done_lbl = QLabel("You're all set")
         done_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -444,6 +521,13 @@ class OnboardingOverlay(QWidget):
         )
         lay.addWidget(done_lbl)
 
+        sub_lbl = QLabel("NetSentinel is running in the background.")
+        sub_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub_lbl.setStyleSheet(
+            f"font-size:13px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        lay.addWidget(sub_lbl)
+
         _add_centre(outer, card)
         outer.addStretch(1)
         self._stack.addWidget(page)
@@ -452,8 +536,12 @@ class OnboardingOverlay(QWidget):
 
     def _go_to_screen(self, n: int) -> None:
         self._stack.setCurrentIndex(n)
+        # Re-raise so sibling widgets (e.g. ScanSummarySheet) can't appear on top
+        self.raise_()
         if n == 6:
-            QTimer.singleShot(1500, self._finish)
+            self._s6_checkmark.start_anim()
+            # 800 ms animation + ~1400 ms rest before dismissing
+            QTimer.singleShot(2200, self._finish)
 
     def _on_scan_clicked(self) -> None:
         self.scan_requested.emit()
@@ -468,16 +556,21 @@ class OnboardingOverlay(QWidget):
         qs.setValue(_TOUR_KEY, True)
         if self.parent():
             self.parent().removeEventFilter(self)
-        # Stop animation timers before deletion
+        # Stop all animation timers before deletion
+        for attr in ("_s3_count_timer",):
+            try:
+                timer = getattr(self, attr, None)
+                if timer is not None:
+                    timer.stop()
+            except Exception:
+                pass
         try:
-            if hasattr(self, "_s3_count_timer"):
-                self._s3_count_timer.stop()
-        except Exception:
-            pass
-        try:
-            from ui.widgets.scan_animation import ScanAnimationWidget
-            for w in self.findChildren(ScanAnimationWidget):
-                w.stop()
+            from ui.widgets.scan_animation import (
+                ScanAnimationWidget, MiniSparklineWidget, CheckmarkAnimWidget,
+            )
+            for cls in (ScanAnimationWidget, MiniSparklineWidget, CheckmarkAnimWidget):
+                for w in self.findChildren(cls):
+                    w.stop()
         except Exception:
             pass
         self.hide()
@@ -514,6 +607,8 @@ class OnboardingOverlay(QWidget):
             )
 
         self._s2_bar.setValue(100)
+        # Re-raise now — scan result may have triggered ScanSummarySheet.show_sheet()
+        self.raise_()
         # Brief pause at 100% so the user sees completion before the transition
         QTimer.singleShot(400, lambda: self._show_screen_3(count, high))
 
@@ -699,3 +794,61 @@ class _TopBar(QWidget):
         skip = _SkipLink("Skip")
         skip.clicked.connect(on_skip)
         lay.addWidget(skip)
+
+
+class _RiskChip(QLabel):
+    """Small pill badge showing a risk level (e.g. 'Clean', 'Review')."""
+
+    def __init__(self, text: str, bg: str, fg: str, parent=None) -> None:
+        super().__init__(text, parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setFixedHeight(18)
+        self.setStyleSheet(
+            f"background:{bg}; color:{fg}; border:none; border-radius:8px;"
+            f" font-size:10px; font-weight:600; padding:0px 8px;"
+        )
+
+
+class _DevicePreviewRow(QWidget):
+    """Single row in the Screen 4 device table preview."""
+
+    def __init__(
+        self,
+        dot_color:  str,
+        device_name: str,
+        ip:          str,
+        chip_text:   str,
+        chip_bg:     str,
+        chip_fg:     str,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self.setStyleSheet(f"background:{BG_CARD};")
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(14, 7, 14, 7)
+        lay.setSpacing(10)
+
+        dot = QLabel("●")
+        dot.setFixedWidth(12)
+        dot.setStyleSheet(
+            f"font-size:10px; color:{dot_color}; background:transparent; border:none;"
+        )
+        lay.addWidget(dot)
+
+        name_lbl = QLabel(device_name)
+        name_lbl.setStyleSheet(
+            f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        lay.addWidget(name_lbl)
+
+        ip_lbl = QLabel(ip)
+        ip_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        lay.addWidget(ip_lbl)
+
+        lay.addStretch(1)
+
+        chip = _RiskChip(chip_text, chip_bg, chip_fg)
+        lay.addWidget(chip)

@@ -261,19 +261,22 @@ QSettings key: `ui/onboarding_v2_done` (reuses existing key so existing users ar
 - [x] Skip from Screen 2 goes to Screen 6 (not Screen 3)
 - [x] 21 tests pass; full suite 2964 passed; app launches cleanly
 
-### Sprint I3 — Feature spotlight screens + Done animation
-- [ ] Screens 4 and 5 (miniature previews, not full widgets)
-- [ ] Screen 6 (done checkmark + fade-out reveal animation)
-- [ ] Logger auto-start on Screen 5 button click
-- [ ] Mark `ui/onboarding_v2_done` in QSettings on completion
-- [ ] Full flow tested via screenshot automation
+### Sprint I3 — Feature spotlight screens + Done animation ✅ (2026-06-04)
+- [x] Screen 4: device table spotlight — 3-row preview (`_DevicePreviewRow` + `_RiskChip`), "Next →" advances to Screen 5
+- [x] Screen 5: monitoring spotlight — `MiniSparklineWidget` (simulated RTT, scrolls every 420 ms), "Done — Start exploring" green button
+- [x] Screen 6: animated checkmark — `CheckmarkAnimWidget` two-phase QPainter (circle expand ease-out + check draw-in), `animation_done` signal; auto-dismiss extended to 2.2 s
+- [x] `self.raise_()` added to `_go_to_screen()` and `on_scan_complete()` — prevents `ScanSummarySheet` from appearing above overlay after scan
+- [x] `MiniSparklineWidget` + `CheckmarkAnimWidget` added to `scan_animation.py`; all animation timers stopped in `_finish()`
+- [x] 34 tests pass (14 new Sprint I3 tests); full suite 2977 passed; app launches cleanly
+- [ ] Logger auto-start on Screen 5 button click — deferred to Sprint I4
+- [ ] Full flow live test per RULE-T6 — deferred to Sprint I4
 
-### Sprint I4 — Polish + verification
-- [ ] Dot progress indicator (6 dots, current = filled accent, others = muted)
-- [ ] Cross-fade transitions between screens (150ms)
-- [ ] "Skip setup" goes directly to Screen 6 (still shows done animation)
-- [ ] Keyboard: Enter advances, Esc = Skip
-- [ ] Screenshot each screen and confirm against this spec
+### Sprint I4 — Polish + live verification
+- [ ] Logger auto-start when "Done — Start exploring" is clicked on Screen 5
+- [ ] Cross-fade transitions between screens (150 ms opacity animation)
+- [ ] Full live flow test per RULE-T6: clear QSettings → launch → walk all 6 screens → confirm no tour bar / no auto-scan
+- [ ] Screenshot each screen and confirm against spec
+- [ ] Keyboard: Enter advances, Esc = Skip (already partially wired in `keyPressEvent`)
 
 ---
 
