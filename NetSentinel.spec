@@ -282,6 +282,8 @@ hiddenimports: list = [
     "ui.widgets.page_header",
     "ui.widgets.pulsing_dot",
     "ui.widgets.scan_summary_sheet",
+    "ui.widgets.scan_animation",
+    "ui.widgets.onboarding_overlay",
     "ui.widgets.skeleton",
     "ui.widgets.toast",
     # ── Scapy 802.11 layer (M9 — wifi_monitor_worker) ─────────────────────────

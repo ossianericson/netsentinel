@@ -242,13 +242,17 @@ QSettings key: `ui/onboarding_v2_done` (reuses existing key so existing users ar
 
 ## Sprint Breakdown
 
-### Sprint I1 — Core overlay scaffold + Welcome + Permission screens
-- [ ] Create `ui/widgets/onboarding_overlay.py` with `QStackedWidget`
-- [ ] Screen 0 (Welcome) and Screen 1 (Permission) working
-- [ ] Remove auto-scan from onboarding orchestrator
-- [ ] Remove blue tour banner from dashboard header
-- [ ] App launches cleanly, overlay shows, clicking "Scan my network" fires scan
-- [ ] All existing tests pass
+### Sprint I1 — Core overlay scaffold + Welcome + Permission screens ✅ (2026-06-04)
+- [x] Create `ui/widgets/onboarding_overlay.py` with `QStackedWidget`
+- [x] Screen 0 (Welcome) and Screen 1 (Permission) working
+- [x] Screens 2–5 implemented as placeholder pages with Next → buttons
+- [x] Screen 6 (Done, 1.5 s auto-dismiss) implemented
+- [x] Remove auto-scan from onboarding — `OnboardingOrchestrator` deleted
+- [x] Remove blue tour banner from dashboard header (`_tour_bar` block stripped from `tabs.py`)
+- [x] `_maybe_start_onboarding()` creates `OnboardingOverlay`; `scan_requested` wired to `_start_full_scan`
+- [x] `ui/widgets/scan_animation.py` — animated rings + radar QPainter widget
+- [x] All existing tests pass (2954 passed); new tests in `tests/test_onboarding_overlay.py`
+- [x] App launches cleanly: `Dashboard() instantiated OK`, `window.show() called OK`
 
 ### Sprint I2 — Scanning progress + Results reveal
 - [ ] Screen 2: live progress bar wired to scan worker `progress` signal

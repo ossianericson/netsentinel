@@ -243,6 +243,8 @@ netsentinel/
 │       ├── pulsing_dot.py          # Animated status indicator dot (live/offline)
 │       ├── scan_summary_sheet.py   # Bottom sheet showing scan summary stats
 │       ├── signal_bar.py           # 5-bar phone-style signal-strength indicator (POLISH-12)
+│       ├── scan_animation.py       # Animated concentric rings / radar sweep for onboarding (Sprint I1)
+│       ├── onboarding_overlay.py   # Full-screen Apple-like first-run onboarding overlay (Sprint I1)
 │       ├── skeleton.py             # Skeleton loading placeholder rows (widget variant)
 │       └── toast.py                # Non-blocking toast notification widget
 ├── workers/                    # QThread wrappers (signals only, no logic)

@@ -699,16 +699,18 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     # ── First-run onboarding ──────────────────────────────────────────────────
 
     def _show_welcome_overlay(self) -> None:
-        """Entry point called at startup. Routes to OnboardingOrchestrator (v2)
-        which replaces the old WelcomeOverlay + GuidedTour two-format flow."""
+        """Entry point called at startup — shows OnboardingOverlay on first launch."""
         self._maybe_start_onboarding()
 
     def _maybe_start_onboarding(self) -> None:
-        from ui.onboarding import OnboardingOrchestrator, should_show_onboarding
+        from ui.onboarding import should_show_onboarding
         if not should_show_onboarding():
             return
-        self._onboarding = OnboardingOrchestrator(self)
-        self._onboarding.start()
+        from ui.widgets.onboarding_overlay import OnboardingOverlay
+        self._onboarding_overlay = OnboardingOverlay(self)
+        self._onboarding_overlay.scan_requested.connect(self._start_full_scan)
+        self._onboarding_overlay.show()
+        self._onboarding_overlay.setFocus()
 
     def _on_welcome_scan(self) -> None:
         """Legacy slot kept so existing signal connections don't crash.
