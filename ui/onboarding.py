@@ -1,16 +1,9 @@
 """
-onboarding.py — Thin shim for the Apple-like onboarding flow (Sprint I1+).
-
-The full onboarding UI lives in ui/widgets/onboarding_overlay.py.
-This module only provides the QSettings helpers used by OnboardingOverlay
-and by dashboard._maybe_start_onboarding().
+onboarding.py — QSettings helpers for the first-run coach mark flow.
 
 QSettings key: ui/onboarding_v2_done
-  True  → user has completed (or skipped) onboarding; overlay is not shown.
-  False / absent → show OnboardingOverlay on next launch.
-
-Reuses the same key as the old OnboardingOrchestrator so that existing users
-who completed the previous onboarding are not shown the new overlay.
+  True  → user has seen the pre-scan coach mark; do not show again.
+  False / absent → show pre-scan CoachMarkChain on next launch.
 """
 from __future__ import annotations
 

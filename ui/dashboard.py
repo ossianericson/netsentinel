@@ -703,22 +703,45 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._maybe_start_onboarding()
 
     def _maybe_start_onboarding(self) -> None:
-        from ui.onboarding import should_show_onboarding
+        from ui.onboarding import should_show_onboarding, mark_onboarding_done
         if not should_show_onboarding():
             return
-        from ui.widgets.onboarding_overlay import OnboardingOverlay
-        self._onboarding_overlay = OnboardingOverlay(self)
-        self._onboarding_overlay.scan_requested.connect(self._start_full_scan)
-        self._onboarding_overlay.logger_start_requested.connect(
-            self._start_logger_if_needed
-        )
-        self._onboarding_overlay.show()
-        self._onboarding_overlay.setFocus()
+        self._nav_rail_go_to("Home")
+        from ui.widgets.coach_mark import CoachMarkChain
+        CoachMarkChain(
+            self,
+            [{
+                "target": lambda: getattr(self, "_home_page", None)
+                          and getattr(self._home_page, "_btn_scan", None),
+                "title":  "Scan your network",
+                "body":   "Click here to discover every device and check your security grade.",
+            }],
+            on_done=mark_onboarding_done,
+        ).start()
 
     def _start_logger_if_needed(self) -> None:
         """Start the background network logger if it is not already running."""
         if not (getattr(self, "_logger_worker", None) and self._logger_worker.isRunning()):
             self._toggle_logger()
+
+    def _start_post_scan_coach_marks(self) -> None:
+        """Show two coach marks on the real app after the first scan completes."""
+        from ui.widgets.coach_mark import CoachMarkChain
+        CoachMarkChain(
+            self,
+            [
+                {
+                    "target": lambda: getattr(self, "_net_devices_table", None),
+                    "title":  "Your real devices",
+                    "body":   "Right-click any row to label, investigate, or block a device.",
+                },
+                {
+                    "target": lambda: self._nav_rail_buttons.get("Discover"),
+                    "title":  "Explore your network",
+                    "body":   "Devices, maps, WiFi — all in the Discover section.",
+                },
+            ],
+        ).start()
 
     def _on_welcome_scan(self) -> None:
         """Legacy slot kept so existing signal connections don't crash.
@@ -1427,13 +1450,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             lbl.setText(m)
         if hasattr(self, "_home_page"):
             self._home_page.set_scan_progress(m)
-        # Feed onboarding overlay Screen 2 progress bar
-        _ov = getattr(self, "_onboarding_overlay", None)
-        if _ov is not None:
-            try:
-                _ov.on_scan_progress(m)
-            except Exception:
-                pass
 
 
     # ── Module result handlers ────────────────────────────────────────────────

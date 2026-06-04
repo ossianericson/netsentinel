@@ -302,13 +302,6 @@ class ScanResultMixin(ScanEnrichmentMixin):
         import time as _t
         self._last_scan_time = _t.time()
         self._m1_result = data
-        # Feed onboarding overlay Screen 3 results reveal
-        _ov = getattr(self, "_onboarding_overlay", None)
-        if _ov is not None:
-            try:
-                _ov.on_scan_complete(data)
-            except Exception:
-                pass
         devices = data.get("devices", [])
         if hasattr(self, "_overview_page") and devices:
             self._overview_page.set_has_results(True)
@@ -588,15 +581,15 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # auto-snapshot errors must never break the scan result handler
 
 
-        # After scan from home: start guided tour if eligible, else go to Overview.
-        # Uses should_show_tour() directly — not "app/has_scanned_before" — so the
-        # tour fires correctly after a settings reset (app/has_scanned_before survives
-        # resets but tour/v1_done is cleared, making the tour eligible again).
+        # After scan from home: show post-scan coach marks on first scan, else go to Overview.
         if getattr(self, "_scan_from_home", False) and len(devices) > 0:
             self._scan_from_home = False
-            from ui.guided_tour import GuidedTour, should_show_tour
-            if should_show_tour():
-                GuidedTour(self).start()
+            from PyQt6.QtCore import QSettings as _QS
+            _qs = _QS("NetSentinel", "NetSentinel")
+            if not _qs.value("tour/post_scan_done", False, type=bool):
+                _qs.setValue("tour/post_scan_done", True)
+                from PyQt6.QtCore import QTimer as _QT
+                _QT.singleShot(600, self._start_post_scan_coach_marks)
             else:
                 self._nav_rail_go_to("Overview")
 
