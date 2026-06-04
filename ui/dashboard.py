@@ -696,24 +696,24 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         if "scheduler" in keys and not (self._sched_worker and self._sched_worker.isRunning()):
             self._start_scheduler()
 
-    # ── First-run welcome overlay ──────────────────────────────────────────────
+    # ── First-run onboarding ──────────────────────────────────────────────────
 
     def _show_welcome_overlay(self) -> None:
-        """Show the WelcomeOverlay on first ever launch (ui/first_run_done gate)."""
-        from ui.first_run_dialog import WelcomeOverlay, should_show_first_run
-        if not should_show_first_run():
+        """Entry point called at startup. Routes to OnboardingOrchestrator (v2)
+        which replaces the old WelcomeOverlay + GuidedTour two-format flow."""
+        self._maybe_start_onboarding()
+
+    def _maybe_start_onboarding(self) -> None:
+        from ui.onboarding import OnboardingOrchestrator, should_show_onboarding
+        if not should_show_onboarding():
             return
-        overlay = WelcomeOverlay(self)
-        self._welcome_overlay = overlay
-        overlay.start_scan_requested.connect(self._on_welcome_scan)
-        overlay.dismissed.connect(lambda: setattr(self, "_welcome_overlay", None))
-        overlay.show_animated()
+        self._onboarding = OnboardingOrchestrator(self)
+        self._onboarding.start()
 
     def _on_welcome_scan(self) -> None:
-        """User clicked 'Scan my network →' in the welcome overlay."""
-        self._welcome_overlay = None
-        self._nav_rail_go_to("Home")
-        self._start_full_scan()
+        """Legacy slot kept so existing signal connections don't crash.
+        Onboarding v2 fires scans directly — this is a no-op."""
+        pass
 
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
@@ -1373,10 +1373,17 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     def _start_full_scan(self):
         # Track whether this scan was triggered from the home page so we can
         # auto-navigate to Overview once device results arrive.
-        self._scan_from_home = (
-            hasattr(self, "_home_page")
-            and self._stack.currentWidget() is self._home_page
-        )
+        # Do NOT overwrite if already True (pre-set by _on_welcome_scan to survive
+        # the 160ms crossfade animation that delays the stack widget switch).
+        if not getattr(self, "_scan_from_home", False):
+            self._scan_from_home = (
+                hasattr(self, "_home_page")
+                and self._stack.currentWidget() is self._home_page
+            )
+        # Store grade before scan so toast can report improvement/drop
+        self._pre_scan_grade = getattr(
+            getattr(self, "_home_page", None), "_current_grade", ""
+        ) or ""
         # Reset UI
         self._m1_result = self._m2_result = self._m3_result = None
         self._m4_result = self._m5_result = None
@@ -1756,12 +1763,40 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._graph.redraw()
             self._workers.clear()
             self._push_monitor_pills()   # clear Analysis badge + Broadcast Storm dot
+            self._show_scan_complete_toast()
             if self._auto_report_pending:
                 self._auto_report_scan_done = True
                 self._maybe_auto_report()
             if getattr(self, "_pending_benchmark", False):
                 self._pending_benchmark = False
                 self._run_benchmark()
+
+    def _show_scan_complete_toast(self) -> None:
+        """Show a toast summarising scan results; note grade change if applicable."""
+        try:
+            from ui.widgets.toast import ToastManager
+            n_dev = len(getattr(self, "_last_scan_devices", []))
+            dev_part = f"{n_dev} device{'s' if n_dev != 1 else ''}"
+            grade_now = getattr(
+                getattr(self, "_home_page", None), "_current_grade", ""
+            ) or ""
+            pre = getattr(self, "_pre_scan_grade", "")
+
+            if grade_now and grade_now not in ("—", "?") and pre and pre not in ("—", "?") and grade_now != pre:
+                _letters = ("A", "B", "C", "D", "F")
+                improved = _letters.index(grade_now) < _letters.index(pre)
+                if improved:
+                    msg = f"Scan complete — {dev_part} · Grade improved from {pre} to {grade_now}"
+                    ToastManager.show(msg, "success")
+                else:
+                    n_findings = len(getattr(self, "_last_scan_devices", []))
+                    msg = f"Scan complete — {dev_part} · Grade dropped from {pre} to {grade_now}"
+                    ToastManager.show(msg, "warning")
+            else:
+                grade_part = f" · Grade {grade_now}" if grade_now and grade_now not in ("—", "?") else ""
+                ToastManager.show(f"Scan complete — {dev_part}{grade_part}", "success")
+        except Exception:
+            pass
 
 
     # ── Export ────────────────────────────────────────────────────────────────

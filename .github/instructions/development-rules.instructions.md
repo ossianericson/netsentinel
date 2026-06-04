@@ -26,6 +26,17 @@ Read `netsentinel_debug.log` and confirm:
 - `window.show() called OK` is present
 - No `UNHANDLED EXCEPTION` block in the log
 
+**CRITICAL — always read `netsentinel_debug.log` (the main log), never the
+timestamped variants (`netsentinel_debug_YYYYMMDD_HHMMSS.log`).** The timestamped
+files are from older runs and may describe bugs that have since been fixed. The
+`debug_launch.py` script now deletes all old timestamped logs before each run, so
+only one timestamped log (the current run) and `netsentinel_debug.log` ever exist.
+
+If old timestamped logs are present from a session before this rule was enforced, delete them:
+```powershell
+Remove-Item netsentinel_debug_????????_??????.log -Force -ErrorAction SilentlyContinue
+```
+
 **Do NOT proceed to Step 3 until this passes.** PyQt6 TypeError crashes (wrong
 kwarg on addLayout, bad signal signature, missing import) only surface here —
 not in the test suite. A clean test run does not prove the app starts.
@@ -299,6 +310,36 @@ Every bug fix PR must include a new test that reproduces the original failure an
 
 ### RULE-T4 (blocking): Smoke test list must stay current
 `app.py _smoke_test()` must be updated whenever a new module or worker is added.
+
+### RULE-T5 (blocking): Signal-to-slot chains that cross an animation or async gap must have an integration test covering the full sequence
+Unit tests on each part in isolation are insufficient. Any `signal → slot` chain where:
+- the slot calls `_nav_rail_go_to()` (160ms crossfade) AND THEN reads `currentWidget()`, OR
+- the slot triggers a `QTimer.singleShot()` and the next step depends on state set by that timer
+
+must have a test that exercises the FULL call sequence, not just individual methods.
+
+Pattern to test:
+```python
+# Test the wiring, not just the existence of the method
+dash._on_welcome_scan()                          # trigger the full chain
+assert getattr(dash, "_scan_from_home", False)   # assert downstream state
+```
+
+This rule exists because the guided tour (H1) was correctly implemented but failed silently:
+`_on_welcome_scan` called `_nav_rail_go_to("Home")` then `_start_full_scan()` in the next line.
+`_start_full_scan` checked `currentWidget() is _home_page` — but the 160ms crossfade animation
+hadn't completed yet, so `currentWidget()` was still the old page, setting `_scan_from_home=False`
+and preventing the tour from ever firing. Unit tests for each method passed; the integration test
+would have caught it.
+
+### RULE-T6 (blocking): Do not claim a feature works unless it was exercised in the running app
+Screenshot automation and unit tests do NOT substitute for a real-user flow test. Before marking
+a first-run, onboarding, or post-scan flow as complete:
+1. Delete the QSettings key (`ui/first_run_done` or `tour/v1_done`) to simulate a clean install.
+2. Launch the app and walk the actual flow (welcome overlay → Scan → tour bar → each step).
+3. Confirm each step navigates to the correct page and the tour completes without errors.
+State this explicitly in the session: "Verified in live app: [what was observed]." Do NOT
+substitute "tests pass" or "screenshots show" for an actual walk-through of user-facing flows.
 
 ---
 

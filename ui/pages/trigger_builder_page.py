@@ -613,7 +613,10 @@ class TriggerBuilderPage(QWidget):
     def _on_eval_result(self, rule: TriggerRule,
                         triggered: bool, lhs: float, error: str) -> None:
         if error:
-            self._test_status.setText(f"Error: {error}")
+            self._test_status.setText(
+                f"Trigger evaluation failed — {error}. "
+                "Check that the metric name and operator are correct."
+            )
             self._test_status.setStyleSheet(f"font-size:10px; color:{RED};")
             self._log.appendPlainText(f"[ERROR] {rule.name}: {error}")
             return

@@ -443,8 +443,12 @@ class InventoryPage(QWidget):
             insert_skeleton_rows(self._table, count=6)
 
     def _maybe_show_coach_devices(self) -> None:
+        if not self.isVisible():
+            return
         from PyQt6.QtCore import QSettings
         qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("tour/v1_done", False, type=bool):
+            return
         key = "coach/devices_rightclick_shown"
         if qs.value(key, False, type=bool):
             return

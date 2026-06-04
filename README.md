@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.84
+**Fixed**
+- `ui/onboarding.py` step 6 (Network Grade): tile grid now shows immediately instead of the "Scan" CTA — `_auto_grade()` calls `_show_tiles()` + `set_scanning(True)` before emitting `scan_requested`
+- `ui/onboarding.py` step 7 (Logger): replaced three broken spotlight targets (`_sources_frame`, `_chk_autostart`, `_outage_table`) that resolved to `None` with `_sources_bar` and `_table` which both exist
+- `ui/pages/speed_test_page.py`: empty-state "Run Speed Test →" CTA now hides while a test is in progress (`_hist_stack` switches to table view on `_run_test()`)
+
+**Added**
+- `ui/pages/log_hub_page.py`: `self._sources_bar` attribute exposes the source-toggle bar widget for spotlight targeting
+- `ui/pages/home_page.py`: hardware nudge bar (`_hw_nudge_bar`) shown after onboarding completes until first hardware plugin is configured; dismissible; auto-hides via `on_hardware_added()`
+
 ### v1.9.83
 **Added**
 - `_HelpPopover` in `ui/widgets/page_header.py` now shows a three-section layout: "What it does" (from `_PAGE_HELP`), up to two usage tips from the page's `hidden` tips list, and global keyboard shortcuts (Ctrl+K, Ctrl+F, Esc) — wired to every page header via `_proactive_wire_page_help_btns()`

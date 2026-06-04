@@ -35,7 +35,7 @@ Three specific user-reported problems drive this plan:
 | ✅ **H7** | Contextual Coach Marks | M | `ui/pages/log_hub_page.py`, `ui/pages/diagnosis_page.py`, `ui/pages/home_data_mixin.py`, `ui/pages/home_page.py`, `ui/pages/inventory_page.py`, `tests/test_coach_marks.py` — completed 2026-06-03 |
 | ✅ **H8** | Home Page Recurring Mode Polish | S | `ui/pages/home_data_mixin.py`, `ui/widgets/home_session_widgets.py`, `ui/pages/home_page.py`, `tests/test_getting_started_card.py` — completed 2026-06-03 |
 | ✅ **H9** | Page-Level Help & Keyboard Shortcuts | S | `ui/widgets/page_header.py`, `ui/nav/builder.py`, `ui/pages/home_page.py`, `ui/pages/home_data_mixin.py`, `ui/help_tab.py` — completed 2026-06-03 |
-| **H10** | Terminology, Tone & Milestone Cards | S | String audit across all `ui/` files |
+| ✅ **H10** | Terminology, Tone & Milestone Cards | S | `ui/dashboard.py`, `ui/pages/home_page.py`, `ui/pages/home_data_mixin.py`, `app.py`, `ui/pages/dhcp_lease_page.py`, `ui/pages/dns_zone_page.py`, `ui/pages/syslog_page.py`, `ui/pages/trigger_builder_page.py`, `ui/pages/settings_cards.py`, `ui/pages/geo_map_page.py`, `ui/pages/hardware_browse_mixin.py`, `ui/pages/notif_alert_history.py`, `ui/pages/plugin_device_page.py`, `ui/widgets/hub_card.py`, `ui/tabs_logger.py` — completed 2026-06-03 |
 
 Effort: S = 1–2 days · M = 3–5 days · L = 5–8 days
 
@@ -884,7 +884,15 @@ Each version gets a README changelog entry per RULE-R1b before bumping.
 
 ---
 
-*Plan created: 2026-06-03. Source: UX audit across first_run_dialog.py, home_page.py,*
-*home_data_mixin.py, home_session_widgets.py, log_hub_page.py, diagnosis_page.py,*
-*root_cause_correlator.py, hardware_integration_page.py, hub_card.py, overview_page.py,*
-*coach_mark.py, home_suggestions.py.*
+*Plan created: 2026-06-03. All 10 sprints completed 2026-06-03.*
+
+---
+
+## Polish Backlog (next session)
+
+| Sprint | Polish needed |
+|---|---|
+| **H1** | Guided tour bar needs visual polish — review step transitions, timing, and the "Logger started ✓" confirmation at Step 3 |
+| All | Visual review pass — confirm every new widget (milestone banner, recurring-intro card, scan toast, coach marks) renders correctly across Arctic Clean / Midnight Pro / Obsidian Neon themes |
+
+Next session should start with a visual walkthrough of H1 tour flow before any new feature work.

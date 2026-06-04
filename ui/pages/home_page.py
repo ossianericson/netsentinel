@@ -118,11 +118,16 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._refresh_hw_nudge()
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(700, self._maybe_show_coach_home_pills)
 
     def _maybe_show_coach_home_pills(self) -> None:
+        if not self.isVisible():
+            return
         qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("tour/v1_done", False, type=bool):
+            return  # wait until guided tour is complete — no competing onboarding
         key = "coach/home_pills_shown"
         if qs.value(key, False, type=bool):
             return
@@ -133,7 +138,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         if not strip:
             return
         arp_pill = getattr(strip, "_fs_pill_arp", None)
-        if not arp_pill:
+        if not arp_pill or not arp_pill.isVisible():
             return
         from ui.widgets.coach_mark import CoachMarkChain
         CoachMarkChain(
@@ -237,6 +242,83 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         return banner
 
 
+    # ── Hardware nudge ────────────────────────────────────────────────────────
+
+    def _build_hw_nudge_bar(self) -> "QFrame":
+        from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton
+        from PyQt6.QtCore import Qt
+        bar = QFrame()
+        bar.setObjectName("hwNudgeBar")
+        bar.setStyleSheet(
+            f"QFrame#hwNudgeBar {{ background:{BG_HOVER}; border-bottom:1px solid {BORDER}; }}"
+        )
+        lay = QHBoxLayout(bar)
+        lay.setContentsMargins(14, 6, 10, 6)
+        lay.setSpacing(10)
+        _icon = QLabel("⬡")
+        _icon.setFixedWidth(18)
+        _icon.setStyleSheet(
+            f"font-size:12px; color:{ACCENT}; background:transparent; border:none;"
+        )
+        _text = QLabel(
+            "Complete your setup — connect your router or modem for real device names and signal data."
+        )
+        _text.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _btn = QPushButton("Set up Hardware →")
+        _btn.setFixedHeight(24)
+        _btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px;"
+            f" border:none; border-radius:3px; padding:0 10px; }}"
+            f"QPushButton:hover   {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        _btn.clicked.connect(lambda: self.navigate_to.emit("Hardware"))
+        _dismiss = QPushButton("✕")
+        _dismiss.setFixedSize(20, 20)
+        _dismiss.setFlat(True)
+        _dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _dismiss.setStyleSheet(
+            f"QPushButton {{ color:{TEXT_SECONDARY}; background:transparent; border:none; font-size:10px; }}"
+            f"QPushButton:hover   {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+        _dismiss.setToolTip("Dismiss")
+        _dismiss.clicked.connect(self._dismiss_hw_nudge)
+        lay.addWidget(_icon)
+        lay.addWidget(_text, 1)
+        lay.addWidget(_btn)
+        lay.addWidget(_dismiss)
+        bar.setVisible(False)
+        return bar
+
+    def _refresh_hw_nudge(self) -> None:
+        import json as _json
+        bar = getattr(self, "_hw_nudge_bar", None)
+        if bar is None:
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("ui/onboarding_v2_done", False, type=bool):
+            bar.setVisible(False)
+            return
+        if qs.value("ui/hw_nudge_dismissed", False, type=bool):
+            bar.setVisible(False)
+            return
+        try:
+            raw = qs.value("hardware/custom_scripts", "[]") or "[]"
+            configured = len(_json.loads(raw)) > 0
+        except Exception:
+            configured = False
+        bar.setVisible(not configured)
+
+    def _dismiss_hw_nudge(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("ui/hw_nudge_dismissed", True)
+        bar = getattr(self, "_hw_nudge_bar", None)
+        if bar:
+            bar.setVisible(False)
+
     def _setup_ui(self) -> None:
         self.setObjectName("homePageRoot")
         self.setStyleSheet(f"QWidget#homePageRoot {{ background:{BG_DARK}; }}")
@@ -248,6 +330,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _banner = self._build_theme_banner()
         if _banner is not None:
             outer.addWidget(_banner)
+        # ─────────────────────────────────────────────────────────────────────
+
+        # ── Hardware nudge (post-onboarding, until first plugin configured) ──
+        self._hw_nudge_bar = self._build_hw_nudge_bar()
+        outer.addWidget(self._hw_nudge_bar)
         # ─────────────────────────────────────────────────────────────────────
 
         # ── Freshness strip � always visible above scroll area ────────────────
@@ -500,6 +587,37 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _db_lay.addWidget(self._delta_chips_lbl, 1)
         _db_lay.addWidget(_db_dismiss)
         lay.addWidget(self._delta_banner)
+
+        # ── Milestone banner (hidden until a milestone is reached) ────────────
+        self._milestone_banner = QFrame()
+        self._milestone_banner.setObjectName("milestoneBanner")
+        self._milestone_banner.setStyleSheet(
+            f"QFrame#milestoneBanner {{ background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-left:3px solid {ACCENT};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._milestone_banner.setVisible(False)
+        _mb_lay = QHBoxLayout(self._milestone_banner)
+        _mb_lay.setContentsMargins(12, 8, 8, 8)
+        _mb_lay.setSpacing(10)
+        self._milestone_lbl = QLabel("")
+        self._milestone_lbl.setWordWrap(True)
+        self._milestone_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _mb_dismiss = QPushButton("×")
+        _mb_dismiss.setFixedSize(20, 20)
+        _mb_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _mb_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:14px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+        )
+        _mb_dismiss.clicked.connect(lambda: self._milestone_banner.setVisible(False))
+        _mb_lay.addWidget(self._milestone_lbl, 1)
+        _mb_lay.addWidget(_mb_dismiss)
+        lay.addWidget(self._milestone_banner)
 
         # ── Recurring-user top section (hidden until conditions met) ──────────
         self._recurring_section = QFrame()

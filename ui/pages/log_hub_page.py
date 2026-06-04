@@ -152,7 +152,11 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         QTimer.singleShot(600, self._maybe_show_coach_log_hub)
 
     def _maybe_show_coach_log_hub(self) -> None:
+        if not self.isVisible():
+            return
         qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("tour/v1_done", False, type=bool):
+            return
         key = "coach/log_hub_sources_shown"
         if qs.value(key, False, type=bool):
             return
@@ -204,7 +208,8 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         inner_lay.setSpacing(8)
 
         inner_lay.addWidget(self._build_scan_config_panel())
-        inner_lay.addWidget(self._build_control_bar())
+        self._sources_bar = self._build_control_bar()
+        inner_lay.addWidget(self._sources_bar)
         inner_lay.addWidget(self._build_logged_sources_bar())
 
         card = QFrame()

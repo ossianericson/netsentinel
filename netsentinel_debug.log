@@ -1,117 +1,19 @@
 === NetSentinel Debug Launch ===
 Python 3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]
 CWD: C:\Code\netsentinel
-Log: C:\Code\netsentinel\netsentinel_debug_20260601_123135.log
+Log: C:\Code\netsentinel\netsentinel_debug_20260604_114654.log
 
 QApplication created OK
 Dashboard class imported OK
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x201d50ea460)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x201d50ea620)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x201d50ea620)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x201d50ea460)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QLineEdit(0x2018caa7ac0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QLineEdit(0x2018caa7ac0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e916c50, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e9191f0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e9191f0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e916c50, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e917f90, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91a840)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91a840)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e917f90, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91a1b0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91c130)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91c130)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91a1b0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91c600, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91de10)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91de10)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91c600, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91cde0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91fd20)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91fd20)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91cde0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e920d50, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e9203b0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e9203b0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e920d50, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e9231a0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e924010)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e924010)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e9231a0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e924470, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e925ac0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e925ac0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e924470, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e925900, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e928e60)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e928e60)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e925900, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e928610, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e929bf0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e929bf0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e928610, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e916c50, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e9191f0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e917f90, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91a840)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91a1b0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91c130)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91c600, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91de10)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e91cde0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e91fd20)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e920d50, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e9203b0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e9231a0, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e924010)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e924470, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e925ac0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e925900, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e928e60)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018e928610, name = "hubCatalogCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018e929bf0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6c55f0, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f6ca4b0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f6ca4b0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f6cb2b0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f6cb2b0)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6c55f0, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6cac20, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6cac20, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6d1f30, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6d1f30, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6db540, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6db540, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6e12e0, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f6e12e0, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f8610a0, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f863480)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f863480)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f865a20)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QPushButton(0x2018f865a20)
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f8610a0, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f866510, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f866510, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f86b360, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f86b360, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f86deb0, name = "pluginCard")
-[Qt WARN ] <qt> — Could not parse stylesheet of object QFrame(0x2018f86deb0, name = "pluginCard")
+Dashboard() instantiated OK
+window.show() called OK
 
-=== UNHANDLED EXCEPTION ===
-Traceback (most recent call last):
-  File "C:\Code\netsentinel\tools\debug_launch.py", line 83, in <module>
-    window = Dashboard()
-             ^^^^^^^^^^^
-  File "C:\Code\netsentinel\ui\dashboard.py", line 342, in __init__
-    self._build_ui()
-  File "C:\Code\netsentinel\ui\dashboard.py", line 363, in _build_ui
-    _main = self._build_tabs()
-            ^^^^^^^^^^^^^^^^^^
-  File "C:\Code\netsentinel\ui\tabs.py", line 383, in _build_tabs
-    self._recon_pe_tab_widget        = self._build_recon_pe_tab()
-                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Code\netsentinel\ui\tabs_recon.py", line 869, in _build_recon_pe_tab
-    input_frame = QFrame()
-                  ^^^^^^
-NameError: name 'QFrame' is not defined
+--- entering event loop ---
+[Qt WARN ] <qt> — Unknown property cursor
+[Qt WARN ] <qt> — QFont::setPointSize: Point size <= 0 (-1), must be greater than 0
+[Qt WARN ] <qt> — Unknown property cursor
+[Qt WARN ] <qt> — Unknown property cursor
+[Qt WARN ] <qt> — Unknown property cursor
+[Qt WARN ] <qt> — Unknown property cursor
+[Qt WARN ] <qt> — QThreadStorage: entry 1 destroyed before end of thread 0x1d25df35f90
+[Qt WARN ] <qt> — QThreadStorage: entry 0 destroyed before end of thread 0x1d25df35f90

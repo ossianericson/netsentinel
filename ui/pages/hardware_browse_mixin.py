@@ -108,7 +108,10 @@ class _HardwareBrowseMixin:
 
     @pyqtSlot(str)
     def _on_community_index_error(self, msg: str) -> None:
-        self._browse_status.setText(f"Error: {msg}")
+        self._browse_status.setText(
+            f"Community index unavailable — {msg}. "
+            "Check your internet connection or try again later."
+        )
 
     def _rebuild_browse_cards(self, entries: list) -> None:
         while self._browse_lay.count() > 1:

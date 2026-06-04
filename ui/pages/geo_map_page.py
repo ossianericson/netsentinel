@@ -1100,7 +1100,10 @@ class GeoMapPage(QWidget):
     @pyqtSlot(str)
     def _on_dl_error(self, msg: str) -> None:
         self._btn_dl.setEnabled(True)
-        self._dl_status.setText(f"Error: {msg}")
+        self._dl_status.setText(
+            f"GeoLite2 database download failed — {msg}. "
+            "Check your internet connection and try again."
+        )
         self._dl_status.setStyleSheet(f"font-size:9px; color:{RED};")
 
     # ── Table ─────────────────────────────────────────────────────────────────

@@ -998,6 +998,7 @@ class SpeedTestPage(QWidget):
         # Reset display
         self._btn_run.setEnabled(False)
         self._btn_run.setText("⏳  Testing…")
+        self._hist_stack.setCurrentIndex(1)  # hide CTA while test is in progress
         self._lbl_ping.setText("—")
         self._lbl_down.setText("—")
         self._lbl_up.setText("—")

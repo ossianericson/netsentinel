@@ -324,7 +324,10 @@ class SyslogPage(QWidget):
 
     @pyqtSlot(str)
     def on_error(self, text: str) -> None:
-        self._status_lbl.setText(f"Error: {text}")
+        self._status_lbl.setText(
+            f"Syslog receiver error — {text}. "
+            "Check that UDP port 514 is not blocked by another application or firewall."
+        )
         self._status_lbl.setStyleSheet(f"font-size:11px; color:{AMBER}; background:transparent;")
 
     # ── Filter / table rebuild ────────────────────────────────────────────────

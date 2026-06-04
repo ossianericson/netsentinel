@@ -1181,9 +1181,9 @@ class HubCard(QFrame):
             self._btn_update_cred.setVisible(False)
             self._btn_reimport.setVisible(False)
         elif msg.startswith("Authentication failed"):
-            # P4-1: auth error — show credential update button, not circuit-breaker path
+            # P4-1: auth err — credential update button shown; update creds and retry
             self._pending_pkg = ""
-            self._metrics_lbl.setText(f"Error: {msg[:80]}")
+            self._metrics_lbl.setText("Authentication failed — update credentials and retry")
             self._btn_update_cred.setVisible(True)
             self._btn_reimport.setVisible(False)
         elif msg.startswith("Plugin file was moved or deleted"):
@@ -1195,7 +1195,10 @@ class HubCard(QFrame):
             self._btn_install.setVisible(False)
         else:
             self._pending_pkg = ""
-            self._metrics_lbl.setText(f"Error: {msg[:80]}")
+            short = msg[:80] if msg else "Unknown error"
+            self._metrics_lbl.setText(
+                f"Plugin error — {short}. Check the plugin log for details."
+            )
             self._btn_update_cred.setVisible(False)
             self._btn_install.setVisible(False)
             self._btn_reimport.setVisible(False)

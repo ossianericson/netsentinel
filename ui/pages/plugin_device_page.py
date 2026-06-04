@@ -456,7 +456,10 @@ class PluginDevicePage(QWidget):
         self._cred_test_btn.setEnabled(True)
         self._cred_test_btn.setText("▶  Test")
         if error_msg:
-            self._cred_status.setText(f"Error: {error_msg}")
+            self._cred_status.setText(
+                f"Connection failed — {error_msg}. "
+                "Check the device IP address and credentials."
+            )
 
     def _build_modem_ui(self) -> None:
         # Status

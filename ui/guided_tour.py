@@ -9,11 +9,12 @@ The tour attaches to the Dashboard instance and drives the pre-built
 _tour_bar / _tour_step_lbl / _tour_body_lbl / _tour_next_btn / _tour_skip_btn
 widgets created in ui/tabs.py.
 
-Four steps:
-  1  Devices    — Your inventory
-  2  Overview   — Your network score
-  3  Log Hub    — Leave this running  (auto-enables Network RTT source)
-  4  Overview   — The full picture    (final step)
+Five steps:
+  1  Speed Test     — Test your connection
+  2  Network Grade  — Grade your network now  (explicit CTA to run the grade)
+  3  Network Logger — Leave this running  (auto-enables Network RTT source)
+  4  Hardware       — Connect your hardware   (router/modem integration)
+  5  Overview       — The full picture    (final step)
 """
 from __future__ import annotations
 
@@ -41,27 +42,35 @@ class _TourStep:
 
 _STEPS: list[_TourStep] = [
     _TourStep(
-        nav_label="Devices",
-        title="Your inventory",
+        nav_label="Speed Test",
+        title="Test your connection",
         body=(
-            "Every device on your network is listed here. "
-            "Look for Unknown devices — they are new arrivals."
+            "Click ‘Run Speed Test →’ to measure your download and upload speeds. "
+            "Every result is logged — build a history to hold your ISP accountable."
         ),
     ),
     _TourStep(
-        nav_label="Overview",
-        title="Your network score",
+        nav_label="Network Grade",
+        title="Grade your network — do this now",
         body=(
-            "NetSentinel grades your network A–F across 8 dimensions. "
-            "Low scores have one-click remediation."
+            "Click ‘Scan & Grade’ to score your network A–F across 8 dimensions. "
+            "Takes 60 seconds. Low scores show you exactly what to fix."
         ),
     ),
     _TourStep(
-        nav_label="Log Hub",
+        nav_label="Network Logger",
         title="Leave this running",
         body=(
             "The Network Logger records RTT, jitter and DNS every 30 seconds. "
-            "Leave it on and come back tomorrow for stability insights."
+            "Leave it on and come back tomorrow for stability trends and outage windows."
+        ),
+    ),
+    _TourStep(
+        nav_label="Hardware",
+        title="Connect your router and modem",
+        body=(
+            "This is the highest-value step. Click ‘Add’ next to your detected device "
+            "to get real hostnames, signal strength, and your full network map."
         ),
     ),
     _TourStep(
@@ -138,7 +147,11 @@ class GuidedTour(QObject):
     def _navigate_and_show(self) -> None:
         step = _STEPS[self._step]
         self._dashboard._nav_rail_go_to(step.nav_label)
-        if step.nav_label == "Log Hub":
+        if step.nav_label == "Speed Test":
+            self._auto_start_speed_test()
+        elif step.nav_label == "Network Grade":
+            self._auto_start_grade()
+        elif step.nav_label == "Network Logger":
             self._auto_enable_rtt()
         self._update_bar()
 
@@ -180,8 +193,37 @@ class GuidedTour(QObject):
             bar.setVisible(False)
         self.deleteLater()
 
+    def _auto_start_speed_test(self) -> None:
+        """Auto-start a speed test so results are ready when the user reads the step."""
+        try:
+            st_page = getattr(self._dashboard, "_speed_test_page", None)
+            if st_page is None:
+                return
+            # Only start if not already running
+            worker = getattr(st_page, "_worker", None)
+            if worker and worker.isRunning():
+                return
+            if hasattr(st_page, "_run_test"):
+                st_page._run_test()
+        except Exception:
+            pass
+
+    def _auto_start_grade(self) -> None:
+        """Auto-trigger the network grade scan."""
+        try:
+            # The grade page emits scan_requested which is wired to _start_full_scan
+            grade_page = getattr(self._dashboard, "_grade_page", None)
+            if grade_page and hasattr(grade_page, "scan_requested"):
+                grade_page.scan_requested.emit()
+                return
+            # Fallback: trigger the full scan directly from the dashboard
+            if hasattr(self._dashboard, "_start_full_scan"):
+                self._dashboard._start_full_scan()
+        except Exception:
+            pass
+
     def _auto_enable_rtt(self) -> None:
-        """Auto-enable Network RTT source on the Log Hub page."""
+        """Auto-enable Network RTT source on the Network Logger page."""
         try:
             log_page = getattr(self._dashboard, "_log_hub_page", None)
             if log_page is None:

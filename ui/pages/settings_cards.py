@@ -1144,7 +1144,10 @@ class _SettingsCardsMixin:
         )
 
     def _pm_on_registry_error(self, msg: str) -> None:
-        self._pm_status.setText(f"Error: {msg}")
+        self._pm_status.setText(
+            f"Plugin registry load failed — {msg}. "
+            "Check the plugins folder is accessible and not corrupted."
+        )
 
     def _pm_on_selection(self) -> None:
         has_sel = bool(self._pm_table.selectedItems())
@@ -1169,7 +1172,10 @@ class _SettingsCardsMixin:
         self._pm_on_registry_ready(self._pm_entries)
 
     def _pm_on_install_error(self, name: str, msg: str) -> None:
-        self._pm_status.setText(f"Error installing {name}: {msg}")
+        self._pm_status.setText(
+            f"Could not install {name} — {msg}. "
+            "Check your internet connection and that pip is available."
+        )
         self._pm_btn_install.setEnabled(True)
 
     def _pm_uninstall_selected(self) -> None:
@@ -1190,7 +1196,10 @@ class _SettingsCardsMixin:
         self._pm_on_registry_ready(self._pm_entries)
 
     def _pm_on_uninstall_error(self, name: str, msg: str) -> None:
-        self._pm_status.setText(f"Error removing {name}: {msg}")
+        self._pm_status.setText(
+            f"Could not remove {name} — {msg}. "
+            "The plugin may be in use; try restarting the application."
+        )
         self._pm_btn_uninstall.setEnabled(True)
 
     def _pm_open_folder(self) -> None:

@@ -292,7 +292,10 @@ class DnsZonePage(QWidget):
     def _on_error(self, msg: str) -> None:
         self._axfr_btn.setEnabled(True)
         self._mdns_btn.setEnabled(True)
-        self._status_lbl.setText(f"Error: {msg}")
+        self._status_lbl.setText(
+            f"DNS zone scan failed — {msg}. "
+            "AXFR requires the DNS server to allow zone transfers; mDNS requires local network access."
+        )
 
     # ── Table population ──────────────────────────────────────────────────────
 

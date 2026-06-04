@@ -26,11 +26,13 @@ _TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 _ROTATED_PATH = os.path.join(_ROOT, f"netsentinel_debug_{_TIMESTAMP}.log")
 LOG_PATH = os.path.join(_ROOT, "netsentinel_debug.log")
 
-# Rotate: remove oldest logs, keep last 4 (the new one will be 5th)
+# Rotate: delete ALL previous timestamped logs before creating a new one.
+# Only netsentinel_debug.log (the symlink/copy) plus the current run's log are kept.
+# This prevents agents from reading stale old logs during version-bump/commit sessions.
 import glob as _glob
 
 _existing = sorted(_glob.glob(os.path.join(_ROOT, "netsentinel_debug_????????_??????.log")))
-for _old in _existing[:-4]:
+for _old in _existing:
     try:
         os.remove(_old)
     except OSError:
@@ -38,10 +40,24 @@ for _old in _existing[:-4]:
 
 _log = open(_ROTATED_PATH, "w", encoding="utf-8")
 
+# Update the stable symlink/copy immediately so any process reading
+# netsentinel_debug.log always gets the current run's content even if
+# the event loop is killed before clean shutdown.
+try:
+    _log.flush()
+    shutil.copy2(_ROTATED_PATH, LOG_PATH)
+except OSError:
+    pass
+
 
 def _w(msg: str) -> None:
     _log.write(msg + "\n")
     _log.flush()
+    # Keep the main log in sync after every write
+    try:
+        shutil.copy2(_ROTATED_PATH, LOG_PATH)
+    except OSError:
+        pass
     print(msg)
 
 
@@ -72,7 +88,7 @@ try:
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.83")
+    app.setApplicationVersion("1.9.84")
     app.setOrganizationName("netsentinel")
 
     _w("QApplication created OK")

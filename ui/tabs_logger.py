@@ -398,7 +398,9 @@ class _LoggerTabMixin:
             self._logger_worker.status.connect(self._log_status_lbl.setText)
             self._logger_worker.rotated.connect(self._on_log_rotate)
             self._logger_worker.error.connect(
-                lambda e: self._log_status_lbl.setText(f"Error: {e}"),
+                lambda e: self._log_status_lbl.setText(
+                    f"Logger stopped — {e}. Check network connectivity and try again."
+                ),
                 Qt.ConnectionType.QueuedConnection,
             )
             self._logger_worker.start()

@@ -581,13 +581,12 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # auto-snapshot errors must never break the scan result handler
 
 
-        # After the very first scan: start guided tour (if eligible) or fall back
-        # to Overview.  Subsequent scans leave the user on the current page.
-        _qs = QSettings("NetSentinel", "NetSentinel")
-        _first_scan = not _qs.value("app/has_scanned_before", False, type=bool)
-        if getattr(self, "_scan_from_home", False) and len(devices) > 0 and _first_scan:
+        # After scan from home: start guided tour if eligible, else go to Overview.
+        # Uses should_show_tour() directly — not "app/has_scanned_before" — so the
+        # tour fires correctly after a settings reset (app/has_scanned_before survives
+        # resets but tour/v1_done is cleared, making the tour eligible again).
+        if getattr(self, "_scan_from_home", False) and len(devices) > 0:
             self._scan_from_home = False
-            _qs.setValue("app/has_scanned_before", True)
             from ui.guided_tour import GuidedTour, should_show_tour
             if should_show_tour():
                 GuidedTour(self).start()

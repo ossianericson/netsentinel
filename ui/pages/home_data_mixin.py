@@ -748,7 +748,7 @@ class _HomeDataMixin:
 
             if n_at_risk == 0:
                 _sec_colour = GREEN
-                self._res_security_lbl.setText("No security issues detected")
+                self._res_security_lbl.setText("No security findings")
             else:
                 _sec_colour = RED
                 _i = "s" if n_at_risk != 1 else ""
@@ -766,11 +766,65 @@ class _HomeDataMixin:
         if n_total > 0:
             self._last_scan_ts = datetime.datetime.now()
             qs = QSettings("NetSentinel", "NetSentinel")
-            qs.setValue("home/scan_count", int(qs.value("home/scan_count", 0)) + 1)
+            new_count = int(qs.value("home/scan_count", 0)) + 1
+            qs.setValue("home/scan_count", new_count)
             if self._recurring_mode:
                 self._update_recurring_scan_time()
             else:
                 self._check_recurring_mode()
+            self._check_scan_milestones(new_count)
+
+    def _check_scan_milestones(self, scan_count: int) -> None:
+        """Show one-time milestone banner when scan count crosses a threshold."""
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if scan_count == 10 and not qs.value("milestone/scan_10", False, type=bool):
+            qs.setValue("milestone/scan_10", True)
+            grade = getattr(self, "_current_grade", "") or "—"
+            self._show_milestone(
+                f"You've run 10 scans — great momentum! "
+                f"Your current network grade is {grade}. "
+                "Check Network Grade for a full breakdown."
+            )
+
+    def _check_logger_milestones(self) -> None:
+        """Check 24h / 7d logging milestones; call at startup after store is ready."""
+        if self._store is None:
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            rows = self._store._conn.execute(
+                "SELECT MIN(ts), COUNT(*), AVG(rtt_ms) FROM rtt_sample"
+            ).fetchone()
+        except Exception:
+            return
+        if not rows or not rows[0]:
+            return
+        import time as _t
+        oldest_ts = rows[0]
+        n_rows = rows[1] or 0
+        avg_rtt = rows[2] or 0.0
+        elapsed_h = (_t.time() - oldest_ts) / 3600.0
+        if elapsed_h >= 168 and not qs.value("milestone/logger_7d", False, type=bool):
+            qs.setValue("milestone/logger_7d", True)
+            self._show_milestone(
+                f"7 days of network data! Your logger has recorded {n_rows:,} samples "
+                f"with an average RTT of {avg_rtt:.0f} ms. "
+                "See Log Hub for trend charts."
+            )
+        elif elapsed_h >= 24 and not qs.value("milestone/logger_24h", False, type=bool):
+            qs.setValue("milestone/logger_24h", True)
+            self._show_milestone(
+                f"You've been monitoring for 24 hours — {n_rows:,} samples logged, "
+                f"average RTT {avg_rtt:.0f} ms. "
+                "Check Log Hub to see your stability trends."
+            )
+
+    def _show_milestone(self, text: str) -> None:
+        """Display text in the milestone banner on the home page."""
+        if not hasattr(self, "_milestone_banner"):
+            return
+        self._milestone_lbl.setText(text)
+        self._milestone_banner.setVisible(True)
 
     @pyqtSlot(object)
     def on_speed_result(self, result) -> None:
@@ -926,8 +980,12 @@ class _HomeDataMixin:
             self._maybe_show_coach_grade()
 
     def _maybe_show_coach_grade(self) -> None:
+        if not self.isVisible():
+            return
         from PyQt6.QtCore import QSettings
         qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("tour/v1_done", False, type=bool):
+            return
         key = "coach/grade_shown"
         if qs.value(key, False, type=bool):
             return
@@ -985,6 +1043,8 @@ class _HomeDataMixin:
         card = getattr(self, "_setup_card_top", None)
         if card and hasattr(card, "refresh_checklist"):
             card.refresh_checklist(self._device_count)
+        if hasattr(self, "_refresh_hw_nudge"):
+            self._refresh_hw_nudge()
 
     def on_hw_detected(self, matches: list) -> None:
         """Called when hw_detect_worker finds compatible hardware on the network."""

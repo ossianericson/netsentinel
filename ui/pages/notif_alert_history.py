@@ -477,7 +477,10 @@ class _NotifAlertHistoryMixin:
             self._log_detail.setVisible(False)
             return
         err = entry.get("error", "Unknown error")
-        self._log_detail_error_lbl.setText(f"Error: {err}")
+        self._log_detail_error_lbl.setText(
+            f"Delivery failed — {err}. "
+            "Check your notification settings and retry."
+        )
         self._log_detail_entry = entry
         try:
             self._log_detail_retry_btn.clicked.disconnect()

@@ -268,7 +268,10 @@ class DhcpLeasePage(QWidget):
 
     def _on_error(self, msg: str) -> None:
         self._refresh_btn.setEnabled(True)
-        self._status_lbl.setText(f"Error: {msg}")
+        self._status_lbl.setText(
+            f"DHCP lease scan failed — {msg}. "
+            "Check that you are running as administrator and your network adapter is active."
+        )
 
     # ── Table population ──────────────────────────────────────────────────────
 

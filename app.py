@@ -369,7 +369,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.83")
+    app.setApplicationVersion("1.9.84")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -402,7 +402,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.83")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.84")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -734,6 +734,12 @@ def main():
 
     # First-run welcome overlay is shown by Dashboard._show_welcome_overlay()
     # via a 600 ms deferred timer after the window is fully painted.
+
+    # H10: check logging milestones at startup (deferred so DB is warmed up)
+    from PyQt6.QtCore import QTimer as _MilestoneTimer
+    _MilestoneTimer.singleShot(
+        2000, lambda: window._home_page._check_logger_milestones()
+    )
 
     ret = app.exec()
     avail_worker.stop()

@@ -176,7 +176,11 @@ class DiagnosisPage(QWidget):
         QTimer.singleShot(600, self._maybe_show_coach_diagnosis)
 
     def _maybe_show_coach_diagnosis(self) -> None:
+        if not self.isVisible():
+            return
         qs = QSettings("NetSentinel", "NetSentinel")
+        if not qs.value("tour/v1_done", False, type=bool):
+            return
         key = "coach/diagnosis_shown"
         if qs.value(key, False, type=bool):
             return
