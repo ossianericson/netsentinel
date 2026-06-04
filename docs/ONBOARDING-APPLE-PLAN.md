@@ -254,10 +254,12 @@ QSettings key: `ui/onboarding_v2_done` (reuses existing key so existing users ar
 - [x] All existing tests pass (2954 passed); new tests in `tests/test_onboarding_overlay.py`
 - [x] App launches cleanly: `Dashboard() instantiated OK`, `window.show() called OK`
 
-### Sprint I2 — Scanning progress + Results reveal
-- [ ] Screen 2: live progress bar wired to scan worker `progress` signal
-- [ ] Screen 3: animated count-up, KPI summary cards, plain-English verdict
-- [ ] `scan_animation.py` QPainter widget (concentric rings for Screen 1, radar for Screen 2)
+### Sprint I2 — Scanning progress + Results reveal ✅ (2026-06-04)
+- [x] Screen 2: live progress bar wired to `_on_prescan_status` → `on_scan_progress()`; radar animation; status label truncates to one line
+- [x] Screen 3: animated count-up (QTimer, ~600 ms total), two `_KpiCard` widgets (Alerts + Grade), plain-English verdict derived from `high_risk_count`
+- [x] `on_scan_complete(data)` slot wired in `scan_wiring._on_m1_result()`; completes bar to 100 %, 400 ms pause, then transitions
+- [x] Skip from Screen 2 goes to Screen 6 (not Screen 3)
+- [x] 21 tests pass; full suite 2964 passed; app launches cleanly
 
 ### Sprint I3 — Feature spotlight screens + Done animation
 - [ ] Screens 4 and 5 (miniature previews, not full widgets)

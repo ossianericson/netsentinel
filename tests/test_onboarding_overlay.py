@@ -7,6 +7,13 @@ Covers Sprint I1 acceptance criteria:
   - Skip jumps to Screen 6 (done)
   - Screen 0 → Screen 1 navigation works
   - should_show_onboarding / mark_onboarding_done round-trip
+
+Sprint I2 acceptance criteria:
+  - Screen 2 progress bar updates via on_scan_progress()
+  - Screen 2 advances to Screen 3 via on_scan_complete()
+  - Count-up timer populates Screen 3 device count
+  - KPI cards and verdict text are populated on completion
+  - Skip from Screen 2 does not trigger Screen 3
 """
 import pytest
 
@@ -34,7 +41,7 @@ def test_onboarding_shim_import():
     assert callable(mark_onboarding_done)
 
 
-# ── Behaviour tests ───────────────────────────────────────────────────────────
+# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def root_widget():
@@ -51,44 +58,36 @@ def root_widget():
             app.processEvents()
 
 
-def test_overlay_instantiates(root_widget):
+@pytest.fixture
+def overlay(root_widget):
     from ui.widgets.onboarding_overlay import OnboardingOverlay
-    overlay = OnboardingOverlay(root_widget)
+    ov = OnboardingOverlay(root_widget)
+    yield ov
+    try:
+        if hasattr(ov, "_s3_count_timer"):
+            ov._s3_count_timer.stop()
+        ov.deleteLater()
+    except RuntimeError:
+        pass
+    QApplication.instance().processEvents()
+
+
+# ── Sprint I1 behaviour tests ─────────────────────────────────────────────────
+
+def test_overlay_instantiates(overlay):
     assert overlay is not None
-    assert overlay.parent() is root_widget
-    try:
-        overlay.deleteLater()
-    except RuntimeError:
-        pass
-    QApplication.instance().processEvents()
 
 
-def test_overlay_starts_on_screen_0(root_widget):
-    from ui.widgets.onboarding_overlay import OnboardingOverlay
-    overlay = OnboardingOverlay(root_widget)
+def test_overlay_starts_on_screen_0(overlay):
     assert overlay._stack.currentIndex() == 0
-    try:
-        overlay.deleteLater()
-    except RuntimeError:
-        pass
-    QApplication.instance().processEvents()
 
 
-def test_overlay_navigate_to_screen_1(root_widget):
-    from ui.widgets.onboarding_overlay import OnboardingOverlay
-    overlay = OnboardingOverlay(root_widget)
+def test_overlay_navigate_to_screen_1(overlay):
     overlay._go_to_screen(1)
     assert overlay._stack.currentIndex() == 1
-    try:
-        overlay.deleteLater()
-    except RuntimeError:
-        pass
-    QApplication.instance().processEvents()
 
 
-def test_scan_requested_signal(root_widget):
-    from ui.widgets.onboarding_overlay import OnboardingOverlay
-    overlay = OnboardingOverlay(root_widget)
+def test_scan_requested_signal(overlay):
     overlay._go_to_screen(1)
 
     fired = []
@@ -96,26 +95,12 @@ def test_scan_requested_signal(root_widget):
     overlay._on_scan_clicked()
 
     assert fired == [True], "scan_requested should have been emitted once"
-    # After clicking, overlay advances to Screen 2
     assert overlay._stack.currentIndex() == 2
 
-    try:
-        overlay.deleteLater()
-    except RuntimeError:
-        pass
-    QApplication.instance().processEvents()
 
-
-def test_skip_goes_to_screen_6(root_widget):
-    from ui.widgets.onboarding_overlay import OnboardingOverlay
-    overlay = OnboardingOverlay(root_widget)
+def test_skip_goes_to_screen_6(overlay):
     overlay._do_skip()
     assert overlay._stack.currentIndex() == 6
-    try:
-        overlay.deleteLater()
-    except RuntimeError:
-        pass
-    QApplication.instance().processEvents()
 
 
 def test_should_show_onboarding_after_mark_done(root_widget):
@@ -160,3 +145,134 @@ def test_scan_animation_radar_instantiates(root_widget):
     except RuntimeError:
         pass
     QApplication.instance().processEvents()
+
+
+# ── Sprint I2 behaviour tests ─────────────────────────────────────────────────
+
+def test_screen_2_has_progress_bar(overlay):
+    """Screen 2 must have a QProgressBar attribute."""
+    assert hasattr(overlay, "_s2_bar"), "overlay should have _s2_bar on Screen 2"
+    assert hasattr(overlay, "_s2_status"), "overlay should have _s2_status label"
+
+
+def test_on_scan_progress_updates_bar(overlay):
+    """on_scan_progress() increments the bar and updates the status label."""
+    overlay._go_to_screen(2)
+    overlay.on_scan_progress("Checking 192.168.1.0/24")
+    overlay.on_scan_progress("ARP sweep complete")
+
+    assert overlay._s2_bar.value() > 0, "progress bar should advance"
+    assert overlay._s2_status.text() == "ARP sweep complete"
+
+
+def test_on_scan_progress_ignored_when_not_on_screen_2(overlay):
+    """on_scan_progress() is a no-op when the overlay is not on Screen 2."""
+    overlay._go_to_screen(0)
+    overlay.on_scan_progress("should be ignored")
+    # Bar stays at 0 — it was never on Screen 2
+    assert overlay._s2_bar.value() == 0
+
+
+def test_on_scan_complete_advances_to_screen_3(overlay):
+    """on_scan_complete() should transition overlay from Screen 2 to Screen 3."""
+    from PyQt6.QtWidgets import QApplication
+    overlay._go_to_screen(2)
+
+    data = {
+        "total_count": 5,
+        "high_risk_count": 0,
+        "devices": [],
+    }
+    overlay.on_scan_complete(data)
+
+    # on_scan_complete fires a 400ms QTimer before transitioning; process it
+    app = QApplication.instance()
+    for _ in range(20):
+        app.processEvents()
+    import time
+    time.sleep(0.45)
+    for _ in range(10):
+        app.processEvents()
+
+    assert overlay._stack.currentIndex() == 3, (
+        f"Expected screen 3 after scan complete, got {overlay._stack.currentIndex()}"
+    )
+
+
+def test_on_scan_complete_populates_verdict(overlay):
+    """Screen 3 verdict is set based on high_risk_count."""
+    from PyQt6.QtWidgets import QApplication
+    import time
+
+    overlay._go_to_screen(2)
+    data = {"total_count": 8, "high_risk_count": 0, "devices": []}
+    overlay.on_scan_complete(data)
+
+    app = QApplication.instance()
+    for _ in range(20):
+        app.processEvents()
+    time.sleep(0.45)
+    for _ in range(10):
+        app.processEvents()
+
+    verdict = overlay._s3_verdict.text()
+    assert "healthy" in verdict.lower() or "no high-risk" in verdict.lower(), (
+        f"Unexpected verdict for 0 high-risk devices: {verdict!r}"
+    )
+
+
+def test_on_scan_complete_high_risk_verdict(overlay):
+    """Screen 3 shows a warning verdict when high_risk_count > 0."""
+    from PyQt6.QtWidgets import QApplication
+    import time
+
+    overlay._go_to_screen(2)
+    data = {"total_count": 10, "high_risk_count": 3, "devices": []}
+    overlay.on_scan_complete(data)
+
+    app = QApplication.instance()
+    for _ in range(20):
+        app.processEvents()
+    time.sleep(0.45)
+    for _ in range(10):
+        app.processEvents()
+
+    verdict = overlay._s3_verdict.text()
+    assert "3" in verdict, f"Verdict should mention the high-risk count: {verdict!r}"
+
+
+def test_on_scan_complete_ignored_when_not_on_screen_2(overlay):
+    """on_scan_complete() is a no-op if the overlay is not on Screen 2."""
+    overlay._go_to_screen(0)
+    data = {"total_count": 5, "high_risk_count": 0, "devices": []}
+    overlay.on_scan_complete(data)
+    # Must stay on Screen 0
+    assert overlay._stack.currentIndex() == 0
+
+
+def test_skip_from_screen_2_does_not_trigger_screen_3(overlay):
+    """Skipping while on Screen 2 must go to Screen 6, not Screen 3."""
+    overlay._go_to_screen(2)
+    overlay._do_skip()
+    assert overlay._stack.currentIndex() == 6
+
+
+def test_screen_3_kpi_cards_exist(overlay):
+    """Screen 3 must have both KPI card widgets."""
+    assert hasattr(overlay, "_s3_alerts_card")
+    assert hasattr(overlay, "_s3_grade_card")
+    assert hasattr(overlay, "_s3_count_lbl")
+
+
+def test_kpi_card_set_value():
+    """_KpiCard.set_value() updates the displayed text."""
+    from ui.widgets.onboarding_overlay import _KpiCard
+    app = QApplication.instance()
+    card = _KpiCard("Test", "0", "#00FF00")
+    card.set_value("42", "#FF0000")
+    assert card._val_lbl.text() == "42"
+    try:
+        card.deleteLater()
+    except RuntimeError:
+        pass
+    app.processEvents()

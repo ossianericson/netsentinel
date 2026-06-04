@@ -302,6 +302,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
         import time as _t
         self._last_scan_time = _t.time()
         self._m1_result = data
+        # Feed onboarding overlay Screen 3 results reveal
+        _ov = getattr(self, "_onboarding_overlay", None)
+        if _ov is not None:
+            try:
+                _ov.on_scan_complete(data)
+            except Exception:
+                pass
         devices = data.get("devices", [])
         if hasattr(self, "_overview_page") and devices:
             self._overview_page.set_has_results(True)

@@ -1419,6 +1419,13 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             lbl.setText(m)
         if hasattr(self, "_home_page"):
             self._home_page.set_scan_progress(m)
+        # Feed onboarding overlay Screen 2 progress bar
+        _ov = getattr(self, "_onboarding_overlay", None)
+        if _ov is not None:
+            try:
+                _ov.on_scan_progress(m)
+            except Exception:
+                pass
 
 
     # ── Module result handlers ────────────────────────────────────────────────
