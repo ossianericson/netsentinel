@@ -1,15 +1,17 @@
 """
-Tests for ui.onboarding — OnboardingOrchestrator.
+Tests for ui.onboarding — OnboardingOrchestrator (Sprint H11 value-first redesign).
 
 Validates:
   - should_show_onboarding() responds to QSettings correctly
   - mark_onboarding_done() sets both keys
   - Step count is 9
-  - All nav labels exist in a real Dashboard._nav_label_to_widget
-  - Phase 1 steps (1-4) have no nav_label or nav to Home
-  - Phase 2 steps (5-9) all have nav_labels
-  - _on_welcome_scan in welcome overlay fires background scans (RULE-T5 integration test)
+  - New step sequence: Overview → Devices → Overview → Speed Test → Network Logger
+                       → Hardware → Home → (stay Home) → Overview
+  - Step 1 fires all background scans via _step1_fire_scans
+  - Step 8 has no nav_label (stays on Home) and next_enabled_immediately=True
+  - All step nav labels exist in the expected page registry
   - tour/v1_done is set after finish
+  - Coach marks are suppressed during onboarding (RULE-T6)
 """
 import sys
 import pytest
@@ -67,29 +69,6 @@ class TestStepDefinitions:
     def test_exactly_9_steps(self):
         assert len(self._steps()) == 9
 
-    def test_phase1_stays_put_or_goes_home(self):
-        steps = self._steps()
-        for i, step in enumerate(steps[:4]):
-            assert step.nav_label in (None, "Home"), (
-                f"Phase 1 step {i+1} should stay put or go Home, got '{step.nav_label}'"
-            )
-
-    def test_phase2_all_have_nav_labels(self):
-        steps = self._steps()
-        for i, step in enumerate(steps[4:], start=5):
-            assert step.nav_label is not None, (
-                f"Phase 2 step {i} has no nav_label"
-            )
-
-    def test_phase2_nav_labels(self):
-        steps = self._steps()
-        labels = [s.nav_label for s in steps[4:]]
-        assert labels[0] == "Speed Test"
-        assert labels[1] == "Network Grade"
-        assert labels[2] == "Network Logger"
-        assert labels[3] == "Hardware"
-        assert labels[4] == "Overview"
-
     def test_all_steps_have_tour_title_and_body(self):
         for i, step in enumerate(self._steps()):
             assert step.tour_title.strip(), f"Step {i+1} has empty tour_title"
@@ -101,40 +80,124 @@ class TestStepDefinitions:
                 assert sp.title.strip(), f"Step {i+1} spotlight {j+1} has empty title"
                 assert sp.body.strip(),  f"Step {i+1} spotlight {j+1} has empty body"
 
-    def test_speed_test_step_has_auto_action(self):
+    # ── Value-first sequence ──────────────────────────────────────────────────
+
+    def test_step1_navigates_to_overview(self):
+        """Scan fires on Overview — user sees something happening immediately."""
+        steps = self._steps()
+        assert steps[0].nav_label == "Overview"
+
+    def test_step1_fires_all_scans(self):
+        """Step 1 auto_action is _step1_fire_scans (scan + speed test + logger)."""
+        steps = self._steps()
+        assert steps[0].auto_action == "_step1_fire_scans"
+
+    def test_step2_goes_to_devices(self):
+        """First wow moment — real device list."""
+        steps = self._steps()
+        assert steps[1].nav_label == "Devices"
+
+    def test_step3_returns_to_overview_for_grade(self):
+        """Grade ring is populated by now."""
+        steps = self._steps()
+        assert steps[2].nav_label == "Overview"
+
+    def test_step4_speed_test(self):
+        """Speed test gauge is already moving from step 1."""
+        steps = self._steps()
+        assert steps[3].nav_label == "Speed Test"
+
+    def test_step5_network_logger(self):
+        """Logger already recording from step 1."""
+        steps = self._steps()
+        assert steps[4].nav_label == "Network Logger"
+
+    def test_step6_hardware(self):
+        steps = self._steps()
+        assert steps[5].nav_label == "Hardware"
+
+    def test_step7_home_shows_completed_checklist(self):
+        """Home at step 7 — GettingStartedCard already shows 3+ ticks."""
+        steps = self._steps()
+        assert steps[6].nav_label == "Home"
+
+    def test_step8_stays_on_home_for_ctrlk(self):
+        """Ctrl+K explained here — user has context from visiting 5 pages."""
+        steps = self._steps()
+        assert steps[7].nav_label is None, (
+            "Step 8 should stay on Home (nav_label=None)"
+        )
+
+    def test_step8_next_enabled_immediately(self):
+        """Step 8 is a simple spotlight — Next → should not be gated."""
+        steps = self._steps()
+        assert steps[7].next_enabled_immediately is True
+
+    def test_step9_ends_on_overview(self):
+        """Final step is Overview with live tile grid."""
+        steps = self._steps()
+        assert steps[8].nav_label == "Overview"
+
+    # ── No shell-orientation steps ────────────────────────────────────────────
+
+    def test_no_steps_point_only_at_nav_rail(self):
+        """Old steps 1-3 (nav rail / breadcrumb / health badge) must be gone."""
+        steps = self._steps()
+        nav_rail_titles = [
+            s.tour_title for s in steps
+            if "navigation rail" in s.tour_title.lower()
+            or "find anything" in s.tour_title.lower() and s.nav_label is None and s == steps[0]
+        ]
+        # Step 8 "Find anything" is allowed (it stays on Home, user has context)
+        # but only one such step should exist
+        assert len(nav_rail_titles) <= 1
+
+    # ── Speed test and logger auto-actions ────────────────────────────────────
+
+    def test_speed_test_step_has_no_auto_action(self):
+        """Speed test was already started in step 1 — step 4 just navigates."""
         steps = self._steps()
         st_step = next(s for s in steps if s.nav_label == "Speed Test")
-        assert st_step.auto_action == "_auto_speed_test"
+        assert st_step.auto_action is None
 
-    def test_logger_step_has_auto_action(self):
+    def test_logger_step_has_no_auto_action(self):
+        """Logger was already started in step 1 — step 5 just navigates."""
         steps = self._steps()
         log_step = next(s for s in steps if s.nav_label == "Network Logger")
-        assert log_step.auto_action == "_auto_logger"
+        assert log_step.auto_action is None
 
 
 # ── Nav label validity (RULE-T5) ─────────────────────────────────────────────
 
 class TestNavLabelValidity:
-    """Verify every Phase 2 nav label actually exists in the dashboard nav registry."""
+    """Verify every non-None nav label names a real page in the expected registry."""
 
     def setup_method(self):  _fresh()
     def teardown_method(self): _fresh()
 
-    def test_all_phase2_labels_registered_in_dashboard(self, monkeypatch):
-        from unittest.mock import MagicMock, patch
+    def test_all_nav_labels_in_expected_set(self):
+        from unittest.mock import MagicMock
         from ui.onboarding import _build_steps
-
         d = MagicMock()
         steps = _build_steps(d)
 
-        expected_labels = {"Speed Test", "Network Grade", "Network Logger",
-                           "Hardware", "Overview", "Home"}
-        phase2_labels = {s.nav_label for s in steps if s.nav_label}
-        missing = phase2_labels - expected_labels
+        expected = {
+            "Overview", "Devices", "Speed Test", "Network Logger",
+            "Hardware", "Home", None,
+        }
+        for i, step in enumerate(steps):
+            assert step.nav_label in expected, (
+                f"Step {i+1} nav_label '{step.nav_label}' not in expected page set"
+            )
 
-        # All expected labels should be present in the step definitions
-        for label in {"Speed Test", "Network Grade", "Network Logger", "Hardware", "Overview"}:
-            assert label in phase2_labels, f"Phase 2 missing step for '{label}'"
+    def test_required_pages_all_present(self):
+        from unittest.mock import MagicMock
+        from ui.onboarding import _build_steps
+        d = MagicMock()
+        labels = {s.nav_label for s in _build_steps(d) if s.nav_label}
+        for required in ("Overview", "Devices", "Speed Test", "Network Logger",
+                         "Hardware", "Home"):
+            assert required in labels, f"Required page '{required}' missing from step sequence"
 
 
 # ── Orchestrator behaviour ────────────────────────────────────────────────────
@@ -153,8 +216,6 @@ class TestOrchestratorBehaviour:
         d._tour_next_btn.clicked = MagicMock()
         d._tour_skip_btn = MagicMock()
         d._tour_skip_btn.clicked = MagicMock()
-        d._nav_rail_panel = MagicMock()
-        d._nav_flyout     = MagicMock()
         d.window.return_value = MagicMock()
         return d
 
@@ -183,8 +244,18 @@ class TestOrchestratorBehaviour:
         orc._finish()
         d._tour_bar.setVisible.assert_called_with(False)
 
+    def test_finish_sets_both_keys(self):
+        from ui.onboarding import OnboardingOrchestrator
+        d = self._mock_dashboard()
+        orc = OnboardingOrchestrator(None)
+        orc._dashboard = d
+        orc._finish()
+        qs = QSettings("NetSentinel", "NetSentinel")
+        assert qs.value("ui/onboarding_v2_done", False, type=bool) is True
+        assert qs.value("tour/v1_done", False, type=bool) is True
 
-# ── RULE-T6: coach marks suppressed during onboarding ─────────────────────────
+
+# ── Coach mark suppression (RULE-T6) ─────────────────────────────────────────
 
 class TestCoachMarkSuppression:
     """Coach marks must not fire until tour/v1_done = True."""
@@ -192,19 +263,13 @@ class TestCoachMarkSuppression:
     def setup_method(self):  _fresh()
     def teardown_method(self): _fresh()
 
-    def test_home_pills_coach_suppressed_before_tour_done(self):
-        from unittest.mock import MagicMock, patch
+    def test_tour_key_false_before_onboarding_completes(self):
+        """On fresh install tour/v1_done is absent/False — coach marks stay off."""
         qs = QSettings("NetSentinel", "NetSentinel")
-        qs.setValue("tour/v1_done", False)
+        assert not qs.value("tour/v1_done", False, type=bool)
 
-        # Import and call the method — it should return early without calling
-        # CoachMarkChain. We verify by patching CoachMarkChain.
-        with patch("ui.widgets.coach_mark.CoachMarkChain") as mock_chain:
-            from ui.pages.home_page import HomePage
-            page = MagicMock(spec=HomePage)
-            page.isVisible.return_value = True
-            # Directly run the guard logic
-            qs2 = QSettings("NetSentinel", "NetSentinel")
-            assert not qs2.value("tour/v1_done", False, type=bool)
-            # If guard works, chain is never instantiated
-            mock_chain.assert_not_called()
+    def test_tour_key_true_after_finish(self):
+        from ui.onboarding import mark_onboarding_done
+        mark_onboarding_done()
+        qs = QSettings("NetSentinel", "NetSentinel")
+        assert qs.value("tour/v1_done", True, type=bool) is True

@@ -348,4 +348,5 @@ Speed test shows a live gauge even while running — this is better than a spinn
 
 ---
 
-*Plan created: 2026-06-04. Status: awaiting approval before implementation.*
+*Plan created: 2026-06-04.*  
+*Sprint H11 implementation started 2026-06-04: `ui/onboarding.py` and `tests/test_onboarding.py` rewritten with value-first 9-step sequence. Step content and spotlight widget targets remain for visual refinement in the next session (see `docs/ONBOARDING-VISUAL-FIX-PLAN-V3.md` for remaining work: J1 home page surgery, J3 empty state polish, J4 tour bar animations).*

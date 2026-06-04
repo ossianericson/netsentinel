@@ -1,14 +1,27 @@
 """
-OnboardingOrchestrator — single-format, 9-step first-run onboarding.
+OnboardingOrchestrator — value-first 9-step first-run onboarding (Sprint H11).
 
-Replaces WelcomeOverlay (modal slides) + GuidedTour (separate bar) with one
-seamless experience:
+Design principle: show value first, explain the shell second.
+Steps 1-3 (old shell-orientation steps) deleted — nav rail / breadcrumb / health
+badge are self-explanatory once the user has visited real pages with real data.
 
-  Layer 1 — Tour bar  : "Step N of 9 · [title] · [body]  [Next →]  [Skip]"
-  Layer 2 — Spotlights: CoachMarkChain highlights specific widgets per step
+Step sequence:
+  1  Overview       — scan fires here, user watches something happen
+  2  Devices        — first "wow" moment: real device list
+  3  Overview       — grade ring now populated, user sees a score
+  4  Speed Test     — gauge already moving (started 500ms after step 1)
+  5  Network Logger — already recording (started 1s after step 1)
+  6  Hardware       — spotlight real detected hardware
+  7  Home           — GettingStartedCard shows 3-4 ticks already done
+  8  Home (stay)    — Ctrl+K spotlight — user has context from 5 pages
+  9  Overview       — "Finish ✓", full tile grid with live data
 
-All background scans (device scan, speed test, logger, grade) fire immediately
-when the orchestrator starts so the user sees live data at every step.
+Background scans fire via step 1's auto_action, not a pre-start:
+  _start_full_scan()    — fires in step 1
+  _auto_speed_test()    — fires 500ms after step 1
+  _auto_logger()        — fires 1s after step 1
+
+Steps 2-9 display results of those already-running scans.
 
 Trigger:
   QSettings("ui/onboarding_v2_done") is False or absent.
@@ -16,7 +29,7 @@ Trigger:
 
 Completion:
   Sets QSettings("tour/v1_done") and QSettings("ui/onboarding_v2_done") = True.
-  Coach marks (home_pills, diagnosis, log_hub, devices, grade) then become eligible.
+  Per-page coach marks (gated on tour/v1_done) become eligible after this.
 """
 from __future__ import annotations
 
@@ -32,6 +45,12 @@ if TYPE_CHECKING:
 _SETTINGS_KEY = "ui/onboarding_v2_done"
 _TOUR_KEY     = "tour/v1_done"
 
+# Delay (ms) from step 1 auto_action before background scans fire
+_SPEED_TEST_DELAY = 500
+_LOGGER_DELAY     = 1000
+# Delay (ms) after navigation before spotlight chain starts
+_SPOTLIGHT_DELAY  = 350
+
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
@@ -44,225 +63,255 @@ class SpotlightSpec:
 
 @dataclass
 class OnboardingStep:
-    nav_label:  str | None           # page to navigate to; None = stay put
-    tour_title: str
-    tour_body:  str
-    spotlights: list[SpotlightSpec] = field(default_factory=list)
-    auto_action: str | None = None   # method name on the orchestrator to call
+    nav_label:   str | None              # page to navigate to; None = stay put
+    tour_title:  str
+    tour_body:   str
+    spotlights:  list[SpotlightSpec] = field(default_factory=list)
+    auto_action: str | None = None       # method name on the orchestrator to call
+    next_enabled_immediately: bool = False  # skip spotlight gating for this step
 
 
 # ── Step definitions ──────────────────────────────────────────────────────────
 
 def _build_steps(d: "Dashboard") -> list[OnboardingStep]:
-    """Build the 9-step sequence with widget-resolving lambdas bound to dashboard d."""
+    """Build the 9-step value-first sequence with widget-resolving lambdas."""
 
     def _w(attr: str):
-        """Safely get an attribute from d; return None if absent or invisible."""
+        """Safely resolve a dotted attribute path on d; returns None if missing."""
         def _resolve():
-            w = d
+            obj = d
             for part in attr.split("."):
-                w = getattr(w, part, None)
-                if w is None:
+                obj = getattr(obj, part, None)
+                if obj is None:
                     return None
-            return w
+            return obj
         return _resolve
 
     return [
-        # ── PHASE 1: App shell orientation (steps 1–4, no navigation) ─────────
-
+        # ── Step 1: Scan starts here ─────────────────────────────────────────
         OnboardingStep(
-            nav_label=None,
-            tour_title="Step 1 of 9  ·  The navigation rail",
-            tour_body="9 sections on the left — click any icon to expand its pages.",
+            nav_label="Overview",
+            tour_title="Step 1 of 9  ·  Scanning your network",
+            tour_body=(
+                "Finding every device right now — routers, phones, smart speakers, "
+                "everything. Takes 30–60 seconds. Watch the tiles populate."
+            ),
+            auto_action="_step1_fire_scans",
             spotlights=[
-                SpotlightSpec(
-                    title="9 sections, all your tools",
-                    body="Getting Started, Discover, Monitor, Reports, Analysis, "
-                         "Automation, Security, Education, Extend — everything is here.",
-                    target=_w("_nav_rail_panel"),
-                ),
-                SpotlightSpec(
-                    title="Click to expand",
-                    body="Each icon opens a flyout listing every page in that section. "
-                         "Right-click any item to pin it to the top of the rail.",
-                    target=_w("_nav_flyout"),
-                ),
-            ],
-        ),
-
-        OnboardingStep(
-            nav_label=None,
-            tour_title="Step 2 of 9  ·  Find anything instantly",
-            tour_body="Press Ctrl+K to open the command palette — fuzzy-search all 60+ pages.",
-            spotlights=[
-                SpotlightSpec(
-                    title="Command palette",
-                    body="Type any page name, feature, or action. "
-                         "Arrow keys to move, Enter to go. Esc to close.",
-                    target=_w("_cmd_palette_btn"),
-                ),
-                SpotlightSpec(
-                    title="Always know where you are",
-                    body="The breadcrumb strip shows Section › Page. "
-                         "Click the section name to jump back.",
-                    target=_w("_breadcrumb_lbl"),
-                ),
-            ],
-        ),
-
-        OnboardingStep(
-            nav_label=None,
-            tour_title="Step 3 of 9  ·  Your live health indicator",
-            tour_body="The status badge in the header reflects your network grade at a glance.",
-            spotlights=[
-                SpotlightSpec(
-                    title="Live verdict",
-                    body="Updates after every scan: Network Healthy, Issues Found, or No Data. "
-                         "Click to jump straight to the diagnostic details.",
-                    target=_w("_verdict_panel"),
-                ),
                 SpotlightSpec(
                     title="One-click scan",
-                    body="Runs a full device discovery and grades your network in 60–90 seconds. "
-                         "We already started one for you.",
+                    body=(
+                        "Runs full device discovery, grades your network A–F, and "
+                        "records a baseline — all at once. Already running."
+                    ),
                     target=_w("_header_scan_btn"),
                 ),
             ],
         ),
 
+        # ── Step 2: Devices — first tangible result ──────────────────────────
         OnboardingStep(
-            nav_label="Home",
-            tour_title="Step 4 of 9  ·  Your home page",
-            tour_body="Daily starting point — scan status, monitors, and what to do next.",
+            nav_label="Devices",
+            tour_title="Step 2 of 9  ·  Your network inventory",
+            tour_body=(
+                "Every device found on your network is listed here. "
+                "Unknown devices in red are new arrivals — could be a guest or an intruder."
+            ),
             spotlights=[
                 SpotlightSpec(
-                    title="Setup checklist",
-                    body="Complete these steps once. The card disappears permanently "
-                         "when all 6 are done — no clutter after setup.",
-                    target=_w("_home_page._getting_started_card"),
+                    title="Device list",
+                    body=(
+                        "MAC address, OUI vendor, IP, hostname, and risk level. "
+                        "Right-click any row to label a device or check its open ports."
+                    ),
+                    target=_w("_inventory_page._devices_table"),
                 ),
                 SpotlightSpec(
-                    title="What to do next",
-                    body="After each scan NetSentinel surfaces your 3–4 highest-priority "
-                         "actions. Acted-on items don't reappear for 7 days.",
-                    target=_w("_home_page._suggestions_frame"),
-                ),
-                SpotlightSpec(
-                    title="Background monitors",
-                    body="ARP Watch, Logger, DHCP, Storm — run silently in the background. "
-                         "Green dot = active. Grey = off. Click to start.",
-                    target=_w("_home_page._freshness_strip"),
+                    title="Risk filter",
+                    body=(
+                        "Click 'Unknown' to filter to new, unrecognised devices. "
+                        "Connect hardware in step 6 to get real hostnames instead of MACs."
+                    ),
+                    target=_w("_inventory_page._filter_bar"),
                 ),
             ],
         ),
 
-        # ── PHASE 2: Feature pages (steps 5–9, live data already loading) ─────
+        # ── Step 3: Overview — grade ring now populated ──────────────────────
+        OnboardingStep(
+            nav_label="Overview",
+            tour_title="Step 3 of 9  ·  Your network grade",
+            tour_body=(
+                "Scored A–F across 8 dimensions. Click the ring to see exactly "
+                "which dimension is dragging your score down — and how to fix it."
+            ),
+            spotlights=[
+                SpotlightSpec(
+                    title="Grade ring",
+                    body=(
+                        "Click the ring for the full breakdown: device risk, "
+                        "DNS stability, uptime, cert health, CVE exposure, rogue "
+                        "detection, speed, and latency."
+                    ),
+                    target=_w("_overview_page._grade_ring"),
+                ),
+            ],
+        ),
 
+        # ── Step 4: Speed Test — gauge already moving ────────────────────────
         OnboardingStep(
             nav_label="Speed Test",
-            tour_title="Step 5 of 9  ·  Speed Test",
-            tour_body="Already running — every result is logged for ISP accountability.",
-            auto_action="_auto_speed_test",
+            tour_title="Step 4 of 9  ·  Speed Test",
+            tour_body=(
+                "Already running — the gauge is live. "
+                "Every result is saved. Build months of history before disputing an ISP bill."
+            ),
             spotlights=[
                 SpotlightSpec(
                     title="Live gauge",
-                    body="Shows download speed in real time as the test runs. "
-                         "The needle moves — watch it while you read.",
+                    body=(
+                        "Watch the needle while you read. Result saves automatically "
+                        "with timestamp, server, and engine used."
+                    ),
                     target=_w("_speed_test_page._gauge"),
                 ),
                 SpotlightSpec(
                     title="Test history",
-                    body="Every result is saved. Run weekly — build months of data "
-                         "before disputing an ISP bill. Export as PDF.",
+                    body=(
+                        "Click any row to see the full result including modem signal "
+                        "data if hardware is connected. Export as PDF for ISP tickets."
+                    ),
                     target=_w("_speed_test_page._hist_table"),
                 ),
-                SpotlightSpec(
-                    title="Engine indicator",
-                    body="Uses Ookla CLI if installed, then speedtest-cli, then "
-                         "pure-Python. All three produce the same logged data.",
-                    target=_w("_speed_test_page._engine_lbl"),
-                ),
             ],
         ),
 
-        OnboardingStep(
-            nav_label="Network Grade",
-            tour_title="Step 6 of 9  ·  Network Grade",
-            tour_body="Your A–F score across 8 security and stability dimensions — already computing.",
-            auto_action="_auto_grade",
-            spotlights=[
-                SpotlightSpec(
-                    title="Your grade",
-                    body="Click the ring to see the 8-dimension breakdown. "
-                         "Low scores link directly to the page where you fix them.",
-                    target=_w("_overview_page._grade_ring"),
-                ),
-                SpotlightSpec(
-                    title="How is it calculated?",
-                    body="Device risk, DNS stability, uptime, cert health, CVE exposure, "
-                         "rogue detection, speed, and latency — all weighted.",
-                    target=_w("_overview_page._grade_how_lbl"),
-                ),
-            ],
-        ),
-
+        # ── Step 5: Network Logger — already recording ───────────────────────
         OnboardingStep(
             nav_label="Network Logger",
-            tour_title="Step 7 of 9  ·  Network Logger",
-            tour_body="Already recording every 30 seconds — leave this running overnight.",
-            auto_action="_auto_logger",
+            tour_title="Step 5 of 9  ·  Network Logger",
+            tour_body=(
+                "Recording RTT and DNS every 30 seconds — already running. "
+                "Leave it on overnight and come back to see stability trends and any outages."
+            ),
             spotlights=[
                 SpotlightSpec(
                     title="Log Sources",
-                    body="Toggle what gets recorded: RTT, jitter, DNS latency, "
-                         "ARP events. Network RTT is the most valuable — already on.",
+                    body=(
+                        "Network RTT is on — it's the most valuable source. "
+                        "Catches micro-outages your ISP won't admit to. "
+                        "Enable DNS Latency to also track name resolution time."
+                    ),
                     target=_w("_log_hub_page._sources_bar"),
                 ),
                 SpotlightSpec(
                     title="Activity Log",
-                    body="Every logged event appears here in real time. "
-                         "Filter by source or switch to History mode to review past sessions. "
-                         "Outages are logged with start time and duration.",
+                    body=(
+                        "Every ping appears here in real time. Jitter = RTT variance. "
+                        "Consecutive failures are grouped as outages with start time "
+                        "and duration — exportable as evidence."
+                    ),
                     target=_w("_log_hub_page._table"),
                 ),
             ],
         ),
 
+        # ── Step 6: Hardware — highest-value optional step ───────────────────
         OnboardingStep(
             nav_label="Hardware",
-            tour_title="Step 8 of 9  ·  Hardware Integration",
-            tour_body="The highest-value step — connect your router or modem for real device names and signal data.",
+            tour_title="Step 6 of 9  ·  Hardware Integration",
+            tour_body=(
+                "Connect your router or modem to unlock real device names and signal data. "
+                "Credentials stored in the OS keychain — never in a file."
+            ),
             spotlights=[
                 SpotlightSpec(
-                    title="Detected devices",
-                    body="NetSentinel found compatible hardware on your network. "
-                         "Click Add to connect it — takes 30 seconds.",
+                    title="Detected hardware",
+                    body=(
+                        "NetSentinel found compatible devices on your network. "
+                        "Click Add next to any card — takes 30 seconds. "
+                        "You'll get real hostnames, signal strength, and mesh topology."
+                    ),
                     target=_w("_hardware_integration_page._hub_scroll"),
-                ),
-                SpotlightSpec(
-                    title="What you get",
-                    body="Real hostnames in Devices, live signal strength in Speed Test, "
-                         "mesh topology in Network Map. Credentials stored in OS keychain.",
-                    target=None,
                 ),
             ],
         ),
 
+        # ── Step 7: Home — GettingStartedCard shows progress ─────────────────
         OnboardingStep(
-            nav_label="Overview",
-            tour_title="Step 9 of 9  ·  Overview",
-            tour_body="Your home base — all monitors, today's alerts, and your grade in one place.",
+            nav_label="Home",
+            tour_title="Step 7 of 9  ·  Home — your starting point",
+            tour_body=(
+                "Your daily launching pad. The checklist shows what you've already done "
+                "— scan and logger are ticked. Return here after any restart."
+            ),
             spotlights=[
                 SpotlightSpec(
-                    title="Your dashboard",
-                    body="Each tile is a live monitor. Drag to reorder. "
-                         "Click Edit Layout to add or remove tiles.",
+                    title="Setup checklist",
+                    body=(
+                        "Steps you've already completed are ticked. "
+                        "The card disappears permanently when all 6 are done — "
+                        "no clutter after setup."
+                    ),
+                    target=_w("_home_page._getting_started_card"),
+                ),
+                SpotlightSpec(
+                    title="What to do next",
+                    body=(
+                        "After each scan, NetSentinel surfaces your 3–4 highest-priority "
+                        "actions. Acted-on items won't reappear for 7 days."
+                    ),
+                    target=_w("_home_page._suggestions_frame"),
+                ),
+            ],
+        ),
+
+        # ── Step 8: Ctrl+K — now the user has context ────────────────────────
+        OnboardingStep(
+            nav_label=None,   # stay on Home
+            tour_title="Step 8 of 9  ·  Find anything instantly",
+            tour_body=(
+                "You've just visited 5 pages. Press Ctrl+K to jump back to any of them "
+                "— or to any of the 60+ pages — without touching the sidebar."
+            ),
+            next_enabled_immediately=True,
+            spotlights=[
+                SpotlightSpec(
+                    title="Command palette  Ctrl+K",
+                    body=(
+                        "Type 'Devices', 'Grade', 'Logger' — anything. "
+                        "Arrow keys + Enter. Esc to close. "
+                        "Right-click any sidebar item to pin it to the top."
+                    ),
+                    target=_w("_cmd_palette_btn"),
+                ),
+            ],
+        ),
+
+        # ── Step 9: Overview — full tile grid with live data ─────────────────
+        OnboardingStep(
+            nav_label="Overview",
+            tour_title="Step 9 of 9  ·  Overview — your home base",
+            tour_body=(
+                "All monitors, today's alerts, and your grade in one place. "
+                "Drag tiles to reorder. Click Edit Layout to add or remove tiles."
+            ),
+            spotlights=[
+                SpotlightSpec(
+                    title="Live tile dashboard",
+                    body=(
+                        "Each tile updates automatically. Grade tile shows your score. "
+                        "Stability tile shows RTT trends from the logger running since step 5."
+                    ),
                     target=_w("_overview_page._tile_container"),
                 ),
                 SpotlightSpec(
                     title="What's Wrong?",
-                    body="Pick a symptom, get targeted findings in 30 seconds — "
-                         "no need to know what ARP or STP mean.",
+                    body=(
+                        "Something not right? Pick a symptom — slow internet, "
+                        "dropped connection, unknown device. "
+                        "Targeted checks in 30 seconds. No technical knowledge needed."
+                    ),
                     target=_w("_overview_page._whats_wrong_btn"),
                 ),
             ],
@@ -287,11 +336,15 @@ def mark_onboarding_done() -> None:
 
 class OnboardingOrchestrator(QObject):
     """
-    Single-format first-run onboarding: tour bar + spotlight chain per step.
+    Value-first 9-step onboarding: tour bar + per-step spotlight chain.
+
+    Scan fires in step 1. Speed test fires 500ms later. Logger fires 1s later.
+    Steps 2–9 show results of those already-running scans.
+    No spotlights fire during pre-step setup — every spotlight is tied to real data.
 
     Usage:
         orchestrator = OnboardingOrchestrator(dashboard)
-        orchestrator.start()   # fires all background scans, shows step 1
+        orchestrator.start()
     """
 
     def __init__(self, dashboard: "Dashboard") -> None:
@@ -299,7 +352,6 @@ class OnboardingOrchestrator(QObject):
         self._dashboard = dashboard
         self._step = 0
         self._steps: list[OnboardingStep] = []
-        self._chain_active = False
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -308,20 +360,19 @@ class OnboardingOrchestrator(QObject):
             return
         self._steps = _build_steps(self._dashboard)
         self._step = 0
-        self._fire_background_scans()
         self._connect_buttons()
         self._advance()
 
-    # ── Background scans ──────────────────────────────────────────────────────
+    # ── Background scan triggers ──────────────────────────────────────────────
 
-    def _fire_background_scans(self) -> None:
-        """Start all scans immediately so data is ready by the time steps 5–9 show."""
+    def _step1_fire_scans(self) -> None:
+        """Called as step 1's auto_action. Fires all background work."""
         try:
             self._dashboard._start_full_scan()
         except Exception:
             pass
-        QTimer.singleShot(500, self._auto_speed_test)
-        QTimer.singleShot(1000, self._auto_logger)
+        QTimer.singleShot(_SPEED_TEST_DELAY, self._auto_speed_test)
+        QTimer.singleShot(_LOGGER_DELAY,     self._auto_logger)
 
     def _auto_speed_test(self) -> None:
         try:
@@ -330,25 +381,9 @@ class OnboardingOrchestrator(QObject):
                 return
             worker = getattr(st, "_worker", None)
             if worker and getattr(worker, "isRunning", lambda: False)():
-                return
+                return   # already running
             if hasattr(st, "_run_test"):
                 st._run_test()
-        except Exception:
-            pass
-
-    def _auto_grade(self) -> None:
-        try:
-            overview = getattr(self._dashboard, "_overview_page", None)
-            if overview:
-                # Switch to tile grid immediately so user sees results, not the CTA
-                if hasattr(overview, "_show_tiles"):
-                    overview._show_tiles()
-                if hasattr(overview, "set_scanning"):
-                    overview.set_scanning(True)
-                if hasattr(overview, "scan_requested"):
-                    overview.scan_requested.emit()
-                    return
-            self._dashboard._start_full_scan()
         except Exception:
             pass
 
@@ -385,29 +420,29 @@ class OnboardingOrchestrator(QObject):
 
         step = self._steps[self._step]
 
-        # Navigate
+        # Navigate first so page is loading while we update the bar
         if step.nav_label:
             self._dashboard._nav_rail_go_to(step.nav_label)
 
-        # Auto-action (e.g. start speed test)
+        # Fire auto-action (e.g. start scan on step 1)
         if step.auto_action:
             action = getattr(self, step.auto_action, None)
             if callable(action):
-                QTimer.singleShot(250, action)
+                QTimer.singleShot(150, action)
 
-        # Update tour bar
+        # Update tour bar text
         self._update_bar(step)
 
-        # Disable Next until spotlights complete (or immediately enable if none)
+        # Gate Next → until spotlight chain finishes (or skip gating if flagged)
         self._set_next_enabled(False)
-        if step.spotlights:
-            # Small delay so navigation crossfade completes before spotlights show
-            QTimer.singleShot(300, lambda s=step: self._run_spotlights(s))
-        else:
+        if not step.spotlights or step.next_enabled_immediately:
             self._set_next_enabled(True)
+        else:
+            QTimer.singleShot(_SPOTLIGHT_DELAY,
+                              lambda s=step: self._run_spotlights(s))
 
     def _update_bar(self, step: OnboardingStep) -> None:
-        total = len(self._steps)
+        total   = len(self._steps)
         is_last = self._step == total - 1
 
         lbl = getattr(self._dashboard, "_tour_step_lbl", None)
@@ -430,33 +465,29 @@ class OnboardingOrchestrator(QObject):
         btn = getattr(self._dashboard, "_tour_next_btn", None)
         if btn:
             btn.setEnabled(enabled)
-            btn.setStyleSheet(
-                btn.styleSheet()  # preserve existing style
-            )
-            opacity = "1.0" if enabled else "0.4"
-            btn.setProperty("opacity", opacity)
 
     def _run_spotlights(self, step: OnboardingStep) -> None:
-        win = self._dashboard.window()
+        win = self._dashboard.window() if hasattr(self._dashboard, "window") else None
         if not (win and win.isVisible()):
             self._set_next_enabled(True)
             return
 
-        marks = []
-        for i, sp in enumerate(step.spotlights):
-            marks.append({
-                "target": sp.target,
-                "title":  sp.title,
-                "body":   sp.body,
-            })
+        marks = [
+            {"target": sp.target, "title": sp.title, "body": sp.body}
+            for sp in step.spotlights
+        ]
 
-        from ui.widgets.coach_mark import CoachMarkChain
-        chain = CoachMarkChain(
-            win,
-            marks,
-            on_done=lambda: self._set_next_enabled(True),
-        )
-        chain.start()
+        try:
+            from ui.widgets.coach_mark import CoachMarkChain
+            chain = CoachMarkChain(
+                win,
+                marks,
+                on_done=lambda: self._set_next_enabled(True),
+            )
+            chain.start()
+        except Exception:
+            # If CoachMarkChain fails (e.g. target widget not found), don't block
+            self._set_next_enabled(True)
 
     def _on_next(self) -> None:
         self._step += 1

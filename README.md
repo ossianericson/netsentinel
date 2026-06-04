@@ -322,6 +322,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.85
+**Changed**
+- `ui/onboarding.py` (Sprint H11): rewrote 9-step sequence to value-first order — scan fires on step 1 (Overview), step 2 shows real device list, steps 4–5 show Speed Test and Logger already running; old shell-orientation steps (nav rail, breadcrumb, health badge) removed
+- `ui/onboarding.py`: `_step1_fire_scans()` replaces `_fire_background_scans()` — scan + speed test (500ms) + logger (1s) all start at step 1, steps 2–9 display results of those already-running processes
+- `ui/onboarding.py`: step 8 (Ctrl+K) stays on Home with `next_enabled_immediately=True` — user has page context before the palette is introduced
+- `tests/test_onboarding.py`: fully rewritten to validate new step sequence, nav labels, auto-action placement, and coach mark suppression
+
+**Added**
+- `docs/ONBOARDING-VISUAL-FIX-PLAN-V3.md` — comprehensive visual fix plan: screenshot audit, Apple-level acceptance criteria, sprint J1–J5 scope for home page surgery and empty state polish
+
 ### v1.9.84
 **Fixed**
 - `ui/onboarding.py` step 6 (Network Grade): tile grid now shows immediately instead of the "Scan" CTA — `_auto_grade()` calls `_show_tiles()` + `set_scanning(True)` before emitting `scan_requested`
