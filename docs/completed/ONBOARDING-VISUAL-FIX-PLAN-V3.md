@@ -638,7 +638,7 @@ At no point during the journey above should a CoachMarkChain spotlight fire. Zer
 | Sprint | Focus | Impact | Estimated Time |
 |---|---|---|---|
 | **J1** | Home page surgery — remove theme buttons, collapse empty sections, redesign Getting Started card | **Highest** — fixes first impression | 3–4 h |
-| **J2** | Onboarding flow rewrite — 4 steps, value-first, no random boxes | **Highest** — fixes the core experience | 5–6 h |
+| **J2** | Onboarding flow rewrite — value-first, no random boxes | **Highest** — fixes the core experience | 5–6 h |
 | **J3** | Empty state polish — Devices CTA, Overview security scan, Logger live feedback | High — fixes "broken" feeling | 2 h |
 | **J4** | Tour bar transitions — fade, dots, page transition animation | Medium — makes it feel smooth | 1–2 h |
 | **J5** | Returning user state — "since you were away" banner | Medium — value for day-2+ users | 1–2 h |
