@@ -709,8 +709,16 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         from ui.widgets.onboarding_overlay import OnboardingOverlay
         self._onboarding_overlay = OnboardingOverlay(self)
         self._onboarding_overlay.scan_requested.connect(self._start_full_scan)
+        self._onboarding_overlay.logger_start_requested.connect(
+            self._start_logger_if_needed
+        )
         self._onboarding_overlay.show()
         self._onboarding_overlay.setFocus()
+
+    def _start_logger_if_needed(self) -> None:
+        """Start the background network logger if it is not already running."""
+        if not (getattr(self, "_logger_worker", None) and self._logger_worker.isRunning()):
+            self._toggle_logger()
 
     def _on_welcome_scan(self) -> None:
         """Legacy slot kept so existing signal connections don't crash.

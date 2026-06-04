@@ -271,12 +271,15 @@ QSettings key: `ui/onboarding_v2_done` (reuses existing key so existing users ar
 - [ ] Logger auto-start on Screen 5 button click — deferred to Sprint I4
 - [ ] Full flow live test per RULE-T6 — deferred to Sprint I4
 
-### Sprint I4 — Polish + live verification
-- [ ] Logger auto-start when "Done — Start exploring" is clicked on Screen 5
-- [ ] Cross-fade transitions between screens (150 ms opacity animation)
-- [ ] Full live flow test per RULE-T6: clear QSettings → launch → walk all 6 screens → confirm no tour bar / no auto-scan
-- [ ] Screenshot each screen and confirm against spec
-- [ ] Keyboard: Enter advances, Esc = Skip (already partially wired in `keyPressEvent`)
+### Sprint I4 — Polish + live verification ✅ (2026-06-04)
+- [x] Logger auto-start when "Done — Start exploring" is clicked on Screen 5 — emits `logger_start_requested`, wired to `_start_logger_if_needed()` in dashboard
+- [x] Cross-fade transitions between screens (150 ms: 75 ms fade-out + switch + 75 ms fade-in via `QGraphicsOpacityEffect` on `_stack`)
+- [x] Whole-overlay fade-out on Screen 6 (500 ms `QGraphicsOpacityEffect` on `self`, then `_finish()`)
+- [x] Keyboard: Enter on Screen 0 now also advances to Screen 1; Esc = Skip on all screens
+- [x] `_finishing` flag prevents double-call to `_finish()` in race conditions
+- [x] 9 new Sprint I4 tests (43 total in test_onboarding_overlay.py); full suite 2986 passed
+- [x] App launches cleanly: `Dashboard() instantiated OK`, `window.show() called OK`
+- [ ] Full live flow test per RULE-T6 — requires user to clear QSettings and walk the 6 screens manually (see Verification Checklist below)
 
 ---
 

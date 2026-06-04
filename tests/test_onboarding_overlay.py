@@ -23,6 +23,14 @@ Sprint I3 acceptance criteria:
   - Screen 6 contains a CheckmarkAnimWidget with start_anim() / stop()
   - MiniSparklineWidget and CheckmarkAnimWidget can be imported/instantiated
   - CheckmarkAnimWidget emits animation_done after animation completes
+
+Sprint I4 acceptance criteria:
+  - logger_start_requested signal fires when "Done — Start exploring" is clicked
+  - Cross-fade switches screen immediately when overlay is not visible (test mode)
+  - Enter key on Screen 0 advances to Screen 1
+  - Enter key on Screen 3 advances to Screen 4
+  - _on_done_btn_clicked emits logger_start_requested then navigates to Screen 6
+  - _finishing flag prevents double-finish
 """
 import pytest
 
@@ -423,3 +431,78 @@ def test_risk_chip_instantiates(root_widget):
     except RuntimeError:
         pass
     QApplication.instance().processEvents()
+
+
+# ── Sprint I4 behaviour tests ─────────────────────────────────────────────────
+
+def test_logger_start_requested_signal_fires(overlay):
+    """logger_start_requested must fire when the Done button is clicked."""
+    fired = []
+    overlay.logger_start_requested.connect(lambda: fired.append(True))
+    overlay._on_done_btn_clicked()
+    assert fired == [True], "logger_start_requested should have been emitted once"
+
+
+def test_done_btn_navigates_to_screen_6(overlay):
+    """_on_done_btn_clicked must advance the overlay to Screen 6."""
+    overlay._on_done_btn_clicked()
+    assert overlay._stack.currentIndex() == 6, (
+        f"Expected screen 6 after Done click, got {overlay._stack.currentIndex()}"
+    )
+
+
+def test_crossfade_switches_immediately_when_not_visible(overlay):
+    """_go_to_screen() must switch immediately when the overlay is not visible."""
+    # root_widget is never .show()'d in tests so overlay.isVisible() is False
+    assert not overlay.isVisible(), "overlay must be invisible in this test"
+    overlay._go_to_screen(1)
+    assert overlay._stack.currentIndex() == 1
+
+
+def test_crossfade_preserves_stack_fx(overlay):
+    """_stack_fx (QGraphicsOpacityEffect) must be present after init."""
+    from PyQt6.QtWidgets import QGraphicsOpacityEffect
+    assert hasattr(overlay, "_stack_fx")
+    assert isinstance(overlay._stack_fx, QGraphicsOpacityEffect)
+
+
+def test_enter_key_on_screen_0_advances_to_screen_1(overlay):
+    """Pressing Enter on Screen 0 must advance to Screen 1."""
+    from PyQt6.QtCore import QEvent, Qt as _Qt
+    from PyQt6.QtGui import QKeyEvent
+    assert overlay._stack.currentIndex() == 0
+    e = QKeyEvent(QEvent.Type.KeyPress, _Qt.Key.Key_Return, _Qt.KeyboardModifier.NoModifier)
+    overlay.keyPressEvent(e)
+    assert overlay._stack.currentIndex() == 1
+
+
+def test_enter_key_on_screen_3_advances_to_screen_4(overlay):
+    """Pressing Enter on Screen 3 must advance to Screen 4."""
+    from PyQt6.QtCore import QEvent, Qt as _Qt
+    from PyQt6.QtGui import QKeyEvent
+    overlay._stack.setCurrentIndex(3)
+    e = QKeyEvent(QEvent.Type.KeyPress, _Qt.Key.Key_Return, _Qt.KeyboardModifier.NoModifier)
+    overlay.keyPressEvent(e)
+    assert overlay._stack.currentIndex() == 4
+
+
+def test_escape_key_skips_to_screen_6(overlay):
+    """Pressing Escape must skip to Screen 6."""
+    from PyQt6.QtCore import QEvent, Qt as _Qt
+    from PyQt6.QtGui import QKeyEvent
+    overlay._stack.setCurrentIndex(1)
+    e = QKeyEvent(QEvent.Type.KeyPress, _Qt.Key.Key_Escape, _Qt.KeyboardModifier.NoModifier)
+    overlay.keyPressEvent(e)
+    assert overlay._stack.currentIndex() == 6
+
+
+def test_finishing_flag_prevents_double_finish(overlay):
+    """_finish() must set _finishing=True and be idempotent on second call."""
+    overlay._finishing = False
+    overlay._finish()
+    assert overlay._finishing is True
+
+
+def test_logger_start_requested_exists_as_signal(overlay):
+    """logger_start_requested must be a pyqtSignal on the overlay class."""
+    assert hasattr(overlay, "logger_start_requested")

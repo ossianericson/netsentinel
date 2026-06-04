@@ -11,9 +11,9 @@ Screen sequence
   1  Permission       — "Scan my network" (emits scan_requested) or Skip
   2  Scanning         — live progress bar wired to scan worker (Sprint I2)
   3  Results reveal   — device count, grade, verdict  (Sprint I2)
-  4  Devices page     — "Every device, in plain English"  (Sprint I3 placeholder)
-  5  Logger running   — "Done — Start exploring"  (Sprint I3 placeholder)
-  6  Done             — green checkmark, auto-dismisses after 1.5 s
+  4  Devices page     — "Every device, in plain English"  (Sprint I3)
+  5  Logger running   — "Done — Start exploring"  (Sprint I3)
+  6  Done             — green checkmark, fades out revealing the dashboard
 
 QSettings key: ui/onboarding_v2_done  (reused — existing users are not reshown)
 """
@@ -22,9 +22,19 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QEvent, QSettings, Qt, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QFont, QPalette, QPixmap
+from PyQt6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QPropertyAnimation,
+    QSettings,
+    Qt,
+    QTimer,
+    pyqtSignal,
+    pyqtSlot,
+)
+from PyQt6.QtGui import QColor, QPalette, QPixmap
 from PyQt6.QtWidgets import (
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QProgressBar,
@@ -58,8 +68,11 @@ class OnboardingOverlay(QWidget):
     """Full-screen first-run onboarding overlay."""
 
     # Emitted when the user clicks "Scan my network" on Screen 1.
-    # Connect to dashboard._start_full_scan().
     scan_requested = pyqtSignal()
+
+    # Emitted when the user clicks "Done — Start exploring" on Screen 5.
+    # Connect to dashboard._start_logger_if_needed().
+    logger_start_requested = pyqtSignal()
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -100,6 +113,12 @@ class OnboardingOverlay(QWidget):
         # Progress tracking for Screen 2
         self._scan_progress_count = 0
 
+        # Graphics effect for cross-fade transitions (applied to content stack only)
+        self._stack_fx = QGraphicsOpacityEffect(self._stack)
+        self._stack_fx.setOpacity(1.0)
+        self._stack.setGraphicsEffect(self._stack_fx)
+        self._finishing = False
+
     # ── Parent resize tracking ─────────────────────────────────────────────────
 
     def eventFilter(self, obj, event):
@@ -112,10 +131,12 @@ class OnboardingOverlay(QWidget):
             self._do_skip()
         elif e.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             idx = self._stack.currentIndex()
-            if idx == 1:
+            if idx == 0:
+                self._go_to_screen(1)
+            elif idx == 1:
                 self._on_scan_clicked()
             elif 3 <= idx <= 5:
-                # Screen 2 (scanning) must not be skipped via Enter — scan must complete
+                # Screen 2 (scanning) must not advance via Enter — scan must complete first
                 self._go_to_screen(idx + 1)
         else:
             super().keyPressEvent(e)
@@ -490,7 +511,7 @@ class OnboardingOverlay(QWidget):
             f"QPushButton:hover    {{ background:{GREEN}; color:{WHITE}; }}"
             f"QPushButton:pressed  {{ background:{GREEN}; color:{WHITE}; }}"
         )
-        done_btn.clicked.connect(lambda: self._go_to_screen(6))
+        done_btn.clicked.connect(self._on_done_btn_clicked)
         lay.addWidget(done_btn)
 
         _add_centre(outer, card)
@@ -535,22 +556,75 @@ class OnboardingOverlay(QWidget):
     # ── Navigation ─────────────────────────────────────────────────────────────
 
     def _go_to_screen(self, n: int) -> None:
+        """Navigate to screen n.  Cross-fades when the overlay is visible."""
+        if self.isVisible():
+            self._crossfade_to(n)
+        else:
+            # Immediate switch (tests / off-screen)
+            self._stack.setCurrentIndex(n)
+            self.raise_()
+            if n == 6:
+                self._s6_checkmark.start_anim()
+                QTimer.singleShot(2200, self._finish)
+
+    def _crossfade_to(self, n: int) -> None:
+        """150 ms cross-fade: fade out stack content → switch → fade in."""
+        anim_out = QPropertyAnimation(self._stack_fx, b"opacity", self)
+        anim_out.setDuration(75)
+        anim_out.setStartValue(1.0)
+        anim_out.setEndValue(0.0)
+        anim_out.setEasingCurve(QEasingCurve.Type.OutQuad)
+        anim_out.finished.connect(lambda: self._do_switch(n))
+        anim_out.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def _do_switch(self, n: int) -> None:
+        """Complete the cross-fade by switching index and fading in."""
         self._stack.setCurrentIndex(n)
-        # Re-raise so sibling widgets (e.g. ScanSummarySheet) can't appear on top
         self.raise_()
         if n == 6:
             self._s6_checkmark.start_anim()
-            # 800 ms animation + ~1400 ms rest before dismissing
-            QTimer.singleShot(2200, self._finish)
+            # Checkmark animation (~800 ms) + 800 ms rest, then fade-out the overlay
+            QTimer.singleShot(1600, self._fade_out_overlay)
+        anim_in = QPropertyAnimation(self._stack_fx, b"opacity", self)
+        anim_in.setDuration(75)
+        anim_in.setStartValue(0.0)
+        anim_in.setEndValue(1.0)
+        anim_in.setEasingCurve(QEasingCurve.Type.InQuad)
+        anim_in.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def _fade_out_overlay(self) -> None:
+        """Fade the whole overlay from opaque to transparent, then call _finish()."""
+        if self._finishing:
+            return
+        # Ensure stack content is fully opaque before fading the parent
+        self._stack_fx.setOpacity(1.0)
+        # Apply effect to the whole overlay widget
+        ov_fx = QGraphicsOpacityEffect(self)
+        ov_fx.setOpacity(1.0)
+        self.setGraphicsEffect(ov_fx)
+        anim = QPropertyAnimation(ov_fx, b"opacity", self)
+        anim.setDuration(500)
+        anim.setStartValue(1.0)
+        anim.setEndValue(0.0)
+        anim.setEasingCurve(QEasingCurve.Type.InQuad)
+        anim.finished.connect(self._finish)
+        anim.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def _on_scan_clicked(self) -> None:
         self.scan_requested.emit()
         self._go_to_screen(2)
 
+    def _on_done_btn_clicked(self) -> None:
+        self.logger_start_requested.emit()
+        self._go_to_screen(6)
+
     def _do_skip(self) -> None:
         self._go_to_screen(6)
 
     def _finish(self) -> None:
+        if self._finishing:
+            return
+        self._finishing = True
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue(_SETTINGS_KEY, True)
         qs.setValue(_TOUR_KEY, True)
