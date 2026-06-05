@@ -322,6 +322,15 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.86
+**Fixed**
+- `scan_wiring.py`: `AMBER_BG` / `RED_BG` `NameError` crash on internet exposure scan results
+- `hub_helpers.py`: stale "Plugin" nav item after settings reset — `_is_temp_artifact` now catches `pytest-of-` temp paths via case-insensitive match regardless of file existence
+- `hardware_integration_page.py`: "How to write a plugin script" guide moved to a dedicated **Write a Plugin** tab, giving it full vertical screen estate
+
+**Added**
+- Settings → Maintenance: **Skip all guided hints** button marks all 7 coach-mark keys as seen in one click
+
 ### v1.9.85
 **Changed**
 - `ui/onboarding.py` (Sprint H11): rewrote 9-step sequence to value-first order — scan fires on step 1 (Overview), step 2 shows real device list, steps 4–5 show Speed Test and Logger already running; old shell-orientation steps (nav rail, breadcrumb, health badge) removed
