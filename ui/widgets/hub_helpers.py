@@ -316,21 +316,25 @@ def _load_instances() -> list[dict]:
                     _save_instances(data)
 
                 # Auto-remove entries whose plugin file lives in a temp/pytest
-                # directory and no longer exists.  These are test artifacts that
-                # sometimes escape into QSettings.  Real user plugins on USB
-                # drives or network shares are NOT in the system temp dir, so
-                # this filter is safe to apply silently.
+                # directory.  Pytest artifacts escape into QSettings when tests
+                # don't fully isolate their QSettings writes.  Real user plugins
+                # on USB drives or network shares never have "pytest-of-" in
+                # their path, so the pattern match is safe to apply silently.
+                # Case-insensitive string comparison avoids relative_to() failures
+                # on Windows when paths have mixed case or symlink components.
                 import tempfile as _tf
-                _tmp = Path(_tf.gettempdir()).resolve()
+                _tmp_str = str(Path(_tf.gettempdir()).resolve()).lower().replace("\\", "/")
                 def _is_temp_artifact(inst: dict) -> bool:
                     p = Path(inst.get("path", ""))
+                    p_str = str(p).lower().replace("\\", "/")
+                    # Always remove pytest-generated temp paths, even if the file
+                    # still exists (it may be a live test runner session).
+                    if "pytest-of-" in p_str or "/pytest-" in p_str:
+                        return True
                     if p.exists():
                         return False
-                    try:
-                        p.resolve().relative_to(_tmp)
-                        return True   # in temp dir AND missing → test artifact
-                    except ValueError:
-                        return False
+                    # Remove any missing path that is under the system temp dir.
+                    return p_str.startswith(_tmp_str)
                 clean = [i for i in data if not _is_temp_artifact(i)]
                 if len(clean) != len(data):
                     _save_instances(clean)

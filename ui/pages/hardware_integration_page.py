@@ -159,7 +159,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         )
         root.addWidget(self._tabs, 1)
 
-        # ── Tab 0: Hardware (HubCards + guide) ───────────────────────────────
+        # ── Tab 0: Hardware (HubCards) ────────────────────────────────────────
         hub_tab = QWidget()
         hub_tab.setStyleSheet(f"background:{BG_DARK};")
         hub_tab_lay = QVBoxLayout(hub_tab)
@@ -185,23 +185,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         self._hub_lay.setSpacing(8)
         self._rebuild_hub()
         self._hub_scroll.setWidget(self._hub_body)
-        hub_tab_lay.addWidget(self._hub_scroll, 3)
-
-        guide_toggle_row = QHBoxLayout()
-        guide_toggle_row.setContentsMargins(8, 0, 8, 0)
-        self._guide_toggle = _btn("▶  How to write a plugin script")
-        self._guide_toggle.clicked.connect(self._toggle_guide)
-        guide_toggle_row.addWidget(self._guide_toggle)
-        guide_toggle_row.addStretch()
-        hub_tab_lay.addLayout(guide_toggle_row)
-
-        self._guide_area = PluginGuide(self._hub_body)
-        self._guide_area.setVisible(False)
-        hub_tab_lay.addWidget(self._guide_area, 2)
-
-        if not _load_instances():
-            self._guide_area.setVisible(True)
-            self._guide_toggle.setText("▼  How to write a plugin script")
+        hub_tab_lay.addWidget(self._hub_scroll, 1)
 
         self._tabs.addTab(hub_tab, "Hardware")
 
@@ -244,13 +228,8 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         # ── Tab 2: Browse community plugins (P3-4) ────────────────────────────
         self._browse_tab_idx = self._tabs.addTab(self._build_browse_tab(), "Browse")
 
-    def _toggle_guide(self) -> None:
-        visible = not self._guide_area.isVisible()
-        self._guide_area.setVisible(visible)
-        self._guide_toggle.setText(
-            "▼  How to write a plugin script" if visible
-            else "▶  How to write a plugin script"
-        )
+        # ── Tab 3: Write a Plugin guide ───────────────────────────────────────
+        self._tabs.addTab(PluginGuide(), "Write a Plugin")
 
     # ── Hub management ────────────────────────────────────────────────────────
 

@@ -1285,6 +1285,21 @@ class _SettingsCardsMixin:
             btn.clicked.connect(getattr(self, signal_name).emit)
             bl.addWidget(btn, alignment=Qt.AlignmentFlag.AlignLeft)
 
+        skip_hints_btn = QPushButton("Skip all guided hints")
+        skip_hints_btn.setFixedWidth(220)
+        skip_hints_btn.setToolTip(
+            "Mark every first-run coach mark as seen so they never appear again."
+        )
+        skip_hints_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BTN_HOVER_BG}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        skip_hints_btn.clicked.connect(self._on_skip_all_hints)
+        bl.addWidget(skip_hints_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
         bl.addSpacing(6)
         settings_hdr = QLabel("Settings Export / Import")
         settings_hdr.setStyleSheet(
@@ -1455,6 +1470,25 @@ class _SettingsCardsMixin:
                 "All settings reset to defaults — restart NetSentinel to apply."
             )
         self.clear_dirty()
+
+    def _on_skip_all_hints(self) -> None:
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        for key in [
+            "onboarding_v6_done",
+            "tour/post_scan_done",
+            "coach/home_pills_shown",
+            "coach/grade_shown",
+            "coach/devices_rightclick_shown",
+            "coach/log_hub_sources_shown",
+            "coach/diagnosis_shown",
+        ]:
+            qs.setValue(key, True)
+        qs.sync()
+        if hasattr(self, "_reset_settings_status"):
+            self._reset_settings_status.setText(
+                "All guided hints marked as seen — they will not appear again."
+            )
 
     # ── App Health ────────────────────────────────────────────────────────────
 

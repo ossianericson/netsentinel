@@ -111,7 +111,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # _SettingsCardsMixin — all card builder methods + workers.
     # Still large; next split: extract per-section QWidget subclasses.
-    "pages/settings_cards.py": 1533,  # actual 1,333 + 200 margin (S14-3c new file)
+    "pages/settings_cards.py": 1560,  # actual 1,340 + 200 margin (S14-3c new file; +skip-hints button)
 
     # Hardware integration page — plugin hub shell + worker management.
     # S14-2 complete: plugin_guide.py + credential_dialog.py + plugin_wizard_mixin.py +
@@ -208,7 +208,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, pulse bar, overall verdict.
     # Also contains RiskBadge, VerdictPanel, _color_for_level, _bg_for_level.
     # Extracted from dashboard.py (Sprint 19).
-    "monitor_state.py": 680,  # actual ~480 + 200 margin (Sprint 19 new file)
+    "monitor_state.py": 720,  # collapsible VerdictPanel +23 lines (was 680)
 
     # _PluginPageMixin — plugin page lifecycle, HW auto-detect, integration banner, scan launch.
     # Extracted from dashboard.py (Sprint 19).
