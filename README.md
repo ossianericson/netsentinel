@@ -322,6 +322,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.88
+**Added**
+- `ui/widgets/diagnostic_card_widget.py` — `render_card_widget()` extracted from `modules/diagnostic_card.py` to eliminate PyQt6 dependency in the module layer (ARCH RULE 1)
+- `tests/test_metric_store_queries_metrics.py` — 14 behavioural tests for `_MetricsQueriesMixin` (RTT, speed test, CVE, alerts, modem, mesh, plugin log)
+- `tests/test_metric_store_queries_uptime.py` — 12 behavioural tests for `_UptimeQueriesMixin` (state IPs, uptime %, uptime table, device state history, device events)
+
 ### v1.9.87
 **Fixed**
 - `report_exporter.py`: removed phantom `save_nmap_report` from `__all__` (never existed); `credentialed_scan_helpers.py`: replaced non-existent `run_ssh_commands` export with actual private names
