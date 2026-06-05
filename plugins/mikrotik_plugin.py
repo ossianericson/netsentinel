@@ -52,17 +52,23 @@ def _load_password() -> str:
     )
 
 
+_cached_api = None  # Per-poll cache — reset each exec_module call
+
+
 def _make_api():
-    import routeros_api
-    pw   = _load_password()
-    pool = routeros_api.RouterOsApiPool(
-        HARDWARE_IP,
-        username=USERNAME,
-        password=pw,
-        port=API_PORT,
-        plaintext_login=True,   # required for RouterOS >= 6.43
-    )
-    return pool.get_api()
+    global _cached_api
+    if _cached_api is None:
+        import routeros_api
+        pw   = _load_password()
+        pool = routeros_api.RouterOsApiPool(
+            HARDWARE_IP,
+            username=USERNAME,
+            password=pw,
+            port=API_PORT,
+            plaintext_login=True,   # required for RouterOS >= 6.43
+        )
+        _cached_api = pool.get_api()
+    return _cached_api
 
 
 # ── Plugin interface ──────────────────────────────────────────────────────────

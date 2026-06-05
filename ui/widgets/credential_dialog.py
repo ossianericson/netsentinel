@@ -194,6 +194,16 @@ def show_credential_dialog(
                 _kr.set_password("NetSentinel/hardware", ip, pw)
             except Exception:
                 pass
+            # Cache the test result so the polling worker can show it immediately
+            # on first start rather than waiting for the first full poll to complete.
+            try:
+                from ui.widgets.hub_helpers import _save_last_result
+                iid = _instance_id(plugin_path or ip, ip)
+                result.setdefault("clients", [])  # tester doesn't call get_clients()
+                result["_instance_id"] = iid
+                _save_last_result(iid, result)
+            except Exception:
+                pass
             QTimer.singleShot(600, dlg.accept)
 
         def _on_failure(msg: str) -> None:

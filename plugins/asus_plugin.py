@@ -52,9 +52,11 @@ def _load_password() -> str:
     )
 
 
-# ── Async data fetcher ────────────────────────────────────────────────────────
+# ── Per-poll cache — reset each time exec_module creates a fresh namespace ────
+_cached_fetch = None  # (devices, info) tuple — reused by get_status + get_clients
 
-async def _fetch_all():
+
+async def _fetch_all_async():
     from asusrouter import AsusRouter
     pw = _load_password()
     router = AsusRouter(host=HARDWARE_IP, username=USERNAME, password=pw, use_ssl=False)
@@ -65,6 +67,14 @@ async def _fetch_all():
         return devices, info
     finally:
         await router.async_disconnect()
+
+
+def _fetch_all():
+    """Run async fetch once per poll; cache result so get_clients() reuses it."""
+    global _cached_fetch
+    if _cached_fetch is None:
+        _cached_fetch = asyncio.run(_fetch_all_async())
+    return _cached_fetch
 
 
 # ── Plugin interface ──────────────────────────────────────────────────────────
@@ -94,7 +104,7 @@ def get_info() -> dict:
 
 def get_status() -> dict:
     _check_deps()
-    devices, _ = asyncio.run(_fetch_all())
+    devices, _ = _fetch_all()
     return {
         "wan_ip":            None,
         "connected_clients": len(devices),
@@ -104,7 +114,7 @@ def get_status() -> dict:
 
 def get_clients() -> list:
     _check_deps()
-    devices, _ = asyncio.run(_fetch_all())
+    devices, _ = _fetch_all()
     _BAND = {
         "2g":    "2.4G", "2ghz": "2.4G",
         "5g":    "5G",   "5ghz": "5G",

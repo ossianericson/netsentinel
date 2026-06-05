@@ -506,6 +506,15 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         if Path(path).exists() and path not in self._file_watcher.files():
             self._file_watcher.addPath(path)
 
+        # Emit cached data immediately so the UI is populated before the first
+        # full poll completes (mirrors ZTE's near-instant first display).
+        # The credential dialog now saves its test result to this cache on success,
+        # so new instances show data right away; subsequent launches also benefit.
+        cached = _load_last_result(instance_id)
+        if cached:
+            QTimer.singleShot(0, lambda d=cached, iid=instance_id:
+                              self._on_plugin_result(iid, d))
+
     def closedown(self) -> None:
         for w in list(self._poll_workers.values()):
             w.stop()
@@ -566,10 +575,20 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
 
     @pyqtSlot(str)
     def _run_plugin(self, path: str) -> None:
-        card = self._cards.get(path)
+        # Workers are stored by instance_id, not path — resolve it first so
+        # trigger_now() actually reaches the running worker.
+        inst_id = None
+        for inst in _load_instances():
+            if inst["path"] == path:
+                inst_id = inst["id"]
+                break
+
+        card = self._cards.get(inst_id) or self._cards.get(path)
         if card:
             card.set_refreshing(True)
-        worker = self._poll_workers.get(path)
+
+        worker = (self._poll_workers.get(inst_id)
+                  if inst_id else self._poll_workers.get(path))
         if worker and worker.isRunning():
             worker.trigger_now()
         else:

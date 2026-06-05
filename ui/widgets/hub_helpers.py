@@ -314,6 +314,28 @@ def _load_instances() -> list[dict]:
                         changed = True
                 if changed:
                     _save_instances(data)
+
+                # Auto-remove entries whose plugin file lives in a temp/pytest
+                # directory and no longer exists.  These are test artifacts that
+                # sometimes escape into QSettings.  Real user plugins on USB
+                # drives or network shares are NOT in the system temp dir, so
+                # this filter is safe to apply silently.
+                import tempfile as _tf
+                _tmp = Path(_tf.gettempdir()).resolve()
+                def _is_temp_artifact(inst: dict) -> bool:
+                    p = Path(inst.get("path", ""))
+                    if p.exists():
+                        return False
+                    try:
+                        p.resolve().relative_to(_tmp)
+                        return True   # in temp dir AND missing → test artifact
+                    except ValueError:
+                        return False
+                clean = [i for i in data if not _is_temp_artifact(i)]
+                if len(clean) != len(data):
+                    _save_instances(clean)
+                    data = clean
+
                 return data
         except Exception:
             pass  # corrupted QSettings value — fall through to migration path

@@ -725,20 +725,28 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._toggle_logger()
 
     def _start_post_scan_coach_marks(self) -> None:
-        """Show two coach marks on the real app after the first scan completes."""
+        """Show three coach marks after the first scan, navigating to each page."""
         from ui.widgets.coach_mark import CoachMarkChain
         CoachMarkChain(
             self,
             [
                 {
-                    "target": lambda: getattr(self, "_net_devices_table", None),
-                    "title":  "Your real devices",
-                    "body":   "Right-click any row to label, investigate, or block a device.",
+                    "on_show": lambda: self._nav_rail_go_to("Devices"),
+                    "target":  lambda: self._nav_rail_buttons.get("Discover"),
+                    "title":   "Your network devices",
+                    "body":    "All discovered devices are here. Right-click any row for actions and details.",
                 },
                 {
-                    "target": lambda: self._nav_rail_buttons.get("Discover"),
-                    "title":  "Explore your network",
-                    "body":   "Devices, maps, WiFi — all in the Discover section.",
+                    "on_show": lambda: self._nav_rail_go_to("Network Logger"),
+                    "target":  lambda: self._nav_rail_buttons.get("Monitor"),
+                    "title":   "Live network logger",
+                    "body":    "RTT, DNS latency, and outages are logged in real time — running now.",
+                },
+                {
+                    "on_show": lambda: self._nav_rail_go_to("Hardware"),
+                    "target":  lambda: self._nav_rail_buttons.get("Extend"),
+                    "title":   "Hardware integrations",
+                    "body":    "Connect your modem, mesh router, or custom USB device in the Extend section.",
                 },
             ],
         ).start()

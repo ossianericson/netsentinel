@@ -91,17 +91,17 @@ def restore_settings(window) -> None:
     # Window geometry
     geom_b64 = s.value("window/geometry", "")
     was_maximized = s.value("window/maximized", "False") == "True"
-    # Fresh-install / no-saved-geometry fallback: 1280×800 centered on primary screen.
-    center_on_screen(window, 1280, 800)
+    # Fresh-install / no-saved-geometry fallback: 1440×900 centered on primary screen.
+    center_on_screen(window, 1440, 900)
     if was_maximized:
         nx = s.value("window/normal_x")
         ny = s.value("window/normal_y")
-        nw = s.value("window/normal_width", "1280")
-        nh = s.value("window/normal_height", "800")
+        nw = s.value("window/normal_width", "1440")
+        nh = s.value("window/normal_height", "900")
         try:
             nw_i, nh_i = int(nw), int(nh)
         except (ValueError, TypeError):
-            nw_i, nh_i = 1280, 800
+            nw_i, nh_i = 1440, 900
         window.resize(nw_i, nh_i)
         # Store for SetWindowPlacement in app.py (fixes showNormal() restore position).
         try:

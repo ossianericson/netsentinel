@@ -49,18 +49,25 @@ def _load_credentials() -> tuple[str, str]:
     )
 
 
-# ── Shared client helper ──────────────────────────────────────────────────────
-# Log in once; reuse the same session for both get_status and get_clients.
+# ── Per-poll connection cache ─────────────────────────────────────────────────
+# Module-level caches are reset automatically on each poll because
+# PluginPollingWorker calls exec_module() fresh every cycle.  This means
+# get_status() and get_clients() share ONE login rather than doing two.
+_cached_client = None
+
 
 def _get_client():
-    host, password = _load_credentials()
-    # TODO: replace with your library's client / session object
-    # Example:
-    #   from mylib import MyRouterClient
-    #   client = MyRouterClient(host, password)
-    #   client.login()
-    #   return client
-    raise NotImplementedError("Replace _get_client() with your hardware's login logic")
+    """Return a connected client, logging in only once per poll cycle."""
+    global _cached_client
+    if _cached_client is None:
+        host, password = _load_credentials()
+        # TODO: replace with your library's client / session object
+        # Example:
+        #   from mylib import MyRouterClient
+        #   _cached_client = MyRouterClient(host, password)
+        #   _cached_client.login()
+        raise NotImplementedError("Replace _get_client() with your hardware's login logic")
+    return _cached_client
 
 
 # ── Required interface ────────────────────────────────────────────────────────

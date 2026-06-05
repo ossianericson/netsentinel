@@ -72,11 +72,32 @@ def get_info() -> dict:
     }
 
 
+# ── Per-poll caches — reset each exec_module call ─────────────────────────────
+_cached_fritz_status = None
+_cached_fritz_hosts  = None
+
+
+def _get_fritz_status():
+    global _cached_fritz_status
+    if _cached_fritz_status is None:
+        _check_deps()
+        from fritzconnection.lib.fritzstatus import FritzStatus
+        _cached_fritz_status = FritzStatus(address=HARDWARE_IP, password=_load_password())
+    return _cached_fritz_status
+
+
+def _get_fritz_hosts():
+    global _cached_fritz_hosts
+    if _cached_fritz_hosts is None:
+        _check_deps()
+        from fritzconnection.lib.fritzhosts import FritzHosts
+        _cached_fritz_hosts = FritzHosts(address=HARDWARE_IP, password=_load_password())
+    return _cached_fritz_hosts
+
+
 def get_status() -> dict:
     _check_deps()
-    from fritzconnection.lib.fritzstatus import FritzStatus
-    pw = _load_password()
-    fs = FritzStatus(address=HARDWARE_IP, password=pw)
+    fs = _get_fritz_status()
     return {
         "wan_ip":            fs.external_ip,
         "uptime_sec":        fs.uptime,
@@ -87,13 +108,11 @@ def get_status() -> dict:
 
 def get_clients() -> list:
     _check_deps()
-    from fritzconnection.lib.fritzhosts import FritzHosts
-    pw = _load_password()
-    fh = FritzHosts(address=HARDWARE_IP, password=pw)
+    fh = _get_fritz_hosts()
     return [
         {
-            "ip":       h.get("ip", ""),
-            "mac":      h.get("mac", ""),
+            "ip":       h.get("ip",   ""),
+            "mac":      h.get("mac",  ""),
             "hostname": h.get("name", ""),
             "band":     h.get("interface_type", ""),
         }

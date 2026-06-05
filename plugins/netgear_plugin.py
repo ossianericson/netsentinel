@@ -75,9 +75,15 @@ def get_info() -> dict:
     }
 
 
+_cached_ng = None  # Per-poll cache — reset each exec_module call
+
+
 def _make_client():
-    from pynetgear import Netgear
-    return Netgear(password=_load_password(), host=HARDWARE_IP)
+    global _cached_ng
+    if _cached_ng is None:
+        from pynetgear import Netgear
+        _cached_ng = Netgear(password=_load_password(), host=HARDWARE_IP)
+    return _cached_ng
 
 
 def get_status() -> dict:

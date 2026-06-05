@@ -49,8 +49,8 @@ class CoachMarkOverlay(QWidget):
     advanced  = pyqtSignal()   # fired by "Next →" on non-last marks
 
     _BG_ALPHA   = 170          # 0-255
-    _BUBBLE_W   = 280
-    _BUBBLE_H   = 130
+    _BUBBLE_W   = 320
+    _BUBBLE_H   = 178
     _PADDING    = 16
     _HOLE_PAD   = 12           # extra space around target rect
     _HOLE_R     = 10           # rounded-rect corner radius for the hole
@@ -75,55 +75,55 @@ class CoachMarkOverlay(QWidget):
         self._bubble = QWidget(self)
         self._bubble.setFixedSize(self._BUBBLE_W, self._BUBBLE_H)
         self._bubble.setStyleSheet(
-            "QWidget { background: OVERLAY_BG; border: 1px solid OVERLAY_BG3;"
-            " border-radius: 12px; }"
+            f"QWidget {{ background: {OVERLAY_BG}; border: 1px solid {OVERLAY_BG3};"
+            f" border-radius: 12px; }}"
         )
 
         # Title
         title_lbl = QLabel(title, self._bubble)
         title_lbl.setGeometry(
             self._PADDING, self._PADDING,
-            self._BUBBLE_W - 2 * self._PADDING, 22,
+            self._BUBBLE_W - 2 * self._PADDING - 30, 22,
         )
         title_lbl.setStyleSheet(
-            "QLabel { background: transparent; border: none;"
-            " color: WHITE; font-size: 14px; font-weight: 600; }"
+            f"QLabel {{ background: transparent; border: none;"
+            f" color: {WHITE}; font-size: 14px; font-weight: 600; }}"
         )
 
         # Body
         body_lbl = QLabel(body, self._bubble)
         body_lbl.setGeometry(
             self._PADDING, 44,
-            self._BUBBLE_W - 2 * self._PADDING, 46,
+            self._BUBBLE_W - 2 * self._PADDING, 82,
         )
         body_lbl.setWordWrap(True)
         body_lbl.setStyleSheet(
-            "QLabel { background: transparent; border: none;"
-            " color: OVERLAY_FG2; font-size: 12px; }"
+            f"QLabel {{ background: transparent; border: none;"
+            f" color: {OVERLAY_FG2}; font-size: 12px; }}"
         )
 
-        # Dismiss × button
+        # Dismiss × button — oversized hit area for easy clicking
         close_btn = QPushButton("×", self._bubble)
-        close_btn.setGeometry(self._BUBBLE_W - 28, 8, 22, 22)
+        close_btn.setGeometry(self._BUBBLE_W - 36, 4, 32, 32)
         close_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: none;"
-            " color: STATUS_OFFLINE; font-size: 16px; }"
-            "QPushButton:hover { color: WHITE; }"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton {{ background: transparent; border: none;"
+            f" color: {STATUS_OFFLINE}; font-size: 18px; }}"
+            f"QPushButton:hover {{ color: {WHITE}; }}"
+            f"QPushButton:pressed {{ background: {BG_HOVER}; color: {TEXT_PRIMARY}; }}"
         )
         close_btn.clicked.connect(self.dismissed)
 
-        # Action button
+        # Action button — tall for easy clicking
         action_text = "Got it" if is_last else "Next →"
         action_btn = QPushButton(action_text, self._bubble)
         action_btn.setGeometry(
-            self._BUBBLE_W - self._PADDING - 90, self._BUBBLE_H - 38, 90, 26,
+            self._BUBBLE_W - self._PADDING - 108, self._BUBBLE_H - 48, 108, 34,
         )
         action_btn.setStyleSheet(
-            "QPushButton { background: OVERLAY_BLUE; border: none; border-radius: 6px;"
-            " color: WHITE; font-size: 12px; font-weight: 600; }"
-            "QPushButton:hover { background: OVERLAY_BLUE2; }"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton {{ background: {OVERLAY_BLUE}; border: none; border-radius: 6px;"
+            f" color: {WHITE}; font-size: 12px; font-weight: 600; }}"
+            f"QPushButton:hover {{ background: {OVERLAY_BLUE2}; color: {WHITE}; }}"
+            f"QPushButton:pressed {{ background: {ACCENT_DARK}; color: {WHITE}; }}"
         )
         if is_last:
             action_btn.clicked.connect(self.dismissed)
@@ -186,9 +186,9 @@ class CoachMarkOverlay(QWidget):
         self._position_bubble()
 
     def mousePressEvent(self, event):
-        # Clicking outside the bubble dismisses the overlay
-        if not self._bubble.geometry().contains(event.pos()):
-            self.dismissed.emit()
+        # Intentionally do not dismiss on outside click — use the × or action button.
+        # Clicking outside was too easy to trigger accidentally when aiming for a button.
+        pass
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -200,8 +200,14 @@ class CoachMarkOverlay(QWidget):
 
         if self._target_rect:
             tr = self._target_rect.toRect()
-            # Prefer below the target
-            bx = max(margin, min(tr.center().x() - bw // 2, w - bw - margin))
+
+            # Horizontal: centre on the target, but cap at 68% of window width so
+            # the bubble never drifts into the far-right corner on wide screens.
+            ideal_bx = tr.center().x() - bw // 2
+            max_bx   = min(w - bw - margin, int(w * 0.68) - bw)
+            bx       = max(margin, min(ideal_bx, max_bx))
+
+            # Vertical: prefer below the target
             by = tr.bottom() + self._HOLE_PAD + 16
             if by + bh > h - margin:
                 by = tr.top() - self._HOLE_PAD - bh - 16
@@ -238,6 +244,12 @@ class CoachMarkChain:
 
         spec = self._marks[index]
         is_last = (index == len(self._marks) - 1)
+
+        # Fire navigation / prep callback before resolving target rect so the
+        # destination page is already active when we compute widget positions.
+        on_show = spec.get("on_show")
+        if callable(on_show):
+            on_show()
 
         # Resolve the target widget → screen-relative rect mapped to parent
         target_rect = None

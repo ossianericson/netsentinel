@@ -50,9 +50,15 @@ def _load_password() -> str:
     )
 
 
+_cached_rpc = None  # Per-poll cache — reset each exec_module call
+
+
 def _make_rpc():
-    from openwrt_luci_rpc import OpenWrtRpc
-    return OpenWrtRpc(HARDWARE_IP, USERNAME, _load_password())
+    global _cached_rpc
+    if _cached_rpc is None:
+        from openwrt_luci_rpc import OpenWrtRpc
+        _cached_rpc = OpenWrtRpc(HARDWARE_IP, USERNAME, _load_password())
+    return _cached_rpc
 
 
 # ── Plugin interface ──────────────────────────────────────────────────────────

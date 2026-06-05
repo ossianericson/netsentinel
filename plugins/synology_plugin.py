@@ -55,8 +55,14 @@ def _api_call(session_id: str, api: str, method: str, version: int = 1, **kwargs
         return json.loads(resp.read())
 
 
+_cached_sid = None  # Per-poll cache — reset each exec_module call
+
+
 def _login() -> str:
-    """Return session ID (SID)."""
+    """Return session ID (SID), cached for the duration of the poll cycle."""
+    global _cached_sid
+    if _cached_sid is not None:
+        return _cached_sid
     pw   = _load_password()
     base = f"http://{HARDWARE_IP}:{SRM_PORT}/webapi/auth.cgi"
     params = urllib.parse.urlencode({
@@ -72,7 +78,8 @@ def _login() -> str:
         data = json.loads(resp.read())
     if not data.get("success"):
         raise RuntimeError(f"Synology login failed: {data.get('error', {}).get('code', '?')}")
-    return data["data"]["sid"]
+    _cached_sid = data["data"]["sid"]
+    return _cached_sid
 
 
 # ── Plugin interface ──────────────────────────────────────────────────────────

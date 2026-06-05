@@ -63,6 +63,17 @@ def _ha_get(endpoint: str) -> object:
         return json.loads(resp.read())
 
 
+# ── Per-poll cache — /api/states is large; fetch once, share across calls ─────
+_cached_states = None
+
+
+def _get_states() -> list:
+    global _cached_states
+    if _cached_states is None:
+        _cached_states = _ha_get("states")
+    return _cached_states
+
+
 # ── Plugin interface ──────────────────────────────────────────────────────────
 
 
@@ -90,7 +101,7 @@ def get_info() -> dict:
 
 def get_status() -> dict:
     ha_config = _ha_get("config")
-    states    = _ha_get("states")
+    states    = _get_states()
     trackers  = [s for s in states if s["entity_id"].startswith("device_tracker.")]
     home_count = sum(1 for t in trackers if t.get("state") == "home")
     return {
@@ -105,7 +116,7 @@ def get_status() -> dict:
 
 
 def get_clients() -> list:
-    states   = _ha_get("states")
+    states   = _get_states()
     trackers = [s for s in states if s["entity_id"].startswith("device_tracker.")]
     result   = []
     for t in trackers:

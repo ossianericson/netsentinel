@@ -76,14 +76,20 @@ def get_info() -> dict:
     }
 
 
+_cached_ctrl = None  # Per-poll cache — reset each exec_module call
+
+
 def _make_controller():
-    from pyunifi.controller import Controller
-    pw = _load_password()
-    return Controller(
-        HARDWARE_IP, USERNAME, pw,
-        version=CONTROLLER_VERSION,
-        ssl_verify=False,
-    )
+    global _cached_ctrl
+    if _cached_ctrl is None:
+        from pyunifi.controller import Controller
+        pw = _load_password()
+        _cached_ctrl = Controller(
+            HARDWARE_IP, USERNAME, pw,
+            version=CONTROLLER_VERSION,
+            ssl_verify=False,
+        )
+    return _cached_ctrl
 
 
 def get_status() -> dict:
