@@ -711,10 +711,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         CoachMarkChain(
             self,
             [{
-                "target": lambda: getattr(self, "_home_page", None)
-                          and getattr(self._home_page, "_btn_scan", None),
-                "title":  "Scan your network",
-                "body":   "Click here to discover every device and check your security grade.",
+                "target":   lambda: getattr(self, "_home_page", None)
+                            and getattr(self._home_page, "_btn_scan", None),
+                "title":    "Scan your network",
+                "body":     "Click here to discover every device and check your security grade.",
+                "delay_ms": 400,  # wait for Home page crossfade (160 ms) before resolving button position
             }],
             on_done=mark_onboarding_done,
         ).start()
@@ -725,28 +726,82 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._toggle_logger()
 
     def _start_post_scan_coach_marks(self) -> None:
-        """Show three coach marks after the first scan, navigating to each page."""
+        """Show six coach marks (3×2-step) after the first scan, teaching rail navigation."""
         from ui.widgets.coach_mark import CoachMarkChain
+
+        def _open_section(name: str) -> None:
+            """Open the flyout for *name*; switch sections if a different one is open."""
+            if self._nav_open_section == name and self._nav_flyout.maximumWidth() > 0:
+                return  # already open — nothing to do
+            self._nav_rail_toggle(name)
+
+        def _click_net_source() -> None:
+            """Programmatically animate-click the Network RTT source chip to demo it."""
+            page = getattr(self, "_log_hub_page", None)
+            if page is None:
+                return
+            btn = getattr(page, "_toggle_btns", {}).get("net")
+            if btn:
+                btn.animateClick()  # brief visual press so user sees the interaction
+
         CoachMarkChain(
             self,
             [
+                # ── Pair 1: Discover → Devices ─────────────────────────────────
+                {
+                    "on_show": lambda: _open_section("Discover"),
+                    "target":  lambda: self._nav_rail_buttons.get("Discover"),
+                    "title":   "Discover",
+                    "body":    "Click the Discover icon to open this menu. It contains your device inventory, network map, WiFi, and more.",
+                },
                 {
                     "on_show": lambda: self._nav_rail_go_to("Devices"),
-                    "target":  lambda: self._nav_rail_buttons.get("Discover"),
-                    "title":   "Your network devices",
-                    "body":    "All discovered devices are here. Right-click any row for actions and details.",
+                    "target":  lambda: self._nav_flyout._items.get("Devices"),
+                    "title":   "Network Devices",
+                    "body":    "All discovered devices are listed here. Right-click any row for details and actions.",
+                },
+                # ── Pair 2: Monitor → Network Logger ───────────────────────────
+                {
+                    "on_show": lambda: _open_section("Monitor"),
+                    "target":  lambda: self._nav_rail_buttons.get("Monitor"),
+                    "title":   "Monitor",
+                    "body":    "Click the Monitor icon to open live streams — bandwidth, connections, availability, and more.",
                 },
                 {
                     "on_show": lambda: self._nav_rail_go_to("Network Logger"),
-                    "target":  lambda: self._nav_rail_buttons.get("Monitor"),
-                    "title":   "Live network logger",
-                    "body":    "RTT, DNS latency, and outages are logged in real time — running now.",
+                    "target":  lambda: self._nav_flyout._items.get("Network Logger"),
+                    "title":   "Network Logger",
+                    "body":    "Every log source feeds into this unified timeline. Click here to open it.",
+                },
+                # ── Network Logger bonus steps: Activity Log tab + source click ────
+                {
+                    "on_show": lambda: (
+                        self._nav_flyout.close_panel(),
+                        # Switch to the "Activity Log" tab (index 1) so user sees it clicked
+                        self._logging_container.setCurrentIndex(1),
+                    ),
+                    "target":  lambda: self._logging_container,
+                    "title":   "Activity Log",
+                    "body":    "The 'Activity Log' tab shows the live event timeline from all your monitoring sources — RTT, outages, modem signal, syslog, and more.",
+                },
+                {
+                    "on_show": lambda: _click_net_source(),
+                    "target":  lambda: getattr(self._log_hub_page, "_toggle_btns", {}).get("net"),
+                    "title":   "Source filter chips",
+                    "body":    "Clicking a chip like 'Network RTT' filters the log to that stream only. Use these to focus on one activity at a time.",
+                },
+                # ── Pair 3: Extend → Hardware ──────────────────────────────────
+                {
+                    "on_show": lambda: _open_section("Extend"),
+                    "target":  lambda: self._nav_rail_buttons.get("Extend"),
+                    "title":   "Extend",
+                    "body":    "Click the Extend icon to manage hardware integrations — modem, mesh router, or custom USB devices.",
                 },
                 {
                     "on_show": lambda: self._nav_rail_go_to("Hardware"),
-                    "target":  lambda: self._nav_rail_buttons.get("Extend"),
-                    "title":   "Hardware integrations",
-                    "body":    "Connect your modem, mesh router, or custom USB device in the Extend section.",
+                    "target":  lambda: self._nav_flyout._items.get("Hardware"),
+                    "title":   "Hardware Hub",
+                    "body":    "Each connected device gets its own live monitoring card with configurable polling.",
                 },
             ],
         ).start()
@@ -1384,7 +1439,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             from PyQt6.QtWidgets import QDialog, QVBoxLayout
             dlg = QDialog(self)
             dlg.setWindowTitle("App Settings")
-            dlg.resize(660, 540)
+            # 110 px anchor sidebar + cards with 190 px labels need at least ~780 px wide.
+            # Default 880×680 gives comfortable room; minimum prevents sidebar overlap on resize.
+            dlg.setMinimumSize(780, 540)
+            dlg.resize(880, 680)
             dlg.setStyleSheet(f"QDialog{{background:{BG_DARK};}}")
             lay = QVBoxLayout(dlg)
             lay.setContentsMargins(0, 0, 0, 0)

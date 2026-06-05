@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -57,27 +58,68 @@ class RiskBadge(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
+_VERDICT_COLLAPSED_KEY = "ui/verdict_collapsed"
+
+
 class VerdictPanel(QFrame):
-    """Traffic-light coloured plain-English verdict box."""
+    """Traffic-light coloured plain-English verdict box — collapsible via the ▼/▶ toggle."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("verdictFrame")
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # ── Header row: title + toggle button ────────────────────────────────
+        hdr = QWidget()
+        hdr.setStyleSheet("background:transparent;")
+        hdr_lay = QHBoxLayout(hdr)
+        hdr_lay.setContentsMargins(12, 6, 6, 4)
+        hdr_lay.setSpacing(4)
 
         self._title = QLabel("Overall Verdict")
         self._title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
 
+        self._toggle_btn = QPushButton("▼")
+        self._toggle_btn.setFixedSize(22, 22)
+        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle_btn.setToolTip("Collapse / expand verdict")
+        self._toggle_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; border:none;"
+            f" color:{TEXT_MUTED}; font-size:11px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
+        )
+        self._toggle_btn.clicked.connect(self._on_toggle)
+
+        hdr_lay.addWidget(self._title, 1)
+        hdr_lay.addWidget(self._toggle_btn)
+        outer.addWidget(hdr)
+
+        # ── Body: multi-line verdict text ─────────────────────────────────────
         self._text = QLabel("Run a scan to see results.")
         self._text.setObjectName("verdictText")
         self._text.setWordWrap(True)
         self._text.setFont(QFont("Segoe UI", 11))
         self._text.setTextFormat(Qt.TextFormat.PlainText)
+        outer.addWidget(self._text)
 
-        self._layout.addWidget(self._title)
-        self._layout.addWidget(self._text)
         self._set_level("UNKNOWN")
+
+        # Default collapsed — only expand if user explicitly clicked the toggle before
+        qs = QSettings("NetSentinel", "NetSentinel")
+        if qs.value(_VERDICT_COLLAPSED_KEY, True, type=bool):
+            self._text.setVisible(False)
+            self._toggle_btn.setText("▶")
+
+    def _on_toggle(self) -> None:
+        collapsed = not self._text.isVisible()
+        self._text.setVisible(collapsed)
+        self._toggle_btn.setText("▼" if collapsed else "▶")
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            _VERDICT_COLLAPSED_KEY, not collapsed
+        )
 
     def _set_level(self, level: str):
         color = _color_for_level(level)
@@ -87,12 +129,17 @@ class VerdictPanel(QFrame):
             f"border-radius:0px; border-top:1px solid {BORDER};"
             f"border-right:1px solid {BORDER}; border-bottom:1px solid {BORDER}; }}"
         )
-        self._title.setStyleSheet(f"color:{color}; font-weight:bold; padding:6px 12px 2px 12px;")
-        self._text.setStyleSheet(f"color:{TEXT_PRIMARY}; padding:2px 12px 8px 12px; font-size:11px;")
+        self._title.setStyleSheet(
+            f"color:{color}; font-weight:bold; background:transparent;"
+        )
+        self._text.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; padding:2px 12px 8px 12px; font-size:11px;"
+        )
 
     def update(self, text: str, level: str = "UNKNOWN"):
         self._set_level(level)
         self._text.setText(text)
+        # Respect the user's collapsed preference — never auto-expand
 
 
 # ── Mixin ─────────────────────────────────────────────────────────────────────

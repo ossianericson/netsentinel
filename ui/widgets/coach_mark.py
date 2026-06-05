@@ -30,6 +30,7 @@ from PyQt6.QtCore import (
     QRect,
     QRectF,
     Qt,
+    QTimer,
     pyqtSignal,
 )
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
@@ -62,14 +63,24 @@ class CoachMarkOverlay(QWidget):
         title: str,
         body: str,
         is_last: bool = False,
+        target_widget: QWidget | None = None,
     ):
         super().__init__(parent)
-        self._target_rect = QRectF(target_rect) if target_rect else None
+        self._target_rect   = QRectF(target_rect) if target_rect else None
+        self._target_widget = target_widget   # kept for live position tracking
         self._title = title
         self._body  = body
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setGeometry(parent.rect())
+
+        # Refresh the target rect every 250 ms so the hole stays on the widget
+        # even when surrounding content shifts (e.g. VerdictPanel appearing).
+        self._track_timer = QTimer(self)
+        self._track_timer.setInterval(250)
+        self._track_timer.timeout.connect(self._refresh_target)
+        if target_widget is not None:
+            self._track_timer.start()
 
         # Build bubble widget (child of overlay)
         self._bubble = QWidget(self)
@@ -146,12 +157,32 @@ class CoachMarkOverlay(QWidget):
         self._fade_anim.start()
 
     def hide_animated(self, callback=None) -> None:
+        self._track_timer.stop()
         self._fade_anim.stop()
         self._fade_anim.setStartValue(1.0)
         self._fade_anim.setEndValue(0.0)
         if callback:
             self._fade_anim.finished.connect(callback)
         self._fade_anim.start()
+
+    def _refresh_target(self) -> None:
+        """Recompute the target rect from the live widget position and repaint if moved."""
+        w = self._target_widget
+        if w is None:
+            return
+        try:
+            if not w.isVisible():
+                return
+            global_rect = QRect(w.mapToGlobal(QPoint(0, 0)), w.size())
+            new_rect = QRectF(
+                QRect(self.parent().mapFromGlobal(global_rect.topLeft()), global_rect.size())
+            )
+            if new_rect != self._target_rect:
+                self._target_rect = new_rect
+                self._position_bubble()
+                self.update()
+        except Exception:
+            pass
 
     # ── Painting ──────────────────────────────────────────────────────────────
 
@@ -245,14 +276,25 @@ class CoachMarkChain:
         spec = self._marks[index]
         is_last = (index == len(self._marks) - 1)
 
-        # Fire navigation / prep callback before resolving target rect so the
-        # destination page is already active when we compute widget positions.
+        # Fire navigation / prep callback immediately so the destination is
+        # ready before we resolve widget positions.
         on_show = spec.get("on_show")
         if callable(on_show):
             on_show()
 
-        # Resolve the target widget → screen-relative rect mapped to parent
-        target_rect = None
+        # Optional delay (ms) — gives animations time to settle before the
+        # target widget's screen position is resolved.
+        delay_ms = int(spec.get("delay_ms", 0))
+        if delay_ms > 0:
+            from PyQt6.QtCore import QTimer as _QT
+            _QT.singleShot(delay_ms, lambda: self._create_overlay(spec, index, is_last))
+        else:
+            self._create_overlay(spec, index, is_last)
+
+    def _create_overlay(self, spec: dict, index: int, is_last: bool) -> None:
+        """Resolve target rect and display the overlay bubble."""
+        target_rect   = None
+        target_widget = None
         target_fn = spec.get("target")
         if callable(target_fn):
             try:
@@ -267,7 +309,7 @@ class CoachMarkChain:
                         global_rect.size(),
                     )
             except Exception:
-                pass
+                target_widget = None
 
         overlay = CoachMarkOverlay(
             parent=self._parent,
@@ -275,6 +317,7 @@ class CoachMarkChain:
             title=spec["title"],
             body=spec["body"],
             is_last=is_last,
+            target_widget=target_widget,
         )
         self._overlay = overlay
 
