@@ -29,6 +29,7 @@ LOG_PATH = os.path.join(_ROOT, "netsentinel_debug.log")
 # Rotate: delete ALL previous timestamped logs before creating a new one.
 # Only netsentinel_debug.log (the symlink/copy) plus the current run's log are kept.
 # This prevents agents from reading stale old logs during version-bump/commit sessions.
+import atexit
 import glob as _glob
 
 _existing = sorted(_glob.glob(os.path.join(_ROOT, "netsentinel_debug_????????_??????.log")))
@@ -38,7 +39,8 @@ for _old in _existing:
     except OSError:
         pass
 
-_log = open(_ROTATED_PATH, "w", encoding="utf-8")
+_log = open(_ROTATED_PATH, "w", encoding="utf-8")  # noqa: WPS515
+atexit.register(_log.close)
 
 # Update the stable symlink/copy immediately so any process reading
 # netsentinel_debug.log always gets the current run's content even if
@@ -88,7 +90,7 @@ try:
 
     app = QApplication(sys.argv)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.86")
+    app.setApplicationVersion("1.9.87")
     app.setOrganizationName("netsentinel")
 
     _w("QApplication created OK")

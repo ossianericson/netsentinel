@@ -1888,14 +1888,14 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                     msg = f"Scan complete — {dev_part} · Grade improved from {pre} to {grade_now}"
                     ToastManager.show(msg, "success")
                 else:
-                    n_findings = len(getattr(self, "_last_scan_devices", []))
                     msg = f"Scan complete — {dev_part} · Grade dropped from {pre} to {grade_now}"
                     ToastManager.show(msg, "warning")
             else:
                 grade_part = f" · Grade {grade_now}" if grade_now and grade_now not in ("—", "?") else ""
                 ToastManager.show(f"Scan complete — {dev_part}{grade_part}", "success")
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 — toast failure must not crash the UI
+            import logging as _logging
+            _logging.getLogger(__name__).debug("scan toast error", exc_info=True)
 
 
     # ── Export ────────────────────────────────────────────────────────────────

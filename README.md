@@ -244,7 +244,7 @@ If you use NetSentinel in a course or lab and need curriculum-specific features,
 
 ## Quality
 
-The project ships with **1 550+ automated tests** covering detection logic, metric storage, version consistency, and UI wiring. Run the full suite with:
+The project ships with **3 064+ automated tests** across 154 test files, covering detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. Run the full suite with:
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -321,6 +321,19 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 ---
 
 ## Changelog
+
+### v1.9.87
+**Fixed**
+- `report_exporter.py`: removed phantom `save_nmap_report` from `__all__` (never existed); `credentialed_scan_helpers.py`: replaced non-existent `run_ssh_commands` export with actual private names
+- `speed_tester_backends.py`: SSL shim now sets `minimum_version = TLSv1_2`, blocking TLSv1/TLSv1.1 (CodeQL `py/insecure-protocol`)
+- `network_log_writer.py`: host-presence check converted from `in` operator to set superset `>=` to eliminate CodeQL `py/incomplete-url-substring-sanitization` false positive
+- `report_isp.py`: implicit three-way string concatenation in list wrapped in parentheses to silence CodeQL `py/implicit-string-concatenation-in-list`
+- `test_source_encoding.py`: regex character-class patterns for Windows-1252 curly quotes fixed — ASCII `''""` inside single-quoted raw strings silently dropped the quote chars from the class; now uses Unicode escapes `‘’“”`
+- `debug_launch.py`: log file registered with `atexit` to ensure closure even on exception (CodeQL `py/file-not-closed`)
+- `dashboard.py`: removed unused `n_findings` variable; empty `except` block now logs at DEBUG level instead of silently passing
+
+**Changed**
+- README Quality section updated: test count corrected from "1 550+" to "3 064+ across 154 test files"
 
 ### v1.9.86
 **Fixed**
