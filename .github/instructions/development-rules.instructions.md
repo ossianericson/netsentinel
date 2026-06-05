@@ -351,22 +351,13 @@ When the user says "version bump", "bump version", "bump to X.Y.Z", or any varia
 1. Determine the target version — use the version the user specifies, or increment the patch digit (X.Y.Z+1) if none given.
 2. Add a `### vX.Y.Z` entry at the top of `## Changelog` in `README.md` listing changes from this session (RULE-R1b).
 3. Update "What's New" in `ui/dashboard.py` (`_section(f"What's New in v{app_ver}", [...])`) to match the changelog entry.
-4. Run `python bump_version.py X.Y.Z` — this updates all tracked version files and runs the consistency tests automatically. **Never edit version strings by hand across files.**
+4. Run `python bump_version.py X.Y.Z` — this updates all tracked version files, runs the consistency tests, **and automatically stages + commits the version files**. **Never edit version strings by hand across files.**
 5. If `bump_version.py` exits non-zero, fix the reported failures before continuing.
-6. **Immediately after `bump_version.py` exits 0, run `git add -A` and commit the version files.** `bump_version.py` modifies files on disk but does NOT commit them. Pushing before this commit causes CI version-consistency tests to fail with "X.Y.Z does not match app.py". This is the most common version-bump mistake.
+6. After `bump_version.py` exits 0, the version commit already exists locally. Push and tag:
 
 ```powershell
-# Correct sequence — never push before this commit exists
+# bump_version.py now auto-commits — only push and tag remain
 python bump_version.py X.Y.Z
-git add app.py cli.py apm.yml apm.lock.yaml installer.iss build.bat build.sh `
-        modules/rest_api.py tools/debug_launch.py packaging/AppxManifest.xml `
-        .github/winget/NetSentinel.NetSentinel.yaml `
-        .github/winget/NetSentinel.NetSentinel.installer.yaml `
-        .github/winget/NetSentinel.NetSentinel.locale.en-US.yaml `
-        README.md CLAUDE.md AGENTS.md ui/dashboard.py `
-        .apm/instructions/project-vision.instructions.md `
-        .claude/rules/project-vision.md .github/instructions/project-vision.instructions.md
-git commit -m "chore: bump version to vX.Y.Z"
 git push origin main
 git tag vX.Y.Z
 git push origin vX.Y.Z

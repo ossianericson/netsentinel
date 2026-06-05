@@ -143,11 +143,53 @@ def bump(ver: str) -> None:
          "tests/test_version_consistency.py", "-v", "--tb=short"],
         cwd=ROOT,
     )
-    if result.returncode == 0:
-        print(f"\nAll good — version is now {ver}")
-    else:
+    if result.returncode != 0:
         print("\nConsistency tests failed — check warnings above.")
         sys.exit(1)
+
+    print(f"\nAll good — version is now {ver}")
+
+    # ── auto-commit all version-touched files ─────────────────────────────────
+    _VERSION_FILES = [
+        "app.py", "cli.py", "apm.yml", "apm.lock.yaml", "installer.iss",
+        "build.bat", "build.sh", "modules/rest_api.py", "tools/debug_launch.py",
+        "packaging/AppxManifest.xml",
+        "bump_version.py",
+        ".github/winget/NetSentinel.NetSentinel.yaml",
+        ".github/winget/NetSentinel.NetSentinel.installer.yaml",
+        ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml",
+        "README.md", "CLAUDE.md", "AGENTS.md", "ui/dashboard.py",
+        ".apm/instructions/project-vision.instructions.md",
+        ".claude/rules/project-vision.md",
+        ".github/instructions/project-vision.instructions.md",
+    ]
+    print("\nStaging version files…")
+    existing = [f for f in _VERSION_FILES if (ROOT / f).exists()]
+    add_result = subprocess.run(
+        ["git", "add", "--"] + existing,
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    if add_result.returncode != 0:
+        print(f"  WARN  git add failed: {add_result.stderr.strip()}")
+        print(f"  Run manually: git add -A && git commit -m 'chore: bump version to v{ver}'")
+    else:
+        commit_result = subprocess.run(
+            ["git", "commit", "-m", f"chore: bump version to v{ver}"],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        out = commit_result.stdout + commit_result.stderr
+        if commit_result.returncode == 0:
+            print(f"  ok    committed — chore: bump version to v{ver}")
+        elif "nothing to commit" in out:
+            print("  ok    nothing to commit (already up to date)")
+        else:
+            print(f"  WARN  git commit failed: {out.strip()}")
+            print(f"  Run manually: git commit -m 'chore: bump version to v{ver}'")
+
+    print(f"\nNext steps:")
+    print(f"  git push origin main")
+    print(f"  git tag v{ver}")
+    print(f"  git push origin v{ver}")
 
 
 if __name__ == "__main__":
