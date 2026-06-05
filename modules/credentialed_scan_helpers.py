@@ -33,7 +33,7 @@ __all__ = [
     "ListeningPort", "CredScanResult",
     "_LINUX_CMDS", "_WINDOWS_CMDS",
     "_parse_linux", "_parse_windows",
-    "run_ssh_commands",
+    "_run_ssh_paramiko", "_run_ssh_subprocess",
 ]
 
 

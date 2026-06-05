@@ -27,7 +27,7 @@ from modules.report_isp import generate_isp_report, save_isp_report
 
 __all__ = [
     "save_report", "save_json_report", "save_csv_report",
-    "save_nmap_report", "save_lab_report",
+    "save_lab_report",
     "generate_html", "save_pdf_report",
     "generate_isp_report", "save_isp_report",
 ]

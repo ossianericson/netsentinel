@@ -360,12 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("? help button on every page", "Every page header now has a ? button that shows what the page does, up to two usage tips, and global keyboard shortcuts — no searching through the help tab needed."),
-        ("Keyboard shortcuts in help", "The Help tab 'Keyboard Shortcuts' section lists all global and navigation shortcuts in a searchable 2-column table."),
-        ("Quick Tips card removed", "The dismissible Quick Tips card on the Home page has been retired — keyboard shortcut hints are now available via the ? button on every page."),
-        ("Recurring mode intro card", "Home page shows a one-time 'Home page upgraded' banner the first time recurring layout activates (5th scan), explaining the layout change."),
-        ("Contextual coach marks", "Five per-feature one-shot overlays guide you through Log Hub sources, Network Grade, Diagnosis symptom tiles, Home monitoring pills, and Devices right-click — each shown once, independently dismissible."),
-        ("Empty state consistency", "Overview, SNMP Trap, WiFi Monitor, Geolocation Map, Timeline, Speed Test, and Trend pages all show structured EmptyStateCards with actionable CTAs instead of blank tables or passive labels."),
+        ("Security hardening", "SSL shim in speed tester now enforces TLS 1.2 minimum; host-presence check in log analysis uses set superset operator instead of substring 'in'."),
+        ("Export API cleaned up", "Removed phantom save_nmap_report from __all__ and corrected credentialed_scan_helpers exports to match actual private function names."),
+        ("Test suite grown to 3 064+", "154 test files now cover detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates."),
+        ("Debug log always closed", "debug_launch.py registers log file with atexit so it is always flushed and closed even when the event loop is killed early."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

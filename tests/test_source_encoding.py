@@ -42,12 +42,12 @@ _MOJIBAKE_PATTERNS: list[str] = [
     # ── Sequences starting with Ã (U+00C3) ──────────────────────────────────
     # Ã followed by a Windows-1252 special char in 0x80–0x9F range
     r'Ã[\x80-\x9f\xa0-\xbf]',    # Ã + any Latin-1 supplement
-    r'Ã[ƒ†‡ˆ‰Š‹ŒŽ''""•–—˜™š›œžŸ]',  # Ã + Windows-1252 specials
+    'Ã[ƒ†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]',  # Ã + Windows-1252 specials
     # Common close-button mojibake: Ã + ƒ (triple-encoded ×)
     r'Ãƒ',
     # ── Sequences starting with Å (U+00C5) ──────────────────────────────────
     r'Å[¸\x92]',                  # Å¸ or Å + RIGHT SINGLE QUOTE
-    r'Å[''""•–—˜™š›œžŸ]',
+    'Å[‘’“”•–—˜™š›œžŸ]',
     # ── Sequences starting with â (U+00E2) ──────────────────────────────────
     # â followed by € (U+20AC, cp1252 byte 0x80) — em dash / arrow / quote families
     r'â€["“”‘’‚„†…•]',

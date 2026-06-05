@@ -336,7 +336,7 @@ def analyse_log(summary: LogSummary) -> List[AnalysisFinding]:
         ))
 
     all_hosts = {e.host for e in summary.entries}
-    if "google.com" in all_hosts and "8.8.8.8" in all_hosts:
+    if all_hosts >= {"google.com", "8.8.8.8"}:  # exact set membership — both targets must be present
         name_fails = sum(1 for e in summary.entries if e.host == "google.com" and e.status == "FAIL")
         ip_fails   = sum(1 for e in summary.entries if e.host == "8.8.8.8"   and e.status == "FAIL")
         name_total = sum(1 for e in summary.entries if e.host == "google.com")

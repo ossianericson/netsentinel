@@ -243,6 +243,7 @@ def _patch_ssl_for_312() -> None:
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_2
             server_hostname = kwargs.pop("server_hostname", None)
             return ctx.wrap_socket(sock, server_hostname=server_hostname, **kwargs)
         ssl.wrap_socket = _wrap_shim  # type: ignore[attr-defined]

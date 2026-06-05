@@ -304,9 +304,11 @@ def generate_isp_complaint_text(
         "",
         "Dear Support Team,",
         "",
-        "I am experiencing persistent performance issues with my broadband connection. "
-        "I have monitored my connection using NetSentinel (a local network diagnostics tool) "
-        "and recorded the following measurements:",
+        (
+            "I am experiencing persistent performance issues with my broadband connection. "
+            "I have monitored my connection using NetSentinel (a local network diagnostics tool) "
+            "and recorded the following measurements:"
+        ),
         "",
         f"  • {uptime_line}",
         f"  • {rtt_line}",
