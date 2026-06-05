@@ -29,7 +29,7 @@ from ui.expanding_table import ExpandingTable
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, CRITICAL, GREEN, INPUT_PLACEHOLDER,
+    CARD_RADIUS, CVE_CRITICAL_FG, GREEN, INPUT_PLACEHOLDER,
     RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
@@ -47,7 +47,7 @@ _STATE_COLORS = {
 }
 
 _SEVERITY_COLORS = {
-    "CRITICAL": CRITICAL,
+    "CRITICAL": CVE_CRITICAL_FG,
     "HIGH":     RED,
     "MEDIUM":   AMBER,
     "LOW":      ACCENT,
@@ -261,7 +261,7 @@ class CvePage(QWidget):
         t3, self._kpi_ack   = _shared_kpi_tile("Acknowledged",  "0", AMBER)
         t4, self._kpi_risk  = _shared_kpi_tile("Accepted Risk", "0", TEXT_SECONDARY)
         t5, self._kpi_fixed = _shared_kpi_tile("Remediated",    "0", GREEN)
-        t6, self._kpi_crit  = _shared_kpi_tile("Critical/High", "0", CRITICAL)
+        t6, self._kpi_crit  = _shared_kpi_tile("Critical/High", "0", CVE_CRITICAL_FG)
         for t in (t1, t2, t3, t4, t5, t6):
             kpi_row.addWidget(t)
         kpi_row.addStretch()
@@ -460,7 +460,7 @@ class CvePage(QWidget):
             score_item = _item(f"{r['cvss_score']:.1f}")
             score_val = float(r["cvss_score"])
             if score_val >= 9.0:
-                score_item.setForeground(QColor(CRITICAL))
+                score_item.setForeground(QColor(CVE_CRITICAL_FG))
             elif score_val >= 7.0:
                 score_item.setForeground(QColor(RED))
             elif score_val >= 4.0:
@@ -656,7 +656,7 @@ class CvePage(QWidget):
         state_color = _STATE_COLORS.get(r["state"], TEXT_PRIMARY)
         score_val = float(r["cvss_score"])
         score_color = (
-            CRITICAL if score_val >= 9.0 else
+            CVE_CRITICAL_FG if score_val >= 9.0 else
             RED      if score_val >= 7.0 else
             AMBER    if score_val >= 4.0 else TEXT_PRIMARY
         )

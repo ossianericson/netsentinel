@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, CARD_RADIUS, CRITICAL,
+    BG_HOVER, BORDER, CARD_RADIUS,
     GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, WHITE,
 )

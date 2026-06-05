@@ -104,7 +104,7 @@ _ARCTIC_CLEAN = {
     "CHART_GRID":         "#E8EDF2",
     "CHART_TITLE":        "#1A3A5C",
     # Critical severity (CVE, risk — darker than RED for emphasis)
-    "CRITICAL":           "#8B0000",
+    "CVE_CRITICAL_FG":    "#8B0000",
 }
 
 _DARK_PRO = {
@@ -194,7 +194,7 @@ _DARK_PRO = {
     "CHART_GRID":         "#21262D",
     "CHART_TITLE":        "#58A6FF",
     # Critical severity
-    "CRITICAL":           "#FF6E6E",
+    "CVE_CRITICAL_FG":    "#FF6E6E",
 }
 
 _OBSIDIAN_NEON = {
@@ -284,7 +284,7 @@ _OBSIDIAN_NEON = {
     "CHART_GRID":         "#262638",
     "CHART_TITLE":        "#9D5CF6",
     # Critical severity
-    "CRITICAL":           "#FF8080",
+    "CVE_CRITICAL_FG":    "#FF8080",
 }
 
 _ABYSS = {
@@ -374,7 +374,7 @@ _ABYSS = {
     "CHART_GRID":         "#1A1A1A",
     "CHART_TITLE":        "#22D4FF",
     # Critical severity
-    "CRITICAL":           "#FF8080",
+    "CVE_CRITICAL_FG":    "#FF8080",
 }
 
 # ── Theme registry ────────────────────────────────────────────────────────────

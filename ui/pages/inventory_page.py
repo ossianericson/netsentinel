@@ -35,7 +35,7 @@ from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_DARK, BG_HOVER, BORDER, BTN_DISABLED_BORDER,
-    CARD_RADIUS, CRITICAL, GREEN, RED,
+    CARD_RADIUS, GREEN, RED,
     TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, TH_BG, TH_BORDER, TH_TEXT,
     WHITE,

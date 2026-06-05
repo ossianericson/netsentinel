@@ -45,7 +45,7 @@ from ui.widgets.jargon_tooltip import get_definition
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CRITICAL, GREEN, RED, TEXT_MUTED,
+    GREEN, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.overview_tile import (
