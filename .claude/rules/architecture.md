@@ -223,6 +223,7 @@ netsentinel/
 │       ├── context_menu.py         # Reusable right-click context menu builder
 │       ├── density_toggle.py       # Compact/comfortable row density toggle widget
 │       ├── device_popover.py       # Hover popover showing quick device info
+│       ├── diagnostic_card_widget.py # render_card_widget() — 520×300 QWidget share card (ARCH RULE 1 split from modules/diagnostic_card.py)
 │       ├── empty_state_card.py     # EmptyStateCard — reusable empty state with icon, what/why copy, and CTA button (Sprint A2)
 │       ├── explainer_panel.py      # Reusable inline explanation panel (Lab Mode, Protocol Viz)
 │       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers, _MiniCard, _AlertRow

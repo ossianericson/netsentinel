@@ -360,10 +360,8 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Security hardening", "SSL shim in speed tester now enforces TLS 1.2 minimum; host-presence check in log analysis uses set superset operator instead of substring 'in'."),
-        ("Export API cleaned up", "Removed phantom save_nmap_report from __all__ and corrected credentialed_scan_helpers exports to match actual private function names."),
-        ("Test suite grown to 3 064+", "154 test files now cover detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates."),
-        ("Debug log always closed", "debug_launch.py registers log file with atexit so it is always flushed and closed even when the event loop is killed early."),
+        ("Architecture clean-up", "render_card_widget() moved from modules/ to ui/widgets/diagnostic_card_widget.py — modules layer is now fully PyQt6-free (ARCH RULE 1)."),
+        ("Expanded test coverage", "14 new tests for _MetricsQueriesMixin and 12 for _UptimeQueriesMixin; test count now exceeds 3 098."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

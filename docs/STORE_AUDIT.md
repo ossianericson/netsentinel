@@ -229,15 +229,15 @@ before committing.
 
 ---
 
-### Sprint S-A — Blocking compliance (1 session)
+### Sprint S-A — Blocking compliance (1 session) ✅ 2026-06-05
 
 The minimum set needed before Store submission.
 
-- [ ] **A1.** Move PyQt6 widget code out of `modules/diagnostic_card.py`
+- [x] **A1.** Move PyQt6 widget code out of `modules/diagnostic_card.py`
   into `ui/widgets/diagnostic_card_widget.py`; keep only data assembly in the module.
-- [ ] **A2.** Add `tests/test_metric_store_queries_metrics.py` (import + 2 query tests).
-- [ ] **A3.** Add `tests/test_metric_store_queries_uptime.py` (import + 2 query tests).
-- [ ] **A4.** Bump version, run full suite, verify app launch.
+- [x] **A2.** Add `tests/test_metric_store_queries_metrics.py` (import + 2 query tests).
+- [x] **A3.** Add `tests/test_metric_store_queries_uptime.py` (import + 2 query tests).
+- [x] **A4.** Bump version, run full suite, verify app launch.
 
 ---
 

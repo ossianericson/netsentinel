@@ -261,6 +261,7 @@ hiddenimports: list = [
     "ui.pages.plugin_device_page",
     "ui.pages.wifi_monitor_page",
     # ── ui/widgets/ — all widget modules ──────────────────────────────────────
+    "ui.widgets.diagnostic_card_widget",
     "ui.widgets.alert_drawer",
     "ui.widgets.animated_kpi",
     "ui.widgets.coach_mark",

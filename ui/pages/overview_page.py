@@ -675,7 +675,8 @@ class OverviewPage(QWidget):
         menu.exec(self._share_btn.mapToGlobal(self._share_btn.rect().bottomLeft()))
 
     def _render_pixmap(self):
-        from modules.diagnostic_card import render_card_widget, build_card_data
+        from ui.widgets.diagnostic_card_widget import render_card_widget
+        from modules.diagnostic_card import build_card_data
         card = self._card_data or build_card_data(None, None, self._store)
         widget = render_card_widget(card)
         widget.show()          # must be visible for grab() to paint correctly
