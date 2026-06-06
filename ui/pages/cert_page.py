@@ -279,7 +279,7 @@ class CertPage(QWidget):
         )
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
-        self._table.verticalHeader().setDefaultSectionSize(26)
+        self._table.verticalHeader().setDefaultSectionSize(24)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_cert_context_menu)
         install_copy_menu(self._table)

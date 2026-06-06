@@ -79,7 +79,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
     t.setHorizontalHeaderLabels(headers)
     t.horizontalHeader().setStretchLastSection(False)
     t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(26)
+    t.verticalHeader().setDefaultSectionSize(24)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     t.setAlternatingRowColors(True)

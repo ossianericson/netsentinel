@@ -412,8 +412,8 @@ class IpCalculatorPage(QWidget):
             tbl.setColumnWidth(0, 32)
             tbl.setColumnWidth(1, 110)
             tbl.setColumnWidth(2, 110)
-            tbl.verticalHeader().setDefaultSectionSize(20)
-            tbl.setFixedHeight(len(chunk_entries) * 20 + 2)
+            tbl.verticalHeader().setDefaultSectionSize(24)
+            tbl.setFixedHeight(len(chunk_entries) * 24 + 2)
 
             for i, (cidr, mask, hosts) in enumerate(chunk_entries):
                 bg = BG_ALT_ROW if i % 2 else BG_CARD

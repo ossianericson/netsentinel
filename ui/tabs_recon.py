@@ -113,7 +113,7 @@ class _ReconTabsMixin:
         ctrl.addWidget(btn_stop)
         ctrl.addStretch()
         self._recon_syn_table = _table(["Port", "State", "Protocol", "Service", "CVEs"])
-        self._recon_syn_table.verticalHeader().setDefaultSectionSize(26)
+        self._recon_syn_table.verticalHeader().setDefaultSectionSize(24)
         self._recon_syn_table.setColumnWidth(0, 70)
         self._recon_syn_table.setColumnWidth(1, 90)
         self._recon_syn_table.setColumnWidth(2, 70)

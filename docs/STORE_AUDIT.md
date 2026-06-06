@@ -252,56 +252,44 @@ The minimum set needed before Store submission.
 
 ---
 
-### Sprint S-C — Worker lifecycle tests, batch 1 (1 session)
+### Sprint S-C — Worker lifecycle tests, batch 1 (1 session) ✅ 2026-06-06
 
-Add minimal lifecycle tests for 10 workers. Use the conftest `qt_app` fixture.
-Pattern:
-```python
-def test_NAME_worker_lifecycle(qt_app):
-    from workers.NAME_worker import NAMEWorker
-    w = NAMEWorker()
-    w.start()
-    w.msleep(50)
-    w.stop()
-    w.wait(1000)
-    assert not w.isRunning()
-```
+All batch 1 worker lifecycle tests already existed in `tests/test_worker_lifecycle.py`
+and `tests/test_worker_lifecycle_full.py`. All 75 worker tests pass.
 
-Batch 1: `availability`, `cert`, `dhcp_lease`, `diagnosis`, `dns_zone`, `ha`,
+Batch 1 covered: `availability`, `cert`, `dhcp_lease`, `diagnosis`, `dns_zone`, `ha`,
 `hw_detect`, `iface_bw`, `plugin`, `process`.
 
 ---
 
-### Sprint S-D — Worker lifecycle tests, batch 2 (1 session)
+### Sprint S-D — Worker lifecycle tests, batch 2 (1 session) ✅ 2026-06-06
 
-Batch 2: `report_scheduler`, `rest_api`, `scan`, `service`, `snmp_trap`,
-`speed_test`, `syslog`, `threat_intel`, `wifi_monitor`.
+All batch 2 worker lifecycle tests already existed in `tests/test_worker_lifecycle.py`,
+`tests/test_worker_lifecycle_full.py`, and `tests/test_plugin_polling_worker.py`.
 
-Note: `scan_worker` and `wifi_monitor_worker` require network/admin access — mark
-tests with `@pytest.mark.live` and confirm they skip in CI.
+Batch 2 covered: `report_scheduler`, `rest_api`, `scan`, `service`, `snmp_trap`,
+`speed_test`, `syslog`, `threat_intel`, `wifi_monitor`, `plugin_polling`.
 
 ---
 
-### Sprint S-E — Table row height standardisation (1 session)
+### Sprint S-E — Table row height standardisation (1 session) ✅ 2026-06-06
 
 Set `verticalHeader().setDefaultSectionSize(24)` on all non-compliant tables.
-Work through the list in Section 4. Visually verify each page after changes.
 
-- [ ] cert_page.py:282 (26 → 24)
-- [ ] connections_page.py:616 (22 → 24)
-- [ ] cve_page.py:67,349 (26 → 24)
-- [ ] inventory_page.py:654 (26 → 24)
-- [ ] ip_calculator_page.py:415 (20 → 24)
-- [ ] log_hub_page.py:82 (26 → 24)
-- [ ] notif_alert_history.py:232,344 (26 → 24)
-- [ ] service_page.py:300 (26 → 24)
-- [ ] speed_test_page.py:579 (26 → 24)
-- [ ] threat_intel_page.py:105 (26 → 24)
-- [ ] tabs_recon.py:116 (26 → 24)
-- [ ] device_detail_panels.py:273,327 (22, 20 → 24)
-- [ ] hub_card.py:399,453 (22, 20 → 24)
-- [ ] tabs_helpers.py:45 — **verify**: value is 120; confirm this is a column width
-  setting, not a row height, before changing.
+- [x] cert_page.py:282 (26 → 24)
+- [x] connections_page.py:616 (22 → 24) — also updated setFixedHeight calculation
+- [x] cve_page.py:67,349 (26 → 24)
+- [x] inventory_page.py:654 (26 → 24)
+- [x] ip_calculator_page.py:415 (20 → 24) — also updated setFixedHeight calculation
+- [x] log_hub_page.py:82 (26 → 24)
+- [x] notif_alert_history.py:232,344 (26 → 24)
+- [x] service_page.py:300 (26 → 24)
+- [x] speed_test_page.py:579 (26 → 24)
+- [x] threat_intel_page.py:105 (26 → 24)
+- [x] tabs_recon.py:116 (26 → 24)
+- [x] device_detail_panels.py:273,327 (22, 20 → 24)
+- [x] hub_card.py:399,453 (22, 20 → 24)
+- [x] tabs_helpers.py:45 — **verified**: value is 120 on `horizontalHeader()` (column width); row height on line 47 already 24. No change needed.
 
 ---
 

@@ -64,7 +64,7 @@ def _table(cols: list[str]) -> QTableWidget:
     t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
     t.setAlternatingRowColors(True)
     t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(26)
+    t.verticalHeader().setDefaultSectionSize(24)
     t.horizontalHeader().setStretchLastSection(True)
     t.setStyleSheet(
         f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:{TABLE_ROW_BORDER};"
@@ -346,7 +346,7 @@ class CvePage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
-        self._table.verticalHeader().setDefaultSectionSize(26)
+        self._table.verticalHeader().setDefaultSectionSize(24)
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.setStyleSheet(
             f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:{TABLE_ROW_BORDER};"

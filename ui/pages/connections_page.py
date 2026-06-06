@@ -613,8 +613,8 @@ class ConnectionsPage(QWidget):
         sub_tbl.verticalHeader().setVisible(False)
         sub_tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         sub_tbl.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        sub_tbl.verticalHeader().setDefaultSectionSize(22)
-        sub_tbl.setFixedHeight(min(22 * len(grp_conns) + 26, 120))
+        sub_tbl.verticalHeader().setDefaultSectionSize(24)
+        sub_tbl.setFixedHeight(min(24 * len(grp_conns) + 26, 120))
         sub_tbl.setStyleSheet(
             f"QTableWidget {{ border:none; font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD}; }}"
             f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:10px;"

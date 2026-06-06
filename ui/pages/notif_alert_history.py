@@ -229,7 +229,7 @@ class _NotifAlertHistoryMixin:
             QTableWidget.SelectionBehavior.SelectRows
         )
         self._alert_history_table.setAlternatingRowColors(True)
-        self._alert_history_table.verticalHeader().setDefaultSectionSize(26)
+        self._alert_history_table.verticalHeader().setDefaultSectionSize(24)
         self._alert_history_table.setFixedHeight(200)
         self._alert_history_table.setStyleSheet(_tbl_qss)
         for w, col in zip((100, 80, 100, 80), range(4)):
@@ -341,7 +341,7 @@ class _NotifAlertHistoryMixin:
         self._log_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._log_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._log_table.setAlternatingRowColors(True)
-        self._log_table.verticalHeader().setDefaultSectionSize(26)
+        self._log_table.verticalHeader().setDefaultSectionSize(24)
         self._log_table.setFixedHeight(200)
         self._log_table.setStyleSheet(_tbl_qss)
         for w, col in zip((110, 90, 80, 120, 80), range(5)):
