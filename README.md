@@ -106,7 +106,7 @@ Most network monitoring tools are locked to their own ecosystem. Ubiquiti works 
 
 NetSentinel takes a different approach: **an open plugin protocol that any Python script can implement.**
 
-The full interface is four functions and two variables:
+The minimal interface is two constants and two required functions:
 
 ```python
 HARDWARE_NAME = "My Router XYZ"   # displayed in the app
@@ -114,45 +114,75 @@ HARDWARE_TYPE = "router"           # router | modem | ap | switch | other
 
 def get_info()    -> dict   # static metadata: model, firmware, IP
 def get_status()  -> dict   # live data: WAN IP, uptime, signal, speed
-def get_clients() -> list   # connected devices: ip, mac, hostname (optional)
+
+# Optional — if present, clients appear on the plugin's device page
+def get_clients() -> list   # connected devices: ip, mac, hostname
 ```
 
-That is the entire contract. Any `.py` file that satisfies it becomes a first-class NetSentinel integration.
+Optional constants: `HARDWARE_IP` (target address), `PYPI_PACKAGE` (pip dependency name), `CONFIG_SCHEMA` (typed settings the Hub card auto-generates a config form for), `ICON_PATH` (24×24 icon shown on the Hub card).
+
+Any `.py` file that satisfies the required interface becomes a first-class NetSentinel integration.
+
+### Bundled integrations
+
+12 plugins ship with the app, all signed and hash-verified:
+
+| Plugin | Hardware |
+|---|---|
+| `zte_plugin.py` | ZTE MC889 5G modem (SINR, RSRP, band, cell ID) |
+| `deco_plugin.py` | TP-Link Deco XE75 mesh router (nodes, clients, topology) |
+| `asus_plugin.py` | ASUS routers and ZenWiFi mesh (via `asusrouter` library) |
+| `fritzbox_plugin.py` | AVM FRITZ!Box (DSL/cable, WAN IP, uptime, clients) |
+| `unifi_plugin.py` | Ubiquiti UniFi (via UniFi API; requires local controller) |
+| `netgear_plugin.py` | Netgear routers (Nighthawk, Orbi via SOAP API) |
+| `mikrotik_plugin.py` | MikroTik RouterOS (REST API; v7.1+) |
+| `openwrt_plugin.py` | OpenWrt (ubus JSON-RPC API) |
+| `synology_plugin.py` | Synology NAS (DSM API; connection stats, uptime) |
+| `ha_plugin.py` | Home Assistant (REST API; entity state and attributes) |
+| `template_plugin.py` | Starter template for writing a new plugin |
 
 ### How users create integrations
 
-The **Integrate Hardware** page (Extend section in the nav) walks through the process in four steps:
+The **Hardware Hub** (Extend section in the nav) has a dedicated **Write a Plugin** tab that walks through the process:
 
 1. **Find your hardware's API** — GitHub search strings, Home Assistant integration library, and a five-step browser dev-tools workflow (F12 → Network tab → Copy as cURL) to capture the exact API calls your router admin panel makes
-2. **Write the script** — a ready-to-run Python template you fill in, or hand to an AI
-3. **Test and import** — NetSentinel validates the plugin via AST (no code executed during validation), then runs it in a sandboxed subprocess so a buggy script cannot crash the app; output appears inline
-4. **Share** — submit a working script as a GitHub Issue; reviewed and merged as a built-in integration for all users
+2. **Write the script** — click "⬡ New Plugin" to open the template wizard; fill in hardware name, type, IP, and any pip dependencies; a complete `.py` file is generated and opened in your system editor
+3. **Test and import** — NetSentinel validates the plugin via AST (no code executed during validation), runs a live credential test in a background thread before registering, and executes subsequent polls in a sandboxed subprocess so a buggy script cannot crash the app
+4. **Share** — submit a working script as a GitHub Issue; reviewed scripts are merged as built-in integrations
 
 ### The AI angle
 
-An AI assistant (Claude, ChatGPT, Gemini) can write a working plugin for most hardware in about 10 minutes if you give it the right input. The page includes three copy-ready AI prompts:
+An AI assistant (Claude, ChatGPT, Gemini) can write a working plugin for most hardware in about 10 minutes if you give it the right input. The Write a Plugin tab includes three copy-ready AI prompts:
 
 - **Prompt A** — general: "write a script for my Brand Model at 192.168.1.1, I need WAN IP, uptime, clients, and speed"
 - **Prompt B** — from cURL: paste the captured request from your browser dev tools and ask the AI to convert it to a full plugin (this produces the best results)
 - **Prompt C** — debug: paste a broken script and error message and ask the AI to fix it
 
-### Current status and roadmap
+### Plugin ecosystem features
 
-| Capability | Status |
+Every registered plugin gets a Hub card and a dedicated page under the Extend section. The full feature set:
+
+| Capability | Notes |
 |---|---|
-| Plugin import with AST validation | ✅ Live in v1.9.8 |
-| Sandboxed subprocess test with inline output | ✅ Live in v1.9.8 |
-| In-app guidance, template, and AI prompts | ✅ Live in v1.9.8 |
-| Plugin clients → Devices table (with source badge) | 🔜 Next milestone |
-| Plugin status → Overview hardware tile | 🔜 Next milestone |
-| Plugin device names → Topology diagram | 🔜 Next milestone |
-| Community plugin library (built-in integrations) | 🔜 Depends on submissions |
-
-The test-and-validate workflow is live now. Data flowing from a plugin into the rest of the app is the next development sprint.
-
-### Validation approach
-
-The two reference integrations built into NetSentinel (TP-Link Deco mesh, ZTE MC889 5G modem) are being rebuilt using only the in-app plugin guide and an AI assistant — no internal documentation. If the workflow produces working scripts for those devices, it works for anything. Results and scripts will be published as the first entries in the community plugin library.
+| AST validation before import | No code executed during validation; checks required constants and function signatures |
+| Live credential test before registration | Runs `get_info()` + `get_status()` in a background thread; only saves on success |
+| Sandboxed subprocess execution | Buggy polls cannot crash the app; each poll runs in an isolated namespace |
+| Multi-instance support | Same plugin type, multiple device IPs — each gets its own Hub card and nav entry |
+| Per-instance OS keychain credentials | Password stored under a unique instance ID; zero cross-instance key collisions |
+| CONFIG_SCHEMA typed config panel | Plugin declares `poll_interval`, `verify_ssl`, etc.; Hub card auto-generates the form |
+| Health tracking + circuit breaker | Success/error counters visible on each card; auto-disables after 10 consecutive errors; amber "degraded" state after 24 h without a successful poll |
+| Structured error classification | `AUTH:` / `DEPS:` / `NET:` / `TIMEOUT:` prefixes route to specific remediation text ("Re-enter Password", "pip install …", "Check IP") |
+| Re-enter Password button | Appears on AUTH errors; reopens the credential dialog and restarts the worker on success |
+| Plugin log console | "≡ Logs" toggle on each Hub card shows the last 100 structured poll log lines |
+| Plugin validator CLI | `python -m modules.plugin_tools validate <plugin.py>` — static checks for required interface, PYPI_PACKAGE, top-level network calls, and unsafe imports |
+| Bundled plugin signing | `data/plugin_hashes.json` SHA-256 list; tampered bundled files are blocked at load time |
+| Unsigned plugin consent | One-time SHA-256-keyed warning dialog for non-bundled scripts; consent persisted in QSettings |
+| Restricted import advisory | Warns when imports fall outside the safe-list; plugin can declare `SAFE_IMPORTS` to acknowledge custom dependencies |
+| Plugin icon support | `icon.png` alongside the script or `ICON_PATH` constant; displayed as 24×24 on Hub cards and community catalog entries |
+| Plugin rename | "✎" button renames the instance; change propagates atomically to nav flyout, breadcrumb, and command palette |
+| Community Browse tab | Fetches a GitHub-hosted JSON index; per-entry SHA-256 verified before download; Install button copies to AppData and runs the normal registration flow |
+| `.nspkg` bundle format | ZIP containing `plugin.py` + `manifest.json` + optional `icon.png`; "⬡ Import .nspkg" button in the Hub handles the full install flow |
+| Startup dependency smoke-check | Missing `PYPI_PACKAGE` dependencies surface as card errors immediately on startup |
 
 ---
 
@@ -189,7 +219,7 @@ The two reference integrations built into NetSentinel (TP-Link Deco mesh, ZTE MC
 | Geolocation map | Plots internet-facing IPs on an offline world map using MaxMind GeoLite2-City — no API key, no external calls |
 | Topology diagram | Visual topology diagram: flat star by default; upgrades to a three-tier mesh tree (Gateway → Satellites → Clients grouped by satellite) when Deco credentials are configured — devices invisible to the mesh attach directly to the gateway so nothing is dropped |
 | Mesh router integration | Pulls live data from your mesh gateway — Deco-assigned device names replace rDNS guesses in the Devices on Network table; Node and Band columns appear automatically; per-device upload/download rates from the router's own counters. Runs silently after each scan when credentials are saved. TP-Link Deco fully supported; architecture supports Eero, Google Nest, Asus ZenWiFi, Netgear Orbi |
-| **Hardware plugin protocol** | **Import any router, modem, or AP via a 4-function Python script. In-app guide covers finding the API, writing the script with AI assistance, testing in a sandboxed subprocess, and submitting to the community library. Plugin data flowing into Devices and Overview is the next milestone — see [Works with any hardware](#works-with-any-hardware--open-plugin-protocol) above.** |
+| **Hardware plugin protocol** | **12 bundled plugins included (TP-Link Deco, UniFi, FRITZ!Box, OpenWrt, MikroTik, Netgear, ASUS, Synology, Home Assistant, ZTE 5G modem). Import any router, modem, or AP via a Python script. Per-instance credentials, health tracking, circuit breaker, plugin log console, CONFIG_SCHEMA typed config, community Browse tab, and `.nspkg` bundle format all live. See [Works with any hardware](#works-with-any-hardware--open-plugin-protocol).** |
 | Automation hooks | Webhook and script triggers on network events — device down, high RTT, new device discovered |
 | REST API | Read-only local HTTP API at `http://127.0.0.1:8765` — query devices, alerts, and uptime from Home Assistant or scripts |
 | "What's Wrong?" diagnosis | One-click root-cause analysis across slow / dropping / can't-connect symptoms — sequences network, storm, rogue device, and STP checks then surfaces a prioritised plain-English finding |
@@ -270,9 +300,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, coding convent
 
 ### Hardware plugins (no coding required beyond Python)
 
-If you own a router, modem, or AP that is not yet supported, the highest-value contribution is a working plugin script. Use the **Integrate Hardware** page in the app — the four-step guide and AI prompts get most people to a working script in under 30 minutes.
+12 plugins ship with the app (see [Bundled integrations](#bundled-integrations) above). If your hardware is not on that list, the highest-value contribution is a working plugin script. Use the **Write a Plugin** tab in the Hardware Hub — the in-app guide, template wizard ("⬡ New Plugin"), and AI prompts get most people to a working script in under 30 minutes.
 
-To submit: open a GitHub Issue titled `[Hardware Plugin] Brand Model XYZ`, attach the `.py` file, describe what `get_status()` returns, and list any `pip install` dependencies. Reviewed scripts are merged as built-in integrations.
+To submit: open a GitHub Issue titled `[Hardware Plugin] Brand Model XYZ`, attach the `.py` file, describe what `get_status()` returns, and list any `pip install` dependencies. Reviewed scripts are signed, added to `data/plugin_hashes.json`, and merged as built-in integrations.
 
 **Template for the issue:**
 
