@@ -521,6 +521,7 @@ jobs:
             "- Architecture: x64",
             "  InstallerUrl: $url",
             "  InstallerSha256: $hash",
+            "  InstallerProductCode: com.netsentinel.app_is1",
             "ManifestType: installer",
             "ManifestVersion: 1.12.0"
           ) | Set-Content "$dir\NetSentinel.NetSentinel.installer.yaml" -Encoding UTF8

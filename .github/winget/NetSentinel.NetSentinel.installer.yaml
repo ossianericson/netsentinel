@@ -24,6 +24,7 @@ Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/ossianericson/netsentinel/releases/download/v1.9.88/NetSentinel-Setup-1.9.88.exe
     InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+    InstallerProductCode: com.netsentinel.app_is1
 
 ManifestType: installer
 ManifestVersion: 1.12.0
