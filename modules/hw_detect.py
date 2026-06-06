@@ -170,15 +170,12 @@ def detect(
     return results
 
 
-def already_installed(plugin_id: str) -> bool:
-    """Return True if a plugin with this catalogue id is in QSettings paths."""
-    try:
-        from PyQt6.QtCore import QSettings
-        from ui.pages.hardware_integration_page import _load_paths
-        paths = _load_paths()
-        return any(plugin_id in p.replace("\\", "/").split("/")[-1] for p in paths)
-    except Exception:
-        return False
+def already_installed(plugin_id: str, registered_paths: "list[str] | tuple" = ()) -> bool:
+    """Return True if plugin_id appears in any of the registered plugin paths.
+
+    Pass the path list from the UI layer; the module stays import-free.
+    """
+    return any(plugin_id in p.replace("\\", "/").split("/")[-1] for p in registered_paths)
 
 
 def bundled_plugin_path(file_rel: str) -> Optional[Path]:

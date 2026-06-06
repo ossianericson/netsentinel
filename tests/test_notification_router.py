@@ -218,5 +218,79 @@ class TestSerialization(unittest.TestCase):
         assert "s3cr3t" not in serialised
 
 
+class TestSnoozeJsonPersistence(unittest.TestCase):
+    """Snooze state must round-trip through a JSON file — no QSettings."""
+
+    def _make_router_with_tmp(self, tmp_path):
+        r = NotificationRouter.__new__(NotificationRouter)
+        r._channels = []
+        r._toast_cb = None
+        r._lock = __import__("threading").Lock()
+        r._log = []
+        r._log_max = 500
+        r._snooze = {}
+        with patch.object(NotificationRouter, "_snooze_path", return_value=tmp_path):
+            r._restore_snoozes()
+        return r
+
+    def test_set_snooze_writes_json(self):
+        import tempfile, json, os
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "snoozes.json"
+            r = NotificationRouter()
+            with patch.object(type(r), "_snooze_path", staticmethod(lambda: path)):
+                r.set_snooze("rule_a", 9999999999.0)
+            data = json.loads(path.read_text())
+            assert "rule_a" in data
+            assert data["rule_a"] == 9999999999.0
+
+    def test_clear_snooze_removes_key(self):
+        import tempfile, json
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "snoozes.json"
+            r = NotificationRouter()
+            with patch.object(type(r), "_snooze_path", staticmethod(lambda: path)):
+                r.set_snooze("rule_b", 9999999999.0)
+                r.clear_snooze("rule_b")
+            data = json.loads(path.read_text())
+            assert "rule_b" not in data
+
+    def test_restore_snoozes_reads_json(self):
+        import tempfile, json
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "snoozes.json"
+            path.write_text(json.dumps({"rule_c": 9999999999.0}), encoding="utf-8")
+            r = NotificationRouter()
+            r._snooze = {}
+            with patch.object(type(r), "_snooze_path", staticmethod(lambda: path)):
+                r._restore_snoozes()
+            assert "rule_c" in r._snooze
+
+    def test_expired_snooze_not_restored(self):
+        import tempfile, json
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "snoozes.json"
+            path.write_text(json.dumps({"old_rule": 1.0}), encoding="utf-8")
+            r = NotificationRouter()
+            r._snooze = {}
+            with patch.object(type(r), "_snooze_path", staticmethod(lambda: path)):
+                r._restore_snoozes()
+            assert "old_rule" not in r._snooze
+
+    def test_no_pyqt_import_in_snooze_methods(self):
+        """Snooze methods must not lazily import PyQt6.QtCore.QSettings."""
+        import inspect
+        import modules.notification_router as nr_mod
+        for method_name in ("_restore_snoozes", "set_snooze", "clear_snooze"):
+            src = inspect.getsource(getattr(nr_mod.NotificationRouter, method_name))
+            assert "import QSettings" not in src and "QSettings(" not in src, (
+                f"{method_name} still uses QSettings"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

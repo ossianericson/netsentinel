@@ -22,12 +22,15 @@ Architecture rules observed
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from modules.alert_engine import AlertFired
+from modules.utils import get_app_data_dir
 from modules.notification_channels import (
     _deliver_webhook_tracked, _deliver_email_tracked,
     _deliver_pushover_tracked, _deliver_ntfy_tracked, _deliver_telegram_tracked,
@@ -169,26 +172,31 @@ class NotificationRouter:
 
     # ── Snooze management ─────────────────────────────────────────────────────
 
-    _SNOOZE_PREFIX = "notif/snooze/"
+    @staticmethod
+    def _snooze_path() -> Path:
+        return get_app_data_dir() / "notification_snoozes.json"
 
     def _restore_snoozes(self) -> None:
-        """Restore persisted snooze state from QSettings on startup."""
+        """Restore persisted snooze state from JSON file on startup."""
         try:
-            from PyQt6.QtCore import QSettings
-            qs = QSettings("NetSentinel", "NetSentinel")
+            data: dict = json.loads(self._snooze_path().read_text("utf-8"))
             now = time.time()
-            for key in qs.allKeys():
-                if key.startswith(self._SNOOZE_PREFIX):
-                    rule_name = key[len(self._SNOOZE_PREFIX):]
-                    try:
-                        expiry = float(qs.value(key, 0))
-                    except (TypeError, ValueError):
-                        continue
-                    # Drop expired snoozes immediately on restore
-                    if expiry == 0 or expiry > now:
-                        self._snooze[rule_name] = expiry
-                    else:
-                        qs.remove(key)
+            for rule_name, expiry in data.items():
+                try:
+                    expiry = float(expiry)
+                except (TypeError, ValueError):
+                    continue
+                if expiry == 0 or expiry > now:
+                    self._snooze[rule_name] = expiry
+        except Exception:
+            pass
+
+    def _persist_snoozes(self) -> None:
+        """Write current snooze registry to disk."""
+        try:
+            path = self._snooze_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(self._snooze), encoding="utf-8")
         except Exception:
             pass
 
@@ -196,22 +204,22 @@ class NotificationRouter:
         """Snooze rule_name until until_ts (Unix seconds). Pass 0 for 'forever'."""
         with self._lock:
             self._snooze[rule_name] = until_ts
+            snapshot = dict(self._snooze)
         try:
-            from PyQt6.QtCore import QSettings
-            QSettings("NetSentinel", "NetSentinel").setValue(
-                f"{self._SNOOZE_PREFIX}{rule_name}", until_ts
-            )
+            path = self._snooze_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(snapshot), encoding="utf-8")
         except Exception:
             pass
 
     def clear_snooze(self, rule_name: str) -> None:
         with self._lock:
             self._snooze.pop(rule_name, None)
+            snapshot = dict(self._snooze)
         try:
-            from PyQt6.QtCore import QSettings
-            QSettings("NetSentinel", "NetSentinel").remove(
-                f"{self._SNOOZE_PREFIX}{rule_name}"
-            )
+            path = self._snooze_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(snapshot), encoding="utf-8")
         except Exception:
             pass
 

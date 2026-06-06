@@ -315,7 +315,8 @@ class _HardwareBrowseMixin:
             return
 
         from modules.hw_detect import already_installed
-        visible = [m for m in matches if not already_installed(m["plugin"].get("id", ""))]
+        _installed_paths = _load_paths()
+        visible = [m for m in matches if not already_installed(m["plugin"].get("id", ""), _installed_paths)]
 
         if not visible:
             self._tabs.setTabVisible(self._suggested_tab_idx, False)

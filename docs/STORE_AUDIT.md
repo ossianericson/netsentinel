@@ -241,14 +241,14 @@ The minimum set needed before Store submission.
 
 ---
 
-### Sprint S-B — Architecture clean-up (1 session)
+### Sprint S-B — Architecture clean-up (1 session) ✅ 2026-06-06
 
-- [ ] **B1.** Replace lazy `QSettings` snooze-state reads/writes in
+- [x] **B1.** Replace lazy `QSettings` snooze-state reads/writes in
   `modules/notification_router.py` with a plain JSON file via `get_app_data_dir()`.
   Remove the `from PyQt6.QtCore import QSettings` imports.
-- [ ] **B2.** Audit `modules/hw_detect.py:176` — the `QSettings` import checks plugin
-  registration. Refactor to accept a plain list/set of registered IDs passed as a
-  parameter instead.
+- [x] **B2.** Refactored `modules/hw_detect.already_installed()` to accept
+  `registered_paths` as a parameter; removed `PyQt6` and `ui/` imports entirely.
+  Updated caller in `ui/pages/hardware_browse_mixin.py` to pass `_load_paths()`.
 
 ---
 

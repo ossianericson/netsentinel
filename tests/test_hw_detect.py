@@ -11,14 +11,29 @@ def test_import():
 
 def test_already_installed_false():
     from modules.hw_detect import already_installed
-    result = already_installed("__nonexistent_plugin_xyz__")
+    result = already_installed("__nonexistent_plugin_xyz__", [])
     assert result is False
 
 
 def test_already_installed_returns_bool():
     from modules.hw_detect import already_installed
-    result = already_installed("some_plugin_id")
+    result = already_installed("some_plugin_id", [])
     assert isinstance(result, bool)
+
+
+def test_already_installed_finds_match():
+    from modules.hw_detect import already_installed
+    paths = ["/plugins/my_plugin_id.py", "/plugins/other.py"]
+    assert already_installed("my_plugin_id", paths) is True
+
+
+def test_already_installed_no_ui_import():
+    """already_installed() must not import from ui/ or PyQt6."""
+    import importlib, inspect
+    import modules.hw_detect as m
+    src = inspect.getsource(m.already_installed)
+    assert "PyQt6" not in src
+    assert "ui.pages" not in src
 
 
 def test_bundled_plugin_path_missing():
