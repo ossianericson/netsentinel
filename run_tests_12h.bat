@@ -12,11 +12,12 @@ setlocal
 set STAMP=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%%time:~6,2%
 set STAMP=%STAMP: =0%
 set OUT=test_output\12h_%STAMP%
+set FULLOUT=c:\Code\netsentinel\%OUT%
 
 echo.
 echo ════════════════════════════════════════
 echo  NetSentinel 12-hour test suite
-echo  Output: %OUT%
+echo  Output: %FULLOUT%
 echo  Started: %date% %time%
 echo ════════════════════════════════════════
 echo.
@@ -48,6 +49,26 @@ if errorlevel 1 echo WARNING: systematic post-run reported errors
 echo.
 echo ════════════════════════════════════════
 echo  Done: %date% %time%
-echo  Results in: %OUT%
+echo  Results in: %FULLOUT%
 echo ════════════════════════════════════════
+echo.
+echo.
+echo ┌──────────────────────────────────────────────────────────────────────────┐
+echo │  PASTE THIS INTO A NEW CHAT TO ANALYSE RESULTS:                         │
+echo └──────────────────────────────────────────────────────────────────────────┘
+echo.
+echo I ran overnight chaos and systematic tests on the NetSentinel app.
+echo The output is in %FULLOUT%\ with these folders:
+echo   - sys_pre\        -- systematic coverage run before chaos
+echo   - monkey_mild\    -- 1500 iterations mild chaos   (seed 1)
+echo   - monkey_moderate\ -- 4500 iterations moderate chaos  (seed 42)
+echo   - monkey_wild\    -- 9000 iterations wild chaos   (seed 99)
+echo   - sys_post\       -- systematic coverage run after chaos
+echo.
+echo Please inspect all output files (logs, screenshots, crash reports) in
+echo those folders. For each folder: summarise what happened, list any crashes
+echo or errors found, identify which pages or actions caused problems, and give
+echo me a prioritised fix list. Focus on actionable bugs -- ignore pywinauto
+echo focus warnings and QThreadStorage teardown warnings as those are known noise.
+echo.
 pause
