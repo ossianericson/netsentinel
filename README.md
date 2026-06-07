@@ -352,6 +352,14 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.90
+**Fixed**
+- `tests/test_monkey_test.py`: marked `pytest.mark.monkey` and excluded from CI `addopts` — pywinauto not available in GitHub Actions; run locally with `pytest -m monkey`
+- `tools/monkey_test.py`: dependency checks now raise `ImportError` instead of `sys.exit()` when imported without `pywinauto`, allowing graceful `pytest.skip()` in tests
+
+**Changed**
+- APM instructions and README synced with current codebase: removed phantom widget entries (`scan_animation.py`, `onboarding_overlay.py`), added `ui/app_settings.py`, `ui/guided_tour.py`, `ui/onboarding.py` to layout table, documented `monkey` pytest marker, updated implemented-features version tag to v1.9.89
+
 ### v1.9.89
 **Added**
 - `tools/monkey_test.py` — pywinauto UIA + psutil chaos/monkey harness; `--source`, `--connect`, and exe-path modes; mild/moderate/wild chaos levels; spatial + glyph titlebar blacklist; memory/CPU health monitor; screenshot on crash; seed-reproducible runs
