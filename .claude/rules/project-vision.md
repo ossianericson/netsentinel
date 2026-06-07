@@ -27,7 +27,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 
 ---
 
-## Implemented Features (as of v1.9.66)
+## Implemented Features (as of v1.9.89)
 
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection

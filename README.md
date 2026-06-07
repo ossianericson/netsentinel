@@ -355,7 +355,7 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 ### v1.9.89
 **Added**
 - `tools/monkey_test.py` — pywinauto UIA + psutil chaos/monkey harness; `--source`, `--connect`, and exe-path modes; mild/moderate/wild chaos levels; spatial + glyph titlebar blacklist; memory/CPU health monitor; screenshot on crash; seed-reproducible runs
-- `tests/test_monkey_test.py` — 11 unit tests covering import, `Config`, `Stats`, `History`, blacklist logic, and CLI smoke test
+- `tests/test_monkey_test.py` — 11 unit tests covering import, `Config`, `Stats`, `History`, blacklist logic, and CLI smoke test; marked `pytest.mark.monkey` — excluded from CI by default, run locally with `pytest -m monkey`
 - `requirements-dev.txt` — documents `pywinauto`, `psutil`, and `Pillow` as dev-only dependencies
 
 ### v1.9.88

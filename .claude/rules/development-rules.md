@@ -332,6 +332,23 @@ hadn't completed yet, so `currentWidget()` was still the old page, setting `_sca
 and preventing the tour from ever firing. Unit tests for each method passed; the integration test
 would have caught it.
 
+### Pytest markers (pyproject.toml addopts)
+All markers are declared in `pyproject.toml`. The default `addopts` excludes these markers from every `pytest tests/` run:
+
+| Marker | Excluded by default | When to run |
+|---|---|---|
+| `live` | Yes | `pytest -m live` — requires real network / device |
+| `benchmark` | Yes | `pytest -m benchmark` — performance / scaling tests |
+| `monkey` | Yes | `pytest -m monkey` — chaos tests; requires `pywinauto` (dev-only) |
+| `slow` | No | Long-running; skip with `-m "not slow"` |
+| `integration` | No | Multi-module end-to-end; always runs in CI |
+
+**`monkey` marker specifics:** `tests/test_monkey_test.py` tests `tools/monkey_test.py`, which requires `pywinauto` and `psutil` (listed in `requirements-dev.txt`). These tests are **local-only** — never run in GitHub Actions. To run them:
+```powershell
+python -m pytest -m monkey
+```
+`tools/monkey_test.py` raises `ImportError` (not `sys.exit`) when imported without `pywinauto`, so the `_import_monkey()` helper in the test file calls `pytest.skip()` gracefully if the dep is missing locally.
+
 ### RULE-T6 (blocking): Do not claim a feature works unless it was exercised in the running app
 Screenshot automation and unit tests do NOT substitute for a real-user flow test. Before marking
 a first-run, onboarding, or post-scan flow as complete:
