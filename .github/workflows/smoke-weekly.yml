@@ -1,0 +1,44 @@
+name: Weekly Smoke Test
+
+# GAP-7: Synthetic post-release probe.
+# Runs the app's --smoke path every Monday on a clean environment to catch
+# silent regressions introduced by dependency updates or platform drift.
+# Opens a GitHub Issue automatically on failure.
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"   # Every Monday 08:00 UTC
+  workflow_dispatch:        # Allow manual trigger for verification
+
+jobs:
+  smoke:
+    name: Smoke test (main branch)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pywin32
+
+      - name: Run smoke test
+        run: python app.py --smoke
+
+      - name: Open issue on failure
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $runUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          $date   = (Get-Date -Format "yyyy-MM-dd")
+          gh issue create `
+            --title "Weekly smoke test failed ($date)" `
+            --body "The scheduled Monday smoke test failed on ``main``.`n`nWorkflow run: $runUrl`n`nInvestigate before the next release tag." `
+            --label "bug" `
+            --repo "${{ github.repository }}"

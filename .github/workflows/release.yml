@@ -355,7 +355,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "NetSentinel ${{ github.ref_name }}"
           draft: false
-          prerelease: false
+          prerelease: true
           body: |
             ## NetSentinel ${{ github.ref_name }}
 
@@ -432,198 +432,27 @@ jobs:
 
           python scripts/update_release_body.py $ARGS
 
-  # ── Winget submission ──────────────────────────────────────────────────────
-  # Only runs after the GitHub Release job succeeds (needs: [release]).
-  # A failed build or release will never reach this job.
-  submit-winget:
+  # ── Staged rollout note ────────────────────────────────────────────────────
+  # The release above is created as prerelease: true.
+  # WinGet submission is intentionally NOT automatic — it happens manually:
+  #   Step 1: Wait 48h and verify no crash reports in GitHub Issues.
+  #   Step 2: Run "Promote Release" workflow to flip prerelease → stable.
+  #   Step 3: Run "WinGet Submit" workflow with the version number.
+  # Both workflows are in .github/workflows/ as workflow_dispatch triggers.
+  staged-rollout-note:
     needs: [release]
-    runs-on: windows-latest
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v6
-
-      # Version comes directly from the tag — no API call needed.
-      - name: Resolve version
-        id: version
-        shell: pwsh
+      - name: Print staged rollout instructions
         run: |
-          $ver = "${{ github.ref_name }}" -replace '^v', ''
-          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
-          echo "Resolved version: $ver"
-
-      # ── Install wingetcreate ─────────────────────────────────────────────────
-      - name: Install wingetcreate
-        shell: pwsh
-        run: winget install --id Microsoft.Wingetcreate --source winget --silent --accept-package-agreements --accept-source-agreements
-
-      # ── Compute installer URL ────────────────────────────────────────────────
-      - name: Build installer URL
-        id: url
-        shell: pwsh
-        run: |
-          $ver = "${{ steps.version.outputs.VERSION }}"
-          $url = "https://github.com/${{ github.repository }}/releases/download/v${ver}/NetSentinel-Setup-${ver}.exe"
-          echo "URL=$url" >> $env:GITHUB_OUTPUT
-          echo "Installer URL: $url"
-
-      # ── Download installer & compute SHA256 ─────────────────────────────────
-      - name: Compute installer SHA256
-        id: sha
-        shell: pwsh
-        run: |
-          $url = "${{ steps.url.outputs.URL }}"
-          $tmp = Join-Path $env:TEMP "NetSentinel-installer.exe"
-          Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
-          $hash = (Get-FileHash $tmp -Algorithm SHA256).Hash.ToUpper()
-          Remove-Item $tmp -Force
-          echo "HASH=$hash" >> $env:GITHUB_OUTPUT
-          echo "Installer SHA256: $hash"
-
-      # ── Write winget manifest files ──────────────────────────────────────────
-      # WINGET_PAT must be a GitHub Personal Access Token (classic) with:
-      #   repo  scope  →  for fork + PR creation in microsoft/winget-pkgs
-      # Add it as a repository secret named WINGET_PAT.
-      - name: Write manifest files
-        shell: pwsh
-        run: |
-          $ver  = "${{ steps.version.outputs.VERSION }}"
-          $url  = "${{ steps.url.outputs.URL }}"
-          $hash = "${{ steps.sha.outputs.HASH }}"
-          $dir  = "manifests\n\NetSentinel\NetSentinel\$ver"
-          New-Item -ItemType Directory -Force -Path $dir | Out-Null
-
-          # Version manifest
-          @(
-            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json",
-            "PackageIdentifier: NetSentinel.NetSentinel",
-            "PackageVersion: $ver",
-            "DefaultLocale: en-US",
-            "ManifestType: version",
-            "ManifestVersion: 1.12.0"
-          ) | Set-Content "$dir\NetSentinel.NetSentinel.yaml" -Encoding UTF8
-
-          # Installer manifest
-          @(
-            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json",
-            "PackageIdentifier: NetSentinel.NetSentinel",
-            "PackageVersion: $ver",
-            "InstallerLocale: en-US",
-            "InstallerType: inno",
-            "Scope: machine",
-            "InstallModes:",
-            "- interactive",
-            "- silent",
-            "UpgradeBehavior: install",
-            "InstallerSwitches:",
-            "  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=`"!installookla`"",
-            "  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART /TASKS=`"!installookla`"",
-            "  Log: /`"{localappdata}\NetSentinel\install.log`"",
-            "Installers:",
-            "- Architecture: x64",
-            "  InstallerUrl: $url",
-            "  InstallerSha256: $hash",
-            "  InstallerProductCode: com.netsentinel.app_is1",
-            "ManifestType: installer",
-            "ManifestVersion: 1.12.0"
-          ) | Set-Content "$dir\NetSentinel.NetSentinel.installer.yaml" -Encoding UTF8
-
-          # Default locale manifest — full rich metadata, mirrors the static file
-          @(
-            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json",
-            "PackageIdentifier: NetSentinel.NetSentinel",
-            "PackageVersion: $ver",
-            "PackageLocale: en-US",
-            "Publisher: NetSentinel Project",
-            "PublisherUrl: https://github.com/ossianericson/netsentinel",
-            "PublisherSupportUrl: https://github.com/ossianericson/netsentinel/issues",
-            "PackageName: NetSentinel",
-            "PackageUrl: https://github.com/ossianericson/netsentinel",
-            "License: MIT",
-            "LicenseUrl: https://raw.githubusercontent.com/ossianericson/netsentinel/main/LICENSE",
-            "PrivacyUrl: https://github.com/ossianericson/netsentinel/blob/main/PRIVACY.md",
-            "ShortDescription: Professional network monitor — LAN scanner, security audit, 5G modem and mesh router integration",
-            "Description: |-",
-            "  NetSentinel is a professional-grade network security scanner and monitor for Windows,",
-            "  targeting IT administrators, home lab users, and students learning network concepts.",
-            "  It replaces a collection of separate utilities with one integrated desktop application:",
-            "",
-            "    • Device Inventory — ARP + mDNS + NetBIOS + DHCP scan; OUI fingerprinting identifies",
-            "      cameras, smart speakers, routers, and IoT sensors by MAC address",
-            "    • 5G Modem Monitor — live SINR, RSRP, RSRQ, band, and cell ID from ZTE MC889 modems;",
-            "      signal history logged alongside every speed test result",
-            "    • Mesh Router Monitor — TP-Link Deco XE75 node signal stats and topology;",
-            "      enriches device inventory with real hostnames from your mesh network",
-            "    • Hardware Integration — USB, serial, and GPIO device detection; extend the app",
-            "      with physical sensors and network hardware",
-            "    • Rogue Bridge Detector — captures 802.1D/RSTP BPDUs; flags devices stealing the",
-            "      Root Bridge role and causing periodic 15-45 second network outages",
-            "    • Broadcast Storm Analyser — measures broadcast/multicast rates in real time;",
-            "      identifies the flooding device with packet-level evidence",
-            "    • Speed Test — three-tier: Ookla CLI (1 Gbps+) then speedtest-cli (8 threads) then",
-            "      pure-Python (16 TCP streams); each result captures a full modem signal snapshot",
-            "    • Security Audit — SYN/UDP port scan, OS fingerprint, CVE lookup, TLS checker,",
-            "      credential test (SSH/SMB/FTP/Telnet), threat intelligence, and risk scorer",
-            "    • IoT Behavioral Baseline — learns normal traffic patterns; alerts when a device",
-            "      contacts unexpected hosts or starts scanning",
-            "    • What's Wrong? Diagnosis — symptom tiles trigger a sequenced scan; results",
-            "      delivered as plain-English findings with root-cause correlation",
-            "    • Log Hub — unified view: network RTT, 5G modem, mesh, syslog, and SNMP traps",
-            "    • Protocol Visualizer — animated ARP/DNS/TCP/DHCP/STP diagrams from real scan data",
-            "    • Lab Mode — guided CompTIA Network+/CCNA exercises with exportable HTML results",
-            "    • MQTT / Home Assistant — Discovery payloads, configurable broker, keychain credentials",
-            "    • REST API — read-only Flask API on localhost; API key stored in OS keychain",
-            "    • WiFi Heatmap — floor plan import, IDW interpolation, PNG export",
-            "    • Network Documentation — one-click HTML/Markdown snapshot of full network state",
-            "    • Automation Hooks — shell commands triggered by alert and scan events",
-            "",
-            "  Most active scan features require Administrator privileges.",
-            "  Install Npcap (https://npcap.com) for STP, storm, ARP watch, and 802.11 monitor mode.",
-            "Moniker: netsentinel",
-            "Tags:",
-            "- network",
-            "- security",
-            "- scanner",
-            "- monitoring",
-            "- diagnostics",
-            "- lan",
-            "- wifi",
-            "- dns",
-            "- iot",
-            "- port-scanner",
-            "- cve",
-            "- speed-test",
-            "- packet-capture",
-            "- mqtt",
-            "- home-assistant",
-            "- network-health",
-            "ReleaseNotesUrl: https://github.com/ossianericson/netsentinel/releases/tag/v$ver",
-            "ManifestType: defaultLocale",
-            "ManifestVersion: 1.12.0"
-          ) | Set-Content "$dir\NetSentinel.NetSentinel.locale.en-US.yaml" -Encoding UTF8
-
-          echo "Manifests written to $dir"
-
-      # ── Submit to winget-pkgs via wingetcreate ───────────────────────────────
-      - name: Submit to winget-pkgs
-        shell: pwsh
-        env:
-          WINGET_PAT: ${{ secrets.WINGET_PAT }}
-        run: |
-          $ver = "${{ steps.version.outputs.VERSION }}"
-          $dir = "manifests\n\NetSentinel\NetSentinel\$ver"
-          wingetcreate submit $dir --token $env:WINGET_PAT
-
-      # ── Summary ──────────────────────────────────────────────────────────────
-      - name: Print summary
-        shell: pwsh
-        run: |
-          $ver = "${{ steps.version.outputs.VERSION }}"
-          echo "### winget submission summary" >> $env:GITHUB_STEP_SUMMARY
-          echo "" >> $env:GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $env:GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $env:GITHUB_STEP_SUMMARY
-          echo "| Package | NetSentinel.NetSentinel |" >> $env:GITHUB_STEP_SUMMARY
-          echo "| Version | $ver |" >> $env:GITHUB_STEP_SUMMARY
-          echo "| Installer URL | ${{ steps.url.outputs.URL }} |" >> $env:GITHUB_STEP_SUMMARY
-          echo "" >> $env:GITHUB_STEP_SUMMARY
-          echo "A PR has been opened in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs)." >> $env:GITHUB_STEP_SUMMARY
-          echo "It will be auto-merged by the winget bot within ~24 hours after validation." >> $env:GITHUB_STEP_SUMMARY
+          TAG="${{ github.ref_name }}"
+          VER="${TAG#v}"
+          echo "### Staged rollout checklist" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Release **$TAG** is live as a **pre-release**." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Step | Action |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 1 | Wait 48h — monitor [Issues](https://github.com/${{ github.repository }}/issues) for crash reports |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 2 | Run **Promote Release** workflow with tag \`$TAG\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 3 | Run **WinGet Submit** workflow with version \`$VER\` |" >> "$GITHUB_STEP_SUMMARY"

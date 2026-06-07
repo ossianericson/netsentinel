@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── GAP-1: Ruff lint (RULE-LINT1) ─────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install "ruff>=0.4.0"
+
+      - name: Check unused imports and variables
+        run: ruff check . --select=F401,F811,F841 --output-format=github
+
+  # ── GAP-2: mypy type check (modules/ only) ────────────────────────────────
+  typecheck:
+    name: Type check (mypy)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime dependencies + mypy
+        run: |
+          pip install -r requirements.txt
+          pip install "mypy>=1.10.0"
+
+      - name: Run mypy on modules/
+        # Targets only the pure-Python business logic layer (no PyQt6).
+        # ui/ and workers/ are excluded — PyQt6 stubs are incomplete and
+        # would produce too many false positives.
+        run: mypy modules/ --config-file mypy.ini
+
+  # ── GAP-3: Dependency CVE audit (pip-audit) ───────────────────────────────
+  audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install pip-audit
+        run: pip install "pip-audit>=2.7.0"
+
+      - name: Audit production dependencies for known CVEs
+        # Fails only on Critical severity to avoid blocking on low-signal advisories.
+        # Lower the threshold to "high" once the initial noise is baselined.
+        run: pip-audit -r requirements.txt --desc on --severity critical
