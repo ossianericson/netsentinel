@@ -354,11 +354,15 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ### v1.9.90
 **Fixed**
+- `ui/command_palette.py`: command palette now opens non-modally (`show()` instead of `exec()`) — clicking anywhere outside the palette dismisses it; app is no longer locked while the palette is open
+- `ui/command_palette.py`: app-level `installEventFilter` in `showEvent` / `removeEventFilter` in `hideEvent` so outside-click detection fires correctly in non-modal mode
+- `ui/widgets/page_header.py`: `_HelpPopover.show_at()` now clamps position to `screen.availableGeometry()` so the help popover never renders partially off-screen near screen edges
 - `tests/test_monkey_test.py`: marked `pytest.mark.monkey` and excluded from CI `addopts` — pywinauto not available in GitHub Actions; run locally with `pytest -m monkey`
 - `tools/monkey_test.py`: dependency checks now raise `ImportError` instead of `sys.exit()` when imported without `pywinauto`, allowing graceful `pytest.skip()` in tests
 
 **Changed**
-- APM instructions and README synced with current codebase: removed phantom widget entries (`scan_animation.py`, `onboarding_overlay.py`), added `ui/app_settings.py`, `ui/guided_tour.py`, `ui/onboarding.py` to layout table, documented `monkey` pytest marker, updated implemented-features version tag to v1.9.89
+- APM instructions updated: Roadmap / backlog section removed — there is no active backlog; monkey/chaos tests explicitly documented as user-initiated only, never part of commit gate
+- APM instructions and README synced with current codebase: removed phantom widget entries, added `ui/app_settings.py`, `ui/guided_tour.py`, `ui/onboarding.py` to layout table, documented `monkey` pytest marker
 
 ### v1.9.89
 **Added**

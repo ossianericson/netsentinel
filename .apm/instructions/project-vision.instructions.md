@@ -5,7 +5,7 @@ description: "NetSentinel project vision, strategic goals, implemented features 
 
 # NetSentinel — Project Vision & Purpose
 
-## Strategic Goals (from BACKLOG.md)
+## Strategic Goals
 
 NetSentinel has two parallel strategic goals:
 
@@ -13,7 +13,7 @@ NetSentinel has two parallel strategic goals:
 
 2. **Educational standard** — become the natural starting point for anyone learning how networks actually work. Every feature should produce output that maps directly to a textbook concept or exam objective and can be submitted as evidence of work.
 
-Both goals are served by the same core property: zero prior knowledge required. Everything on the backlog either lowers the barrier for non-technical users or makes the tool usable in structured learning contexts.
+Both goals are served by the same core property: zero prior knowledge required.
 
 ---
 
@@ -27,7 +27,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 
 ---
 
-## Implemented Features (as of v1.9.89)
+## Implemented Features (as of v1.9.90)
 
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection
@@ -66,8 +66,9 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Persistent search button** — magnifier at the top of the rail, always visible; opens Ctrl+K on click
 - **Breadcrumb strip** — `"Section  ›  Page"` label above the content area; updated on every navigation
 - **Pinned section** — right-click any flyout item to pin it; a "Pinned" rail section appears immediately at the top of the rail; persists via QSettings
-- **Command palette (Ctrl+K)** — fuzzy-match any page or action; arrow keys + Enter; Esc to dismiss
+- **Command palette (Ctrl+K)** — fuzzy-match any page or action; non-modal (click anywhere to dismiss); arrow keys + Enter; Esc to close
 - **Sidebar search (Ctrl+F)** — focuses sidebar search from anywhere in the app
+- **Page help popover (?)** — floating 300px panel anchored below the ? button; screen-edge clamped so it never renders off-screen
 - **Lucide SVG rail section icons** — RULE 25; clean scalable SVG at any size
 - **Three colour themes** — Arctic Clean, Midnight Pro, Obsidian Neon; all values in `ui/styles.py`
 - **Configurable Overview tile dashboard** — drag to reorder, layout persists
@@ -133,31 +134,6 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
   - Plugin icon support — `icon.png` alongside script or `ICON_PATH` constant displayed as 24×24 on Hub cards (P2-3)
   - Bundled plugin signing — `data/plugin_hashes.json` SHA-256 hash list; tampered files blocked at load time (P4-2)
   - Restricted import advisory — `validate_plugin()` warns when imports fall outside `_DEFAULT_SAFE_IMPORTS` (P4-3)
-
----
-
-## Roadmap (open items from BACKLOG.md)
-
-### Priority 1 — De-facto Home Standard
-
-1. **Anonymous opt-in ISP comparison** — opt-in only; submits ISP name, country, anonymised speed/latency/uptime once per day; shows comparison against ISP+country median. Requires a backend endpoint. New: `modules/isp_telemetry.py`. Effort: L.
-
-### Priority 2 — Educational Standard
-
-1. **CompTIA Network+ / CCNA curriculum alignment** — compact exam-objective badge per page; exportable study-session checklist. New: `data/curriculum_map.json`, `ui/widgets/objective_badge.py`. Effort: S.
-2. **Classroom export** — signed JSON+HTML scan report with machine fingerprint; instructor aggregation view. New: `modules/classroom_export.py`, `ui/pages/classroom_page.py`. Effort: M.
-
-### Priority 3 — Plugin Ecosystem (remaining)
-
-- **Typed CONFIG_SCHEMA** (P2-2) — plugin declares `poll_interval`, `verify_ssl` etc.; auto-generated config panel in the Hub card
-- **Community plugin index** (P3-4) — GitHub-hosted JSON index; SHA-256 verified before install; in-app "Browse" tab
-- **Plugin bundle format** (P3-5) — `.nspkg` ZIP with `plugin.py` + `manifest.json` + optional `icon.png`
-
-### Priority 4 — Polish and Retention
-
-- **"Abyss" WCAG AA high-contrast theme** — fourth theme; true black, no low-opacity elements
-- **Keyboard shortcut reference card** — in Help panel
-- **Per-page documentation link** — `?` link on each page header → relevant wiki section
 
 ---
 

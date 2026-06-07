@@ -1093,12 +1093,22 @@ class _NavBuilderMixin:
 
     def _open_command_palette(self) -> None:
         from ui.command_palette import CommandPalette
+        # Toggle: close if already visible
+        existing = getattr(self, "_cmd_palette", None)
+        if existing is not None:
+            try:
+                if existing.isVisible():
+                    existing.reject()
+                    return
+            except RuntimeError:
+                pass
         items = self._build_palette_items()
         pal = CommandPalette(items, parent=self)
         pal.load_recent_data(self._store)
         pal.page_requested.connect(self._nav_rail_go_to)
         pal.action_requested.connect(self._on_palette_action)
-        pal.exec()
+        self._cmd_palette = pal  # keep alive; prevents GC before user interaction
+        pal.show()
 
     def _open_shortcut_overlay(self) -> None:
         """Show the keyboard shortcut reference overlay (KEYBOARD-1)."""

@@ -36,6 +36,7 @@ import argparse
 import dataclasses
 import json
 import logging
+import re
 import subprocess
 import sys
 import time
@@ -69,29 +70,37 @@ _WINDOW_RE = ".*NetSentinel.*"
 _CONNECT_TIMEOUT = 60
 _CONNECT_POLL = 1.0
 
-# All pages in nav order (matches _build_pro_nav in dashboard.py).
-# The command palette is used for navigation so labels must match exactly.
-_ALL_PAGES: List[str] = [
-    # Getting Started
-    "Overview", "Speed Test", "DNS Monitor", "Home", "What's Wrong?",
-    # Discover
-    "Devices", "Network Map", "WiFi", "DHCP Leases", "Home Automation",
-    # Monitor
-    "Log Hub", "Live Bandwidth", "Connections", "Availability", "Service Heartbeat",
-    # Reports
-    "Network Grade", "Health Report", "Network Doc", "IP Calculator", "Notifications",
-    # Analysis
-    "Broadcast Storm", "STP / Rogue Bridge", "IoT Baseline", "Monitor Overview",
-    "802.11 Monitor", "ARP Watch", "Trace", "SNMP Traps", "Tools",
-    "Geo Map", "Trends", "Timeline",
-    # Automation
-    "Automation Hooks", "Scheduled Scans", "Custom Triggers",
-    "MQTT", "REST API", "Config Snapshots", "Maintenance Windows",
-    # Security Audit (no admin-required actions clicked)
-    "Security Overview",
-    # Education
-    "Protocol Viz", "Lab Mode", "Feature Guide", "Help",
-]
+def _discover_pages(skip_admin: bool = True) -> List[str]:
+    """Parse ui/nav/builder.py at runtime to get the live registered page list.
+
+    This ensures systematic_test.py never lags behind _build_pro_nav().
+    Pages with admin_required=True are excluded by default (require elevation).
+    """
+    builder = Path(__file__).parent.parent / "ui" / "nav" / "builder.py"
+    src = builder.read_text(encoding="utf-8")
+    labels: List[str] = []
+    # Match: _nav_add_rail_item("Label", <anything up to closing paren>)
+    for m in re.finditer(
+        r'_nav_add_rail_item\(\s*"([^"]+)"([^)]*)\)', src, re.DOTALL
+    ):
+        label = m.group(1)
+        args = m.group(2)
+        if skip_admin and "admin_required=True" in args:
+            continue
+        labels.append(label)
+    if not labels:
+        raise RuntimeError(
+            "systematic_test: _discover_pages() found 0 pages — "
+            "check that ui/nav/builder.py still uses _nav_add_rail_item()"
+        )
+    return labels
+
+
+# Auto-derived from ui/nav/builder.py — never edit this manually.
+# To exclude a page from testing, add it to _SKIP_PAGES below.
+_SKIP_PAGES: List[str] = []   # e.g. pages that require hardware not present in CI
+
+_ALL_PAGES: List[str] = [p for p in _discover_pages() if p not in _SKIP_PAGES]
 
 # Shared blacklist — same rules as monkey_test.py: never click destructive controls
 _BLACKLIST: List[str] = [
@@ -329,10 +338,12 @@ class SystematicTester:
         self._dismiss_any_overlay()
         time.sleep(0.2)
         try:
+            self._win.set_focus()
+            time.sleep(0.1)
             self._win.type_keys("^k")
             time.sleep(0.5)
             # Type enough of the page name for the fuzzy match to pick it
-            query = page[:8] if len(page) > 8 else page
+            query = page[:12] if len(page) > 12 else page
             self._win.type_keys(query, with_spaces=True, pause=0.04)
             time.sleep(0.35)
             self._win.type_keys("{ENTER}")
@@ -351,6 +362,8 @@ class SystematicTester:
     def _get_controls(self) -> List:
         """Return enabled, visible, non-blacklisted descendants within the window."""
         try:
+            self._win.set_focus()
+            time.sleep(0.15)
             all_ctrl = self._win.descendants()
         except Exception as exc:
             self.log.debug("descendants() failed: %s", exc)

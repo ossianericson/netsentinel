@@ -155,9 +155,9 @@ _BLACKLIST: List[str] = [
 # Safe pages to navigate to via the Ctrl+K command palette.
 # Only read-only / lightweight pages are listed.
 _SAFE_PAGES: List[str] = [
-    "Overview", "Home", "History", "Help", "Feature Guide",
-    "Timeline", "Trends", "IP Calculator", "Network Doc",
-    "Log Hub", "Geo Map", "Protocol Viz", "Lab Mode",
+    "Overview", "Home", "Help & Reference", "Feature Guide",
+    "Trend Forecasts", "IP Calculator", "Network Doc",
+    "Network Logger", "Geolocation Map", "Protocol Visualizer", "Lab Mode",
 ]
 
 # Keyboard shortcuts that are safe to inject at any time.
@@ -789,6 +789,7 @@ class MonkeyTester:
         for ctrl in all_ctrl:
             try:
                 ctype = _safe_type(ctrl)
+
                 if ctype not in _SUPPORTED_TYPES:
                     continue
                 # Manual enabled / visible check (UIA backend ignores kwargs)
@@ -907,6 +908,13 @@ class MonkeyTester:
 
         # Dismiss any unexpected modal that appeared since last iteration
         self._dismiss_blocking_dialogs()
+
+        # Ensure the app window has focus before every interaction
+        try:
+            self._win.set_focus()
+            time.sleep(0.1)
+        except Exception:
+            self.log.debug("set_focus() failed; continuing")
 
         # Choose: navigation action or random control
         if random.random() < self.cfg.nav_prob:

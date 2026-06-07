@@ -39,6 +39,7 @@ class CommandPalette(QDialog):
         """items: list of {'icon': str, 'label': str, 'kind': 'page'|'action'}"""
         super().__init__(parent, Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setWindowModality(Qt.WindowModality.NonModal)
         self._all_items = items
         self._data_items: list[dict] = []  # pre-loaded device + alert items
         self._build()
@@ -218,9 +219,20 @@ class CommandPalette(QDialog):
             self.action_requested.emit(data["label"])
         self.accept()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        QApplication.instance().installEventFilter(self)
+        self._search.setFocus()
+
+    def hideEvent(self, event):
+        QApplication.instance().removeEventFilter(self)
+        super().hideEvent(event)
+
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.MouseButtonPress:
-            # Close if the click landed outside our own geometry
+            # Close if the click landed outside our own geometry.
+            # This handles both the app-level filter (installed in showEvent for
+            # non-modal show()) and the search-box filter (legacy).
             if not self.geometry().contains(event.globalPosition().toPoint()):
                 self.reject()
                 return False

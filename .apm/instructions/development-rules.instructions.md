@@ -284,6 +284,10 @@ This rule covers **rail section buttons only**. Flyout item prefix characters ar
 10. If the worker exposes `set_targets()`: follow RULE-FW1 — add inline target
     management UI on the page, persist via QSettings, emit `targets_changed`
     pyqtSignal, and wire startup loading + signal connection in app.py
+11. **Do NOT manually update `_ALL_PAGES` in `tools/systematic_test.py`** — it is
+    auto-derived from `ui/nav/builder.py` at runtime via `_discover_pages()`. The new
+    page is covered automatically once step 4 is done. Run
+    `python -m pytest tests/test_systematic_coverage.py -v` to confirm.
 
 ## Naming Conventions
 
@@ -343,9 +347,14 @@ All markers are declared in `pyproject.toml`. The default `addopts` excludes the
 | `slow` | No | Long-running; skip with `-m "not slow"` |
 | `integration` | No | Multi-module end-to-end; always runs in CI |
 
-**`monkey` marker specifics:** `tests/test_monkey_test.py` tests `tools/monkey_test.py`, which requires `pywinauto` and `psutil` (listed in `requirements-dev.txt`). These tests are **local-only** — never run in GitHub Actions. To run them:
+**`monkey` marker specifics:** `tests/test_monkey_test.py` tests `tools/monkey_test.py`, which requires `pywinauto` and `psutil` (listed in `requirements-dev.txt`). These tests are **local-only** — never run in GitHub Actions.
+
+**CRITICAL — Do NOT run monkey tests as part of any commit gate, build, or automated check.** The full monkey/chaos test takes tens of minutes. It is a human-initiated exploratory session — the user starts it manually when they want to run extended chaos coverage. Do not add it to CI, do not suggest running it before committing, and do not include it in any automated pipeline. The commit gate is ONLY Steps 1–4 above.
+
+To run a monkey session manually (user-initiated only):
 ```powershell
-python -m pytest -m monkey
+python tools/monkey_test.py --source
+python tools/systematic_test.py
 ```
 `tools/monkey_test.py` raises `ImportError` (not `sys.exit`) when imported without `pywinauto`, so the `_import_monkey()` helper in the test file calls `pytest.skip()` gracefully if the dep is missing locally.
 

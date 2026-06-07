@@ -21,7 +21,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
 from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER, WHITE
@@ -252,6 +252,17 @@ class _HelpPopover(QFrame):
         self.adjustSize()
         x = global_pos.x() - self.width() // 2
         y = global_pos.y() + 4
+
+        # Clamp so the popover stays fully on-screen.
+        screen = QApplication.screenAt(global_pos)
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        if screen:
+            avail = screen.availableGeometry()
+            x = max(avail.left() + 4, min(x, avail.right()  - self.width()  - 4))
+            y = max(avail.top()  + 4, min(y, avail.bottom() - self.height() - 4))
+
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.move(x, y)
         self.show()
         self.raise_()
