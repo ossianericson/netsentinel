@@ -36,6 +36,7 @@ from modules.automation_hooks import (
     AutomationEngine, AutomationRule, Trigger,
     template_wol, template_log_to_file, get_engine,
 )
+from ui.widgets.context_menu import install_copy_menu
 
 
 # ── Card / layout helpers ─────────────────────────────────────────────────────
@@ -355,6 +356,24 @@ class AutomationPage(QWidget):
         self._table.setStyleSheet(_table_style())
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.doubleClicked.connect(self._edit_rule)
+
+        def _auto_copy_name():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 0)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _auto_run_now():
+            self._test_rule()
+
+        install_copy_menu(self._table, [
+            ("separator",   None),
+            ("Copy name",   _auto_copy_name),
+            ("separator",   None),
+            ("Run now",     _auto_run_now),
+        ])
 
         rules_body.addLayout(tpl_row)
         rules_body.addWidget(self._table)

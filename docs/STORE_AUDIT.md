@@ -293,29 +293,29 @@ Set `verticalHeader().setDefaultSectionSize(24)` on all non-compliant tables.
 
 ---
 
-### Sprint S-F — Right-click menus, high-priority pages (1 session)
+### Sprint S-F — Right-click menus, high-priority pages (1 session) ✅ 2026-06-07
 
 Add `customContextMenuRequested` context menus with at minimum **Copy** and a
 context-appropriate second action (e.g. "How to Fix", "Export Row", "Open in Browser").
 
-- [ ] `inventory_page.py` — Copy IP, Copy MAC, Label Device, Open in Browser
-- [ ] `service_page.py` — Copy URL, Copy Status, How to Fix
-- [ ] `uptime_page.py` — Copy Host, Export Row
-- [ ] `cve_page.py` — Copy CVE ID, Open NVD Link, How to Fix
-- [ ] `baseline_page.py` — Copy, Export Row
-- [ ] `dns_zone_page.py` — Copy Record, Export
+- [x] `inventory_page.py` — Copy IP, Copy MAC, Label Device, Open in Browser
+- [x] `service_page.py` — Copy URL, Copy Status, How to Fix
+- [x] `uptime_page.py` — Copy Host, Export Row
+- [x] `cve_page.py` — Copy CVE ID, Open NVD Link, How to Fix
+- [x] `baseline_page.py` — Copy, Export Row
+- [x] `dns_zone_page.py` — Copy Record, Export
 
 ---
 
-### Sprint S-G — Right-click menus, remaining pages (1 session)
+### Sprint S-G — Right-click menus, remaining pages (1 session) ✅ 2026-06-07
 
-- [ ] `syslog_page.py` — Copy Message, Copy Host
-- [ ] `snmp_trap_page.py` — Copy OID, Copy Source
-- [ ] `maintenance_page.py` — Copy Window, Delete
-- [ ] `automation_page.py` — Copy Hook, Run Now
-- [ ] `trend_page.py` — Copy Metric, Export Row
-- [ ] `trigger_builder_page.py` — Copy Expression
-- [ ] `security_overview_page.py` — Copy Finding, How to Fix
+- [x] `syslog_page.py` — Copy Message, Copy Host
+- [x] `snmp_trap_page.py` — Copy OID, Copy Source
+- [x] `maintenance_page.py` — Copy Window, Delete
+- [x] `automation_page.py` — Copy Hook, Run Now
+- [x] `trend_page.py` — Copy Metric, Export Row
+- [x] `trigger_builder_page.py` — Copy Expression
+- [x] `security_overview_page.py` — Copy Finding, How to Fix
 
 ---
 

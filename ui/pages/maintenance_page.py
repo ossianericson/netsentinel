@@ -52,6 +52,7 @@ from ui.styles import (
 from modules.maintenance_window import (
     MaintenanceWindow, MaintenanceWindowManager,
 )
+from ui.widgets.context_menu import install_copy_menu
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -324,6 +325,25 @@ class MaintenancePage(QWidget):
         )
         for w, col in zip((0, 140, 130, 130, 70), range(1, 6)):
             self._win_table.setColumnWidth(col, w)
+
+        def _win_copy_label():
+            r = self._win_table.currentRow()
+            if r >= 0:
+                it = self._win_table.item(r, 0)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _win_delete():
+            self._delete_window()
+
+        install_copy_menu(self._win_table, [
+            ("separator",      None),
+            ("Copy label",     _win_copy_label),
+            ("separator",      None),
+            ("Delete window",  _win_delete),
+        ])
+
         bl.addWidget(self._win_table)
 
         action_row = QHBoxLayout()
@@ -364,6 +384,20 @@ class MaintenancePage(QWidget):
         )
         for w, col in zip((110, 140, 120, 70), range(4)):
             self._log_table.setColumnWidth(col, w)
+
+        def _log_copy_alert():
+            r = self._log_table.currentRow()
+            if r >= 0:
+                it = self._log_table.item(r, 4)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        install_copy_menu(self._log_table, [
+            ("separator",    None),
+            ("Copy alert",   _log_copy_alert),
+        ])
+
         bl.addWidget(self._log_table)
 
         btn_row = QHBoxLayout()

@@ -57,6 +57,7 @@ from modules.trigger_expression import (
     preview_expression,
     save_rules,
 )
+from ui.widgets.context_menu import install_copy_menu
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
@@ -409,6 +410,22 @@ class TriggerBuilderPage(QWidget):
         self._rule_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents)
         self._rule_table.itemSelectionChanged.connect(self._on_rule_selected)
+
+        def _trig_copy_expression():
+            r = self._rule_table.currentRow()
+            if r < 0 or r >= len(self._rules):
+                return
+            rule_id_data = self._rule_table.item(r, 0).data(Qt.ItemDataRole.UserRole)
+            rule = next((x for x in self._rules if x.id == rule_id_data), None)
+            if rule:
+                from PyQt6.QtWidgets import QApplication as _QApp
+                _QApp.clipboard().setText(rule.expression)
+
+        install_copy_menu(self._rule_table, [
+            ("separator",        None),
+            ("Copy expression",  _trig_copy_expression),
+        ])
+
         self._rules_stack.addWidget(self._rule_table)
         inner.addWidget(self._rules_stack)
 

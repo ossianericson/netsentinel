@@ -298,7 +298,58 @@ class ServicePage(QWidget):
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
-        install_copy_menu(self._table)
+
+        def _svc_copy_url():
+            r = self._table.currentRow()
+            if r >= 0:
+                host_it = self._table.item(r, 1)
+                port_it = self._table.item(r, 2)
+                if host_it and port_it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(f"{host_it.text()}:{port_it.text()}")
+
+        def _svc_copy_status():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 3)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _svc_how_to_fix():
+            r = self._table.currentRow()
+            if r < 0:
+                return
+            from PyQt6.QtWidgets import QMessageBox
+            status_it = self._table.item(r, 3)
+            status = status_it.text() if status_it else ""
+            if "UP" in status.upper() or "OK" in status.upper():
+                msg = "Service is responding normally — no action required."
+            else:
+                svc_it  = self._table.item(r, 0)
+                host_it = self._table.item(r, 1)
+                port_it = self._table.item(r, 2)
+                svc  = svc_it.text()  if svc_it  else "service"
+                host = host_it.text() if host_it else "host"
+                port = port_it.text() if port_it else "port"
+                msg = (
+                    f"<b>{svc}</b> at {host}:{port} is not responding.<br><br>"
+                    "Steps to investigate:<br>"
+                    "1. Ping the host to confirm basic connectivity.<br>"
+                    "2. Check that the service is running (e.g. <code>netstat -an | grep {port}</code>).<br>"
+                    "3. Verify firewall rules allow inbound traffic on port {port}.<br>"
+                    "4. Check service logs for crash or restart errors.<br>"
+                    "5. Confirm the host IP/port in the service target list is correct."
+                )
+            QMessageBox.information(self, "How to Fix", msg)
+
+        install_copy_menu(self._table, [
+            ("separator",     None),
+            ("Copy target",   _svc_copy_url),
+            ("Copy status",   _svc_copy_status),
+            ("separator",     None),
+            ("How to Fix",    _svc_how_to_fix),
+        ])
         card_layout.addWidget(self._table)
         cl.addWidget(card, stretch=1)
         self._content_stack.addWidget(content)

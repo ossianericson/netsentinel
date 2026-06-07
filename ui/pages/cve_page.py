@@ -559,8 +559,9 @@ class CvePage(QWidget):
         menu.addSeparator()
         act_state  = menu.addAction("Change State…")
         menu.addSeparator()
-        act_copy   = menu.addAction("Copy CVE ID")
-        act_nvd    = menu.addAction("Open in NVD Browser")
+        act_copy    = menu.addAction("Copy CVE ID")
+        act_nvd     = menu.addAction("Open in NVD Browser")
+        act_how_fix = menu.addAction("How to Fix")
 
         act_device = None
         host = row_data.get("host") or ""
@@ -597,6 +598,22 @@ class CvePage(QWidget):
         elif chosen == act_nvd:
             import webbrowser
             webbrowser.open(f"https://nvd.nist.gov/vuln/detail/{row_data['cve_id']}")
+        elif chosen == act_how_fix:
+            from PyQt6.QtWidgets import QMessageBox
+            cve_id  = row_data.get("cve_id", "")
+            service = row_data.get("service", "the affected service")
+            sev     = (row_data.get("severity") or "").upper()
+            msg = (
+                f"<b>{cve_id}</b> — {sev or 'Unknown severity'}<br><br>"
+                "<b>Immediate steps:</b><br>"
+                f"1. Check for an updated or patched version of <i>{service}</i>.<br>"
+                "2. Apply the vendor security advisory patch or upgrade.<br>"
+                "3. If no patch is available, consider disabling the service or restricting access.<br>"
+                "4. Review the NVD entry for known workarounds and CVSSv3 exploitability.<br>"
+                "5. After patching, re-run the port scanner to confirm the CVE is resolved.<br><br>"
+                f"<a href='https://nvd.nist.gov/vuln/detail/{cve_id}'>Open NVD advisory →</a>"
+            )
+            QMessageBox.information(self, "How to Fix", msg)
         elif chosen == act_delete:
             self._store.delete_cve_lifecycle(row_data["id"])
             self._refresh()

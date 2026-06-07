@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
 
 from modules.dns_zone_scanner import DnsRecord, DnsZoneResult, MdnsService
 from workers.dns_zone_worker import DnsZoneWorker
+from ui.widgets.context_menu import install_copy_menu
 from ui.styles import (
     ACCENT,
     ACCENT_DARK,
@@ -228,6 +229,35 @@ class DnsZonePage(QWidget):
         # Left: AXFR records
         left_card, left_lay = _card("DNS Zone Records (AXFR)")
         self._rec_table = _make_table(["Name", "Type", "Value", "TTL"])
+
+        def _rec_copy_record():
+            r = self._rec_table.currentRow()
+            if r >= 0:
+                # Copy Name + Type + Value as "name TYPE value"
+                parts = [(self._rec_table.item(r, c).text()
+                          if self._rec_table.item(r, c) else "")
+                         for c in range(3)]
+                from PyQt6.QtWidgets import QApplication as _QApp
+                _QApp.clipboard().setText(" ".join(parts))
+
+        def _rec_export():
+            r = self._rec_table.currentRow()
+            if r < 0:
+                return
+            headers = ["Name", "Type", "Value", "TTL"]
+            values  = [(self._rec_table.item(r, c).text()
+                        if self._rec_table.item(r, c) else "")
+                       for c in range(self._rec_table.columnCount())]
+            from PyQt6.QtWidgets import QApplication as _QApp
+            _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
+
+        install_copy_menu(self._rec_table, [
+            ("separator",     None),
+            ("Copy record",   _rec_copy_record),
+            ("separator",     None),
+            ("Export row",    _rec_export),
+        ])
+
         self._rec_empty = QLabel("No records — run AXFR or server refused transfer.")
         self._rec_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._rec_empty.setStyleSheet(f"font-size:12px; color:{INPUT_PLACEHOLDER};")
@@ -240,6 +270,38 @@ class DnsZonePage(QWidget):
         self._svc_table = _make_table(
             ["Service Type", "Instance", "Host", "IP", "Port", "TXT"]
         )
+
+        def _svc_copy_record():
+            r = self._svc_table.currentRow()
+            if r >= 0:
+                # Copy "Instance Host:Port"
+                inst_it = self._svc_table.item(r, 1)
+                host_it = self._svc_table.item(r, 2)
+                port_it = self._svc_table.item(r, 4)
+                inst = inst_it.text() if inst_it else ""
+                host = host_it.text() if host_it else ""
+                port = port_it.text() if port_it else ""
+                from PyQt6.QtWidgets import QApplication as _QApp
+                _QApp.clipboard().setText(f"{inst} {host}:{port}".strip())
+
+        def _svc_export():
+            r = self._svc_table.currentRow()
+            if r < 0:
+                return
+            headers = ["Service Type", "Instance", "Host", "IP", "Port", "TXT"]
+            values  = [(self._svc_table.item(r, c).text()
+                        if self._svc_table.item(r, c) else "")
+                       for c in range(self._svc_table.columnCount())]
+            from PyQt6.QtWidgets import QApplication as _QApp
+            _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
+
+        install_copy_menu(self._svc_table, [
+            ("separator",   None),
+            ("Copy record", _svc_copy_record),
+            ("separator",   None),
+            ("Export row",  _svc_export),
+        ])
+
         self._svc_empty = QLabel("No mDNS services discovered. Click 'Enumerate mDNS'.")
         self._svc_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._svc_empty.setStyleSheet(f"font-size:12px; color:{INPUT_PLACEHOLDER};")

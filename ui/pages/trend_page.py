@@ -39,6 +39,7 @@ from ui.styles import (
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile
 from modules.trend_analyser import TrendResult, TrendReport, run_full_trend_report
+from ui.widgets.context_menu import install_copy_menu
 
 
 # ── Mini sparkline widget (VIZ-3) ─────────────────────────────────────────────
@@ -347,6 +348,37 @@ class TrendPage(QWidget):
         )
         for w, col in zip((130, 80, 70, 70, 80, 80), range(6)):
             self._table.setColumnWidth(col, w)
+
+        def _trend_copy_metric():
+            r = self._table.currentRow()
+            if r >= 0:
+                host_it   = self._table.item(r, 0)
+                metric_it = self._table.item(r, 1)
+                parts = [it.text() for it in (host_it, metric_it) if it]
+                if parts:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(" — ".join(parts))
+
+        def _trend_export_row():
+            r = self._table.currentRow()
+            if r < 0:
+                return
+            headers = [self._table.horizontalHeaderItem(c).text()
+                       for c in range(self._table.columnCount())
+                       if self._table.horizontalHeaderItem(c)]
+            values  = [(self._table.item(r, c).text()
+                        if self._table.item(r, c) else "")
+                       for c in range(len(headers))]
+            from PyQt6.QtWidgets import QApplication as _QApp
+            _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
+
+        install_copy_menu(self._table, [
+            ("separator",    None),
+            ("Copy metric",  _trend_copy_metric),
+            ("separator",    None),
+            ("Export row",   _trend_export_row),
+        ])
+
         bl.addWidget(self._table)
 
         note = QLabel(

@@ -46,6 +46,8 @@ try:
 except Exception:
     _THREAT_OK = False
 
+from ui.widgets.context_menu import install_copy_menu
+
 try:
     from ui.pages.overview_page import _SecurityScanPanel
     _PANEL_OK = True
@@ -256,6 +258,43 @@ class SecurityOverviewPage(QWidget):
             ["Indicator", "Type", "Categories", "Confidence", "Source"]
         )
         self._findings_table.setFixedHeight(260)
+
+        def _sec_copy_indicator():
+            r = self._findings_table.currentRow()
+            if r >= 0:
+                it = self._findings_table.item(r, 0)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _sec_how_to_fix():
+            r = self._findings_table.currentRow()
+            if r < 0:
+                return
+            from PyQt6.QtWidgets import QMessageBox
+            ind_it  = self._findings_table.item(r, 0)
+            type_it = self._findings_table.item(r, 1)
+            cat_it  = self._findings_table.item(r, 2)
+            ind  = ind_it.text()  if ind_it  else "this indicator"
+            typ  = type_it.text() if type_it else "unknown type"
+            cats = cat_it.text()  if cat_it  else "unknown categories"
+            msg = (
+                f"<b>{ind}</b> ({typ}) — {cats}<br><br>"
+                "<b>Recommended steps:</b><br>"
+                "1. Identify which device on your network contacted this indicator.<br>"
+                "2. Block the indicator at your firewall or DNS level.<br>"
+                "3. Run a full port scan and CVE check on the affected device.<br>"
+                "4. If the device is a workstation, run an antimalware scan immediately.<br>"
+                "5. Check AbuseIPDB and VirusTotal for additional context on this indicator."
+            )
+            QMessageBox.information(self, "How to Fix", msg)
+
+        install_copy_menu(self._findings_table, [
+            ("separator",        None),
+            ("Copy indicator",   _sec_copy_indicator),
+            ("separator",        None),
+            ("How to Fix",       _sec_how_to_fix),
+        ])
 
         # Informative empty state for the findings section
         self._empty_widget = QWidget()

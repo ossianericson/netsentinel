@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 
 from modules.metric_store import MetricStore
@@ -189,6 +190,33 @@ class UptimePage(QWidget):
         self._table.setShowGrid(True)
         self._table.setWordWrap(False)
         self._table.verticalHeader().setDefaultSectionSize(24)
+
+        def _upt_copy_host():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 1) or self._table.item(r, 0)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _upt_export_row():
+            r = self._table.currentRow()
+            if r < 0:
+                return
+            headers = [self._table.horizontalHeaderItem(c).text()
+                       for c in range(self._table.columnCount())]
+            values  = [(self._table.item(r, c).text() if self._table.item(r, c) else "")
+                       for c in range(self._table.columnCount())]
+            from PyQt6.QtWidgets import QApplication as _QApp
+            _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
+
+        install_copy_menu(self._table, [
+            ("separator",  None),
+            ("Copy host",  _upt_copy_host),
+            ("separator",  None),
+            ("Export row", _upt_export_row),
+        ])
+
         card_layout.addWidget(self._table)
         cl.addWidget(card, stretch=1)
         self._content_stack.addWidget(content)

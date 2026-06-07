@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
     QFrame, QTextEdit,
 )
+from ui.widgets.context_menu import install_copy_menu
 
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
@@ -280,6 +281,29 @@ class SyslogPage(QWidget):
         self._table.setColumnWidth(4, 120)
         self._table.setColumnWidth(5, 100)
         self._table.doubleClicked.connect(self._on_row_dbl_click)
+
+        def _sys_copy_message():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 6)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _sys_copy_host():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 4) or self._table.item(r, 1)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        install_copy_menu(self._table, [
+            ("separator",     None),
+            ("Copy message",  _sys_copy_message),
+            ("Copy host",     _sys_copy_host),
+        ])
+
         body_lay.addWidget(self._table)
 
         # Empty state label (shown until first message)

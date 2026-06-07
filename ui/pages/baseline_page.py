@@ -270,7 +270,22 @@ class BaselinePage(QWidget):
         for w, col in zip((140, 0, 70, 80), range(4)):
             if w:
                 self._snap_table.setColumnWidth(col, w)
-        install_copy_menu(self._snap_table)
+        def _snap_export_row():
+            r = self._snap_table.currentRow()
+            if r < 0:
+                return
+            headers = [self._snap_table.horizontalHeaderItem(c).text()
+                       for c in range(self._snap_table.columnCount())]
+            values  = [(self._snap_table.item(r, c).text()
+                        if self._snap_table.item(r, c) else "")
+                       for c in range(self._snap_table.columnCount())]
+            from PyQt6.QtWidgets import QApplication as _QApp
+            _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
+
+        install_copy_menu(self._snap_table, [
+            ("separator",  None),
+            ("Export row", _snap_export_row),
+        ])
         bl.addWidget(self._snap_table)
 
         self._empty_lbl = QLabel(
@@ -347,7 +362,22 @@ class BaselinePage(QWidget):
         )
         for w, col in zip((130, 100), range(2)):
             self._diff_table.setColumnWidth(col, w)
-        install_copy_menu(self._diff_table)
+        def _diff_export_row():
+            r = self._diff_table.currentRow()
+            if r < 0:
+                return
+            headers = [self._diff_table.horizontalHeaderItem(c).text()
+                       for c in range(self._diff_table.columnCount())]
+            values  = [(self._diff_table.item(r, c).text()
+                        if self._diff_table.item(r, c) else "")
+                       for c in range(self._diff_table.columnCount())]
+            from PyQt6.QtWidgets import QApplication as _QApp
+            _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
+
+        install_copy_menu(self._diff_table, [
+            ("separator",  None),
+            ("Export row", _diff_export_row),
+        ])
         bl.addWidget(self._diff_table)
 
         btn_export_diff = _btn("↓ Export HTML")

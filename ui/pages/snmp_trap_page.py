@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.empty_state_card import EmptyStateCard
+from ui.widgets.context_menu import install_copy_menu
 
 from modules.metric_store import MetricStore
 from ui.styles import (
@@ -170,6 +171,29 @@ class SnmpTrapPage(QWidget):
         self._table.setColumnWidth(3, 90)
         self._table.setColumnWidth(4, 150)
         self._table.doubleClicked.connect(self._show_detail)
+
+        def _snmp_copy_oid():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 5)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _snmp_copy_source():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 1)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        install_copy_menu(self._table, [
+            ("separator",    None),
+            ("Copy OID",     _snmp_copy_oid),
+            ("Copy source",  _snmp_copy_source),
+        ])
+
         card_body.addWidget(self._table)
 
         # Empty state (replaces table when no traps received)

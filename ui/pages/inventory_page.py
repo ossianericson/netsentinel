@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
@@ -697,6 +698,51 @@ class InventoryPage(QWidget):
         self._table.cellDoubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_row_single_clicked)
         self._table.selectionModel().selectionChanged.connect(self._on_selection_changed)
+
+        def _inv_copy_ip():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 3)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _inv_copy_mac():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 4)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        def _inv_label_device():
+            r = self._table.currentRow()
+            if r < 0:
+                return
+            mac_it = self._table.item(r, 4)
+            if mac_it and mac_it.text() and mac_it.text() != "—":
+                dlg = _DeviceLabelDialog(mac_it.text(), self._store, self)
+                dlg.exec()
+
+        def _inv_open_browser():
+            r = self._table.currentRow()
+            if r >= 0:
+                ip_it = self._table.item(r, 3)
+                if ip_it:
+                    ip = ip_it.text().strip()
+                    if ip and ip != "—":
+                        import webbrowser
+                        webbrowser.open(f"http://{ip}")
+
+        install_copy_menu(self._table, [
+            ("separator",       None),
+            ("Copy IP",         _inv_copy_ip),
+            ("Copy MAC",        _inv_copy_mac),
+            ("separator",       None),
+            ("Label Device",    _inv_label_device),
+            ("Open in Browser", _inv_open_browser),
+        ])
+
         card_lay.addWidget(self._table)
         from ui.table_utils import save_column_widths
         self._table.horizontalHeader().sectionResized.connect(
