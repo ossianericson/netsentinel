@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
 from modules.lab_scenarios import LabResult, LabScenario, LabStep, SCENARIOS
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK,
+    ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK,
     BG_HOVER, BORDER, GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -599,8 +599,8 @@ class LabModePage(QWidget):
         export_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}cc; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         export_btn.clicked.connect(self._export_report)
 

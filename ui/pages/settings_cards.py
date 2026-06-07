@@ -838,10 +838,10 @@ class _SettingsCardsMixin:
         save_btn = QPushButton("Save Schedule")
         save_btn.setFixedHeight(28)
         save_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:white; border:none;"
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" font-size:11px; border-radius:4px; padding:0 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         save_btn.clicked.connect(self._save_sched_scan)
         bl.addWidget(save_btn, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1096,7 +1096,7 @@ class _SettingsCardsMixin:
             f"QHeaderView::section{{background:{BG_CARD};color:{TEXT_PRIMARY};"
             f"font-size:11px;font-weight:bold;border:none;"
             f"border-bottom:1px solid {BORDER};padding:3px 6px;}}"
-            f"QTableWidget::item:selected{{background:{ACCENT};color:white;}}"
+            f"QTableWidget::item:selected{{background:{ACCENT};color:{WHITE};}}"
         )
         self._pm_table.itemSelectionChanged.connect(self._pm_on_selection)
         bl.addWidget(self._pm_table)
@@ -1498,7 +1498,7 @@ class _SettingsCardsMixin:
         tbl.setHorizontalHeaderLabels(["Component", "Status"])
         tbl.horizontalHeader().setStretchLastSection(True)
         tbl.horizontalHeader().setStyleSheet(
-            f"QHeaderView::section {{ background:{NAV_BAR}; color:white;"
+            f"QHeaderView::section {{ background:{NAV_BAR}; color:{WHITE};"
             f" font-size:10px; font-weight:bold; padding:4px 8px; border:none; }}"
         )
         tbl.verticalHeader().setVisible(False)

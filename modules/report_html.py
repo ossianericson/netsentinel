@@ -24,6 +24,7 @@ from modules.colours import (
 
 _CSS = _Template("""
 * { box-sizing: border-box; margin: 0; padding: 0; }
+:root { color-scheme: dark; }
 body { font-family: 'Segoe UI', Arial, sans-serif; background: $EXPORT_BG; color: $EXPORT_TEXT; padding: 24px; }
 h1 { color: $EXPORT_HEADING_FG; margin-bottom: 4px; font-size: 1.8rem; }
 .subtitle { color: $EXPORT_META; font-size: 0.9rem; margin-bottom: 24px; }
@@ -35,13 +36,13 @@ h1 { color: $EXPORT_HEADING_FG; margin-bottom: 4px; font-size: 1.8rem; }
 .verdict-box.red h2    { color: $EXPORT_RED_FG; }
 .verdict-box.amber h2  { color: $EXPORT_AMBER_FG; }
 .verdict-box.green h2  { color: $EXPORT_GREEN_FG; }
-.verdict-box p { font-size: 0.95rem; line-height: 1.6; }
+.verdict-box p { font-size: 0.95rem; line-height: 1.6; color: $EXPORT_TEXT; }
 .module { background: $EXPORT_CARD; border-radius: 10px; padding: 18px; margin-bottom: 18px; border: 1px solid $EXPORT_BORDER; }
 .module h3 { font-size: 1rem; color: $EXPORT_ACCENT_FG; margin-bottom: 12px; }
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 th { background: $EXPORT_TH_BG; color: $EXPORT_ACCENT_FG; text-align: left; padding: 8px 10px; }
-td { padding: 7px 10px; border-bottom: 1px solid $EXPORT_TH_BG; vertical-align: top; }
-tr:hover td { background: $EXPORT_ROW_HOVER; }
+td { padding: 7px 10px; border-bottom: 1px solid $EXPORT_TH_BG; vertical-align: top; color: $EXPORT_TEXT; background: $EXPORT_CARD; }
+tr:hover td { background: $EXPORT_ROW_HOVER; color: $EXPORT_TEXT; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; }
 .badge.HIGH   { background: $BADGE_HIGH_BG; color: $BADGE_HIGH_FG; }
 .badge.MEDIUM { background: $BADGE_MEDIUM_BG; color: $BADGE_MEDIUM_FG; }

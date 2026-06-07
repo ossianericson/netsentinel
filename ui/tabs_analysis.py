@@ -198,6 +198,8 @@ class _AnalysisTabsMixin:
             fig = build_figure(self._log_chart_summary)
             self._chart_window = _make_chart_window(fig)
             self._chart_window.show()
+            self._chart_window.raise_()
+            self._chart_window.activateWindow()
             self._log_status_lbl.setText("Chart opened.")
         except Exception as exc:
             self._log_status_lbl.setText(f"Chart error: {exc}")

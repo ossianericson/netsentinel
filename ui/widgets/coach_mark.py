@@ -1,5 +1,9 @@
 """
-Coach mark overlay for first-run onboarding (POLISH-5).
+Coach mark hint panel for first-run onboarding (POLISH-5).
+
+Design rule: coach marks MUST NEVER block or dim any content.
+The hint appears as a small floating panel anchored to the bottom-right corner of the
+main window.  The rest of the window remains fully interactive at all times.
 
 Usage::
 
@@ -9,17 +13,16 @@ Usage::
         main_window,
         [
             {
-                "target":  lambda: main_window.findChild(QWidget, "home_content"),
-                "title":   "Your network, on a map.",
-                "body":    "After a scan, NetSentinel plots every device on the world map.",
+                "title": "Scan your network",
+                "body":  "Click Scan Now to discover every device and check your grade.",
             },
             ...
         ],
     )
     chain.start()
 
-Each mark is dismissed by "Got it →" / "Next →" or the × button.
-Keyed to QSettings "onboarding_v6_done" — the chain marks it True on full completion.
+Each hint is dismissed by "Got it" / "Next →", the × button, or clicking anywhere
+outside the panel.  The chain marks QSettings "onboarding_v6_done" True on completion.
 """
 from __future__ import annotations
 
@@ -28,242 +31,161 @@ from PyQt6.QtCore import (
     QPoint,
     QPropertyAnimation,
     QRect,
-    QRectF,
     Qt,
     QTimer,
     pyqtSignal,
 )
-from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 from ui.styles import (
     ACCENT_DARK, BG_HOVER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
     OVERLAY_BLUE2, OVERLAY_FG2, STATUS_OFFLINE, TEXT_PRIMARY, WHITE,
 )
 
+_AUTO_DISMISS_MS = 12_000   # dismiss automatically after 12 s of inactivity
 
-# ── Single overlay ────────────────────────────────────────────────────────────
 
 class CoachMarkOverlay(QWidget):
-    """Full-window semi-transparent overlay with a callout bubble."""
+    """
+    Non-blocking floating hint panel — no dim overlay, no mouse interception.
 
-    dismissed = pyqtSignal()   # fired by × or "Got it" on the last mark
-    advanced  = pyqtSignal()   # fired by "Next →" on non-last marks
+    Rendered as a small card in the bottom-right corner of the parent window.
+    The rest of the UI remains fully interactive at all times.
+    """
 
-    _BG_ALPHA   = 170          # 0-255
-    _BUBBLE_W   = 320
-    _BUBBLE_H   = 178
-    _PADDING    = 16
-    _HOLE_PAD   = 12           # extra space around target rect
-    _HOLE_R     = 10           # rounded-rect corner radius for the hole
+    dismissed = pyqtSignal()
+    advanced  = pyqtSignal()
+
+    _W       = 300
+    _H       = 160
+    _MARGIN  = 20
+    _PADDING = 14
 
     def __init__(
         self,
         parent: QWidget,
-        target_rect: QRect | None,
+        target_rect: QRect | None,   # kept for API compat; not used for dimming
         title: str,
         body: str,
         is_last: bool = False,
         target_widget: QWidget | None = None,
     ):
         super().__init__(parent)
-        self._target_rect   = QRectF(target_rect) if target_rect else None
-        self._target_widget = target_widget   # kept for live position tracking
-        self._title = title
-        self._body  = body
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
-        self.setGeometry(parent.rect())
+        self._is_last = is_last
 
-        # Refresh the target rect every 250 ms so the hole stays on the widget
-        # even when surrounding content shifts (e.g. VerdictPanel appearing).
-        self._track_timer = QTimer(self)
-        self._track_timer.setInterval(250)
-        self._track_timer.timeout.connect(self._refresh_target)
-        if target_widget is not None:
-            self._track_timer.start()
-
-        # Build bubble widget (child of overlay)
-        self._bubble = QWidget(self)
-        self._bubble.setFixedSize(self._BUBBLE_W, self._BUBBLE_H)
-        self._bubble.setStyleSheet(
+        # Floating, always-on-top, no frame — but still a child so it moves with the window
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setFixedSize(self._W, self._H)
+        self.setStyleSheet(
             f"QWidget {{ background: {OVERLAY_BG}; border: 1px solid {OVERLAY_BG3};"
             f" border-radius: 12px; }}"
         )
 
         # Title
-        title_lbl = QLabel(title, self._bubble)
-        title_lbl.setGeometry(
-            self._PADDING, self._PADDING,
-            self._BUBBLE_W - 2 * self._PADDING - 30, 22,
-        )
+        title_lbl = QLabel(title, self)
+        title_lbl.setGeometry(self._PADDING, self._PADDING,
+                               self._W - 2 * self._PADDING - 28, 22)
         title_lbl.setStyleSheet(
             f"QLabel {{ background: transparent; border: none;"
-            f" color: {WHITE}; font-size: 14px; font-weight: 600; }}"
+            f" color: {WHITE}; font-size: 13px; font-weight: 600; }}"
         )
 
         # Body
-        body_lbl = QLabel(body, self._bubble)
-        body_lbl.setGeometry(
-            self._PADDING, 44,
-            self._BUBBLE_W - 2 * self._PADDING, 82,
-        )
+        body_lbl = QLabel(body, self)
+        body_lbl.setGeometry(self._PADDING, 42,
+                              self._W - 2 * self._PADDING, 72)
         body_lbl.setWordWrap(True)
         body_lbl.setStyleSheet(
             f"QLabel {{ background: transparent; border: none;"
-            f" color: {OVERLAY_FG2}; font-size: 12px; }}"
+            f" color: {OVERLAY_FG2}; font-size: 11px; line-height: 1.4; }}"
         )
 
-        # Dismiss × button — oversized hit area for easy clicking
-        close_btn = QPushButton("×", self._bubble)
-        close_btn.setGeometry(self._BUBBLE_W - 36, 4, 32, 32)
+        # × dismiss button
+        close_btn = QPushButton("×", self)
+        close_btn.setGeometry(self._W - 32, 4, 28, 28)
         close_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; border: none;"
-            f" color: {STATUS_OFFLINE}; font-size: 18px; }}"
+            f" color: {STATUS_OFFLINE}; font-size: 17px; }}"
             f"QPushButton:hover {{ color: {WHITE}; }}"
-            f"QPushButton:pressed {{ background: {BG_HOVER}; color: {TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color: {WHITE}; }}"
         )
         close_btn.clicked.connect(self.dismissed)
 
-        # Action button — tall for easy clicking
+        # Action button
         action_text = "Got it" if is_last else "Next →"
-        action_btn = QPushButton(action_text, self._bubble)
-        action_btn.setGeometry(
-            self._BUBBLE_W - self._PADDING - 108, self._BUBBLE_H - 48, 108, 34,
-        )
+        action_btn = QPushButton(action_text, self)
+        action_btn.setGeometry(self._W - self._PADDING - 96, self._H - 40, 96, 28)
         action_btn.setStyleSheet(
-            f"QPushButton {{ background: {OVERLAY_BLUE}; border: none; border-radius: 6px;"
-            f" color: {WHITE}; font-size: 12px; font-weight: 600; }}"
+            f"QPushButton {{ background: {OVERLAY_BLUE}; border: none; border-radius: 5px;"
+            f" color: {WHITE}; font-size: 11px; font-weight: 600; }}"
             f"QPushButton:hover {{ background: {OVERLAY_BLUE2}; color: {WHITE}; }}"
             f"QPushButton:pressed {{ background: {ACCENT_DARK}; color: {WHITE}; }}"
         )
-        if is_last:
-            action_btn.clicked.connect(self.dismissed)
-        else:
-            action_btn.clicked.connect(self.advanced)
+        action_btn.clicked.connect(self.dismissed if is_last else self.advanced)
 
-        self._position_bubble()
+        # Auto-dismiss timer
+        self._auto_timer = QTimer(self)
+        self._auto_timer.setSingleShot(True)
+        self._auto_timer.setInterval(_AUTO_DISMISS_MS)
+        self._auto_timer.timeout.connect(self.dismissed)
 
-        # Fade-in animation on the overlay (not the bubble — the bubble is opaque)
+        # Fade animation
         self._fade_anim = QPropertyAnimation(self, b"windowOpacity", self)
-        self._fade_anim.setDuration(200)
+        self._fade_anim.setDuration(180)
         self._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
+        self._position()
+
     def show_animated(self) -> None:
+        self._position()
         self.show()
         self.raise_()
         self._fade_anim.stop()
         self._fade_anim.setStartValue(0.0)
         self._fade_anim.setEndValue(1.0)
         self._fade_anim.start()
+        self._auto_timer.start()
 
     def hide_animated(self, callback=None) -> None:
-        self._track_timer.stop()
+        self._auto_timer.stop()
         self._fade_anim.stop()
-        self._fade_anim.setStartValue(1.0)
+        self._fade_anim.setStartValue(self.windowOpacity())
         self._fade_anim.setEndValue(0.0)
         if callback:
             self._fade_anim.finished.connect(callback)
         self._fade_anim.start()
 
-    def _refresh_target(self) -> None:
-        """Recompute the target rect from the live widget position and repaint if moved."""
-        w = self._target_widget
-        if w is None:
+    def _position(self) -> None:
+        """Anchor the panel to the bottom-right of the parent window."""
+        p = self.parent()
+        if p is None:
             return
-        try:
-            if not w.isVisible():
-                return
-            global_rect = QRect(w.mapToGlobal(QPoint(0, 0)), w.size())
-            new_rect = QRectF(
-                QRect(self.parent().mapFromGlobal(global_rect.topLeft()), global_rect.size())
-            )
-            if new_rect != self._target_rect:
-                self._target_rect = new_rect
-                self._position_bubble()
-                self.update()
-        except Exception:
-            pass
+        pw, ph = p.width(), p.height()
+        x = pw - self._W - self._MARGIN
+        y = ph - self._H - self._MARGIN
+        self.move(x, y)
 
-    # ── Painting ──────────────────────────────────────────────────────────────
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # Dark overlay with hole cut out for target
-        full_path = QPainterPath()
-        full_path.addRect(QRectF(self.rect()))
-
-        if self._target_rect:
-            hole_rect = self._target_rect.adjusted(
-                -self._HOLE_PAD, -self._HOLE_PAD,
-                self._HOLE_PAD,  self._HOLE_PAD,
-            )
-            hole = QPainterPath()
-            hole.addRoundedRect(hole_rect, self._HOLE_R, self._HOLE_R)
-            full_path = full_path.subtracted(hole)
-
-            # Highlight ring around the hole
-            p.setPen(QPen(QColor(OVERLAY_BLUE), 1.5))
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRoundedRect(hole_rect, self._HOLE_R, self._HOLE_R)
-
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(0, 0, 0, self._BG_ALPHA))
-        p.drawPath(full_path)
-
-    def resizeEvent(self, event):
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._position_bubble()
+        self._position()
 
-    def mousePressEvent(self, event):
-        # Intentionally do not dismiss on outside click — use the × or action button.
-        # Clicking outside was too easy to trigger accidentally when aiming for a button.
-        pass
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
-
-    def _position_bubble(self) -> None:
-        """Place the bubble near the target rect, staying inside the overlay."""
-        w, h = self.width(), self.height()
-        bw, bh = self._BUBBLE_W, self._BUBBLE_H
-        margin = 24
-
-        if self._target_rect:
-            tr = self._target_rect.toRect()
-
-            # Horizontal: centre on the target, but cap at 68% of window width so
-            # the bubble never drifts into the far-right corner on wide screens.
-            ideal_bx = tr.center().x() - bw // 2
-            max_bx   = min(w - bw - margin, int(w * 0.68) - bw)
-            bx       = max(margin, min(ideal_bx, max_bx))
-
-            # Vertical: prefer below the target
-            by = tr.bottom() + self._HOLE_PAD + 16
-            if by + bh > h - margin:
-                by = tr.top() - self._HOLE_PAD - bh - 16
-            if by < margin:
-                by = margin
-        else:
-            # No target — centre of window
-            bx = (w - bw) // 2
-            by = (h - bh) // 2
-
-        self._bubble.move(bx, by)
+    def paintEvent(self, event) -> None:
+        # No dim overlay — just let the styled background paint the card.
+        super().paintEvent(event)
 
 
 # ── Chain sequencer ───────────────────────────────────────────────────────────
 
 class CoachMarkChain:
-    """Sequences a list of coach marks and saves completion to QSettings."""
+    """Sequences a list of non-blocking hint panels."""
 
     def __init__(self, parent_window: QWidget, marks: list[dict],
                  on_done=None) -> None:
         self._parent  = parent_window
         self._marks   = marks
-        self._current = 0
         self._overlay: CoachMarkOverlay | None = None
-        self._on_done = on_done  # optional callable — fired once when chain ends
+        self._on_done = on_done
 
     def start(self) -> None:
         self._show_mark(0)
@@ -273,17 +195,13 @@ class CoachMarkChain:
             self._complete()
             return
 
-        spec = self._marks[index]
-        is_last = (index == len(self._marks) - 1)
+        spec     = self._marks[index]
+        is_last  = (index == len(self._marks) - 1)
 
-        # Fire navigation / prep callback immediately so the destination is
-        # ready before we resolve widget positions.
         on_show = spec.get("on_show")
         if callable(on_show):
             on_show()
 
-        # Optional delay (ms) — gives animations time to settle before the
-        # target widget's screen position is resolved.
         delay_ms = int(spec.get("delay_ms", 0))
         if delay_ms > 0:
             from PyQt6.QtCore import QTimer as _QT
@@ -292,38 +210,16 @@ class CoachMarkChain:
             self._create_overlay(spec, index, is_last)
 
     def _create_overlay(self, spec: dict, index: int, is_last: bool) -> None:
-        """Resolve target rect and display the overlay bubble."""
-        target_rect   = None
-        target_widget = None
-        target_fn = spec.get("target")
-        if callable(target_fn):
-            try:
-                target_widget = target_fn()
-                if target_widget and target_widget.isVisible():
-                    global_rect = QRect(
-                        target_widget.mapToGlobal(QPoint(0, 0)),
-                        target_widget.size(),
-                    )
-                    target_rect = QRect(
-                        self._parent.mapFromGlobal(global_rect.topLeft()),
-                        global_rect.size(),
-                    )
-            except Exception:
-                target_widget = None
-
         overlay = CoachMarkOverlay(
             parent=self._parent,
-            target_rect=target_rect,
+            target_rect=None,
             title=spec["title"],
             body=spec["body"],
             is_last=is_last,
-            target_widget=target_widget,
         )
         self._overlay = overlay
-
         overlay.dismissed.connect(self._on_dismissed)
         overlay.advanced.connect(lambda i=index: self._on_advanced(i))
-
         overlay.show_animated()
 
     def _on_advanced(self, current_index: int) -> None:
@@ -348,7 +244,7 @@ class CoachMarkChain:
             self._overlay = None
         if callable(self._on_done):
             _cb = self._on_done
-            self._on_done = None  # fire once only
+            self._on_done = None
             _cb()
 
     def _complete(self) -> None:

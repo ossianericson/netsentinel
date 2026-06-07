@@ -135,7 +135,7 @@ def _compute_summary(entries: List[LogEntry], log_path: str) -> LogSummary:
         for e in entries if e.arp_event
     ]
 
-    hosts = sorted(set(e.host for e in entries))
+    hosts = sorted(h for h in set(e.host for e in entries) if h is not None)
     for host in hosts:
         host_entries = [e for e in entries if e.host == host]
         for is_fail, group in groupby(host_entries, key=lambda e: e.status == "FAIL"):
