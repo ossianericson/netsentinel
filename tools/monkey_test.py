@@ -387,7 +387,7 @@ def _act_edit(ctrl, chaos: str) -> str:
         # select-all then overwrite, rather than appending
         ctrl.type_keys("^a", pause=0.05)
     except Exception:
-        pass
+        logging.debug("select-all failed; continuing")
     ctrl.type_keys(text, with_spaces=True, pause=0.02)
     return f"type:{text!r}"
 
@@ -400,7 +400,7 @@ def _act_combobox(ctrl, chaos: str) -> str:
             ctrl.select(idx)
             return f"select:{idx}"
     except Exception:
-        pass
+        logging.debug("item_count or select failed")
     ctrl.click_input()
     return "click_open"
 
@@ -498,7 +498,7 @@ def _nav_command_palette(win, chaos: str) -> str:
         try:
             win.type_keys("{ESC}")
         except Exception:
-            pass
+            logging.debug("ESC after palette error failed")
         return f"palette_err:{exc.__class__.__name__}"
 
 
@@ -589,12 +589,12 @@ class MonkeyTester:
                     try:
                         title = main.window_text()
                     except Exception:
-                        pass
+                        self.log.debug("window_text() unavailable")
                     self.log.info("Connected: %r", title)
                     return True
             except Exception:
-                pass
-            time.sleep(0.5)
+                self.log.debug("UIA scan error; retrying")
+            time.sleep(_CONNECT_POLL)
 
         self.log.error("Timed out waiting for window")
         return False
@@ -623,7 +623,7 @@ class MonkeyTester:
             try:
                 title = main.window_text()
             except Exception:
-                pass
+                self.log.debug("window_text() unavailable")
             self.log.info("Attached: %r", title)
             return True
         except Exception as exc:
@@ -683,7 +683,7 @@ class MonkeyTester:
                 try:
                     win.type_keys("%{F4}")
                 except Exception:
-                    pass
+                    self.log.debug("Alt+F4 on dialog failed")
         except Exception as exc:
             self.log.debug("Dialog scan: %s", exc)
 
@@ -749,7 +749,7 @@ class MonkeyTester:
                 if self._win is not None and self._win.exists() and _is_main_window(self._win):
                     return True
             except Exception:
-                pass
+                self.log.debug("cached window reference stale")
             # Slow path: re-scan Desktop, picking the largest matching window
             try:
                 wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
@@ -758,7 +758,7 @@ class MonkeyTester:
                     self._win = main
                     return True
             except Exception:
-                pass
+                self.log.debug("UIA desktop scan failed")
             if i < retries - 1:
                 time.sleep(0.5)
         return False
@@ -796,12 +796,12 @@ class MonkeyTester:
                     if not ctrl.is_enabled():
                         continue
                 except Exception:
-                    pass
+                    self.log.debug("is_enabled() failed")
                 try:
                     if not ctrl.is_visible():
                         continue
                 except Exception:
-                    pass
+                    self.log.debug("is_visible() failed")
                 name = _safe_name(ctrl)
                 auto_id = _safe_id(ctrl)
                 if _is_blacklisted(name, auto_id):
@@ -821,7 +821,7 @@ class MonkeyTester:
                             self.stats.blacklisted += 1
                             continue
                     except Exception:
-                        pass
+                        self.log.debug("rectangle() failed; skipping bounds check")
                 # Spatial filter: skip controls inside the title-bar strip
                 # (~top 38px of the frameless window = close/min/max buttons)
                 if win_top is not None and ctype in ("Button", "SplitButton"):
@@ -831,7 +831,7 @@ class MonkeyTester:
                             self.stats.blacklisted += 1
                             continue
                     except Exception:
-                        pass
+                        self.log.debug("title-bar check failed")
                 # mild chaos: skip Edit boxes to avoid corrupting settings
                 if self.cfg.chaos == "mild" and ctype == "Edit":
                     continue
@@ -869,7 +869,7 @@ class MonkeyTester:
             action_str = "skip_state"
             result = f"skipped:{exc.__class__.__name__}"
             self.stats.skipped += 1
-        except pywinauto.findwindows.ElementNotFoundError:
+        except ElementNotFoundError:
             action_str = "skip_gone"
             result = "skipped:ElementNotFound"
             self.stats.skipped += 1
@@ -959,7 +959,7 @@ class MonkeyTester:
                 json.dump(report, f, indent=2, default=str)
             self.log.info("Crash report: %s", rpath)
         except Exception:
-            pass
+            self.log.debug("could not write crash report")
 
     # ── Main run ──────────────────────────────────────────────────────────
 
@@ -1007,7 +1007,7 @@ class MonkeyTester:
                 try:
                     rss = self._proc.memory_info().rss / (1024 * 1024)
                 except Exception:
-                    pass
+                    self.log.debug("memory_info() unavailable")
                 self.log.info(
                     "Progress %d/%d  controls=%d  exceptions=%d  rss=%.0fMB  elapsed=%.0fs",
                     i, self.cfg.iterations,
@@ -1047,7 +1047,7 @@ class MonkeyTester:
                 json.dump(self.stats.to_dict(), f, indent=2)
             self.log.info("Summary JSON: %s", summary_path)
         except Exception:
-            pass
+            self.log.debug("could not write summary JSON")
 
         # Graceful shutdown — skip when in --connect mode (we didn't own the app)
         if not self.cfg.connect_only and self._alive():
@@ -1056,12 +1056,12 @@ class MonkeyTester:
                 self._win.close()
                 time.sleep(2.5)
             except Exception:
-                pass
+                self.log.debug("window close failed")
             if self._alive():
                 try:
                     self._proc.terminate()
                 except Exception:
-                    pass
+                    self.log.debug("process terminate failed")
 
         return 1 if crashed else 0
 

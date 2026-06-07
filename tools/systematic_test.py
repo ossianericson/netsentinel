@@ -41,7 +41,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 try:
     import psutil
@@ -49,8 +49,7 @@ except ImportError:
     sys.exit("ERROR: psutil required.  pip install psutil")
 
 try:
-    import pywinauto
-    from pywinauto import Application, Desktop
+    from pywinauto import Desktop
     from pywinauto.base_wrapper import ElementNotEnabled, ElementNotVisible
     from pywinauto.findwindows import ElementNotFoundError
 except ImportError:
@@ -115,8 +114,6 @@ _SUPPORTED_TYPES = frozenset({
     "ListItem", "TabItem", "Slider", "Hyperlink", "SplitButton",
 })
 
-# Controls that are safe to interact with but should not navigate away
-_SKIP_NAV_TYPES = frozenset({"Edit", "Slider"})
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -248,12 +245,12 @@ class SystematicTester:
                         pid = main.element_info.process_id
                         self._proc = psutil.Process(pid)
                     except Exception:
-                        pass
+                        self.log.debug("PID lookup failed")
                     self._win = main
                     self.log.info("Connected: %r", main.window_text())
                     return True
             except Exception:
-                pass
+                self.log.debug("UIA scan error; retrying")
             time.sleep(_CONNECT_POLL)
         self.log.error("Timed out waiting for window")
         return False
@@ -271,7 +268,7 @@ class SystematicTester:
                 self._proc = psutil.Process(pid)
                 self.log.info("PID: %d", pid)
             except Exception:
-                pass
+                self.log.debug("PID lookup failed")
             self._win = main
             self.log.info("Attached: %r", main.window_text())
             return True
@@ -292,7 +289,7 @@ class SystematicTester:
             if self._win and self._win.exists() and _is_main_window(self._win):
                 return True
         except Exception:
-            pass
+            self.log.debug("cached window reference stale")
         try:
             wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
             main = next((w for w in wins if _is_main_window(w)), None)
@@ -300,7 +297,7 @@ class SystematicTester:
                 self._win = main
                 return True
         except Exception:
-            pass
+            self.log.debug("UIA desktop scan failed")
         return False
 
     def _dismiss_startup_overlays(self) -> None:
@@ -323,7 +320,7 @@ class SystematicTester:
             self._win.type_keys("{ESC}")
             time.sleep(0.15)
         except Exception:
-            pass
+            self.log.debug("ESC dismiss failed")
 
     # ── Navigation ────────────────────────────────────────────────────────
 
@@ -346,7 +343,7 @@ class SystematicTester:
             try:
                 self._win.type_keys("{ESC}")
             except Exception:
-                pass
+                self.log.debug("ESC after nav failure failed")
             return False
 
     # ── Control collection ────────────────────────────────────────────────
@@ -374,12 +371,12 @@ class SystematicTester:
                     if not ctrl.is_enabled():
                         continue
                 except Exception:
-                    pass
+                    self.log.debug("is_enabled() failed")
                 try:
                     if not ctrl.is_visible():
                         continue
                 except Exception:
-                    pass
+                    self.log.debug("is_visible() failed")
                 name = _safe_name(ctrl)
                 auto_id = _safe_id(ctrl)
                 if _is_blacklisted(name, auto_id):
@@ -395,14 +392,14 @@ class SystematicTester:
                                 cr.top    > win_rect.bottom + margin):
                             continue
                     except Exception:
-                        pass
+                        self.log.debug("rectangle() failed; skipping bounds check")
                 # Skip title-bar chrome (top 38px)
                 if win_rect is not None and ctype in ("Button", "SplitButton"):
                     try:
                         if ctrl.rectangle().top - win_rect.top < 38:
                             continue
                     except Exception:
-                        pass
+                        self.log.debug("title-bar check failed")
                 result.append(ctrl)
             except Exception:
                 continue
@@ -430,7 +427,7 @@ class SystematicTester:
                         ctrl.select(0)
                         return "select:0", "ok"
                 except Exception:
-                    pass
+                    self.log.debug("ComboBox select failed")
                 ctrl.click_input()
                 return "click_open", "ok"
             elif ctype == "Edit":
@@ -600,7 +597,7 @@ class SystematicTester:
                 json.dump(report, f, indent=2)
             self.log.info("Report: %s", rpath)
         except Exception:
-            pass
+            self.log.debug("could not write report JSON")
 
         # Graceful shutdown
         if not self.cfg.connect_only and self._alive():
@@ -608,12 +605,12 @@ class SystematicTester:
                 self._win.close()
                 time.sleep(2.0)
             except Exception:
-                pass
+                self.log.debug("window close failed")
             if self._alive():
                 try:
                     self._proc.terminate()
                 except Exception:
-                    pass
+                    self.log.debug("process terminate failed")
 
         return 1 if crashed else 0
 
