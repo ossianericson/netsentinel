@@ -53,6 +53,7 @@ from ui.styles import (
     TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.context_menu import install_copy_menu
+from ui.widgets.empty_state_card import EmptyStateCard
 from modules.config_baseline import (
     ConfigSnapshot, SnapshotDiff,
     build_snapshot_from_scan, diff_snapshots,
@@ -186,6 +187,7 @@ class BaselinePage(QWidget):
     """Configuration baseline snapshot and diff page."""
 
     drift_detected = pyqtSignal(str)   # message describing the drift found
+    scan_requested = pyqtSignal()      # emitted by the empty-state CTA button
 
     def __init__(self, store=None, parent: QWidget | None = None):
         super().__init__(parent)
@@ -193,6 +195,7 @@ class BaselinePage(QWidget):
         self._store = store
         self._snapshots: List[ConfigSnapshot] = []
         self._worker: Optional[_SnapshotWorker] = None
+        self.scan_requested.connect(self._take_snapshot)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -288,13 +291,21 @@ class BaselinePage(QWidget):
         ])
         bl.addWidget(self._snap_table)
 
-        self._empty_lbl = QLabel(
-            "No snapshots yet.  Take your first snapshot to start tracking configuration drift."
+        self._empty_lbl = EmptyStateCard(
+            icon="◇",
+            title="Configuration Baseline",
+            what_it_shows=(
+                "Point-in-time snapshots of every device's IP, MAC, hostname, "
+                "and open ports — plus SNMP data — so you can compare any two "
+                "moments and see exactly what changed."
+            ),
+            why_it_matters=(
+                "Configuration drift is silent. A new open port or a changed "
+                "hostname often signals a breach or misconfiguration that went unnoticed."
+            ),
+            btn_label="Take First Snapshot",
         )
-        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:11px; padding:16px 0;"
-        )
+        self._empty_lbl.clicked.connect(self.scan_requested.emit)
         bl.addWidget(self._empty_lbl)
 
         # Label input + action buttons

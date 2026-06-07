@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -27,11 +27,14 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.widgets.empty_state_card import EmptyStateCard
 
 from modules.dns_zone_scanner import DnsRecord, DnsZoneResult, MdnsService
 from workers.dns_zone_worker import DnsZoneWorker
@@ -167,6 +170,8 @@ def _field(placeholder: str, width: int = 180) -> QLineEdit:
 class DnsZonePage(QWidget):
     """DNS Zone Mapping — AXFR records + mDNS LAN service enumeration."""
 
+    scan_requested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._worker: Optional[DnsZoneWorker] = None
@@ -195,6 +200,31 @@ class DnsZonePage(QWidget):
         kpi_row.addStretch()
         root.addLayout(kpi_row)
 
+        # Content stack: index 0 = empty state, index 1 = toolbar + splitter
+        self._content_stack = QStackedWidget()
+
+        empty_card = EmptyStateCard(
+            icon="⬡",
+            title="DNS Zone Mapping",
+            what_it_shows=(
+                "DNS records from zone transfers (AXFR) and mDNS services "
+                "advertising on your local network — printers, NAS, smart devices."
+            ),
+            why_it_matters=(
+                "Zone transfer misconfigurations expose your entire DNS structure. "
+                "Unexpected mDNS services can reveal shadow IT or rogue devices."
+            ),
+            btn_label="Enumerate mDNS",
+        )
+        empty_card.clicked.connect(self._run_mdns)
+        self._content_stack.addWidget(empty_card)
+
+        # Index 1: toolbar + splitter in a content widget
+        content_w = QWidget()
+        content_lay = QVBoxLayout(content_w)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(8)
+
         # Toolbar
         tb = QHBoxLayout()
         tb.setSpacing(6)
@@ -219,7 +249,7 @@ class DnsZonePage(QWidget):
         self._status_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
         tb.addWidget(self._status_lbl)
         tb.addStretch()
-        root.addLayout(tb)
+        content_lay.addLayout(tb)
 
         # Content — horizontal splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -310,7 +340,10 @@ class DnsZonePage(QWidget):
         splitter.addWidget(right_card)
 
         splitter.setSizes([500, 500])
-        root.addWidget(splitter, stretch=1)
+        content_lay.addWidget(splitter, stretch=1)
+
+        self._content_stack.addWidget(content_w)
+        root.addWidget(self._content_stack, 1)
 
     # ── Scan triggering ───────────────────────────────────────────────────────
 
@@ -349,11 +382,13 @@ class DnsZonePage(QWidget):
     def _on_result(self, result: DnsZoneResult) -> None:
         self._axfr_btn.setEnabled(True)
         self._mdns_btn.setEnabled(True)
+        self._content_stack.setCurrentIndex(1)
         self._populate(result)
 
     def _on_error(self, msg: str) -> None:
         self._axfr_btn.setEnabled(True)
         self._mdns_btn.setEnabled(True)
+        self._content_stack.setCurrentIndex(1)
         self._status_lbl.setText(
             f"DNS zone scan failed — {msg}. "
             "AXFR requires the DNS server to allow zone transfers; mDNS requires local network access."

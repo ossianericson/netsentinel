@@ -340,8 +340,8 @@ class LabModePage(QWidget):
         btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}cc; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT}; color:{WHITE}; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         btn.clicked.connect(lambda _, s=scenario: self._start_scenario(s))
         btn.clicked.connect(lambda: self.scan_requested.emit())
@@ -354,7 +354,7 @@ class LabModePage(QWidget):
                 f"QPushButton {{ background:transparent; color:{ACCENT};"
                 f" border:1px solid {ACCENT}; border-radius:4px; font-size:11px; }}"
                 f"QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             )
             _proto = scenario.protocol
             viz_btn.clicked.connect(lambda _, p=_proto: self.explore_protocol.emit(p))
@@ -475,8 +475,8 @@ class LabModePage(QWidget):
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
-            f"QPushButton:hover:!disabled {{ background:{ACCENT}cc; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover:!disabled {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         self._run_btn.clicked.connect(self._run_check)
 
@@ -486,8 +486,9 @@ class LabModePage(QWidget):
         self._hint_btn.setStyleSheet(
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             f"QPushButton:checked {{ color:{ACCENT}; border-color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._hint_btn.toggled.connect(self._toggle_hint)
 
@@ -496,8 +497,8 @@ class LabModePage(QWidget):
         self._solution_btn.setStyleSheet(
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; border-color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; border-color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._solution_btn.clicked.connect(self._reveal_solution)
 
@@ -508,8 +509,8 @@ class LabModePage(QWidget):
             f"QPushButton {{ background:{GREEN}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; padding:0 14px; }}"
             f"QPushButton:disabled {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; }}"
-            f"QPushButton:hover:!disabled {{ opacity:0.9; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover:!disabled {{ background:{GREEN}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{GREEN}; color:{WHITE}; }}"
         )
         self._next_btn.clicked.connect(self._next_step)
 

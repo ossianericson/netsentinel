@@ -31,11 +31,14 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLabel,
     QPushButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.widgets.empty_state_card import EmptyStateCard
 from PyQt6.QtGui import QColor
 
 from ui.styles import (
@@ -82,6 +85,8 @@ def _kpi_tile(label: str, color: str = ACCENT) -> tuple[QFrame, QLabel]:
 
 class LiveBandwidthPage(QWidget):
     """Real-time bandwidth chart + per-interface breakdown table."""
+
+    scan_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -155,6 +160,31 @@ class LiveBandwidthPage(QWidget):
         ctrl.addWidget(btn_reset)
         root.addLayout(ctrl)
 
+        # Content stack: index 0 = empty state, index 1 = chart + table
+        self._content_stack = QStackedWidget()
+
+        empty_card = EmptyStateCard(
+            icon="▲",
+            title="Live Bandwidth Monitor",
+            what_it_shows=(
+                "Real-time upload and download throughput for every network "
+                "interface — 60-second rolling chart plus per-interface session totals."
+            ),
+            why_it_matters=(
+                "Unexpected bandwidth spikes can reveal malware calling home, "
+                "a misconfigured backup job, or a saturated link."
+            ),
+            btn_label="Start Monitoring",
+        )
+        empty_card.clicked.connect(self._start_worker)
+        self._content_stack.addWidget(empty_card)
+
+        # Index 1: chart + table
+        content_w = QWidget()
+        content_lay = QVBoxLayout(content_w)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(4)
+
         # Matplotlib chart
         chart_frame = QFrame()
         chart_frame.setStyleSheet(
@@ -170,7 +200,7 @@ class LiveBandwidthPage(QWidget):
         self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")
         self._canvas.setMinimumHeight(80)
         chart_lay.addWidget(self._canvas)
-        root.addWidget(chart_frame, 2)
+        content_lay.addWidget(chart_frame, 2)
 
         # Per-interface breakdown table
         tbl_label = QLabel("SESSION TOTALS BY INTERFACE")
@@ -179,7 +209,7 @@ class LiveBandwidthPage(QWidget):
             f" letter-spacing:0.5px; background:transparent; border:none;"
             f" padding:6px 0 2px 0;"
         )
-        root.addWidget(tbl_label)
+        content_lay.addWidget(tbl_label)
 
         self._tbl = QTableWidget(0, 5)
         self._tbl.setHorizontalHeaderLabels(
@@ -206,7 +236,10 @@ class LiveBandwidthPage(QWidget):
             f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
             f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
         )
-        root.addWidget(self._tbl)
+        content_lay.addWidget(self._tbl)
+
+        self._content_stack.addWidget(content_w)
+        root.addWidget(self._content_stack, 1)
 
         self._draw_empty_chart()
 
@@ -232,6 +265,7 @@ class LiveBandwidthPage(QWidget):
     @pyqtSlot(dict)
     def _on_stats(self, stats: dict) -> None:
         """Called every second with per-interface Mbps data."""
+        self._content_stack.setCurrentIndex(1)
         # Update combo box if new interfaces appear
         current_ifaces = set(self._history.keys())
         new_ifaces = set(stats.keys()) - current_ifaces

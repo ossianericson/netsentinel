@@ -667,6 +667,10 @@ def main():
     window._geo_map_page.scan_requested.connect(window._start_full_scan)
     window._timeline_page.scan_requested.connect(window._start_full_scan)
     window._trend_page.scan_requested.connect(window._start_full_scan)
+    # S-H: self-contained pages — CTAs wire internally; no _start_full_scan needed
+    #   connections_page._refresh(), dns_zone_page._run_mdns(),
+    #   baseline_page._take_snapshot(), threat_intel_page._run_refresh(),
+    #   live_bandwidth_page._start_worker()
 
     # ── Show window / close splash ────────────────────────────────────────────
     if not _start_minimised:

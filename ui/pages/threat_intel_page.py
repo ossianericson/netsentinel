@@ -194,6 +194,7 @@ class ThreatIntelPage(QWidget):
 
     entries_updated = pyqtSignal(list)  # emitted after each feed load with list[ThreatEntry]
     show_on_map     = pyqtSignal(str)   # emitted when user picks "Show on Geolocation Map"
+    scan_requested  = pyqtSignal()      # emitted by empty-state CTA to trigger feed refresh
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -312,10 +313,11 @@ class ThreatIntelPage(QWidget):
         _el_cta.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT}; color:{WHITE}; }}"
         )
         _el_cta.clicked.connect(self._run_refresh)
+        _el_cta.clicked.connect(self.scan_requested.emit)
         _el_lay.addWidget(_el_icon)
         _el_lay.addWidget(_el_head)
         _el_lay.addSpacing(4)

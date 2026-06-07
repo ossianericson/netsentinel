@@ -23,7 +23,7 @@ import subprocess
 import sys
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -38,11 +38,14 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.expanding_table import ExpandingTable
 
@@ -150,6 +153,8 @@ def _get_blocked_rules() -> list[str]:
 
 class ConnectionsPage(QWidget):
     """Active Connections — process-to-socket map with firewall control."""
+
+    scan_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -348,14 +353,39 @@ class ConnectionsPage(QWidget):
         self._tbl.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._tbl.customContextMenuRequested.connect(self._context_menu)
 
+        # Content stack: index 0 = empty state, index 1 = table + blocked panel
+        self._content_stack = QStackedWidget()
+
+        empty_card = EmptyStateCard(
+            icon="◆",
+            title="Active Connections",
+            what_it_shows=(
+                "Every TCP/UDP connection on this machine — process name, remote IP, "
+                "country, and connection status — updated live."
+            ),
+            why_it_matters=(
+                "Unexpected outbound connections can reveal malware, data exfiltration, "
+                "or shadow IT. Knowing what's connecting matters."
+            ),
+            btn_label="Start Monitoring",
+        )
+        empty_card.clicked.connect(self._refresh)
+        self._content_stack.addWidget(empty_card)
+
+        # Index 1: table + blocked rules panel
+        content_w = QWidget()
+        content_lay = QVBoxLayout(content_w)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(4)
+
         from ui.widgets.density_toggle import DensityToggle
         _dt_row = QHBoxLayout()
         _dt_row.setContentsMargins(0, 2, 0, 2)
         _dt_row.addStretch()
         _dt_row.addWidget(DensityToggle("connections", self._tbl))
-        root.addLayout(_dt_row)
+        content_lay.addLayout(_dt_row)
 
-        root.addWidget(self._tbl, 3)
+        content_lay.addWidget(self._tbl, 3)
         self._tbl.horizontalHeader().sectionResized.connect(
             lambda _l, _o, _n: save_column_widths(self._tbl, "connections")
         )
@@ -393,7 +423,10 @@ class ConnectionsPage(QWidget):
         self._blocked_lbl.setWordWrap(True)
         blocked_lay.addWidget(self._blocked_lbl)
 
-        root.addWidget(blocked_frame)
+        content_lay.addWidget(blocked_frame)
+        self._content_stack.addWidget(content_w)
+
+        root.addWidget(self._content_stack, 1)
 
     # ── Refresh ───────────────────────────────────────────────────────────────
 
@@ -416,6 +449,7 @@ class ConnectionsPage(QWidget):
     @pyqtSlot(list)
     def _on_snapshot(self, conns: list) -> None:
         self._connections = conns
+        self._content_stack.setCurrentIndex(1)
         self._apply_filters()
         self._update_kpis()
 
