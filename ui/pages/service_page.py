@@ -385,7 +385,7 @@ class ServicePage(QWidget):
     # ── Data refresh ──────────────────────────────────────────────────────────
 
     def _refresh(self) -> None:
-        if not self._store:
+        if not self._store or not self.isVisible():
             return
         rows = self._store.query_service_status(hours=self._query_hours)
         self._populate(rows)

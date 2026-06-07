@@ -295,11 +295,13 @@ class _NavBuilderMixin:
         self._sidebar_toggle_btn.setText("▶" if not visible else "◀")
 
     def _focus_nav_search(self) -> None:
-        """Expand sidebar if collapsed, then focus the search box."""
-        if self._nav_collapsed:
-            self._toggle_sidebar()
-        self._nav_search.setFocus()
-        self._nav_search.selectAll()
+        """Open the command palette — the search mechanism in the activity-rail nav.
+
+        The old flat-panel _nav_search field is hidden in the current nav.
+        Ctrl+F now opens the same Ctrl+K command palette so the keyboard
+        shortcut always does something visible.
+        """
+        self._open_command_palette()
 
     @pyqtSlot(str)
     def _on_nav_search_changed(self, text: str):

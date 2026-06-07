@@ -502,7 +502,7 @@ class _NotifAlertHistoryMixin:
         self._log_detail.setVisible(False)
 
     def _refresh_alert_history(self) -> None:
-        if self._store is None:
+        if self._store is None or not self.isVisible():
             return
         try:
             alerts = self._store.get_recent_alerts(hours=self._hist_hours, limit=500)

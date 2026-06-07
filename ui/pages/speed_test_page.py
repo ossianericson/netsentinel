@@ -1031,6 +1031,8 @@ class SpeedTestPage(QWidget):
 
     @pyqtSlot(str, str)
     def _on_phase_changed(self, phase: str, message: str) -> None:
+        if not self.isVisible():
+            return
         self._set_status(message)
         if phase == "ping":
             # Parse ping value from message e.g. "Ping: 50 ms → …"
@@ -1064,6 +1066,8 @@ class SpeedTestPage(QWidget):
     @pyqtSlot(float, str)
     def _on_speed_sample(self, mbps: float, phase: str) -> None:
         """Receive a live throughput sample and update the gauge target."""
+        if not self.isVisible():
+            return
         self._anim_phase  = phase
         self._anim_target = mbps
         if not self._anim_timer.isActive():
@@ -1071,29 +1075,16 @@ class SpeedTestPage(QWidget):
 
     @pyqtSlot(object)
     def _on_result_ready(self, result: object) -> None:
+        # Always: unblock modem monitoring, reset button, emit signal.
         self.modem_resume_requested.emit()
         self._anim_timer.stop()
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶   Run Speed Test")
         self.test_completed.emit(result)
-        self._lbl_ping.setText(f"{result.ping_ms:.0f}")
-        self._start_tile_count_up(result.download_mbps, result.upload_mbps)
 
-        # Animate gauge to final download value, then hold
-        self._anim_phase   = "download"
-        self._anim_target  = result.download_mbps
-        self._anim_timer.start()
-        self._set_status(
-            f"✓  {result.server_name}, {result.server_city} — "
-            f"↓ {result.download_mbps:.1f}  ↑ {result.upload_mbps:.1f}  Mbps"
-        )
-
-        # Show modem signal snapshot panel if present
         sig = getattr(result, "modem_signal", None)
-        if sig:
-            self._update_signal_panel(sig)
 
-        # Persist to database
+        # Always: persist to database regardless of page visibility.
         if self._store:
             try:
                 self._store.record_speed_test(
@@ -1125,6 +1116,26 @@ class SpeedTestPage(QWidget):
                 )
             except Exception:
                 pass  # never let a DB write break the UI
+
+        # Skip pure UI updates when page is not in view.
+        if not self.isVisible():
+            return
+
+        self._lbl_ping.setText(f"{result.ping_ms:.0f}")
+        self._start_tile_count_up(result.download_mbps, result.upload_mbps)
+
+        # Animate gauge to final download value, then hold
+        self._anim_phase   = "download"
+        self._anim_target  = result.download_mbps
+        self._anim_timer.start()
+        self._set_status(
+            f"✓  {result.server_name}, {result.server_city} — "
+            f"↓ {result.download_mbps:.1f}  ↑ {result.upload_mbps:.1f}  Mbps"
+        )
+
+        # Show modem signal snapshot panel if present
+        if sig:
+            self._update_signal_panel(sig)
 
         # Add to history
         self._add_history_row(result)
@@ -1162,6 +1173,8 @@ class SpeedTestPage(QWidget):
         self._anim_timer.stop()
         self._btn_run.setEnabled(True)
         self._btn_run.setText("▶   Run Speed Test")
+        if not self.isVisible():
+            return
         self._gauge.set_value(0.0, "idle")
         self._gauge.set_status("ERROR")
         self._set_status(f"⚠  {msg}")
@@ -1263,6 +1276,11 @@ class SpeedTestPage(QWidget):
 
     def set_global_hours(self, hours: float) -> None:
         self._history_hours = max(1.0, hours)
+        if not self.isVisible():
+            return
+        if self._test_worker is not None and self._test_worker.isRunning():
+            self._test_worker.quit()
+            self._test_worker.wait(400)
         self._hist_table.setRowCount(0)
         self._load_history_from_db()
 

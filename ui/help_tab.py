@@ -360,8 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
+        ("Monkey / chaos tester", "tools/monkey_test.py — pywinauto UIA harness hammers the live UI for N iterations, detects crashes, hangs, and memory leaks; three chaos levels; seed-reproducible."),
+        ("Dev requirements documented", "requirements-dev.txt lists pywinauto, psutil, and Pillow needed for chaos testing."),
         ("Architecture clean-up", "render_card_widget() moved from modules/ to ui/widgets/diagnostic_card_widget.py — modules layer is now fully PyQt6-free (ARCH RULE 1)."),
-        ("Expanded test coverage", "14 new tests for _MetricsQueriesMixin and 12 for _UptimeQueriesMixin; test count now exceeds 3 098."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

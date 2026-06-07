@@ -72,7 +72,7 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.1.0"
+_VERSION = "1.2.0"
 _WINDOW_RE = ".*NetSentinel.*"
 _CONNECT_TIMEOUT = 60       # seconds to wait for the window after launch
 _CONNECT_POLL = 2.0         # seconds between connection attempts
@@ -129,6 +129,9 @@ _BLACKLIST: List[str] = [
     "",   # Maximize
     "",   # Restore Down
     "",   # Minimize  -- safe to skip clicks here too
+    # Catch-all for any _ChromeButton by auto_id (close/min/max that
+    # slipped past the 38px spatial filter — confirmed crash cause from seed=99).
+    "_chromebutton",   # matches auto_id: QApplication.Dashboard.QWidget.appBar._ChromeButton
     # --- App lifecycle ---
     "quit",
     "exit application",
@@ -171,11 +174,17 @@ class Config:
     seed: Optional[int] = None
     screenshots: bool = True
     mem_limit_mb: int = 800
-    log_file: str = "netsentinel_monkey.log"
+    output_dir: str = "test_output"  # all generated files written here
+    log_file: str = ""               # empty = auto-derive from output_dir
     cpu_threshold: float = 35.0      # % CPU — wait below this before acting
     cpu_wait_max: float = 12.0       # max seconds to wait for CPU to settle
     nav_prob: float = 0.15           # probability of a navigation action per iteration
     history_size: int = 15
+
+    def resolved_log_file(self) -> str:
+        if self.log_file:
+            return self.log_file
+        return str(Path(self.output_dir) / "monkey.log")
 
 
 # ── Statistics ─────────────────────────────────────────────────────────────────
@@ -293,6 +302,19 @@ def _safe_type(ctrl) -> str:
         return "Unknown"
 
 
+def _is_main_window(win) -> bool:
+    """True when *win* looks like the main app window and not a toast / popup.
+
+    NetSentinel's own toast notifications and Windows system-tray popups are
+    small (< 600 × 400 px).  The main app window is always larger.
+    """
+    try:
+        r = win.rectangle()
+        return (r.right - r.left) >= 600 and (r.bottom - r.top) >= 400
+    except Exception:
+        return False
+
+
 def _is_blacklisted(name: str, auto_id: str) -> bool:
     combined = (name + " " + auto_id).lower()
     return any(pat in combined for pat in _BLACKLIST)
@@ -317,12 +339,12 @@ def _realistic_text(chaos: str) -> str:
     return random.choice(pool)
 
 
-def _screenshot(label: str, log: logging.Logger) -> Optional[str]:
+def _screenshot(label: str, log: logging.Logger, output_dir: str = ".") -> Optional[str]:
     if not _HAS_PIL:
         return None
     try:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = f"monkey_{label}_{ts}.png"
+        path = str(Path(output_dir) / f"monkey_{label}_{ts}.png")
         ImageGrab.grab().save(path)
         log.info("Screenshot: %s", path)
         return path
@@ -497,7 +519,8 @@ def _nav_pool(chaos: str) -> List[Callable]:
 class MonkeyTester:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.log = _setup_log(cfg.log_file)
+        Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
+        self.log = _setup_log(cfg.resolved_log_file())
         random.seed(cfg.seed)
 
         self.stats = Stats()
@@ -539,37 +562,34 @@ class MonkeyTester:
     def _connect(self) -> bool:
         """
         Poll until the main NetSentinel window appears.
-        Uses Timings.window_find_timeout per attempt rather than the
-        timeout= kwarg of connect() (which is not reliably honoured across
-        pywinauto versions).
+        Uses Desktop.windows() (non-blocking) rather than Application.connect()
+        to guarantee the outer deadline is respected regardless of pywinauto version.
         """
-        from pywinauto import timings as _timings
-        self.log.info("Waiting for window '%s' (up to %ds)...", _WINDOW_RE, _CONNECT_TIMEOUT)
+        self.log.info("Waiting for window (up to %ds)...", _CONNECT_TIMEOUT)
         deadline = time.time() + _CONNECT_TIMEOUT
 
         while time.time() < deadline:
-            remaining = deadline - time.time()
-            if remaining <= 0:
-                break
-            # Cap each polling attempt so we don't overshoot the deadline
-            old = _timings.Timings.window_find_timeout
-            _timings.Timings.window_find_timeout = min(_CONNECT_POLL, remaining)
             try:
-                app = Application(backend="uia").connect(title_re=_WINDOW_RE)
-                self._app = app
-                self._win = app.top_window()
-                title = ""
-                try:
-                    title = self._win.window_text()
-                except Exception:
-                    pass
-                self.log.info("Connected: %r", title)
-                return True
+                wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
+                # Prefer the largest matching window (main app, not toast/popup)
+                main = next((w for w in wins if _is_main_window(w)), None)
+                if main:
+                    try:
+                        pid = main.element_info.process_id
+                        self._proc = psutil.Process(pid)
+                        self.log.info("PID: %d", pid)
+                    except Exception as exc:
+                        self.log.warning("Could not get PID from window: %s", exc)
+                    self._win = main
+                    title = ""
+                    try:
+                        title = main.window_text()
+                    except Exception:
+                        pass
+                    self.log.info("Connected: %r", title)
+                    return True
             except Exception:
                 pass
-            finally:
-                _timings.Timings.window_find_timeout = old
-
             time.sleep(0.5)
 
         self.log.error("Timed out waiting for window")
@@ -583,21 +603,21 @@ class MonkeyTester:
         self.log.info("Attaching to running NetSentinel window...")
         try:
             wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
-            if not wins:
-                self.log.error("No NetSentinel window found on desktop")
+            # Prefer main window over toast/popup (same _WINDOW_RE may match toasts)
+            main = next((w for w in wins if _is_main_window(w)), None)
+            if not main:
+                self.log.error("No NetSentinel main window found on desktop")
                 return False
-            win = wins[0]
-            # Build a process handle from the window's PID
             try:
-                pid = win.element_info.process_id
+                pid = main.element_info.process_id
                 self._proc = psutil.Process(pid)
                 self.log.info("Attached to PID %d", pid)
             except Exception as exc:
                 self.log.warning("Could not get PID from window: %s", exc)
-            self._win = win
+            self._win = main
             title = ""
             try:
-                title = win.window_text()
+                title = main.window_text()
             except Exception:
                 pass
             self.log.info("Attached: %r", title)
@@ -617,7 +637,7 @@ class MonkeyTester:
         # Button labels that close overlays / first-run dialogs
         dismiss_labels = [
             "Get Started", "Close", "Skip", "No Thanks", "Later",
-            "Continue", "OK", "Done", "Start",
+            "Continue", "OK",
         ]
         for label in dismiss_labels:
             try:
@@ -709,25 +729,29 @@ class MonkeyTester:
 
     def _window_ok(self, retries: int = 6) -> bool:
         """
-        Returns True if a NetSentinel window is accessible on the desktop.
+        Returns True if the main NetSentinel window is accessible on the desktop.
 
         PyQt6 windows can briefly disappear from the UIA tree during overlay
         animations or startup sequences without the process dying.  After each
         failed check we do a fresh Desktop scan to pick up a new/re-created
         window handle before giving up.
+
+        The size check (_is_main_window) ensures we never mistake a NetSentinel
+        toast notification or system popup for the main window.
         """
         for i in range(retries):
-            # Fast path: check cached reference
+            # Fast path: cached reference — verify it's still the main window
             try:
-                if self._win is not None and self._win.exists():
+                if self._win is not None and self._win.exists() and _is_main_window(self._win):
                     return True
             except Exception:
                 pass
-            # Slow path: re-scan Desktop in case the element reference is stale
+            # Slow path: re-scan Desktop, picking the largest matching window
             try:
                 wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
-                if wins:
-                    self._win = wins[0]   # refresh stale reference
+                main = next((w for w in wins if _is_main_window(w)), None)
+                if main:
+                    self._win = main
                     return True
             except Exception:
                 pass
@@ -749,10 +773,12 @@ class MonkeyTester:
             self.log.debug("descendants() failed: %s", exc)
             return []
 
-        # Get window top-edge for the title-bar spatial filter
+        # Get window rectangle for spatial filters
         try:
-            win_top = self._win.rectangle().top
+            win_rect = self._win.rectangle()
+            win_top = win_rect.top
         except Exception:
+            win_rect = None
             win_top = None
 
         result = []
@@ -777,6 +803,21 @@ class MonkeyTester:
                 if _is_blacklisted(name, auto_id):
                     self.stats.blacklisted += 1
                     continue
+                # Bounds guard: control must be inside (or very close to) the
+                # main window rect.  This prevents clicking on NetSentinel toast
+                # notifications or any window that accidentally became self._win.
+                if win_rect is not None:
+                    try:
+                        cr = ctrl.rectangle()
+                        margin = 50  # allow slight overhang for drop-downs
+                        if (cr.right  < win_rect.left   - margin or
+                                cr.left   > win_rect.right  + margin or
+                                cr.bottom < win_rect.top    - margin or
+                                cr.top    > win_rect.bottom + margin):
+                            self.stats.blacklisted += 1
+                            continue
+                    except Exception:
+                        pass
                 # Spatial filter: skip controls inside the title-bar strip
                 # (~top 38px of the frameless window = close/min/max buttons)
                 if win_top is not None and ctype in ("Button", "SplitButton"):
@@ -899,7 +940,7 @@ class MonkeyTester:
         self.log.error(sep)
 
         if self.cfg.screenshots:
-            _screenshot("crash", self.log)
+            _screenshot("crash", self.log, self.cfg.output_dir)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         report = {
@@ -908,7 +949,7 @@ class MonkeyTester:
             "stats": self.stats.to_dict(),
             "last_actions": self.hist.dump(),
         }
-        rpath = f"monkey_crash_{ts}.json"
+        rpath = str(Path(self.cfg.output_dir) / f"monkey_crash_{ts}.json")
         try:
             with open(rpath, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
@@ -996,7 +1037,7 @@ class MonkeyTester:
             self.log.info("  %-30s %s", k, v)
         self.log.info("=" * 70)
 
-        summary_path = "monkey_summary.json"
+        summary_path = str(Path(self.cfg.output_dir) / "monkey_summary.json")
         try:
             with open(summary_path, "w", encoding="utf-8") as f:
                 json.dump(self.stats.to_dict(), f, indent=2)
@@ -1040,7 +1081,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--no-screenshots", action="store_true")
     p.add_argument("--mem-limit", type=int, default=800, metavar="MB")
-    p.add_argument("--log", default="netsentinel_monkey.log")
+    p.add_argument("--log", default="",
+                   help="Log file path (default: <output-dir>/monkey.log)")
+    p.add_argument("--output-dir", default="test_output",
+                   help="Directory for all generated output files (default: test_output)")
     return p
 
 
@@ -1064,6 +1108,7 @@ def main() -> None:
         seed=args.seed,
         screenshots=not args.no_screenshots,
         mem_limit_mb=args.mem_limit,
+        output_dir=args.output_dir,
         log_file=args.log,
     )
 

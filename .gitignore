@@ -66,3 +66,6 @@ netsentinel_stderr.log
 # Generated output
 repomix-output.txt
 
+# Test/chaos tester output — screenshots, crash reports, logs
+test_output/
+

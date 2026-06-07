@@ -436,7 +436,7 @@ class HistoryPage(QWidget):
 
     @pyqtSlot()
     def _refresh(self) -> None:
-        if not self._store:
+        if not self._store or not self.isVisible():
             return
         self._populate_host_combo()
         has_data = self._host_combo.count() > 0
