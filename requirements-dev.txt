@@ -1,0 +1,7 @@
+# Development and testing extras — not required for the production build
+# Install with: pip install -r requirements-dev.txt
+
+# Monkey / chaos testing (tools/monkey_test.py)
+pywinauto>=0.6.8
+psutil>=5.9.0
+Pillow>=9.0.0

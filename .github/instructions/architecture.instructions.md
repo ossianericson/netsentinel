@@ -269,7 +269,10 @@ netsentinel/
 │   ├── syslog_worker.py
 │   ├── threat_intel_worker.py
 │   └── wifi_monitor_worker.py  # WifiMonitorWorker — passive 802.11 capture thread (Npcap)
-└── tests/
+├── tests/
+└── tools/
+    ├── debug_launch.py         # GUI smoke-launch with Qt message handler → netsentinel_debug.log (COMMIT GATE Step 2)
+    └── monkey_test.py          # Chaos / monkey tester — pywinauto UIA + psutil; --source/--connect/exe modes
 ```
 
 ## Key Architectural Patterns
