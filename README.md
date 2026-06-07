@@ -352,6 +352,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.89
+**Added**
+- `tools/monkey_test.py` — pywinauto UIA + psutil chaos/monkey harness; `--source`, `--connect`, and exe-path modes; mild/moderate/wild chaos levels; spatial + glyph titlebar blacklist; memory/CPU health monitor; screenshot on crash; seed-reproducible runs
+- `tests/test_monkey_test.py` — 11 unit tests covering import, `Config`, `Stats`, `History`, blacklist logic, and CLI smoke test
+- `requirements-dev.txt` — documents `pywinauto`, `psutil`, and `Pillow` as dev-only dependencies
+
 ### v1.9.88
 **Added**
 - `ui/widgets/diagnostic_card_widget.py` — `render_card_widget()` extracted from `modules/diagnostic_card.py` to eliminate PyQt6 dependency in the module layer (ARCH RULE 1)
