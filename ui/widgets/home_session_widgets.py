@@ -112,7 +112,7 @@ class FreshnessStrip(QFrame):
                 _dt = datetime.datetime.fromisoformat(_ts)
                 self._fs_scan_lbl.setText(f"Last scan: {self._fmt_age(_dt)}")
             except ValueError:
-                pass
+                pass  # ignore invalid timestamp
 
     @staticmethod
     def _make_fs_pill(label: str) -> QPushButton:

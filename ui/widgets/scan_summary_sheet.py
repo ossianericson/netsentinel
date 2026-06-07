@@ -270,7 +270,7 @@ class ScanSummarySheet(QFrame):
         try:
             self._anim.finished.disconnect(self._on_dismiss_done)
         except Exception:
-            pass
+            pass  # non-fatal
         self.setVisible(False)
 
     def _dont_show(self) -> None:

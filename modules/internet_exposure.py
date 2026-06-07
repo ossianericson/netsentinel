@@ -265,7 +265,7 @@ def _fetch_upnp_mappings(location_url: str) -> tuple[str, list[UPnPMapping]]:
                 break   # 713 = SpecifiedArrayIndexInvalid → no more entries
 
     except Exception:
-        pass
+        pass  # non-fatal
 
     return control_url, mappings
 

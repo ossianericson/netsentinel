@@ -69,7 +69,7 @@ def set_run_on_startup(enabled: bool) -> None:
                 pass  # already absent
         winreg.CloseKey(key)
     except (OSError, ImportError):
-        pass
+        pass  # non-fatal
 
 
 def _resolve_exe_path() -> str:
@@ -329,7 +329,7 @@ class SystemTrayManager:
                 chk.setChecked(checked)
                 chk.blockSignals(False)
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _open_alerts(self) -> None:
         self._show_window()

@@ -65,7 +65,7 @@ def lookup_vendor(
             _CACHE[cache_key] = info["vendor"]
             return info["vendor"]
     except Exception:
-        pass
+        pass  # non-fatal
 
     # 2 — offenders.json OUI table
     try:
@@ -86,7 +86,7 @@ def lookup_vendor(
             _CACHE[cache_key] = vendor
             return vendor
     except Exception:
-        pass
+        pass  # non-fatal
 
     # 3 — online API (rate-limited)
     vendor = _api_lookup(mac_clean, timeout)

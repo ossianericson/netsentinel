@@ -217,20 +217,20 @@ def _extract_rsa(body: dict, label: str):
                 try:
                     return int(val[0], 16), int(val[1], 16)
                 except Exception:
-                    pass
+                    pass  # non-fatal
     # X90: data list
     data = body.get("data")
     if isinstance(data, list) and len(data) >= 2:
         try:
             return int(data[0], 16), int(data[1], 16)
         except Exception:
-            pass
+            pass  # non-fatal
     # dict format
     if isinstance(data, dict):
         try:
             return int(data["n"], 16), int(data["e"], 16)
         except Exception:
-            pass
+            pass  # non-fatal
     print(f"  ✗  Could not parse RSA key from {label} response: {body!r:.300}")
     sys.exit(1)
 

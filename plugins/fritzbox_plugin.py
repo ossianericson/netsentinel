@@ -40,7 +40,7 @@ def _load_password() -> str:
         if pw:
             return pw
     except Exception:
-        pass
+        pass  # non-fatal
     raise RuntimeError(
         f"No password saved for {HARDWARE_IP}. "
         "Enter it in the Hardware Hub password field and click Save."

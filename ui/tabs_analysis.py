@@ -190,7 +190,7 @@ class _AnalysisTabsMixin:
                 self._chart_window.activateWindow()
                 return
         except RuntimeError:
-            pass
+            pass  # non-fatal
         try:
             from modules.log_chart import build_figure
             self._btn_log_chart.setEnabled(False)
@@ -281,7 +281,7 @@ class _AnalysisTabsMixin:
                 try:
                     log_summary = self._logger_worker.get_summary()
                 except Exception:
-                    pass
+                    pass  # non-fatal — logger worker may be unavailable
 
             result = correlate(
                 diag_result=diag,
@@ -684,7 +684,7 @@ class _AnalysisTabsMixin:
                 try:
                     log_summary = self._logger_worker.get_summary()
                 except Exception:
-                    pass
+                    pass  # non-fatal — logger worker may be unavailable
 
             result = bm_grade(
                 log_summary=log_summary,
@@ -697,7 +697,7 @@ class _AnalysisTabsMixin:
             try:
                 self._store.record_grade(result.overall_grade, result.overall_score, result.overall_verdict)
             except Exception:
-                pass
+                pass  # non-fatal
 
             # Update grade circle
             grade_styles = {
@@ -827,7 +827,7 @@ class _AnalysisTabsMixin:
                 try:
                     log_summary = self._logger_worker.get_summary()
                 except Exception:
-                    pass
+                    pass  # non-fatal — logger worker may be unavailable
             bm_result = getattr(self, "_last_benchmark_result", None)
 
             # Pick save path
@@ -906,7 +906,7 @@ class _AnalysisTabsMixin:
                 try:
                     log_summary = self._logger_worker.get_summary()
                 except Exception:
-                    pass
+                    pass  # non-fatal — logger worker may be unavailable
             bm_result = getattr(self, "_last_benchmark_result", None)
 
             text = generate_isp_complaint_text(

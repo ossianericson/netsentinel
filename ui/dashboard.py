@@ -597,7 +597,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 import shutil as _shutil
                 _shutil.rmtree(_sys._MEIPASS, ignore_errors=True)
             except Exception:
-                pass
+                pass  # non-fatal
         _os._exit(0)
 
 
@@ -1324,9 +1324,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 try:
                     _kr.delete_password("NetSentinel", "snmp/community")
                 except Exception:
-                    pass
+                    pass  # non-fatal
         except Exception:
-            pass
+            pass  # non-fatal
 
 
     # ── Help page ────────────────────────────────────────────────────────────
@@ -1535,7 +1535,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                     from PyQt6.QtCore import QTimer
                     QTimer.singleShot(0, lambda: self._geo_map_page.set_home_ip(ip))
             except Exception:
-                pass
+                pass  # non-fatal
 
         threading.Thread(target=_do, daemon=True).start()
 
@@ -1613,12 +1613,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             try:
                 self._settings_page._refresh_sched_scan_label()
             except Exception:
-                pass
+                pass  # non-fatal
         # Fire the scan (reuse the existing full-scan trigger)
         try:
             self._start_scan()
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _check_lan_connectivity(self) -> None:
         """HEALTH-2: async socket probe; 3 failures → show amber offline banner."""
@@ -1696,7 +1696,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 )
                 self._notif_router.dispatch(alert)
             except Exception:
-                pass
+                pass  # non-fatal
 
 
     @pyqtSlot(str)
@@ -1758,7 +1758,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                     mesh_units=_mu, mesh_enrichment=_me, modem_data=data,
                 )
             except Exception:
-                pass
+                pass  # non-fatal
         # Monitor logging — live entry + throttled DB write
         if hasattr(self, "_log_hub_page"):
             from PyQt6.QtCore import QSettings
@@ -1803,16 +1803,16 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         try:
             self._history_page.on_cycle_done(result)
         except Exception:
-            pass
+            pass  # non-fatal
         try:
             self._ha_page.on_availability_update(states)
         except Exception:
-            pass
+            pass  # non-fatal
         try:
             for _ip, _state in states.items():
                 self._mqtt_page.on_uptime_state(_ip, _state, rtts.get(_ip) or 0.0)
         except Exception:
-            pass
+            pass  # non-fatal
 
     @pyqtSlot(object)
     def _on_bpdu_found(self, bpdu):
@@ -2095,7 +2095,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._maybe_auto_report()
 
     def _on_theme_changed(self, _name: str) -> None:
-        import ui.styles as _s
+        from ui import styles as _s
         from PyQt6.QtWidgets import QApplication
         self.setStyleSheet(_s.MAIN_STYLE)
         _app = QApplication.instance()

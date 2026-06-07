@@ -38,7 +38,7 @@ from ui.styles import (
     BG_HOVER,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile
-from modules.trend_analyser import TrendResult, TrendReport, run_full_trend_report
+from modules.trend_analyser import TrendReport, run_full_trend_report
 from ui.widgets.context_menu import install_copy_menu
 
 

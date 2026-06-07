@@ -63,7 +63,7 @@ def _parse_dnsmasq(path: Path) -> List[DhcpLease]:
                 expires=expires, source=str(path),
             ))
     except Exception:
-        pass
+        pass  # non-fatal
     return leases
 
 
@@ -98,7 +98,7 @@ def _parse_dhclient(path: Path) -> List[DhcpLease]:
                 dt = datetime.datetime.strptime(exp_m.group(1), "%Y/%m/%d %H:%M:%S")
                 expires = int(dt.timestamp())
             except Exception:
-                pass
+                pass  # non-fatal
         leases.append(DhcpLease(
             mac=mac, ip=ip, hostname=hostname,
             expires=expires, server=server, source=str(path),
@@ -144,9 +144,9 @@ def _windows_arp_leases() -> List[DhcpLease]:
                         expires = int(dt.timestamp())
                         break
                     except ValueError:
-                        pass
+                        pass  # non-fatal
         except Exception:
-            pass
+            pass  # non-fatal
 
         # Parse ARP table
         for line in arp_out.splitlines():
@@ -166,7 +166,7 @@ def _windows_arp_leases() -> List[DhcpLease]:
                         source="ARP cache (Windows)",
                     ))
     except Exception:
-        pass
+        pass  # non-fatal
     return leases
 
 
@@ -200,7 +200,7 @@ def _nmcli_leases() -> List[DhcpLease]:
                 expires=block_expires, source="nmcli",
             ))
     except Exception:
-        pass
+        pass  # non-fatal
     return leases
 
 

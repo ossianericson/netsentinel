@@ -1,6 +1,9 @@
 # Development and testing extras — not required for the production build
 # Install with: pip install -r requirements-dev.txt
 
+# Linting — run: ruff check . --select=F401,F811,F841
+ruff>=0.4.0
+
 # Monkey / chaos testing (tools/monkey_test.py)
 pywinauto>=0.6.8
 psutil>=5.9.0

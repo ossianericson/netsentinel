@@ -70,7 +70,7 @@ class ScanEnrichmentMixin:
                         )
                         self._last_mesh_log_ts = now
                     except Exception:
-                        pass
+                        pass  # non-fatal
 
     def _on_hardware_plugin_result(self, data: dict) -> None:
         """Route a successful plugin Test result to the relevant existing page.
@@ -848,7 +848,7 @@ class ScanEnrichmentMixin:
                 _vendor = _d.vendor     if not isinstance(_d, dict) else _d.get("vendor", "Unknown")
                 _add_row(self._net_devices_table, [_ip, _host or "—", _mac, _vendor, _level], _level)
         except Exception:
-            pass
+            pass  # non-fatal
 
         # Refresh AvailabilityWorker targets so Uptime page labels use enriched names
         try:
@@ -867,7 +867,7 @@ class ScanEnrichmentMixin:
                 if _targets:
                     self._avail_worker.set_targets(_targets)
         except Exception:
-            pass
+            pass  # non-fatal
 
         # Re-render topology — native mesh preferred; fall back to plugin node data
         try:
@@ -881,7 +881,7 @@ class ScanEnrichmentMixin:
                 modem_data=getattr(self, "_last_modem_data", None),
             )
         except Exception:
-            pass
+            pass  # non-fatal
 
         # Update the Deco band-usage chips on the WiFi Networks page
         self._update_m4_deco_chips()

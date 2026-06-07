@@ -749,7 +749,7 @@ class HomeAutomationPage(QWidget):
                         d["last_seen"]
                     ).strftime("%Y-%m-%d %H:%M")
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
             vendor_str = d.get("vendor") or d.get("device_type") or ""
             mac_str    = d.get("mac", "")
@@ -884,7 +884,7 @@ class HomeAutomationPage(QWidget):
             try:
                 self._store.update_device_ha_info(mac=mac, is_pinned=new_pinned)
             except Exception:
-                pass
+                pass  # non-fatal
         d["is_pinned"] = new_pinned
         self._populate_table(self._devices)
         self._rebuild_pins()
@@ -914,7 +914,7 @@ class HomeAutomationPage(QWidget):
                 try:
                     self._store.upsert_known_device(mac=mac, vendor=vendor)
                 except Exception:
-                    pass
+                    pass  # non-fatal
             # Update local cache
             for d in self._devices:
                 if d.get("mac") == mac:
@@ -942,7 +942,7 @@ class HomeAutomationPage(QWidget):
                     for kd in all_dev.values() if kd.ip
                 ]
             except Exception:
-                pass
+                pass  # non-fatal
 
         if not hosts:
             self._set_status("No known devices to scan — run a device scan first")
@@ -983,7 +983,7 @@ class HomeAutomationPage(QWidget):
                             category=ha_category(match.ha_type),
                         )
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
         self._load_devices()
 
@@ -1125,7 +1125,7 @@ class HomeAutomationPage(QWidget):
             try:
                 self._store.update_device_ha_info(mac=mac, is_pinned=False)
             except Exception:
-                pass
+                pass  # non-fatal
         for d in self._devices:
             if d.get("mac") == mac:
                 d["is_pinned"] = False

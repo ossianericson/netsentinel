@@ -323,7 +323,7 @@ def save_device_baseline(baseline: dict) -> None:
             encoding="utf-8",
         )
     except Exception:
-        pass
+        pass  # non-fatal
 
 
 def diff_devices_against_baseline(

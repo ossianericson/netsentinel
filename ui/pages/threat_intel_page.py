@@ -82,7 +82,7 @@ def _save_secret(key: str, value: str) -> None:
         try:
             _keyring.delete_password(_KR_SERVICE, key)
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 def _load_secret(key: str) -> str:

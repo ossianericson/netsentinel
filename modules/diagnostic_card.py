@@ -78,7 +78,7 @@ def build_card_data(
         try:
             device_count = len(store.get_known_devices())
         except Exception:
-            pass
+            pass  # non-fatal
 
     return CardData(
         grade=grade,

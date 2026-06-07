@@ -411,7 +411,7 @@ def set_active_theme_name(name: str) -> None:
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("ui/theme", name)
     except Exception:
-        pass
+        pass  # non-fatal
 
 
 # ── Accent colour override (SET-2) ────────────────────────────────────────────
@@ -437,7 +437,7 @@ def set_accent_override(hex_color: "str | None") -> None:
         else:
             qs.remove("ui/accent_override")
     except Exception:
-        pass
+        pass  # non-fatal
 
 
 def _compute_accent_variants(hex_color: str) -> "tuple[str, str, str]":

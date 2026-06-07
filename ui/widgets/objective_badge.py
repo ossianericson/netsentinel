@@ -21,8 +21,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget
 
 from ui.styles import (
-    ACCENT, BG_CARD, CERT_CISCO_BG, CERT_NETPLUS_BG, CERT_SEC_BG,
-    NAV_BAR, TEXT_PRIMARY, WHITE,
+    ACCENT, CERT_CISCO_BG, CERT_NETPLUS_BG, CERT_SEC_BG,
+    NAV_BAR, WHITE,
 )
 
 

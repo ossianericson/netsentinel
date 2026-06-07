@@ -47,7 +47,7 @@ def make_card():
         try:
             card.deleteLater()
         except RuntimeError:
-            pass
+            pass  # non-fatal
     if app:
         app.processEvents()
 
@@ -148,7 +148,7 @@ def device_page():
     try:
         page.deleteLater()
     except RuntimeError:
-        pass
+        pass  # non-fatal
     if app:
         app.processEvents()
 

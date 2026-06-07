@@ -23,7 +23,7 @@ try:
     from scapy.all import AsyncSniffer, Ether  # type: ignore
     SCAPY_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ class BandwidthSniffer:
                 if dst and not dst.startswith("ff:") and not dst.startswith("01:"):
                     self._rx[dst] = self._rx.get(dst, 0) + size
         except Exception:
-            pass
+            pass  # non-fatal
 
     def start(self):
         if not SCAPY_AVAILABLE:
@@ -105,7 +105,7 @@ class BandwidthSniffer:
             if self._sniffer:
                 self._sniffer.stop()
         except Exception:
-            pass
+            pass  # non-fatal
 
     def snapshot(self, window_s: float, label_map: Dict[str, str]) -> BandwidthSnapshot:
         """

@@ -135,13 +135,13 @@ class GuidedTour(QObject):
             try:
                 next_btn.clicked.disconnect()
             except Exception:
-                pass
+                pass  # signal already disconnected
             next_btn.clicked.connect(self._on_next)
         if skip_btn is not None:
             try:
                 skip_btn.clicked.disconnect()
             except Exception:
-                pass
+                pass  # signal already disconnected
             skip_btn.clicked.connect(self._on_skip)
 
     def _navigate_and_show(self) -> None:
@@ -206,7 +206,7 @@ class GuidedTour(QObject):
             if hasattr(st_page, "_run_test"):
                 st_page._run_test()
         except Exception:
-            pass
+            pass  # non-fatal — page ref may be invalid
 
     def _auto_start_grade(self) -> None:
         """Auto-trigger the network grade scan."""
@@ -220,7 +220,7 @@ class GuidedTour(QObject):
             if hasattr(self._dashboard, "_start_full_scan"):
                 self._dashboard._start_full_scan()
         except Exception:
-            pass
+            pass  # non-fatal — page ref may be invalid
 
     def _auto_enable_rtt(self) -> None:
         """Auto-enable Network RTT source on the Network Logger page."""
@@ -231,4 +231,4 @@ class GuidedTour(QObject):
             if hasattr(log_page, "show_network_log"):
                 log_page.show_network_log()
         except Exception:
-            pass
+            pass  # non-fatal — page ref may be invalid

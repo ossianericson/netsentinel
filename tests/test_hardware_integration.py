@@ -86,11 +86,11 @@ def _cleanup_page(p):
         if hasattr(p, "_tick_timer"):
             p._tick_timer.stop()
     except RuntimeError:
-        pass
+        pass  # non-fatal
     try:
         p.deleteLater()
     except RuntimeError:
-        pass
+        pass  # non-fatal
     if app:
         for _ in range(3):
             app.processEvents()

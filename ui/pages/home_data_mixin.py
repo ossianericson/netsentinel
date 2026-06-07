@@ -311,7 +311,7 @@ class _HomeDataMixin:
             grade_now = self._current_grade or "—"
             self._tw_grade_val.setText(grade_now)
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _update_scan_button_label(self) -> None:
         label = "▶  Scan Network" if self._device_count == 0 else "▶  Rescan"
@@ -496,7 +496,7 @@ class _HomeDataMixin:
             try:
                 self._store.acknowledge_alert(int(alert_id))
             except Exception:
-                pass
+                pass  # non-fatal
         row_widget.setVisible(False)
         row_widget.deleteLater()
         remaining = sum(
@@ -600,12 +600,12 @@ class _HomeDataMixin:
                 dl_points = [r.download_mbps or 0.0 for r in reversed(speed_rows)]
                 self._speed_card.set_sparkline_data(dl_points, colour)
         except Exception:
-            pass
+            pass  # non-fatal
 
         try:
             self._events_ticker.set_store(self._store)
         except Exception:
-            pass
+            pass  # non-fatal
         try:
             devices = self._store.get_known_devices()
             n = len(devices)
@@ -619,7 +619,7 @@ class _HomeDataMixin:
                     GREEN,
                 )
         except Exception:
-            pass
+            pass  # non-fatal
         if self._device_count == 0:
             self._set_first_run_mode(True)
         else:
@@ -641,7 +641,6 @@ class _HomeDataMixin:
         devices = result.get("devices", [])
         rtts = result.get("rtts", {})
         n_total = len(devices)
-        was_first_run = self._first_run_mode
         if n_total > 0 and self._first_run_mode:
             self._set_first_run_mode(False)
 

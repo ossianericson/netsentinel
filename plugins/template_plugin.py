@@ -42,7 +42,7 @@ def _load_credentials() -> tuple[str, str]:
         if pw:
             return HARDWARE_IP, pw
     except Exception:
-        pass
+        pass  # non-fatal
     raise RuntimeError(
         f"No saved password for {HARDWARE_IP}. "
         "Enter the password in the Hardware Hub card and click Save."
@@ -60,7 +60,7 @@ def _get_client():
     """Return a connected client, logging in only once per poll cycle."""
     global _cached_client
     if _cached_client is None:
-        host, password = _load_credentials()
+        _host, _password = _load_credentials()
         # TODO: replace with your library's client / session object
         # Example:
         #   from mylib import MyRouterClient

@@ -91,7 +91,7 @@ def test_objective_badge_for_protocol_returns_list():
         try:
             b.deleteLater()
         except RuntimeError:
-            pass
+            pass  # skip test if PyQt6 unavailable
     if app:
         for _ in range(3):
             app.processEvents()
@@ -108,7 +108,7 @@ def test_objective_badge_for_scenario_rogue():
         try:
             b.deleteLater()
         except RuntimeError:
-            pass
+            pass  # skip test if PyQt6 unavailable
     if app:
         for _ in range(3):
             app.processEvents()
@@ -132,7 +132,7 @@ def test_objective_badge_cert_labels():
         try:
             b.deleteLater()
         except RuntimeError:
-            pass
+            pass  # skip test if PyQt6 unavailable
     if app:
         for _ in range(3):
             app.processEvents()

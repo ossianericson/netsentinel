@@ -325,7 +325,7 @@ class _ScanTabsMixin:
             if self._store:
                 _has_cves = any(c.get("host") == ip for c in self._store.list_cve_lifecycles())
         except Exception:
-            pass
+            pass  # non-fatal
         act_cve = menu.addAction(f"🔎  View in CVE Tracker →") if _has_cves else None
         menu.addSeparator()
         act_fix      = menu.addAction("🔧  How to Fix")

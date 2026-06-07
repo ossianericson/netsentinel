@@ -51,7 +51,7 @@ def get_ipv6_devices() -> List[dict]:
                         seen.add(ipv6)
                         devices.append({"ip6": ipv6, "mac": mac, "state": state})
     except Exception:
-        pass
+        pass  # non-fatal
     return devices
 
 
@@ -109,7 +109,7 @@ def ping_sweep_ipv6(progress_cb=None) -> List[dict]:
                 if m_addr and current_iface:
                     iface_addrs.append((current_iface, f"{m_addr.group(1).lower()}%{current_iface}"))
     except Exception:
-        pass
+        pass  # non-fatal
 
     if not iface_addrs:
         if progress_cb:
@@ -140,7 +140,7 @@ def ping_sweep_ipv6(progress_cb=None) -> List[dict]:
                     capture_output=True, timeout=2,
                 )
         except Exception:
-            pass
+            pass  # non-fatal
         finally:
             done_count[0] += 1
             if progress_cb and done_count[0] % 64 == 0:

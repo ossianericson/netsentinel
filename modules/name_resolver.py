@@ -87,7 +87,7 @@ def _netbios(ip: str) -> str:
                 if m:
                     return m.group(1).strip()
     except Exception:
-        pass
+        pass  # non-fatal
     return ""
 
 
@@ -125,7 +125,7 @@ def _mdns_name(ip: str) -> str:
             if "." in s or len(s) > 3:
                 return s.strip()
     except Exception:
-        pass
+        pass  # non-fatal
     return ""
 
 
@@ -186,7 +186,7 @@ def _snmp_sysname(ip: str, community: str = "public") -> str:
             if val and len(val) > 1:
                 return val
     except Exception:
-        pass
+        pass  # non-fatal
     return ""
 
 
@@ -222,7 +222,7 @@ def _dhcp_lease_name(ip: str) -> str:
                     if m:
                         candidates.append(m.group(1))
         except Exception:
-            pass
+            pass  # non-fatal
     return candidates[0] if candidates else ""
 
 

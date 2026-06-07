@@ -45,7 +45,7 @@ def load_catalogue(try_remote: bool = False) -> dict:
                 if data.get("version"):
                     return data
         except Exception:
-            pass
+            pass  # non-fatal
     try:
         return json.loads(_catalogue_path().read_text("utf-8"))
     except Exception:

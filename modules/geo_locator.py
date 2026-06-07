@@ -130,7 +130,7 @@ class GeoLocator:
                 try:
                     self._db.close()
                 except Exception:
-                    pass
+                    pass  # non-fatal
             self._db = None
         self._open()
 
@@ -194,7 +194,7 @@ class GeoLocator:
                 try:
                     self._db.close()
                 except Exception:
-                    pass
+                    pass  # non-fatal
             self._db = None
 
 

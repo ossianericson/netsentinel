@@ -4,7 +4,6 @@ Tests for Sprint H7 contextual coach marks.
 Validates per-feature QSettings flags and that coach mark methods
 exist and behave correctly based on the flag state.
 """
-import sys
 import pytest
 
 try:
@@ -69,7 +68,7 @@ class TestCoachMarkChainOnDone:
     def test_on_done_is_callable_and_fires_on_cleanup(self):
         from ui.widgets.coach_mark import CoachMarkChain
         fired = []
-        app = QApplication.instance()
+        _app = QApplication.instance()
         chain = CoachMarkChain(None, [], on_done=lambda: fired.append(True))
         chain._cleanup()
         assert fired == [True]
@@ -107,7 +106,7 @@ class TestLogHubCoachMark:
         called = []
         original = LogHubPage._maybe_show_coach_log_hub
 
-        def patched(self_):
+        def _patched(self_):
             original(self_)
             called.append(True)
 
@@ -117,7 +116,7 @@ class TestLogHubCoachMark:
             page.window.return_value = None
             LogHubPage._maybe_show_coach_log_hub(page)
         except Exception:
-            pass
+            pass  # skip test if PyQt6 unavailable
         assert qs.value("coach/log_hub_sources_shown", False, type=bool) is True
 
     def test_log_hub_coach_skips_when_net_enabled(self):

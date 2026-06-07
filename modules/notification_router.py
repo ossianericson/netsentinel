@@ -189,7 +189,7 @@ class NotificationRouter:
                 if expiry == 0 or expiry > now:
                     self._snooze[rule_name] = expiry
         except Exception:
-            pass
+            pass  # ignore corrupt snooze registry
 
     def _persist_snoozes(self) -> None:
         """Write current snooze registry to disk."""
@@ -198,7 +198,7 @@ class NotificationRouter:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(self._snooze), encoding="utf-8")
         except Exception:
-            pass
+            pass  # non-fatal
 
     def set_snooze(self, rule_name: str, until_ts: float) -> None:
         """Snooze rule_name until until_ts (Unix seconds). Pass 0 for 'forever'."""
@@ -210,7 +210,7 @@ class NotificationRouter:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(snapshot), encoding="utf-8")
         except Exception:
-            pass
+            pass  # non-fatal
 
     def clear_snooze(self, rule_name: str) -> None:
         with self._lock:
@@ -221,7 +221,7 @@ class NotificationRouter:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(snapshot), encoding="utf-8")
         except Exception:
-            pass
+            pass  # non-fatal
 
     def get_snooze_expiry(self, rule_name: str) -> Optional[float]:
         """Return expiry ts for snoozed rule, 0 if forever, None if not snoozed."""
@@ -279,7 +279,7 @@ class NotificationRouter:
                     try:
                         self._toast_cb(alert)
                     except Exception:
-                        pass
+                        pass  # non-fatal
                 entry = self._log_delivery(ch.name, "TOAST", alert)
                 self._mark_delivered(entry)
 

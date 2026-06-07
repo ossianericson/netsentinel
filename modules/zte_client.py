@@ -304,7 +304,7 @@ class ZteMC889Client:
                 )
                 enb_id = str(cid >> 8)
             except (TypeError, ValueError):
-                pass
+                pass  # non-fatal
 
         return ZteSignalData(
             ts=int(time.time()),

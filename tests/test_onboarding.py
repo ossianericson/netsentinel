@@ -9,7 +9,6 @@ Validates:
 import pytest
 
 try:
-    from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import QSettings
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)

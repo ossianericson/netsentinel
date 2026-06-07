@@ -363,7 +363,7 @@ class ReportsPage(QWidget):
                         grade_dates.append(dt)
                         grade_scores.append(float(grade))
         except Exception:
-            pass
+            pass  # non-fatal
         return device_dates, device_counts, grade_dates, grade_scores
 
     # ── Actions ───────────────────────────────────────────────────────────────
@@ -400,7 +400,7 @@ class ReportsPage(QWidget):
                                         on_saved=lambda p: self.on_report_saved(str(p)))
                 sched.generate_now()
             except Exception:
-                pass
+                pass  # non-fatal
             return
         self._worker.trigger_now()
 

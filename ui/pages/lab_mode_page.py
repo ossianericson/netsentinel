@@ -330,7 +330,7 @@ class LabModePage(QWidget):
             badge_row.addStretch()
             lay.addLayout(badge_row)
         except Exception:
-            pass
+            pass  # non-fatal — badge widget optional
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)

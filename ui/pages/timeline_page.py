@@ -271,7 +271,7 @@ class TimelinePage(QWidget):
                         severity = "info" if e.event_type == "join" else "warn",
                     ))
             except Exception:
-                pass
+                pass  # non-fatal
 
         # Alerts
         if _SOURCE_ALERTS in self._active_sources:
@@ -286,7 +286,7 @@ class TimelinePage(QWidget):
                         severity = sev,
                     ))
             except Exception:
-                pass
+                pass  # non-fatal
 
         # CVEs
         if _SOURCE_CVE in self._active_sources:
@@ -307,7 +307,7 @@ class TimelinePage(QWidget):
                         severity = "critical",
                     ))
             except Exception:
-                pass
+                pass  # non-fatal
 
         # Speed tests
         if _SOURCE_SPEED in self._active_sources:
@@ -323,7 +323,7 @@ class TimelinePage(QWidget):
                         severity = "info",
                     ))
             except Exception:
-                pass
+                pass  # non-fatal
 
         events.sort(key=lambda e: e.ts, reverse=True)
         return events[:200]

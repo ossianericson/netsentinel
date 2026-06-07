@@ -21,7 +21,7 @@ try:
     )
     SCAPY_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 # STP multicast destination MAC
 STP_MULTICAST = "01:80:c2:00:00:00"
@@ -174,7 +174,7 @@ class STPSniffer:
 
             self.on_bpdu(info)
         except Exception:
-            pass
+            pass  # non-fatal
 
     def start(self):
         if not SCAPY_AVAILABLE:
@@ -202,7 +202,7 @@ class STPSniffer:
             if self._sniffer:
                 self._sniffer.stop()
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 def scan(

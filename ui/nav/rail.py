@@ -382,7 +382,7 @@ class _RailButton(QPushButton):
         self.update()
 
     def paintEvent(self, event):
-        import ui.styles as _s
+        from ui import styles as _s
         from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen
         from PyQt6.QtCore import QRect, QRectF
         # QSS background + hover/checked effects
@@ -452,7 +452,7 @@ class _RailButton(QPushButton):
         p.end()
 
     def _refresh_icon(self):
-        import ui.styles as _s
+        from ui import styles as _s
         color = _s.WHITE if self.isChecked() else _s.SIDEBAR_ITEM_FG
         self.setIcon(_make_nav_icon(self._icon_name, 20, color))
         self.setIconSize(QSize(20, 20))
@@ -462,7 +462,7 @@ class _RailButton(QPushButton):
         self._refresh_icon()
 
     def refresh_theme(self) -> None:
-        import ui.styles as _s
+        from ui import styles as _s
         _RailButton._COLOR_NORMAL = _s.SIDEBAR_ITEM_FG
         _RailButton._COLOR_ACTIVE = _s.WHITE
         _RailButton._LABEL_COLOR  = _s.TEXT_MUTED
@@ -491,7 +491,7 @@ class _FlyoutItem(QPushButton):
         self._apply_item_style()
 
     def _apply_item_style(self) -> None:
-        import ui.styles as _s
+        from ui import styles as _s
         _fg = _s.AUDIT_RED if self._danger else _s.SIDEBAR_ITEM_FG
         self.setStyleSheet(
             f"QPushButton {{"
@@ -617,7 +617,7 @@ class _FlyoutPanel(QWidget):
         self._items: dict = {}   # label -> _FlyoutItem
 
     def refresh_theme(self) -> None:
-        import ui.styles as _s
+        from ui import styles as _s
         self.setStyleSheet(f"background: {_s.SIDEBAR_BG};")
         self._flyout_hdr.setStyleSheet(
             f"background: {_s.SIDEBAR_SECTION_BG}; border-bottom: 1px solid {_s.NAV_DIVIDER};"

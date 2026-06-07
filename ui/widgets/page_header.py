@@ -19,7 +19,6 @@ Usage::
 from __future__ import annotations
 
 from PyQt6.QtCore import QPoint, Qt
-from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
@@ -131,7 +130,7 @@ class PageHeaderBar(QWidget):
             self._help_btn.setChecked(False)
 
     def refresh_theme(self) -> None:
-        import ui.styles as _s
+        from ui import styles as _s
         PageHeaderBar._CHIP_STYLE = (
             f"color:{_s.TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
             " padding: 0 0 0 0;"

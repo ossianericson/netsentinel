@@ -324,7 +324,7 @@ class _DiagExtraTabsMixin:
                 if hasattr(self, "_notifications_page"):
                     self._notifications_page._alert_drawer.open(alert)
             except Exception:
-                pass
+                pass  # non-fatal
             return
         rule_type = getattr(alert, "rule_type", "") or ""
         host = getattr(alert, "host", "") or ""

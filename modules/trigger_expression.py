@@ -264,7 +264,7 @@ class _Parser:
             self._consume()
             return _Number(val)
         except ValueError:
-            pass
+            pass  # non-fatal
 
         raise ExpressionError(f"Unexpected token {tok!r}.")
 
@@ -419,7 +419,7 @@ def _extract_lhs(ast: _Expr, store: Optional[object]) -> float:
         try:
             return float(v)
         except (TypeError, ValueError):
-            pass
+            pass  # non-fatal
     if isinstance(ast, _BinOp) and ast.op in ("AND", "OR"):
         v = _extract_lhs(ast.left, store)
         if not math.isnan(v):

@@ -58,7 +58,7 @@ def _notify(title: str, message: str) -> None:
                 capture_output=True,
             )
     except Exception:
-        pass
+        pass  # non-fatal
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────

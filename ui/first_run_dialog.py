@@ -104,7 +104,6 @@ _SLIDES = [
 
 # Total slide count including the interactive notification slide
 _TOTAL_SLIDES = len(_SLIDES) + 1
-_NOTIF_SLIDE_IDX = len(_SLIDES)   # index 3
 
 
 class WelcomeOverlay(QWidget):

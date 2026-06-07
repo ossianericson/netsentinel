@@ -312,7 +312,7 @@ class IpCalculatorPage(QWidget):
             net = ipaddress.IPv4Network("192.168.1.0/24", strict=False)
             self._update_binary(ipaddress.IPv4Address("192.168.1.0"), net)
         except Exception:
-            pass
+            pass  # non-fatal
         return card
 
     def _make_bit_row(self, label: str) -> tuple[QWidget, list[QLabel]]:

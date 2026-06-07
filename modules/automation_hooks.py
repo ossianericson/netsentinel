@@ -110,7 +110,7 @@ class AutomationEngine:
                 data = [asdict(r) for r in self._rules]
             p.write_text(json.dumps(data, indent=2), encoding="utf-8")
         except Exception:
-            pass
+            pass  # non-fatal
 
     # ── CRUD ──────────────────────────────────────────────────────────────────
 
@@ -196,7 +196,7 @@ class AutomationEngine:
                 try:
                     on_log(rule.id, stream, text)
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
         script = rule.script_path.strip()
         if not script:

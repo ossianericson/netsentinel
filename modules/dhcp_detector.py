@@ -30,7 +30,7 @@ try:
     )
     SCAPY_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ class DHCPDetector:
             )
             self.on_offer(offer)
         except Exception:
-            pass
+            pass  # non-fatal
 
     def run(self):
         if not SCAPY_AVAILABLE:
@@ -186,7 +186,7 @@ class DHCPDetector:
             if self._sniffer:
                 self._sniffer.stop()
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 # ── Public scan entry point ───────────────────────────────────────────────────

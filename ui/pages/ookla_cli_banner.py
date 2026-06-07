@@ -182,7 +182,7 @@ class OoklaCliBanner(QFrame):
                 self.hide()
                 return
         except Exception:
-            pass
+            pass  # non-fatal
         # Only show on Windows (winget is Windows-only)
         if platform.system() != "Windows":
             self.hide()

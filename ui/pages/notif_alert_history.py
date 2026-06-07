@@ -485,7 +485,7 @@ class _NotifAlertHistoryMixin:
         try:
             self._log_detail_retry_btn.clicked.disconnect()
         except RuntimeError:
-            pass
+            pass  # non-fatal
         self._log_detail_retry_btn.clicked.connect(self._retry_log_entry)
         self._log_detail.setVisible(True)
 
@@ -727,7 +727,7 @@ class _NotifAlertHistoryMixin:
                 try:
                     self._store.acknowledge_alert(int(alert_id))
                 except Exception:
-                    pass
+                    pass  # non-fatal
         self._alert_history_table.clearSelection()
         self._refresh_alert_history()
         self.alert_acknowledged.emit()

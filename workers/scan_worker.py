@@ -24,7 +24,7 @@ def _stp_scan_process_target(gateway_mac, duration, result_q, event_q, mp_stop):
         try:
             event_q.put((kind, payload))
         except Exception:
-            pass
+            pass  # non-fatal
 
     try:
         from modules.stp_detector import scan
@@ -66,7 +66,7 @@ def _storm_scan_process_target(duration, warn_threshold, storm_threshold,
         try:
             event_q.put((kind, payload))
         except Exception:
-            pass
+            pass  # non-fatal
 
     try:
         from modules.storm_analyser import scan
@@ -88,7 +88,7 @@ def _storm_scan_process_target(duration, warn_threshold, storm_threshold,
                 storm_level="UNKNOWN",
             ))
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 class Module1Worker(QThread):

@@ -250,7 +250,7 @@ def _probe_service(sock: "socket.socket", port: int, ip: str, timeout: float) ->
             version = "Telnet"
 
     except Exception:
-        pass
+        pass  # non-fatal
 
     return banner, version
 

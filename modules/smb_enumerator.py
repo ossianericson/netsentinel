@@ -39,7 +39,7 @@ try:
     from impacket.smbconnection import SMBConnection  # type: ignore
     IMPACKET_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 
 # ── Data classes ─────────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ def _netbios_name_query(host: str, timeout: float = 3.0) -> NetBIOSInfo:
             info.mac = ":".join(f"{b:02x}" for b in mac_bytes)
 
     except Exception:
-        pass
+        pass  # non-fatal
     return info
 
 
@@ -250,9 +250,9 @@ def _smb_anonymous_banner(host: str, timeout: float = 5.0) -> tuple:
             anonymous_ok = True   # We got a response = SMB is open
 
     except ConnectionRefusedError:
-        pass
+        pass  # non-fatal
     except Exception:
-        pass
+        pass  # non-fatal
     return os_version, anonymous_ok
 
 
@@ -278,7 +278,7 @@ def _net_view_shares(host: str) -> List[SMBShare]:
                     comment=m.group(3).strip()
                 ))
     except Exception:
-        pass
+        pass  # non-fatal
     return shares
 
 

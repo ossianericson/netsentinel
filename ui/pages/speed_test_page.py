@@ -1040,7 +1040,7 @@ class SpeedTestPage(QWidget):
                 ping_val = float(message.split(":")[1].split("ms")[0].strip())
                 self._lbl_ping.setText(f"{ping_val:.0f}")
             except (IndexError, ValueError):
-                pass
+                pass  # non-fatal
             self._gauge.set_value(0.0, "download")
             self._gauge.set_status("Starting…")
 
@@ -1341,7 +1341,7 @@ class SpeedTestPage(QWidget):
             try:
                 self._hist_chart_canvas.mpl_disconnect(self._hist_chart_cid)
             except Exception:
-                pass
+                pass  # non-fatal
             self._hist_chart_cid = None
 
     def hideEvent(self, event) -> None:
@@ -1517,7 +1517,7 @@ class SpeedTestPage(QWidget):
                         try:
                             baseline_dl = float(v)
                         except (TypeError, ValueError):
-                            pass
+                            pass  # non-fatal
                 break
 
         for r in range(self._hist_table.rowCount()):

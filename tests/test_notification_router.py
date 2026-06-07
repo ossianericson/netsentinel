@@ -284,9 +284,8 @@ class TestSnoozeJsonPersistence(unittest.TestCase):
     def test_no_pyqt_import_in_snooze_methods(self):
         """Snooze methods must not lazily import PyQt6.QtCore.QSettings."""
         import inspect
-        import modules.notification_router as nr_mod
         for method_name in ("_restore_snoozes", "set_snooze", "clear_snooze"):
-            src = inspect.getsource(getattr(nr_mod.NotificationRouter, method_name))
+            src = inspect.getsource(getattr(NotificationRouter, method_name))
             assert "import QSettings" not in src and "QSettings(" not in src, (
                 f"{method_name} still uses QSettings"
             )

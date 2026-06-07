@@ -25,7 +25,7 @@ try:
     from scapy.all import AsyncSniffer, ARP, Ether  # type: ignore
     SCAPY_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 
 # ── Data classes ──────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ def _build_baseline() -> Dict[str, str]:
                 if mac != "ff:ff:ff:ff:ff:ff":
                     baseline[ip] = mac
     except Exception:
-        pass
+        pass  # non-fatal
     return baseline
 
 
@@ -185,7 +185,7 @@ class ARPSniffer:
             self._mac_to_ips[src_mac].add(src_ip)
 
         except Exception:
-            pass
+            pass  # non-fatal
 
     def start(self):
         if not SCAPY_AVAILABLE:
@@ -213,7 +213,7 @@ class ARPSniffer:
             if self._sniffer:
                 self._sniffer.stop()
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 # ── Public scan entry point ───────────────────────────────────────────────────

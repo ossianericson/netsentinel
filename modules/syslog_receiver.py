@@ -287,7 +287,7 @@ class SyslogReceiver:
                 try:
                     sock.close()
                 except Exception:
-                    pass
+                    pass  # non-fatal
                 continue
         raise OSError(f"Could not bind syslog UDP socket on port {self._port} or fallback {FALLBACK_PORT}")
 
@@ -314,5 +314,5 @@ class SyslogReceiver:
             try:
                 self._sock.close()
             except Exception:
-                pass
+                pass  # non-fatal
             self._sock = None

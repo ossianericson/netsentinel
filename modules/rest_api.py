@@ -85,7 +85,7 @@ try:
     from flask import Flask, jsonify, request, abort  # type: ignore
     FLASK_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 _start_ts: float = time.time()
 

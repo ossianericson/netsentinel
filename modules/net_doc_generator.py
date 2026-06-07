@@ -237,7 +237,7 @@ def _certs_section(cert_data: List[Dict]) -> str:
                 exp_dt = datetime.datetime.fromisoformat(str(expiry).replace("Z", "+00:00"))
                 days   = (exp_dt - now).days
             except Exception:
-                pass
+                pass  # non-fatal
 
         if days is not None:
             if days < 0:

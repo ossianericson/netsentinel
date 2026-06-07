@@ -173,4 +173,4 @@ class PluginGuide(QScrollArea):
         try:
             Path(path).write_text(_TEMPLATE, encoding="utf-8")
         except Exception:
-            pass
+            pass  # non-fatal

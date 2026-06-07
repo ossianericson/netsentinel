@@ -996,7 +996,7 @@ class _SettingsCardsMixin:
             if win and hasattr(win, "_tray_manager"):
                 win._tray_manager.set_minimize_to_tray(checked)
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _on_minimize_tray_toggled(self, checked: bool) -> None:
         self._mark_dirty()

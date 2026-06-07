@@ -263,7 +263,7 @@ class _HardwareBrowseMixin:
                     lay.addWidget(icon_lbl)
                     icon_widget_added = True
             except Exception:
-                pass
+                pass  # non-fatal
         if not icon_widget_added:
             icon_lbl = QLabel(_TYPE_ICON.get(meta.get("type", ""), "🔌"))
             icon_lbl.setFixedWidth(22)

@@ -95,4 +95,4 @@ class RestApiWorker(QThread):
                 f"http://{host}:{self._port}/health", timeout=1
             )
         except Exception:
-            pass
+            pass  # non-fatal

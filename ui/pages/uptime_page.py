@@ -19,7 +19,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QPushButton,
     QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,

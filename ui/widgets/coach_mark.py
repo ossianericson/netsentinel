@@ -28,14 +28,12 @@ from __future__ import annotations
 
 from PyQt6.QtCore import (
     QEasingCurve,
-    QPoint,
     QPropertyAnimation,
     QRect,
     Qt,
     QTimer,
     pyqtSignal,
 )
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 from ui.styles import (
     ACCENT_DARK, BG_HOVER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,

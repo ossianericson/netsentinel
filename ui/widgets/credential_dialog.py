@@ -161,7 +161,7 @@ def show_credential_dialog(
                 _kr.set_password("NetSentinel/plugin", iid, pw)
                 _kr.set_password("NetSentinel/hardware", ip, pw)
             except Exception:
-                pass
+                pass  # non-fatal
         dlg.accept()
 
     def _run_test() -> None:
@@ -193,7 +193,7 @@ def show_credential_dialog(
                 _kr.set_password("NetSentinel/plugin", iid, pw)
                 _kr.set_password("NetSentinel/hardware", ip, pw)
             except Exception:
-                pass
+                pass  # non-fatal — keyring write failure
             # Cache the test result so the polling worker can show it immediately
             # on first start rather than waiting for the first full poll to complete.
             try:
@@ -203,7 +203,7 @@ def show_credential_dialog(
                 result["_instance_id"] = iid
                 _save_last_result(iid, result)
             except Exception:
-                pass
+                pass  # non-fatal
             QTimer.singleShot(600, dlg.accept)
 
         def _on_failure(msg: str) -> None:
@@ -211,7 +211,7 @@ def show_credential_dialog(
                 import keyring as _kr
                 _kr.delete_password("NetSentinel/hardware", ip)
             except Exception:
-                pass
+                pass  # non-fatal
             _set_status(f"✗  {msg}", RED)
             test_btn.setEnabled(True)
             cancel_btn.setEnabled(True)

@@ -43,7 +43,7 @@ class _HomeSuggestionsMixin:
                     if (now - ts).days < _SNOOZE_DAYS:
                         return True
                 except Exception:
-                    pass
+                    pass  # ignore invalid date in snooze registry
         return False
 
     def _record_suggestion_acted(self, action_key: str | None) -> None:

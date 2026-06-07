@@ -43,7 +43,7 @@ try:
     import paho.mqtt.client as mqtt  # type: ignore
     _PAHO_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 
 # ── MAC / IP sanitiser for MQTT topic segments ────────────────────────────────
@@ -108,7 +108,7 @@ class MqttPublisher:
             try:
                 c.disconnect()
             except Exception:
-                pass
+                pass  # non-fatal
 
     def is_connected(self) -> bool:
         return self._connected
@@ -182,7 +182,7 @@ class MqttPublisher:
             try:
                 cb(connected, msg)
             except Exception:
-                pass
+                pass  # non-fatal
 
     # ── Low-level publish ─────────────────────────────────────────────────────
 

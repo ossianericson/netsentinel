@@ -6,7 +6,6 @@ Tests for GettingStartedCard (H2+H3 sprint changes):
 - refresh_checklist marks all 6 steps
 """
 import pytest
-import sys
 
 try:
     from PyQt6.QtWidgets import QApplication
@@ -24,7 +23,7 @@ def test_step_order_scan_first():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -39,7 +38,7 @@ def test_step_order_logger_last():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -56,7 +55,7 @@ def test_step_order_hw_after_scan():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -74,7 +73,7 @@ def test_checklist_states_includes_logger():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -90,7 +89,7 @@ def test_checklist_states_all_keys():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -109,7 +108,7 @@ def test_notify_hw_detected_modem_changes_zte_dot():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -126,7 +125,7 @@ def test_notify_hw_detected_router_changes_deco_dot():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -140,7 +139,7 @@ def test_notify_hw_detected_unknown_type_no_crash():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -156,7 +155,7 @@ def test_freshness_strip_pills_have_navigate_to_signal():
     try:
         strip.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -172,7 +171,7 @@ def test_freshness_strip_pills_are_buttons():
     try:
         strip.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -189,7 +188,7 @@ def test_getting_started_card_has_completion_done_signal():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -207,7 +206,7 @@ def test_getting_started_card_completion_done_is_connectable():
     try:
         card.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -223,7 +222,7 @@ def test_freshness_strip_has_update_logger_tooltip():
     try:
         strip.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -241,7 +240,7 @@ def test_freshness_strip_update_logger_tooltip_when_active():
     try:
         strip.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -259,7 +258,7 @@ def test_freshness_strip_update_logger_tooltip_noop_when_inactive():
     try:
         strip.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):

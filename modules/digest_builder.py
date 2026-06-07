@@ -125,7 +125,7 @@ def _grade_kpi(store: "MetricStore") -> str:
                 f'</div>'
             )
     except Exception:
-        pass
+        pass  # non-fatal
     return '<div class="kpi"><div class="label">Grade</div><div class="value">—</div></div>'
 
 

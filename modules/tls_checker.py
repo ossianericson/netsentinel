@@ -72,7 +72,7 @@ def check_cert(host: str, port: int = 443, timeout: float = 5.0) -> CertInfo:
                 info.days_remaining = delta
                 info.is_expired     = delta < 0
             except Exception:
-                pass
+                pass  # non-fatal
 
         info.is_self_signed = (subject == issuer)
 

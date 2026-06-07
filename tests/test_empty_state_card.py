@@ -3,7 +3,6 @@ import pytest
 
 try:
     from PyQt6.QtWidgets import QApplication, QLabel, QPushButton
-    from PyQt6.QtCore import QCoreApplication
     _HAS_QT = True
 except ImportError:
     _HAS_QT = False
@@ -34,7 +33,7 @@ def card():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     if app:
         for _ in range(3):
             app.processEvents()
@@ -95,7 +94,7 @@ def test_card_clicked_connects_to_external_slot():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     if app:
         for _ in range(3):
             app.processEvents()

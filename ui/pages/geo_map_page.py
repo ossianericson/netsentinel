@@ -801,7 +801,7 @@ class GeoMapPage(QWidget):
                 if getattr(e, "itype", "") == "ip" and e.indicator == ip
             ]
         except Exception:
-            pass
+            pass  # non-fatal
 
         if ti_entries:
             best = max(ti_entries, key=lambda e: e.confidence)
@@ -1010,7 +1010,7 @@ class GeoMapPage(QWidget):
             if result and not result.is_bogon and result.latitude != 0.0:
                 self._home_ll = (result.latitude, result.longitude)
         except Exception:
-            pass
+            pass  # non-fatal
 
     # ── Button handlers ───────────────────────────────────────────────────────
 
@@ -1169,7 +1169,7 @@ class GeoMapPage(QWidget):
                 )
                 self._dl_status.setStyleSheet(f"font-size:9px; color:{TEXT_SECONDARY};")
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _on_table_selection(self) -> None:
         rows = self._ip_table.selectedItems()

@@ -294,7 +294,7 @@ def _resolve_path(p: str) -> str:
         if appdata_copy.exists():
             return str(appdata_copy)
     except Exception:
-        pass
+        pass  # non-fatal — AppData lookup failure
     return p
 
 
@@ -498,7 +498,7 @@ def _load_health(path: str) -> dict:
         try:
             return json.loads(raw)
         except Exception:
-            pass
+            pass  # non-fatal
     return {"success": 0, "errors": 0, "consecutive": 0,
             "last_ok": 0.0, "last_err": "", "disabled": False}
 
@@ -554,7 +554,7 @@ def _load_instance_config(instance_id: str) -> dict:
         try:
             return json.loads(raw)
         except Exception:
-            pass
+            pass  # non-fatal
     return {}
 
 

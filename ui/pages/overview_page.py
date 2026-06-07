@@ -844,4 +844,4 @@ class OverviewPage(QWidget):
                 if devices:
                     self.set_has_results(True)
             except Exception:
-                pass
+                pass  # non-fatal

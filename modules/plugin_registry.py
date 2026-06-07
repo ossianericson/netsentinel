@@ -184,7 +184,7 @@ def install_plugin(
                 try:
                     on_progress(downloaded, total)
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
     # Basic safety check — must look like a Python source file
     text = buf.decode("utf-8", errors="replace")

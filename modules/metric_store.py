@@ -99,7 +99,7 @@ class MetricStore(MetricStoreQueryMixin):
                 conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 conn.close()
         except Exception:
-            pass
+            pass  # non-fatal
 
     # ── SQLAlchemy engine setup ───────────────────────────────────────────────
 

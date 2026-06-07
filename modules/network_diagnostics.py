@@ -137,7 +137,7 @@ def _ping_host(host: str) -> Tuple[float, str]:
             if m:
                 return float(m.group(1)), resolved
     except Exception:
-        pass
+        pass  # non-fatal
     return -1.0, resolved
 
 
@@ -212,7 +212,7 @@ def _speed_test() -> float:
         if elapsed > 0:
             return (len(data) * 8) / (elapsed * 1_000_000)
     except Exception:
-        pass
+        pass  # non-fatal
     return -1.0
 
 
@@ -274,7 +274,7 @@ def _traceroute(target: str = "8.8.8.8", max_hops: int = 15) -> List[TraceHop]:
                         )
                     )
     except Exception:
-        pass
+        pass  # non-fatal
     return hops
 
 
@@ -306,7 +306,7 @@ def _dns_leak_test() -> DnsLeakResult:
         try:
             socket.getaddrinfo(f"{uid}.bash.ws", None)
         except Exception:
-            pass
+            pass  # non-fatal
 
         # Step 3: fetch results
         result_req = urllib.request.Request(

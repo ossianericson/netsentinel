@@ -327,4 +327,4 @@ class ReportScheduler:
             try:
                 path.unlink()
             except OSError:
-                pass
+                pass  # non-fatal

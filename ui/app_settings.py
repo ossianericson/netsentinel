@@ -123,7 +123,7 @@ def restore_settings(window) -> None:
         try:
             window.restoreGeometry(QByteArray.fromBase64(geom_b64.encode()))
         except Exception:
-            pass
+            pass  # non-fatal
     # Sidebar nav state
     if s.value("nav/collapsed", "False") == "True" and not window._nav_collapsed:
         window._toggle_sidebar()

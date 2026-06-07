@@ -24,7 +24,7 @@ def _make_stub(rows=None):
 
 
 def test_import():
-    import modules.metric_store_queries_uptime  # noqa: F401
+    from modules import metric_store_queries_uptime  # noqa: F401
 
 
 def test_class_importable():

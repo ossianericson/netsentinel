@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock
 
 
 # ── Stub ────────────────────────────────────────────────────────────────────
@@ -25,7 +24,7 @@ def _make_stub(rows=None):
 
 
 def test_import():
-    import modules.metric_store_queries_metrics  # noqa: F401
+    from modules import metric_store_queries_metrics  # noqa: F401
 
 
 def test_class_importable():

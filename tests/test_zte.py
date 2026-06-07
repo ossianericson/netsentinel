@@ -88,7 +88,7 @@ class ZTEMC889:
                 cid_int = int(cell_id, 16) if any(c.isalpha() for c in str(cell_id)) else int(cell_id)
                 enbid = str(cid_int >> 8)
             except:
-                pass
+                pass  # non-fatal
 
         print(f"\n📡 ZTE MC889 @ {datetime.now().strftime('%H:%M:%S')}")
         print("=" * 95)

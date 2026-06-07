@@ -282,7 +282,7 @@ def apply_sqlite_schema(conn: sqlite3.Connection, write_lock: threading.Lock) ->
         try:
             conn.execute("PRAGMA VACUUM")
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 def apply_sqlalchemy_schema(engine) -> None:

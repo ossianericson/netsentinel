@@ -23,8 +23,8 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtWidgets import QApplication, QLabel, QToolTip, QWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QLabel, QWidget
 
 from ui.styles import ACCENT, TEXT_PRIMARY, TEXT_SECONDARY
 

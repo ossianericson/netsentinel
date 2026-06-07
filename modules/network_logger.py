@@ -82,7 +82,7 @@ def _ping_once(host: str) -> float:
             if m:
                 return float(m.group(1))
     except Exception:
-        pass
+        pass  # non-fatal
     return -1.0
 
 
@@ -232,7 +232,7 @@ class NetworkLogger:
             try:
                 self._on_rotate(new_path, self._segment)
             except Exception:
-                pass
+                pass  # non-fatal
 
     def start(
         self,
@@ -340,7 +340,7 @@ class NetworkLogger:
                     try:
                         self._on_entry(entry)
                     except Exception:
-                        pass
+                        pass  # non-fatal
 
                 # DNS/HTTP/ARP are cycle-level — only emit for first host
                 dns_ms = -1.0

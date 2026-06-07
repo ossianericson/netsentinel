@@ -1322,13 +1322,13 @@ class HubCard(QFrame):
                 try:
                     parts.append(f"RSRP {float(rsrp):.0f} dBm")
                 except (TypeError, ValueError):
-                    pass
+                    pass  # non-fatal
             sinr = extra.get("nr5g_sinr_db") or extra.get("lte_snr_db")
             if sinr is not None:
                 try:
                     parts.append(f"SINR {float(sinr):.1f} dB")
                 except (TypeError, ValueError):
-                    pass
+                    pass  # non-fatal
             summary = "  ·  ".join(parts) if parts else "Online"
             self._metrics_lbl.setText(summary)
             self._metrics_lbl.setStyleSheet(
@@ -1504,7 +1504,7 @@ class HubCard(QFrame):
                 try:
                     keyring.delete_password(service, hw_ip)
                 except Exception:
-                    pass
+                    pass  # non-fatal
             status.setText("Forgotten")
             status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
         except Exception:

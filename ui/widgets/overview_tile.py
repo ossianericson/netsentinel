@@ -598,7 +598,7 @@ class TlsStatusTile(_BaseTile):
             self._expiring_lbl.setText(str(expiring))
             self._expired_lbl.setText(str(expired))
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 class RttSummaryTile(_BaseTile):
@@ -960,7 +960,7 @@ class EventFeedTile(_BaseTile):
                 label  = etype.replace("_", " ").lower()
                 unified.append((ts, colour, f"[device]  {ip}  {label}"))
         except Exception:
-            pass
+            pass  # non-fatal
 
         # Fired alerts
         try:
@@ -975,7 +975,7 @@ class EventFeedTile(_BaseTile):
                     msg += f"  ({host})"
                 unified.append((ts, colour, f"[alert]  {msg}"))
         except Exception:
-            pass
+            pass  # non-fatal
 
         # Sort newest-first, cap at 20
         unified.sort(key=lambda x: x[0], reverse=True)
@@ -1056,7 +1056,7 @@ class HaDevicesTile(_BaseTile):
                     self._body_layout.count() - 1, label
                 )
         except Exception:
-            pass
+            pass  # non-fatal
 
     def update_ha_states(self, states: dict) -> None:
         """states: {ip: UP/DOWN/DEGRADED/UNKNOWN} — called from dashboard."""
@@ -1140,7 +1140,7 @@ class LiveBandwidthTile(_BaseTile):
             self._worker.stats_ready.connect(self._on_stats)
             self._worker.start()
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _stop_worker(self) -> None:
         w = getattr(self, "_worker", None)
@@ -1150,7 +1150,7 @@ class LiveBandwidthTile(_BaseTile):
                 w.quit()
                 w.wait(2000)
             except Exception:
-                pass
+                pass  # non-fatal
             self._worker = None
 
     def _on_stats(self, stats: dict) -> None:
@@ -1438,7 +1438,7 @@ class TopTalkersTile(_BaseTile):
             self._worker.stats_ready.connect(self._on_stats)
             self._worker.start()
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _stop_worker(self) -> None:
         w = getattr(self, "_worker", None)
@@ -1446,7 +1446,7 @@ class TopTalkersTile(_BaseTile):
             try:
                 w.stop(); w.quit(); w.wait(2000)
             except Exception:
-                pass
+                pass  # non-fatal
             self._worker = None
 
     def _on_stats(self, stats: dict) -> None:

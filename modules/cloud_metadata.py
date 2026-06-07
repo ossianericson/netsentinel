@@ -147,7 +147,7 @@ def check_local_imds() -> CloudMetadataResult:
                 acct_data = json.loads(v2_account)
                 result.account_id = acct_data.get("AccountId")
             except Exception:
-                pass
+                pass  # non-fatal
         result.findings.append("AWS IMDSv2 token obtained — IMDSv2 is enforced (secure).")
         result.risk_level = "INFO"
 

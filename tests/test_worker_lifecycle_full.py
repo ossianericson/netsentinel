@@ -47,7 +47,7 @@ class TestHwDetectWorker:
             try:
                 w.deleteLater()
             except RuntimeError:
-                pass
+                pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
                 app = QApplication.instance()
@@ -55,7 +55,7 @@ class TestHwDetectWorker:
                     for _ in range(3):
                         app.processEvents()
             except Exception:
-                pass
+                pass  # non-fatal
 
     def test_lifecycle(self):
         from workers.hw_detect_worker import HwDetectWorker
@@ -71,7 +71,7 @@ class TestHwDetectWorker:
                 try:
                     w.deleteLater()
                 except RuntimeError:
-                    pass
+                    pass  # non-fatal
                 try:
                     from PyQt6.QtWidgets import QApplication
                     app = QApplication.instance()
@@ -79,7 +79,7 @@ class TestHwDetectWorker:
                         for _ in range(3):
                             app.processEvents()
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
 
 # ── PluginWorker ───────────────────────────────────────────────────────────────
@@ -100,7 +100,7 @@ class TestPluginWorker:
             try:
                 w.deleteLater()
             except RuntimeError:
-                pass
+                pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
                 app = QApplication.instance()
@@ -108,7 +108,7 @@ class TestPluginWorker:
                     for _ in range(3):
                         app.processEvents()
             except Exception:
-                pass
+                pass  # non-fatal
 
     def test_lifecycle(self, tmp_path):
         from workers.plugin_worker import PluginWorker
@@ -122,7 +122,7 @@ class TestPluginWorker:
             try:
                 w.deleteLater()
             except RuntimeError:
-                pass
+                pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
                 app = QApplication.instance()
@@ -130,7 +130,7 @@ class TestPluginWorker:
                     for _ in range(3):
                         app.processEvents()
             except Exception:
-                pass
+                pass  # non-fatal
 
 
 # ── WiFiMonitorWorker ──────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ class TestWifiMonitorWorker:
             try:
                 w.deleteLater()
             except RuntimeError:
-                pass
+                pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
                 app = QApplication.instance()
@@ -156,7 +156,7 @@ class TestWifiMonitorWorker:
                     for _ in range(3):
                         app.processEvents()
             except Exception:
-                pass
+                pass  # non-fatal
 
     def test_lifecycle(self):
         from workers.wifi_monitor_worker import WiFiMonitorWorker
@@ -171,7 +171,7 @@ class TestWifiMonitorWorker:
                 try:
                     w.deleteLater()
                 except RuntimeError:
-                    pass
+                    pass  # non-fatal
                 try:
                     from PyQt6.QtWidgets import QApplication
                     app = QApplication.instance()
@@ -179,7 +179,7 @@ class TestWifiMonitorWorker:
                         for _ in range(3):
                             app.processEvents()
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
 
 # ── S5-3: _running flag audit ─────────────────────────────────────────────────

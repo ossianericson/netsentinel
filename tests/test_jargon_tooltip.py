@@ -70,7 +70,7 @@ def test_get_definition_case_sensitive():
     from ui.widgets.jargon_tooltip import get_definition
     # Terms in the glossary are stored with exact case
     d_upper = get_definition("DNS")
-    d_lower = get_definition("dns")
+    _ = get_definition("dns")
     # At least the canonical form works
     assert d_upper != ""
 
@@ -86,7 +86,7 @@ def jt():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     if app:
         for _ in range(3):
             app.processEvents()
@@ -106,7 +106,7 @@ def test_jargon_tooltip_unknown_term():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     if app:
         for _ in range(3):
             app.processEvents()

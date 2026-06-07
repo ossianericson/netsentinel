@@ -29,9 +29,9 @@ def test_already_installed_finds_match():
 
 def test_already_installed_no_ui_import():
     """already_installed() must not import from ui/ or PyQt6."""
-    import importlib, inspect
-    import modules.hw_detect as m
-    src = inspect.getsource(m.already_installed)
+    import inspect
+    import modules.hw_detect
+    src = inspect.getsource(modules.hw_detect.already_installed)
     assert "PyQt6" not in src
     assert "ui.pages" not in src
 
@@ -61,7 +61,7 @@ def test_load_catalogue_no_network():
         from modules.hw_detect import load_catalogue
         load_catalogue(try_remote=False)
     except Exception:
-        pass
+        pass  # non-fatal
     finally:
         urllib.request.urlopen = original
     assert len(calls) == 0, "load_catalogue(try_remote=False) made a network call"

@@ -454,7 +454,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
                     )
                 return
         except Exception:
-            pass
+            pass  # non-fatal
 
         ok, _, meta = _validate_script(path)
         hw_type = meta.get("type", "other") if ok else "other"

@@ -671,7 +671,7 @@ class _LogSourcePanelMixin:
                     if ts_start <= float(p.ts) <= ts_end:
                         rows.append(self._modem_point_to_entry(p))
             except Exception:
-                pass
+                pass  # non-fatal
             try:
                 for p in self._store.query_mesh_signal_log(hours=hours, limit=10_000):
                     if ts_start <= float(p.ts) <= ts_end:
@@ -684,13 +684,13 @@ class _LogSourcePanelMixin:
                             "  ·  ".join(parts), "OK",
                         ))
             except Exception:
-                pass
+                pass  # non-fatal
             try:
                 for row in self._store.query_plugin_log(hours=hours, limit=10_000):
                     if ts_start <= float(row.get("ts", 0)) <= ts_end:
                         rows.append(self._plugin_row_to_entry(row))
             except Exception:
-                pass
+                pass  # non-fatal
         rows.sort(key=lambda e: e["ts"], reverse=True)
         rows = rows[:_MAX_ROWS]
         filt = self._search_box.text().strip().lower()
@@ -797,7 +797,7 @@ class _LogSourcePanelMixin:
                         r = e["row"]
                         rows.append((_fmt_ts(e["ts"]), r[1], r[2], r[3], r[4], r[5]))
             except Exception:
-                pass
+                pass  # non-fatal
             try:
                 for p in self._store.query_mesh_signal_log(hours=hours, limit=10_000):
                     if ts_start <= float(p.ts) <= ts_end:
@@ -808,7 +808,7 @@ class _LogSourcePanelMixin:
                                      f"{p.online_count}/{p.unit_count} units",
                                      "  ·  ".join(parts), "OK"))
             except Exception:
-                pass
+                pass  # non-fatal
             try:
                 for row in self._store.query_plugin_log(hours=hours, limit=10_000):
                     if ts_start <= float(row.get("ts", 0)) <= ts_end:
@@ -816,7 +816,7 @@ class _LogSourcePanelMixin:
                         r = e["row"]
                         rows.append((_fmt_ts(e["ts"]), r[1], r[2], r[3], r[4], r[5]))
             except Exception:
-                pass
+                pass  # non-fatal
         rows.sort(key=lambda r: r[0])
         try:
             with open(path, "w", newline="", encoding="utf-8") as f:

@@ -61,7 +61,7 @@ def get_network_info() -> dict:
                 with _wr.OpenKey(_wr.HKEY_LOCAL_MACHINE, _PARAMS) as k:
                     info["domain"] = _rval(k, "Domain") or _rval(k, "DhcpDomain")
             except OSError:
-                pass
+                pass  # non-fatal
 
             try:
                 with _wr.OpenKey(_wr.HKEY_LOCAL_MACHINE, _IFACES) as k:
@@ -97,11 +97,11 @@ def get_network_info() -> dict:
                                 if not info["domain"]:
                                     info["domain"] = _rval(ik, "Domain") or _rval(ik, "DhcpDomain")
                         except OSError:
-                            pass
+                            pass  # non-fatal
             except OSError:
-                pass
+                pass  # non-fatal
         except Exception:
-            pass
+            pass  # non-fatal
 
     elif system == "Darwin":
         try:
@@ -114,23 +114,23 @@ def get_network_info() -> dict:
                     if ip:
                         info["local_ips"].append({"ip": ip, "mask": "", "adapter": iface})
                 except Exception:
-                    pass
+                    pass  # non-fatal
         except Exception:
-            pass
+            pass  # non-fatal
         try:
             raw = subprocess.check_output(["route", "get", "default"], text=True, timeout=5)
             m = re.search(r"gateway:\s*(\d+\.\d+\.\d+\.\d+)", raw)
             if m:
                 info["gateway"] = m.group(1)
         except Exception:
-            pass
+            pass  # non-fatal
         try:
             with open("/etc/resolv.conf") as f:
                 for line in f:
                     if line.startswith("nameserver"):
                         info["dns_servers"].append(line.split()[1].strip())
         except Exception:
-            pass
+            pass  # non-fatal
 
     else:  # Linux
         try:
@@ -140,7 +140,7 @@ def get_network_info() -> dict:
             ):
                 info["local_ips"].append({"ip": m.group(1), "mask": m.group(2), "adapter": ""})
         except Exception:
-            pass
+            pass  # non-fatal
         try:
             raw = subprocess.check_output(
                 ["ip", "route", "show", "default"], text=True, timeout=5
@@ -149,14 +149,14 @@ def get_network_info() -> dict:
             if m:
                 info["gateway"] = m.group(1)
         except Exception:
-            pass
+            pass  # non-fatal
         try:
             with open("/etc/resolv.conf") as f:
                 for line in f:
                     if line.startswith("nameserver"):
                         info["dns_servers"].append(line.split()[1].strip())
         except Exception:
-            pass
+            pass  # non-fatal
 
     seen: set = set()
     info["dns_servers"] = [
@@ -185,7 +185,7 @@ def get_network_info() -> dict:
                 if m:
                     info["gateway_mac"] = m.group(0).lower()
         except Exception:
-            pass
+            pass  # non-fatal
 
     return info
 
@@ -254,13 +254,13 @@ def get_dhcp_info() -> dict:
                                             "%A, %B %d, %Y %I:%M:%S %p"
                                         )
                                     except Exception:
-                                        pass
+                                        pass  # non-fatal
                             if result["dhcp_enabled"]:
                                 break
                     except OSError:
-                        pass
+                        pass  # non-fatal
         except Exception:
-            pass
+            pass  # non-fatal
         if result["lease_obtained"] and result["lease_expires"]:
             for fmt in (
                 "%A, %B %d, %Y %I:%M:%S %p",
@@ -273,7 +273,7 @@ def get_dhcp_info() -> dict:
                     result["lease_duration_h"] = round((t1 - t0).total_seconds() / 3600, 1)
                     break
                 except ValueError:
-                    pass
+                    pass  # non-fatal
 
     elif system == "Darwin":
         for iface in ("en0", "en1"):
@@ -292,7 +292,7 @@ def get_dhcp_info() -> dict:
                         result["lease_duration_h"] = round(int(m.group(1)) / 3600, 1)
                     break
             except Exception:
-                pass
+                pass  # non-fatal
 
     else:  # Linux
         try:
@@ -306,7 +306,7 @@ def get_dhcp_info() -> dict:
                 if m:
                     result["dhcp_server"] = m.group(1)
         except Exception:
-            pass
+            pass  # non-fatal
         if not result["dhcp_server"]:
             try:
                 for lease_file in [
@@ -322,7 +322,7 @@ def get_dhcp_info() -> dict:
                             result["dhcp_server"] = m.group(1)
                         break
             except Exception:
-                pass
+                pass  # non-fatal
 
     return result
 
@@ -377,7 +377,7 @@ def get_interface_details() -> List[dict]:
                     "speed_mbps": speed_mbps, "signal_pct": -1, "connected": connected,
                 })
         except Exception:
-            pass
+            pass  # non-fatal
 
     elif system == "Darwin":
         try:
@@ -407,11 +407,11 @@ def get_interface_details() -> List[dict]:
                             current["ipv4"] = ip
                             current["connected"] = True
                     except Exception:
-                        pass
+                        pass  # non-fatal
             if current.get("name"):
                 adapters.append(dict(current))
         except Exception:
-            pass
+            pass  # non-fatal
 
     else:  # Linux
         try:
@@ -424,19 +424,19 @@ def get_interface_details() -> List[dict]:
                 try:
                     mac = (iface / "address").read_text().strip()
                 except Exception:
-                    pass
+                    pass  # non-fatal
                 speed_mbps = 0
                 try:
                     speed_mbps = int((iface / "speed").read_text().strip())
                 except Exception:
-                    pass
+                    pass  # non-fatal
                 connected = False
                 ipv4 = ""
                 try:
                     operstate = (iface / "operstate").read_text().strip()
                     connected = operstate == "up"
                 except Exception:
-                    pass
+                    pass  # non-fatal
                 try:
                     raw = subprocess.check_output(
                         ["ip", "-4", "addr", "show", iface.name],
@@ -447,12 +447,12 @@ def get_interface_details() -> List[dict]:
                         ipv4 = m.group(1)
                         connected = True
                 except Exception:
-                    pass
+                    pass  # non-fatal
                 adapters.append({
                     "name": iface.name, "type": t, "mac": mac, "ipv4": ipv4,
                     "speed_mbps": speed_mbps, "signal_pct": -1, "connected": connected,
                 })
         except Exception:
-            pass
+            pass  # non-fatal
 
     return [a for a in adapters if a.get("name")]

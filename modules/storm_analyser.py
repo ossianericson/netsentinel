@@ -17,7 +17,7 @@ try:
     from scapy.all import AsyncSniffer, Ether  # type: ignore
     SCAPY_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 BROADCAST_MAC = "ff:ff:ff:ff:ff:ff"
 
@@ -90,7 +90,7 @@ def scan(
                 else:
                     unicast_count += 1
         except Exception:
-            pass
+            pass  # non-fatal
 
     sniffer = AsyncSniffer(prn=_handle, store=False)
     try:

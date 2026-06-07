@@ -38,7 +38,6 @@ import collections
 import dataclasses
 import json
 import logging
-import os
 import random
 import string
 import subprocess
@@ -59,7 +58,6 @@ except ImportError:
     raise ImportError("psutil required — pip install psutil")
 
 try:
-    import pywinauto
     from pywinauto import Application, Desktop
     from pywinauto.base_wrapper import ElementNotEnabled, ElementNotVisible
     from pywinauto.findwindows import ElementNotFoundError

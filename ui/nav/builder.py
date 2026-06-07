@@ -964,7 +964,7 @@ class _NavBuilderMixin:
             s = _QS(str(self._settings_path()), _QS.Format.IniFormat)
             s.setValue("nav/pinned_labels", "|||".join(sorted(self._nav_pinned_labels)))
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _build_favourites_section(self) -> None:
         """Prepend a Favourites section when the user has pinned at least one page."""
@@ -1101,7 +1101,7 @@ class _NavBuilderMixin:
                     existing.reject()
                     return
             except RuntimeError:
-                pass
+                pass  # non-fatal — palette may have already been closed
         items = self._build_palette_items()
         pal = CommandPalette(items, parent=self)
         pal.load_recent_data(self._store)
@@ -1183,7 +1183,7 @@ class _NavBuilderMixin:
                     self._nav_rail_go_to("Notifications")
                     self._notifications_page._alert_drawer.open(alert_dict)
             except Exception:
-                pass
+                pass  # non-fatal
         elif action.startswith("__recent__"):
             self._replay_recent_action(action[len("__recent__"):])
         elif action == "Run Full Scan":

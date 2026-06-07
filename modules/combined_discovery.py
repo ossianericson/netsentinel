@@ -41,7 +41,7 @@ try:
     from scapy.all import ARP, Ether, IP, TCP, ICMP, srp, sr, sr1  # type: ignore
     SCAPY_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 ProgressCB = Optional[Callable[[str], None]]
 
@@ -122,7 +122,7 @@ def _arp_cache_scan() -> Dict[str, DiscoveredDevice]:
                 if mac != "ff:ff:ff:ff:ff:ff" and not ip.startswith("224.") and not ip.endswith(".255"):
                     devices[ip] = DiscoveredDevice(ip=ip, mac=mac, discovery_methods=["arp-cache"])
     except Exception:
-        pass
+        pass  # non-fatal
     return devices
 
 
@@ -147,7 +147,7 @@ def _arp_sweep(cidr: str, timeout: float = 2.0) -> Dict[str, DiscoveredDevice]:
                 if "arp-sweep" not in devices[ip].discovery_methods:
                     devices[ip].discovery_methods.append("arp-sweep")
     except Exception:
-        pass
+        pass  # non-fatal
     return devices
 
 
@@ -167,7 +167,7 @@ def _ping_single(ip: str, timeout: float) -> Optional[DiscoveredDevice]:
         if r.returncode == 0:
             return DiscoveredDevice(ip=ip, response_ms=ms, discovery_methods=["icmp-ping"])
     except Exception:
-        pass
+        pass  # non-fatal
     return None
 
 
@@ -194,7 +194,7 @@ def _tcp_probe_host(ip: str, ports: List[int], timeout: float) -> Optional[Disco
             if rcv.haslayer(TCP) and rcv[TCP].flags in (0x12, 0x14):  # SYN-ACK or RST
                 return DiscoveredDevice(ip=ip, discovery_methods=["tcp-syn"])
     except Exception:
-        pass
+        pass  # non-fatal
     return None
 
 
@@ -256,7 +256,7 @@ def _mdns_query(timeout: float = 2.0) -> Dict[str, DiscoveredDevice]:
                 break
         sock.close()
     except Exception:
-        pass
+        pass  # non-fatal
     return devices
 
 
@@ -384,7 +384,7 @@ def discover(
                         if name and ip in devices:
                             devices[ip].hostname = name
                     except Exception:
-                        pass
+                        pass  # non-fatal
 
     duration = time.monotonic() - t0
     sorted_devs = sorted(devices.values(), key=lambda d: ipaddress.ip_address(d.ip))

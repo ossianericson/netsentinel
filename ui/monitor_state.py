@@ -516,7 +516,7 @@ class _MonitorStateMixin:
                     self._home_page.set_action_needed(len(unacked), offline)
                     self._home_page.set_pending_alert_rows(unacked)
                 except Exception:
-                    pass
+                    pass  # non-fatal
         # Flyout item dots — always reflect current state
         self._set_flyout_dot("ARP Spoof Watch",    GREEN if arp    else "")
         self._set_flyout_dot("DHCP Rogue Monitor", GREEN if dhcp   else "")
@@ -536,7 +536,7 @@ class _MonitorStateMixin:
                     len(_auto_rules), _auto_ts
                 )
         except Exception:
-            pass
+            pass  # non-fatal
         # HEALTH-1/4: push health + config completeness to Settings page
         if hasattr(self, "_settings_page"):
             try:
@@ -563,15 +563,15 @@ class _MonitorStateMixin:
                     from modules.automation_hooks import get_engine as _gae
                     rule_count = len(_gae().get_rules())
                 except Exception:
-                    pass
+                    pass  # non-fatal
                 try:
                     if self._store:
                         cve_count = len(self._store.list_cve_lifecycles() or [])
                 except Exception:
-                    pass
+                    pass  # non-fatal
                 self._settings_page.refresh_config_completeness(cve_count, rule_count)
             except Exception:
-                pass
+                pass  # non-fatal
         # Section button badges
         self._refresh_section_badges(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
         # Push to Monitor Overview page
@@ -589,7 +589,7 @@ class _MonitorStateMixin:
                         cve=self._store.get_last_event_time("CVE"),
                     )
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
     def _m3_monitoring_active(self) -> bool:
         """Return True if any scan worker (including storm) is currently running."""

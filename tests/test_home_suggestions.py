@@ -5,7 +5,6 @@ and live challenge banner wiring.
 from __future__ import annotations
 
 import datetime
-import sys
 
 import pytest
 
@@ -103,7 +102,7 @@ def home_page(qt_app, monkeypatch):
     try:
         page.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):

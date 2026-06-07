@@ -267,7 +267,7 @@ class _EvidenceWorker(QThread):
             result["cve_count"] = len(cves)
 
         except Exception:
-            pass
+            pass  # non-fatal
         self.done.emit(result)
 
 

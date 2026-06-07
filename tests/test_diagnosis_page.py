@@ -27,7 +27,7 @@ def test_diagnosis_worker_focused_on_accepted():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -41,7 +41,7 @@ def test_diagnosis_worker_focused_on_none_by_default():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):
@@ -81,7 +81,7 @@ def diag_page(qt_app):
     try:
         page.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):

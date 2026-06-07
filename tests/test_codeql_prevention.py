@@ -162,7 +162,7 @@ def _unused_imports(path: Path) -> list[tuple[str, int]]:
                     if isinstance(n, ast.Name):
                         v.used.add(n.id)
             except (SyntaxError, UnicodeEncodeError, ValueError):
-                pass
+                pass  # non-fatal
 
     result = []
     for name, lineno in v.imported.items():

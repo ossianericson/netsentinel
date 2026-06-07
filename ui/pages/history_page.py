@@ -201,7 +201,7 @@ class HistoryPage(QWidget):
             try:
                 self._rtt_card.canvas.mpl_disconnect(self._hover_cid)
             except Exception:
-                pass
+                pass  # non-fatal
             self._hover_cid = None
 
     def _setup_rtt_hover(self, hosts: list) -> None:

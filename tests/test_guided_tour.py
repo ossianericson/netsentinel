@@ -9,7 +9,6 @@ Validates:
   - tour/v1_done is set after skip (via _finish())
   - tour/v1_done is set after completing all steps (via _on_next() × N)
 """
-import sys
 import pytest
 
 try:
@@ -126,7 +125,7 @@ class TestGuidedTour:
     def _make_mock_dashboard(self):
         """Return a minimal mock dashboard with the required tour bar attributes."""
         from unittest.mock import MagicMock
-        app = QApplication.instance()
+        _ = QApplication.instance()
         d = MagicMock()
         d._tour_bar     = MagicMock()
         d._tour_step_lbl = MagicMock()
@@ -219,7 +218,7 @@ class TestWelcomeScanWiring:
         """_start_full_scan must not set _scan_from_home=False when it is
         pre-set to True by _on_welcome_scan."""
         from unittest.mock import MagicMock
-        app = QApplication.instance()
+        _ = QApplication.instance()
 
         dash = MagicMock()
         dash._scan_from_home = True   # pre-set by welcome flow

@@ -5,7 +5,6 @@ Tests for LogHubPage empty state changes (H3-F2):
 - EmptyStateCard CTA button is present on page 0
 """
 import pytest
-import sys
 from unittest.mock import MagicMock
 
 try:
@@ -28,7 +27,7 @@ def log_hub_page(monkeypatch):
     try:
         page.deleteLater()
     except RuntimeError:
-        pass
+        pass  # skip test if PyQt6 unavailable
     app = QApplication.instance()
     if app:
         for _ in range(3):

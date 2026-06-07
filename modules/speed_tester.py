@@ -79,7 +79,7 @@ def fetch_servers(limit: int = 20) -> List[SpeedServer]:
             try:
                 client.get_best_server(closest)
             except Exception:
-                pass
+                pass  # non-fatal
             return [
                 SpeedServer(
                     id=str(s.get("id", "")),
@@ -96,7 +96,7 @@ def fetch_servers(limit: int = 20) -> List[SpeedServer]:
         finally:
             _socket.setdefaulttimeout(_prev)
     except ImportError:
-        pass
+        pass  # non-fatal
     except Exception as exc:
         raise RuntimeError(f"Server fetch failed: {exc}") from exc
 
@@ -128,7 +128,7 @@ def run_test(
             return _run_ookla_cli(cli, server_id=server_id,
                                   on_progress=on_progress, on_sample=on_sample)
         except Exception:
-            pass
+            pass  # non-fatal
 
     try:
         return _run_speedtest_cli(server_id=server_id, on_progress=on_progress,

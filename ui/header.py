@@ -496,7 +496,7 @@ class AppHeaderMixin:
             _SetWindowSubclass.restype  = wt.BOOL
             _SetWindowSubclass(hwnd, self._snap_subclass_proc, 1, 0)
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _install_edge_grips(self):
         """Create 8 transparent resize-grip strips around the window border."""

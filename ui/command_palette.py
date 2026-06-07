@@ -175,7 +175,7 @@ class CommandPalette(QDialog):
                     "alert": a, "search": f"{rule} {host}".lower(),
                 })
         except Exception:
-            pass
+            pass  # non-fatal
 
         if self._data_items:
             all_with_data = list(self._all_items) + [
@@ -218,15 +218,6 @@ class CommandPalette(QDialog):
         else:
             self.action_requested.emit(data["label"])
         self.accept()
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        QApplication.instance().installEventFilter(self)
-        self._search.setFocus()
-
-    def hideEvent(self, event):
-        QApplication.instance().removeEventFilter(self)
-        super().hideEvent(event)
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.MouseButtonPress:

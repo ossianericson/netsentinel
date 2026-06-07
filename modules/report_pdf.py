@@ -50,7 +50,7 @@ def save_pdf_report(
         weasyprint.HTML(string=html_content).write_pdf(str(output_path))
         return output_path
     except ImportError:
-        pass
+        pass  # non-fatal
     except Exception as exc:
         raise RuntimeError(f"weasyprint failed: {exc}") from exc
 
@@ -108,7 +108,7 @@ def save_pdf_report(
     try:
         Path(tmp_html).unlink(missing_ok=True)
     except Exception:
-        pass
+        pass  # non-fatal
 
     raise RuntimeError(
         "No PDF backend available.\n"

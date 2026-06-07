@@ -134,7 +134,7 @@ def _flush_qt_events(qt_app):
             w.close()
             w.deleteLater()
         except Exception:
-            pass
+            pass  # non-fatal
     # Three passes ensures deleteLater() chains are fully resolved.
     for _ in range(3):
         qt_app.processEvents()

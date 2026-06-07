@@ -38,7 +38,7 @@ def _default_db_path() -> Path:
         candidate.touch(exist_ok=True)
         return candidate
     except OSError:
-        pass
+        pass  # non-fatal
 
     return get_app_data_dir() / "NetSentinel.db"
 

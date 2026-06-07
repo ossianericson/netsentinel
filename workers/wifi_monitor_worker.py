@@ -75,7 +75,7 @@ class WiFiMonitorWorker(QThread):
                             break
                         elt = elt.payload if hasattr(elt, "payload") and elt.payload else None
                 except Exception:
-                    pass
+                    pass  # non-fatal
             self.frame_captured.emit({
                 "ts":         time.strftime("%H:%M:%S"),
                 "frame_type": frame_type,

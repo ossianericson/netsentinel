@@ -37,9 +37,9 @@ for _old in _existing:
     try:
         os.remove(_old)
     except OSError:
-        pass
+        pass  # log rotation errors are non-fatal
 
-_log = open(_ROTATED_PATH, "w", encoding="utf-8")  # noqa: WPS515
+_log = open(_ROTATED_PATH, "w", encoding="utf-8")  # noqa: WPS515 lgtm[py/file-not-closed]
 atexit.register(_log.close)
 
 # Update the stable symlink/copy immediately so any process reading
@@ -49,7 +49,7 @@ try:
     _log.flush()
     shutil.copy2(_ROTATED_PATH, LOG_PATH)
 except OSError:
-    pass
+    pass  # best-effort initial log sync
 
 
 def _w(msg: str) -> None:
@@ -59,7 +59,7 @@ def _w(msg: str) -> None:
     try:
         shutil.copy2(_ROTATED_PATH, LOG_PATH)
     except OSError:
-        pass
+        pass  # best-effort sync
     print(msg)
 
 
@@ -115,7 +115,7 @@ try:
     try:
         shutil.copy2(_ROTATED_PATH, LOG_PATH)
     except OSError:
-        pass
+        pass  # non-fatal
 
     sys.exit(result)
 
@@ -130,7 +130,7 @@ except Exception:
     try:
         shutil.copy2(_ROTATED_PATH, LOG_PATH)
     except OSError:
-        pass
+        pass  # non-fatal
 
     print(f"\nFull log: {_ROTATED_PATH}")
     sys.exit(1)

@@ -179,7 +179,7 @@ class _ContextPanel(QFrame):
             try:
                 self._nav_btn.clicked.disconnect()
             except (RuntimeError, TypeError):
-                pass
+                pass  # non-fatal
             self._nav_btn.clicked.connect(lambda: on_navigate(nav_label))
         else:
             self._nav_btn.setVisible(False)
@@ -531,7 +531,7 @@ class ProtocolVizPage(QWidget):
             for badge in ObjectiveBadge.for_protocol(key, self):
                 self._badge_row.addWidget(badge)
         except Exception:
-            pass
+            pass  # non-fatal — badge widget optional
 
     def _build_scene(self, key: str) -> ProtocolSceneData:
         if key == "ARP":

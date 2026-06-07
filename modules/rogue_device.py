@@ -104,7 +104,7 @@ def _get_arp_table() -> List[tuple]:
                             and not ip.endswith(".255")):
                         pairs.append((ip, mac))
     except Exception:
-        pass
+        pass  # non-fatal
     return pairs
 
 
@@ -143,7 +143,7 @@ def _get_ipv6_routers() -> set:
                     if m:
                         routers.add(m.group(1).lower())
     except Exception:
-        pass
+        pass  # non-fatal
     return routers
 
 
@@ -168,7 +168,7 @@ def _get_default_gateway() -> Optional[str]:
             if m:
                 return m.group(1)
     except Exception:
-        pass
+        pass  # non-fatal
     return None
 
 

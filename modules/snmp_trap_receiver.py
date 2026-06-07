@@ -357,5 +357,5 @@ class SnmpTrapReceiver:
             try:
                 self._sock.close()
             except Exception:
-                pass
+                pass  # non-fatal
             self._sock = None

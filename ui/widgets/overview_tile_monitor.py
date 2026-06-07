@@ -108,7 +108,7 @@ class LiveBandwidthTile(_BaseTile):
             self._worker.stats_ready.connect(self._on_stats)
             self._worker.start()
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _stop_worker(self) -> None:
         w = getattr(self, "_worker", None)
@@ -118,7 +118,7 @@ class LiveBandwidthTile(_BaseTile):
                 w.quit()
                 w.wait(2000)
             except Exception:
-                pass
+                pass  # non-fatal
             self._worker = None
 
     def _on_stats(self, stats: dict) -> None:
@@ -406,7 +406,7 @@ class TopTalkersTile(_BaseTile):
             self._worker.stats_ready.connect(self._on_stats)
             self._worker.start()
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _stop_worker(self) -> None:
         w = getattr(self, "_worker", None)
@@ -414,7 +414,7 @@ class TopTalkersTile(_BaseTile):
             try:
                 w.stop(); w.quit(); w.wait(2000)
             except Exception:
-                pass
+                pass  # non-fatal
             self._worker = None
 
     def _on_stats(self, stats: dict) -> None:

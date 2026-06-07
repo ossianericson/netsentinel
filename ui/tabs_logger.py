@@ -566,7 +566,7 @@ class _LoggerTabMixin:
                         "priority": "low",
                     })
             except Exception:
-                pass
+                pass  # non-fatal
 
         # Open CVEs
         if self._store is not None:
@@ -583,7 +583,7 @@ class _LoggerTabMixin:
                         "priority": "high",
                     })
             except Exception:
-                pass
+                pass  # non-fatal
 
         # Poor grade
         bm = getattr(self, "_last_benchmark_result", None)
@@ -661,7 +661,7 @@ class _LoggerTabMixin:
                 joined_count, outage_count, last_str, logger_summary
             )
         except Exception:
-            pass
+            pass  # non-fatal — home page may not be ready
 
     def _build_logger_summary(self, hours_since: float) -> str:
         """Return a one-line logger insight string for the 'since you were away' banner."""
@@ -735,7 +735,7 @@ class _LoggerTabMixin:
                     if g:
                         parts.append(f"Network grade: {g['grade']}")
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
             if not parts:
                 parts.append("Network has been running smoothly")
@@ -747,7 +747,7 @@ class _LoggerTabMixin:
             )
             _s.setValue("app/last_digest_ts", str(now))
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _load_log_file(self):
         """Let the user pick any existing log CSV and show its analysis."""

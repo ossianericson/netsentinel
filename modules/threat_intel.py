@@ -120,7 +120,7 @@ def _parse_feodo_json(data: bytes) -> List[ThreatEntry]:
                     comment=r.get("malware", ""),
                 ))
     except Exception:
-        pass
+        pass  # non-fatal
     return entries
 
 
@@ -152,7 +152,7 @@ def _parse_urlhaus_text(data: bytes) -> List[ThreatEntry]:
                 last_seen="",
             ))
     except Exception:
-        pass
+        pass  # non-fatal
     return entries
 
 
@@ -178,9 +178,9 @@ def _parse_plain_ip_list(data: bytes, source: str, categories: List[str],
                     last_seen="",
                 ))
             except ValueError:
-                pass
+                pass  # non-fatal
     except Exception:
-        pass
+        pass  # non-fatal
     return entries
 
 
@@ -258,7 +258,7 @@ def refresh_from_feeds(
                     if progress_cb:
                         progress_cb(f"  {feed['name']}: loaded from cache ({len(entries)} indicators).")
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
     if progress_cb:
         progress_cb(f"Done. {len(all_entries)} threat indicators loaded.")
@@ -277,7 +277,7 @@ def load_from_cache(cache_dir: Optional[Path] = None) -> List[ThreatEntry]:
                 data = cache_path.read_bytes()
                 all_entries.extend(feed["parser"](data))
             except Exception:
-                pass
+                pass  # non-fatal
     return all_entries
 
 
@@ -322,7 +322,7 @@ class ThreatIntelDB:
                         net = ipaddress.ip_network(ind, strict=False)
                         self._cidr_list.append((net, entry))
                     except ValueError:
-                        pass
+                        pass  # non-fatal
                 else:
                     self._ip_index[ind] = entry
             elif entry.itype == "domain":
@@ -339,7 +339,7 @@ class ThreatIntelDB:
                 if addr in net:
                     return e
         except ValueError:
-            pass
+            pass  # non-fatal
         return None
 
     def check_domain(self, domain: str) -> Optional[ThreatEntry]:

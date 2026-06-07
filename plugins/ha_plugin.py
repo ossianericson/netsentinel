@@ -44,7 +44,7 @@ def _load_token() -> str:
         if tok:
             return tok
     except Exception:
-        pass
+        pass  # non-fatal
     raise RuntimeError(
         "No Home Assistant token configured. "
         "Edit ha_plugin.py and set HA_TOKEN, or save it via the Hardware Hub password field."

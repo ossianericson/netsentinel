@@ -89,7 +89,7 @@ def geo_lookup(ip: str, timeout: float = 3.0) -> dict:
                 _GEO_CACHE[ip] = data
                 return data
         except Exception:
-            pass
+            pass  # non-fatal
         _GEO_CACHE[ip] = {}
         return {}
 
@@ -124,7 +124,7 @@ def snapshot(
                 info.get("exe")  or "",
             )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+            pass  # non-fatal
 
     results: list[Connection] = []
 
@@ -144,7 +144,7 @@ def snapshot(
                 for c in proc.net_connections(kind="inet"):
                     conn_pid_pairs.append((p_pid, c))
             except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+                pass  # non-fatal
 
     seen: set[tuple] = set()
 

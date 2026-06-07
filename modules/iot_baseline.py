@@ -41,7 +41,7 @@ try:
     from scapy.all import AsyncSniffer, IP, TCP, UDP, Ether  # type: ignore
     SCAPY_AVAILABLE = True
 except ImportError:
-    pass
+    pass  # non-fatal
 
 # ── Cloud-metadata / sensitive endpoint ranges ────────────────────────────────
 # Any IoT device contacting these IPs should trigger an immediate alert.
@@ -430,13 +430,13 @@ class IoTMonitor:
                         self._syn_ports[mac] = {}
 
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _emit(self, alert: IoTAlert) -> None:
         try:
             self._on_alert(alert)
         except Exception:
-            pass
+            pass  # non-fatal
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -466,7 +466,7 @@ class IoTMonitor:
             if self._sniffer:
                 self._sniffer.stop()
         except Exception:
-            pass
+            pass  # non-fatal
 
 
 # ── Risk scorer integration ────────────────────────────────────────────────────

@@ -120,7 +120,7 @@ def _parse_rdata(rtype: int, data: bytes, offset: int, rdlen: int) -> str:
             rname, _    = _decode_name(data, pos2)
             return f"{mname} {rname}"
     except Exception:
-        pass
+        pass  # non-fatal
     return data[offset:end].hex()
 
 
@@ -157,7 +157,7 @@ def _parse_dns_response(data: bytes) -> List[DnsRecord]:
                 ttl=ttl,
             ))
     except Exception:
-        pass
+        pass  # non-fatal
     return records
 
 
@@ -231,7 +231,7 @@ def axfr_transfer(
                 break
 
     except Exception:
-        pass
+        pass  # non-fatal
 
     if progress_cb:
         progress_cb(f"AXFR complete: {len(records)} record(s) received.")
@@ -327,7 +327,7 @@ def mdns_enumerate(
                         break
                 s2.close()
             except Exception:
-                pass
+                pass  # non-fatal
 
         # Step 3: for each instance, gather SRV + A/AAAA
         instance_details: dict[str, dict] = {}
@@ -351,7 +351,7 @@ def mdns_enumerate(
                                     try:
                                         info["port"] = int(parts[2])
                                     except ValueError:
-                                        pass
+                                        pass  # non-fatal
                                     info["host"] = parts[3]
                             elif rec.rtype == "A":
                                 info["ip"] = rec.value
@@ -366,7 +366,7 @@ def mdns_enumerate(
                 s3.close()
                 instance_details[instance] = info
             except Exception:
-                pass
+                pass  # non-fatal
 
         # Build MdnsService list
         for instance, stype in instance_to_type.items():
@@ -381,7 +381,7 @@ def mdns_enumerate(
             ))
 
     except Exception:
-        pass
+        pass  # non-fatal
 
     if progress_cb:
         progress_cb(f"mDNS enumeration complete: {len(services)} service(s).")
@@ -409,13 +409,13 @@ def scan(
             result.records = axfr_transfer(axfr_server, axfr_domain, axfr_timeout, progress_cb)
             result.axfr_ok = len(result.records) > 0
         except Exception:
-            pass
+            pass  # non-fatal
 
     # mDNS
     try:
         result.services = mdns_enumerate(mdns_timeout, progress_cb)
     except Exception:
-        pass
+        pass  # non-fatal
 
     # Verdict
     n_rec  = len(result.records)

@@ -124,7 +124,7 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
         if m:
             my_channel = int(m.group(1))
     except Exception:
-        pass
+        pass  # non-fatal
 
     # Parse network blocks
     blocks = re.split(r"SSID \d+ :", raw)[1:]
@@ -242,7 +242,7 @@ def _scan_linux() -> Tuple[List[NetworkInfo], str, int]:
             )
             networks.append(net)
     except Exception:
-        pass
+        pass  # non-fatal
     return networks, my_ssid, my_channel
 
 
@@ -378,7 +378,7 @@ def _get_connected_clients() -> List[ConnectedClient]:
                     mac = m.group(1).replace("-", ":").lower()
                     clients.append(ConnectedClient(mac=mac))
     except Exception:
-        pass
+        pass  # non-fatal
 
     # Attempt to enrich with IPs from ARP cache
     if clients:
@@ -397,6 +397,6 @@ def _get_connected_clients() -> List[ConnectedClient]:
             for client in clients:
                 client.ip = mac_to_ip.get(client.mac, "")
         except Exception:
-            pass
+            pass  # non-fatal
 
     return clients

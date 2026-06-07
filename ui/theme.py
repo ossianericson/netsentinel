@@ -33,7 +33,7 @@ def _reduce_motion() -> bool:
         if hasattr(hints, "isReduceMotionPreferred"):
             return hints.isReduceMotionPreferred()
     except Exception:
-        pass
+        pass  # non-fatal
     return QSettings("NetSentinel", "NetSentinel").value(
         "accessibility/reduce_motion", False, type=bool
     )

@@ -4,7 +4,6 @@ Run: python tools/verify_ux_screenshots.py
 Saves PNGs to tools/verify_screenshots/
 """
 import sys
-import os
 import time
 from pathlib import Path
 
@@ -12,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QTimer, QSettings
-from PyQt6.QtGui import QPixmap
 
 OUT_DIR = Path(__file__).parent / "verify_screenshots"
 OUT_DIR.mkdir(exist_ok=True)

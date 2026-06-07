@@ -660,7 +660,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
                         entry.arp_event or entry.status, detail, entry.status, raw=entry,
                     ))
         except Exception:
-            pass
+            pass  # non-fatal
 
         if self._store:
             # Modem signal history
@@ -669,7 +669,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
                     for p in self._store.query_modem_signal_log(hours=168, limit=200):
                         self._entries.append(self._modem_point_to_entry(p))
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
             # Mesh history
             if self._is_source_enabled("mesh"):
@@ -684,7 +684,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
                             unit_str, "  ·  ".join(parts), "OK",
                         ))
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
             # Plugin history
             if self._is_source_enabled("plugin"):
@@ -692,7 +692,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
                     for row in self._store.query_plugin_log(hours=168, limit=200):
                         self._entries.append(self._plugin_row_to_entry(row))
                 except Exception:
-                    pass
+                    pass  # non-fatal
 
         self._sort_and_render()
 

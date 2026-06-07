@@ -68,7 +68,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 topo_widget=getattr(self, "_topology_widget", None),
             )
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _on_ipv6_result(self, devices: list):
         from PyQt6.QtGui import QColor
@@ -177,7 +177,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     if _svc:
                         _cve_counts[_svc] = _cve_counts.get(_svc, 0) + 1
         except Exception:
-            pass
+            pass  # non-fatal
         for p in result.open_ports:
             row = self._recon_syn_table.rowCount()
             self._recon_syn_table.insertRow(row)
@@ -219,7 +219,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 topo_widget=getattr(self, "_topology_widget", None),
             )
         except Exception:
-            pass
+            pass  # non-fatal
 
     def _on_udp_result(self, result):
         from PyQt6.QtGui import QColor
@@ -394,7 +394,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         "days_remaining": _c.days_remaining,
                     })
             except Exception:
-                pass
+                pass  # non-fatal
         self._network_doc_page.set_scan_data(
             devices=self._last_scan_devices,
             port_data=self._port_data_cache,
@@ -471,7 +471,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             ]
             self._geo_map_page.add_ips([ip for ip in _ips if ip])
         except Exception:
-            pass
+            pass  # non-fatal
 
         # ── Start / refresh AvailabilityWorker after each scan ────────────────
         try:
@@ -498,7 +498,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         self._avail_worker.cycle_done.connect(self._on_avail_cycle_done)
                         self._avail_worker.start()
         except Exception:
-            pass
+            pass  # non-fatal
 
         self._update_overall_verdict()
         self._update_kpi_tiles(data)
@@ -576,7 +576,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     try:
                         _ds(self._store, _old.id)
                     except Exception:
-                        pass
+                        pass  # non-fatal
         except Exception:
             pass  # auto-snapshot errors must never break the scan result handler
 
@@ -636,7 +636,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     new_cves=0,
                 )
             except Exception:
-                pass
+                pass  # non-fatal
 
     def _on_plugin_result(self, res):
         if res.error:

@@ -815,7 +815,7 @@ class CvePage(QWidget):
                     )
                     imported += 1
             except Exception:
-                pass
+                pass  # non-fatal
 
         self._refresh()
         self._status_lbl.setText(f"Imported {imported} CVE(s) from {len(services)} service(s).")

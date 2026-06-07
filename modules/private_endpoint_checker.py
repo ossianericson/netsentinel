@@ -208,7 +208,7 @@ def _get_system_dns_server() -> str:
                         if len(parts) >= 2:
                             return parts[1]
     except Exception:
-        pass
+        pass  # non-fatal
     return ""
 
 
@@ -293,7 +293,7 @@ def _tls_inspect(host: str, port: int, timeout: float = 6.0) -> CertInfo:
                 info.days_left = (exp - now).days
                 info.expired   = info.days_left < 0
             except Exception:
-                pass
+                pass  # non-fatal
 
             # Hostname match — check CN + SANs
             host_lower = host.lower()

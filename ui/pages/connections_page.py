@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor
