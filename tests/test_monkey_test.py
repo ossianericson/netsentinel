@@ -1,4 +1,10 @@
-"""Tests for tools/monkey_test.py — import, dataclass construction, blacklist logic."""
+"""Tests for tools/monkey_test.py — import, dataclass construction, blacklist logic.
+
+Run locally only:
+    python -m pytest -m monkey
+
+Never runs in CI (excluded by addopts in pyproject.toml).
+"""
 import importlib
 import sys
 import subprocess
@@ -8,6 +14,8 @@ import pytest
 
 TOOLS_ROOT = Path(__file__).parent.parent / "tools"
 
+pytestmark = pytest.mark.monkey
+
 
 def _import_monkey():
     """Import monkey_test without executing main()."""
@@ -15,7 +23,10 @@ def _import_monkey():
         return sys.modules["monkey_test"]
     spec = importlib.util.spec_from_file_location("monkey_test", TOOLS_ROOT / "monkey_test.py")
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    try:
+        spec.loader.exec_module(mod)
+    except ImportError as exc:
+        pytest.skip(f"monkey_test dependency missing: {exc}")
     sys.modules["monkey_test"] = mod
     return mod
 
@@ -63,7 +74,7 @@ def test_history_instantiation():
 
 def test_blacklist_contains_close_glyph():
     mod = _import_monkey()
-    close_glyph = ""
+    close_glyph = ""
     assert any(close_glyph in entry for entry in mod._BLACKLIST)
 
 

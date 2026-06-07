@@ -54,7 +54,9 @@ from typing import Callable, Dict, List, Optional
 try:
     import psutil
 except ImportError:
-    sys.exit("ERROR: psutil required.  pip install psutil")
+    if __name__ == "__main__":
+        sys.exit("ERROR: psutil required.  pip install psutil")
+    raise ImportError("psutil required — pip install psutil")
 
 try:
     import pywinauto
@@ -62,7 +64,9 @@ try:
     from pywinauto.base_wrapper import ElementNotEnabled, ElementNotVisible
     from pywinauto.findwindows import ElementNotFoundError
 except ImportError:
-    sys.exit("ERROR: pywinauto required.  pip install pywinauto")
+    if __name__ == "__main__":
+        sys.exit("ERROR: pywinauto required.  pip install pywinauto")
+    raise ImportError("pywinauto required — pip install pywinauto")
 
 try:
     from PIL import ImageGrab
