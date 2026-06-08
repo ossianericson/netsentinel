@@ -805,6 +805,68 @@ monkeypatch.setattr(
 
 **Never** delete Qt widgets by letting them go out of scope or by calling the C++ destructor directly. **Always** use `deleteLater()` followed by `processEvents()`.
 
+### RULE-WIN5 (blocking): Never use QTimer.singleShot(n, self.method) in __init__ — use a parented QTimer
+`QTimer.singleShot(n, slot)` creates a standalone timer with **no Qt parent**. If the widget is
+deleted before the timer fires (fixture teardown, rapid navigation, or test cleanup faster than
+`n` ms), the timer fires on a zombie C++ object, raises uncaught `RuntimeError` through the
+Qt C++ timer callback machinery, and corrupts the heap. The crash surfaces as
+`STATUS_STACK_BUFFER_OVERRUN` hundreds of tests later — not at the callsite.
+
+```python
+# WRONG — unparented; fires on zombie if widget is deleted within n ms
+def __init__(self):
+    self._setup_ui()
+    QTimer.singleShot(300, self._load_history)
+
+# CORRECT — parented QTimer is auto-destroyed when the widget is deleted
+def __init__(self):
+    self._setup_ui()
+    _t = QTimer(self)
+    _t.setSingleShot(True)
+    _t.timeout.connect(self._load_history)
+    _t.start(300)
+```
+
+This rule applies to **any delay**, including 0 ms. `QTimer.singleShot(0, slot)` is equally
+dangerous because `processEvents()` in test teardown can fire it before the `deleteLater()`
+deferred-delete event is processed.
+
+`QTimer.singleShot(n, slot)` **is safe** in:
+- `showEvent` / `closeEvent` handlers (widget is alive when shown; timer is short-lived)
+- Transient UI feedback slots (e.g., reset a button label after 2 s) where the lambda
+  captures only local widget references and uses a defensive `try/except RuntimeError`
+
+### RULE-WIN6 (blocking): Test fixtures must patch ALL persistent-storage readers for the page under test
+When monkeypatching a page's storage functions in a test fixture, identify and patch **every**
+function that reads from QSettings, the filesystem, or any other persistent store — not only
+the ones that are obviously exercised by the test body.
+
+A missed reader can silently pull in real device data from the developer's machine, causing
+the page's `__init__` to spawn timers or workers for those devices. Those objects outlive
+fixture teardown and corrupt the heap during unrelated tests.
+
+**Checklist when writing a `_reset_qsettings` (or equivalent) fixture:**
+
+1. Search the page's `__init__` and every method it calls at construction time for any
+   function whose name starts with `_load_`, `_read_`, `_fetch_`, or `get_` that touches
+   QSettings or the filesystem.
+2. Patch each one to return a safe empty value (`[]`, `{}`, `None`).
+3. Also patch `QFileSystemWatcher` and any `QThread`/worker that the page auto-starts.
+
+```python
+# WRONG — _load_instances not patched; real QSettings data spawns 3-second timers
+monkeypatch.setattr("ui.pages.hardware_integration_page._load_paths", lambda: [])
+
+# CORRECT — all readers patched; __init__ constructs with a clean slate
+monkeypatch.setattr("ui.pages.hardware_integration_page._load_paths",     lambda: [])
+monkeypatch.setattr("ui.pages.hardware_integration_page._load_instances", lambda: [])
+monkeypatch.setattr("ui.pages.hardware_integration_page._load_last_result", lambda _: None)
+```
+
+QObject subclasses that are **not** QWidget (e.g. `QThread`, `GuidedTour`) are invisible to
+`topLevelWidgets()` and therefore escape `conftest._flush_qt_events`. Track them explicitly
+and call `deleteLater()` + 3× `processEvents()` in `teardown_method` or fixture finaliser.
+
 ---
 
 ## QSettings State Hygiene
