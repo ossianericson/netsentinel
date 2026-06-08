@@ -47,7 +47,7 @@ class _NetworkTabsMixin:
         menu = QMenu(self)
         menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_scan  = menu.addAction(f"🔍  Port Scan  {ip}")
-        act_geo   = menu.addAction(f"🗺  Show on Geo Map →")
+        act_geo   = menu.addAction(f"🗺  Show on Geolocation Map →")
         act_abuse = menu.addAction(f"🛡  Check IP (AbuseIPDB) →")
         menu.addSeparator()
         act_copy_ip  = menu.addAction("📋  Copy IP")
@@ -59,7 +59,7 @@ class _NetworkTabsMixin:
             self._show_ip_on_geo_map(ip)
         elif chosen == act_abuse:
             self._threat_intel_page.check_ip(ip)
-            self._nav_rail_go_to("Threat Intelligence")
+            self._nav_rail_go_to("Threat Intel")
         elif chosen == act_copy_ip:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(ip)

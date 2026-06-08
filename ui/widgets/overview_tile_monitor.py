@@ -465,7 +465,7 @@ class RecentEventsTile(_BaseTile):
     TILE_ID    = "recent_events"
     TILE_LABEL = "Recent Events"
     TILE_ICON  = "◷"
-    _NAV_LABEL = "Timeline"
+    _NAV_LABEL = "Network Timeline"
 
     _EVENT_ICONS = {
         "NEW":     ("◆", ACCENT),
@@ -494,7 +494,7 @@ class RecentEventsTile(_BaseTile):
             f"QPushButton:hover {{ text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
-        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Timeline"))
+        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Network Timeline"))
         self._link_btn.hide()
         self._body_layout.addWidget(self._link_btn)
 
@@ -502,7 +502,7 @@ class RecentEventsTile(_BaseTile):
         if (not self._edit_mode
                 and event.button() == Qt.MouseButton.LeftButton
                 and self._row_labels):
-            self.navigate_requested.emit("Timeline")
+            self.navigate_requested.emit("Network Timeline")
         else:
             super().mousePressEvent(event)
 
@@ -668,10 +668,10 @@ class _SecurityScanPanel(QWidget):
 
     # (nav_label, display_name, checked_by_default, is_active_probe)
     _TOOLS = [
-        ("Threat Intelligence",  "Threat Intelligence",  True,  False),
-        ("TLS & exposure",       "TLS & Certificates",   True,  False),
+        ("Threat Intel",         "Threat Intel",         True,  False),
+        ("TLS & Exposure",       "TLS & Exposure",       True,  False),
         ("Device Risk Score",    "Device Risk Score",    True,  False),
-        ("Known CVEs",           "Known CVEs",           True,  False),
+        ("CVE Lookup",           "CVE Lookup",           True,  False),
         ("Port Scan (TCP)",      "Port Scan (TCP) ⚠",   False, True),
         ("Exposed to Internet",  "Exposed to Internet ⚠",False, True),
     ]

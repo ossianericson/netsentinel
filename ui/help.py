@@ -145,6 +145,13 @@ _PAGE_HELP: dict[str, dict] = {
             "Link-local addresses (fe80::) are not routable — global unicast addresses (2xxx:) are the ones exposed to the internet.",
         ],
     },
+    "Network Timeline": {
+        "what": "Reverse-chronological unified event feed — device joins/leaves, fired alerts, CVE discoveries, and speed tests in a single scrollable view. Filter by source with one click.",
+        "hidden": [
+            "Use the source filter to isolate a specific event type — e.g. show only CVE discoveries or only speed test results.",
+            "Click any row to expand full event details including timestamps, IP, and MAC address.",
+        ],
+    },
     "Network Logger": {
         "what": "'Log Sources' tab: configure what gets recorded (ping, DNS, modem, mesh, ARP, Syslog, SNMP) and start/stop logging. 'Activity Log' tab: unified chronological viewer for all sources.",
         "hidden": [

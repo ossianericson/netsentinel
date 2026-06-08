@@ -462,7 +462,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             except Exception:
                 pass   # tracker errors must never break the scan result handler
 
-        # ── Feed Geo Map with discovered device IPs (public ones auto-filtered) ─
+        # ── Feed Geolocation Map with discovered device IPs (public ones auto-filtered) ─
         try:
             _ips = [
                 (d.ip if not isinstance(d, dict) else d.get("ip", ""))

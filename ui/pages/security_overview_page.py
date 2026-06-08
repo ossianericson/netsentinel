@@ -5,7 +5,7 @@ Layout
 ──────
   Hero CTA card  (ACCENT border — primary scan actions + status)
   KPI row        (Threat Indicators / Malicious IPs / Blocked Domains / Last Updated)
-  Quick nav row  (horizontal pills — Threat Intel / Geo Map / Port Scan / CVEs)
+  Quick nav row  (horizontal pills — Threat Intel / Geolocation Map / Port Scan / CVEs)
   Recent high-risk findings table (top 15 by confidence)
 
 This page reads from the local ThreatIntelDB cache only — no network calls.
@@ -324,7 +324,7 @@ class SecurityOverviewPage(QWidget):
         )
         _why_body.setWordWrap(True)
         _why_body.setStyleSheet(f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;")
-        _nav_btn = QPushButton("Go to Threat Intelligence →")
+        _nav_btn = QPushButton("Go to Threat Intel →")
         _nav_btn.setFlat(True)
         _nav_btn.setStyleSheet(
             f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"

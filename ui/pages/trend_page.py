@@ -285,12 +285,12 @@ class TrendPage(QWidget):
         hl.addWidget(self._btn_run)
 
         self._status_lbl = QLabel(
-            "Enable Network RTT logging in Log Hub to build forecast data."
+            "Enable Network RTT logging in Network Logger to build forecast data."
         )
         self._status_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:10px;")
         hl.addWidget(self._status_lbl)
 
-        self._btn_log_hub = QPushButton("Open Log Hub →")
+        self._btn_log_hub = QPushButton("Open Network Logger →")
         self._btn_log_hub.setFlat(True)
         self._btn_log_hub.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_log_hub.setStyleSheet(

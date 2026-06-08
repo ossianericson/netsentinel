@@ -447,7 +447,7 @@ class GeoMapPage(QWidget):
         self._chk_arcs.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px;")
         self._chk_arcs.setToolTip(
             "Draws arcs from your network's public IP to each Threat Intel dot.\n"
-            "Set home location via right-click 'Show on Geo Map' on a local device."
+            "Set home location via right-click 'Show on Geolocation Map' on a local device."
         )
         self._chk_arcs.stateChanged.connect(self._redraw_map)
         legend_row.addWidget(self._chk_arcs)

@@ -880,6 +880,7 @@ class _NavBuilderMixin:
 
         self._nav_begin_section("Monitor", "monitor")
         self._nav_add_rail_item("Network Logger",      self._logging_container)
+        self._nav_add_rail_item("Network Timeline",    self._timeline_page)
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
         self._nav_add_rail_item("Active Connections",  self._connections_page)
         self._nav_add_rail_item("Availability History", self._history_page)
@@ -1007,7 +1008,7 @@ class _NavBuilderMixin:
     _MONITOR_PAGES: dict = {
         "ARP Spoof Watch":     "_arp_worker",
         "DHCP Rogue Monitor":  "_dhcp_worker",
-        "Bandwidth Monitor":   "_bw_worker",
+        "Live Bandwidth":      "_bw_worker",
     }
 
     def _is_monitor_running(self, worker_attr: str) -> bool:
@@ -1046,7 +1047,7 @@ class _NavBuilderMixin:
                 })
 
         _PAGE_SHORTCUTS: dict[str, str] = {
-            "Log Hub":  "Ctrl+L",
+            "Network Logger":  "Ctrl+L",
             "Settings": "Ctrl+,",
         }
         seen: set = set()
@@ -1133,7 +1134,7 @@ class _NavBuilderMixin:
             ("Ctrl+F",      "Focus nav search"),
             ("Ctrl+R",      "Run full scan"),
             ("Ctrl+,",      "Settings"),
-            ("Ctrl+L",      "Log Hub"),
+            ("Ctrl+L",      "Network Logger"),
             ("Ctrl+Q",      "Quit"),
             ("J / K",       "Next / previous row in tables"),
             ("Escape",      "Close panel / flyout"),

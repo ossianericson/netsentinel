@@ -808,14 +808,14 @@ class _HomeDataMixin:
             self._show_milestone(
                 f"7 days of network data! Your logger has recorded {n_rows:,} samples "
                 f"with an average RTT of {avg_rtt:.0f} ms. "
-                "See Log Hub for trend charts."
+                "See Network Logger for trend charts."
             )
         elif elapsed_h >= 24 and not qs.value("milestone/logger_24h", False, type=bool):
             qs.setValue("milestone/logger_24h", True)
             self._show_milestone(
                 f"You've been monitoring for 24 hours — {n_rows:,} samples logged, "
                 f"average RTT {avg_rtt:.0f} ms. "
-                "Check Log Hub to see your stability trends."
+                "Check Network Logger to see your stability trends."
             )
 
     def _show_milestone(self, text: str) -> None:
@@ -1022,7 +1022,7 @@ class _HomeDataMixin:
         dlg.exec()
 
     def on_live_challenge(self, scenario) -> None:
-        """Show persistent amber banner when Log Hub detects a network anomaly."""
+        """Show persistent amber banner when Network Logger detects a network anomaly."""
         if not hasattr(self, "_live_challenge_banner"):
             return
         import datetime as _dt

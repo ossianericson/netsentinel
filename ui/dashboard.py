@@ -241,7 +241,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _settings_sc = QShortcut(QKeySequence("Ctrl+,"), self)
         _settings_sc.activated.connect(self._open_settings_dialog)
 
-        # Ctrl+L — Log Hub
+        # Ctrl+L — Network Logger
         _loghub_sc = QShortcut(QKeySequence("Ctrl+L"), self)
         _loghub_sc.activated.connect(lambda: self._nav_rail_go_to("Network Logger"))
 
@@ -628,11 +628,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._inventory_page.select_device(ip_or_mac)
 
     def _on_popover_open_threat_intel(self, ip: str) -> None:
-        self._nav_rail_go_to("Threat Intelligence")
+        self._nav_rail_go_to("Threat Intel")
         if hasattr(self, "_threat_intel_page") and ip:
             self._threat_intel_page.check_ip(ip)
 
-    # ── TIME-2: View in Log Hub from alert drawer ─────────────────────────────
+    # ── TIME-2: View in Network Logger from alert drawer ──────────────────────
 
     def _on_view_alert_in_log_hub(self, alert_ts: float, source_key: str) -> None:
         self._nav_rail_go_to("Network Logger")

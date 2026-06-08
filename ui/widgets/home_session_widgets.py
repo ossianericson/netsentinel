@@ -62,7 +62,7 @@ class FreshnessStrip(QFrame):
             self._fs_pill_arp:   "ARP Spoof Watch",
             self._fs_pill_dhcp:  "DHCP Leases",
             self._fs_pill_storm: "Broadcast Storm",
-            self._fs_pill_log:   "Log Hub",
+            self._fs_pill_log:   "Network Logger",
         }
         self._fs_pill_active: dict = {p: False for p in _pill_nav}
         for pill, nav_label in _pill_nav.items():
@@ -316,7 +316,7 @@ class GettingStartedCard(QFrame):
              None, "ARP Spoof Watch"),
             ("logger",  "Start the Network Logger",
              "Records RTT and DNS every 30 s — leave it on for daily insights",
-             None, "Log Hub"),
+             None, "Network Logger"),
         ]
 
         self._setup_check_lbls:   dict[str, QLabel]       = {}
@@ -810,10 +810,10 @@ class ProWelcomePage(QWidget):
         ("◎", "CVE tracker",         ["• NVD API v2 lookup per host",
                                            "• Lifecycle state machine",
                                            "• Days-open counter, owner field"]),
-        ("◎", "Threat Intelligence", ["• Feodo Tracker + Emerging Threats",
+        ("◎", "Threat Intel",        ["• Feodo Tracker + Emerging Threats",
                                            "• AbuseIPDB v2 lookup",
                                            "• Blocklist KPI tiles"]),
-        ("◼", "TLS & exposure",      ["• Per-host cert expiry monitor",
+        ("◼", "TLS & Exposure",      ["• Per-host cert expiry monitor",
                                            "• WAN / CGNAT / UPnP exposure",
                                            "• Cloud metadata probe"]),
     ]

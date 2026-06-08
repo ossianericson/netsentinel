@@ -46,7 +46,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Cloud metadata probe** — `modules/cloud_metadata.py`; detects AWS/Azure/GCP IMDS exposure
 
 ### Monitoring & Alerting
-- **Log Hub** — unified chronological monitor combining Network RTT, 5G Modem, Mesh, Syslog, and SNMP Traps; source toggle bar; per-source intervals; emits `live_challenge_detected` → Lab Mode
+- **Network Logger** — unified chronological monitor combining Network RTT, 5G Modem, Mesh, Syslog, and SNMP Traps; source toggle bar; per-source intervals; emits `live_challenge_detected` → Lab Mode
 - **Active Connections** — process-to-socket map with firewall block/unblock
 - **Live Bandwidth** — 60-second rolling per-interface chart
 - **Threat Intelligence** — ThreatIntelDB, AbuseIPDB v2 lookup (consent-gated)
@@ -114,7 +114,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 
 ### Education
 - **Interactive protocol visualizer** — animated ARP/DNS/TCP/DHCP/STP diagrams using real scan data (`ui/pages/protocol_viz_page.py`, `modules/protocol_animator.py`)
-- **Lab / scenario mode** — guided exercises with hints, solution reveals, exportable HTML results; live challenges injected from Log Hub events (`ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`)
+- **Lab / scenario mode** — guided exercises with hints, solution reveals, exportable HTML results; live challenges injected from Network Logger events (`ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`)
 - **Contextual explainer panel** — `ui/widgets/explainer_panel.py`; collapsible plain-English panel on detection pages
 
 ### Security & Plumbing

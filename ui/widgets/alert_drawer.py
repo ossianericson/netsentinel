@@ -101,7 +101,7 @@ _RULE_FIX: dict[str, str] = {
         "NetSentinel will automatically show the service as recovered when it responds."
     ),
     "RTT_THRESHOLD": (
-        "NetSentinel measured high latency to this device. Open the Log Hub to see "
+        "NetSentinel measured high latency to this device. Open the Network Logger to see "
         "the full latency timeline and when the problem started.\n"
         "High latency for all devices usually means the router or ISP link is congested. "
         "Try changing the DNS server on your router to 1.1.1.1 to rule out DNS delays.\n"
@@ -528,10 +528,10 @@ class AlertDrawer(QFrame):
         )
         self._snooze_btn.clicked.connect(self._on_snooze)
 
-        self._log_btn = QPushButton("Log Hub →")
+        self._log_btn = QPushButton("Network Logger →")
         self._log_btn.setFixedHeight(26)
         self._log_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._log_btn.setToolTip("Open Log Hub at ±30 min around this alert")
+        self._log_btn.setToolTip("Open Network Logger at ±30 min around this alert")
         self._log_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT};"
             f" border:1px solid {ACCENT}; border-radius:3px;"

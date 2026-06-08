@@ -314,7 +314,7 @@ class _ScanTabsMixin:
         menu = QMenu(self)
         menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
         act_scan     = menu.addAction(f"🔍  Port Scan  {ip}")
-        act_geo      = menu.addAction(f"🗺  Show on Geo Map →")
+        act_geo      = menu.addAction(f"🗺  Show on Geolocation Map →")
         act_abuseipdb = menu.addAction(f"🛡  Check IP (AbuseIPDB) →")
         act_wol      = menu.addAction(f"⚡  Wake-on-LAN  →  {mac}")
         # Show CVE Tracker link only when this IP has tracked CVE entries
@@ -338,7 +338,7 @@ class _ScanTabsMixin:
             self._show_ip_on_geo_map(ip)
         elif chosen == act_abuseipdb:
             self._threat_intel_page.check_ip(ip)
-            self._nav_rail_go_to("Threat Intelligence")
+            self._nav_rail_go_to("Threat Intel")
         elif act_cve and chosen == act_cve:
             self._nav_rail_go_to("CVE Tracker")
         elif chosen == act_wol:

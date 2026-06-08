@@ -307,7 +307,7 @@ class _EventsTicker(QFrame):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            self.navigate_to.emit("Timeline")
+            self.navigate_to.emit("Network Timeline")
         super().mousePressEvent(event)
 
     def refresh(self, store=None) -> None:

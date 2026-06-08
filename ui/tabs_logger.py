@@ -607,7 +607,7 @@ class _LoggerTabMixin:
                     "action_key": "start_logger_fallback",
                     "text": "Enable the Network Logger to track stability over time",
                     "action_label": "Start →",
-                    "target": "Log Hub",
+                    "target": "Network Logger",
                     "priority": "low",
                 })
 

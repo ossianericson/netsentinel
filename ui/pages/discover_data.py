@@ -317,7 +317,7 @@ _FEATURES: list[dict] = [
             "CVE discoveries, and speed tests in a single scrollable view. "
             "Filter by source with one click."
         ),
-        "page": None,
+        "page": "Network Timeline",
         "requires": None,
         "tags": ["timeline", "events", "history", "alerts", "devices", "cve", "feed"],
     },
@@ -538,7 +538,7 @@ _FEATURES: list[dict] = [
         "desc": (
             "Checks internet-facing IPs from your scan against AbuseIPDB and threat feeds — "
             "flags known malicious hosts and overlays results on the Geolocation Map. "
-            "Right-click any row to show the IP on the Geo Map, copy the indicator, or export."
+            "Right-click any row to show the IP on the Geolocation Map, copy the indicator, or export."
         ),
         "page": "Threat Intel",
         "requires": None,
@@ -649,7 +649,7 @@ _FEATURES: list[dict] = [
         "name": "Device right-click actions",
         "desc": (
             "Right-click any row in the Devices table to access: Port Scan that device, "
-            "Show on Geo Map, Check IP (AbuseIPDB), Wake-on-LAN, How to Fix, and Copy IP / MAC."
+            "Show on Geolocation Map, Check IP (AbuseIPDB), Wake-on-LAN, How to Fix, and Copy IP / MAC."
         ),
         "page": "Devices",
         "requires": None,

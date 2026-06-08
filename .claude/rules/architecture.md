@@ -64,7 +64,7 @@ netsentinel/
 │   ├── internet_exposure.py
 │   ├── iot_baseline.py
 │   ├── lab_scenarios.py        # Lab exercise definitions and result dataclasses
-│   ├── log_chart.py            # Log chart data builder for Log Hub visualisations
+│   ├── log_chart.py            # Log chart data builder for Network Logger visualisations
 │   ├── mac_lookup.py           # Online OUI/MAC vendor lookup helper
 │   ├── mac_registry.py         # OUI database (offenders.json)
 │   ├── maintenance_window.py   # Maintenance window schedule and suppression logic
@@ -176,7 +176,7 @@ netsentinel/
 │   │   ├── ip_calculator_page.py   # IP subnet calculator
 │   │   ├── lab_mode_page.py        # LabModePage — guided exercises; inject_live_challenge()
 │   │   ├── live_bandwidth_page.py
-│   │   ├── log_hub_page.py         # Log Hub — unified chronological log (RTT, Modem, Mesh, Syslog, SNMP); emits live_challenge_detected
+│   │   ├── log_hub_page.py         # Network Logger — unified chronological log (RTT, Modem, Mesh, Syslog, SNMP); emits live_challenge_detected
 │   │   ├── log_source_panel.py     # _LogSourcePanelMixin — panel builders + source management for LogHubPage (S14-3b split)
 │   │   ├── maintenance_page.py
 │   │   ├── monitor_overview_page.py # Monitor Overview — aggregated view of all monitoring streams
@@ -333,9 +333,9 @@ Add new icons to `_LUCIDE` before using them in `_nav_begin_section()`. Do not u
 **Nav section placement guide** (use the correct section when adding new pages):
 - Getting Started — daily-use core tools (Overview, Speed Test, DNS, Home, What's Wrong?)
 - Discover — network inventory and topology (Devices, Network Map, WiFi, DHCP, Home Automation)
-- Monitor — live data and history streams (Log Hub, Bandwidth, Connections, Availability, Service Heartbeat)
+- Monitor — live data and history streams (Network Logger, Live Bandwidth, Active Connections, Availability History, Service Heartbeat)
 - Reports — grading, ISP reports, docs, notifications (Network Grade, Health Report, Network Doc, IP Calculator, Notifications)
-- Analysis — deep packet / protocol tools, advanced diagnostics (Broadcast Storm, STP, IoT, Monitor Overview, 802.11 Monitor, ARP Watch, Trace, SNMP, Tools, Geo, Trends)
+- Analysis — deep packet / protocol tools, advanced diagnostics (Broadcast Storm, Rogue Bridge (STP), IoT Behaviour, Monitor Overview, 802.11 Monitor, ARP Spoof Watch, Hop-by-Hop Trace, SNMP Device Info, Tools & Wake-on-LAN, Geolocation Map, Trend Forecasts)
 - Automation — scheduled scans, hooks, MQTT, REST API, integrations (Automation Hooks, Scheduled Scans, Custom Triggers, MQTT, REST API, Config Snapshots, Maintenance Windows)
 - Security Audit — RED-labelled; elevated-privilege scan tools (Security Overview, Port Scan, CVE, Threat Intel, TLS, Login Test, OS Detection, Risk Score, Exposure, Discovery, SMB, Plugins, Private Endpoint, Cloud Metadata, DHCP Rogue)
 - Education — learning tools (Protocol Visualizer, Lab Mode, Feature Guide, Help)

@@ -352,6 +352,12 @@ jobs:
             echo "MSIX not found — skipping cosign"
           fi
 
+      - name: Delete existing release for this tag if present
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "${{ github.ref_name }}" --yes 2>/dev/null || true
+
       - name: Create GitHub Release
         id: gh_release
         uses: softprops/action-gh-release@v3

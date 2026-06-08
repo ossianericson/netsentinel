@@ -335,7 +335,7 @@ class _DiagExtraTabsMixin:
         elif rule_type in ("THREAT_INTEL", "CVE") and host:
             if hasattr(self, "_threat_intel_page"):
                 self._threat_intel_page.check_ip(host)
-            self._nav_rail_go_to("Threat Intelligence")
+            self._nav_rail_go_to("Threat Intel")
         elif rule_type == "RATE_SPIKE" and host:
             if hasattr(self, "_live_bandwidth_page"):
                 self._live_bandwidth_page.annotate_event("Rate spike", RED)

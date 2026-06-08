@@ -384,7 +384,7 @@ class OverviewPage(QWidget):
         event_tile = self._tiles.get("event_feed")
         if event_tile is not None:
             event_tile.viewall_clicked.connect(
-                lambda: self.navigate_to.emit("Monitor")
+                lambda: self.navigate_to.emit("Network Logger")
             )
         modem_tile = self._tiles.get("modem_signal")
         if modem_tile is not None:

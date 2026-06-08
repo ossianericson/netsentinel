@@ -895,7 +895,7 @@ class EventFeedTile(_BaseTile):
     TILE_ICON  = "◉"
     MIN_HEIGHT = 165
 
-    viewall_clicked = pyqtSignal()   # user clicked "View all → Log Hub"
+    viewall_clicked = pyqtSignal()   # user clicked "View all → Network Logger"
 
     # Severity / event-type → colour
     _TYPE_COLOUR = {
@@ -930,7 +930,7 @@ class EventFeedTile(_BaseTile):
         self._event_labels: list[QLabel] = []
 
         # "View all" footer — styled as link button
-        self._viewall_btn = QPushButton("View all →  Log Hub")
+        self._viewall_btn = QPushButton("View all →  Network Logger")
         self._viewall_btn.setFlat(True)
         self._viewall_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._viewall_btn.setStyleSheet(
@@ -1501,7 +1501,7 @@ class RecentEventsTile(_BaseTile):
     TILE_ID    = "recent_events"
     TILE_LABEL = "Recent Events"
     TILE_ICON  = "◷"
-    _NAV_LABEL = "Timeline"
+    _NAV_LABEL = "Network Timeline"
 
     _EVENT_ICONS = {
         "NEW":     ("◆", ACCENT),
@@ -1530,7 +1530,7 @@ class RecentEventsTile(_BaseTile):
             f"QPushButton:hover {{ text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
-        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Timeline"))
+        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Network Timeline"))
         self._link_btn.hide()
         self._body_layout.addWidget(self._link_btn)
 
@@ -1538,7 +1538,7 @@ class RecentEventsTile(_BaseTile):
         if (not self._edit_mode
                 and event.button() == Qt.MouseButton.LeftButton
                 and self._row_labels):
-            self.navigate_requested.emit("Timeline")
+            self.navigate_requested.emit("Network Timeline")
         else:
             super().mousePressEvent(event)
 
@@ -1704,10 +1704,10 @@ class _SecurityScanPanel(QWidget):
 
     # (nav_label, display_name, checked_by_default, is_active_probe)
     _TOOLS = [
-        ("Threat Intelligence",  "Threat Intelligence",  True,  False),
-        ("TLS & exposure",       "TLS & Certificates",   True,  False),
+        ("Threat Intel",         "Threat Intel",         True,  False),
+        ("TLS & Exposure",       "TLS & Exposure",       True,  False),
         ("Device Risk Score",    "Device Risk Score",    True,  False),
-        ("Known CVEs",           "Known CVEs",           True,  False),
+        ("CVE Lookup",           "CVE Lookup",           True,  False),
         ("Port Scan (TCP)",      "Port Scan (TCP) ⚠",   False, True),
         ("Exposed to Internet",  "Exposed to Internet ⚠",False, True),
     ]

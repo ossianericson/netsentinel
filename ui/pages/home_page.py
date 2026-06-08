@@ -848,7 +848,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _stats_hbox.addWidget(self._this_week_card, 2)
         lay.addLayout(_stats_hbox)
 
-        # ── Live challenge banner (hidden until Log Hub detects an anomaly) ───
+        # ── Live challenge banner (hidden until Network Logger detects an anomaly) ───
         self._live_challenge_banner = QFrame()
         self._live_challenge_banner.setObjectName("liveChallengeBar")
         self._live_challenge_banner.setStyleSheet(

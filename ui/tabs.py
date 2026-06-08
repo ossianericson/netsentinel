@@ -257,7 +257,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
             lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (TCP)"))
         )
         self._hardware_integration_page.check_abuse_ip.connect(
-            lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intelligence"))
+            lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intel"))
         )
 
         # Pre-populate enrichment from cached QSettings so the first scan has
@@ -348,7 +348,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
                         }, source=_hw_p, hw_name=_hw_label)
             self._plugin_pages[_hw_p] = _pg  # keyed by path for signal compat
 
-        # Populate Log Hub DB bar and set initial Monitor badge once the event loop starts.
+        # Populate Network Logger DB bar and set initial Monitor badge once the event loop starts.
         from PyQt6.QtCore import QTimer as _QT
         _QT.singleShot(0, lambda: self._log_hub_page.update_plugin_sources(
             [pg._label for pg in self._plugin_pages.values()]

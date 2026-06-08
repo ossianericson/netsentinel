@@ -339,8 +339,8 @@ class _RouterDetailPanel(QFrame):
     "Router" fallback group.
 
     Right-click context menus mirror mesh_router_page:
-      Nodes:   Geo Map | Copy IP | Copy MAC
-      Clients: Port Scan | Geo Map | AbuseIPDB | Copy IP | Copy MAC
+      Nodes:   Geolocation Map | Copy IP | Copy MAC
+      Clients: Port Scan | Geolocation Map | AbuseIPDB | Copy IP | Copy MAC
     """
 
     # Emitted on context-menu actions — parent page connects to its own signals
@@ -633,7 +633,7 @@ class _RouterDetailPanel(QFrame):
         mac = self._node_table.item(row, 2).text() if self._node_table.item(row, 2) else ""
         menu = QMenu(self)
         if ip:
-            menu.addAction("Show on Geo Map", lambda: self.geo_map_ip.emit(ip))
+            menu.addAction("Show on Geolocation Map", lambda: self.geo_map_ip.emit(ip))
             menu.addSeparator()
             menu.addAction(f"Copy IP  {ip}", lambda: QApplication.clipboard().setText(ip))
         if mac and mac != "—":
@@ -662,7 +662,7 @@ class _RouterDetailPanel(QFrame):
         menu = QMenu(self)
         if ip:
             menu.addAction("Port Scan", lambda: self.port_scan_ip.emit(ip))
-            menu.addAction("Show on Geo Map", lambda: self.geo_map_ip.emit(ip))
+            menu.addAction("Show on Geolocation Map", lambda: self.geo_map_ip.emit(ip))
             menu.addAction("Check IP (AbuseIPDB)", lambda: self.check_abuse_ip.emit(ip))
             menu.addSeparator()
             menu.addAction(f"Copy IP  {ip}", lambda: QApplication.clipboard().setText(ip))

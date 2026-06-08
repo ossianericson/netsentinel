@@ -192,7 +192,7 @@ class _ReconTabsMixin:
         svc  = (svc_item.text()  if svc_item  else "")
         menu = QMenu(self)
         menu.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};")
-        act_geo   = menu.addAction(f"🗺  Show {host} on Geo Map →")
+        act_geo   = menu.addAction(f"🗺  Show {host} on Geolocation Map →")
         act_abuse = menu.addAction(f"🛡  Check {host} (AbuseIPDB) →")
         menu.addSeparator()
         act_copy_host = menu.addAction(f"📋  Copy host  ({host})")
@@ -205,7 +205,7 @@ class _ReconTabsMixin:
             self._show_ip_on_geo_map(host)
         elif chosen == act_abuse:
             self._threat_intel_page.check_ip(host)
-            self._nav_rail_go_to("Threat Intelligence")
+            self._nav_rail_go_to("Threat Intel")
         elif chosen == act_copy_host:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(host)
