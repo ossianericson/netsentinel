@@ -194,32 +194,16 @@ class TestGradeCoachMark:
         assert qs.value("coach/grade_shown", False, type=bool) is True
 
 
-# ── Home pills coach mark ─────────────────────────────────────────────────────
+# ── Home pills coach mark (removed — was cluttering startup) ──────────────────
 
 class TestHomePillsCoachMark:
-    def setup_method(self):
-        _clear_keys()
-
-    def teardown_method(self):
-        _clear_keys()
-
-    def test_home_page_has_coach_method(self):
+    def test_home_page_pills_coach_removed(self):
         from ui.pages.home_page import HomePage
-        assert hasattr(HomePage, "_maybe_show_coach_home_pills")
+        assert not hasattr(HomePage, "_maybe_show_coach_home_pills")
 
     def test_home_page_has_show_event(self):
         from ui.pages.home_page import HomePage
         assert hasattr(HomePage, "showEvent")
-
-    def test_pills_coach_skips_when_key_set(self):
-        from unittest.mock import MagicMock
-        from ui.pages.home_page import HomePage
-        qs = QSettings("NetSentinel", "NetSentinel")
-        qs.setValue("coach/home_pills_shown", True)
-        page = MagicMock(spec=HomePage)
-        page.window.return_value = None
-        HomePage._maybe_show_coach_home_pills(page)
-        assert qs.value("coach/home_pills_shown", False, type=bool) is True
 
 
 # ── Devices coach mark ────────────────────────────────────────────────────────

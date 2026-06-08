@@ -618,23 +618,6 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # bundled plugin gateway that isn't already imported
         self._check_integration_banner(devices)
 
-        # OUTPUT-4: post-scan summary sheet
-        if hasattr(self, "_scan_sheet") and self._store is not None:
-            try:
-                _pending = [
-                    a for a in self._store.get_recent_alerts(hours=24)
-                    if not a.get("acked_ts")
-                ]
-                self._scan_sheet.show_sheet(
-                    total_devices=len(devices),
-                    new_devices=getattr(self, "_last_scan_new", 0),
-                    missing_devices=getattr(self, "_last_scan_gone", 0),
-                    pending_alerts=len(_pending),
-                    baseline_diffs=1 if getattr(self, "_baseline_has_drift", False) else 0,
-                    new_cves=0,
-                )
-            except Exception:
-                pass  # non-fatal
 
     def _on_plugin_result(self, res):
         if res.error:

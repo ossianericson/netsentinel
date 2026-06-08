@@ -397,11 +397,6 @@ class AppHeaderMixin:
         # Attach toast manager once window is visible
         from ui.widgets.toast import ToastManager
         ToastManager.instance().attach(self)
-        # OUTPUT-4: scan summary sheet (lazy init, parented to main window)
-        if not hasattr(self, "_scan_sheet"):
-            from ui.widgets.scan_summary_sheet import ScanSummarySheet
-            self._scan_sheet = ScanSummarySheet(self)
-            self._scan_sheet.navigate_requested.connect(self._nav_rail_go_to)
         # SCHED-3: restore monitors that were running before last close
         if not getattr(self, "_monitors_restored", False):
             self._monitors_restored = True

@@ -30,10 +30,12 @@ from PyQt6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     QRect,
+    QRectF,
     Qt,
     QTimer,
     pyqtSignal,
 )
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 from ui.styles import (
     ACCENT_DARK, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
@@ -43,11 +45,57 @@ from ui.styles import (
 _AUTO_DISMISS_MS = 12_000   # dismiss automatically after 12 s of inactivity
 
 
+class _HighlightRing(QWidget):
+    """Transparent overlay that draws a bright border ring around the target widget."""
+
+    _BORDER = 2.5
+    _RADIUS = 7.0
+    _MARGIN = 4    # extra padding around the target
+
+    def __init__(self, target: QWidget, parent: QWidget) -> None:
+        super().__init__(parent)
+        self._target = target
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.setStyleSheet("background: transparent; border: none;")
+        self._update_geometry()
+
+    def _update_geometry(self) -> None:
+        p = self.parent()
+        if p is None:
+            return
+        try:
+            if not self._target.isVisible() or self._target.width() == 0:
+                self.setGeometry(0, 0, 0, 0)
+                return
+            m = self._MARGIN
+            tl = self._target.mapTo(p, self._target.rect().topLeft())
+            self.setGeometry(
+                tl.x() - m,
+                tl.y() - m,
+                self._target.width() + 2 * m,
+                self._target.height() + 2 * m,
+            )
+        except Exception:
+            pass  # non-fatal — target may be unmapped or deleted
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        b = self._BORDER / 2
+        rect = QRectF(self.rect()).adjusted(b, b, -b, -b)
+        pen = QPen(QColor(OVERLAY_BLUE), self._BORDER)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, self._RADIUS, self._RADIUS)
+
+
 class CoachMarkOverlay(QWidget):
     """
     Non-blocking floating hint panel — no dim overlay, no mouse interception.
 
-    Rendered as a small card in the bottom-right corner of the parent window.
+    Rendered as a small card positioned next to the target widget (or bottom-right
+    corner of the parent window if no target is set).
     The rest of the UI remains fully interactive at all times.
     """
 
@@ -67,18 +115,26 @@ class CoachMarkOverlay(QWidget):
         body: str,
         is_last: bool = False,
         target_widget: QWidget | None = None,
+        auto_dismiss_ms: int = _AUTO_DISMISS_MS,
     ):
         super().__init__(parent)
         self._is_last = is_last
+        self._auto_dismiss_ms = auto_dismiss_ms
+        self._target_widget = target_widget
 
-        # Floating, always-on-top, no frame — but still a child so it moves with the window
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # WA_TranslucentBackground keeps corners transparent; paintEvent fills the background
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setFixedSize(self._W, self._H)
-        self.setStyleSheet(
-            f"QWidget {{ background: {OVERLAY_BG}; border: 1px solid {OVERLAY_BG3};"
-            f" border-radius: 12px; }}"
-        )
+        # Transparent stylesheet — background drawn via paintEvent so WA_Translucent works
+        self.setStyleSheet("background: transparent; border: none;")
+
+        # Highlight ring around the target widget (sibling of parent, not child of overlay)
+        self._ring: _HighlightRing | None = None
+        if target_widget is not None:
+            try:
+                self._ring = _HighlightRing(target_widget, parent)
+            except Exception:
+                self._ring = None  # non-fatal
 
         # Title
         title_lbl = QLabel(title, self)
@@ -122,11 +178,12 @@ class CoachMarkOverlay(QWidget):
         )
         action_btn.clicked.connect(self.dismissed if is_last else self.advanced)
 
-        # Auto-dismiss timer
+        # Auto-dismiss timer — skipped when auto_dismiss_ms <= 0
         self._auto_timer = QTimer(self)
         self._auto_timer.setSingleShot(True)
-        self._auto_timer.setInterval(_AUTO_DISMISS_MS)
-        self._auto_timer.timeout.connect(self.dismissed)
+        self._auto_timer.setInterval(max(auto_dismiss_ms, 0))
+        if auto_dismiss_ms > 0:
+            self._auto_timer.timeout.connect(self.dismissed)
 
         # Fade animation
         self._fade_anim = QPropertyAnimation(self, b"windowOpacity", self)
@@ -137,16 +194,26 @@ class CoachMarkOverlay(QWidget):
 
     def show_animated(self) -> None:
         self._position()
+        # Show highlight ring around target before the overlay fades in
+        if self._ring is not None:
+            self._ring._update_geometry()
+            self._ring.show()
+            self._ring.raise_()
         self.show()
         self.raise_()
         self._fade_anim.stop()
         self._fade_anim.setStartValue(0.0)
         self._fade_anim.setEndValue(1.0)
         self._fade_anim.start()
-        self._auto_timer.start()
+        if self._auto_dismiss_ms > 0:
+            self._auto_timer.start()
 
     def hide_animated(self, callback=None) -> None:
         self._auto_timer.stop()
+        # Remove highlight ring immediately when the step is dismissed
+        if self._ring is not None:
+            self._ring.deleteLater()
+            self._ring = None
         self._fade_anim.stop()
         self._fade_anim.setStartValue(self.windowOpacity())
         self._fade_anim.setEndValue(0.0)
@@ -155,22 +222,50 @@ class CoachMarkOverlay(QWidget):
         self._fade_anim.start()
 
     def _position(self) -> None:
-        """Anchor the panel to the bottom-right of the parent window."""
+        """Position next to target_widget if set; otherwise bottom-right of parent."""
         p = self.parent()
         if p is None:
             return
         pw, ph = p.width(), p.height()
-        x = pw - self._W - self._MARGIN
-        y = ph - self._H - self._MARGIN
-        self.move(x, y)
+
+        if self._target_widget is not None:
+            try:
+                tw = self._target_widget
+                if tw.isVisible() and tw.width() > 0:
+                    tl = tw.mapTo(p, tw.rect().topLeft())
+                    tx, ty = tl.x(), tl.y()
+                    tw_w = tw.width()
+                    # Prefer right of target; fall back to left
+                    x = tx + tw_w + self._MARGIN
+                    if x + self._W > pw - self._MARGIN:
+                        x = tx - self._W - self._MARGIN
+                    x = max(self._MARGIN, min(x, pw - self._W - self._MARGIN))
+                    # Vertically align with target top, clamped to window
+                    y = max(self._MARGIN, min(ty, ph - self._H - self._MARGIN))
+                    self.move(x, y)
+                    return
+            except Exception:
+                pass  # target may be deleted or unmapped; fall through
+
+        # Default: bottom-right corner
+        self.move(pw - self._W - self._MARGIN, ph - self._H - self._MARGIN)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._position()
 
     def paintEvent(self, event) -> None:
-        # No dim overlay — just let the styled background paint the card.
-        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        # Solid dark background with rounded corners
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(OVERLAY_BG))
+        painter.drawRoundedRect(rect, 12.0, 12.0)
+        # Border
+        painter.setPen(QPen(QColor(OVERLAY_BG3), 1.0))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, 12.0, 12.0)
 
 
 # ── Chain sequencer ───────────────────────────────────────────────────────────
@@ -179,11 +274,13 @@ class CoachMarkChain:
     """Sequences a list of non-blocking hint panels."""
 
     def __init__(self, parent_window: QWidget, marks: list[dict],
-                 on_done=None) -> None:
-        self._parent  = parent_window
-        self._marks   = marks
+                 on_done=None,
+                 auto_dismiss_ms: int = _AUTO_DISMISS_MS) -> None:
+        self._parent          = parent_window
+        self._marks           = marks
         self._overlay: CoachMarkOverlay | None = None
-        self._on_done = on_done
+        self._on_done         = on_done
+        self._auto_dismiss_ms = auto_dismiss_ms
 
     def start(self) -> None:
         self._show_mark(0)
@@ -208,12 +305,19 @@ class CoachMarkChain:
             self._create_overlay(spec, index, is_last)
 
     def _create_overlay(self, spec: dict, index: int, is_last: bool) -> None:
+        target = spec.get("target")
+        try:
+            target_widget = target() if callable(target) else target
+        except Exception:
+            target_widget = None  # lambda may fail if widget not yet created
         overlay = CoachMarkOverlay(
             parent=self._parent,
             target_rect=None,
             title=spec["title"],
             body=spec["body"],
             is_last=is_last,
+            auto_dismiss_ms=int(spec.get("auto_dismiss_ms", self._auto_dismiss_ms)),
+            target_widget=target_widget,
         )
         self._overlay = overlay
         overlay.dismissed.connect(self._on_dismissed)

@@ -106,40 +106,6 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._refresh_hw_nudge()
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(700, self._maybe_show_coach_home_pills)
-
-    def _maybe_show_coach_home_pills(self) -> None:
-        if not self.isVisible():
-            return
-        qs = QSettings("NetSentinel", "NetSentinel")
-        if not qs.value("tour/v1_done", False, type=bool):
-            return  # wait until guided tour is complete — no competing onboarding
-        key = "coach/home_pills_shown"
-        if qs.value(key, False, type=bool):
-            return
-        win = self.window()
-        if not (win and win.isVisible()):
-            return
-        strip = getattr(self, "_freshness_strip", None)
-        if not strip:
-            return
-        arp_pill = getattr(strip, "_fs_pill_arp", None)
-        if not arp_pill or not arp_pill.isVisible():
-            return
-        from ui.widgets.coach_mark import CoachMarkChain
-        CoachMarkChain(
-            win,
-            [{
-                "target": lambda p=arp_pill: p,
-                "title": "Your monitors",
-                "body": (
-                    "These run in the background. Enable ARP Watch to detect "
-                    "spoofing attacks; enable Logger to record stability data."
-                ),
-            }],
-            on_done=lambda: QSettings("NetSentinel", "NetSentinel").setValue(key, True),
-        ).start()
 
     # ── Theme nudge banner ────────────────────────────────────────────────────
 
