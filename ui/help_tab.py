@@ -360,9 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Monkey / chaos tester", "tools/monkey_test.py — pywinauto UIA harness hammers the live UI for N iterations, detects crashes, hangs, and memory leaks; three chaos levels; seed-reproducible."),
-        ("Dev requirements documented", "requirements-dev.txt lists pywinauto, psutil, and Pillow needed for chaos testing."),
-        ("Architecture clean-up", "render_card_widget() moved from modules/ to ui/widgets/diagnostic_card_widget.py — modules layer is now fully PyQt6-free (ARCH RULE 1)."),
+        ("Chaos validated — MS Store ready", "9-hour overnight run: 10,001 UIA interactions across mild/moderate/wild chaos levels; zero crashes; all 61 pages clean before and after."),
+        ("Non-modal command palette", "Ctrl+K palette opens with show() — click anywhere outside to dismiss; app no longer locked while palette is open."),
+        ("CodeQL & CI hardening", "100+ CodeQL alerts resolved; ruff, mypy, and pip-audit enforced as Step 1 of the commit gate; dependency CVEs patched."),
+        ("Test-suite stability", "Eliminated intermittent STATUS_STACK_BUFFER_OVERRUN heap corruption — parented QTimer pattern (RULE-WIN5) and deleteLater() teardown (RULE-WIN4) enforced."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
