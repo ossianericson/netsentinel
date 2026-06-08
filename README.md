@@ -352,6 +352,10 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.92
+**Fixed**
+- `release.yml`: add `update_release: true` to `softprops/action-gh-release` — prevents "already_exists" failure when a tag is re-pushed or CI is retriggered for an existing release
+
 ### v1.9.91
 **Fixed**
 - `ui/command_palette.py`: command palette now opens non-modally (`show()` instead of `exec()`) — clicking anywhere outside the palette dismisses it; app is no longer locked while the palette is open
