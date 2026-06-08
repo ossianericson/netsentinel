@@ -41,7 +41,6 @@ from ui.tabs import (
     _empty_state_widget,
 )
 from ui.tabs_helpers import _page_header  # noqa: F401 — re-exported; used via lazy `from ui.dashboard import _page_header`
-from ui.monitor_state import _color_for_level  # noqa: F401 — re-exported; used via lazy `from ui.dashboard import _color_for_level`
 
 
 # --- Activity-Rail Navigation widgets (extracted to ui/nav/rail.py) -----------
@@ -91,7 +90,8 @@ from ui.header import AppHeaderMixin
 from ui.tabs import TabBuilderMixin
 from ui.nav.builder import _NavBuilderMixin
 from ui.monitor_state import (
-    _color_for_level, _MonitorStateMixin,
+    _color_for_level,  # noqa: F401 — re-exported; used via lazy `from ui.dashboard import _color_for_level`
+    _MonitorStateMixin,
 )
 from ui.plugin_page_mixin import _PluginPageMixin
 
