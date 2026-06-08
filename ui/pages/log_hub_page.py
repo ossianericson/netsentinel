@@ -143,7 +143,14 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._src_bold_font.setPointSize(8)
 
         self._setup_ui()
-        QTimer.singleShot(300, self._load_history)
+        # Use a parented QTimer so it is automatically stopped when this widget
+        # is deleted.  QTimer.singleShot(n, slot) creates an unparented timer that
+        # fires after widget deletion, causing RuntimeError through the C++ timer
+        # callback and corrupting the heap (same pattern fixed in home_page.py).
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(self._load_history)
+        _t.start(300)
 
     def showEvent(self, event) -> None:
         from ui.table_utils import restore_column_widths

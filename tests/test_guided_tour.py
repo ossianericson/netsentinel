@@ -118,9 +118,23 @@ class TestTourSteps:
 class TestGuidedTour:
     def setup_method(self):
         _fresh_qs()
+        self._tour = None  # RULE-WIN4: track for deleteLater() in teardown
 
     def teardown_method(self):
         _fresh_qs()
+        # RULE-WIN4: GuidedTour is QObject (not QWidget) — topLevelWidgets() misses it.
+        # Must call deleteLater() explicitly or the C++ object leaks and corrupts the Qt
+        # heap, causing STATUS_STACK_BUFFER_OVERRUN hundreds of tests later.
+        if self._tour is not None:
+            try:
+                self._tour.deleteLater()
+            except RuntimeError:
+                pass  # non-fatal — object already deleted
+            self._tour = None
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
 
     def _make_mock_dashboard(self):
         """Return a minimal mock dashboard with the required tour bar attributes."""
@@ -142,9 +156,9 @@ class TestGuidedTour:
         QSettings("NetSentinel", "NetSentinel").setValue("ui/first_run_done", True)
         mark_tour_done()
         d = self._make_mock_dashboard()
-        tour = GuidedTour(None)
-        tour._dashboard = d
-        tour.start()
+        self._tour = GuidedTour(None)
+        self._tour._dashboard = d
+        self._tour.start()
         # tour bar should NOT become visible
         d._tour_bar.setVisible.assert_not_called()
 
@@ -152,9 +166,9 @@ class TestGuidedTour:
         from ui.guided_tour import GuidedTour
         QSettings("NetSentinel", "NetSentinel").setValue("ui/first_run_done", True)
         d = self._make_mock_dashboard()
-        tour = GuidedTour(None)
-        tour._dashboard = d
-        tour.start()
+        self._tour = GuidedTour(None)
+        self._tour._dashboard = d
+        self._tour.start()
         d._tour_bar.setVisible.assert_called_with(True)
 
     def test_skip_sets_tour_done_and_hides_bar(self):
@@ -162,9 +176,9 @@ class TestGuidedTour:
         QSettings("NetSentinel", "NetSentinel").setValue("ui/first_run_done", True)
         assert should_show_tour() is True
         d = self._make_mock_dashboard()
-        tour = GuidedTour(None)
-        tour._dashboard = d
-        tour._finish()
+        self._tour = GuidedTour(None)
+        self._tour._dashboard = d
+        self._tour._finish()
         assert should_show_tour() is False
         d._tour_bar.setVisible.assert_called_with(False)
 
@@ -172,10 +186,10 @@ class TestGuidedTour:
         from ui.guided_tour import GuidedTour, _STEPS, should_show_tour
         QSettings("NetSentinel", "NetSentinel").setValue("ui/first_run_done", True)
         d = self._make_mock_dashboard()
-        tour = GuidedTour(None)
-        tour._dashboard = d
-        tour._step = len(_STEPS) - 1
-        tour._on_next()
+        self._tour = GuidedTour(None)
+        self._tour._dashboard = d
+        self._tour._step = len(_STEPS) - 1
+        self._tour._on_next()
         assert should_show_tour() is False
 
 

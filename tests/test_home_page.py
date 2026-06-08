@@ -24,6 +24,34 @@ except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
 
+# ---------------------------------------------------------------------------
+# RULE-WIN4 compliance: keep created pages alive until deleteLater() runs.
+# Python GC destroys C++ objects immediately on scope-exit, but HomePage
+# starts a 0ms QTimer in __init__.  Storing every page here prevents
+# premature destruction; the autouse fixture below drains the list via
+# deleteLater() + 3× processEvents() after every test.
+# ---------------------------------------------------------------------------
+_created_pages: list = []
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_home_pages():
+    yield
+    app = QApplication.instance()
+    # Schedule Qt-side deletion while we still hold Python references
+    for page in _created_pages:
+        try:
+            page.deleteLater()
+        except RuntimeError:
+            pass  # already destroyed — safe to skip
+    # processEvents() runs Qt's deferred deletions while references are still held;
+    # the C++ objects are gone after this but the Python wrappers are still alive.
+    if app:
+        for _ in range(3):
+            app.processEvents()
+    # Now release Python references — C++ objects already deleted by Qt above
+    _created_pages.clear()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,7 +59,9 @@ except ImportError:
 
 def _make_page(store=None):
     from ui.pages.home_page import HomePage
-    return HomePage(store=store)
+    page = HomePage(store=store)
+    _created_pages.append(page)
+    return page
 
 
 def _make_alert(severity: str = "WARNING", message: str = "Test alert"):

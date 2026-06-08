@@ -45,11 +45,18 @@ def make_card():
     app = QApplication.instance()
     for card in created:
         try:
+            # Stop the 30-second tick timer before deletion (RULE-WIN4)
+            if hasattr(card, "_tick_timer"):
+                card._tick_timer.stop()
+        except RuntimeError:
+            pass  # non-fatal
+        try:
             card.deleteLater()
         except RuntimeError:
             pass  # non-fatal
     if app:
-        app.processEvents()
+        for _ in range(3):
+            app.processEvents()
 
 
 # isVisible() returns False for widgets whose parent has never been shown.
@@ -150,7 +157,8 @@ def device_page():
     except RuntimeError:
         pass  # non-fatal
     if app:
-        app.processEvents()
+        for _ in range(3):
+            app.processEvents()
 
 
 def test_plugin_device_page_banner_pip_shows_button(device_page):

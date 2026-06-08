@@ -1,22 +1,12 @@
 """tests/test_community_index.py — P3-4: community plugin index download + SHA-256 verification"""
 import hashlib
 import json
-import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-import pytest
 from PyQt6.QtWidgets import QApplication
-
-
-# ── QApplication fixture ──────────────────────────────────────────────────────
-
-@pytest.fixture(scope="module")
-def qapp():
-    app = QApplication.instance() or QApplication(sys.argv)
-    yield app
 
 
 def _wait(condition, timeout=6.0, step=0.05) -> bool:
@@ -27,6 +17,19 @@ def _wait(condition, timeout=6.0, step=0.05) -> bool:
             return True
         time.sleep(step)
     return False
+
+
+def _thread_cleanup(thread) -> None:
+    """RULE-WIN4: QThread is a QObject — deleteLater() must be called explicitly.
+    topLevelWidgets() only catches QWidget subclasses; QThread escapes conftest cleanup."""
+    try:
+        thread.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal — object already deleted
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -84,7 +87,7 @@ def test_community_index_thread_import():
     assert _CommunityIndexThread is not None
 
 
-def test_community_index_thread_fetches_list(qapp):
+def test_community_index_thread_fetches_list():
     from ui.pages.hardware_integration_page import _CommunityIndexThread
 
     index = [{"name": "Test", "author": "Bob", "desc": "A plugin",
@@ -94,6 +97,7 @@ def test_community_index_thread_fetches_list(qapp):
         index_data = json.dumps(index).encode()
 
     srv, port = _start_server(_H)
+    thread = None
     try:
         url = f"http://127.0.0.1:{port}/index.json"
         thread = _CommunityIndexThread(url)
@@ -107,10 +111,12 @@ def test_community_index_thread_fetches_list(qapp):
         assert len(results) == 1
         assert results[0] == index
     finally:
+        if thread is not None:
+            _thread_cleanup(thread)
         srv.shutdown()
 
 
-def test_community_index_thread_error_on_bad_url(qapp):
+def test_community_index_thread_error_on_bad_url():
     from ui.pages.hardware_integration_page import _CommunityIndexThread
 
     # Port 1 is always refused on any OS
@@ -118,17 +124,21 @@ def test_community_index_thread_error_on_bad_url(qapp):
     errors = []
     thread.error.connect(errors.append)
     thread.start()
-    assert _wait(lambda: not thread.isRunning()), "Thread timed out"
-    assert errors
+    try:
+        assert _wait(lambda: not thread.isRunning()), "Thread timed out"
+        assert errors
+    finally:
+        _thread_cleanup(thread)
 
 
-def test_community_index_thread_error_on_non_list(qapp):
+def test_community_index_thread_error_on_non_list():
     from ui.pages.hardware_integration_page import _CommunityIndexThread
 
     class _H(_MockHandler):
         index_data = b'{"not": "a list"}'
 
     srv, port = _start_server(_H)
+    thread = None
     try:
         thread = _CommunityIndexThread(f"http://127.0.0.1:{port}/index.json")
         errors = []
@@ -137,6 +147,8 @@ def test_community_index_thread_error_on_non_list(qapp):
         assert _wait(lambda: not thread.isRunning()), "Thread timed out"
         assert errors
     finally:
+        if thread is not None:
+            _thread_cleanup(thread)
         srv.shutdown()
 
 
@@ -147,7 +159,7 @@ def test_community_download_thread_import():
     assert _CommunityDownloadThread is not None
 
 
-def test_community_download_thread_success(qapp, tmp_path, monkeypatch):
+def test_community_download_thread_success(tmp_path, monkeypatch):
     from ui.pages.hardware_integration_page import _CommunityDownloadThread
 
     monkeypatch.setattr("modules.utils.get_app_data_dir", lambda: tmp_path)
@@ -156,6 +168,7 @@ def test_community_download_thread_success(qapp, tmp_path, monkeypatch):
         pass  # serves _PLUGIN_SRC on /plugin.py
 
     srv, port = _start_server(_H)
+    thread = None
     try:
         sha = hashlib.sha256(_PLUGIN_SRC).hexdigest()
         thread = _CommunityDownloadThread(
@@ -172,10 +185,12 @@ def test_community_download_thread_success(qapp, tmp_path, monkeypatch):
         assert Path(results[0]).exists()
         assert Path(results[0]).read_bytes() == _PLUGIN_SRC
     finally:
+        if thread is not None:
+            _thread_cleanup(thread)
         srv.shutdown()
 
 
-def test_community_download_thread_sha256_mismatch(qapp, tmp_path, monkeypatch):
+def test_community_download_thread_sha256_mismatch(tmp_path, monkeypatch):
     from ui.pages.hardware_integration_page import _CommunityDownloadThread
 
     monkeypatch.setattr("modules.utils.get_app_data_dir", lambda: tmp_path)
@@ -184,6 +199,7 @@ def test_community_download_thread_sha256_mismatch(qapp, tmp_path, monkeypatch):
         pass
 
     srv, port = _start_server(_H)
+    thread = None
     try:
         thread = _CommunityDownloadThread(
             f"http://127.0.0.1:{port}/plugin.py",
@@ -197,10 +213,12 @@ def test_community_download_thread_sha256_mismatch(qapp, tmp_path, monkeypatch):
         assert errors
         assert any("mismatch" in e.lower() for e in errors)
     finally:
+        if thread is not None:
+            _thread_cleanup(thread)
         srv.shutdown()
 
 
-def test_community_download_thread_no_sha256_check(qapp, tmp_path, monkeypatch):
+def test_community_download_thread_no_sha256_check(tmp_path, monkeypatch):
     """Empty sha256 string means skip verification — download should succeed."""
     from ui.pages.hardware_integration_page import _CommunityDownloadThread
 
@@ -210,6 +228,7 @@ def test_community_download_thread_no_sha256_check(qapp, tmp_path, monkeypatch):
         pass
 
     srv, port = _start_server(_H)
+    thread = None
     try:
         thread = _CommunityDownloadThread(
             f"http://127.0.0.1:{port}/plugin.py", "", "Example Router"
@@ -220,4 +239,6 @@ def test_community_download_thread_no_sha256_check(qapp, tmp_path, monkeypatch):
         assert _wait(lambda: not thread.isRunning(), timeout=8), "Thread timed out"
         assert results
     finally:
+        if thread is not None:
+            _thread_cleanup(thread)
         srv.shutdown()

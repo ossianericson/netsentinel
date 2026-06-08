@@ -181,6 +181,7 @@ def test_polling_worker_injects_attributes_not_env_var(tmp_path):
 def test_polling_worker_file_error_prefix(tmp_path):
     """A missing plugin file emits 'FILE: plugin file not found at …'."""
     from workers.plugin_polling_worker import PluginPollingWorker
+    from PyQt6.QtWidgets import QApplication
 
     missing = str(tmp_path / "nonexistent_plugin.py")
     errors: list[str] = []
@@ -192,7 +193,18 @@ def test_polling_worker_file_error_prefix(tmp_path):
     worker.error.connect(errors.append)
     worker._run_once()
 
-    assert len(errors) == 1
-    assert errors[0].startswith("FILE:"), (
-        f"Expected 'FILE:' prefix, got: {errors[0]!r}"
-    )
+    try:
+        assert len(errors) == 1
+        assert errors[0].startswith("FILE:"), (
+            f"Expected 'FILE:' prefix, got: {errors[0]!r}"
+        )
+    finally:
+        # RULE-WIN4: QThread is QObject — deleteLater() prevents C++ heap corruption
+        try:
+            worker.deleteLater()
+        except RuntimeError:
+            pass  # non-fatal — object already deleted
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()

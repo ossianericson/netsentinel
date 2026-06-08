@@ -69,6 +69,13 @@ def _reset_qsettings(monkeypatch):
     monkeypatch.setattr(
         "ui.pages.hardware_integration_page._save_last_result", lambda *_: None
     )
+    # Patch _load_instances to return [] so _start_all_poll_workers() does not
+    # create unparented QTimer.singleShot(n, ...) timers for real QSettings data.
+    # Without this patch, machines with stored plugin instances create timers with
+    # delays up to 3000 ms that fire on zombie page objects during later tests.
+    monkeypatch.setattr(
+        "ui.pages.hardware_integration_page._load_instances", lambda: []
+    )
     # Prevent QFileSystemWatcher from starting OS-level file-watching threads
     # (ReadDirectoryChangesW on Windows) that don't clean up reliably in tests.
     # Use a lambda to ignore the parent arg so MagicMock doesn't treat it as spec.
@@ -89,6 +96,23 @@ def _cleanup_page(p):
         pass  # non-fatal
     try:
         p.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+def _cleanup_card(card):
+    """Safely delete a HubCard: stop any named timers, deleteLater(), 3× processEvents."""
+    app = QApplication.instance()
+    try:
+        if hasattr(card, "_tick_timer"):
+            card._tick_timer.stop()
+    except RuntimeError:
+        pass  # non-fatal — object may already be partially deleted
+    try:
+        card.deleteLater()
     except RuntimeError:
         pass  # non-fatal
     if app:
@@ -213,8 +237,7 @@ def test_save_password_writes_to_keyring(monkeypatch):
 
     assert ("NetSentinel/hardware", hw_ip) in saved
     assert saved[("NetSentinel/hardware", hw_ip)] == "secret123"
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 def test_save_password_empty_shows_error(monkeypatch):
@@ -224,8 +247,7 @@ def test_save_password_empty_shows_error(monkeypatch):
     card._pw_edit.setText("")
     card._save_password(meta["ip"], card._pw_edit, card._pw_status)
     assert card._pw_status.text() != ""  # some error/feedback text set
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 def test_forget_password_calls_delete_for_all_services(monkeypatch):
@@ -242,8 +264,7 @@ def test_forget_password_calls_delete_for_all_services(monkeypatch):
 
     services = {s for s, _ in deleted}
     assert "NetSentinel/hardware" in services
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -260,8 +281,7 @@ def test_hubcard_survives_corrupt_clients_strings(monkeypatch):
         "_ts":     time.time(),
     }
     card = HubCard(_DECO, meta, corrupt)  # must not raise
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 def test_hubcard_survives_corrupt_nodes_strings(monkeypatch):
@@ -277,24 +297,21 @@ def test_hubcard_survives_corrupt_nodes_strings(monkeypatch):
         "_ts":     time.time(),
     }
     card = HubCard(_DECO, meta, corrupt)  # must not raise
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 def test_hubcard_survives_none_last_result():
     """HubCard with last_result=None must construct without error."""
     _, _, meta = _validate_script(_ZTE)
     card = HubCard(_ZTE, meta, None)
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 def test_hubcard_survives_non_dict_last_result():
     """HubCard with last_result='garbage' must not crash."""
     _, _, meta = _validate_script(_DECO)
     card = HubCard(_DECO, meta, "garbage")  # type: ignore[arg-type]
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -312,8 +329,7 @@ def test_type_mismatch_meta_unknown_data_modem(monkeypatch):
         "_ts":     time.time(),
     }
     card = HubCard(_ZTE, bad_meta, modem_result)  # must not raise
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 def test_type_mismatch_meta_modem_data_router(monkeypatch):
@@ -327,8 +343,7 @@ def test_type_mismatch_meta_modem_data_router(monkeypatch):
         "_ts":     time.time(),
     }
     card = HubCard(_ZTE, modem_meta, router_result)  # must not raise
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -348,7 +363,10 @@ def test_safe_set_text_sets_text_on_live_widget():
     _safe_set_text(lbl, "after")
     assert lbl.text() == "after"
     lbl.deleteLater()
-    QApplication.instance().processEvents()
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
 
 def test_delete_card_while_password_save_timer_pending(monkeypatch):
@@ -360,8 +378,7 @@ def test_delete_card_while_password_save_timer_pending(monkeypatch):
     card._pw_edit.setText("pw")
     card._save_password(meta["ip"], card._pw_edit, card._pw_status)
     # Immediately delete the card — timer will fire after deleteLater
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
     # Fire all pending timers (forces the lambda to run on deleted widget)
     from PyQt6.QtTest import QTest
     QTest.qWait(50)
@@ -428,8 +445,14 @@ def test_auto_import_skipped_when_paths_already_set(monkeypatch):
 def router_panel():
     p = _RouterDetailPanel()
     yield p
-    p.deleteLater()
-    QApplication.instance().processEvents()
+    try:
+        p.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
 
 def test_router_panel_update_empty(router_panel):
@@ -479,8 +502,14 @@ def test_router_panel_update_mixed_valid_invalid_clients(router_panel):
 def modem_panel():
     p = _ModemDetailPanel()
     yield p
-    p.deleteLater()
-    QApplication.instance().processEvents()
+    try:
+        p.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
 
 def test_modem_panel_update_empty(modem_panel):
@@ -521,8 +550,7 @@ def test_hubcard_update_result_router(monkeypatch):
         "_ts": time.time(),
     }
     card.update_result(data, time.time())  # must not raise
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 def test_hubcard_update_result_modem(monkeypatch):
@@ -538,8 +566,7 @@ def test_hubcard_update_result_modem(monkeypatch):
         "_ts": time.time(),
     }
     card.update_result(data, time.time())  # must not raise
-    card.deleteLater()
-    QApplication.instance().processEvents()
+    _cleanup_card(card)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -652,8 +679,7 @@ def test_hubcard_configure_button_hidden_no_schema():
     try:
         assert not card._btn_configure.isVisible()
     finally:
-        card.deleteLater()
-        QApplication.instance().processEvents()
+        _cleanup_card(card)
 
 
 def test_hubcard_configure_button_visible_with_schema():
@@ -664,8 +690,7 @@ def test_hubcard_configure_button_visible_with_schema():
     try:
         assert not card._btn_configure.isHidden()
     finally:
-        card.deleteLater()
-        QApplication.instance().processEvents()
+        _cleanup_card(card)
 
 
 def test_build_config_panel_widget_types():
@@ -683,8 +708,7 @@ def test_build_config_panel_widget_types():
         assert isinstance(card._config_fields["active"], QCheckBox)
         assert isinstance(card._config_fields["label"],  QLineEdit)
     finally:
-        card.deleteLater()
-        QApplication.instance().processEvents()
+        _cleanup_card(card)
 
 
 def test_apply_config_persists_values(monkeypatch):
@@ -705,15 +729,26 @@ def test_apply_config_persists_values(monkeypatch):
         card._apply_config()
         assert saved.get("poll_interval") == 120
     finally:
-        card.deleteLater()
-        QApplication.instance().processEvents()
+        _cleanup_card(card)
 
 
 def test_plugin_polling_worker_interval_from_config():
     """poll_interval in config overrides the hardware-type default interval (PB-7)."""
     from workers.plugin_polling_worker import PluginPollingWorker
+    from PyQt6.QtWidgets import QApplication
     w = PluginPollingWorker("dummy.py", "router", config={"poll_interval": 15})
-    assert w._interval_s == 15
+    try:
+        assert w._interval_s == 15
+    finally:
+        # RULE-WIN4: QThread is QObject — deleteLater() prevents C++ heap corruption
+        try:
+            w.deleteLater()
+        except RuntimeError:
+            pass  # non-fatal — object already deleted
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
 
 
 def test_plugin_polling_worker_passes_config_to_get_status(tmp_path):
@@ -733,9 +768,21 @@ def test_plugin_polling_worker_passes_config_to_get_status(tmp_path):
         encoding="utf-8",
     )
     from workers.plugin_polling_worker import PluginPollingWorker
+    from PyQt6.QtWidgets import QApplication
     cfg = {"poll_interval": 10, "verify_ssl": True}
     w = PluginPollingWorker(str(plugin), "router", config=cfg)
-    w._run_once()
-    assert out_file.exists(), "get_status(config=...) was not called by the worker"
-    received = json.loads(out_file.read_text())
-    assert received == cfg
+    try:
+        w._run_once()
+        assert out_file.exists(), "get_status(config=...) was not called by the worker"
+        received = json.loads(out_file.read_text())
+        assert received == cfg
+    finally:
+        # RULE-WIN4: QThread is QObject — deleteLater() prevents C++ heap corruption
+        try:
+            w.deleteLater()
+        except RuntimeError:
+            pass  # non-fatal — object already deleted
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
