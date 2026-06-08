@@ -352,6 +352,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.93
+**Fixed**
+- `ui/widgets/coach_mark.py`: added `_HighlightRing` — blue border ring drawn around the target widget while each coach mark step is active, so users can see exactly what to click
+- `ui/dashboard.py`: post-scan tour (Steps 2–9) now fires immediately after "Got it" on Step 1, without waiting for scan to complete — tour is reliable regardless of scan outcome
+- `ui/dashboard.py`: added Hardware Hub as Step 9 of 9 in the onboarding tour; tour navigates to Overview on completion
+
 ### v1.9.92
 **Fixed**
 - `release.yml`: add `update_release: true` to `softprops/action-gh-release` — prevents "already_exists" failure when a tag is re-pushed or CI is retriggered for an existing release

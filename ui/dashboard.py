@@ -675,7 +675,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     # ── First-run onboarding ──────────────────────────────────────────────────
 
     def _show_welcome_overlay(self) -> None:
-        """Entry point called at startup — shows OnboardingOverlay on first launch."""
+        """Entry point called at startup — shows coach mark on first launch."""
         self._maybe_start_onboarding()
 
     def _maybe_start_onboarding(self) -> None:
@@ -684,17 +684,36 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             return
         self._nav_rail_go_to("Home")
         from ui.widgets.coach_mark import CoachMarkChain
-        CoachMarkChain(
+        def _step1_done() -> None:
+            mark_onboarding_done()
+            from PyQt6.QtCore import QSettings as _QS
+            # Mark tour as done immediately so scan-result handler doesn't also trigger it
+            _QS("NetSentinel", "NetSentinel").setValue("tour/post_scan_done", True)
+            # Start scan in background (no _scan_from_home flag — tour handles navigation)
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self._start_full_scan)
+            _t.start(300)
+            # Start 8-step tour immediately (doesn't wait for scan to complete)
+            _t2 = QTimer(self)
+            _t2.setSingleShot(True)
+            _t2.timeout.connect(self._start_post_scan_coach_marks)
+            _t2.start(800)
+
+        # Store reference on self — prevents Python GC from collecting the chain
+        # before the 400 ms delay fires and the signal connections are alive.
+        self._onboarding_chain = CoachMarkChain(
             self,
             [{
-                "target":   lambda: getattr(self, "_home_page", None)
-                            and getattr(self._home_page, "_btn_scan", None),
-                "title":    "Scan your network",
-                "body":     "Click here to discover every device and check your security grade.",
-                "delay_ms": 400,  # wait for Home page crossfade (160 ms) before resolving button position
+                "title":         "Step 1 of 9 — Scan your network",
+                "body":          "Click 'Got it' to start your first scan. An 8-step guided tour follows automatically.",
+                "delay_ms":      400,
+                "auto_dismiss_ms": 0,   # stays until user explicitly clicks Got it
+                "target":        lambda: getattr(self, "_btn_scan", None),
             }],
-            on_done=mark_onboarding_done,
-        ).start()
+            on_done=_step1_done,
+        )
+        self._onboarding_chain.start()
 
     def _start_logger_if_needed(self) -> None:
         """Start the background network logger if it is not already running."""
@@ -702,17 +721,15 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._toggle_logger()
 
     def _start_post_scan_coach_marks(self) -> None:
-        """Show six coach marks (3×2-step) after the first scan, teaching rail navigation."""
+        """Show 8 coach marks walking the user through key sections of the app."""
         from ui.widgets.coach_mark import CoachMarkChain
 
         def _open_section(name: str) -> None:
-            """Open the flyout for *name*; switch sections if a different one is open."""
             if self._nav_open_section == name and self._nav_flyout.maximumWidth() > 0:
                 return  # already open — nothing to do
             self._nav_rail_toggle(name)
 
         def _click_net_source() -> None:
-            """Programmatically animate-click the Network RTT source chip to demo it."""
             page = getattr(self, "_log_hub_page", None)
             if page is None:
                 return
@@ -720,72 +737,76 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             if btn:
                 btn.animateClick()  # brief visual press so user sees the interaction
 
-        CoachMarkChain(
+        def _tour_done() -> None:
+            self._nav_rail_go_to("Overview")
+
+        self._post_scan_chain = CoachMarkChain(
             self,
             [
                 # ── Pair 1: Discover → Devices ─────────────────────────────────
                 {
                     "on_show": lambda: _open_section("Discover"),
                     "target":  lambda: self._nav_rail_buttons.get("Discover"),
-                    "title":   "Discover",
+                    "title":   "Step 2 of 9 — Discover",
                     "body":    "Click the Discover icon to open this menu. It contains your device inventory, network map, WiFi, and more.",
                 },
                 {
                     "on_show": lambda: self._nav_rail_go_to("Devices"),
                     "target":  lambda: self._nav_flyout._items.get("Devices"),
-                    "title":   "Network Devices",
+                    "title":   "Step 3 of 9 — Network Devices",
                     "body":    "All discovered devices are listed here. Right-click any row for details and actions.",
                 },
                 # ── Pair 2: Monitor → Network Logger ───────────────────────────
                 {
                     "on_show": lambda: _open_section("Monitor"),
                     "target":  lambda: self._nav_rail_buttons.get("Monitor"),
-                    "title":   "Monitor",
+                    "title":   "Step 4 of 9 — Monitor",
                     "body":    "Click the Monitor icon to open live streams — bandwidth, connections, availability, and more.",
                 },
                 {
                     "on_show": lambda: self._nav_rail_go_to("Network Logger"),
                     "target":  lambda: self._nav_flyout._items.get("Network Logger"),
-                    "title":   "Network Logger",
+                    "title":   "Step 5 of 9 — Network Logger",
                     "body":    "Every log source feeds into this unified timeline. Click here to open it.",
                 },
-                # ── Network Logger bonus steps: Activity Log tab + source click ────
+                # ── Network Logger: Activity Log tab + source chip ────────────
                 {
                     "on_show": lambda: (
                         self._nav_flyout.close_panel(),
-                        # Switch to the "Activity Log" tab (index 1) so user sees it clicked
                         self._logging_container.setCurrentIndex(1),
                     ),
                     "target":  lambda: self._logging_container,
-                    "title":   "Activity Log",
+                    "title":   "Step 6 of 9 — Activity Log",
                     "body":    "The 'Activity Log' tab shows the live event timeline from all your monitoring sources — RTT, outages, modem signal, syslog, and more.",
                 },
                 {
                     "on_show": lambda: _click_net_source(),
                     "target":  lambda: getattr(self._log_hub_page, "_toggle_btns", {}).get("net"),
-                    "title":   "Source filter chips",
+                    "title":   "Step 7 of 9 — Source filters",
                     "body":    "Clicking a chip like 'Network RTT' filters the log to that stream only. Use these to focus on one activity at a time.",
                 },
-                # ── Pair 3: Extend → Hardware ──────────────────────────────────
+                # ── Pair 3: Extend → Hardware Hub ──────────────────────────────
                 {
                     "on_show": lambda: _open_section("Extend"),
                     "target":  lambda: self._nav_rail_buttons.get("Extend"),
-                    "title":   "Extend",
+                    "title":   "Step 8 of 9 — Extend",
                     "body":    "Click the Extend icon to manage hardware integrations — modem, mesh router, or custom USB devices.",
                 },
                 {
                     "on_show": lambda: self._nav_rail_go_to("Hardware"),
                     "target":  lambda: self._nav_flyout._items.get("Hardware"),
-                    "title":   "Hardware Hub",
-                    "body":    "Each connected device gets its own live monitoring card with configurable polling.",
+                    "title":   "Step 9 of 9 — Hardware Hub",
+                    "body":    "Connect your router, modem, or mesh system here for deep signal stats, connection info, and real-time diagnostics.",
                 },
             ],
-        ).start()
+            auto_dismiss_ms=0,
+            on_done=_tour_done,
+        )
+        self._post_scan_chain.start()
 
     def _on_welcome_scan(self) -> None:
-        """Legacy slot kept so existing signal connections don't crash.
-        Onboarding v2 fires scans directly — this is a no-op."""
-        pass
+        """Legacy slot — kept so any existing signal connections don't crash."""
+        pass  # no-op; _maybe_start_onboarding drives the first-run flow
 
     def _set_scanning(self, scanning: bool):
         self._btn_scan.setEnabled(not scanning)
@@ -901,11 +922,21 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("home/checklist_done", False)
         qs.setValue("home/scan_count", 0)
+        # Reset all onboarding keys so coach marks fire immediately in this session
+        qs.setValue("ui/first_run_done", False)
+        qs.setValue("ui/onboarding_v2_done", False)
+        qs.setValue("tour/post_scan_done", False)
+        self._welcome_shown = False   # allow _show_welcome_overlay to fire again
         self._nav_rail_go_to("Home")
         if hasattr(self, "_home_page"):
             self._home_page._recurring_mode = False
             self._home_page._set_first_run_mode(True)
             self._home_page.refresh_checklist()
+        # Re-trigger the welcome overlay (key is now False)
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(self._show_welcome_overlay)
+        _t.start(400)
 
     @pyqtSlot()
     def _on_export_all(self) -> None:
