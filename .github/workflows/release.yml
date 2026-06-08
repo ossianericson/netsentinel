@@ -46,7 +46,11 @@ jobs:
           (Get-Content cli.py) -replace '_VERSION\s*=\s*"[^"]+"', "_VERSION = `"$ver`"" |
             Set-Content cli.py
           # packaging\AppxManifest.xml  — 4-part MSIX version (X.Y.Z.W format, not X.Y.Z.0.0)
-          (Get-Content "packaging\AppxManifest.xml") -replace 'Version="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"', "Version=`"$ver.0`"" |
+          # CRITICAL: pattern must be anchored with ^ so it only matches the Identity element's
+          # Version= attribute (which is on its own indented line).  An unanchored pattern also
+          # matches "Version=" as a substring of MinVersion= and MaxVersionTested=, overwriting
+          # them with the app version and breaking the CI test_appxmanifest_target_device_family_minversion.
+          (Get-Content "packaging\AppxManifest.xml") -replace '^\s+Version="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"', "    Version=`"$ver.0`"" |
             Set-Content "packaging\AppxManifest.xml"
           echo "Patched to $ver"
 
