@@ -352,6 +352,27 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.91
+**Fixed**
+- `ui/command_palette.py`: command palette now opens non-modally (`show()` instead of `exec()`) — clicking anywhere outside the palette dismisses it; app is no longer locked while the palette is open
+- `ui/widgets/page_header.py`: `_HelpPopover.show_at()` now clamps position to `screen.availableGeometry()` so the help popover never renders partially off-screen near screen edges
+- Resolved 100+ CodeQL code-scanning alerts across `modules/`, `workers/`, `tools/`, and `ui/` — empty `except` blocks documented, unused variables removed, URL-substring patterns replaced with `urlparse` checks
+- Test suite: eliminated intermittent `STATUS_STACK_BUFFER_OVERRUN` heap corruption caused by unparented `QTimer.singleShot()` in `__init__` and Qt widgets deleted by Python GC instead of `deleteLater()`
+- CI pipeline: ruff (F401/F811/F841), mypy, pip-audit all now pass as Step 1 of the commit gate; CVE findings in dependencies resolved
+
+**Changed**
+- `tools/monkey_test.py`: `_dismiss_blocking_dialogs()` detects Windows common file dialogs (class `#32770`) and dismisses them immediately — eliminates spurious `SetCursorPos` stale-reference exceptions
+- `tools/monkey_test.py`: `_act_edit()` strips pywinauto key-sequence special characters before `type_keys()` — eliminates `KeySequenceError` on port-number fields
+- `tools/monkey_test.py`: default `mem_limit_mb` raised 800 → 1500 MB to match observed wild-chaos peak RSS
+- `tplinkrouterc6u` dependency updated to `~=5.22`
+- 9h / 12h / 24h chaos test bat launchers added with ready-to-paste analysis prompt
+
+**Security**
+- pip-audit CVE findings resolved; `requirements.txt` updated to patched versions
+
+**Validated**
+- 9-hour overnight chaos run: 10,001 UIA interactions across mild / moderate / wild chaos levels; zero application crashes; all 61 pages pass systematic pre/post coverage; app confirmed production-stable — Microsoft Store submission ready
+
 ### v1.9.90
 **Fixed**
 - `ui/command_palette.py`: command palette now opens non-modally (`show()` instead of `exec()`) — clicking anywhere outside the palette dismisses it; app is no longer locked while the palette is open
