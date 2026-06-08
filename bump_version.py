@@ -84,8 +84,9 @@ def bump(ver: str) -> None:
 
     # packaging/AppxManifest.xml  — 4-part MSIX version (Major.Minor.Patch.0)
     # CRITICAL: Must be exactly 4 parts. makeappx.exe rejects 5-part versions.
+    # Negative lookbehind prevents matching MinVersion= or MaxVersionTested= attributes.
     _sub(ROOT / "packaging" / "AppxManifest.xml",
-         rf'(Version="){_VER4}(")',
+         rf'(?<![A-Za-z])(Version="){_VER4}(")',
          rf'\g<1>{ver}.0\g<2>')
 
     # WinGet manifests

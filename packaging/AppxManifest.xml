@@ -34,7 +34,7 @@
 
   <Dependencies>
     <!-- Windows 10 1809 (build 17763) minimum — required for Desktop Bridge full trust -->
-    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="1.9.91.0" MaxVersionTested="10.0.22621.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
   </Dependencies>
 
   <Resources>

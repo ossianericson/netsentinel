@@ -134,6 +134,23 @@ def test_appxmanifest_msix_version_format(canonical):
     )
 
 
+def test_appxmanifest_target_device_family_minversion(canonical):
+    """
+    TargetDeviceFamily MinVersion must be a valid Windows build (10.0.x.x),
+    NOT the app version. bump_version.py's Version= regex must not match MinVersion=.
+    """
+    text = (ROOT / "packaging" / "AppxManifest.xml").read_text(encoding="utf-8")
+    m = re.search(r'MinVersion="([^"]+)"', text)
+    assert m, "Could not find MinVersion= in AppxManifest.xml TargetDeviceFamily"
+    minver = m.group(1)
+    parts = minver.split(".")
+    assert parts[0] == "10", (
+        f"AppxManifest.xml TargetDeviceFamily MinVersion={minver!r} must start with '10' "
+        f"(Windows 10/11 build). Got {parts[0]!r}. "
+        f"This is likely bump_version.py overwriting MinVersion with the app version ({canonical})."
+    )
+
+
 def test_splash_screen_version(canonical):
     text = (ROOT / "app.py").read_text(encoding="utf-8")
     m = re.search(r'AlignmentFlag\.AlignCenter,\s*"v([^"]+)"', text)
