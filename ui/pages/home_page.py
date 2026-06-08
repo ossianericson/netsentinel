@@ -11,9 +11,6 @@ Architecture rules observed:
 """
 from __future__ import annotations
 
-import datetime
-
-
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
@@ -49,11 +46,6 @@ from ui.styles import (
 )
 import ui.styles as _styles
 
-try:
-    from ui.pages.discover_page import _FEATURES as _GUIDE_FEATURES
-except ImportError:
-    _GUIDE_FEATURES: list = []
-
 from ui.widgets.home_widgets import (
     _GradeRing, _MiniCard, _GradeSparkline, _EventsTicker,
 )
@@ -61,6 +53,8 @@ from ui.widgets.home_session_widgets import (
     FreshnessStrip, GettingStartedCard,
     StandardWelcomePage, ProWelcomePage,  # noqa: F401 — re-exported for test imports
 )
+
+__all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
 from ui.pages.home_data_mixin import _HomeDataMixin
 

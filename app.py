@@ -268,13 +268,13 @@ def _fatal(title: str, message: str) -> None:
             from modules.utils import get_app_data_dir
             log_path = os.path.join(get_app_data_dir(), "netsentinel_error.log")
         except Exception:
-            pass
+            pass  # fall back to exe-dir path if AppData is unavailable
         try:
             with open(log_path, "w") as f:
                 f.write(f"{title}\n{message}\n\n")
                 traceback.print_exc(file=f)
         except OSError:
-            pass
+            pass  # non-fatal — error already shown in the dialog
     sys.exit(1)
 
 
@@ -363,7 +363,7 @@ def main():
             "netsentinel.netsentinel.1"
         )
     except Exception:
-        pass
+        pass  # non-Windows or ctypes unavailable — AppUserModelID is cosmetic only
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
@@ -707,7 +707,7 @@ def main():
                     wp.rcNormal.r = _nx + _nw; wp.rcNormal.b = _ny + _nh
                     _ct.windll.user32.SetWindowPlacement(_hwnd, _ct.byref(wp))
                 except Exception:
-                    pass
+                    pass  # geometry fixup is best-effort; window still visible
             _QTimer.singleShot(0, _fix_geo)
     else:
         _splash.close()

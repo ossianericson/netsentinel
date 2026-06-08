@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-import ui.styles as _styles
+from ui import styles as _styles
 from ui.styles import (
     ACCENT, ACCENT_PURPLE,
     BG_HOVER, BORDER, DEEP_ORANGE, GREEN, RED, TEAL, TEXT_PRIMARY,

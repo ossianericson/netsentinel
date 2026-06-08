@@ -7,7 +7,7 @@ import html
 import webbrowser
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QPropertyAnimation, QRect, QSettings, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QPropertyAnimation, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -41,6 +41,8 @@ from ui.tabs import (
     _empty_state_widget,
 )
 from ui.tabs_helpers import _page_header  # noqa: F401 — re-exported; used via lazy `from ui.dashboard import _page_header`
+
+__all__ = ["Dashboard", "_page_header"]
 
 
 # --- Activity-Rail Navigation widgets (extracted to ui/nav/rail.py) -----------

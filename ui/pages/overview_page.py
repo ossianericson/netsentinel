@@ -56,6 +56,14 @@ from ui.widgets.overview_tile import (
     NetworkGradeTile, AlertFeedTile, EventFeedTile,  # noqa: F401
 )
 
+# Explicit re-export list so CodeQL recognises these as intentional re-exports.
+__all__ = [
+    "OverviewPage",
+    "_TILE_HEIGHT",
+    "DeviceCountTile", "ServiceStatusTile", "TlsStatusTile", "RttSummaryTile",
+    "NetworkGradeTile", "AlertFeedTile", "EventFeedTile",
+]
+
 
 class OverviewPage(QWidget):
     """

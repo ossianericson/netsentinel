@@ -22,6 +22,12 @@ from typing import List, Tuple
 from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details  # noqa: F401
 from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6  # noqa: F401
 
+# Explicit re-export list so CodeQL recognises these as intentional re-exports.
+__all__ = [
+    "get_network_info", "get_dhcp_info", "get_interface_details",
+    "get_ipv6_devices", "ping_sweep_ipv6",
+]
+
 
 def is_admin() -> bool:
     """Return True if the process has administrator / root privileges."""

@@ -61,6 +61,19 @@ from ui.widgets.hub_helpers import (
     _save_health,  # noqa: F401
 )
 
+# Explicit re-export list so CodeQL recognises these as intentional re-exports.
+__all__ = [
+    "HubCard", "PipInstallDialog",
+    "_TEMPLATE", "_instance_id", "_validate_script",
+    "_load_paths", "_save_paths",
+    "_load_instances", "_save_instances",
+    "_is_consented", "_record_consent",
+    "_migrate_stale_paths",
+    "_load_last_result", "_save_last_result",
+    "_record_success", "_record_error",
+    "_save_health",
+]
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

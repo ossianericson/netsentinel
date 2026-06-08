@@ -103,12 +103,6 @@ class TestLogHubCoachMark:
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("coach/log_hub_sources_shown", True)
         qs.setValue("logging/net_enabled", False)
-        called = []
-        original = LogHubPage._maybe_show_coach_log_hub
-
-        def _patched(self_):
-            original(self_)
-            called.append(True)
 
         try:
             from unittest.mock import MagicMock

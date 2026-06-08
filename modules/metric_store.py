@@ -39,6 +39,16 @@ from modules.metric_store_schema import (
     KnownDevice, MeshSignalPoint, ModemSignalPoint, RttPoint,  # noqa: F401
     ServiceCheckPoint, SpeedTestPoint,  # noqa: F401
 )
+
+# Explicit re-export list so CodeQL recognises these as intentional re-exports.
+__all__ = [
+    "MetricStore",
+    "_SCHEMA_VERSION", "_DDL",
+    "apply_sqlite_schema", "apply_sqlalchemy_schema",
+    "CertCheckPoint", "DeviceEvent", "DeviceStatePoint", "HaDetectedPoint",
+    "KnownDevice", "MeshSignalPoint", "ModemSignalPoint", "RttPoint",
+    "ServiceCheckPoint", "SpeedTestPoint",
+]
 from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
 
 

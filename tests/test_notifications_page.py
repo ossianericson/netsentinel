@@ -17,10 +17,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-try:
-    from PyQt6.QtWidgets import QApplication  # noqa: F401
-except ImportError:
-    pytest.skip("PyQt6 not available", allow_module_level=True)
+pytest.importorskip("PyQt6.QtWidgets")
 
 # Use the session-scoped app from conftest; fall back for standalone runs.
 
