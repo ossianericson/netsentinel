@@ -82,12 +82,16 @@ def bump(ver: str) -> None:
          rf'(AlignmentFlag\.AlignCenter,\s*"v){_VER}(")',
          rf'\g<1>{ver}\g<2>')
 
-    # packaging/AppxManifest.xml  — 4-part MSIX version (Major.Minor.Patch.0)
+    # packaging/AppxManifest.xml  — 4-part MSIX version in <Identity> only.
     # CRITICAL: Must be exactly 4 parts. makeappx.exe rejects 5-part versions.
-    # Negative lookbehind prevents matching MinVersion= or MaxVersionTested= attributes.
+    # Use a line-start anchor (^\s+Version=") so we ONLY match the Identity element's
+    # Version attribute, which sits on its own indented line.  MinVersion= and
+    # MaxVersionTested= live on the <TargetDeviceFamily ...> line which begins with
+    # "<", not whitespace-then-Version, so they are never touched.
     _sub(ROOT / "packaging" / "AppxManifest.xml",
-         rf'(?<![A-Za-z])(Version="){_VER4}(")',
-         rf'\g<1>{ver}.0\g<2>')
+         rf'(^\s+Version="){_VER4}(")',
+         rf'\g<1>{ver}.0\g<2>',
+         flags=re.MULTILINE)
 
     # WinGet manifests
     winget = ROOT / ".github" / "winget"
