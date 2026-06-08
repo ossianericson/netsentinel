@@ -22,34 +22,30 @@ QSettings keys (prefix "logging/"):
 """
 from __future__ import annotations
 
-import csv as _csv
 import datetime as _dt
-import os as _os
 import time as _t
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QEvent, QObject, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFileDialog,
-    QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QScrollArea, QSizePolicy, QSpinBox, QTableWidget, QTableWidgetItem,
-    QTimeEdit, QToolButton, QVBoxLayout, QWidget,
+    QComboBox, QDateEdit, QFrame, QHBoxLayout, QLabel, QPushButton,
+    QScrollArea, QSizePolicy, QTableWidget, QTableWidgetItem,
+    QTimeEdit, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_RADIUS, GREEN, RED, TABLE_SEL,
+    CARD_RADIUS, RED, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT, WHITE,
 )
 
 from ui.pages.log_source_panel import (
     _LogSourcePanelMixin,
-    _SOURCES, _LABEL_TO_KEY, _SYSLOG_SEVERITY_COLOR, _SOURCE_TIPS,
-    _MAX_ROWS, _LIVE_CHALLENGE_COOLDOWN,
-    _source_key, _fmt_ts, _status_color, _build_live_scenario,
+    _SOURCES, _MAX_ROWS, _LIVE_CHALLENGE_COOLDOWN,
+    _fmt_ts, _status_color, _build_live_scenario,
 )
 
 

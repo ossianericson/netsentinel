@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
-    ACCENT, ACCENT_LITE, AMBER, BG_CARD,
+    ACCENT, AMBER, BG_CARD,
     BORDER, CHART_BG, CHART_GRID, CHART_PLOT_BG,
     CHART_TITLE, GREEN, RED, TEXT_PRIMARY,
     TEXT_SECONDARY,

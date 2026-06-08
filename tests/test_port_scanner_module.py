@@ -1,5 +1,4 @@
 """Tests for modules/port_scanner.py — TCP connect-scan."""
-import pytest
 from modules.port_scanner import (
     PORT_NAMES, PortResult, PortScanResult, apply_politeness, scan,
 )

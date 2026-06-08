@@ -10,7 +10,6 @@ subprocess.run patched out for any ping calls.
 """
 
 import csv
-import io
 import sys
 import os
 import time
@@ -24,8 +23,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from modules.network_logger import (
     NetworkLogger,
     LogEntry,
-    LogSummary,
-    OutageSummary,
     _compute_summary,
     load_log_file,
 )

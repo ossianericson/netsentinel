@@ -21,7 +21,6 @@ import re
 import socket
 import subprocess
 from dataclasses import dataclass, field
-from typing import Optional
 
 from modules.mac_registry import lookup as mac_lookup
 

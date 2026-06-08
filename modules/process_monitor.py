@@ -22,8 +22,7 @@ import ipaddress
 import socket
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 try:
     import psutil

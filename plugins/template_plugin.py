@@ -96,8 +96,9 @@ def get_status() -> dict:
                          For a single router: one entry with role="primary".
     """
     try:
-        client = _get_client()
+        _get_client()
         # TODO: fetch status from your hardware
+        # client  = _get_client()
         # units   = client.get_nodes()      # list of APs / mesh satellites
         # clients = client.get_clients()    # list of connected devices
         units   = []   # TODO
@@ -141,9 +142,9 @@ def get_clients() -> list:
     band  — Wi-Fi band string, e.g. "2.4G", "5G", "6G", "Wired".
     """
     try:
-        client = _get_client()
+        _get_client()
         # TODO: fetch client list from your hardware
-        raw = []   # TODO: client.get_clients()
+        raw = []   # TODO: client = _get_client(); client.get_clients()
         return [
             {
                 "ip":       c.ip,       # TODO: adapt field names to your library

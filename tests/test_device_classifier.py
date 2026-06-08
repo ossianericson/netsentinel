@@ -1,5 +1,4 @@
 """Tests for device_classifier module."""
-import pytest
 from modules.device_classifier import classify
 
 

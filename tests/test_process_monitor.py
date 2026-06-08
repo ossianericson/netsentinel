@@ -1,5 +1,4 @@
 """Tests for modules/process_monitor.py — process-to-socket mapping."""
-import pytest
 from modules.process_monitor import Connection, _is_private, is_available
 
 

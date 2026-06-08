@@ -19,7 +19,7 @@ import pytest
 
 try:
     from PyQt6.QtWidgets import (
-        QApplication, QPushButton, QStackedWidget, QTableWidget, QTreeWidget,
+        QApplication, QPushButton, QStackedWidget, QTreeWidget,
     )
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)

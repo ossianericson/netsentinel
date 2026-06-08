@@ -364,7 +364,6 @@ class NotificationRouter:
     def retry_delivery(self, entry: dict) -> None:
         """Re-attempt delivery for a failed log entry."""
         ch_name = entry.get("channel_name", "")
-        ch_type = entry.get("channel_type", "")
         alert = AlertFired(
             ts=entry.get("ts", 0.0),
             severity=entry.get("severity", "WARNING"),

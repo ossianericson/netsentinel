@@ -14,8 +14,6 @@ No network, no Scapy sniff, no file writes outside tmp (pytest tmp_path fixture)
 import sys
 import os
 import types
-import json
-import time
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))

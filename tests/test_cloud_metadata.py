@@ -1,5 +1,4 @@
 """Tests for modules/cloud_metadata.py — cloud IMDS probe."""
-import pytest
 from modules.cloud_metadata import (
     CloudMetadataResult, NetworkExposureResult,
     _tcp_connect, check_local_imds, check_network_imds_exposure,

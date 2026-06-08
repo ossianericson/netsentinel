@@ -1,11 +1,9 @@
 """
 Tests for modules/plugin_system.py
 """
-import sys
-import types
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 # ── PluginResult ───────────────────────────────────────────────────────────────
@@ -283,8 +281,6 @@ class TestLoadPluginsEdgeCases:
             fake_plugins.mkdir()
             with patch("modules.plugin_system._get_app_data_dir", return_value=fake_appdata):
                 # Force candidate=None path by making the first mkdir raise
-                import modules.plugin_system as ps
-                original_plugins_dir = ps.plugins_dir
 
                 # The key property: AppData/plugins == what wizard would write to
                 assert fake_appdata / "plugins" == fake_plugins

@@ -19,12 +19,11 @@ from typing import Dict, List, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")
-import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -1040,7 +1039,6 @@ class HomeAutomationPage(QWidget):
             return
 
         if self._store:
-            import time as _t
             try:
                 self._store.upsert_known_device(mac=mac.lower())
                 self._store.update_device_ha_info(

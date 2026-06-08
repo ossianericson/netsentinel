@@ -38,7 +38,7 @@ from typing import Callable, Dict, List, Optional, Set
 
 SCAPY_AVAILABLE = False
 try:
-    from scapy.all import AsyncSniffer, IP, TCP, UDP, Ether  # type: ignore
+    from scapy.all import AsyncSniffer, IP, TCP, UDP  # type: ignore
     SCAPY_AVAILABLE = True
 except ImportError:
     pass  # non-fatal

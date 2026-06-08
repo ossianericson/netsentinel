@@ -61,6 +61,5 @@ jobs:
         run: pip install "pip-audit>=2.7.0"
 
       - name: Audit production dependencies for known CVEs
-        # Fails only on Critical severity to avoid blocking on low-signal advisories.
-        # Lower the threshold to "high" once the initial noise is baselined.
-        run: pip-audit -r requirements.txt --desc on --severity critical
+        # --desc shows vulnerability descriptions; no severity filter so any known CVE fails.
+        run: pip-audit -r requirements.txt --desc

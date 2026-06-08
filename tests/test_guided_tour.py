@@ -241,7 +241,6 @@ class TestWelcomeScanWiring:
         dash._stack = MagicMock()
         dash._stack.currentWidget.return_value = MagicMock()
 
-        from ui.dashboard import Dashboard
         # Call only the flag-setting portion of _start_full_scan
         # (the guard: if not getattr(self, "_scan_from_home", False): ...)
         if not getattr(dash, "_scan_from_home", False):

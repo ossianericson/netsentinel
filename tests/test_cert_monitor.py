@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from modules.cert_monitor import CertMonitor, CertTarget
-from modules.metric_store import CertCheckPoint, MetricStore
+from modules.metric_store import MetricStore
 from modules.tls_checker import CertInfo
 
 

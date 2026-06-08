@@ -1,6 +1,5 @@
 """Tests for modules/threat_intel.py — threat intelligence feed."""
 import json
-import pytest
 from modules.threat_intel import (
     ThreatEntry, ThreatIntelDB, _is_public_ip,
     _parse_feodo_json, _parse_urlhaus_text, _parse_plain_ip_list,

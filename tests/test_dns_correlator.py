@@ -1,5 +1,4 @@
 """Tests for modules/dns_correlator.py — DNS failure / micro-outage correlator."""
-import pytest
 from modules.dns_correlator import (
     PingPoint, DnsPoint, CorrelatorResult, _find_outages, PING_TARGETS, DNS_DOMAINS,
 )

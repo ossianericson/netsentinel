@@ -26,7 +26,7 @@ from typing import Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QWidget
 
-from ui.styles import ACCENT, TEXT_PRIMARY, TEXT_SECONDARY
+from ui.styles import ACCENT
 
 # ── Glossary loader ────────────────────────────────────────────────────────────
 

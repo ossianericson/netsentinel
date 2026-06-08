@@ -9,7 +9,6 @@ every dataclass from production modules.
 import sys
 import os
 import types
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

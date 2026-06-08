@@ -6,17 +6,11 @@ NotificationsPage imports both _NotifChannelsMixin and _NotifExtraChannelsMixin.
 """
 from __future__ import annotations
 
-import json
-import re
-import threading
-import time
 
 from PyQt6.QtCore import Qt, QSettings, QTimer
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -27,17 +21,13 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER,
-    BG_CARD, BG_DARK, BG_HOVER,
-    BORDER, BTN_HOVER_BG, CARD_RADIUS,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER,
+    BORDER, GREEN, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE,
 )
 from ui.pages.notif_channel_panels import (
     _KR_PUSHOVER_TOKEN_KEY, _KR_PUSHOVER_USER_KEY,
-    _KR_NTFY_TOKEN_KEY, _KR_TELEGRAM_TOKEN_KEY, _KR_SERVICE,
-    _save_secret, _load_secret,
-    _card, _field_row, _lineedit, _severity_combo,
+    _KR_NTFY_TOKEN_KEY, _KR_TELEGRAM_TOKEN_KEY, _card, _field_row, _lineedit, _severity_combo,
 )
 
 

@@ -2,7 +2,6 @@
 Tests for modules/cve_lookup.py — pure logic (data classes + normalisation).
 No live NVD API calls.
 """
-import pytest
 from modules.cve_lookup import (
     CVEResult, CVELookupResult, _normalise_service_version,
 )

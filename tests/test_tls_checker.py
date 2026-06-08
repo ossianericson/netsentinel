@@ -1,7 +1,6 @@
 """
 Tests for modules/tls_checker.py — pure logic helpers, no live TLS connections.
 """
-import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock
 from modules.tls_checker import _parse_cert_field, CertInfo, check_cert

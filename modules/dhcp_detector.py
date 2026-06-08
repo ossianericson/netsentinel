@@ -12,7 +12,6 @@ Gracefully degrades when Scapy is unavailable.
 
 import threading
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
@@ -25,7 +24,6 @@ try:
         Ether,
         IP,
         UDP,
-        conf as scapy_conf,
         sendp,
     )
     SCAPY_AVAILABLE = True

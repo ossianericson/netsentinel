@@ -10,7 +10,7 @@ Shows a live view of DHCP leases visible from the local machine:
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
@@ -23,7 +23,6 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -38,7 +37,6 @@ from ui.styles import (
     AMBER,
     BG_ALT_ROW,
     BG_CARD,
-    BG_DARK,
     BG_HOVER,
     BORDER,
     BTN_DISABLED_BORDER,

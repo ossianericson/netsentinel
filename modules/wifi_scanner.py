@@ -17,7 +17,7 @@ import platform
 import re
 import subprocess
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 # Suspicious SSID patterns (case-insensitive)
 ROGUE_SSID_PATTERNS = [
@@ -107,7 +107,7 @@ def _scan_windows() -> Tuple[List[NetworkInfo], str, int]:
             text=True, timeout=15,
             creationflags=subprocess.CREATE_NO_WINDOW,
         )
-    except Exception as exc:
+    except Exception:
         return networks, my_ssid, my_channel
 
     # Get current connection

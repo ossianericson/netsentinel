@@ -5,8 +5,6 @@ All tests use an in-memory MetricStore and a patched _ping function so no
 real network calls are made.
 """
 
-import time
-import unittest
 from unittest.mock import patch
 
 import pytest
@@ -15,7 +13,6 @@ from modules.metric_store import MetricStore
 from modules.availability_monitor import (
     AvailabilityMonitor,
     CycleResult,
-    StateChange,
     TargetConfig,
     DEFAULT_DEGRADED_THRESHOLD,
 )

@@ -6,12 +6,10 @@ Covers:
   S6-3: busy_timeout set on connection (prevents OperationalError under contention)
   S6-4: two threads writing simultaneously without OperationalError
 """
-import sqlite3
 import threading
-import time
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from modules.metric_store import MetricStore
 
@@ -69,8 +67,6 @@ def test_wal_checkpoint_triggered_for_large_wal(tmp_path):
     wal_path.write_bytes(b"\x00" * (51 * 1024 * 1024))  # 51 MB
 
     checkpoint_called = []
-
-    original_init = MetricStore.__init__
 
     def patched_checkpoint(self, threshold_bytes=50 * 1024 * 1024):
         if self._db_path is not None:

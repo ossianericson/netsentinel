@@ -9,7 +9,7 @@ Gracefully degrades if Scapy is unavailable or privileges are insufficient.
 
 import struct
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, List, Optional
 
 SCAPY_AVAILABLE = False
@@ -17,7 +17,6 @@ try:
     from scapy.all import (  # type: ignore
         AsyncSniffer,
         Ether,
-        conf as scapy_conf,
     )
     SCAPY_AVAILABLE = True
 except ImportError:
@@ -59,8 +58,6 @@ def _parse_bpdu(raw_payload: bytes, src_mac: str, iface: str) -> Optional[BPDUIn
         if len(bpdu) < 4:
             return None
 
-        proto_id = struct.unpack_from(">H", bpdu, 0)[0]  # should be 0x0000
-        version = bpdu[2]
         bpdu_type_raw = bpdu[3]
 
         type_map = {0x00: "Config", 0x80: "TCN", 0x02: "RST", 0x03: "MST"}
@@ -76,7 +73,6 @@ def _parse_bpdu(raw_payload: bytes, src_mac: str, iface: str) -> Optional[BPDUIn
             bridge_pri = struct.unpack_from(">H", bpdu, 17)[0]
             bridge_mac_bytes = bpdu[19:25]
             bridge_mac = ":".join(f"{b:02x}" for b in bridge_mac_bytes)
-            msg_age = struct.unpack_from(">H", bpdu, 27)[0] / 256.0
             max_age = struct.unpack_from(">H", bpdu, 29)[0] / 256.0
             hello_time = struct.unpack_from(">H", bpdu, 31)[0] / 256.0
             fwd_delay = struct.unpack_from(">H", bpdu, 33)[0] / 256.0

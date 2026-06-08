@@ -34,7 +34,6 @@ Privacy / Security
 from __future__ import annotations
 
 import ipaddress
-import struct
 import threading
 from dataclasses import dataclass
 from pathlib import Path

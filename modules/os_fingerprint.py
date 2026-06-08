@@ -28,9 +28,8 @@ TTL starting values (typical):
 import concurrent.futures
 import platform
 import socket
-import struct
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 

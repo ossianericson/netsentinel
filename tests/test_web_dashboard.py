@@ -1,5 +1,4 @@
 """Tests for modules/web_dashboard.py — self-contained HTML dashboard builder."""
-import pytest
 from urllib.parse import urlparse
 
 

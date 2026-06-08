@@ -39,7 +39,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from modules.utils import get_app_data_dir
 

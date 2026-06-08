@@ -85,7 +85,7 @@ class TestSuggestionSuppression:
 
 @pytest.fixture
 def home_page(qt_app, monkeypatch):
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
     # Patch QSettings to avoid real registry writes during tests
     monkeypatch.setattr(
         "ui.pages.home_suggestions.QSettings",
@@ -179,7 +179,7 @@ class TestFallbackSuggestion:
     """Verify _compute_suggestions always provides ≥1 suggestion after scan."""
 
     def test_fallback_suggestion_added_when_empty(self, monkeypatch):
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
         monkeypatch.setattr(
             "ui.tabs_logger.QSettings",
             lambda *a, **kw: _FakeQSettings(),

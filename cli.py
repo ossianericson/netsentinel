@@ -390,7 +390,6 @@ def cmd_cloud_metadata(args) -> None:
     result = check_local_imds()
 
     if args.format == "json":
-        import dataclasses
         payload = {
             "provider":        result.provider,
             "instance_id":     result.instance_id,

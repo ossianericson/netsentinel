@@ -20,14 +20,13 @@ Types:
 """
 from __future__ import annotations
 
-import time
 from typing import Callable, Optional
 
 from PyQt6.QtCore import (
-    QEasingCurve, QPoint, QPropertyAnimation, QRect, QSettings, Qt, QTimer,
+    QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer,
 )
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QPushButton, QWidget,
 )
 
 from ui.styles import (

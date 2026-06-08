@@ -53,7 +53,6 @@ from ui.styles import (
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    WHITE,
 )
 
 from ui.widgets.hub_card import (
@@ -68,11 +67,10 @@ from ui.widgets.hub_card import (
     _load_instance_config,
     _classify_error,
     # Re-exported for test compatibility
-    _path_hash,
-    _load_paths, _save_paths,
-    _CommunityIndexThread, _CommunityDownloadThread,
-    _ModemDetailPanel, _RouterDetailPanel, _safe_set_text,
-    _CIRCUIT_BREAK_THRESHOLD, _DEGRADED_HOURS, _load_health, _save_health,
+    _path_hash, _load_paths, _save_paths,  # noqa: F401
+    _CommunityIndexThread, _CommunityDownloadThread,  # noqa: F401
+    _ModemDetailPanel, _RouterDetailPanel, _safe_set_text,  # noqa: F401
+    _CIRCUIT_BREAK_THRESHOLD, _DEGRADED_HOURS, _load_health, _save_health,  # noqa: F401
 )
 from ui.pages.plugin_guide import PluginGuide
 from ui.widgets.credential_dialog import show_credential_dialog, show_unsigned_warning

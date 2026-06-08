@@ -14,10 +14,8 @@ the Qt runtime needed by QThread.
 from __future__ import annotations
 
 import time
-import threading
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

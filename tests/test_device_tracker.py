@@ -5,7 +5,7 @@ import time
 import pytest
 
 from modules.metric_store import MetricStore
-from modules.device_tracker import DeviceTracker, TrackerResult, _normalise, TrackedDevice
+from modules.device_tracker import DeviceTracker, _normalise
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

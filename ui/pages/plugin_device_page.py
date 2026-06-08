@@ -71,7 +71,6 @@ def _keyring_save(ip: str, password: str) -> bool:
 def _keyring_delete(ip: str) -> bool:
     try:
         import keyring
-        from keyring.errors import PasswordDeleteError
         keyring.delete_password(_KEYRING_SERVICE, ip)
         return True
     except Exception:

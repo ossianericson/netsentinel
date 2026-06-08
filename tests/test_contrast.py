@@ -15,7 +15,6 @@ where fg_token / bg_token are keys in ui.styles.THEMES["Arctic Clean"].
 
 from __future__ import annotations
 
-import math
 import pytest
 
 # ---------------------------------------------------------------------------

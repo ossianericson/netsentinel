@@ -13,7 +13,6 @@ through lightweight stubs.
 """
 from __future__ import annotations
 
-from collections import namedtuple
 
 
 # ── Minimal _apply_mesh_enrichment logic stub ─────────────────────────────────

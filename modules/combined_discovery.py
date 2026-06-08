@@ -34,11 +34,11 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional
 
 SCAPY_AVAILABLE = False
 try:
-    from scapy.all import ARP, Ether, IP, TCP, ICMP, srp, sr, sr1  # type: ignore
+    from scapy.all import ARP, Ether, IP, TCP, srp, sr  # type: ignore
     SCAPY_AVAILABLE = True
 except ImportError:
     pass  # non-fatal
@@ -157,7 +157,6 @@ def _ping_single(ip: str, timeout: float) -> Optional[DiscoveredDevice]:
     system = platform.system()
     try:
         if system == "Windows":
-            extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
             cmd = ["ping", "-n", "1", "-w", str(int(timeout * 1000)), ip]
         else:
             cmd = ["ping", "-c", "1", "-W", str(int(timeout)), ip]

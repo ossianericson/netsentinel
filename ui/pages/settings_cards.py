@@ -31,7 +31,6 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -44,7 +43,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_PURPLE, AMBER,
     BADGE_OFF_BG, BADGE_OFF_BORDER, BADGE_OFF_FG, BADGE_OK_BG,
     BADGE_OK_BORDER, BADGE_OK_FG, BG_ALT_ROW, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, BTN_HOVER_BG,
+    BG_HOVER, BORDER, BTN_HOVER_BG,
     CARD_HDR_BORDER, CARD_RADIUS, DEEP_ORANGE, GREEN,
     INLINE_WARN_BG, INLINE_WARN_FG, NAV_BAR, PRO_WARN_BG,
     RED, RED_BG, TEAL, TEXT_MUTED, TEXT_PRIMARY,
@@ -862,7 +861,7 @@ class _SettingsCardsMixin:
         qs.setValue("sched_scan/interval_hours", hours)
         qs.setValue("sched_scan/hour",   self._sched_hour_spin.value())
         qs.setValue("sched_scan/minute", self._sched_min_spin.value())
-        import time as _t, datetime as _dt
+        import datetime as _dt
         now = _dt.datetime.now()
         next_run = now.replace(
             hour=self._sched_hour_spin.value(),
@@ -896,7 +895,7 @@ class _SettingsCardsMixin:
     # ── System Tray ───────────────────────────────────────────────────────────
 
     def _build_tray_card(self) -> QFrame:
-        from ui.system_tray import get_run_on_startup, set_run_on_startup
+        from ui.system_tray import get_run_on_startup
         card, bl = _card("System Tray & Startup")
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_tray = QCheckBox(

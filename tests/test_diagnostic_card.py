@@ -53,7 +53,6 @@ def test_card_data_to_dict_all_keys():
 
 def test_build_card_data_exists():
     from modules.diagnostic_card import build_card_data
-    import inspect
     assert callable(build_card_data)
 
 

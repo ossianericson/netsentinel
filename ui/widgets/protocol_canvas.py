@@ -25,7 +25,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QWidget
 
-from modules.protocol_animator import AnimNode, AnimStep, ProtocolSceneData
+from modules.protocol_animator import AnimStep, ProtocolSceneData
 from ui.styles import (
     CANVAS_ACCENT, CANVAS_AMBER, CANVAS_BG, CANVAS_DIM,
     CANVAS_FG, CANVAS_GRAY, CANVAS_GREEN,

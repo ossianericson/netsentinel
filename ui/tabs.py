@@ -10,11 +10,9 @@ backward compatibility with callers that do `from ui.tabs import _table`.
 """
 from __future__ import annotations
 
-import webbrowser
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSlot
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,

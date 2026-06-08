@@ -1,8 +1,7 @@
 """Tests for modules/hw_detect.py — hardware integration detection."""
 from __future__ import annotations
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 def test_import():

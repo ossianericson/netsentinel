@@ -4,7 +4,6 @@ Tests for modules/rest_api.py — NetSentinel local REST API.
 from __future__ import annotations
 
 import json
-import time
 import pytest
 
 
@@ -27,7 +26,7 @@ class _FakeStore:
 
 def test_module_imports_without_flask(monkeypatch):
     """rest_api must import cleanly even when Flask is not installed."""
-    import importlib, sys
+    import sys
     # Stash and restore both flask and modules.rest_api to avoid poisoning
     # subsequent tests in the same process.
     orig_flask     = sys.modules.get("flask",        ...)

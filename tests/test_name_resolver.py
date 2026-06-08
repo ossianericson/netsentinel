@@ -1,5 +1,4 @@
 """Tests for modules/name_resolver.py — multi-method hostname resolution."""
-import pytest
 
 
 def test_name_resolver_import():

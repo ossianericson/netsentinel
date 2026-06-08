@@ -10,8 +10,8 @@ The QWidget renderer lives in ui/widgets/diagnostic_card_widget.py (ARCH RULE 1)
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from typing import List
 
 
 @dataclass

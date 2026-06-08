@@ -7,7 +7,6 @@ and classification logic without opening any real network connections.
 
 import sys
 import os
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 

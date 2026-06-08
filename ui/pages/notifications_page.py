@@ -8,7 +8,7 @@ methods.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QSettings, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.styles import BG_DARK, BG_HOVER, BORDER
+from ui.styles import BG_DARK
 from modules.alert_engine import rule_settings_key as _rule_key
 from ui.widgets.alert_drawer import AlertDrawer
 from ui.widgets.skeleton import insert_skeleton_rows
@@ -30,8 +30,8 @@ from ui.pages.notif_channel_panels import (
     _KR_NTFY_TOKEN_KEY,
     _KR_TELEGRAM_TOKEN_KEY,
     _save_secret,
-    _ALERT_RULE_DEFS,
     _page_header,
+    _ALERT_RULE_DEFS,  # noqa: F401 — re-exported for test imports
 )
 from ui.pages.notif_extra_channels import _NotifExtraChannelsMixin
 from ui.pages.notif_alert_history import _NotifAlertHistoryMixin

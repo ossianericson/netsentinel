@@ -209,7 +209,6 @@ def syn_scan(
     if _phi > 0:
         delay_per_pkt = max(delay_per_pkt, random.uniform(_plo, _phi))
 
-    chunk_size = max(1, min(100, rate_pps))
     answered, _ = [], []
 
     try:

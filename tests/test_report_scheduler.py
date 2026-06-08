@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -95,7 +95,6 @@ class TestGenerateStatusReport:
         assert "Device Events" in html
 
     def test_uptime_row_rendered(self, store):
-        now = int(time.time())
         store.record_device_state("192.168.1.1", mac="aa:bb:cc:dd:ee:ff",
                                    hostname=None, state="UP")
         html = generate_status_report(store)

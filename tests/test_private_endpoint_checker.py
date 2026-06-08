@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 def test_import():
@@ -76,7 +75,6 @@ def test_check_endpoint_function_exists():
 
 def test_check_endpoints_function_exists():
     from modules.private_endpoint_checker import check_endpoints
-    import inspect
     assert callable(check_endpoints)
 
 

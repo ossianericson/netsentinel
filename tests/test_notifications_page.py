@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 try:
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication  # noqa: F401
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 

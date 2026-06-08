@@ -1,7 +1,6 @@
 """
 Tests for modules/risk_scorer.py — pure logic, no network calls.
 """
-import pytest
 from modules.risk_scorer import score_device, RiskAssessment, _band, CRITICAL, HIGH, MEDIUM, LOW, INFO
 
 
@@ -151,7 +150,6 @@ class TestScoreDeviceOUI:
 
 class TestScoreDeviceLinkLocal:
     def test_link_local_adds_15(self):
-        normal = score_device("192.168.1.1")
         ll = score_device("169.254.10.5")
         assert ll.total_score >= 15
 

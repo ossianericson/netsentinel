@@ -21,23 +21,21 @@ matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PyQt6.QtCore    import Qt, QTimer, QUrl, pyqtSlot
+from PyQt6.QtCore    import Qt, QUrl, pyqtSlot
 from PyQt6.QtGui     import QDesktopServices
 from PyQt6.QtWidgets import (
     QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMessageBox, QPushButton, QSizePolicy, QSpinBox,
-    QVBoxLayout, QWidget, QCheckBox, QGroupBox, QFrame,
+    QVBoxLayout, QWidget, QCheckBox,
 )
 
 from modules.metric_store      import MetricStore
-from modules.report_scheduler  import ReportConfig, ReportScheduler
 from ui.styles                 import (
     ACCENT, BG_CARD, BG_DARK, BG_HOVER,
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, CHART_BG,
     CHART_GRID, CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER,
-    RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
-    WHITE,
+    TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
+    TEXT_PRIMARY, TEXT_SECONDARY,
 )
 
 

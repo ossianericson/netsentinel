@@ -33,7 +33,7 @@ from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    GREEN, RED, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )

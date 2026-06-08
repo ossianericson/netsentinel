@@ -13,15 +13,15 @@ This page stores lifecycle state in MetricStore.cve_lifecycle (schema v7).
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui  import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox,
-    QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QFormLayout, QHBoxLayout, QLabel, QLineEdit,
     QMenu, QPlainTextEdit, QPushButton, QSizePolicy,
-    QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore

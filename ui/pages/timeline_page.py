@@ -13,14 +13,12 @@ A "Today at a glance" pinned summary header shows counts for the current day.
 from __future__ import annotations
 
 import datetime
-import time
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore    import Qt, QSettings, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui     import QColor, QFont
+from PyQt6.QtCore    import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea,
-    QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ui.widgets.empty_state_card import EmptyStateCard
@@ -28,7 +26,7 @@ from ui.widgets.empty_state_card import EmptyStateCard
 from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK,
     BG_HOVER, BORDER, GREEN, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    TEXT_MUTED, TEXT_PRIMARY, WHITE,
 )
 
 _SOURCE_PAGE_MAP = {

@@ -6,32 +6,27 @@ overview_tile.py imports all classes back from here.
 """
 from __future__ import annotations
 
-import datetime
-from typing import Callable, List, Optional
 
-from PyQt6.QtCore import Qt, QSettings, QSize, QThread, QTimer, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QCursor, QPainter, QPixmap
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QCursor
 from PyQt6.QtWidgets import (
     QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QVBoxLayout, QWidget,
 )
 
 import matplotlib
 matplotlib.use("QtAgg")
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 
-from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CHART_DOWN, CHART_UP,
-    GREEN, PRO_WARN_BG, RED, TEXT_MUTED,
+    ACCENT, ACCENT_LITE, AMBER,
+    BG_CARD, BG_HOVER, BORDER,
+    CHART_DOWN, CHART_UP,
+    GREEN, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 
 # Base class and animation helper live in overview_tile.py
-from ui.widgets.overview_tile import _BaseTile, _AnimatedNumberLabel
+from ui.widgets.overview_tile import _BaseTile
 
 class LiveBandwidthTile(_BaseTile):
     """Shows current aggregate upload/download Mbps, updated every second."""
@@ -442,7 +437,6 @@ class TopTalkersTile(_BaseTile):
         self._empty_lbl.hide()
 
         for iface, d in ranked:
-            total_mb = d["down_mb"] + d["up_mb"]
             label_text = (
                 f"{iface[:18]}  ↓{d['down_mb']:.1f} MB  ↑{d['up_mb']:.1f} MB"
             )

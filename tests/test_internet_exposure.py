@@ -1,5 +1,4 @@
 """Tests for modules/internet_exposure.py — internet exposure checker."""
-import pytest
 from modules.internet_exposure import UPnPMapping, ExposureResult, check_exposure
 
 

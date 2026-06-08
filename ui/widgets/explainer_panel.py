@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER, WHITE
+from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY, BG_HOVER, WHITE
 
 
 # ── Per-page content ──────────────────────────────────────────────────────────

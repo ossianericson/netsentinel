@@ -6,23 +6,15 @@ tabs_network.py, and tabs_diag.py to avoid circular imports.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
     QScrollArea,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
     QWidget,
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, CARD_RADIUS,
-    RISK_COLORS, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    WHITE,
+    ACCENT_DARK, WHITE,
 )
 
 
@@ -80,7 +72,7 @@ def _empty_state_widget(icon: str, headline: str, body: str,
     """Reusable empty-state panel: icon + headline + body text + optional CTA button."""
     from PyQt6.QtWidgets import QWidget as _W, QVBoxLayout as _VL, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
     from PyQt6.QtCore import Qt as _Qt
-    from ui.styles import ACCENT as _AC, BG_HOVER as _BH, TEXT_PRIMARY as _TP, TEXT_SECONDARY as _TS
+    from ui.styles import ACCENT as _AC, TEXT_PRIMARY as _TP, TEXT_SECONDARY as _TS
     w = _W()
     vl = _VL(w)
     vl.setContentsMargins(32, 32, 32, 32)
@@ -122,7 +114,7 @@ def _error_state_widget(message: str, retry_fn: "callable") -> "QWidget":
     """Reusable error-state panel: warning icon + message + Retry button."""
     from PyQt6.QtWidgets import QWidget as _W, QVBoxLayout as _VL, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
     from PyQt6.QtCore import Qt as _Qt
-    from ui.styles import AMBER as _AM, BG_HOVER as _BH, TEXT_PRIMARY as _TP, TEXT_SECONDARY as _TS
+    from ui.styles import AMBER as _AM, BG_HOVER as _BH, TEXT_PRIMARY as _TP
     w = _W()
     vl = _VL(w)
     vl.setContentsMargins(32, 32, 32, 32)

@@ -299,8 +299,7 @@ def _dns_leak_test() -> DnsLeakResult:
             headers={"User-Agent": "NetSentinel/2.0"},
         )
         with urllib.request.urlopen(start_req, timeout=6) as r:
-            import json as _json
-            data = _json.loads(r.read(4096).decode())
+            r.read(4096)
 
         # Step 2: trigger a DNS lookup of the test subdomain
         try:

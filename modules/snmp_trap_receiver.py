@@ -24,7 +24,6 @@ Architecture rules:
 from __future__ import annotations
 
 import socket
-import struct
 import time
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional, Tuple

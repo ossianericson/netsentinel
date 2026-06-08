@@ -1,7 +1,5 @@
 """Tests for modules/rogue_device.py — rogue device fingerprinter."""
 import json
-import pytest
-from pathlib import Path
 from modules.rogue_device import DeviceInfo, _get_default_gateway, _get_arp_table, scan
 
 

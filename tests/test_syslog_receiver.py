@@ -13,15 +13,11 @@ Covers:
 from __future__ import annotations
 
 import socket
-import struct
 import threading
 import time
 
-import pytest
 
 from modules.syslog_receiver import (
-    FALLBACK_PORT,
-    SYSLOG_PORT,
     SyslogMessage,
     SyslogReceiver,
     parse_syslog_message,

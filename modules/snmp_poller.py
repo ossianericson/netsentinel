@@ -15,8 +15,8 @@ Polls a small set of informational OIDs:
 
 import socket
 import struct
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Dict, List
 
 
 # ── BER/ASN.1 minimal encoder/decoder ────────────────────────────────────────

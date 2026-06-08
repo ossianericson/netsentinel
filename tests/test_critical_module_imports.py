@@ -132,7 +132,7 @@ class TestPortScanner:
     def test_public_symbols(self):
         from modules.port_scanner import (
             PortResult, PortScanResult, scan,
-            apply_politeness, politeness_delay,
+            apply_politeness,
         )
         assert inspect.isclass(PortResult)
         assert inspect.isclass(PortScanResult)

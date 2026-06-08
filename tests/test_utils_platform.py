@@ -1,6 +1,4 @@
 """Tests for modules/utils_platform.py — get_ipv6_devices, ping_sweep_ipv6."""
-import pytest
-from unittest.mock import patch, MagicMock
 
 from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6
 

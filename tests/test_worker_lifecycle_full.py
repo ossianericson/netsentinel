@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import time
 from unittest.mock import MagicMock, patch
-from pathlib import Path
 
-import pytest
 
 # conftest provides the session-scoped qt_app fixture (autouse=True)
 
@@ -161,7 +159,6 @@ class TestWifiMonitorWorker:
     def test_lifecycle(self):
         from workers.wifi_monitor_worker import WiFiMonitorWorker
         # Mock scapy so the worker fails fast (ImportError → error signal → run() returns)
-        mock_scapy = MagicMock()
         with patch.dict("sys.modules", {"scapy.all": None, "scapy.layers.dot11": None}):
             w = WiFiMonitorWorker(iface="")
             try:
@@ -188,7 +185,7 @@ class TestRunningFlagAudit:
     """Verify no worker has an unbounded while True loop without a _running check."""
 
     def test_no_unguarded_while_true(self):
-        import pathlib, ast
+        import pathlib
 
         workers_dir = pathlib.Path("workers")
         violations = []

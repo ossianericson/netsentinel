@@ -9,18 +9,17 @@ from __future__ import annotations
 import datetime
 from typing import Callable, Dict, List, Optional
 
-from PyQt6.QtCore    import QEasingCurve, QMimeData, QPoint, QPropertyAnimation, QSettings, QSize, Qt, QThread, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
+from PyQt6.QtCore    import QEasingCurve, QMimeData, QPoint, QPropertyAnimation, Qt, QThread, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
 from PyQt6.QtGui     import QColor, QCursor, QDrag, QPainter, QPixmap
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QFileDialog, QMenu,
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
+    BG_CARD, BG_HOVER, BORDER,
     CARD_HDR_BORDER, CHART_DOWN, CHART_UP,
     GREEN, PRO_WARN_BG, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
@@ -1474,7 +1473,6 @@ class TopTalkersTile(_BaseTile):
         self._empty_lbl.hide()
 
         for iface, d in ranked:
-            total_mb = d["down_mb"] + d["up_mb"]
             label_text = (
                 f"{iface[:18]}  ↓{d['down_mb']:.1f} MB  ↑{d['up_mb']:.1f} MB"
             )

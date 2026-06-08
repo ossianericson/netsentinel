@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QPoint, QRect
+from PyQt6.QtCore import Qt, QPoint
 from PyQt6.QtGui import QFont, QPixmap
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -15,21 +15,12 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QToolButton,
-    QVBoxLayout,
     QWidget,
 )
 from PyQt6.QtCore import pyqtSlot
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK,
-    BG_CARD, BG_HOVER, BORDER,
-    NAV_BAR, NAV_DIVIDER,
-    RED,
-    SIDEBAR_HOVER, SIDEBAR_SECTION_BG,
-    TEXT_MUTED, TEXT_PRIMARY,
-    UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG,
-    WHITE,
+    NAV_DIVIDER,
 )
 
 
@@ -248,7 +239,7 @@ class AppHeaderMixin:
         lay.addWidget(self._header_scan_btn)
 
         # ── POLISH-5: Theme toggle — cycles through all 3 themes, toast + restart ──
-        from ui.styles import THEMES, get_active_theme_name, set_active_theme_name
+        from ui.styles import THEMES, get_active_theme_name
         _theme_names = list(THEMES.keys())
         _theme_icons = {"Arctic Clean": "☀", "Midnight Pro": "🌙", "Obsidian Neon": "✦", "Abyss": "◼"}
         _current_theme = get_active_theme_name()
@@ -500,7 +491,7 @@ class AppHeaderMixin:
 
     def _install_edge_grips(self):
         """Create 8 transparent resize-grip strips around the window border."""
-        from PyQt6.QtCore import Qt, QRect, QPoint
+        from PyQt6.QtCore import Qt, QRect
         from PyQt6.QtWidgets import QWidget
         _CURSORS = {
             "nw": Qt.CursorShape.SizeFDiagCursor,
@@ -573,7 +564,7 @@ class AppHeaderMixin:
     def _build_update_bar(self) -> QWidget:
         """Thin update-available bar — hidden until a newer release is detected."""
         from ui.styles import ACCENT, UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG
-        from ui.styles import BG_HOVER, WHITE
+        from ui.styles import BG_HOVER
 
         container = QWidget()
         container.setObjectName("updateNotifBar")

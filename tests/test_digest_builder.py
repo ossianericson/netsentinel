@@ -1,7 +1,7 @@
 """Tests for modules/digest_builder.py — HTML digest from MetricStore."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

@@ -15,7 +15,6 @@ from __future__ import annotations
 import csv as _csv
 import datetime as _dt
 import time as _t
-from typing import Optional
 
 from PyQt6.QtCore import Qt, QSettings, QTimer
 from PyQt6.QtWidgets import (
@@ -30,9 +29,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QScrollArea,
     QSpinBox,
-    QTableWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,

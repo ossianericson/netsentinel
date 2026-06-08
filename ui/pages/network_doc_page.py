@@ -20,15 +20,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QPlainTextEdit, QPushButton, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
+    QPlainTextEdit, QPushButton, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    ACCENT, BG_CARD, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 
 

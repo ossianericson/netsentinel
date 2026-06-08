@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import socket
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 

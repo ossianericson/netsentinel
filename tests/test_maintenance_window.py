@@ -234,7 +234,7 @@ class TestAlertEngineIntegration(unittest.TestCase):
         engine.set_on_alert(cb)
 
         # No maintenance → alert fires
-        result = engine.evaluate_cycle({
+        engine.evaluate_cycle({
             "ts": int(time.time()),
             "states": {"10.0.0.1": "UP"},
             "rtts": {"10.0.0.1": 150.0},

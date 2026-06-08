@@ -9,7 +9,6 @@ Run from the repo root:
     python tools/extract_scan_wiring.py
 """
 import ast
-import re
 import sys
 from pathlib import Path
 

@@ -1,5 +1,4 @@
 """Tests for modules/syn_scanner.py — SYN stealth port scanner."""
-import pytest
 from modules.syn_scanner import SYNPortResult, SYNScanResult, syn_scan, udp_scan
 
 

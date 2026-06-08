@@ -15,9 +15,7 @@ No blocking I/O on the main thread (all network ops in workers).
 
 from __future__ import annotations
 
-import time
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
@@ -32,14 +30,13 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from modules.threat_intel import AbuseIpDbResult, ThreatEntry, ThreatIntelDB, load_from_cache
+from modules.threat_intel import AbuseIpDbResult, ThreatEntry, ThreatIntelDB
 from workers.threat_intel_worker import AbuseIpDbWorker, ThreatFeedRefreshWorker
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from ui.styles import (

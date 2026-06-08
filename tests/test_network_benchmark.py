@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from modules.network_benchmark import grade, _letter, DimensionResult, BenchmarkResult
+from modules.network_benchmark import grade, _letter, BenchmarkResult
 
 
 # ── _letter() ─────────────────────────────────────────────────────────────────

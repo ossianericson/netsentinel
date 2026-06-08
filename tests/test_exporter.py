@@ -1,5 +1,4 @@
 """Tests for modules/exporter.py — multi-format data export helpers."""
-import pytest
 
 
 def test_exporter_import():

@@ -68,11 +68,7 @@ def main():
 
     # ── Step 3: build login request ───────────────────────────────────────────
     print("\n-- Step 3: build + POST ?form=login --")
-    import hashlib, random, base64
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-    from cryptography.hazmat.primitives import padding as _cpad
-    from cryptography.hazmat.primitives.asymmetric import padding as _rpad
-    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
+    import hashlib, random
 
     # AES session key / IV
     lo, hi = 10 ** 15, 10 ** 16 - 1

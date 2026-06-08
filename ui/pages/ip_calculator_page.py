@@ -18,7 +18,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui  import QColor, QFont
 from PyQt6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QScrollArea, QSizePolicy, QTableWidget,
+    QPushButton, QScrollArea, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 

@@ -14,14 +14,13 @@ import threading
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QFileDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QProgressBar, QPushButton, QScrollArea, QSizePolicy,
-    QStackedWidget, QVBoxLayout, QWidget,
+    QProgressBar, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from modules.lab_scenarios import LabResult, LabScenario, LabStep, SCENARIOS
+from modules.lab_scenarios import LabResult, LabScenario, SCENARIOS
 from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK,

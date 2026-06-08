@@ -13,7 +13,7 @@ Architecture rules:
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import Optional
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
@@ -24,7 +24,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,

@@ -13,10 +13,8 @@ from __future__ import annotations
 
 import datetime
 
-import json
 
-from PyQt6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRect, QRectF, Qt, QSettings, QUrl, QVariantAnimation, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QDesktopServices, QFont, QPainter, QPainterPath, QPen
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -24,7 +22,6 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -40,7 +37,6 @@ from ui.styles import (
     BORDER,
     CARD_RADIUS,
     GREEN,
-    NAV_BAR,
     PRO_WARN_BG,
     RED,
     TEXT_MUTED,
@@ -59,13 +55,11 @@ except ImportError:
     _GUIDE_FEATURES: list = []
 
 from ui.widgets.home_widgets import (
-    _GradeRing, _MiniCard, _AlertRow, _MiniSparkline, _GradeSparkline, _EventsTicker,
-    _GRADE_HISTORY_KEY, _GRADE_HISTORY_MAX,
-    _append_grade_history, _load_grade_history, _bundled_plugin_path,
+    _GradeRing, _MiniCard, _GradeSparkline, _EventsTicker,
 )
 from ui.widgets.home_session_widgets import (
     FreshnessStrip, GettingStartedCard,
-    _GradeBreakdownDialog, StandardWelcomePage, ProWelcomePage,
+    StandardWelcomePage, ProWelcomePage,  # noqa: F401 — re-exported for test imports
 )
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
 from ui.pages.home_data_mixin import _HomeDataMixin

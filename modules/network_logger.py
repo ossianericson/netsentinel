@@ -23,7 +23,6 @@ import logging
 import platform
 import re
 import socket
-import struct
 import subprocess
 import threading
 import time

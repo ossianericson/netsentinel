@@ -38,8 +38,6 @@ def _mark(stage: str) -> None:
 
 # ── instrument module imports ────────────────────────────────────────────────
 
-import importlib
-import unittest.mock as _mock
 
 _orig_init = None
 

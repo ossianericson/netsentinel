@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from modules.metric_store import MetricStore, ServiceCheckPoint
+from modules.metric_store import MetricStore
 from modules.service_monitor import ServiceMonitor, ServiceTarget, check_tcp
 
 

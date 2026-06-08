@@ -7,7 +7,7 @@ overall verdict, and the RiskBadge / VerdictPanel widget classes.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSlot
+from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,

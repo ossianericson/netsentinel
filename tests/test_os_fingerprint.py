@@ -1,5 +1,4 @@
 """Tests for modules/os_fingerprint.py — OS fingerprinting via TTL/TCP."""
-import pytest
 from modules.os_fingerprint import OSGuess, _ttl_to_os, _banner_to_os, _window_to_os
 
 

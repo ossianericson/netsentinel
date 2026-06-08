@@ -1,5 +1,4 @@
 """Tests for modules/protocol_animator.py — AnimNode/AnimStep scene builders."""
-import pytest
 
 
 def test_protocol_animator_import():
@@ -29,7 +28,7 @@ def test_anim_step_dataclass():
 
 
 def test_protocol_scene_data_dataclass():
-    from modules.protocol_animator import ProtocolSceneData, AnimNode, AnimStep
+    from modules.protocol_animator import ProtocolSceneData, AnimNode
     scene = ProtocolSceneData(
         protocol="ARP",
         title="ARP Resolution",

@@ -28,13 +28,11 @@ Architecture rules observed:
 
 from __future__ import annotations
 
-import datetime
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QSettings, QSize, Qt, QThread, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QCursor, QPainter, QPixmap
+from PyQt6.QtCore import QSettings, Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QFileDialog, QMenu,
+    QApplication, QFileDialog, QMenu,
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
 )
@@ -45,17 +43,17 @@ from ui.widgets.jargon_tooltip import get_definition
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    GREEN, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.overview_tile import (
-    _MIME_TYPE, _COLS, _SETTINGS_KEY, _TILE_HEIGHT, _EXPANDED_HEIGHT, _LAYOUT_VER,
-    _AnimatedNumberLabel, _BaseTile,
-    DeviceCountTile, ServiceStatusTile, TlsStatusTile, RttSummaryTile,
-    NetworkGradeTile, AlertFeedTile, EventFeedTile, HaDevicesTile,
-    LiveBandwidthTile, DnsStabilityTile, ModemSignalTile, TopTalkersTile,
-    RecentEventsTile, TrendStatusTile, _DnsPoller, _SecurityScanPanel,
+    _COLS, _SETTINGS_KEY, _LAYOUT_VER,
+    _TILE_HEIGHT,  # noqa: F401 — re-exported for test imports
+    _BaseTile,
+    _SecurityScanPanel,
     _TILE_CLASSES, _DEFAULT_ORDER,
+    # Backwards-compatible re-exports — consumed by tests and security_overview_page.py
+    DeviceCountTile, ServiceStatusTile, TlsStatusTile, RttSummaryTile,  # noqa: F401
+    NetworkGradeTile, AlertFeedTile, EventFeedTile,  # noqa: F401
 )
 
 

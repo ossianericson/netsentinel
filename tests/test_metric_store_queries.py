@@ -103,7 +103,7 @@ def test_list_snapshots_empty(store):
 
 
 def test_list_snapshots_after_store(store):
-    snap_id = store.store_snapshot(int(time.time()), "test", '{"key": "val"}')
+    store.store_snapshot(int(time.time()), "test", '{"key": "val"}')
     snaps = store.list_snapshots()
     assert len(snaps) == 1
     assert snaps[0]["label"] == "test"

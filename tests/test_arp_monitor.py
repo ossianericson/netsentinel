@@ -1,5 +1,4 @@
 """Tests for modules/arp_monitor.py — ARP spoof/MITM detector."""
-import pytest
 from modules.arp_monitor import SCAPY_AVAILABLE, SpoofEvent, ARPScanResult, _build_baseline
 
 

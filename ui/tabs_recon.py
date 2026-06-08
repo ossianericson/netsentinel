@@ -12,20 +12,19 @@ from PyQt6.QtCore import Qt, QPoint, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication,
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame,
+    QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QMenu, QPushButton,
     QScrollArea, QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, AMBER_BG,
-    AUDIT_RED, BG_CARD, BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, RED_BG, RISK_BG, RISK_COLORS,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
+    BG_CARD, BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
-from ui.tabs_helpers import _table, _make_card, _empty_state_widget
+from ui.tabs_helpers import _table, _empty_state_widget
 
 if TYPE_CHECKING:
-    from ui.dashboard import Dashboard
+    pass
 
 
 # ── Community scan plugin registry threads (PB-8) ─────────────────────────────
@@ -555,7 +554,6 @@ class _ReconTabsMixin:
         self._recon_cred_user_table = _table(["User", "UID / SID", "Home", "Shell"])
         self._recon_cred_sessions_table = _table(["Active Session (logged-in user)"])
 
-        from PyQt6.QtWidgets import QTableWidgetItem as _TWI2
         self._recon_cred_info_table = _table(["Field", "Value"])
         self._recon_cred_info_table.horizontalHeader().setSectionResizeMode(
             1, __import__("PyQt6.QtWidgets", fromlist=["QHeaderView"]).QHeaderView.ResizeMode.Stretch

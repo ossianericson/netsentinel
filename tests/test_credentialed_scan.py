@@ -10,13 +10,12 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
 
 from modules.credentialed_scan import (
     CredScanResult, SoftwareEntry, ServiceEntry, UserEntry,
-    PatchInfo, ListeningPort,
+    ListeningPort,
     _parse_windows, _parse_linux,
-    _WINDOWS_CMDS, _LINUX_CMDS,
+    _WINDOWS_CMDS,
 )
 
 

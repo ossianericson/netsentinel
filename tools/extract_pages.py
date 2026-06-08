@@ -5,7 +5,6 @@ Uses Python file I/O (utf-8) to avoid PowerShell encoding issues.
 Run from repo root:
     python tools/extract_pages.py
 """
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent

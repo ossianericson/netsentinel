@@ -14,9 +14,8 @@ import socket
 import struct
 import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from modules.snmp_trap_receiver import (
     SnmpTrap,
@@ -25,8 +24,6 @@ from modules.snmp_trap_receiver import (
     _decode_value,
     _encode_oid,
     decode_trap_packet,
-    SNMP_TRAP_PORT,
-    FALLBACK_PORT,
 )
 
 

@@ -20,7 +20,6 @@ Architecture rules:
 """
 from __future__ import annotations
 
-import json
 import time
 from typing import List, Optional
 
@@ -28,15 +27,12 @@ from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QSizePolicy,
-    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -44,12 +40,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
-    BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN,
-    GREEN_BG, HTML_AMBER, HTML_BG_ALT, HTML_BG_LIGHT,
-    HTML_GREEN, HTML_MUTED, HTML_RED, HTML_TEXT,
-    RED, RED_BG, TEXT_MUTED, TEXT_PRIMARY,
+    HTML_TEXT,
+    RED, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.context_menu import install_copy_menu
@@ -588,7 +582,6 @@ class BaselinePage(QWidget):
             return
         tbl = self._diff_table
         rows_html = ""
-        colors = {GREEN: HTML_GREEN, RED: HTML_RED, AMBER: HTML_AMBER, TEXT_PRIMARY: HTML_TEXT}
         for r in range(tbl.rowCount()):
             cells = ""
             for c in range(tbl.columnCount()):

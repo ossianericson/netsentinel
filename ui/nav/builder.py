@@ -12,9 +12,8 @@ from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtWidgets import QLabel, QWidget
 
 from ui.help import _PAGE_HELP
-from ui.nav.rail import _LUCIDE, _NavEntry, _RailButton
+from ui.nav.rail import _NavEntry, _RailButton
 from ui.styles import (
-    ACCENT,
     AUDIT_RED,
     BORDER,
     SIDEBAR_BG,
@@ -22,7 +21,6 @@ from ui.styles import (
     SIDEBAR_SECTION_BG,
     SIDEBAR_SECTION_FG,
     TEXT_MUTED,
-    WHITE,
 )
 
 # Pages that auto-expand the tip bar on first visit (non-obvious interactions)

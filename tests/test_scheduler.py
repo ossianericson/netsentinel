@@ -2,10 +2,8 @@
 Tests for modules/scheduler.py — diff logic and data classes.
 No network calls — scan functions are mocked out.
 """
-import time
 import threading
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from modules.scheduler import ScanScheduler, ScheduledScanResult, _notify
 
 

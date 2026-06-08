@@ -1,7 +1,6 @@
 """Tests for modules/lab_scenarios.py — pure data, no network required."""
 from __future__ import annotations
 
-import pytest
 
 
 def test_import():

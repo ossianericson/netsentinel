@@ -28,16 +28,16 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 
 # Re-export all schema symbols so `from modules.metric_store import SpeedTestPoint`
 # continues to work for all existing callers.
 from modules.metric_store_schema import (
-    _SCHEMA_VERSION, _DDL,
+    _SCHEMA_VERSION, _DDL,  # noqa: F401
     apply_sqlite_schema, apply_sqlalchemy_schema,
-    CertCheckPoint, DeviceEvent, DeviceStatePoint, HaDetectedPoint,
-    KnownDevice, MeshSignalPoint, ModemSignalPoint, RttPoint,
-    ServiceCheckPoint, SpeedTestPoint,
+    CertCheckPoint, DeviceEvent, DeviceStatePoint, HaDetectedPoint,  # noqa: F401
+    KnownDevice, MeshSignalPoint, ModemSignalPoint, RttPoint,  # noqa: F401
+    ServiceCheckPoint, SpeedTestPoint,  # noqa: F401
 )
 from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
 

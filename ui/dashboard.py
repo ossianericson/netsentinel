@@ -5,29 +5,19 @@ Main Dashboard — NetSentinel network security scanner and monitor.
 import datetime
 import html
 import webbrowser
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt, QByteArray, QEasingCurve, QObject, QPoint, QPropertyAnimation, QRect, QSettings, QSize, QTimer, QVariantAnimation, pyqtProperty, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QFont, QIcon, QPainter, QPixmap
+from PyQt6.QtCore import Qt, QPropertyAnimation, QRect, QSettings, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QSizePolicy,
-    QStackedWidget,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
@@ -36,40 +26,27 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ui.command_palette import CommandPalette
-from ui.help import _PAGE_HELP
-from ui.live_graph import LiveGraphWidget
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, ADMIN_WARN_FG,
-    ADMIN_WARN_HOVER, AMBER, AMBER_BG, AUDIT_RED,
-    BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
-    BLUE, BORDER, BORDER_MED, BTN_HOVER_BG,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_PURPLE,
-    GRADE_A_BG, GRADE_B_BG, GRADE_B_FG, GRADE_C_BG,
-    GRADE_D_BG, GRADE_F_BG, GRADE_F_FG, GREEN,
-    GREEN_BG, MAIN_STYLE, NAV_BAR, NAV_DIVIDER,
-    PRO_BANNER_BORDER, PRO_WARN_BG, RED, RED_BG,
-    RISK_BG, RISK_COLORS, SIDEBAR_BG, SIDEBAR_HOVER,
-    SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, SIDEBAR_SECTION_FG, SIDEBAR_SEL_BG,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, UPDATE_BAR_BG,
-    UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
+    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, GREEN,
+    MAIN_STYLE, NAV_DIVIDER,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from modules.utils import get_offenders_path, is_admin
 
 
 # ─── Module Tab Helpers (defined in ui/tabs.py, re-exported here) ────────────
 from ui.tabs import (
-    _make_scroll_area, _table, _add_row, _add_skeleton_rows,
-    _empty_state_widget, _error_state_widget, _make_card, _page_header,
+    _table, _add_row, _add_skeleton_rows,
+    _empty_state_widget,
 )
+from ui.tabs_helpers import _page_header  # noqa: F401 — re-exported; used via lazy `from ui.dashboard import _page_header`
+from ui.monitor_state import _color_for_level  # noqa: F401 — re-exported; used via lazy `from ui.dashboard import _color_for_level`
 
 
 # --- Activity-Rail Navigation widgets (extracted to ui/nav/rail.py) -----------
 from ui.nav.rail import (
-    _LUCIDE, _make_nav_icon, _NavEntry,
-    _RailButton, _FlyoutItem, _FlyoutPanel,
-    _CanvasClickFilter, _ClickLabel, _SmoothProgressBar,
+    _ClickLabel, _SmoothProgressBar,
 )
 
 
@@ -112,9 +89,9 @@ def _make_chart_window(fig) -> "QMainWindow":
 from ui.scan_wiring import ScanResultMixin
 from ui.header import AppHeaderMixin
 from ui.tabs import TabBuilderMixin
-from ui.nav.builder import _NavBuilderMixin, _AUTO_HELP_PAGES
+from ui.nav.builder import _NavBuilderMixin
 from ui.monitor_state import (
-    _color_for_level, _bg_for_level, RiskBadge, VerdictPanel, _MonitorStateMixin,
+    _color_for_level, _MonitorStateMixin,
 )
 from ui.plugin_page_mixin import _PluginPageMixin
 
@@ -405,7 +382,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _GAP   = 6
 
         def __init__(self, admin_rows: set, color: str, parent=None):
-            from PyQt6.QtWidgets import QStyledItemDelegate
             super().__init__(parent)
             self._admin_rows    = admin_rows
             self._color         = color
@@ -439,7 +415,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
         def paint(self, painter, option, index):
             from PyQt6.QtWidgets import QStyle, QStyleOptionViewItem
-            from PyQt6.QtGui import QPainter
             opt = QStyleOptionViewItem(option)
             opt.state &= ~QStyle.StateFlag.State_HasFocus
             super().paint(painter, opt, index)
@@ -463,7 +438,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     # ── How to Fix dialog (shared by M1 / M2 / M3 context menus) ─────────────
 
     def _show_how_to_fix(self, title: str, remediation: str):
-        from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QScrollArea as _SA
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox
 
         dlg = QDialog(self)
         dlg.setWindowTitle(f"How to Fix — {title}")
@@ -603,7 +578,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     def _show_alert_toast(self, alert) -> None:
         """Show a desktop notification for a fired alert."""
-        from ui.styles import RED, AMBER
         severity = getattr(alert, "severity", "INFO")
         message  = getattr(alert, "message",  str(alert))
 
@@ -851,7 +825,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
         def _show_menu(pos):
             from PyQt6.QtWidgets import QMenu as _QMenu
-            from PyQt6.QtGui import QClipboard as _QClipboard
             from PyQt6.QtWidgets import QApplication as _QApp
             rows_selected = sorted({i.row() for i in table.selectedIndexes()})
             if not rows_selected:

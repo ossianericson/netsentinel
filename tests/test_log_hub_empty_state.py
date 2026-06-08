@@ -15,7 +15,6 @@ except ImportError:
 
 @pytest.fixture
 def log_hub_page(monkeypatch):
-    from PyQt6.QtWidgets import QStackedWidget
     monkeypatch.setattr(
         "ui.pages.log_hub_page.QFileSystemWatcher",
         lambda *a, **kw: MagicMock(),

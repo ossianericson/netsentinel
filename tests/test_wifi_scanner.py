@@ -1,6 +1,5 @@
 """Tests for modules/wifi_scanner.py — 802.11 WiFi scanner."""
 import re
-import pytest
 from modules.wifi_scanner import (
     NetworkInfo, ConnectedClient, WifiScanResult,
     _channel_from_freq, _band_from_channel, ROGUE_SSID_PATTERNS,

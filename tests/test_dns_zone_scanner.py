@@ -1,5 +1,4 @@
 """Tests for modules/dns_zone_scanner.py — DNS zone enumeration (AXFR + mDNS)."""
-import pytest
 from modules.dns_zone_scanner import (
     DnsRecord, MdnsService, DnsZoneResult, _decode_name, _parse_rdata,
 )

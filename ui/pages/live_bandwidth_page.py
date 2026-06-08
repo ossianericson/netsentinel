@@ -14,16 +14,15 @@ Layout
 
 from __future__ import annotations
 
-import time
 from collections import deque
-from typing import Deque, Dict, List, Optional, Tuple
+from typing import Deque, Dict, List, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -43,9 +42,8 @@ from PyQt6.QtGui import QColor
 
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_DARK, BORDER, CHART_AXIS, CHART_BG,
-    CHART_DOWN, CHART_GRID, CHART_PLOT_BG, CHART_TITLE,
-    CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
+    BORDER, CHART_AXIS, CHART_BG,
+    CHART_DOWN, CHART_GRID, CHART_PLOT_BG, CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
     TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     TH_BG, TH_BORDER, TH_TEXT,
 )

@@ -17,11 +17,8 @@ Covers:
 """
 from __future__ import annotations
 
-import json
 import math
-from pathlib import Path
 from types import SimpleNamespace
-from typing import List
 from unittest.mock import MagicMock, patch
 
 import pytest

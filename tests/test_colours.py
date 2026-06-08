@@ -1,6 +1,5 @@
 """Tests for modules/colours.py — module-layer colour palette."""
 import re
-import pytest
 
 
 def test_colours_import():

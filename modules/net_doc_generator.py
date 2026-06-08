@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import datetime
 import html
-import json
 from pathlib import Path
 from string import Template as _Template
 from typing import Any, Dict, List, Optional

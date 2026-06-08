@@ -36,8 +36,8 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 from ui.styles import (
-    ACCENT_DARK, BG_HOVER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
-    OVERLAY_BLUE2, OVERLAY_FG2, STATUS_OFFLINE, TEXT_PRIMARY, WHITE,
+    ACCENT_DARK, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
+    OVERLAY_BLUE2, OVERLAY_FG2, STATUS_OFFLINE, WHITE,
 )
 
 _AUTO_DISMISS_MS = 12_000   # dismiss automatically after 12 s of inactivity

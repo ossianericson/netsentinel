@@ -9,18 +9,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
 
 from ui.tabs import _add_row
 from ui.styles import (
-    ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER,
-    BG_CARD, BG_DARK, BORDER, BLUE, GREEN, RED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+    ACCENT, AMBER,
+    BG_CARD, BG_DARK, GREEN, RED,
+    TEXT_PRIMARY, TEXT_MUTED,
 )
 
 if TYPE_CHECKING:
-    from ui.dashboard import Dashboard
+    pass
 
 
 class ScanEnrichmentMixin:
@@ -271,7 +270,6 @@ class ScanEnrichmentMixin:
             oui = bssid[:8]
             # Locally-administered variants of named OUIs are common for backhaul.
             # Check exact match and also the canonical (globally-administered) form.
-            canon = bssid[0]
             try:
                 first = int(bssid[0:2], 16)
                 canon_first = first & 0xFD  # clear locally-administered bit
@@ -349,8 +347,6 @@ class ScanEnrichmentMixin:
 
             # Nodes column tooltip
             node_tip = "\n".join(node_tips) if node_tips else ""
-
-            level = "HIGH" if rogue else ("MEDIUM" if conflict else "CLEAN")
 
             row_idx = self._m4_table.rowCount()
             self._m4_table.insertRow(row_idx)
@@ -432,7 +428,7 @@ class ScanEnrichmentMixin:
         self._update_overall_verdict()
 
     def _on_diag_result(self, result):
-        from ui.styles import GREEN, AMBER, RED, TEXT_SECONDARY, TEXT_PRIMARY, BLUE
+        from ui.styles import GREEN, AMBER, RED, TEXT_PRIMARY, BLUE
 
         self._diag_result = result
         self._protocol_viz_page.set_context(
@@ -515,7 +511,6 @@ class ScanEnrichmentMixin:
         self._btn_diag.setEnabled(True)
 
         # DNS Leak
-        from PyQt6.QtGui import QColor
         leak = getattr(result, "dns_leak", None)
         self._diag_leak_table.setRowCount(0)
         if leak:

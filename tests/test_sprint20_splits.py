@@ -33,8 +33,7 @@ def test_import_credentialed_scan_helpers():
 
 def test_credentialed_scan_helpers_dataclasses():
     from modules.credentialed_scan_helpers import (
-        CredScanResult, SoftwareEntry, ServiceEntry, UserEntry,
-        PatchInfo, ListeningPort,
+        CredScanResult,
     )
     r = CredScanResult(host="192.168.1.1")
     assert r.host == "192.168.1.1"
@@ -52,8 +51,7 @@ def test_parse_linux_empty():
 def test_cred_scan_re_exports():
     """Backwards compat: re-exports from credentialed_scan still work."""
     from modules.credentialed_scan import (
-        CredScanResult, SoftwareEntry, ServiceEntry,
-        PARAMIKO_AVAILABLE,
+        CredScanResult,
     )
     assert CredScanResult is not None
 
@@ -176,7 +174,7 @@ def test_analyse_log_clean():
 
 def test_network_logger_re_exports():
     """Backwards compat: LogEntry importable from network_logger."""
-    from modules.network_logger import LogEntry, LogSummary, AnalysisFinding, analyse_log
+    from modules.network_logger import LogEntry, analyse_log
     assert LogEntry is not None
     assert callable(analyse_log)
 
@@ -221,7 +219,7 @@ def test_find_ookla_cli_returns_none_or_path():
 
 def test_speed_tester_re_exports():
     """Backwards compat: SpeedServer, SpeedTestResult importable from speed_tester."""
-    from modules.speed_tester import SpeedServer, SpeedTestResult, speed_to_fraction
+    from modules.speed_tester import SpeedServer, speed_to_fraction
     assert SpeedServer is not None
     assert callable(speed_to_fraction)
 

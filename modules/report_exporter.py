@@ -13,14 +13,13 @@ import datetime
 import html
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # Re-exports for backwards compatibility — callers that do
 # `from modules.report_exporter import generate_html` continue to work.
 from modules.report_html import (
     generate_html,
     _CSS,
-    _badge,
 )
 from modules.report_pdf import save_pdf_report
 from modules.report_isp import generate_isp_report, save_isp_report
@@ -33,8 +32,7 @@ __all__ = [
 ]
 
 from modules.colours import (
-    EXPORT_BG, EXPORT_TEXT, EXPORT_HEADING_FG, EXPORT_META,
-    EXPORT_GREEN_FG, EXPORT_AMBER_FG, EXPORT_RED_FG,
+    EXPORT_BG, EXPORT_HEADING_FG, EXPORT_META,
     EXPORT_CARD, EXPORT_BORDER, EXPORT_ACCENT_FG,
 )
 

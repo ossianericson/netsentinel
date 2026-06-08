@@ -1,5 +1,4 @@
 """Tests for modules/ha_detector.py — Home Automation device detector."""
-import pytest
 from modules.ha_detector import HaMatch, ha_category, scan
 
 

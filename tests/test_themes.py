@@ -22,7 +22,7 @@ Covers:
 """
 
 import re
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -30,7 +30,7 @@ import pytest
 # Minimal Qt bootstrap — use offscreen if no display
 # ---------------------------------------------------------------------------
 try:
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication  # noqa: F401
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 

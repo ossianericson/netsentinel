@@ -1,11 +1,10 @@
 """
 Tests for modules/mqtt_publisher.py
 """
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
 
 from modules.mqtt_publisher import (
-    MqttPublisher, get_publisher, _safe, _PAHO_AVAILABLE,
+    MqttPublisher, get_publisher, _safe,
 )
 
 

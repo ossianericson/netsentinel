@@ -1,5 +1,4 @@
 """Tests for modules/storm_analyser.py — broadcast storm analyser."""
-import pytest
 from modules.storm_analyser import (
     SCAPY_AVAILABLE, StormResult, THRESHOLD_WARNING, BROADCAST_MAC,
 )

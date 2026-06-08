@@ -13,8 +13,6 @@ Covers:
 """
 from __future__ import annotations
 
-import json
-import struct
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -211,7 +209,6 @@ def test_download_rejects_maxmind_subdomain_lookalike():
 
 def test_download_accepts_maxmind_subdomain():
     """Should not raise on valid host — but we mock urlopen so no real request."""
-    import io
     # Fake response: minimal gzip with 2-byte magic header so _is_gzip returns True
     gzip_magic = b"\x1f\x8b" + b"\x00" * 100
     mock_resp = MagicMock()

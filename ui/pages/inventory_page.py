@@ -23,8 +23,7 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
-    QHBoxLayout, QLabel, QLineEdit, QPushButton, QScrollArea, QSizePolicy,
-    QStackedWidget, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
+    QHBoxLayout, QLabel, QLineEdit, QPushButton, QStackedWidget, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
     QWidget,
 )
 
@@ -37,8 +36,8 @@ from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_DARK, BG_HOVER, BORDER, BTN_DISABLED_BORDER,
     CARD_RADIUS, GREEN, RED,
-    TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, TH_BG, TH_BORDER, TH_TEXT,
+    TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, TH_BG, TH_TEXT,
     WHITE,
 )
 
@@ -1223,7 +1222,6 @@ class InventoryPage(QWidget):
 
     def _bulk_export(self) -> None:
         import csv as _csv
-        import datetime as _dt2
         from PyQt6.QtWidgets import QFileDialog
         from ui.widgets.toast import ToastManager
 

@@ -1,10 +1,8 @@
 """Tests for modules/port_scanner.py (RULE-T1)."""
 from __future__ import annotations
 
-import socket
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 import modules.port_scanner as ps
 

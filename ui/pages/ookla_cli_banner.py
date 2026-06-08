@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import platform
 import subprocess
-import sys
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
@@ -21,7 +20,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QWidget,
 )
 from ui.styles import (

@@ -14,7 +14,6 @@ from typing import List, Optional
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
-    QFormLayout,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -38,7 +37,7 @@ from PyQt6.QtWidgets import QMenu
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    GREEN, RED, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )

@@ -41,7 +41,7 @@ from ui.styles import (
 )
 
 try:
-    from modules.threat_intel import ThreatEntry, load_from_cache
+    from modules.threat_intel import load_from_cache
     _THREAT_OK = True
 except Exception:
     _THREAT_OK = False

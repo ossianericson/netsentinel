@@ -19,13 +19,6 @@ def get_network_info() -> dict:
     """
     import socket as _sock
     system = platform.system()
-    if system == "Windows":
-        _si = subprocess.STARTUPINFO()
-        _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        _si.wShowWindow = 0
-        extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": _si}
-    else:
-        extra = {}
     info: dict = {
         "local_ips":   [],
         "gateway":     None,
@@ -200,13 +193,6 @@ def get_dhcp_info() -> dict:
     """
     import datetime
     system = platform.system()
-    if system == "Windows":
-        _si = subprocess.STARTUPINFO()
-        _si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        _si.wShowWindow = 0
-        extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW, "startupinfo": _si}
-    else:
-        extra = {}
     result: dict = {
         "dhcp_enabled":    False,
         "dhcp_server":     "",
@@ -338,7 +324,6 @@ def get_interface_details() -> List[dict]:
     Linux:   /sys/class/net.
     """
     system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
     adapters: List[dict] = []
 
     if system == "Windows":

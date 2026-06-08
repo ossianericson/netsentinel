@@ -1,5 +1,4 @@
 """Tests for modules/nl_query.py — natural language device query parser."""
-import pytest
 
 
 def test_nl_query_import():

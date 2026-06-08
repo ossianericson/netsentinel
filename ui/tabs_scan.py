@@ -7,7 +7,6 @@ tab builders plus their event handlers and filter helpers.
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -23,7 +22,7 @@ from ui.live_graph import LiveGraphWidget
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
     ACCENT, ACCENT_DARK, BG_CARD, BG_DARK,
-    BG_HOVER, BORDER, CARD_RADIUS, CHART_PURPLE,
+    BG_HOVER, BORDER, CHART_PURPLE,
     GREEN, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE,
 )
@@ -113,7 +112,6 @@ class _ScanTabsMixin:
 
         # Integration discovery banner — hidden until scan finds a device matching
         # a bundled plugin's default gateway IP
-        from PyQt6.QtWidgets import QLabel as _QL, QPushButton as _QPB
         self._m1_int_banner = QFrame()
         self._m1_int_banner.setVisible(False)
         _ib_lay = QHBoxLayout(self._m1_int_banner)

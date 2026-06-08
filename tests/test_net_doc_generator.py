@@ -2,9 +2,7 @@
 Tests for modules/net_doc_generator.py
 """
 import datetime
-from pathlib import Path
 
-import pytest
 
 from modules.net_doc_generator import (
     generate_network_doc,

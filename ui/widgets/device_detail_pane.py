@@ -10,19 +10,16 @@ import datetime
 from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, pyqtSignal
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
+    QTableWidgetItem, QTextEdit, QVBoxLayout,
     QWidget,
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    TH_BG, TH_BORDER, TH_TEXT, WHITE,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE,
 )
 
 if TYPE_CHECKING:

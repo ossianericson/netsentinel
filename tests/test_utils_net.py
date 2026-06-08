@@ -1,6 +1,4 @@
 """Tests for modules/utils_net.py — get_network_info, get_dhcp_info, get_interface_details."""
-import pytest
-from unittest.mock import patch, MagicMock
 
 from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details
 

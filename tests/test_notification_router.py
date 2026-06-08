@@ -234,7 +234,7 @@ class TestSnoozeJsonPersistence(unittest.TestCase):
         return r
 
     def test_set_snooze_writes_json(self):
-        import tempfile, json, os
+        import tempfile, json
         from pathlib import Path
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "snoozes.json"

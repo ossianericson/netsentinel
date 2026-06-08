@@ -1,14 +1,11 @@
 """Tests for modules/metric_store_schema.py — DDL, migrations, dataclasses."""
 import sqlite3
 import threading
-import pytest
 
 from modules.metric_store_schema import (
-    _SCHEMA_VERSION, _DDL, _MIGRATIONS,
+    _SCHEMA_VERSION, _MIGRATIONS,
     apply_sqlite_schema,
-    SpeedTestPoint, ServiceCheckPoint, RttPoint, DeviceStatePoint,
-    DeviceEvent, CertCheckPoint, KnownDevice, HaDetectedPoint,
-    ModemSignalPoint, MeshSignalPoint,
+    SpeedTestPoint, RttPoint, CertCheckPoint, KnownDevice, ModemSignalPoint,
 )
 
 

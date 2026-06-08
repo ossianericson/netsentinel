@@ -26,9 +26,8 @@ Covers:
   • swap_tiles same id is a no-op
 """
 
-import types
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,7 +36,7 @@ import pytest
 # Minimal Qt bootstrap — use offscreen if no display
 # ---------------------------------------------------------------------------
 try:
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication  # noqa: F401
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
@@ -109,7 +108,7 @@ def _make_overview(store=None):
 # ---------------------------------------------------------------------------
 class TestTileRegistry:
     def test_all_tile_ids_unique(self):
-        from ui.pages.overview_page import _TILE_CLASSES, _DEFAULT_ORDER
+        from ui.pages.overview_page import _TILE_CLASSES
         assert len(_TILE_CLASSES) == len(set(_TILE_CLASSES.keys()))
 
     def test_default_order_tiles_all_registered(self):
@@ -529,7 +528,6 @@ class TestOverviewPageConstruction:
 # ---------------------------------------------------------------------------
 class TestSwapTiles:
     def test_swap_two_tiles(self):
-        from ui.pages.overview_page import _DEFAULT_ORDER
         with patch("ui.pages.overview_page.QSettings") as MockQS:
             MockQS.return_value.value.return_value = None
             page = _make_overview()

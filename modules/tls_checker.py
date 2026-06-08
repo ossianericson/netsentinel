@@ -8,7 +8,7 @@ No admin or raw sockets required — uses the standard ssl module.
 
 import ssl
 import socket
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -47,7 +47,6 @@ def check_cert(host: str, port: int = 443, timeout: float = 5.0) -> CertInfo:
         with socket.create_connection((host, port), timeout=timeout) as raw:
             with ctx.wrap_socket(raw, server_hostname=host) as tls:
                 cert = tls.getpeercert()
-                bin_cert = tls.getpeercert(binary_form=True)
 
         if not cert:
             info.error = "No certificate returned"

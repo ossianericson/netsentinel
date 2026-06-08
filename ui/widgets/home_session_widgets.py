@@ -19,7 +19,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BORDER,
     CARD_RADIUS, GRADE_B_COLOR, GREEN, NAV_BAR,
-    RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.widgets.home_widgets import _bundled_plugin_path
 

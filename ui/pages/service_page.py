@@ -9,7 +9,6 @@ ServiceWorker emits check_done.
 from __future__ import annotations
 
 import json
-import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -37,9 +36,9 @@ from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from modules.metric_store import MetricStore, ServiceCheckPoint
 from modules.service_monitor import ServiceTarget
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    ACCENT, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    GREEN, RED, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )

@@ -6,8 +6,8 @@ All symbols are re-exported from modules/metric_store for backwards compatibilit
 """
 import sqlite3
 import threading
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
 _SCHEMA_VERSION = 8

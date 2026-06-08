@@ -36,7 +36,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -45,9 +44,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDateTime
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, RED_BG,
-    TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK,
+    BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN, RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from modules.maintenance_window import (
     MaintenanceWindow, MaintenanceWindowManager,

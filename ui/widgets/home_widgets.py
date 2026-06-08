@@ -7,23 +7,19 @@ StandardWelcomePage, ProWelcomePage moved here.
 """
 from __future__ import annotations
 
-import datetime
 import json
 
 from PyQt6.QtCore import QEasingCurve, QPointF, QRectF, Qt, QSettings, QVariantAnimation, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_RADIUS, GRADE_B_COLOR, GREEN, NAV_BAR,
-    PRO_WARN_BG, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, UPDATE_BAR_BG, UPDATE_BAR_BORDER, UPDATE_BAR_FG,
-    WHITE,
+    ACCENT, AMBER,
+    BG_CARD, BG_HOVER, BORDER,
+    CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY,
 )
 
 
@@ -318,7 +314,6 @@ class _EventsTicker(QFrame):
         s = store or self._store
         if s is None:
             return
-        import time as _t
         try:
             events = s.query_device_events(hours=24.0)[:3]
         except Exception:

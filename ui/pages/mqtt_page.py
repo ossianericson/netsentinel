@@ -15,8 +15,7 @@ import datetime
 from typing import Optional
 
 import keyring
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
     QPlainTextEdit, QPushButton, QScrollArea, QSpinBox,
@@ -24,8 +23,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
     CARD_RADIUS, GREEN, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY,
 )

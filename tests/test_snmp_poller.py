@@ -1,5 +1,4 @@
 """Tests for modules/snmp_poller.py — raw SNMP GET poller."""
-import pytest
 from modules.snmp_poller import (
     _encode_oid, _ber_length, _ber_tlv, _build_snmp_get,
     SNMPResult, poll,

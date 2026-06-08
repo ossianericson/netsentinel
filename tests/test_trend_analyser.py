@@ -20,7 +20,6 @@ from modules.trend_analyser import (
     TrendResult, TrendReport,
     _linreg, _project_hours_to_threshold, _direction,
     analyse_host_rtt, run_full_trend_report,
-    DEFAULT_THRESHOLDS,
 )
 
 

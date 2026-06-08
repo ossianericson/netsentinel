@@ -25,7 +25,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QTableWidget,
@@ -36,7 +35,7 @@ from PyQt6.QtWidgets import (
 
 from ui.widgets.empty_state_card import EmptyStateCard
 
-from modules.dns_zone_scanner import DnsRecord, DnsZoneResult, MdnsService
+from modules.dns_zone_scanner import DnsZoneResult
 from workers.dns_zone_worker import DnsZoneWorker
 from ui.widgets.context_menu import install_copy_menu
 from ui.styles import (
@@ -53,7 +52,6 @@ from ui.styles import (
     GREEN,
     INPUT_PLACEHOLDER,
     PROGRESS_TRACK,
-    RED,
     TABLE_SEL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,

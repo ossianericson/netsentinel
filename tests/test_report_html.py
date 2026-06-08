@@ -1,10 +1,8 @@
 """Tests for modules/report_html.py — HTML generation helpers."""
-import pytest
 
 from modules.report_html import (
     generate_html, _badge, _module1_html, _module2_html,
-    _module3_html, _module4_html, _module5_html,
-    _diagnostics_html, _network_info_html, _CSS,
+    _network_info_html, _CSS,
 )
 
 

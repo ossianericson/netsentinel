@@ -9,20 +9,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSettings
-from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
 
 from ui.tabs import _add_row
 
 from ui.styles import (
-    ACCENT, ACCENT_LITE, ACCENT_DARK, AMBER, AMBER_BG,
-    BG_CARD, BORDER, GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+    ACCENT_LITE, AMBER, AMBER_BG,
+    GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
     BLUE,
 )
 from ui.scan_enrichment import ScanEnrichmentMixin
 
 if TYPE_CHECKING:
-    from ui.dashboard import Dashboard
+    pass
 
 
 class ScanResultMixin(ScanEnrichmentMixin):
@@ -622,7 +621,6 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # OUTPUT-4: post-scan summary sheet
         if hasattr(self, "_scan_sheet") and self._store is not None:
             try:
-                import time as _t_o4
                 _pending = [
                     a for a in self._store.get_recent_alerts(hours=24)
                     if not a.get("acked_ts")

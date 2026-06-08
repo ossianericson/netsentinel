@@ -1,5 +1,4 @@
 """Tests for modules/smb_enumerator.py — SMB/Windows Share enumerator."""
-import pytest
 from modules.smb_enumerator import (
     SMBShare, SMBUser, SMBSession, NetBIOSInfo, SMBEnumResult, enumerate_smb,
 )

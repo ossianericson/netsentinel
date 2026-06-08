@@ -10,7 +10,6 @@ Covers:
 """
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 import time
@@ -20,7 +19,6 @@ from modules.metric_store import MetricStore
 from modules.config_baseline import (
     ConfigSnapshot,
     DeviceEntry,
-    SnapshotDiff,
     build_snapshot_from_scan,
     delete_snapshot,
     diff_snapshots,

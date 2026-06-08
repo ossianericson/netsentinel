@@ -1061,7 +1061,7 @@ class PrivateEndpointWorker(QThread):
 
     def run(self):
         try:
-            from modules.private_endpoint_checker import check_endpoint, EndpointSpec
+            from modules.private_endpoint_checker import check_endpoint
             total = len(self._specs)
             for i, spec in enumerate(self._specs, 1):
                 self.status.emit(f"Checking {spec.label}… ({i}/{total})")

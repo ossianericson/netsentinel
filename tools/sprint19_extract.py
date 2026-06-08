@@ -3,8 +3,6 @@ Sprint 19 extraction script — removes extracted methods from ui/dashboard.py
 and wires in the three new mixins.
 Run once from the project root: python tools/sprint19_extract.py
 """
-import re
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent

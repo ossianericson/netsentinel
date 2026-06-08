@@ -21,11 +21,11 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, BG_CARD, BORDER, CARD_RADIUS,
+    BG_CARD, BORDER, CARD_RADIUS,
     GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY,
 )
-from ui.tabs_helpers import _make_card, _page_header, _table
+from ui.tabs_helpers import _table
 
 
 class _NetworkTabsMixin:

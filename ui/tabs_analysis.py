@@ -13,9 +13,8 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QPushButton, QSpinBox, QStackedWidget,
-    QTextEdit, QVBoxLayout, QWidget,
+    QFileDialog, QHBoxLayout, QLabel,
+    QPushButton, QSpinBox, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ui.npcap_banner import NpcapMissingBanner
@@ -25,7 +24,7 @@ from ui.styles import (
     CARD_RADIUS, BLUE,
     GRADE_A_BG, GRADE_B_BG, GRADE_B_FG, GRADE_C_BG,
     GRADE_D_BG, GRADE_F_BG, GRADE_F_FG, GREEN,
-    RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    RED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 from ui.tabs import _table
 
@@ -417,7 +416,6 @@ class _AnalysisTabsMixin:
         return w
 
     def _populate_iot_baseline_table(self, baselines: dict) -> None:
-        from PyQt6.QtGui import QColor
         self._iot_baseline_table.setRowCount(0)
         for mac, b in baselines.items():
             row = self._iot_baseline_table.rowCount()
@@ -440,7 +438,6 @@ class _AnalysisTabsMixin:
         self._iot_status.setText(f"Learning for {duration} s — keep devices active…")
         try:
             from modules.iot_baseline import learn
-            from pathlib import Path
             def _do_learn():
                 baselines = learn(
                     devices=devices, duration_s=duration,
@@ -461,7 +458,6 @@ class _AnalysisTabsMixin:
         try:
             from modules.iot_baseline import load_or_create, IoTMonitor
             from PyQt6.QtGui import QColor
-            import time
 
             if not self._m1_result:
                 self._iot_status.setText("⚠ Run 'Devices on Network' scan first.")

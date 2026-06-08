@@ -9,7 +9,7 @@ Power-user feature.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSlot
+from PyQt6.QtCore import pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox, QHBoxLayout, QLabel, QPushButton, QStackedWidget,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,

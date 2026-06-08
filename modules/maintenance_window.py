@@ -26,7 +26,7 @@ import time
 import threading
 import uuid
 from dataclasses import dataclass, field, asdict
-from typing import Callable, Dict, List, Optional
+from typing import List, Optional
 
 
 # ── Data types ────────────────────────────────────────────────────────────────

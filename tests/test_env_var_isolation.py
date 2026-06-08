@@ -86,9 +86,6 @@ def test_env_var_restored_after_success(tmp_path, monkeypatch):
 
     _write_fake_plugin(tmp_path, "plugin_restore_ok")
 
-    results: list = []
-    errors: list = []
-
     # Minimal stub that exercises the save/restore logic without a real thread
     prev = os.environ.get("NETSENTINEL_PLUGIN_IP")
     os.environ["NETSENTINEL_PLUGIN_IP"] = "192.168.0.55"

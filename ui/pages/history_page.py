@@ -13,12 +13,11 @@ Architecture rules observed:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")  # must be set before figure imports
 import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 

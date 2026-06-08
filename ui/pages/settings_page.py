@@ -13,41 +13,28 @@ Architecture rules observed:
 """
 from __future__ import annotations
 
-from pathlib import Path
 
-from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtWidgets import (
-    QAbstractItemView,
-    QCheckBox,
-    QComboBox,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-import ui.styles as _styles
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    BTN_HOVER_BG, CARD_HDR_BORDER, CARD_RADIUS, GREEN,
-    NAV_BAR, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER,
+    TEXT_MUTED, TEXT_PRIMARY,
 )
 
 from ui.pages.settings_cards import (
     _SettingsCardsMixin,
     _NotifTestWorker,
-    _card, _page_header, _integr_cert_count, _integr_svc_count,
 )
 
 class SettingsPage(_SettingsCardsMixin, QWidget):

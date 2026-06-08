@@ -18,7 +18,6 @@ Architecture rules:
 from __future__ import annotations
 
 import datetime
-from typing import Optional
 
 from PyQt6.QtCore    import Qt, pyqtSlot
 from PyQt6.QtGui     import QColor

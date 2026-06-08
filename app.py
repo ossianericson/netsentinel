@@ -263,7 +263,6 @@ def _fatal(title: str, message: str) -> None:
     except Exception:
         # Last resort: write to a log file next to the exe
         import traceback
-        import tempfile
         log_path = os.path.join(os.path.dirname(sys.executable), "netsentinel_error.log")
         try:
             from modules.utils import get_app_data_dir
@@ -781,7 +780,7 @@ if __name__ == "__main__":
         _headless()
     try:
         main()
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         import traceback
         _fatal("Unexpected error", traceback.format_exc())
 

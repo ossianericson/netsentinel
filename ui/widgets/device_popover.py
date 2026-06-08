@@ -29,13 +29,10 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT,
-    AMBER,
     BG_CARD,
     BG_DARK,
     BORDER,
-    GREEN,
     RED,
-    TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     BG_HOVER,

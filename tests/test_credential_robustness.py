@@ -76,8 +76,7 @@ def test_two_instances_same_plugin_different_ips_have_independent_keys():
 
 def test_on_update_credentials_reads_ip_from_instance_registry(tmp_path, monkeypatch):
     """_on_update_credentials passes current_ip (from registry) to the dialog, not a hardcoded value."""
-    import json
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import patch
 
     stored_ip = "10.0.0.99"
     fake_instance = {
@@ -136,7 +135,6 @@ def test_instance_id_generates_consistent_key_for_known_inputs():
 
 def test_on_rename_card_updates_registry_name(tmp_path, monkeypatch):
     """_on_rename_card persists new name to the instance registry."""
-    import json
 
     fake_instances = [
         {"id": "inst_abc", "path": str(tmp_path / "router.py"),

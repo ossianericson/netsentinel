@@ -1,7 +1,6 @@
 """Tests for modules/settings_io.py — Settings export/import."""
 import json
 import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 

@@ -103,7 +103,7 @@ def isolated_settings(monkeypatch):
     change the behaviour of a completely unrelated test that reads the same key.
     """
     try:
-        from PyQt6.QtCore import QSettings, QCoreApplication
+        from PyQt6.QtCore import QCoreApplication
     except ImportError:
         yield
         return

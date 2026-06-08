@@ -7,19 +7,14 @@ HardwareIntegrationPage is defined in hardware_integration_page.py and imports f
 from __future__ import annotations
 
 import collections
-import hashlib
-import json
-import time
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QFileSystemWatcher, QSettings, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QCursor, QFont, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
-    QComboBox,
     QDialog,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -27,9 +22,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QStackedWidget,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -40,7 +33,6 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QProcess
 
-from workers.plugin_polling_worker import PluginPollingWorker
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
@@ -51,17 +43,22 @@ from ui.styles import (
 )
 
 from ui.widgets.hub_helpers import (
-    _SETTINGS_KEY, _SETTINGS_RESULT, _SETTINGS_INSTANCES, _SETTINGS_CONFIG,
-    _CONSENTED_HASHES_KEY, _HEALTH_KEY, _CIRCUIT_BREAK_THRESHOLD, _DEGRADED_HOURS,
-    _find_python_exe, _TEMPLATE,
-    _path_hash, _parse_dict_literal, _validate_script,
-    _load_paths, _save_paths, _load_instances, _save_instances, _instance_id,
-    _is_consented, _record_consent, _migrate_stale_paths,
-    _load_last_result, _save_last_result,
-    _health_key, _load_health, _save_health, _record_success, _record_error, _reset_health,
+    _CIRCUIT_BREAK_THRESHOLD, _DEGRADED_HOURS,
+    _find_python_exe, _path_hash, _load_health, _reset_health,
     _load_instance_config, _save_instance_config,
     _safe_set_text, _age_str, _rsrp_color, _sinr_color,
     _classify_error,
+    # Backwards-compatible re-exports — consumed by hardware_integration_page.py,
+    # hardware_browse_mixin.py, plugin_guide.py, plugin_wizard_mixin.py, credential_dialog.py
+    _TEMPLATE,  # noqa: F401
+    _instance_id, _validate_script,  # noqa: F401
+    _load_paths, _save_paths,  # noqa: F401
+    _load_instances, _save_instances,  # noqa: F401
+    _is_consented, _record_consent,  # noqa: F401
+    _migrate_stale_paths,  # noqa: F401
+    _load_last_result, _save_last_result,  # noqa: F401
+    _record_success, _record_error,  # noqa: F401
+    _save_health,  # noqa: F401
 )
 
 

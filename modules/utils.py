@@ -11,17 +11,16 @@ modules/utils_platform.py and are re-exported here for backwards compatibility.
 import concurrent.futures
 import os
 import platform
-import re
 import socket
 import subprocess
 import sys
 import threading
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 # Backwards-compatible re-exports (do not remove — callers import from here)
-from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details
-from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6
+from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details  # noqa: F401
+from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6  # noqa: F401
 
 
 def is_admin() -> bool:
@@ -279,7 +278,6 @@ def send_wol(mac: str, broadcast: str = "255.255.255.255") -> bool:
     mac can be in any of: aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, aabbccddeeff.
     Returns True on success, False on failure.
     """
-    import struct as _struct
     try:
         mac_clean = mac.replace(":", "").replace("-", "").replace(".", "")
         if len(mac_clean) != 12:

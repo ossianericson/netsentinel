@@ -20,8 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AUDIT_RED, BG_HOVER, NAV_DIVIDER, RED, SIDEBAR_BG, SIDEBAR_HOVER,
-    SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, SIDEBAR_SEL_BG, TEXT_MUTED,
+    ACCENT, BG_HOVER, NAV_DIVIDER, SIDEBAR_BG, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, TEXT_MUTED,
     TEXT_SECONDARY, WHITE,
 )
 
@@ -383,7 +382,7 @@ class _RailButton(QPushButton):
 
     def paintEvent(self, event):
         from ui import styles as _s
-        from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen
+        from PyQt6.QtGui import QPainter, QColor, QFont, QFontMetrics
         from PyQt6.QtCore import QRect, QRectF
         # QSS background + hover/checked effects
         super().paintEvent(event)

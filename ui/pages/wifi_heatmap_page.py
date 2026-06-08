@@ -22,13 +22,11 @@ Workflow
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")
-import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -41,8 +39,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QPushButton,
     QSizePolicy,
     QSplitter,
@@ -66,9 +62,8 @@ from modules.wifi_heatmap import (
 from modules.wifi_scanner import scan as wifi_scan
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_BG, CHART_GRID,
-    CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER, RED,
+    BG_CARD, BG_HOVER, BORDER,
+    CARD_HDR_BORDER, CARD_RADIUS, CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT, WHITE,
 )

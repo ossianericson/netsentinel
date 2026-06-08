@@ -111,7 +111,7 @@ class TestLogHubCoachMark:
             called.append(True)
 
         try:
-            from unittest.mock import patch, MagicMock
+            from unittest.mock import MagicMock
             page = MagicMock(spec=LogHubPage)
             page.window.return_value = None
             LogHubPage._maybe_show_coach_log_hub(page)

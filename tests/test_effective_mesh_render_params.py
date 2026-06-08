@@ -9,7 +9,6 @@ plugin) this re-rendered a flat topology every ~30 s, losing all node labels.
 These tests verify that the helper returns plugin-sourced params when no native
 MeshWorker data is present, and that it prefers native data when both are set.
 """
-import pytest
 from types import SimpleNamespace
 
 

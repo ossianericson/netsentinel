@@ -1,7 +1,6 @@
 import requests
 import hashlib
 import getpass
-import json
 import urllib3
 import time
 from datetime import datetime

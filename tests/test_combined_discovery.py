@@ -1,7 +1,6 @@
 """Tests for modules/combined_discovery.py — multi-method device discovery."""
 from __future__ import annotations
 
-import pytest
 import threading
 
 

@@ -142,7 +142,6 @@ def _module2_html(data: Optional[Dict]) -> str:
 def _module3_html(data: Optional[Any]) -> str:
     if not data:
         return "<p>Module not run.</p>"
-    plain = getattr(data, "plain_verdict", "") if not isinstance(data, dict) else data.get("plain_verdict", "")
     bps = getattr(data, "bcast_per_sec", 0) if not isinstance(data, dict) else data.get("bcast_per_sec", 0)
     mps = getattr(data, "mcast_per_sec", 0) if not isinstance(data, dict) else data.get("mcast_per_sec", 0)
     level = getattr(data, "storm_level", "UNKNOWN") if not isinstance(data, dict) else data.get("storm_level", "UNKNOWN")

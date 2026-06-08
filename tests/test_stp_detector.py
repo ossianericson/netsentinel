@@ -1,5 +1,4 @@
 """Tests for modules/stp_detector.py — STP/BPDU rogue bridge detector."""
-import pytest
 from modules.stp_detector import SCAPY_AVAILABLE, BPDUInfo, _parse_bpdu
 
 

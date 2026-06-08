@@ -10,7 +10,6 @@ from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtCore import pyqtSignal as _pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -21,10 +20,9 @@ from PyQt6.QtWidgets import (
 
 import ui.styles as _styles
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_PURPLE,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER, BTN_HOVER_BG, CARD_RADIUS,
-    DEEP_ORANGE, GREEN, NAV_BAR, RED, TEAL, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
+    ACCENT, ACCENT_PURPLE,
+    BG_HOVER, BORDER, DEEP_ORANGE, GREEN, RED, TEAL, TEXT_PRIMARY,
+    TEXT_SECONDARY,
 )
 class _ThemeSwatch(QFrame):
     """Clickable mini colour-palette preview card for one theme."""

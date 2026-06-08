@@ -12,7 +12,7 @@ import json
 from PyQt6.QtCore import Qt, QSettings, QUrl, pyqtSlot
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
-    QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget,
 )
 
 from ui.styles import (
@@ -868,7 +868,6 @@ class _HomeDataMixin:
                               outage_count: int = 0) -> None:
         """Update the stability monitoring card on the home page."""
         if running:
-            dot_color = GREEN
             outage_txt = f" · {outage_count} outage{'s' if outage_count != 1 else ''}" if outage_count else " · no outages"
             elapsed_txt = f"  {elapsed_str}" if elapsed_str else ""
             self._mon_status_lbl.setText(

@@ -38,7 +38,6 @@ import configparser
 import datetime
 import os
 import sys
-import time
 import threading
 from pathlib import Path
 

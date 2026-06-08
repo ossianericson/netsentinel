@@ -10,7 +10,6 @@ Displays:
 
 from __future__ import annotations
 
-import shlex
 from pathlib import Path
 from typing import Optional
 
@@ -21,7 +20,7 @@ from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog,
     QFormLayout, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-    QPlainTextEdit, QPushButton, QSizePolicy, QSplitter, QTableWidget,
+    QPlainTextEdit, QPushButton, QSplitter, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -29,8 +28,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
     CARD_RADIUS, GREEN, RED, TABLE_ROW_BORDER,
-    TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    TH_BG, TH_BORDER, TH_TEXT,
+    TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TH_BG, TH_BORDER, TH_TEXT,
 )
 from modules.automation_hooks import (
     AutomationEngine, AutomationRule, Trigger,
@@ -527,8 +525,6 @@ class AutomationPage(QWidget):
 
     @pyqtSlot(str, str, str)
     def _on_log_line(self, rule_id: str, stream: str, text: str) -> None:
-        color_map = {"stdout": TEXT_PRIMARY, "stderr": AMBER, "system": TEXT_MUTED}
-        color = color_map.get(stream, TEXT_PRIMARY)
         prefix = {"stdout": "  ", "stderr": "! ", "system": "# "}.get(stream, "  ")
         self._log.appendPlainText(f"{prefix}{text}")
 

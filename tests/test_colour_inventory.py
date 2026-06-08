@@ -130,7 +130,6 @@ def _count_hex_in_file(path: Path) -> int:
     total = 0
     for line in lines:
         # Strip inline comment portion
-        code = line.split("#")[0] if "#" not in line[:line.find("#")+1].replace("#", "", 1) else line
         # Simpler: count occurrences of _HEX_RE anywhere on the line
         total += len(_HEX_RE.findall(line))
     return total

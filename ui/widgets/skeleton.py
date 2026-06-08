@@ -19,7 +19,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem
 
-from ui.styles import BG_ALT_ROW, BG_HOVER, TEXT_MUTED
+from ui.styles import BG_ALT_ROW, BG_HOVER
 
 _SKELETON_TAG = "__skeleton__"
 

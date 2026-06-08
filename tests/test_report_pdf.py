@@ -1,7 +1,6 @@
 """Tests for modules/report_pdf.py (RULE-T1)."""
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest

@@ -21,7 +21,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from PyQt6.QtCore import Qt, QEasingCurve, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -42,7 +42,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
+    BG_HOVER, BORDER, CARD_HDR_BORDER,
     CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, GREEN,
     PROGRESS_TRACK, RED, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,

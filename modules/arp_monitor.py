@@ -99,7 +99,6 @@ class ARPSniffer:
             if not (pkt.haslayer(ARP) and pkt.haslayer(Ether)):
                 return
             arp = pkt[ARP]
-            eth = pkt[Ether]
             # Only care about ARP replies (op=2) and gratuitous ARPs (op=1 where src==dst)
             if arp.op not in (1, 2):
                 return

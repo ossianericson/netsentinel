@@ -11,7 +11,7 @@ automatically as rows are added or removed.  No layout restructuring needed.
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from ui.styles import BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY
+from ui.styles import BORDER, TEXT_MUTED, TEXT_SECONDARY
 
 
 class EmptyStateOverlay(QWidget):

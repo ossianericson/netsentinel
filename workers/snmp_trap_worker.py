@@ -15,8 +15,6 @@ status(str)
 
 from __future__ import annotations
 
-import time
-from typing import Optional
 
 from PyQt6.QtCore import QThread, pyqtSignal
 

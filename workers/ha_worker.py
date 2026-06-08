@@ -7,7 +7,7 @@ MacLookupWorker  — single background MAC vendor lookup (online)
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from PyQt6.QtCore import QThread, pyqtSignal
 

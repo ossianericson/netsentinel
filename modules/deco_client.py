@@ -25,7 +25,7 @@ import json
 import logging
 from base64 import b64decode
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import requests
 import requests.exceptions

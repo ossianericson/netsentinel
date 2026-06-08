@@ -9,7 +9,7 @@ Auto-plays on protocol selection with play/pause, reset, and manual step control
 from __future__ import annotations
 
 import re as _re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 _IP_RE = _re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
 
@@ -103,7 +103,6 @@ class _ContextPanel(QFrame):
     navigate_to: "pyqtSignal"  # declared as class attr so mypy sees it
 
     def __init__(self, parent=None):
-        from PyQt6.QtCore import pyqtSignal as _ps
         # pyqtSignal must be on the class, not the instance — use a thin wrapper
         super().__init__(parent)
         self.setObjectName("ctxPanel")

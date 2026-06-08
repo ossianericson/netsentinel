@@ -82,7 +82,6 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QHeaderView,
@@ -111,8 +110,8 @@ from modules.geo_locator import (
 )
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_BG, CHART_GRID,
+    BG_CARD, BG_HOVER, BORDER,
+    CARD_HDR_BORDER, CARD_RADIUS, CHART_GRID,
     CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER,
     MAP_LAND_BG, MAP_LAND_BORDER, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,

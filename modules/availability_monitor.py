@@ -32,7 +32,7 @@ Architecture note (ARCH RULE 1 + 2):
 
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 from modules.network_logger import _ping_once as _ping   # reuse existing ping helper
 from modules.metric_store import MetricStore

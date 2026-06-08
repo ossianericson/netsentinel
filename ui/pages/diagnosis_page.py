@@ -19,7 +19,7 @@ from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QButtonGroup, QDialog, QDialogButtonBox, QFrame,
     QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
-    QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore

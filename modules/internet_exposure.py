@@ -31,7 +31,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 from urllib.request import urlopen, Request
-from urllib.error import URLError
 
 # Timeout for each network probe
 _TIMEOUT = 4.0
@@ -189,7 +188,6 @@ def _fetch_upnp_mappings(location_url: str) -> tuple[str, list[UPnPMapping]]:
         with _urlopen(location_url, timeout=_TIMEOUT) as resp:
             xml_data = resp.read()
         root = ET.fromstring(xml_data)
-        ns   = {"upnp": "urn:schemas-upnp-org:device-1-0"}
 
         # Find WANIPConnection or WANPPPConnection service
         for svc in root.iter():

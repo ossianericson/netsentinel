@@ -6,7 +6,6 @@ All tests use in-memory fixture data — no network, no disk, no GUI.
 
 import sys
 import os
-import pytest
 
 # Make the project root importable without installation
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -15,7 +14,6 @@ from modules.network_logger import (
     LogEntry,
     LogSummary,
     OutageSummary,
-    AnalysisFinding,
     analyse_log,
 )
 
