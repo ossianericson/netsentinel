@@ -11,13 +11,30 @@ paths:
 
 **These steps are BLOCKING. Do not commit, tag, or push until ALL are complete.**
 
-### Step 1 — Run the full test suite
+### Step 1 — Run linters and static analysis (HARD GATE)
+```powershell
+python -m ruff check . --select=F401,F811,F841
+python -m mypy modules/
+pip-audit -r requirements.txt --desc
+```
+All three must exit 0 with no errors. Fix every violation before proceeding — these
+are the same checks CI runs, so a failure here means a failed CI run after push.
+
+- **ruff**: unused imports (F401/F811) and unused variables (F841). Fix by removing
+  the unused name or adding `# noqa: F401` with a comment explaining the re-export.
+- **mypy**: type errors in `modules/`. Add `ignore_errors = True` under a
+  `[mypy-modules.<name>]` section in `mypy.ini` for Windows-specific APIs
+  (winreg, ctypes.windll, subprocess.CREATE_NO_WINDOW) that only exist on Windows.
+- **pip-audit**: known CVEs in dependencies. Update the affected package in
+  `requirements.txt` and rerun to confirm the finding is resolved.
+
+### Step 2 — Run the full test suite
 ```powershell
 python -m pytest tests/ -q
 ```
 All tests must pass. Fix any failures before proceeding.
 
-### Step 2 — Verify the app starts (HARD GATE)
+### Step 3 — Verify the app starts (HARD GATE)
 ```powershell
 python tools/debug_launch.py
 ```
@@ -37,18 +54,18 @@ If old timestamped logs are present from a session before this rule was enforced
 Remove-Item netsentinel_debug_????????_??????.log -Force -ErrorAction SilentlyContinue
 ```
 
-**Do NOT proceed to Step 3 until this passes.** PyQt6 TypeError crashes (wrong
+**Do NOT proceed to Step 4 until this passes.** PyQt6 TypeError crashes (wrong
 kwarg on addLayout, bad signal signature, missing import) only surface here —
 not in the test suite. A clean test run does not prove the app starts.
 
-### Step 3 — UI sign-off
+### Step 4 — UI sign-off
 Tell the user: "Tests pass, app launched cleanly — please verify the window looks correct and say 'looks good' to proceed."
 
-Wait for the user's visual confirmation before Step 4.
+Wait for the user's visual confirmation before Step 5.
 Accepted phrases: "looks good", "lgtm", "fine", "ok".
 Do NOT treat silence, a new question, or a feature request as approval.
 
-### Step 4 — Explicit commit instruction (HARD GATE)
+### Step 5 — Explicit commit instruction (HARD GATE)
 Do NOT run `git commit`, `git push`, `git tag`, or any destructive git operation unless the user explicitly says so.
 
 Required trigger phrases: "commit to repo", "push to repo", "go ahead and commit", "push it", "commit it".
