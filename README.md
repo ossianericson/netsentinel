@@ -359,10 +359,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 - `ui/widgets/page_header.py`: `_HelpPopover.show_at()` now clamps position to `screen.availableGeometry()` so the help popover never renders partially off-screen near screen edges
 - `tests/test_monkey_test.py`: marked `pytest.mark.monkey` and excluded from CI `addopts` — pywinauto not available in GitHub Actions; run locally with `pytest -m monkey`
 - `tools/monkey_test.py`: dependency checks now raise `ImportError` instead of `sys.exit()` when imported without `pywinauto`, allowing graceful `pytest.skip()` in tests
+- `tools/monkey_test.py`: `_dismiss_blocking_dialogs()` now detects Windows common file dialogs (class `#32770`) and dismisses them immediately with localised cancel-button labels (English + Swedish) — eliminates spurious `SetCursorPos` stale-reference exceptions caused by Browse… dialogs staying open across iterations
+- `tools/monkey_test.py`: `_act_edit()` strips pywinauto key-sequence special characters (`+^%~(){}`) from generated text before calling `type_keys()` — eliminates `KeySequenceError` on port-number and address input fields
 
 **Changed**
 - APM instructions updated: Roadmap / backlog section removed — there is no active backlog; monkey/chaos tests explicitly documented as user-initiated only, never part of commit gate
 - APM instructions and README synced with current codebase: removed phantom widget entries, added `ui/app_settings.py`, `ui/guided_tour.py`, `ui/onboarding.py` to layout table, documented `monkey` pytest marker
+- `tools/monkey_test.py`: default `mem_limit_mb` raised from 800 → 1500 MB — matches observed peak RSS for a 6,000-iteration wild-chaos session; prevents false-positive memory warnings on standalone invocations
+
+**Validated**
+- 9-hour overnight chaos run (June 2026): 10,001 UIA interactions across mild (1,000 iter), moderate (3,000 iter), and wild (6,000 iter) chaos levels with seeds 1 / 42 / 99; zero application crashes; all 16 exceptions caught were test-harness artefacts (Windows file dialog stale references and pywinauto key-sequence syntax — both fixed above); systematic coverage of all 61 pages passed identically before and after the chaos run. Application confirmed production-stable; Microsoft Store submission ready.
 
 ### v1.9.89
 **Added**

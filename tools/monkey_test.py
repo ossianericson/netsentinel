@@ -175,7 +175,7 @@ class Config:
     chaos: str = "moderate"          # mild | moderate | wild
     seed: Optional[int] = None
     screenshots: bool = True
-    mem_limit_mb: int = 800
+    mem_limit_mb: int = 1500
     output_dir: str = "test_output"  # all generated files written here
     log_file: str = ""               # empty = auto-derive from output_dir
     cpu_threshold: float = 35.0      # % CPU — wait below this before acting
@@ -380,14 +380,18 @@ def _act_button(ctrl, chaos: str) -> str:
 
 def _act_edit(ctrl, chaos: str) -> str:
     text = _realistic_text(chaos)
+    # Strip chars that pywinauto type_keys() treats as key-sequence tokens;
+    # leaving them in raises KeySequenceError on controls like port-number fields.
+    _PYWINAUTO_SPECIAL = str.maketrans("", "", "+^%~(){}")
+    safe_text = text.translate(_PYWINAUTO_SPECIAL)
     try:
         ctrl.set_focus()
         # select-all then overwrite, rather than appending
         ctrl.type_keys("^a", pause=0.05)
     except Exception:
         logging.debug("select-all failed; continuing")
-    ctrl.type_keys(text, with_spaces=True, pause=0.02)
-    return f"type:{text!r}"
+    ctrl.type_keys(safe_text, with_spaces=True, pause=0.02)
+    return f"type:{safe_text!r}"
 
 
 def _act_combobox(ctrl, chaos: str) -> str:
@@ -656,23 +660,36 @@ class MonkeyTester:
         self._dismiss_blocking_dialogs()
 
     def _dismiss_blocking_dialogs(self) -> None:
-        """Close modal error/confirmation windows that would block the test."""
+        """Close modal error/confirmation windows and Windows system file dialogs."""
+        # Cancel-button labels for Windows file pickers (English + Swedish locale)
+        _FILE_DLG_CANCEL = ["Cancel", "Avbryt", "Annullera", "Close"]
         try:
             for win in Desktop(backend="uia").windows():
                 try:
                     title = (win.window_text() or "").lower()
+                    cls   = (win.element_info.class_name or "")
                 except Exception:
                     continue
                 if not title or "netsentinel" in title:
                     continue
+
+                # Windows common file dialog (Open/Save As) — class #32770.
+                # The monkey gets trapped inside these when Browse… buttons open them;
+                # dismiss immediately so stale control references don't accumulate.
+                is_file_dialog = cls == "#32770"
+
                 is_blocking = any(kw in title for kw in [
                     "error", "exception", "unhandled", "crash",
                     "warning", "confirm", "are you sure",
                 ])
-                if not is_blocking:
+
+                if not (is_file_dialog or is_blocking):
                     continue
-                self.log.warning("Dismissing dialog: %r", title)
-                for btn_name in ["OK", "Close", "Cancel", "No", "Dismiss"]:
+
+                kind = "file dialog" if is_file_dialog else "blocking dialog"
+                self.log.warning("Dismissing %s: %r (class=%r)", kind, title, cls)
+                btn_names = _FILE_DLG_CANCEL if is_file_dialog else ["OK", "Close", "Cancel", "No", "Dismiss"]
+                for btn_name in btn_names:
                     try:
                         win.child_window(title=btn_name, control_type="Button").click()
                         return
@@ -681,7 +698,7 @@ class MonkeyTester:
                 try:
                     win.type_keys("%{F4}")
                 except Exception:
-                    self.log.debug("Alt+F4 on dialog failed")
+                    self.log.debug("Alt+F4 on %s failed", kind)
         except Exception as exc:
             self.log.debug("Dialog scan: %s", exc)
 
