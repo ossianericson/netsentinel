@@ -126,6 +126,12 @@ def test_community_index_thread_error_on_bad_url():
     thread.start()
     try:
         assert _wait(lambda: not thread.isRunning()), "Thread timed out"
+        # Flush the Qt event queue — the error signal is posted cross-thread and may
+        # still be pending in the queue when isRunning() first returns False (macOS).
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
         assert errors
     finally:
         _thread_cleanup(thread)
