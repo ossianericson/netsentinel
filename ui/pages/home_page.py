@@ -44,7 +44,6 @@ from ui.styles import (
     UPDATE_BAR_FG,
     WHITE,
 )
-import ui.styles as _styles
 
 from ui.widgets.home_widgets import (
     _GradeRing, _MiniCard, _GradeSparkline, _EventsTicker,
@@ -149,6 +148,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         if qs.value("ui/theme_nudge_dismissed", False, type=bool):
             return None
 
+        from ui import styles as _styles  # runtime import avoids py/import-and-import-from
         active = _styles.get_active_theme_name()
 
         banner = QFrame()
