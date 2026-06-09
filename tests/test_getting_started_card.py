@@ -1,9 +1,9 @@
 """
 Tests for GettingStartedCard (H2+H3 sprint changes):
-- Step order: scan → hw_deco → hw_zte → grade → arp → logger
+- Step order: scan → hw_setup → grade → arp → logger
 - _checklist_states includes 'logger' key
-- notify_hw_detected changes dot to amber for correct step
-- refresh_checklist marks all 6 steps
+- notify_hw_detected changes dot to amber for hw_setup step
+- refresh_checklist marks all 5 steps
 """
 import pytest
 
@@ -49,9 +49,8 @@ def test_step_order_hw_after_scan():
     from ui.widgets.home_session_widgets import GettingStartedCard
     card = GettingStartedCard()
     keys = list(card._setup_check_lbls.keys())
-    assert "hw_deco" in keys and "hw_zte" in keys
-    assert keys.index("scan") < keys.index("hw_deco")
-    assert keys.index("scan") < keys.index("hw_zte")
+    assert "hw_setup" in keys
+    assert keys.index("scan") < keys.index("hw_setup")
     try:
         card.deleteLater()
     except RuntimeError:
@@ -84,7 +83,7 @@ def test_checklist_states_all_keys():
     from ui.widgets.home_session_widgets import GettingStartedCard
     card = GettingStartedCard()
     states = card._checklist_states(device_count=0)
-    expected = {"scan", "hw_deco", "hw_zte", "grade", "arp", "logger"}
+    expected = {"scan", "hw_setup", "grade", "arp", "logger"}
     assert set(states.keys()) == expected
     try:
         card.deleteLater()
@@ -98,11 +97,15 @@ def test_checklist_states_all_keys():
 
 # ── notify_hw_detected ────────────────────────────────────────────────────────
 
-def test_notify_hw_detected_modem_changes_zte_dot():
+def test_notify_hw_detected_modem_changes_hw_setup_dot():
     from ui.widgets.home_session_widgets import GettingStartedCard
     card = GettingStartedCard()
+    # Force hw_setup=False so notify_hw_detected reaches the amber-dot path regardless of
+    # whether the developer's machine has real hardware/instances in QSettings.
+    _empty = {"scan": False, "hw_setup": False, "grade": False, "arp": False, "logger": False}
+    card._checklist_states = lambda **kw: _empty
     card.notify_hw_detected("modem")
-    chk = card._setup_check_lbls.get("hw_zte")
+    chk = card._setup_check_lbls.get("hw_setup")
     assert chk is not None
     assert chk.text() == "◉", f"Expected amber dot '◉', got '{chk.text()}'"
     try:
@@ -115,11 +118,13 @@ def test_notify_hw_detected_modem_changes_zte_dot():
             app.processEvents()
 
 
-def test_notify_hw_detected_router_changes_deco_dot():
+def test_notify_hw_detected_router_changes_hw_setup_dot():
     from ui.widgets.home_session_widgets import GettingStartedCard
     card = GettingStartedCard()
+    _empty = {"scan": False, "hw_setup": False, "grade": False, "arp": False, "logger": False}
+    card._checklist_states = lambda **kw: _empty
     card.notify_hw_detected("router")
-    chk = card._setup_check_lbls.get("hw_deco")
+    chk = card._setup_check_lbls.get("hw_setup")
     assert chk is not None
     assert chk.text() == "◉", f"Expected amber dot '◉', got '{chk.text()}'"
     try:

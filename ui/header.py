@@ -238,39 +238,6 @@ class AppHeaderMixin:
         self._header_scan_btn.clicked.connect(self._start_full_scan)
         lay.addWidget(self._header_scan_btn)
 
-        # ── POLISH-5: Theme toggle — cycles through all 3 themes, toast + restart ──
-        from ui.styles import THEMES, get_active_theme_name
-        _theme_names = list(THEMES.keys())
-        _theme_icons = {"Arctic Clean": "☀", "Midnight Pro": "🌙", "Obsidian Neon": "✦", "Abyss": "◼"}
-        _current_theme = get_active_theme_name()
-        _theme_btn = QPushButton(_theme_icons.get(_current_theme, "☀"))
-        _theme_btn.setObjectName("themeToggleBtn")
-        _theme_btn.setFixedSize(30, 28)
-        _theme_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        _theme_btn.setToolTip(f"Theme: {_current_theme} — click to cycle")
-        _theme_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _theme_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{WHITE}; border:none;"
-            f" font-size:13px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:rgba(255,255,255,0.10); }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
-
-        def _on_theme_toggle():
-            from ui.styles import THEMES, get_active_theme_name, apply_theme
-            from ui.widgets.toast import ToastManager
-            _names = list(THEMES.keys())
-            _cur = get_active_theme_name()
-            _next = _names[(_names.index(_cur) + 1) % len(_names)] if _cur in _names else _names[0]
-            apply_theme(_next)
-            _theme_btn.setText(_theme_icons.get(_next, "☀"))
-            _theme_btn.setToolTip(f"Theme: {_next} — click to cycle")
-            ToastManager.show(f"Theme: {_next}", "info")
-
-        _theme_btn.clicked.connect(_on_theme_toggle)
-        lay.addSpacing(4)
-        lay.addWidget(_theme_btn)
-
         # ── Window controls ───────────────────────────────────────────────────
         # Segoe MDL2 Assets: the exact font Windows uses for its own title bar
         # buttons — looks native on Win10/11; degrades to readable symbols elsewhere.

@@ -82,11 +82,12 @@ class _PluginPageMixin:
                 self._m1_int_banner.setVisible(False)
                 return
 
-            # Find which plugin IPs are already imported
+            # Find which plugin IPs are already imported (old script list) or
+            # registered as Hub instances — either means the user is already set up.
             from PyQt6.QtCore import QSettings as _QS
-            _imported_paths = set(
-                _QS("NetSentinel", "NetSentinel").value("hardware/plugin_paths", [], type=list)
-            )
+            import json as _json
+            _qs = _QS("NetSentinel", "NetSentinel")
+            _imported_paths = set(_qs.value("hardware/plugin_paths", [], type=list))
             import ast
             imported_ips: set = set()
             for p in _imported_paths:
@@ -100,6 +101,16 @@ class _PluginPageMixin:
                                     imported_ips.add(node.value.value)
                 except Exception:
                     continue
+            # Also collect IPs from Hub-registered instances (hardware/instances)
+            try:
+                _raw_inst = _qs.value("hardware/instances", None)
+                if _raw_inst:
+                    for _inst in _json.loads(_raw_inst):
+                        _ip = _inst.get("ip", "")
+                        if _ip:
+                            imported_ips.add(_ip)
+            except Exception:
+                pass  # non-fatal
 
             # Collect scanned IPs
             scanned_ips = {
@@ -225,8 +236,8 @@ class _PluginPageMixin:
 
         # Update pinned labels if this item was pinned
         if old_label in self._nav_pinned_labels:
-            self._nav_pinned_labels.discard(old_label)
-            self._nav_pinned_labels.add(new_label)
+            self._nav_pinned_labels.remove(old_label)
+            self._nav_pinned_labels.append(new_label)
             self._save_pinned_labels()
 
         # Reload flyout and update breadcrumb
@@ -253,6 +264,7 @@ class _PluginPageMixin:
                 active_label=self._nav_current_page_label,
                 on_click=self._nav_rail_go_to,
                 on_pin_toggle=self._on_rail_pin_toggle,
+                on_pin_move=self._on_rail_pin_move,
             )
             for _lbl, _clr in getattr(self, "_flyout_dots", {}).items():
                 if _clr:

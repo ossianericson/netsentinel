@@ -13,12 +13,15 @@ paths:
 
 ### Step 1 — Run linters and static analysis (HARD GATE)
 ```powershell
-python -m ruff check . --select=F401,F811,F841
+ruff check . --select=F401,F811,F841
 python -m mypy modules/
 pip-audit -r requirements.txt --desc
 ```
 All three must exit 0 with no errors. Fix every violation before proceeding — these
 are the same checks CI runs, so a failure here means a failed CI run after push.
+
+**IMPORTANT:** Run `ruff` as a direct CLI executable (`ruff check .`), NOT as `python -m ruff`.
+The installed `ruff` CLI is on the PATH; `python -m ruff` can pick up a wrong interpreter.
 
 - **ruff**: unused imports (F401/F811) and unused variables (F841). Fix by removing
   the unused name or adding `# noqa: F401` with a comment explaining the re-export.
@@ -1076,6 +1079,33 @@ Edit(file="ui/pages/home_page.py", old_string="...", new_string="...")
 
 After any repair tool runs, also verify with `python -m pytest tests/test_source_encoding.py -v`
 before proceeding to ensure the repair is intact.
+
+### RULE-ENC3 (blocking): PowerShell must never write Python source files with a UTF-8 BOM
+Windows PowerShell 5.1 (the default shell in this project) writes UTF-8 with BOM (`EF BB BF`)
+when you use `Set-Content`, `Out-File`, or `[System.IO.File]::WriteAllText` without explicit
+encoding. A BOM at the start of a `.py` file causes `ast.parse` to raise
+`SyntaxError: invalid non-printable character U+FEFF`, which silently empties the import
+set in `test_style_token_imports.py` — making every used token appear as "not imported".
+
+**Never use PowerShell to write Python source files in general.** When you are forced to
+(e.g. regex-replacing a problematic character), strip any BOM that PowerShell added immediately
+afterward:
+
+```powershell
+# Strip UTF-8 BOM from a Python source file written by PowerShell
+$bytes = [System.IO.File]::ReadAllBytes('path/to/file.py')
+if ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+    $nobom = $bytes[3..($bytes.Length-1)]
+    [System.IO.File]::WriteAllBytes('path/to/file.py', $nobom)
+}
+```
+
+Then verify the file still parses:
+```powershell
+python -c "import ast; ast.parse(open('path/to/file.py', encoding='utf-8').read()); print('OK')"
+```
+
+And re-run `test_style_token_imports.py` to confirm no false-positive "missing import" failures.
 
 ---
 

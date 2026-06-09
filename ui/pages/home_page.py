@@ -107,95 +107,6 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         super().showEvent(event)
         self._refresh_hw_nudge()
 
-    # ── Theme nudge banner ────────────────────────────────────────────────────
-
-    def _build_theme_banner(self) -> "QFrame | None":
-        qs = QSettings("NetSentinel", "NetSentinel")
-        if qs.value("ui/theme_nudge_dismissed", False, type=bool):
-            return None
-
-        from ui import styles as _styles  # runtime import avoids py/import-and-import-from
-        active = _styles.get_active_theme_name()
-
-        banner = QFrame()
-        banner.setObjectName("themeBanner")
-        banner.setStyleSheet(
-            f"QFrame#themeBanner {{ background:{UPDATE_BAR_BG}; border-bottom:1px solid {UPDATE_BAR_BORDER}; }}"
-        )
-        row = QHBoxLayout(banner)
-        row.setContentsMargins(14, 6, 10, 6)
-        row.setSpacing(8)
-
-        lbl = QLabel("Choose a theme:")
-        lbl.setStyleSheet(
-            f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
-        )
-        row.addWidget(lbl)
-
-        _THEMES = [
-            ("Arctic Clean",  "☀  Light"),
-            ("Midnight Pro",  "🌙  Dark"),
-            ("Obsidian Neon", "✦  Neon"),
-            ("Abyss",         "◼  Abyss"),
-        ]
-
-        def _dismiss(save_theme: str | None = None) -> None:
-            if save_theme:
-                from ui.styles import apply_theme
-                apply_theme(save_theme)
-                lbl.setText(f"'{save_theme}' applied — looks good!")
-                for b in _btn_refs:
-                    b.setEnabled(False)
-                close_btn.setVisible(False)
-                from PyQt6.QtCore import QTimer
-                QTimer.singleShot(2500, banner.hide)
-            else:
-                banner.hide()
-            QSettings("NetSentinel", "NetSentinel").setValue("ui/theme_nudge_dismissed", True)
-
-        _btn_refs: list[QPushButton] = []
-        for theme_name, theme_label in _THEMES:
-            btn = QPushButton(theme_label)
-            btn.setFixedHeight(24)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            if theme_name == active:
-                btn.setStyleSheet(
-                    f"QPushButton {{ background:{ACCENT}; color:{WHITE};"
-                    f" border:none; border-radius:3px; font-size:11px; padding:0 10px; }}"
-                    f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-                    f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-                )
-            else:
-                btn.setStyleSheet(
-                    f"QPushButton {{ background:transparent; color:{UPDATE_BAR_FG};"
-                    f" border:1px solid {UPDATE_BAR_BORDER}; border-radius:3px;"
-                    f" font-size:11px; padding:0 10px; }}"
-                    f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-                    f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-                )
-                _name = theme_name
-                btn.clicked.connect(lambda _checked, n=_name: _dismiss(n))
-            _btn_refs.append(btn)
-            row.addWidget(btn)
-
-        row.addStretch()
-
-        close_btn = QPushButton("�")
-        close_btn.setFixedSize(22, 22)
-        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setToolTip("Dismiss")
-        close_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:15px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
-        close_btn.clicked.connect(lambda: _dismiss(None))
-        row.addWidget(close_btn)
-
-        return banner
-
-
     # ── Hardware nudge ────────────────────────────────────────────────────────
 
     def _build_hw_nudge_bar(self) -> "QFrame":
@@ -279,12 +190,6 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-
-        # ── Theme nudge banner (one-time, dismissed via QSettings) ───────────
-        _banner = self._build_theme_banner()
-        if _banner is not None:
-            outer.addWidget(_banner)
-        # ─────────────────────────────────────────────────────────────────────
 
         # ── Hardware nudge (post-onboarding, until first plugin configured) ──
         self._hw_nudge_bar = self._build_hw_nudge_bar()

@@ -360,10 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
+        ("Devices page snapshot card", "After a scan, the Devices page now shows a full device list with IP, hostname, MAC, manufacturer, type, and risk — no hardware plugin required."),
+        ("Simplified Getting Started", "Router and modem setup merged into a single 'Connect your hardware' step in the onboarding checklist."),
+        ("Cleaner navigation bar", "Theme cycle button and home-page theme banner removed — theme is now changed only from Settings."),
         ("Chaos validated — MS Store ready", "9-hour overnight run: 10,001 UIA interactions across mild/moderate/wild chaos levels; zero crashes; all 61 pages clean before and after."),
-        ("Non-modal command palette", "Ctrl+K palette opens with show() — click anywhere outside to dismiss; app no longer locked while palette is open."),
-        ("CodeQL & CI hardening", "100+ CodeQL alerts resolved; ruff, mypy, and pip-audit enforced as Step 1 of the commit gate; dependency CVEs patched."),
-        ("Test-suite stability", "Eliminated intermittent STATUS_STACK_BUFFER_OVERRUN heap corruption — parented QTimer pattern (RULE-WIN5) and deleteLater() teardown (RULE-WIN4) enforced."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

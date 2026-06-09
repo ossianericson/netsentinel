@@ -311,6 +311,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._monitor_overview_page.set_last_scan_time(_dt.datetime.now())
         if hasattr(self, "_home_page") and devices:
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
+        if hasattr(self, "_inventory_page"):
+            self._inventory_page.set_scan_devices(devices)
         self._m1_table.setRowCount(0)
         for d in devices:
             level   = d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")

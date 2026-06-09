@@ -390,7 +390,7 @@ THEMES: dict = {
     "Abyss":         _ABYSS,
 }
 
-DEFAULT_THEME = "Arctic Clean"
+DEFAULT_THEME = "Midnight Pro"
 
 
 # ── Theme persistence ─────────────────────────────────────────────────────────

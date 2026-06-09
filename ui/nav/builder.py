@@ -57,7 +57,7 @@ class _NavBuilderMixin:
         _nav_open_section       str
         _nav_flyout             _FlyoutPanel
         _nav_rail_buttons       dict[str, _RailButton]
-        _nav_pinned_labels      set[str]
+        _nav_pinned_labels      list[str]
         _nav_current_page_label str
         _nav_history            list[str]
         _fade_anim              QPropertyAnimation | None
@@ -380,7 +380,7 @@ class _NavBuilderMixin:
 
         if self._nav_pinned_labels:
             _pinned_entries = []
-            for _lbl in sorted(self._nav_pinned_labels):
+            for _lbl in self._nav_pinned_labels:
                 _w = self._nav_label_to_widget.get(_lbl)
                 if _w is not None:
                     _pinned_entries.append(_NavEntry(
@@ -548,12 +548,16 @@ class _NavBuilderMixin:
                 short = lbl.split()[0][:8]
                 pin_btn = _RailButton("star", lbl)
                 pin_btn._short_label = short
-                pin_btn.setToolTip(lbl)
+                pin_btn.setToolTip(f"{lbl}\nRight-click to unpin or reorder")
                 pin_btn.clicked.connect(
                     lambda _c, label=lbl: (
                         self._nav_rail_go_to(label),
                         self._nav_flyout.close_panel() if hasattr(self, "_nav_flyout") else None,
                     )
+                )
+                pin_btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+                pin_btn.customContextMenuRequested.connect(
+                    lambda _pos, _l=lbl, _b=pin_btn: self._show_pin_btn_ctx_menu(_l, _b, _pos)
                 )
                 insert_at = self._nav_rail_lay.count() - 2
                 self._nav_rail_lay.insertWidget(insert_at, pin_btn)
@@ -600,6 +604,7 @@ class _NavBuilderMixin:
             active_label=self._nav_current_page_label,
             on_click=self._nav_rail_go_to,
             on_pin_toggle=self._on_rail_pin_toggle,
+            on_pin_move=self._on_rail_pin_move,
         )
         for _lbl, _color in getattr(self, "_flyout_dots", {}).items():
             if _color:
@@ -844,13 +849,50 @@ class _NavBuilderMixin:
     # ── Pin management ────────────────────────────────────────────────────────
 
     def _on_rail_pin_toggle(self, label: str, is_pinned: bool) -> None:
-        """Update pinned set, persist, and rebuild nav so Pinned section appears/disappears."""
+        """Update pinned list, persist, and rebuild nav so Pinned section appears/disappears."""
         if is_pinned:
-            self._nav_pinned_labels.add(label)
+            if label not in self._nav_pinned_labels:
+                if len(self._nav_pinned_labels) >= 5:
+                    self._set_status("Remove a pin first — max 5 Quick Access items")
+                    return
+                self._nav_pinned_labels.append(label)
         else:
-            self._nav_pinned_labels.discard(label)
+            if label in self._nav_pinned_labels:
+                self._nav_pinned_labels.remove(label)
         self._save_pinned_labels()
         self._rebuild_nav_for_mode()
+
+    def _on_rail_pin_move(self, label: str, direction: int) -> None:
+        """Move a pinned label up (-1) or down (+1) in the ordered list and rebuild."""
+        if label not in self._nav_pinned_labels:
+            return
+        idx = self._nav_pinned_labels.index(label)
+        new_idx = max(0, min(len(self._nav_pinned_labels) - 1, idx + direction))
+        if new_idx == idx:
+            return
+        self._nav_pinned_labels.pop(idx)
+        self._nav_pinned_labels.insert(new_idx, label)
+        self._save_pinned_labels()
+        self._rebuild_nav_for_mode()
+
+    def _show_pin_btn_ctx_menu(self, label: str, btn, pos) -> None:
+        """Context menu for quick-access star buttons: Unpin + Move up/down."""
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.addAction(f"Unpin  {label}").triggered.connect(
+            lambda: self._on_rail_pin_toggle(label, False)
+        )
+        if label in self._nav_pinned_labels:
+            idx = self._nav_pinned_labels.index(label)
+            total = len(self._nav_pinned_labels)
+            menu.addSeparator()
+            up_act = menu.addAction("▲ Move up")
+            up_act.setEnabled(idx > 0)
+            up_act.triggered.connect(lambda: self._on_rail_pin_move(label, -1))
+            dn_act = menu.addAction("▼ Move down")
+            dn_act.setEnabled(idx < total - 1)
+            dn_act.triggered.connect(lambda: self._on_rail_pin_move(label, 1))
+        menu.exec(btn.mapToGlobal(pos))
 
     def _on_canvas_click(self) -> None:
         """Close flyout on canvas click (only if not pinned)."""
@@ -948,20 +990,20 @@ class _NavBuilderMixin:
         for _hw_p, _pg in getattr(self, "_plugin_pages", {}).items():
             self._nav_add_rail_item(_pg._label, _pg)
 
-    def _load_pinned_labels(self) -> set:
+    def _load_pinned_labels(self) -> list:
         try:
             from PyQt6.QtCore import QSettings as _QS
             s = _QS(str(self._settings_path()), _QS.Format.IniFormat)
             raw = s.value("nav/pinned_labels", "")
-            return set(filter(None, raw.split("|||"))) if raw else set()
+            return list(filter(None, raw.split("|||"))) if raw else []
         except Exception:
-            return set()
+            return []
 
     def _save_pinned_labels(self) -> None:
         try:
             from PyQt6.QtCore import QSettings as _QS
             s = _QS(str(self._settings_path()), _QS.Format.IniFormat)
-            s.setValue("nav/pinned_labels", "|||".join(sorted(self._nav_pinned_labels)))
+            s.setValue("nav/pinned_labels", "|||".join(self._nav_pinned_labels))
         except Exception:
             pass  # non-fatal
 
@@ -970,16 +1012,16 @@ class _NavBuilderMixin:
         if not self._nav_pinned_labels:
             return
         self._nav_add_section_label("Favourites")
-        for label in sorted(self._nav_pinned_labels):
+        for label in self._nav_pinned_labels:
             widget = self._nav_label_to_widget.get(label)
             if widget is not None:
                 self._nav_ref("★", label, widget)
 
     def _toggle_pin_label(self, label: str) -> None:
         if label in self._nav_pinned_labels:
-            self._nav_pinned_labels.discard(label)
+            self._nav_pinned_labels.remove(label)
         else:
-            self._nav_pinned_labels.add(label)
+            self._nav_pinned_labels.append(label)
         self._save_pinned_labels()
         self._rebuild_nav_for_mode()
 

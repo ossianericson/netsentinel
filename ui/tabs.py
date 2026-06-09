@@ -416,7 +416,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
             f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f"  padding:6px 18px; border:1px solid {BORDER}; border-bottom:none; margin-right:2px; }}"
             f"QTabBar::tab:selected {{ background:{ACCENT}; color:{BG_DARK}; font-weight:bold; }}"
-            f"QTabBar::tab:hover {{ background:{BG_HOVER}; }}"
+            f"QTabBar::tab:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._logging_container.addTab(self._log_tab,       "Log Sources")
         self._logging_container.addTab(self._log_hub_page,  "Activity Log")

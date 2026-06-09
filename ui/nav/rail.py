@@ -472,7 +472,8 @@ class _RailButton(QPushButton):
 class _FlyoutItem(QPushButton):
     """Single row in the flyout panel — checkable, left-aligned, pin-aware."""
 
-    pin_toggled = pyqtSignal(str, bool)   # (label, is_pinned_now)
+    pin_toggled = pyqtSignal(str, bool)       # (label, is_pinned_now)
+    pin_move_requested = pyqtSignal(str, int) # (label, direction: -1=up, +1=down)
 
     def __init__(self, label: str, pinned: bool = False, danger: bool = False, parent=None):
         super().__init__(label, parent)
@@ -527,6 +528,14 @@ class _FlyoutItem(QPushButton):
         menu = QMenu(self)
         txt = "Unpin from Quick Access" if self._pinned else "Pin to Quick Access"
         menu.addAction(txt).triggered.connect(self._toggle_pin)
+        if self._pinned:
+            menu.addSeparator()
+            menu.addAction("▲ Move up").triggered.connect(
+                lambda: self.pin_move_requested.emit(self._label, -1)
+            )
+            menu.addAction("▼ Move down").triggered.connect(
+                lambda: self.pin_move_requested.emit(self._label, 1)
+            )
         menu.exec(self.mapToGlobal(pos))
 
     def _toggle_pin(self):
@@ -651,6 +660,7 @@ class _FlyoutPanel(QWidget):
         active_label: str,
         on_click: Callable,
         on_pin_toggle: Callable,
+        on_pin_move: Callable = None,
     ) -> None:
         while self._item_layout.count() > 1:
             w = self._item_layout.takeAt(0).widget()
@@ -665,6 +675,8 @@ class _FlyoutPanel(QWidget):
                 lambda _c, b=btn, lbl=label: self._on_item_clicked(b, lbl, on_click)
             )
             btn.pin_toggled.connect(on_pin_toggle)
+            if on_pin_move is not None:
+                btn.pin_move_requested.connect(on_pin_move)
             self._item_layout.insertWidget(self._item_layout.count() - 1, btn)
             self._items[label] = btn
 

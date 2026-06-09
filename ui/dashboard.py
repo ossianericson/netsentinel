@@ -246,7 +246,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _loghub_sc.activated.connect(lambda: self._nav_rail_go_to("Network Logger"))
 
         # Pinned pages — persisted across sessions
-        self._nav_pinned_labels: set = self._load_pinned_labels()
+        self._nav_pinned_labels: list = self._load_pinned_labels()
         self._nav_label_to_widget: dict = {}
         self._nav_history: list = []  # NAV-5: back-stack; direct rail clicks clear it
 

@@ -21,7 +21,6 @@ from ui.styles import (
     CARD_RADIUS, GRADE_B_COLOR, GREEN, NAV_BAR,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
-from ui.widgets.home_widgets import _bundled_plugin_path
 
 
 # ── FreshnessStrip ────────────────────────────────────────────────────────────
@@ -294,27 +293,21 @@ class GettingStartedCard(QFrame):
         body_lay.setContentsMargins(0, 8, 0, 0)
         body_lay.setSpacing(0)
 
-        zte_path  = _bundled_plugin_path("zte_plugin.py")
-        deco_path = _bundled_plugin_path("deco_plugin.py")
-
         # Step order: scan first (gives data), then hardware (enriches data), then grade/arp/logger
         _STEPS = [
-            ("scan",    "Run your first scan",
+            ("scan",     "Run your first scan",
              "Discover all devices on your network",
              None, "Devices"),
-            ("hw_deco", "Connect your router",
-             "Get real device names, signal strength, and your full network map",
-             deco_path, None),
-            ("hw_zte",  "Connect your modem",
-             "See signal quality in every speed test — critical for ISP accountability",
-             zte_path, None),
-            ("grade",   "Run a Network Grade",
+            ("hw_setup", "Connect your hardware",
+             "Add your router or modem to get device names, signal strength, and ISP accountability",
+             None, "Hardware"),
+            ("grade",    "Run a Network Grade",
              "Score your network across 8 dimensions",
              None, "Network Grade"),
-            ("arp",     "Turn on ARP Spoof Watch",
+            ("arp",      "Turn on ARP Spoof Watch",
              "Detect address spoofing in real time",
              None, "ARP Spoof Watch"),
-            ("logger",  "Start the Network Logger",
+            ("logger",   "Start the Network Logger",
              "Records RTT and DNS every 30 s — leave it on for daily insights",
              None, "Network Logger"),
         ]
@@ -407,20 +400,24 @@ class GettingStartedCard(QFrame):
     def _checklist_states(self, device_count: int = 0) -> dict:
         import json as _json
         qs = QSettings("NetSentinel", "NetSentinel")
+        hw_done = False
         try:
             raw = qs.value("hardware/custom_scripts", "[]") or "[]"
-            imported = set(_json.loads(raw))
+            hw_done = bool(_json.loads(raw))
         except Exception:
-            imported = set()
-        zte_path  = _bundled_plugin_path("zte_plugin.py")
-        deco_path = _bundled_plugin_path("deco_plugin.py")
+            pass
+        if not hw_done:
+            try:
+                raw2 = qs.value("hardware/instances", None)
+                hw_done = bool(raw2 and _json.loads(raw2))
+            except Exception:
+                pass
         return {
-            "scan":    device_count > 0,
-            "hw_deco": deco_path in imported,
-            "hw_zte":  zte_path  in imported,
-            "grade":   qs.value("grade/last_run", False, type=bool),
-            "arp":     qs.value("home/setup/arp_started", False, type=bool),
-            "logger":  qs.value("logger_started_once", False, type=bool),
+            "scan":     device_count > 0,
+            "hw_setup": hw_done,
+            "grade":    qs.value("grade/last_run", False, type=bool),
+            "arp":      qs.value("home/setup/arp_started", False, type=bool),
+            "logger":   qs.value("logger_started_once", False, type=bool),
         }
 
     def refresh_checklist(self, device_count: int = 0) -> None:
@@ -439,8 +436,8 @@ class GettingStartedCard(QFrame):
                 btn = self._setup_step_btns.get(key)
                 if btn:
                     btn.setEnabled(False)
-                    if key.startswith("hw_"):
-                        btn.setText("✓ Added")
+                    if key == "hw_setup":
+                        btn.setText("✓ Done")
                     btn.setStyleSheet(
                         f"QPushButton {{ color:{GREEN}; font-size:10px; background:transparent;"
                         f" border:none; padding:0 4px; }}"
@@ -472,7 +469,7 @@ class GettingStartedCard(QFrame):
     def notify_hw_detected(self, hw_type: str) -> None:
         """Mark a hardware step as 'detected nearby' with amber indicator."""
         from ui.styles import AMBER
-        key_map = {"modem": "hw_zte", "router": "hw_deco"}
+        key_map = {"modem": "hw_setup", "router": "hw_setup"}
         key = key_map.get(hw_type)
         if not key:
             return

@@ -425,6 +425,7 @@ class InventoryPage(QWidget):
         self._rows: list = []
         self._last_refresh_ts = 0.0
         self._compare_mode = False
+        self._scan_devices: list = []  # last scan result, set via set_scan_devices()
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
@@ -507,6 +508,85 @@ class InventoryPage(QWidget):
         cl = QVBoxLayout(content)
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(8)
+
+        # ── Current Devices snapshot card ──────────────────────────────────────
+        snap_card = QFrame()
+        snap_card.setObjectName("snapCard")
+        snap_card.setStyleSheet(
+            f"QFrame#snapCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        snap_card_lay = QVBoxLayout(snap_card)
+        snap_card_lay.setContentsMargins(0, 0, 0, 0)
+        snap_card_lay.setSpacing(0)
+
+        snap_hdr = QFrame()
+        snap_hdr.setStyleSheet(
+            f"QFrame {{ background:{TH_BG}; border-radius:{CARD_RADIUS} {CARD_RADIUS} 0 0; }}"
+        )
+        snap_hdr_lay = QHBoxLayout(snap_hdr)
+        snap_hdr_lay.setContentsMargins(10, 5, 10, 5)
+        snap_hdr_lay.setSpacing(8)
+        snap_title = QLabel("Current Devices")
+        snap_title.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TH_TEXT}; background:transparent; border:none;"
+        )
+        self._snap_count_lbl = QLabel("Run a scan to see all devices")
+        self._snap_count_lbl.setStyleSheet(
+            f"font-size:10px; color:{TH_TEXT}; background:transparent; border:none; opacity:0.7;"
+        )
+        snap_hdr_lay.addWidget(snap_title)
+        snap_hdr_lay.addStretch()
+        snap_hdr_lay.addWidget(self._snap_count_lbl)
+        snap_card_lay.addWidget(snap_hdr)
+
+        cols_snap = ["●", "IP Address", "Hostname", "MAC Address", "Manufacturer", "Type", "Risk"]
+        self._snap_table = QTableWidget(0, len(cols_snap))
+        self._snap_table.setHorizontalHeaderLabels(cols_snap)
+        self._snap_table.verticalHeader().setVisible(False)
+        self._snap_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._snap_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._snap_table.setAlternatingRowColors(True)
+        self._snap_table.verticalHeader().setDefaultSectionSize(24)
+        self._snap_table.setShowGrid(False)
+        self._snap_table.setSortingEnabled(True)
+        self._snap_table.setStyleSheet(
+            f"""
+            QTableWidget {{
+                font-size:11px; color:{TEXT_PRIMARY};
+                background:{BG_CARD}; border:none; outline:none;
+                gridline-color:{BORDER};
+            }}
+            QTableWidget::item {{ padding:3px 5px; }}
+            QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}
+            QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}
+            QHeaderView::section {{
+                background:{TH_BG}; color:{TH_TEXT};
+                font-size:11px; font-weight:bold;
+                padding:4px 5px; border:none;
+            }}
+            """
+        )
+        _sh = self._snap_table.horizontalHeader()
+        _sh.resizeSection(0, 22)
+        _sh.resizeSection(1, 120)
+        _sh.resizeSection(2, 150)
+        _sh.resizeSection(3, 145)
+        _sh.resizeSection(4, 180)
+        _sh.resizeSection(5, 130)
+        _sh.setStretchLastSection(True)
+        self._snap_table.setMaximumHeight(200)
+        snap_card_lay.addWidget(self._snap_table)
+
+        self._snap_empty_lbl = QLabel("Run a scan to see discovered devices here.")
+        self._snap_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._snap_empty_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:12px; padding:24px; background:transparent; border:none;"
+        )
+        snap_card_lay.addWidget(self._snap_empty_lbl)
+        self._snap_table.setVisible(False)
+
+        cl.addWidget(snap_card)
 
         ctrl_row = QHBoxLayout()
         ctrl_row.addStretch()
@@ -1042,7 +1122,8 @@ class InventoryPage(QWidget):
             self._table.insertRow(row)
             dt_str = datetime.datetime.fromtimestamp(evt.ts).strftime("%Y-%m-%d %H:%M:%S")
             color, _ = _EVENT_STYLE.get(evt.event_type, (TEXT_SECONDARY, evt.event_type))
-            host_cell = custom_name or evt.ip or "—"
+            hostname = (kd.hostname if kd and kd.hostname else "") or ""
+            host_cell = custom_name or hostname or evt.ip or "—"
 
             # ANIM-1: alert status dot — PulsingDot widget, pulses on new online events
             from ui.widgets.pulsing_dot import PulsingDot
@@ -1078,6 +1159,66 @@ class InventoryPage(QWidget):
     def on_cycle_done(self, _result: dict) -> None:
         """Slot for AvailabilityWorker.cycle_done — refresh on each monitoring cycle."""
         self._refresh()
+
+    @pyqtSlot(list)
+    def set_scan_devices(self, devices: list) -> None:
+        """Populate the Current Devices snapshot from the latest scan result."""
+        self._scan_devices = devices
+        self._snap_table.setSortingEnabled(False)
+        self._snap_table.setRowCount(0)
+
+        if not devices:
+            self._snap_table.setVisible(False)
+            self._snap_empty_lbl.setVisible(True)
+            self._snap_count_lbl.setText("Run a scan to see all devices")
+            return
+
+        from modules.device_classifier import classify_device
+        _RISK_COLOR = {
+            "HIGH": RED, "STORM": RED, "MEDIUM": AMBER,
+            "WARNING": AMBER, "LOW": GREEN, "CLEAN": GREEN,
+        }
+        for d in devices:
+            ip     = (d.ip       if not isinstance(d, dict) else d.get("ip", "?")) or "?"
+            host   = (d.hostname if not isinstance(d, dict) else d.get("hostname", "")) or ""
+            mac    = (d.mac      if not isinstance(d, dict) else d.get("mac", "?")) or "?"
+            vendor = (d.vendor   if not isinstance(d, dict) else d.get("vendor", "")) or ""
+            dtype  = (d.device_type if not isinstance(d, dict) else d.get("device_type", "")) or ""
+            if not dtype:
+                dtype = (d.connection_type if not isinstance(d, dict) else d.get("connection_type", "")) or ""
+            if not dtype and vendor:
+                classified = classify_device(vendor=vendor)
+                dtype = classified.label if classified else ""
+            level = (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")) or "UNKNOWN"
+
+            row = self._snap_table.rowCount()
+            self._snap_table.insertRow(row)
+
+            # Status dot col
+            status_color = _RISK_COLOR.get(level, TEXT_MUTED)
+            dot_item = QTableWidgetItem("●")
+            dot_item.setForeground(QColor(status_color))
+            dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            self._snap_table.setItem(row, 0, dot_item)
+
+            for col, val in enumerate([ip, host or "—", mac, vendor or "—", dtype or "—", level], 1):
+                item = _plain_item(val)
+                self._snap_table.setItem(row, col, item)
+            self._snap_table.setRowHeight(row, 24)
+
+        self._snap_table.setSortingEnabled(True)
+        online = sum(
+            1 for d in devices
+            if (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "")) not in ("", "UNKNOWN", None)
+        )
+        total = len(devices)
+        self._snap_count_lbl.setText(f"{total} devices  ·  {online} active")
+        self._snap_table.setVisible(True)
+        self._snap_empty_lbl.setVisible(False)
+
+        # Switch to content view if still on empty state
+        if self._content_stack.currentIndex() == 0:
+            self._content_stack.setCurrentIndex(1)
 
     # ── Detail panel ──────────────────────────────────────────────────────────
 
