@@ -352,6 +352,15 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.94
+**Changed**
+- `ui/pages/home_page.py`: removed theme-chooser banner from the home page
+- `ui/header.py`: removed theme cycle button from the top navigation bar
+- `ui/widgets/home_session_widgets.py`: merged "Connect your router" and "Connect your modem" Getting Started steps into a single "Connect your hardware" step
+
+**Fixed**
+- `ui/pages/inventory_page.py`: Devices page now shows a "Current Devices" snapshot card after a scan — IP, hostname, MAC, manufacturer, type, and risk without requiring hardware plugins; also uses resolved hostname in the event log
+
 ### v1.9.93
 **Fixed**
 - `ui/widgets/coach_mark.py`: added `_HighlightRing` — blue border ring drawn around the target widget while each coach mark step is active, so users can see exactly what to click

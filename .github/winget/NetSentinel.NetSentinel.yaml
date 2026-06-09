@@ -9,7 +9,7 @@
 #   wingetcreate new https://github.com/ossianericson/netsentinel/releases/download/v1.1.2/NetSentinel-Setup-1.1.2.exe
 
 PackageIdentifier: NetSentinel.NetSentinel
-PackageVersion: 1.9.93
+PackageVersion: 1.9.94
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.12.0
