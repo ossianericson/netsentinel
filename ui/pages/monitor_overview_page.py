@@ -32,6 +32,8 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT,
+    ACCENT_DARK,
+    ACCENT_LITE,
     AMBER,
     BG_CARD,
     BG_DARK,
@@ -43,6 +45,7 @@ from ui.styles import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
     BG_HOVER,
+    WHITE,
 )
 from ui.widgets.animated_kpi import AnimatedKpi
 
@@ -202,6 +205,12 @@ class _StatusTile(QFrame):
         self._evtsparkline = _EventSparkline(self)
         lay.addWidget(self._evtsparkline)
 
+        self._open_hint = QLabel("→ open")
+        self._open_hint.setStyleSheet(
+            f"font-size:9px; color:{ACCENT}; background:transparent; border:none;"
+        )
+        lay.addWidget(self._open_hint)
+
     def set_hourly_counts(self, counts: list) -> None:
         """Push 6-hourly event counts to the sparkline."""
         self._evtsparkline.set_counts(counts)
@@ -213,8 +222,10 @@ class _StatusTile(QFrame):
                 f" border-left:3px solid {ACCENT}; border-radius:{CARD_RADIUS}; }}"
                 f"QFrame:hover {{ border-color:{ACCENT}; border-left:3px solid {ACCENT}; }}"
             )
+            self._open_hint.setVisible(False)
         else:
             self.setStyleSheet(self._base_style)
+            self._open_hint.setVisible(True)
 
     def update(self, value: str, sub: str, color: str) -> None:
         self._value_lbl.setStyleSheet(
@@ -335,12 +346,16 @@ class _GradeTile(QFrame):
 class MonitorOverviewPage(QWidget):
     """Single-glance view of every active detection monitor."""
 
-    navigate_to = pyqtSignal(str)
+    navigate_to         = pyqtSignal(str)
+    start_all_requested = pyqtSignal()   # start ARP + DHCP + Logger in one click
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._last_scan_ts: Optional[datetime.datetime] = None
         self._store = None
+        self._arp_running: bool = False
+        self._dhcp_running: bool = False
+        self._logger_running: bool = False
         self._build_ui()
         self._age_timer = QTimer(self)
         self._age_timer.setInterval(60_000)
@@ -379,7 +394,7 @@ class MonitorOverviewPage(QWidget):
 
         # ── Page header ───────────────────────────────────────────────────────
         hdr_row = QHBoxLayout()
-        hdr_row.setSpacing(0)
+        hdr_row.setSpacing(8)
         page_title = QLabel("Active Monitors")
         page_title.setStyleSheet(
             f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
@@ -392,8 +407,23 @@ class MonitorOverviewPage(QWidget):
         self._last_scan_lbl.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
+        self._start_all_btn = QPushButton("Start Core Monitors")
+        self._start_all_btn.setFixedHeight(26)
+        self._start_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._start_all_btn.setToolTip(
+            "Start ARP Spoof Watch, DHCP Rogue Monitor, and Network Logger in one click"
+        )
+        self._start_all_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:3px; font-size:11px; font-weight:600; padding:0 12px; }}"
+            f"QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed  {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:disabled {{ background:{BORDER}; color:{TEXT_MUTED}; }}"
+        )
+        self._start_all_btn.clicked.connect(self.start_all_requested)
         hdr_row.addWidget(page_title)
         hdr_row.addStretch()
+        hdr_row.addWidget(self._start_all_btn)
         hdr_row.addWidget(self._last_scan_lbl)
         lay.addLayout(hdr_row)
 
@@ -514,6 +544,7 @@ class MonitorOverviewPage(QWidget):
         self._grade_tile.set_dimensions(dimensions)
 
     def set_arp_status(self, running: bool, alerted: bool) -> None:
+        self._arp_running = running or alerted
         if alerted:
             self._tile_arp.update("Alert", "Spoof detected", RED)
         elif running:
@@ -521,13 +552,27 @@ class MonitorOverviewPage(QWidget):
         else:
             self._tile_arp.update("Off", "Not running",    TEXT_MUTED)
         self._tile_arp.set_active(running or alerted)
+        self._update_start_all_btn()
 
     def set_dhcp_status(self, running: bool) -> None:
+        self._dhcp_running = running
         if running:
             self._tile_dhcp.update("On",  "Monitoring",    GREEN)
         else:
             self._tile_dhcp.update("Off", "Not running",   TEXT_MUTED)
         self._tile_dhcp.set_active(running)
+        self._update_start_all_btn()
+
+    def set_logger_running(self, running: bool) -> None:
+        self._logger_running = running
+        self._update_start_all_btn()
+
+    def _update_start_all_btn(self) -> None:
+        all_on = self._arp_running and self._dhcp_running and self._logger_running
+        self._start_all_btn.setEnabled(not all_on)
+        self._start_all_btn.setText(
+            "Core Monitors Active" if all_on else "Start Core Monitors"
+        )
 
     def set_storm_status(self, level: str) -> None:
         if level == "STORM":

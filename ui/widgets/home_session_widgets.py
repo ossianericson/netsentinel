@@ -239,9 +239,11 @@ class FreshnessStrip(QFrame):
 class GettingStartedCard(QFrame):
     """Onboarding checklist: hardware connections + core setup steps."""
 
-    add_plugin_requested = pyqtSignal(str)
-    navigate_to = pyqtSignal(str)
-    completion_done = pyqtSignal()  # emitted 2 s after all steps are complete
+    add_plugin_requested   = pyqtSignal(str)
+    navigate_to            = pyqtSignal(str)
+    start_arp_requested    = pyqtSignal()   # step 4 — start ARP Watch + navigate
+    start_logger_requested = pyqtSignal()   # step 5 — start Logger + navigate
+    completion_done        = pyqtSignal()   # emitted 2 s after all steps are complete
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -375,7 +377,22 @@ class GettingStartedCard(QFrame):
                     f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
                 )
                 _t = nav_target
-                btn.clicked.connect(lambda _=False, t=_t: self.navigate_to.emit(t))
+                if key == "arp":
+                    btn.clicked.connect(
+                        lambda _=False, t=_t: (
+                            self.start_arp_requested.emit(),
+                            self.navigate_to.emit(t),
+                        )
+                    )
+                elif key == "logger":
+                    btn.clicked.connect(
+                        lambda _=False, t=_t: (
+                            self.start_logger_requested.emit(),
+                            self.navigate_to.emit(t),
+                        )
+                    )
+                else:
+                    btn.clicked.connect(lambda _=False, t=_t: self.navigate_to.emit(t))
 
             self._setup_step_btns[key] = btn
             self._setup_step_rows[key] = row
@@ -458,7 +475,10 @@ class GettingStartedCard(QFrame):
                 " background:transparent; border:none; letter-spacing:1.5px;"
             )
             from PyQt6.QtCore import QTimer as _QT
-            _QT.singleShot(2000, self.completion_done.emit)
+            _t = _QT(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self.completion_done.emit)
+            _t.start(2000)
         else:
             self._setup_hdr_lbl.setText("GETTING STARTED")
             self._setup_hdr_lbl.setStyleSheet(

@@ -65,6 +65,10 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     navigate_to = pyqtSignal(str)
     #: Emitted when the user clicks "Start Monitoring" on the stability card.
     start_monitoring_requested = pyqtSignal()
+    #: Emitted from GettingStartedCard step 4 — start ARP Watch immediately.
+    start_arp_requested = pyqtSignal()
+    #: Emitted from GettingStartedCard step 5 — start Network Logger immediately.
+    start_logger_requested = pyqtSignal()
     #: Emitted when the user clicks the refresh icon on the freshness strip.
     rescan_requested = pyqtSignal()
     #: Emitted when the user clicks "Investigate →" on a live challenge suggestion.
@@ -278,6 +282,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._setup_card_top.add_plugin_requested.connect(self.add_plugin_requested)
         self._setup_card_top.navigate_to.connect(self.navigate_to)
         self._setup_card_top.completion_done.connect(self._on_setup_complete)
+        self._setup_card_top.start_arp_requested.connect(self.start_arp_requested)
+        self._setup_card_top.start_logger_requested.connect(self.start_logger_requested)
         # Skip the checklist immediately on subsequent launches once setup is done
         if _already_done:
             self._setup_card_top.setVisible(False)

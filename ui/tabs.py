@@ -391,6 +391,9 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         from ui.pages.monitor_overview_page import MonitorOverviewPage
         self._monitor_overview_page = MonitorOverviewPage(parent=None)
         self._monitor_overview_page.navigate_to.connect(self._nav_rail_go_to)
+        self._monitor_overview_page.start_all_requested.connect(
+            lambda: (self._start_arp_monitor(), self._start_dhcp_scan(), self._toggle_logger())
+        )
         if self._store is not None:
             self._monitor_overview_page.set_store(self._store)
 
@@ -436,6 +439,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
             self._speed_test_page.test_completed.connect(self._on_speed_test_modem_forward)
             self._home_page.navigate_to.connect(self._on_overview_navigate)
             self._home_page.start_monitoring_requested.connect(self._toggle_logger)
+            self._home_page.start_arp_requested.connect(self._start_arp_monitor)
+            self._home_page.start_logger_requested.connect(self._toggle_logger)
             self._home_page.investigate_live_requested.connect(self._on_investigate_live)
             self._home_page.alert_view_requested.connect(self._on_alert_view_requested)
             self._home_page.rescan_requested.connect(self._start_full_scan)

@@ -378,6 +378,8 @@ class _LoggerTabMixin:
             self._log_status_lbl.setText("Logger stopped.")
             self._btn_log_open.setEnabled(True)
             self._home_page.set_monitoring_status(False)
+            if hasattr(self, "_monitor_overview_page"):
+                self._monitor_overview_page.set_logger_running(False)
         else:
             # Start
             import time as _time
@@ -409,6 +411,8 @@ class _LoggerTabMixin:
             self._log_live_table.setRowCount(0)
             self._log_outage_table.setRowCount(0)
             self._home_page.set_monitoring_status(True, "", 0)
+            if hasattr(self, "_monitor_overview_page"):
+                self._monitor_overview_page.set_logger_running(True)
             # Mark logger as ever-started (used by Getting Started checklist and Diagnosis page)
             _qs2 = QSettings("NetSentinel", "NetSentinel")
             _qs2.setValue("logger_started_once", True)
