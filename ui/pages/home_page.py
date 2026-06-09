@@ -171,11 +171,18 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         if qs.value("ui/hw_nudge_dismissed", False, type=bool):
             bar.setVisible(False)
             return
+        configured = False
         try:
             raw = qs.value("hardware/custom_scripts", "[]") or "[]"
             configured = len(_json.loads(raw)) > 0
         except Exception:
-            configured = False
+            pass  # non-fatal — check the instances key below
+        if not configured:
+            try:
+                raw2 = qs.value("hardware/instances", None)
+                configured = bool(raw2 and _json.loads(raw2))
+            except Exception:
+                pass  # non-fatal — malformed QSettings value
         bar.setVisible(not configured)
 
     def _dismiss_hw_nudge(self) -> None:
@@ -264,10 +271,16 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lay.addWidget(self._dashboard_strip)
 
         # ── GETTING STARTED checklist (replaces separate hw strip) ──────────────
+        _already_done = QSettings("NetSentinel", "NetSentinel").value(
+            "setup/all_done", False, type=bool
+        )
         self._setup_card_top = GettingStartedCard()
         self._setup_card_top.add_plugin_requested.connect(self.add_plugin_requested)
         self._setup_card_top.navigate_to.connect(self.navigate_to)
         self._setup_card_top.completion_done.connect(self._on_setup_complete)
+        # Skip the checklist immediately on subsequent launches once setup is done
+        if _already_done:
+            self._setup_card_top.setVisible(False)
         lay.addWidget(self._setup_card_top)
 
         # ── Setup completion celebration card (shown when all steps done) ──────
@@ -278,18 +291,18 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f" border:1px solid {GREEN}44; border-left:3px solid {GREEN};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
-        self._setup_complete_card.setVisible(False)
+        self._setup_complete_card.setVisible(_already_done)
         _sc_lay = QVBoxLayout(self._setup_complete_card)
         _sc_lay.setContentsMargins(14, 12, 14, 12)
         _sc_lay.setSpacing(6)
-        _sc_title = QLabel("✓  All done — your network is set up and monitored")
+        _sc_title = QLabel("✓  Setup complete — you're ready to go")
         _sc_title.setStyleSheet(
             f"font-size:12px; font-weight:bold; color:{GREEN};"
             " background:transparent; border:none;"
         )
         _sc_sub = QLabel(
-            "Network Logger is running · ARP Watch is active · "
-            "Keep scanning weekly for fresh insights"
+            "NetSentinel has 60+ tools — the Feature Guide is the quickest way "
+            "to find what to explore next."
         )
         _sc_sub.setWordWrap(True)
         _sc_sub.setStyleSheet(

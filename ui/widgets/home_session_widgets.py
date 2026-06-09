@@ -405,13 +405,13 @@ class GettingStartedCard(QFrame):
             raw = qs.value("hardware/custom_scripts", "[]") or "[]"
             hw_done = bool(_json.loads(raw))
         except Exception:
-            pass
+            pass  # non-fatal — malformed QSettings value; hw_done stays False
         if not hw_done:
             try:
                 raw2 = qs.value("hardware/instances", None)
                 hw_done = bool(raw2 and _json.loads(raw2))
             except Exception:
-                pass
+                pass  # non-fatal — malformed QSettings value; hw_done stays False
         return {
             "scan":     device_count > 0,
             "hw_setup": hw_done,

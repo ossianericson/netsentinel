@@ -409,8 +409,9 @@ class _LoggerTabMixin:
             self._log_live_table.setRowCount(0)
             self._log_outage_table.setRowCount(0)
             self._home_page.set_monitoring_status(True, "", 0)
-            # Show a non-blocking toast on first-ever logger start
+            # Mark logger as ever-started (used by Getting Started checklist and Diagnosis page)
             _qs2 = QSettings("NetSentinel", "NetSentinel")
+            _qs2.setValue("logger_started_once", True)
             if not _qs2.value("logger/first_start_prompted", False, type=bool):
                 _qs2.setValue("logger/first_start_prompted", True)
                 from ui.widgets.toast import ToastManager
