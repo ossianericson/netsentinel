@@ -176,8 +176,8 @@ class _HomeDataMixin:
             self._pill_arp, self._pill_dhcp, self._pill_storm, self._pill_logger
         ))
         self._monitoring_nudge.setVisible(all_off)
-        if hasattr(self, "_btn_start_all_monitoring"):
-            self._btn_start_all_monitoring.setVisible(all_off)
+        if hasattr(self, "_btn_start_logger"):
+            self._btn_start_logger.setVisible(all_off)
 
     def _maybe_show_post_scan_sheet(
         self, n_total: int, n_new: int, n_at_risk: int
@@ -355,8 +355,8 @@ class _HomeDataMixin:
                 )
         all_off = not any([arp, dhcp, storm, logger])
         self._monitoring_nudge.setVisible(all_off)
-        if hasattr(self, "_btn_start_all_monitoring"):
-            self._btn_start_all_monitoring.setVisible(all_off)
+        if hasattr(self, "_btn_start_logger"):
+            self._btn_start_logger.setVisible(all_off)
         self._freshness_strip.update_freshness(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
         # Enrich logger pill tooltip with "since X ago"
         if logger and getattr(self, "_logger_active_since", None):

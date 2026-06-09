@@ -380,7 +380,7 @@ class MonitorOverviewPage(QWidget):
         # ── Page header ───────────────────────────────────────────────────────
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(0)
-        page_title = QLabel("Monitor Overview")
+        page_title = QLabel("Active Monitors")
         page_title.setStyleSheet(
             f"font-size:14px; font-weight:bold; color:{TEXT_PRIMARY};"
             " background:transparent; border:none;"

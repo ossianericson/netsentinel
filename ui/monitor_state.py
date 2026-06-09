@@ -574,7 +574,7 @@ class _MonitorStateMixin:
                 pass  # non-fatal
         # Section button badges
         self._refresh_section_badges(arp=arp, dhcp=dhcp, storm=storm, logger=logger)
-        # Push to Monitor Overview page
+        # Push to Active Monitors page
         if hasattr(self, "_monitor_overview_page"):
             self._monitor_overview_page.set_arp_status(arp, alerted=False)
             self._monitor_overview_page.set_dhcp_status(dhcp)

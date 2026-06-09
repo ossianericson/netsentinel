@@ -222,6 +222,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
 
     def _on_udp_result(self, result):
         from PyQt6.QtGui import QColor
+        self._udp_stack.setCurrentIndex(1)
         self._recon_udp_table.setRowCount(0)
         for p in result.open_ports:
             row = self._recon_udp_table.rowCount()
@@ -234,6 +235,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._udp_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
 
     def _on_os_result(self, data: dict):
+        self._os_stack.setCurrentIndex(1)
         for guess in data.get("guesses", []):
             row = self._recon_os_table.rowCount()
             self._recon_os_table.insertRow(row)
@@ -250,6 +252,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
 
     def _on_cve_result(self, service_version: str, result):
         from PyQt6.QtGui import QColor
+        self._cve_stack.setCurrentIndex(1)
         for cve in result.cves:
             row = self._recon_cve_table.rowCount()
             self._recon_cve_table.insertRow(row)

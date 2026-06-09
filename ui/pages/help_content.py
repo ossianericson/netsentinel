@@ -175,7 +175,7 @@ _PAGE_HELP: dict[str, dict] = {
             "Client-to-node assignment helps locate dead spots: devices that roam to a distant node despite a nearby node being available.",
         ],
     },
-    "Monitor Overview": {
+    "Active Monitors": {
         "what": "Aggregated dashboard across all monitoring streams — one view of all live data sources.",
         "hidden": [
             "Cards refresh independently as each worker reports — a stale card shows the last known value with a timestamp.",

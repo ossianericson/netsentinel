@@ -22,7 +22,7 @@ from ui.styles import (
     TEXT_SECONDARY, WHITE,
 )
 
-from ui.pages.discover_data import _FEATURES, _GROUPS_ORDER  # noqa: F401
+from ui.pages.discover_data import _FEATURES
 
 
 

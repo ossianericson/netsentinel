@@ -239,10 +239,18 @@ class _ReconTabsMixin:
         self._recon_udp_table.setColumnWidth(0, 70)
         self._recon_udp_table.setColumnWidth(1, 120)
         self._recon_udp_table.setColumnWidth(2, 220)
+        from PyQt6.QtWidgets import QStackedWidget as _SW
+        self._udp_stack = _SW()
+        self._udp_stack.addWidget(_empty_state_widget(
+            "📻", "No scan run yet",
+            "Enter an IP or hostname above and click UDP Scan to probe UDP services.",
+            None, None,
+        ))
+        self._udp_stack.addWidget(self._recon_udp_table)
         lay.addWidget(warn)
         lay.addWidget(self._udp_status)
         lay.addLayout(ctrl)
-        lay.addWidget(self._recon_udp_table, 1)
+        lay.addWidget(self._udp_stack, 1)
         return w
 
     @pyqtSlot()
@@ -282,9 +290,17 @@ class _ReconTabsMixin:
         self._recon_os_table.setColumnWidth(2, 200)
         self._recon_os_table.setColumnWidth(3, 80)
         self._recon_os_table.setColumnWidth(4, 100)
+        from PyQt6.QtWidgets import QStackedWidget as _SW
+        self._os_stack = _SW()
+        self._os_stack.addWidget(_empty_state_widget(
+            "🖥", "No results yet",
+            "OS fingerprinting uses TTL, TCP window size, and banner responses. Leave the IP field blank to use M1 scan results.",
+            None, None,
+        ))
+        self._os_stack.addWidget(self._recon_os_table)
         lay.addWidget(self._os_status)
         lay.addLayout(ctrl)
-        lay.addWidget(self._recon_os_table, 1)
+        lay.addWidget(self._os_stack, 1)
         return w
 
     @pyqtSlot()
@@ -394,10 +410,18 @@ class _ReconTabsMixin:
         self._recon_cve_table.setColumnWidth(2, 55)
         self._recon_cve_table.setColumnWidth(3, 80)
         self._recon_cve_table.setColumnWidth(4, 90)
+        from PyQt6.QtWidgets import QStackedWidget as _SW
+        self._cve_stack = _SW()
+        self._cve_stack.addWidget(_empty_state_widget(
+            "🛡", "No results yet",
+            "CVE lookup reads service versions from the port scanner. Run a port scan first, then click Lookup CVEs.",
+            None, None,
+        ))
+        self._cve_stack.addWidget(self._recon_cve_table)
         lay.addWidget(info)
         lay.addWidget(self._cve_status)
         lay.addLayout(ctrl)
-        lay.addWidget(self._recon_cve_table, 1)
+        lay.addWidget(self._cve_stack, 1)
         return w
 
     @pyqtSlot()

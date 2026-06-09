@@ -81,13 +81,13 @@ _FEATURES: list[dict] = [
     {
         "group": "New in this version",
         "icon": "★",
-        "name": "Monitor Overview",
+        "name": "Active Monitors",
         "desc": (
             "Single-glance security posture — one tile per detection monitor. "
             "See what's running, what's clear, and jump to any detail page. "
             "Added in v1.9."
         ),
-        "page": "Monitor Overview",
+        "page": "Active Monitors",
         "requires": None,
         "tags": ["new", "overview", "monitor", "security", "status"],
     },
@@ -493,14 +493,14 @@ _FEATURES: list[dict] = [
     {
         "group": "Security",
         "icon": "◈",
-        "name": "Monitor Overview",
+        "name": "Active Monitors",
         "desc": (
             "Single-glance security posture — one tile per detection monitor: "
             "ARP Spoof Watch, DHCP Rogue, Broadcast Storm, IoT anomalies, open ports, "
             "and CVE matches. All green means everything is either clear or running. "
             "Click any tile to go straight to that feature's detail page."
         ),
-        "page": "Monitor Overview",
+        "page": "Active Monitors",
         "requires": None,
         "tags": ["overview", "status", "dashboard", "monitor", "arp", "dhcp", "storm", "iot", "cve", "ports", "security"],
         "badge": "updated", "badge_until": "2026-07-24",
@@ -1136,7 +1136,3 @@ _FEATURES: list[dict] = [
     },
 ]
 
-_GROUPS_ORDER = [
-    "Monitoring", "Diagnostics", "Security",
-    "Learning", "Hidden features", "Advanced",
-]

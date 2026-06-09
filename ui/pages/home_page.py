@@ -1084,22 +1084,22 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             " border:none;"
         )
         _nudge_row.addWidget(self._monitoring_nudge)
-        self._btn_start_all_monitoring = QPushButton("▶  Start Network Logger")
-        self._btn_start_all_monitoring.setFixedHeight(22)
-        self._btn_start_all_monitoring.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_start_all_monitoring.setVisible(False)
-        self._btn_start_all_monitoring.setToolTip(
+        self._btn_start_logger = QPushButton("▶  Start Network Logger")
+        self._btn_start_logger.setFixedHeight(22)
+        self._btn_start_logger.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_start_logger.setVisible(False)
+        self._btn_start_logger.setToolTip(
             "Start the Network Logger to record connection stability in the background.\n"
             "It logs RTT, jitter, and packet loss continuously so you can spot patterns."
         )
-        self._btn_start_all_monitoring.setStyleSheet(
+        self._btn_start_logger.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:10px;"
             f" border:1px solid {ACCENT}; border-radius:11px; padding:1px 10px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
-        self._btn_start_all_monitoring.clicked.connect(self.start_monitoring_requested)
-        _nudge_row.addWidget(self._btn_start_all_monitoring)
+        self._btn_start_logger.clicked.connect(self.start_monitoring_requested)
+        _nudge_row.addWidget(self._btn_start_logger)
         _nudge_row.addStretch()
         lay.addLayout(_nudge_row)
 

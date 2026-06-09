@@ -27,8 +27,7 @@ from ui.styles import (
 _AUTO_HELP_PAGES: frozenset[str] = frozenset({
     "Network Logger", "Lab Mode", "Protocol Visualizer",
     "Automation Hooks", "MQTT / Home Assistant", "TLS & Exposure",
-    "Service Heartbeat", "SNMP Trap Receiver", "Syslog Viewer",
-    "IoT Behaviour", "Scheduled Scans",
+    "Service Heartbeat", "IoT Behaviour", "Scheduled Scans",
 })
 
 
@@ -921,6 +920,7 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Home Automation",     self._ha_page)
 
         self._nav_begin_section("Monitor", "monitor")
+        self._nav_add_rail_item("Active Monitors",     self._monitor_overview_page)
         self._nav_add_rail_item("Network Logger",      self._logging_container)
         self._nav_add_rail_item("Network Timeline",    self._timeline_page)
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
@@ -942,7 +942,6 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
         self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
         self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
-        self._nav_add_rail_item("Monitor Overview",    self._monitor_overview_page)
         self._nav_add_rail_item("802.11 Monitor",      self._wifi_monitor_page)
         self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
         self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)

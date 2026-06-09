@@ -133,7 +133,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Sprint 13 extracted pure _FEATURES data to discover_data.py.
     "pages/discover_page.py": 429,  # actual 229 + 200 margin (Sprint 13 extraction)
 
-    # Pure data file: _FEATURES list + _GROUPS_ORDER for Feature Guide page.
+    # Pure data file: _FEATURES list for Feature Guide page.
     # 1,142 lines is expected for a 24-entry feature descriptor list with full docstrings.
     # If grows past 1,400, split by group into discover_data_security.py etc.
     "pages/discover_data.py": 1342,  # actual 1,142 + 200 margin (Sprint 13 new file)
