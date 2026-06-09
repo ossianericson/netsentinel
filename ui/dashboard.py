@@ -704,10 +704,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             _t2.start(800)
 
         def _step1_skipped() -> None:
-            # User pressed × on the initial coach mark — respect the dismissal
+            # User pressed × on the initial coach mark — respect the dismissal.
+            # tour/post_scan_done is NOT set here so the 9-step tour still fires
+            # after the user's first manual scan from the Home page.
             mark_onboarding_done()
-            from PyQt6.QtCore import QSettings as _QS
-            _QS("NetSentinel", "NetSentinel").setValue("tour/post_scan_done", True)
             # Don't start scan or tour; stay on current page
 
         # Store reference on self — prevents Python GC from collecting the chain
@@ -745,11 +745,14 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
         def _tour_done() -> None:
             self._onboarding_active = False
+            from PyQt6.QtCore import QSettings as _QS
+            _QS("NetSentinel", "NetSentinel").setValue("tour/v1_done", True)
             self._nav_rail_go_to("Overview")
 
         def _tour_skipped() -> None:
             self._onboarding_active = False
-            # User dismissed with ×; stay on the current page
+            from PyQt6.QtCore import QSettings as _QS
+            _QS("NetSentinel", "NetSentinel").setValue("tour/v1_done", True)
 
         def _tab_proxy(container, tab_index: int) -> QWidget:
             """Transparent child QWidget covering one QTabBar tab — used as a ring target."""

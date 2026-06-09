@@ -3,8 +3,7 @@ Tests for ui.onboarding (Sprint I1 Apple-like onboarding).
 
 Validates:
   - should_show_onboarding() responds to QSettings correctly
-  - mark_onboarding_done() sets both keys
-  - tour/v1_done is set after finish (RULE-T6 coach mark gate)
+  - mark_onboarding_done() sets the onboarding key
 """
 import pytest
 
@@ -17,7 +16,6 @@ except ImportError:
 def _fresh():
     qs = QSettings("NetSentinel", "NetSentinel")
     qs.remove("ui/onboarding_v2_done")
-    qs.remove("tour/v1_done")
     qs.remove("ui/first_run_done")
     return qs
 
@@ -25,7 +23,7 @@ def _fresh():
 # ── should_show_onboarding() ──────────────────────────────────────────────────
 
 class TestShouldShowOnboarding:
-    def setup_method(self):   _fresh()
+    def setup_method(self):    _fresh()
     def teardown_method(self): _fresh()
 
     def test_true_on_fresh_install(self):
@@ -37,28 +35,8 @@ class TestShouldShowOnboarding:
         mark_onboarding_done()
         assert should_show_onboarding() is False
 
-    def test_mark_sets_both_keys(self):
+    def test_mark_sets_onboarding_key(self):
         from ui.onboarding import mark_onboarding_done
         mark_onboarding_done()
         qs = QSettings("NetSentinel", "NetSentinel")
         assert qs.value("ui/onboarding_v2_done", False, type=bool) is True
-        assert qs.value("tour/v1_done",           False, type=bool) is True
-
-
-# ── Coach mark suppression (RULE-T6) ─────────────────────────────────────────
-
-class TestCoachMarkSuppression:
-    """Coach marks must not fire until tour/v1_done = True."""
-
-    def setup_method(self):   _fresh()
-    def teardown_method(self): _fresh()
-
-    def test_tour_key_false_before_onboarding_completes(self):
-        qs = QSettings("NetSentinel", "NetSentinel")
-        assert not qs.value("tour/v1_done", False, type=bool)
-
-    def test_tour_key_true_after_finish(self):
-        from ui.onboarding import mark_onboarding_done
-        mark_onboarding_done()
-        qs = QSettings("NetSentinel", "NetSentinel")
-        assert qs.value("tour/v1_done", True, type=bool) is True

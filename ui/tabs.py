@@ -799,15 +799,6 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         cw_lay.addLayout(bc_row)
 
-        # Tour bar removed — replaced by OnboardingOverlay (Sprint I1).
-        # Stub attributes kept so GuidedTour and any legacy code can use
-        # getattr(dashboard, "_tour_bar", None) without crashing.
-        self._tour_bar       = None
-        self._tour_step_lbl  = None
-        self._tour_body_lbl  = None
-        self._tour_next_btn  = None
-        self._tour_skip_btn  = None
-
         self._tip_bar = QPushButton("ⓘ  Tips  ▾")
         self._tip_bar.setCheckable(True)
         self._tip_bar.setFixedHeight(22)

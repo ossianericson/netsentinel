@@ -10,7 +10,6 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings
 
 _SETTINGS_KEY = "ui/onboarding_v2_done"
-_TOUR_KEY     = "tour/v1_done"
 
 
 def should_show_onboarding() -> bool:
@@ -21,4 +20,3 @@ def should_show_onboarding() -> bool:
 def mark_onboarding_done() -> None:
     qs = QSettings("NetSentinel", "NetSentinel")
     qs.setValue(_SETTINGS_KEY, True)
-    qs.setValue(_TOUR_KEY, True)
