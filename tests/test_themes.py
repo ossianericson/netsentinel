@@ -87,9 +87,9 @@ class TestThemeRegistry:
         from ui.styles import DEFAULT_THEME, THEMES
         assert DEFAULT_THEME in THEMES
 
-    def test_default_theme_is_arctic_clean(self):
+    def test_default_theme_is_midnight_pro(self):
         from ui.styles import DEFAULT_THEME
-        assert DEFAULT_THEME == "Arctic Clean"
+        assert DEFAULT_THEME == "Midnight Pro"
 
 
 # ---------------------------------------------------------------------------

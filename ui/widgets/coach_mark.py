@@ -35,10 +35,10 @@ from PyQt6.QtCore import (
     QTimer,
     pyqtSignal,
 )
-from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 from ui.styles import (
-    ACCENT_DARK, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
+    ACCENT_DARK, CANVAS_AMBER, OVERLAY_BG, OVERLAY_BG3, OVERLAY_BLUE,
     OVERLAY_BLUE2, OVERLAY_FG2, STATUS_OFFLINE, WHITE,
 )
 
@@ -48,9 +48,9 @@ _AUTO_DISMISS_MS = 12_000   # dismiss automatically after 12 s of inactivity
 class _HighlightRing(QWidget):
     """Transparent overlay that draws a bright border ring around the target widget."""
 
-    _BORDER = 2.5
-    _RADIUS = 7.0
-    _MARGIN = 4    # extra padding around the target
+    _BORDER = 3.5   # amber ring stroke width
+    _RADIUS = 8.0
+    _MARGIN = 6     # extra padding around the target
 
     def __init__(self, target: QWidget, parent: QWidget) -> None:
         super().__init__(parent)
@@ -82,116 +82,18 @@ class _HighlightRing(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        b = self._BORDER / 2
-        rect = QRectF(self.rect()).adjusted(b, b, -b, -b)
-        pen = QPen(QColor(OVERLAY_BLUE), self._BORDER)
-        painter.setPen(pen)
+        # Dark shadow ring — ensures visibility on light/white backgrounds
+        b_shadow = (self._BORDER + 3) / 2
+        rect_shadow = QRectF(self.rect()).adjusted(b_shadow, b_shadow, -b_shadow, -b_shadow)
+        painter.setPen(QPen(QColor(0, 0, 0, 70), self._BORDER + 3))
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect_shadow, self._RADIUS + 1, self._RADIUS + 1)
+        # Amber ring — visible on dark and blue backgrounds
+        b = self._BORDER / 2
+        rect = QRectF(self.rect()).adjusted(b + 1, b + 1, -(b + 1), -(b + 1))
+        painter.setPen(QPen(QColor(CANVAS_AMBER), self._BORDER))
         painter.drawRoundedRect(rect, self._RADIUS, self._RADIUS)
 
-
-class _DimOverlay(QWidget):
-    """
-    Full-window semi-transparent dim with a spotlight cutout over the target widget.
-
-    Purely visual — WA_TransparentForMouseEvents means it never blocks input.
-    Shows a dark dim over the entire window except a rounded-rect cutout around
-    the target, drawing the user's eye to exactly what they should interact with.
-    """
-
-    _DIM_ALPHA   = 140   # 0–255; ~55% opacity
-    _CUTOUT_PAD  = 8     # extra padding around target in the cutout
-    _CUTOUT_RADIUS = 8.0
-
-    def __init__(self, target: QWidget, parent: QWidget) -> None:
-        super().__init__(parent)
-        self._target = target
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setStyleSheet("background: transparent; border: none;")
-        if parent:
-            self.setGeometry(parent.rect())
-
-        self._fade_anim = QPropertyAnimation(self, b"windowOpacity", self)
-        self._fade_anim.setDuration(200)
-        self._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-    # ── Public API ─────────────────────────────────────────────────────────
-
-    def update_target(self, target: QWidget) -> None:
-        self._target = target
-        self.update()
-
-    def show_animated(self) -> None:
-        p = self.parent()
-        if p:
-            self.setGeometry(p.rect())
-        if not self._is_target_valid():
-            return  # no valid target → skip dim to avoid full-black window
-        self.show()
-        self.raise_()  # above page content; ring+card are raised further above us
-        self._fade_anim.stop()
-        self._fade_anim.setStartValue(0.0)
-        self._fade_anim.setEndValue(1.0)
-        self._fade_anim.start()
-
-    def hide_animated(self, callback=None) -> None:
-        self._fade_anim.stop()
-        self._fade_anim.setStartValue(self.windowOpacity())
-        self._fade_anim.setEndValue(0.0)
-        if callback:
-            self._fade_anim.finished.connect(callback)
-        self._fade_anim.start()
-
-    # ── Internal ────────────────────────────────────────────────────────────
-
-    def _is_target_valid(self) -> bool:
-        try:
-            return bool(
-                self._target is not None
-                and self._target.isVisible()
-                and self._target.width() > 0
-            )
-        except Exception:
-            return False  # non-fatal — target may be deleted
-
-    def _get_cutout_rectf(self) -> QRectF | None:
-        p = self.parent()
-        if p is None or not self._is_target_valid():
-            return None
-        try:
-            m = self._CUTOUT_PAD
-            tl = self._target.mapTo(p, self._target.rect().topLeft())
-            return QRectF(
-                tl.x() - m,
-                tl.y() - m,
-                self._target.width()  + 2 * m,
-                self._target.height() + 2 * m,
-            )
-        except Exception:
-            return None  # non-fatal
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        p = self.parent()
-        if p:
-            self.setGeometry(p.rect())
-
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # Build path = full window minus spotlight cutout
-        dim_path = QPainterPath()
-        dim_path.addRect(QRectF(self.rect()))
-
-        cutout = self._get_cutout_rectf()
-        if cutout is not None:
-            hole = QPainterPath()
-            hole.addRoundedRect(cutout, self._CUTOUT_RADIUS, self._CUTOUT_RADIUS)
-            dim_path = dim_path.subtracted(hole)
-
-        painter.fillPath(dim_path, QColor(0, 0, 0, self._DIM_ALPHA))
 
 
 class CoachMarkOverlay(QWidget):
@@ -214,19 +116,24 @@ class CoachMarkOverlay(QWidget):
     def __init__(
         self,
         parent: QWidget,
-        target_rect: QRect | None,   # kept for API compat; not used for dimming
+        target_rect: QRect | None,   # kept for API compat; unused
         title: str,
         body: str,
         is_last: bool = False,
         target_widget: QWidget | None = None,
         auto_dismiss_ms: int = _AUTO_DISMISS_MS,
-        use_spotlight: bool = False,
         action_text: str | None = None,
+        extra_target_widgets: list | None = None,
+        prefer_side: str | None = None,
+        position_widget: QWidget | None = None,
     ):
         super().__init__(parent)
         self._is_last = is_last
         self._auto_dismiss_ms = auto_dismiss_ms
         self._target_widget = target_widget
+        self._prefer_side = prefer_side
+        # Separate widget used for card placement (ring still uses target_widget)
+        self._position_widget = position_widget if position_widget is not None else target_widget
 
         # WA_TranslucentBackground keeps corners transparent; paintEvent fills the background
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -234,21 +141,14 @@ class CoachMarkOverlay(QWidget):
         # Transparent stylesheet — background drawn via paintEvent so WA_Translucent works
         self.setStyleSheet("background: transparent; border: none;")
 
-        # Full-window spotlight dim overlay (sibling widget of overlay, behind ring)
-        self._dim_overlay: _DimOverlay | None = None
-        if use_spotlight and target_widget is not None:
+        # Highlight rings around all target widgets (primary + any extras)
+        self._rings: list[_HighlightRing] = []
+        all_targets = [w for w in ([target_widget] + list(extra_target_widgets or [])) if w is not None]
+        for tw in all_targets:
             try:
-                self._dim_overlay = _DimOverlay(target_widget, parent)
+                self._rings.append(_HighlightRing(tw, parent))
             except Exception:
-                self._dim_overlay = None  # non-fatal
-
-        # Highlight ring around the target widget (sibling of parent, not child of overlay)
-        self._ring: _HighlightRing | None = None
-        if target_widget is not None:
-            try:
-                self._ring = _HighlightRing(target_widget, parent)
-            except Exception:
-                self._ring = None  # non-fatal
+                pass  # non-fatal
 
         # Title
         title_lbl = QLabel(title, self)
@@ -308,14 +208,11 @@ class CoachMarkOverlay(QWidget):
 
     def show_animated(self) -> None:
         self._position()
-        # Show spotlight dim first (behind ring and card)
-        if self._dim_overlay is not None:
-            self._dim_overlay.show_animated()
-        # Show highlight ring around target
-        if self._ring is not None:
-            self._ring._update_geometry()
-            self._ring.show()
-            self._ring.raise_()
+        # Show highlight rings around all targets
+        for ring in self._rings:
+            ring._update_geometry()
+            ring.show()
+            ring.raise_()
         self.show()
         self.raise_()
         self._fade_anim.stop()
@@ -327,14 +224,10 @@ class CoachMarkOverlay(QWidget):
 
     def hide_animated(self, callback=None) -> None:
         self._auto_timer.stop()
-        # Hide spotlight dim
-        if self._dim_overlay is not None:
-            self._dim_overlay.hide_animated()
-            self._dim_overlay = None
-        # Remove highlight ring immediately when the step is dismissed
-        if self._ring is not None:
-            self._ring.deleteLater()
-            self._ring = None
+        # Remove all highlight rings immediately when the step is dismissed
+        for ring in self._rings:
+            ring.deleteLater()
+        self._rings = []
         self._fade_anim.stop()
         self._fade_anim.setStartValue(self.windowOpacity())
         self._fade_anim.setEndValue(0.0)
@@ -343,33 +236,49 @@ class CoachMarkOverlay(QWidget):
         self._fade_anim.start()
 
     def _position(self) -> None:
-        """Position next to target_widget if set; otherwise bottom-right of parent."""
+        """Position the card relative to the position_widget; respects prefer_side."""
         p = self.parent()
         if p is None:
             return
         pw, ph = p.width(), p.height()
+        m = self._MARGIN
 
-        if self._target_widget is not None:
+        ref = self._position_widget
+        if ref is not None:
             try:
-                tw = self._target_widget
-                if tw.isVisible() and tw.width() > 0:
-                    tl = tw.mapTo(p, tw.rect().topLeft())
+                if ref.isVisible() and ref.width() > 0:
+                    tl = ref.mapTo(p, ref.rect().topLeft())
                     tx, ty = tl.x(), tl.y()
-                    tw_w = tw.width()
-                    # Prefer right of target; fall back to left
-                    x = tx + tw_w + self._MARGIN
-                    if x + self._W > pw - self._MARGIN:
-                        x = tx - self._W - self._MARGIN
-                    x = max(self._MARGIN, min(x, pw - self._W - self._MARGIN))
-                    # Vertically align with target top, clamped to window
-                    y = max(self._MARGIN, min(ty, ph - self._H - self._MARGIN))
-                    self.move(x, y)
+                    tw_w, tw_h = ref.width(), ref.height()
+
+                    below = (tx + tw_w // 2 - self._W // 2,  ty + tw_h + m)
+                    right = (tx + tw_w + m,                   ty + tw_h // 2 - self._H // 2)
+                    left  = (tx - self._W - m,                ty + tw_h // 2 - self._H // 2)
+                    above = (tx + tw_w // 2 - self._W // 2,  ty - self._H - m)
+
+                    if self._prefer_side == "right":
+                        # Force clamped-right regardless of fit — consistent right-side placement
+                        cx = max(m, min(right[0], pw - self._W - m))
+                        cy = max(m, min(right[1], ph - self._H - m))
+                        self.move(cx, cy)
+                        return
+
+                    # Default order: below → right → left → above; fallback = clamped below
+                    candidates = [below, right, left, above]
+                    for cx, cy in candidates:
+                        if m <= cx and cx + self._W <= pw - m and m <= cy and cy + self._H <= ph - m:
+                            self.move(cx, cy)
+                            return
+
+                    cx = max(m, min(below[0], pw - self._W - m))
+                    cy = max(m, min(below[1], ph - self._H - m))
+                    self.move(cx, cy)
                     return
             except Exception:
                 pass  # target may be deleted or unmapped; fall through
 
         # Default: bottom-right corner
-        self.move(pw - self._W - self._MARGIN, ph - self._H - self._MARGIN)
+        self.move(pw - self._W - m, ph - self._H - m)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -397,15 +306,13 @@ class CoachMarkChain:
     def __init__(self, parent_window: QWidget, marks: list[dict],
                  on_done=None,
                  on_skip=None,
-                 auto_dismiss_ms: int = _AUTO_DISMISS_MS,
-                 use_spotlight: bool = False) -> None:
+                 auto_dismiss_ms: int = _AUTO_DISMISS_MS) -> None:
         self._parent                 = parent_window
         self._marks                  = marks
         self._overlay: CoachMarkOverlay | None = None
         self._on_done                = on_done
         self._on_skip                = on_skip
         self._auto_dismiss_ms        = auto_dismiss_ms
-        self._use_spotlight_default  = use_spotlight
         self._current_index          = 0
 
     def start(self) -> None:
@@ -437,7 +344,23 @@ class CoachMarkChain:
             target_widget = target() if callable(target) else target
         except Exception:
             target_widget = None  # lambda may fail if widget not yet created
-        use_spotlight = bool(spec.get("use_spotlight", self._use_spotlight_default))
+
+        extra_target_widgets: list = []
+        for et in spec.get("extra_targets", []):
+            try:
+                tw = et() if callable(et) else et
+                if tw is not None:
+                    extra_target_widgets.append(tw)
+            except Exception:
+                pass  # non-fatal
+
+        # card_target — separate widget to anchor card placement (ring still uses target)
+        card_target_fn = spec.get("card_target")
+        try:
+            position_widget = card_target_fn() if callable(card_target_fn) else card_target_fn
+        except Exception:
+            position_widget = None
+
         overlay = CoachMarkOverlay(
             parent=self._parent,
             target_rect=None,
@@ -446,8 +369,10 @@ class CoachMarkChain:
             is_last=is_last,
             auto_dismiss_ms=int(spec.get("auto_dismiss_ms", self._auto_dismiss_ms)),
             target_widget=target_widget,
-            use_spotlight=use_spotlight,
             action_text=spec.get("action_text"),
+            extra_target_widgets=extra_target_widgets or None,
+            prefer_side=spec.get("prefer_side"),
+            position_widget=position_widget,
         )
         self._overlay = overlay
         overlay.dismissed.connect(self._on_dismissed)
@@ -477,14 +402,6 @@ class CoachMarkChain:
 
     def _cleanup(self) -> None:
         if self._overlay:
-            # Dim overlay is parented to the main window, not the card — delete explicitly
-            dim = getattr(self._overlay, "_dim_overlay", None)
-            if dim is not None:
-                try:
-                    dim.deleteLater()
-                except RuntimeError:
-                    pass  # non-fatal — widget may already be deleted
-                self._overlay._dim_overlay = None
             self._overlay.deleteLater()
             self._overlay = None
         if callable(self._on_done):
@@ -495,13 +412,6 @@ class CoachMarkChain:
     def _cleanup_skip(self) -> None:
         """Called when × is pressed before reaching the last step."""
         if self._overlay:
-            dim = getattr(self._overlay, "_dim_overlay", None)
-            if dim is not None:
-                try:
-                    dim.deleteLater()
-                except RuntimeError:
-                    pass  # non-fatal — widget may already be deleted
-                self._overlay._dim_overlay = None
             self._overlay.deleteLater()
             self._overlay = None
         cb = self._on_skip if callable(self._on_skip) else self._on_done

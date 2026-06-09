@@ -716,12 +716,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self,
             [{
                 "title":         "Step 1 of 9 — Scan your network",
-                "body":          "The Scan button is highlighted. Click it now to discover every device on your network — or click 'Start Scan →' below. Your 8-step guided tour follows automatically.",
+                "body":          "Both Scan buttons are highlighted — the one in the header bar (always visible) and the one on this page. Click either to start. Your 8-step guided tour follows automatically.",
                 "delay_ms":      400,
                 "auto_dismiss_ms": 0,   # stays until user explicitly clicks action button
-                "target":        lambda: getattr(self, "_btn_scan", None),
+                "target":        lambda: getattr(self, "_header_scan_btn", None),
+                "extra_targets": [lambda: getattr(getattr(self, "_home_page", None), "_btn_scan", None)],
                 "action_text":   "Start Scan →",
-                "use_spotlight": True,
             }],
             on_done=_step1_done,
             on_skip=_step1_skipped,
@@ -754,49 +754,35 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._post_scan_chain = CoachMarkChain(
             self,
             [
-                # ── Pair 1: Discover → Devices ─────────────────────────────────
-                {
-                    "on_show":      lambda: _open_section("Discover"),
-                    "target":       lambda: self._nav_rail_buttons.get("Discover"),
-                    "title":        "Step 2 of 9 — Discover",
-                    "body":         "Click the Discover icon to open this menu. It contains your device inventory, network map, WiFi, and more.",
-                    "use_spotlight": True,
-                },
-                {
-                    # No on_show — Discover flyout stays open from step 2.
-                    # Navigate to Devices only when the user clicks the item.
-                    "target":       lambda: self._nav_flyout._items.get("Devices"),
-                    "title":        "Step 3 of 9 — Network Devices",
-                    "body":         "Click Devices to see your inventory. The scan is still running — devices appear here as they're discovered (~10 seconds).",
-                    "use_spotlight": True,
-                },
-                # ── Pair 2: Monitor → Network Logger ───────────────────────────
+                # ── Pair 1: Monitor → Network Logger ─────────────────────────────
                 {
                     "on_show":      lambda: _open_section("Monitor"),
                     "target":       lambda: self._nav_rail_buttons.get("Monitor"),
-                    "title":        "Step 4 of 9 — Monitor",
+                    "title":        "Step 2 of 9 — Monitor",
                     "body":         "Click the Monitor icon to open live streams — bandwidth, connections, availability, and more.",
-                    "use_spotlight": True,
                 },
                 {
-                    # No on_show — Monitor flyout stays open from step 4.
+                    # Navigate to Network Logger so the page is visible; flyout stays open
+                    # so the ring on the flyout item is still shown alongside the page.
+                    "on_show":      lambda: self._nav_rail_go_to("Network Logger"),
                     "target":       lambda: self._nav_flyout._items.get("Network Logger"),
-                    "title":        "Step 5 of 9 — Network Logger",
-                    "body":         "Click Network Logger to open the unified activity timeline. It records RTT, jitter, modem signal, syslog, and more.",
-                    "use_spotlight": True,
+                    "title":        "Step 3 of 9 — Network Logger",
+                    "body":         "This is the Network Logger — a live timeline of RTT, jitter, modem signal, syslog, and more. Leave it running for daily insights.",
                 },
                 # ── Network Logger: Activity Log tab ─────────────────────────
                 {
-                    # Navigate to Network Logger page and close flyout so the tab bar is visible.
-                    # Do NOT auto-switch to Activity Log — let the user click the tab.
+                    # Navigate to Network Logger, close flyout, select Activity Log tab.
+                    # delay_ms gives the layout time to commit before the card is positioned.
                     "on_show":      lambda: (
                         self._nav_rail_go_to("Network Logger"),
                         self._nav_flyout.close_panel(),
+                        self._logging_container.setCurrentIndex(1),
                     ),
+                    "delay_ms":     200,
                     "target":       lambda: self._logging_container.tabBar(),
-                    "title":        "Step 6 of 9 — Activity Log",
-                    "body":         "Click the 'Activity Log' tab (highlighted) to see the live event timeline from all your monitoring sources.",
-                    "use_spotlight": True,
+                    "prefer_side":  "right",
+                    "title":        "Step 4 of 9 — Activity Log",
+                    "body":         "The Activity Log tab is now selected. It shows a live timeline of all monitoring events — RTT, jitter, modem signal, and more.",
                 },
                 # ── Network Logger: source filter chips ──────────────────────
                 {
@@ -804,9 +790,27 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                     # Do NOT auto-click a chip — let the user interact.
                     "on_show":      lambda: self._logging_container.setCurrentIndex(1),
                     "target":       lambda: getattr(self._log_hub_page, "_toggle_btns", {}).get("net"),
-                    "title":        "Step 7 of 9 — Source filters",
+                    # card_target anchors the card to the tab bar — same position as step 4
+                    "card_target":  lambda: self._logging_container.tabBar(),
+                    "prefer_side":  "right",
+                    "title":        "Step 5 of 9 — Source filters",
                     "body":         "These chips filter the log by source. Click 'Network RTT' to focus on ping latency data only.",
-                    "use_spotlight": True,
+                },
+                # ── Pair 2: Discover → Devices ─────────────────────────────────
+                # Devices comes after 3 Monitor steps so the scan (~14 s) has time to populate
+                {
+                    "on_show":      lambda: _open_section("Discover"),
+                    "target":       lambda: self._nav_rail_buttons.get("Discover"),
+                    "title":        "Step 6 of 9 — Discover",
+                    "body":         "Click the Discover icon to open this menu. It contains your device inventory, network map, WiFi, and more.",
+                },
+                {
+                    # Navigate to Devices so the inventory is visible; flyout stays open
+                    # (scan has had ~4 steps worth of time to populate the device list).
+                    "on_show":      lambda: self._nav_rail_go_to("Devices"),
+                    "target":       lambda: self._nav_flyout._items.get("Devices"),
+                    "title":        "Step 7 of 9 — Network Devices",
+                    "body":         "This is your device inventory — every device on the network with type, MAC address, and risk level. Right-click any row for actions.",
                 },
                 # ── Pair 3: Extend → Hardware Hub ──────────────────────────────
                 {
@@ -814,14 +818,13 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                     "target":       lambda: self._nav_rail_buttons.get("Extend"),
                     "title":        "Step 8 of 9 — Extend",
                     "body":         "Click the Extend icon to manage hardware integrations — modem, mesh router, or custom USB devices.",
-                    "use_spotlight": True,
                 },
                 {
-                    # No on_show — Extend flyout stays open from step 8.
+                    # Navigate to Hardware so the hub is visible; flyout stays open.
+                    "on_show":      lambda: self._nav_rail_go_to("Hardware"),
                     "target":       lambda: self._nav_flyout._items.get("Hardware"),
                     "title":        "Step 9 of 9 — Hardware Hub",
-                    "body":         "Connect your router, modem, or mesh system here for deep signal stats and diagnostics. Click Hardware to explore — or click 'Finish ✓' to wrap up.",
-                    "use_spotlight": True,
+                    "body":         "Connect your router, modem, or mesh system here for deep signal stats and diagnostics. Click 'Finish ✓' when you're ready.",
                 },
             ],
             auto_dismiss_ms=0,
