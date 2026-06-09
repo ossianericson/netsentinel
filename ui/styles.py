@@ -69,8 +69,9 @@ _ARCTIC_CLEAN = {
     "SCROLLBAR_HANDLE":   "#B0BEC8",
     # Labels / tooltips
     "LABEL_SUBTITLE":     "#9DB0C4",
-    "TOOLTIP_BG":         "#1A3A5C",
-    "TOOLTIP_BORDER":     "#0A1E32",
+    "TOOLTIP_BG":         "#EEF4FF",
+    "TOOLTIP_BORDER":     "#0078D4",
+    "TOOLTIP_FG":         "#1A1A2E",
     # Notification bars
     "UPDATE_BAR_BG":      "#E8F4FF",
     "UPDATE_BAR_BORDER":  "#B0C4D8",
@@ -163,6 +164,7 @@ _DARK_PRO = {
     "LABEL_SUBTITLE":     "#58A6FF",
     "TOOLTIP_BG":         "#0D1117",
     "TOOLTIP_BORDER":     "#30363D",
+    "TOOLTIP_FG":         "#E6EDF3",
     # Notification bars
     "UPDATE_BAR_BG":      "#102030",
     "UPDATE_BAR_BORDER":  "#204050",
@@ -253,6 +255,7 @@ _OBSIDIAN_NEON = {
     "LABEL_SUBTITLE":     "#9D5CF6",
     "TOOLTIP_BG":         "#181825",
     "TOOLTIP_BORDER":     "#302040",
+    "TOOLTIP_FG":         "#CDD6F4",
     # Notification bars
     "UPDATE_BAR_BG":      "#1A1030",
     "UPDATE_BAR_BORDER":  "#3A2060",
@@ -343,6 +346,7 @@ _ABYSS = {
     "LABEL_SUBTITLE":     "#22D4FF",
     "TOOLTIP_BG":         "#000000",
     "TOOLTIP_BORDER":     "#1E1E1E",
+    "TOOLTIP_FG":         "#F0F2F5",
     # Notification bars
     "UPDATE_BAR_BG":      "#001020",
     "UPDATE_BAR_BORDER":  "#003050",
@@ -1074,7 +1078,7 @@ QPushButton:focus, QCheckBox:focus, QRadioButton:focus {{
 /* ── ToolTip ── */
 QToolTip {{
     background: {TOOLTIP_BG};
-    color: {WHITE};
+    color: {TOOLTIP_FG};
     border: 1px solid {TOOLTIP_BORDER};
     border-radius: 3px;
     padding: 4px 8px;
@@ -1194,7 +1198,7 @@ def get_app_qss() -> str:
         f" border:1px solid {_m.BORDER}; padding:4px; font-size:12px; }}"
         f"QMenu::item {{ padding:4px 16px; color:{_m.TEXT_PRIMARY}; background:{_m.BG_CARD}; }}"
         f"QMenu::item:selected {{ background:{_m.BG_HOVER}; color:{_m.TEXT_PRIMARY}; }}"
-        f"QToolTip {{ background:{_m.TOOLTIP_BG}; color:{_m.WHITE};"
+        f"QToolTip {{ background:{_m.TOOLTIP_BG}; color:{_m.TOOLTIP_FG};"
         f" border:1px solid {_m.TOOLTIP_BORDER}; border-radius:3px; padding:4px 8px;"
         f" font-size:11px; }}"
     )

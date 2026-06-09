@@ -95,7 +95,7 @@ _PAIRS: list[tuple[str, str, str, float]] = [
     ("Status bar text",                      "LABEL_SUBTITLE",  "NAV_BAR",       WCAG_AA_LARGE),
 
     # ── Tooltip ──────────────────────────────────────────────────────────────
-    ("Tooltip text",                         "WHITE",           "TOOLTIP_BG",    WCAG_AA),
+    ("Tooltip text",                         "TOOLTIP_FG",      "TOOLTIP_BG",    WCAG_AA),
 
     # ── Notification / info bars ─────────────────────────────────────────────
     ("Update bar text",                      "UPDATE_BAR_FG",   "UPDATE_BAR_BG", WCAG_AA),
