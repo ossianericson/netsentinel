@@ -751,6 +751,17 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._onboarding_active = False
             # User dismissed with ×; stay on the current page
 
+        def _tab_proxy(container, tab_index: int) -> QWidget:
+            """Transparent child QWidget covering one QTabBar tab — used as a ring target."""
+            tab_bar = container.tabBar()
+            rect = tab_bar.tabRect(tab_index)
+            w = QWidget(tab_bar)
+            w.setGeometry(rect)
+            w.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            w.setStyleSheet("background: transparent; border: none;")
+            w.show()
+            return w
+
         self._post_scan_chain = CoachMarkChain(
             self,
             [
@@ -762,27 +773,27 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                     "body":         "Click the Monitor icon to open live streams — bandwidth, connections, availability, and more.",
                 },
                 {
-                    # Navigate to Network Logger so the page is visible; flyout stays open
-                    # so the ring on the flyout item is still shown alongside the page.
-                    "on_show":      lambda: self._nav_rail_go_to("Network Logger"),
-                    "target":       lambda: self._nav_flyout._items.get("Network Logger"),
+                    # Navigate to Network Logger, close flyout, select Log Sources tab (index 0).
+                    # delay_ms lets the layout commit so the tab proxy is correctly positioned.
+                    "on_show":      lambda: (
+                        self._nav_rail_go_to("Network Logger"),
+                        self._nav_flyout.close_panel(),
+                        self._logging_container.setCurrentIndex(0),
+                    ),
+                    "delay_ms":     200,
+                    "target":       lambda: _tab_proxy(self._logging_container, 0),
                     "title":        "Step 3 of 9 — Network Logger",
                     "body":         "This is the Network Logger — a live timeline of RTT, jitter, modem signal, syslog, and more. Leave it running for daily insights.",
                 },
                 # ── Network Logger: Activity Log tab ─────────────────────────
                 {
-                    # Navigate to Network Logger, close flyout, select Activity Log tab.
-                    # delay_ms gives the layout time to commit before the card is positioned.
-                    "on_show":      lambda: (
-                        self._nav_rail_go_to("Network Logger"),
-                        self._nav_flyout.close_panel(),
-                        self._logging_container.setCurrentIndex(1),
-                    ),
+                    # Select Activity Log tab (index 1); ring on that tab only.
+                    "on_show":      lambda: self._logging_container.setCurrentIndex(1),
                     "delay_ms":     200,
-                    "target":       lambda: self._logging_container.tabBar(),
+                    "target":       lambda: _tab_proxy(self._logging_container, 1),
                     "prefer_side":  "right",
                     "title":        "Step 4 of 9 — Activity Log",
-                    "body":         "The Activity Log tab is now selected. It shows a live timeline of all monitoring events — RTT, jitter, modem signal, and more.",
+                    "body":         "The Activity Log tab shows a live timeline of all monitoring events — RTT, jitter, modem signal, and more.",
                 },
                 # ── Network Logger: source filter chips ──────────────────────
                 {
