@@ -590,7 +590,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 from PyQt6.QtCore import QTimer as _QT
                 _QT.singleShot(600, self._start_post_scan_coach_marks)
             else:
-                self._nav_rail_go_to("Overview")
+                if not getattr(self, "_onboarding_active", False):
+                    self._nav_rail_go_to("Overview")
 
         # Re-apply cached mesh/plugin enrichment immediately so names/nodes are
         # visible without waiting for the async worker.
