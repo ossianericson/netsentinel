@@ -14,6 +14,37 @@ import textwrap
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+
+# RULE-WIN4: track all QThread workers; autouse fixture deletes via deleteLater()
+_created_workers: list = []
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_workers():
+    yield
+    try:
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import QCoreApplication, QEvent
+        for w in _created_workers:
+            try:
+                w.deleteLater()
+            except RuntimeError:
+                pass  # non-fatal — already deleted
+        app = QApplication.instance()
+        if app:
+            try:
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+            except Exception:
+                pass  # non-fatal — best-effort cleanup
+            for _ in range(3):
+                app.processEvents()
+    except Exception:
+        pass  # non-fatal — PyQt6 may not be installed
+    finally:
+        _created_workers.clear()
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +86,7 @@ def _write_ok_plugin(tmp_path: Path) -> Path:
 def test_backoff_returns_base_interval_on_no_errors():
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="x")
+    _created_workers.append(w)
     w._consecutive_errors = 0
     assert w.get_effective_interval() == w._interval_s
 
@@ -62,6 +94,7 @@ def test_backoff_returns_base_interval_on_no_errors():
 def test_backoff_returns_base_interval_after_1_error():
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="x")
+    _created_workers.append(w)
     w._consecutive_errors = 1
     assert w.get_effective_interval() == w._interval_s
 
@@ -69,6 +102,7 @@ def test_backoff_returns_base_interval_after_1_error():
 def test_backoff_doubles_interval_at_3_errors():
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="x")
+    _created_workers.append(w)
     w._consecutive_errors = 3
     expected = min(w._interval_s * 2, 300)
     assert w.get_effective_interval() == expected
@@ -77,6 +111,7 @@ def test_backoff_doubles_interval_at_3_errors():
 def test_backoff_quadruples_interval_at_6_errors():
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="x")
+    _created_workers.append(w)
     w._consecutive_errors = 6
     expected = min(w._interval_s * 4, 300)
     assert w.get_effective_interval() == expected
@@ -86,6 +121,7 @@ def test_backoff_caps_at_300s():
     """Even a very long base interval with 6+ errors should not exceed 300 s."""
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "switch", instance_id="x")
+    _created_workers.append(w)
     # _DEFAULT_INTERVAL is 300; 300*4 = 1200 → capped to 300
     w._consecutive_errors = 6
     assert w.get_effective_interval() == 300
@@ -98,6 +134,7 @@ def test_backoff_resets_after_clean_run(tmp_path):
 
     results: list[dict] = []
     w = PluginPollingWorker(str(plugin), "router", instance_id="x")
+    _created_workers.append(w)
     w.result.connect(results.append)
     w._consecutive_errors = 5  # pretend previous run had errors
 
@@ -113,6 +150,7 @@ def test_trigger_now_noop_while_poll_in_progress():
     """trigger_now() must not set the event when _poll_in_progress is True."""
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="x")
+    _created_workers.append(w)
     w._poll_in_progress = True
     w.trigger_now()
     assert not w._trigger.is_set(), (
@@ -124,6 +162,7 @@ def test_trigger_now_sets_event_when_idle():
     """trigger_now() must set the event when no poll is in progress."""
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="x")
+    _created_workers.append(w)
     w._poll_in_progress = False
     w.trigger_now()
     assert w._trigger.is_set(), (

@@ -135,6 +135,12 @@ def _flush_qt_events(qt_app):
             w.deleteLater()
         except Exception:
             pass  # non-fatal
-    # Three passes ensures deleteLater() chains are fully resolved.
+    # processEvents() alone does NOT process DeferredDelete events in Qt6; we
+    # must call sendPostedEvents(DeferredDelete) explicitly to drain the queue.
+    try:
+        from PyQt6.QtCore import QCoreApplication, QEvent
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+    except Exception:
+        pass  # non-fatal — best-effort cleanup
     for _ in range(3):
         qt_app.processEvents()

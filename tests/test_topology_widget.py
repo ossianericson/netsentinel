@@ -25,10 +25,15 @@ def topology(qt_app):
     try:
         w.deleteLater()
     except RuntimeError:
-        pass  # already destroyed
+        pass  # already destroyed — safe to skip
     from PyQt6.QtWidgets import QApplication
     app = QApplication.instance()
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 

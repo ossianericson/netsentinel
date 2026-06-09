@@ -99,6 +99,11 @@ def _cleanup_page(p):
     except RuntimeError:
         pass  # non-fatal
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -116,6 +121,11 @@ def _cleanup_card(card):
     except RuntimeError:
         pass  # non-fatal
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -365,6 +375,11 @@ def test_safe_set_text_sets_text_on_live_widget():
     lbl.deleteLater()
     app = QApplication.instance()
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -451,6 +466,11 @@ def router_panel():
         pass  # non-fatal
     app = QApplication.instance()
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -508,6 +528,11 @@ def modem_panel():
         pass  # non-fatal
     app = QApplication.instance()
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -747,6 +772,11 @@ def test_plugin_polling_worker_interval_from_config():
             pass  # non-fatal — object already deleted
         app = QApplication.instance()
         if app:
+            try:
+                from PyQt6.QtCore import QCoreApplication, QEvent
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+            except Exception:
+                pass  # non-fatal — best-effort cleanup
             for _ in range(3):
                 app.processEvents()
 
@@ -784,5 +814,10 @@ def test_plugin_polling_worker_passes_config_to_get_status(tmp_path):
             pass  # non-fatal — object already deleted
         app = QApplication.instance()
         if app:
+            try:
+                from PyQt6.QtCore import QCoreApplication, QEvent
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+            except Exception:
+                pass  # non-fatal — best-effort cleanup
             for _ in range(3):
                 app.processEvents()

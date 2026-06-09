@@ -46,8 +46,19 @@ def _status(nodes: list | None = None, n: int = 0) -> dict:
 def panel():
     p = _RouterDetailPanel()
     yield p
-    p.deleteLater()
-    QApplication.instance().processEvents()
+    try:
+        p.deleteLater()
+    except RuntimeError:
+        pass  # already destroyed — safe to skip
+    app = QApplication.instance()
+    if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
+        for _ in range(3):
+            app.processEvents()
 
 
 # ── Structure ─────────────────────────────────────────────────────────────────

@@ -1498,7 +1498,10 @@ class HubCard(QFrame):
             pw_edit.clear()
             status.setText("✓ Saved")
             status.setStyleSheet(f"color:{GREEN}; font-size:9px;")
-            QTimer.singleShot(3000, lambda s=status: _safe_set_text(s, ""))
+            _t = QTimer(status)
+            _t.setSingleShot(True)
+            _t.timeout.connect(lambda s=status: _safe_set_text(s, ""))
+            _t.start(3000)
         except Exception as exc:
             status.setText("Error")
             status.setStyleSheet(f"color:{RED}; font-size:9px;")
@@ -1520,7 +1523,10 @@ class HubCard(QFrame):
         except Exception:
             status.setText("Not saved")
             status.setStyleSheet(f"color:{TEXT_MUTED}; font-size:9px;")
-        QTimer.singleShot(3000, lambda s=status: _safe_set_text(s, ""))
+        _t = QTimer(status)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda s=status: _safe_set_text(s, ""))
+        _t.start(3000)
 
     def _on_rename_btn(self) -> None:
         """P3-4: Inline rename — prompt for a new display name, update card and emit signal."""
@@ -1604,7 +1610,10 @@ def _copy_text(btn: QPushButton, text: str) -> None:
     QApplication.clipboard().setText(text)
     orig = btn.text()
     btn.setText("✓  Copied!")
-    QTimer.singleShot(2000, lambda: btn.setText(orig))
+    _t = QTimer(btn)
+    _t.setSingleShot(True)
+    _t.timeout.connect(lambda: btn.setText(orig))
+    _t.start(2000)
 
 
 def _code_chip(code: str) -> QWidget:

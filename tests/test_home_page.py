@@ -44,9 +44,14 @@ def _cleanup_home_pages():
             page.deleteLater()
         except RuntimeError:
             pass  # already destroyed — safe to skip
-    # processEvents() runs Qt's deferred deletions while references are still held;
-    # the C++ objects are gone after this but the Python wrappers are still alive.
+    # processEvents() alone does NOT process DeferredDelete in Qt6; call
+    # sendPostedEvents(DeferredDelete) explicitly so pages are actually freed.
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal
         for _ in range(3):
             app.processEvents()
     # Now release Python references — C++ objects already deleted by Qt above

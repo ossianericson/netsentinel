@@ -33,8 +33,13 @@ def card():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass  # skip test if PyQt6 unavailable
+        pass  # already destroyed — safe to skip
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -94,7 +99,12 @@ def test_card_clicked_connects_to_external_slot():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass  # skip test if PyQt6 unavailable
+        pass  # already destroyed — safe to skip
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()

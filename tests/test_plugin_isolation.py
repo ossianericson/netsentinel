@@ -17,6 +17,37 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
+
+# RULE-WIN4: track all QThread workers; autouse fixture deletes via deleteLater()
+_created_workers: list = []
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_workers():
+    yield
+    try:
+        from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import QCoreApplication, QEvent
+        for w in _created_workers:
+            try:
+                w.deleteLater()
+            except RuntimeError:
+                pass  # non-fatal — already deleted
+        app = QApplication.instance()
+        if app:
+            try:
+                QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+            except Exception:
+                pass  # non-fatal — best-effort cleanup
+            for _ in range(3):
+                app.processEvents()
+    except Exception:
+        pass  # non-fatal — PyQt6 may not be installed
+    finally:
+        _created_workers.clear()
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,6 +136,7 @@ def test_two_workers_have_independent_namespaces(tmp_path):
 def test_trigger_now_is_noop_while_poll_in_progress():
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="iso_test")
+    _created_workers.append(w)
     w._poll_in_progress = True
     w.trigger_now()
     assert not w._trigger.is_set(), (
@@ -117,6 +149,7 @@ def test_trigger_now_is_noop_while_poll_in_progress():
 def test_trigger_now_sets_event_when_not_in_progress():
     from workers.plugin_polling_worker import PluginPollingWorker
     w = PluginPollingWorker("/fake.py", "router", instance_id="iso_test2")
+    _created_workers.append(w)
     w._poll_in_progress = False
     w.trigger_now()
     assert w._trigger.is_set(), (
@@ -131,6 +164,7 @@ def test_poll_in_progress_cleared_after_run_once(tmp_path):
 
     results: list[dict] = []
     w = PluginPollingWorker(str(plugin), "router", instance_id="flag_test")
+    _created_workers.append(w)
     w.result.connect(results.append)
 
     # Manually simulate one iteration of the run() loop

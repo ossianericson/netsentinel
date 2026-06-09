@@ -12,7 +12,32 @@ Contract:
 
 from __future__ import annotations
 
+import pytest
+from PyQt6.QtWidgets import QApplication
 
+
+# RULE-WIN4: track all QThread workers; autouse fixture deletes via deleteLater()
+_created_workers: list = []
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_workers():
+    yield
+    app = QApplication.instance()
+    for w in _created_workers:
+        try:
+            w.deleteLater()
+        except RuntimeError:
+            pass  # non-fatal — already deleted
+    if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
+        for _ in range(3):
+            app.processEvents()
+    _created_workers.clear()
 
 
 # ── SpeedTestResult field ─────────────────────────────────────────────────────
@@ -42,12 +67,14 @@ def test_worker_stores_modem_snapshot():
     from workers.speed_test_worker import SpeedTestWorker
     snapshot = {"network_type": "LTE", "signal_bars": 3}
     w = SpeedTestWorker(modem_snapshot=snapshot)
+    _created_workers.append(w)
     assert w._modem_snapshot == snapshot
 
 
 def test_worker_snapshot_none_by_default():
     from workers.speed_test_worker import SpeedTestWorker
     w = SpeedTestWorker()
+    _created_workers.append(w)
     assert w._modem_snapshot is None
 
 
@@ -63,6 +90,7 @@ def test_worker_uses_snapshot_when_no_zte_creds(monkeypatch):
 
     snapshot = {"network_type": "NR5G", "signal_bars": 4}
     w = SpeedTestWorker(modem_snapshot=snapshot)
+    _created_workers.append(w)
     emitted: list = []
     w.result_ready.connect(lambda r: emitted.append(r))
     w.run()
@@ -82,6 +110,7 @@ def test_worker_no_snapshot_no_zte_gives_none(monkeypatch):
     monkeypatch.setattr("modules.speed_tester.run_test", lambda **kw: fake_result)
 
     w = SpeedTestWorker()
+    _created_workers.append(w)
     emitted: list = []
     w.result_ready.connect(lambda r: emitted.append(r))
     w.run()

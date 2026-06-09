@@ -48,8 +48,13 @@ class TestHwDetectWorker:
                 pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
+                from PyQt6.QtCore import QCoreApplication, QEvent
                 app = QApplication.instance()
                 if app:
+                    try:
+                        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+                    except Exception:
+                        pass  # non-fatal — best-effort cleanup
                     for _ in range(3):
                         app.processEvents()
             except Exception:
@@ -101,8 +106,13 @@ class TestPluginWorker:
                 pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
+                from PyQt6.QtCore import QCoreApplication, QEvent
                 app = QApplication.instance()
                 if app:
+                    try:
+                        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+                    except Exception:
+                        pass  # non-fatal — best-effort cleanup
                     for _ in range(3):
                         app.processEvents()
             except Exception:
@@ -123,8 +133,13 @@ class TestPluginWorker:
                 pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
+                from PyQt6.QtCore import QCoreApplication, QEvent
                 app = QApplication.instance()
                 if app:
+                    try:
+                        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+                    except Exception:
+                        pass  # non-fatal — best-effort cleanup
                     for _ in range(3):
                         app.processEvents()
             except Exception:
@@ -149,8 +164,13 @@ class TestWifiMonitorWorker:
                 pass  # non-fatal
             try:
                 from PyQt6.QtWidgets import QApplication
+                from PyQt6.QtCore import QCoreApplication, QEvent
                 app = QApplication.instance()
                 if app:
+                    try:
+                        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+                    except Exception:
+                        pass  # non-fatal — best-effort cleanup
                     for _ in range(3):
                         app.processEvents()
             except Exception:

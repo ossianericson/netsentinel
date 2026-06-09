@@ -86,8 +86,13 @@ def jt():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass  # skip test if PyQt6 unavailable
+        pass  # already destroyed — safe to skip
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -106,7 +111,12 @@ def test_jargon_tooltip_unknown_term():
     try:
         w.deleteLater()
     except RuntimeError:
-        pass  # skip test if PyQt6 unavailable
+        pass  # already destroyed — safe to skip
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()

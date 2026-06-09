@@ -397,10 +397,14 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         self._migrate_stale_paths()
         for i, inst in enumerate(_load_instances()):
             inst_id = inst["id"]
-            QTimer.singleShot(100, lambda iid=inst_id: self._smoke_check_deps_inst(iid))
-            QTimer.singleShot(
-                i * 3000, lambda iid=inst_id: self._start_poll_worker_inst(iid)
-            )
+            _t1 = QTimer(self)
+            _t1.setSingleShot(True)
+            _t1.timeout.connect(lambda iid=inst_id: self._smoke_check_deps_inst(iid))
+            _t1.start(100)
+            _t2 = QTimer(self)
+            _t2.setSingleShot(True)
+            _t2.timeout.connect(lambda iid=inst_id: self._start_poll_worker_inst(iid))
+            _t2.start(i * 3000)
 
     def _smoke_check_deps(self, path: str) -> None:
         ok, _, meta = _validate_script(path)
@@ -489,8 +493,10 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         # so new instances show data right away; subsequent launches also benefit.
         cached = _load_last_result(instance_id)
         if cached:
-            QTimer.singleShot(0, lambda d=cached, iid=instance_id:
-                              self._on_plugin_result(iid, d))
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(lambda d=cached, iid=instance_id: self._on_plugin_result(iid, d))
+            _t.start(0)
 
     def closedown(self) -> None:
         for w in list(self._poll_workers.values()):
@@ -642,7 +648,10 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
             card._btn_reenable.setVisible(False)
             card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
             card._metrics_lbl.setText("Library installed — reconnecting…")
-        QTimer.singleShot(300, lambda p=path: self._start_poll_worker(p))
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda p=path: self._start_poll_worker(p))
+        _t.start(300)
 
     @pyqtSlot(str)
     def _on_update_credentials(self, instance_id: str) -> None:
@@ -679,7 +688,10 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
             card._btn_reenable.setVisible(False)
             card._dot.setStyleSheet(f"color:{TEXT_MUTED}; font-size:13px; border:none;")
             card._metrics_lbl.setText("Credentials updated — reconnecting…")
-        QTimer.singleShot(300, lambda iid=instance_id: self._start_poll_worker_inst(iid))
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda iid=instance_id: self._start_poll_worker_inst(iid))
+        _t.start(300)
 
     @pyqtSlot(str, str, str)
     def _on_rename_card(self, instance_id: str, old_name: str, new_name: str) -> None:
@@ -766,4 +778,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         color = AMBER if error else GREEN
         self._status_lbl.setText(text)
         self._status_lbl.setStyleSheet(f"font-size:10px; color:{color};")
-        QTimer.singleShot(5000, lambda: self._status_lbl.setText(""))
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._status_lbl.setText(""))
+        _t.start(5000)

@@ -6,18 +6,40 @@ error emission for missing file, and error emission for broken plugin code.
 """
 from __future__ import annotations
 
-import sys
 import textwrap
 import time
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-# ── QApplication fixture ─────────────────────────────────────────────────────
 
-@pytest.fixture(scope="module")
-def qapp():
-    app = QApplication.instance() or QApplication(sys.argv)
-    yield app
+# RULE-WIN4: track all workers; autouse fixture deletes them via deleteLater()
+_created_workers: list = []
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_workers():
+    yield
+    app = QApplication.instance()
+    for w in _created_workers:
+        try:
+            if w.isRunning():
+                w.stop()
+                w.wait(2000)
+        except RuntimeError:
+            pass  # non-fatal — worker may already be gone
+        try:
+            w.deleteLater()
+        except RuntimeError:
+            pass  # non-fatal — already deleted
+    if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
+        for _ in range(3):
+            app.processEvents()
+    _created_workers.clear()
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -25,7 +47,6 @@ def qapp():
 
 def _wait(condition, timeout=5.0, step=0.05) -> bool:
     """Poll condition, pumping Qt events on each iteration."""
-    from PyQt6.QtWidgets import QApplication
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         QApplication.processEvents()
@@ -45,9 +66,8 @@ def test_import():
 # ── lifecycle (start / stop) ─────────────────────────────────────────────────
 
 
-def test_start_stop(qapp, tmp_path):
+def test_start_stop(tmp_path):
     """Worker must start, run, and stop cleanly without hanging."""
-    # Write a minimal valid plugin to a temp file
     plugin = tmp_path / "dummy_plugin.py"
     plugin.write_text(textwrap.dedent("""
         HARDWARE_NAME = "Dummy"
@@ -69,6 +89,7 @@ def test_start_stop(qapp, tmp_path):
     from workers.plugin_polling_worker import PluginPollingWorker
 
     worker = PluginPollingWorker(path=str(plugin), hw_type="other")
+    _created_workers.append(worker)
     worker.start()
     assert _wait(lambda: worker.isRunning()), "worker did not start within 3 s"
     worker.stop()
@@ -79,7 +100,7 @@ def test_start_stop(qapp, tmp_path):
 # ── result emission ───────────────────────────────────────────────────────────
 
 
-def test_result_emitted(qapp, tmp_path):
+def test_result_emitted(tmp_path):
     """Worker emits result signal when plugin returns valid data."""
     plugin = tmp_path / "ok_plugin.py"
     plugin.write_text(textwrap.dedent("""
@@ -103,6 +124,7 @@ def test_result_emitted(qapp, tmp_path):
 
     received: list[dict] = []
     worker = PluginPollingWorker(path=str(plugin), hw_type="other")
+    _created_workers.append(worker)
     worker.result.connect(received.append)
     worker.start()
     assert _wait(lambda: len(received) >= 1, timeout=5), "no result emitted within 5 s"
@@ -118,12 +140,13 @@ def test_result_emitted(qapp, tmp_path):
 # ── error emission — missing file ─────────────────────────────────────────────
 
 
-def test_error_missing_file(qapp, tmp_path):
+def test_error_missing_file(tmp_path):
     """Worker emits error when the plugin file does not exist."""
     from workers.plugin_polling_worker import PluginPollingWorker
 
     errors: list[str] = []
     worker = PluginPollingWorker(path=str(tmp_path / "nonexistent.py"), hw_type="other")
+    _created_workers.append(worker)
     worker.error.connect(errors.append)
     worker.start()
     assert _wait(lambda: len(errors) >= 1, timeout=5), "no error emitted within 5 s"
@@ -135,7 +158,7 @@ def test_error_missing_file(qapp, tmp_path):
 # ── error emission — broken plugin ────────────────────────────────────────────
 
 
-def test_error_broken_plugin(qapp, tmp_path):
+def test_error_broken_plugin(tmp_path):
     """Worker emits error when get_status() raises an unhandled exception."""
     plugin = tmp_path / "broken_plugin.py"
     plugin.write_text(textwrap.dedent("""
@@ -157,6 +180,7 @@ def test_error_broken_plugin(qapp, tmp_path):
 
     errors: list[str] = []
     worker = PluginPollingWorker(path=str(plugin), hw_type="other")
+    _created_workers.append(worker)
     worker.error.connect(errors.append)
     worker.start()
     assert _wait(lambda: len(errors) >= 1, timeout=5), "no error emitted within 5 s"
@@ -168,7 +192,7 @@ def test_error_broken_plugin(qapp, tmp_path):
 # ── trigger_now ───────────────────────────────────────────────────────────────
 
 
-def test_trigger_now_delivers_result_quickly(qapp, tmp_path):
+def test_trigger_now_delivers_result_quickly(tmp_path):
     """trigger_now() wakes the worker immediately without waiting the full interval."""
     plugin = tmp_path / "fast_plugin.py"
     plugin.write_text(textwrap.dedent("""
@@ -193,6 +217,7 @@ def test_trigger_now_delivers_result_quickly(qapp, tmp_path):
     received: list[dict] = []
     # Use a 3600-s interval so the worker would never self-trigger in the test
     worker = PluginPollingWorker(path=str(plugin), hw_type="other")
+    _created_workers.append(worker)
     worker._interval_s = 3600
     worker.result.connect(received.append)
     worker.start()

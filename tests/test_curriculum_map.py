@@ -91,8 +91,13 @@ def test_objective_badge_for_protocol_returns_list():
         try:
             b.deleteLater()
         except RuntimeError:
-            pass  # skip test if PyQt6 unavailable
+            pass  # already destroyed — safe to skip
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -108,8 +113,13 @@ def test_objective_badge_for_scenario_rogue():
         try:
             b.deleteLater()
         except RuntimeError:
-            pass  # skip test if PyQt6 unavailable
+            pass  # already destroyed — safe to skip
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
@@ -132,7 +142,12 @@ def test_objective_badge_cert_labels():
         try:
             b.deleteLater()
         except RuntimeError:
-            pass  # skip test if PyQt6 unavailable
+            pass  # already destroyed — safe to skip
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()

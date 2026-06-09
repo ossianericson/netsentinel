@@ -26,9 +26,14 @@ def log_hub_page(monkeypatch):
     try:
         page.deleteLater()
     except RuntimeError:
-        pass  # skip test if PyQt6 unavailable
+        pass  # already destroyed — safe to skip
     app = QApplication.instance()
     if app:
+        try:
+            from PyQt6.QtCore import QCoreApplication, QEvent
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+        except Exception:
+            pass  # non-fatal — best-effort cleanup
         for _ in range(3):
             app.processEvents()
 
