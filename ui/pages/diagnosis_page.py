@@ -302,6 +302,14 @@ class DiagnosisPage(QWidget):
 
         lay.addLayout(tiles_row)
 
+        _tile_hint = QLabel("Select a symptom, then click Run Diagnosis — NetSentinel runs targeted checks and shows plain-English results in 15–30 seconds.")
+        _tile_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _tile_hint.setWordWrap(True)
+        _tile_hint.setStyleSheet(
+            f"font-size:11px; font-style:italic; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        lay.addWidget(_tile_hint)
+
         run_btn = QPushButton("Run Diagnosis")
         run_btn.setFixedWidth(180)
         run_btn.setFixedHeight(44)

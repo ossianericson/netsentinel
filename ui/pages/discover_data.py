@@ -85,7 +85,7 @@ _FEATURES: list[dict] = [
         "desc": (
             "Opt-in weekly summary of your network's health, alert history, and "
             "device changes — delivered via your configured notification channel "
-            "at a time you choose. Added in v1.9."
+            "at a time you choose. Added in v1.9.97."
         ),
         "page": "Notifications",
         "requires": None,
@@ -97,7 +97,7 @@ _FEATURES: list[dict] = [
         "name": "Recent Actions (Command Palette)",
         "desc": (
             "The command palette now shows your last 5 actions so you can re-run "
-            "them with one click. Open with Ctrl+K or the search bar. Added in v1.9."
+            "them with one click. Open with Ctrl+K or the search bar. Added in v1.9.97."
         ),
         "page": "Feature Guide",
         "requires": None,

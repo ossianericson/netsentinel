@@ -669,19 +669,42 @@ class _HomeDataMixin:
         except Exception:
             _prev_macs = set()
         _qs_delta.setValue("home/last_scan_macs", _json.dumps(list(_current_macs)))
+
+        # Collect all change chips: devices, CVEs, threat intel
+        _parts: list = []
         if _prev_macs:
             _new_count  = len(_current_macs - _prev_macs)
             _gone_count = len(_prev_macs - _current_macs)
-            if _new_count == 0 and _gone_count == 0:
-                _chips_html = f'<span style="color:{GREEN};">● No changes since last scan</span>'
-            else:
-                _parts = []
-                if _new_count:
-                    _parts.append(f'<span style="color:{AMBER};">+{_new_count} new device{"s" if _new_count != 1 else ""}</span>')
-                if _gone_count:
-                    _parts.append(f'<span style="color:{RED};">−{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
-                _chips_html = "  ·  ".join(_parts)
-            self._delta_chips_lbl.setText(_chips_html)
+            if _new_count:
+                _parts.append(f'<span style="color:{AMBER};">+{_new_count} new device{"s" if _new_count != 1 else ""}</span>')
+            if _gone_count:
+                _parts.append(f'<span style="color:{RED};">−{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
+
+        # CVE delta — new CVE findings added since last scan
+        _store = getattr(self, "_store", None)
+        if _store is not None:
+            try:
+                _cve_count = len(_store.list_cve_lifecycles())
+                _prev_cve_str = _qs_delta.value("home/last_cve_count", "")
+                _prev_cve_count = int(_prev_cve_str) if _prev_cve_str else None
+                _qs_delta.setValue("home/last_cve_count", str(_cve_count))
+                if _prev_cve_count is not None and _cve_count > _prev_cve_count:
+                    _d = _cve_count - _prev_cve_count
+                    _parts.append(
+                        f'<span style="color:{RED};">+{_d} new CVE{"s" if _d != 1 else ""}</span>'
+                    )
+            except Exception:
+                pass  # non-fatal — store may not have CVE table yet
+
+        if _parts:
+            self._delta_chips_lbl.setText("  ·  ".join(_parts))
+            self._delta_chips_lbl.setTextFormat(Qt.TextFormat.RichText)
+            self._delta_banner.setVisible(True)
+        elif _prev_macs:
+            # no device or security changes
+            self._delta_chips_lbl.setText(
+                f'<span style="color:{GREEN};">● No changes since last scan</span>'
+            )
             self._delta_chips_lbl.setTextFormat(Qt.TextFormat.RichText)
             self._delta_banner.setVisible(True)
 

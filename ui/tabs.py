@@ -741,20 +741,30 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         # Persistent search button — always visible at top of rail, opens Ctrl+K palette
         _rail_search_btn = QPushButton()
-        _rail_search_btn.setFixedSize(56, 36)
+        _rail_search_btn.setFixedSize(56, 32)
         _rail_search_btn.setToolTip("Search all pages  (Ctrl+K)")
         _rail_search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         _rail_search_btn.setIcon(_make_nav_icon("search", 18, TEXT_MUTED))
         _rail_search_btn.setIconSize(QSize(18, 18))
         _rail_search_btn.setStyleSheet(
-            f"QPushButton {{ background: transparent; border: none; outline: none;"
-            f" border-bottom: 1px solid {NAV_DIVIDER}; }}"
+            f"QPushButton {{ background: transparent; border: none; outline: none; }}"
             f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
             f"QPushButton:focus, QPushButton:focus-visible {{"
-            f" outline: none; border: none; border-bottom: 1px solid {NAV_DIVIDER}; }}"
+            f" outline: none; border: none; }}"
         )
         _rail_search_btn.clicked.connect(self._open_command_palette)
+        # "Ctrl+K" chip — always-visible shortcut hint below the search icon
+        _ctrlk_chip = QLabel("Ctrl+K")
+        _ctrlk_chip.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        _ctrlk_chip.setFixedWidth(56)
+        _ctrlk_chip.setStyleSheet(
+            f"font-size:8px; color:{TEXT_MUTED}; background:transparent;"
+            f" border:none; border-bottom:1px solid {NAV_DIVIDER}; padding-bottom:4px;"
+        )
+        _ctrlk_chip.setCursor(Qt.CursorShape.PointingHandCursor)
+        _ctrlk_chip.mousePressEvent = lambda _e: self._open_command_palette()
         self._nav_rail_lay.addWidget(_rail_search_btn)
+        self._nav_rail_lay.addWidget(_ctrlk_chip)
         self._nav_rail_lay.addStretch()
 
         # Settings button pinned at bottom of rail

@@ -151,7 +151,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15).
     # Natural split if needed: split update vs. scan result methods.
-    "pages/home_data_mixin.py": 1107,  # actual 907 + 200 margin (Sprint 15 new file)
+    "pages/home_data_mixin.py": 1115,  # actual 1111 after polish items 11-18 (Sprint 15 new file)
 
     # home_widgets.py — core animated widgets + grade helpers + _MiniCard/_AlertRow.
     # Sprint 17: FreshnessStrip/GettingStartedCard/_GradeBreakdownDialog/Welcome pages

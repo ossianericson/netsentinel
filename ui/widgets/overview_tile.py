@@ -707,6 +707,13 @@ class NetworkGradeTile(_BaseTile):
     _GRADE_COLOUR = {
         "A": GREEN, "B": GREEN, "C": AMBER, "D": RED, "F": RED,
     }
+    _GRADE_TIPS = {
+        "A": "A — Excellent: no significant issues detected.",
+        "B": "B — Good: minor issues found; review the Security section.",
+        "C": "C — Fair: several issues detected; investigation recommended.",
+        "D": "D — Poor: significant problems found; action needed.",
+        "F": "F — Critical: severe issues detected; immediate action required.",
+    }
 
     def _build_body(self) -> None:
         self._grade_lbl = QLabel("–")
@@ -714,6 +721,7 @@ class NetworkGradeTile(_BaseTile):
         self._grade_lbl.setStyleSheet(
             f"font-size:56px; font-weight:bold; color:{TEXT_SECONDARY}; border:none;"
         )
+        self._grade_lbl.setToolTip("Run a Network Grade scan to see your score (A–F).")
         self._sub_lbl = QPushButton("Run Network Grade →")
         self._sub_lbl.setFlat(True)
         self._sub_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -738,6 +746,9 @@ class NetworkGradeTile(_BaseTile):
         self._grade_lbl.setText(letter)
         self._grade_lbl.setStyleSheet(
             f"font-size:56px; font-weight:bold; color:{colour}; border:none;"
+        )
+        self._grade_lbl.setToolTip(
+            self._GRADE_TIPS.get(letter, "Run a Network Grade scan to see your score (A–F).")
         )
         if grade:
             self._sub_lbl.setText(f"Score: {score:.0f} / 100" if score else "")

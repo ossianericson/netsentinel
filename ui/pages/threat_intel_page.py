@@ -225,6 +225,15 @@ class ThreatIntelPage(QWidget):
         from ui.widgets.page_header import PageHeaderBar
         root.addWidget(PageHeaderBar("Threat Intelligence"))
 
+        _ti_sub = QLabel(
+            "Known-bad IPs and domains from community threat feeds — "
+            "enable AbuseIPDB for live lookups against active connections."
+        )
+        _ti_sub.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        root.addWidget(_ti_sub)
+
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(8)
@@ -278,8 +287,12 @@ class ThreatIntelPage(QWidget):
         # Blocklist table card
         bl_card, bl_lay = _card_frame("Threat Indicators")
         self._table = _make_table(
-            ["Indicator", "Type", "Categories", "Source", "Confidence", "Last Seen"]
+            ["Indicator", "Type", "Categories", "Source", "Confidence", "Last Seen", "Actions"]
         )
+        self._table.horizontalHeader().setSectionResizeMode(
+            6, QHeaderView.ResizeMode.Fixed
+        )
+        self._table.setColumnWidth(6, 100)
         self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.customContextMenuRequested.connect(self._on_table_context_menu)
         bl_lay.addWidget(self._table)
@@ -643,6 +656,25 @@ class ThreatIntelPage(QWidget):
             self._table.setItem(row, 4, conf_item)
 
             self._table.setItem(row, 5, _cell(entry.last_seen or "—"))
+
+            # Inline "View on map →" action button for IP indicators
+            if entry.itype == "ip":
+                _map_btn = QPushButton("View on map →")
+                _map_btn.setFlat(True)
+                _map_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                _map_btn.setStyleSheet(
+                    f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+                    f" border:none; padding:0 4px; }}"
+                    f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+                    f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
+                )
+                _ind = entry.indicator
+                _map_btn.clicked.connect(
+                    lambda _c=False, ip=_ind: self.show_on_map.emit(ip)
+                )
+                self._table.setCellWidget(row, 6, _map_btn)
+            else:
+                self._table.setItem(row, 6, _cell(""))
 
         self._table.setSortingEnabled(True)
         self._table.sortByColumn(4, Qt.SortOrder.DescendingOrder)

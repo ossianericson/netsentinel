@@ -1,6 +1,5 @@
 """Tests for modules/speed_tester_servers.py (S20-7b split)."""
 import importlib
-import sys
 from unittest.mock import MagicMock, patch
 
 

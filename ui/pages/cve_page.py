@@ -254,6 +254,15 @@ class CvePage(QWidget):
         from ui.widgets.page_header import PageHeaderBar
         root.addWidget(PageHeaderBar("CVE Lifecycle Tracker"))
 
+        _cve_sub = QLabel(
+            "Findings are populated by a full scan — click any row to review details "
+            "and update the remediation status."
+        )
+        _cve_sub.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        root.addWidget(_cve_sub)
+
         # KPI row
         kpi_row = QHBoxLayout()
         kpi_row.setSpacing(10)

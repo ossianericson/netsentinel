@@ -402,6 +402,9 @@ class GettingStartedCard(QFrame):
             rl.addWidget(btn)
             body_lay.addWidget(row)
 
+        # Initialise progress label so it shows a count before update_steps() is called
+        self._setup_progress_lbl.setText(f"0/{len(self._setup_check_lbls)} done")
+
         outer.addWidget(self._setup_body)
 
     def _toggle_collapse(self) -> None:
