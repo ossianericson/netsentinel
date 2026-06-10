@@ -25,11 +25,13 @@ Current version: **v1.9.94**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 61 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
-Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness sprints) → v1.9.55–v1.9.60 (test-suite stability, module splits, MetricStore health) → v1.9.61–v1.9.62 (dashboard decomposition: tabs, help, header, settings, page splits) → v1.9.63–v1.9.64 (hex-colour purge, module test coverage, spec integrity) → v1.9.65 (home/hardware/notif/log/settings page splits, tabs sub-mixins) → v1.9.66 (Sprint 16–19: nav/monitor/plugin mixins, dashboard.py 13,483→1,967 lines — dashboard decomposition complete) → v1.9.67–v1.9.90 (CodeQL hardening, 2,000+ test suite, chaos/monkey harness, guided tour, onboarding rewrite — **Microsoft Store ready**)
+Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness sprints) → v1.9.55–v1.9.60 (test-suite stability, module splits, MetricStore health) → v1.9.61–v1.9.62 (dashboard decomposition: tabs, help, header, settings, page splits) → v1.9.63–v1.9.64 (hex-colour purge, module test coverage, spec integrity) → v1.9.65 (home/hardware/notif/log/settings page splits, tabs sub-mixins) → v1.9.66 (Sprint 16–19: nav/monitor/plugin mixins, dashboard.py 13,483→1,967 lines — dashboard decomposition complete) → v1.9.67–v1.9.90 (CodeQL hardening, 2,000+ test suite, chaos/monkey harness, guided tour, onboarding rewrite — **Microsoft Store ready**) → v1.9.91–v1.9.94 (QTimer crash fixes, test suite stabilised to 3,099 tests, APM rules hardened, cross-feature discoverability improvements — feature set complete)
+
+**Development phase:** The feature set is complete as of v1.9.94. All future development is **polish and user-requested changes only** — UX refinements, documentation accuracy, cross-feature discoverability glue, and bug fixes. No new features should be added without an explicit user request.
 
 ---
 
-## Implemented Features (as of v1.9.90)
+## Implemented Features (as of v1.9.94)
 
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection
@@ -75,7 +77,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Three colour themes** — Arctic Clean, Midnight Pro, Obsidian Neon; all values in `ui/styles.py`
 - **Configurable Overview tile dashboard** — drag to reorder, layout persists
 - **Skeleton loading rows** — `ui/widgets/skeleton.py`; placeholder rows while scan workers run
-- **Feature Guide** — `discover_page.py`; 24 feature descriptors with filter bar and Open buttons
+- **Feature Guide** — `discover_page.py`; 83 feature entries across 9 groups with filter bar and Open buttons
 
 ### Home Page
 - **"Since you were last here" banner** — new devices and outages since last session
@@ -162,6 +164,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 
 ## Non-Goals
 
+- Do not add new features without an explicit user request — the feature set is complete; focus is polish, discoverability, and cross-feature cohesion
 - Do not add consumer-style gamification (glow effects, neon colours, oversized animations)
 - Do not abstract away technical detail — show MAC addresses, full IP ranges, exact RTTs
 - Do not add cloud sync, accounts, or telemetry without explicit opt-in

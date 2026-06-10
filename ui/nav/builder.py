@@ -786,13 +786,13 @@ class _NavBuilderMixin:
     # ── Visited-feature tracking ──────────────────────────────────────────────
 
     _DISCOVERY_PAGES = [
+        ("Network Logger",      "Start logging your network — captures RTT, DNS latency, and outages automatically in the background"),
+        ("What's Wrong?",       "Pick a symptom and get a plain-English verdict with a prioritised fix list"),
+        ("Network Grade",       "Get an A–F score for your network health across 8 dimensions"),
+        ("Feature Guide",       "See everything this app can do — including features most users never find"),
         ("Protocol Visualizer", "See animated diagrams of ARP, DNS, TCP and more — using your real devices"),
         ("Lab Mode",            "Try a guided exercise: find a rogue device or diagnose slow DNS on your live network"),
-        ("Network Grade",       "Get an A–F score for your network health across 8 dimensions"),
         ("Network Health Report", "Generate a network health report — great for ISP support tickets"),
-        ("What's Wrong?",       "Pick a symptom and get a plain-English verdict with a prioritised fix list"),
-        ("Feature Guide",       "See everything this app can do — including features most users never find"),
-        ("Network Logger",      "Configure log sources and view the live activity log — all in one place"),
     ]
 
     def _track_page_visit(self, label: str) -> None:

@@ -711,7 +711,12 @@ Required fields (all six mandatory — missing any crashes on startup):
 ```python
 {"group": "Monitoring", "icon": "⬡", "name": "...", "desc": "...", "page": "Nav Label", "requires": None}
 ```
-`group` must be one of: `"Monitoring"`, `"Diagnostics"`, `"Security"`, `"Learning"`, `"Hidden Features"`, `"Advanced"`.
+`group` must be one of the groups currently defined in `ui/pages/discover_data.py`:
+`"Start here"`, `"New in this version"`, `"Monitoring"`, `"Diagnostics"`, `"Security"`, `"Learning"`, `"Extend"`, `"Hidden features"`, `"Advanced"`.
+
+Note casing: `"Hidden features"` (lowercase 'f'), not `"Hidden Features"`.
+Groups appear in the Feature Guide in the order entries are listed in `_FEATURES` — no separate ordering constant exists.
+Use `"Monitoring"` for passive background monitors, `"Diagnostics"` for active one-shot tools, `"Security"` for threat-detection features, `"Advanced"` for automation/integration/expert tools, `"Hidden features"` for discoverability tips that are not full pages.
 
 ---
 
@@ -887,18 +892,29 @@ monkeypatch.setattr(
 
 **Never** delete Qt widgets by letting them go out of scope or by calling the C++ destructor directly. **Always** use `deleteLater()` followed by `processEvents()`.
 
-### RULE-WIN5 (blocking): Never use QTimer.singleShot(n, self.method) in __init__ — use a parented QTimer
+### RULE-WIN5 (blocking): Never use unparented QTimer.singleShot(n, self.method) anywhere in a widget — use a parented QTimer
 `QTimer.singleShot(n, slot)` creates a standalone timer with **no Qt parent**. If the widget is
 deleted before the timer fires (fixture teardown, rapid navigation, or test cleanup faster than
 `n` ms), the timer fires on a zombie C++ object, raises uncaught `RuntimeError` through the
 Qt C++ timer callback machinery, and corrupts the heap. The crash surfaces as
 `STATUS_STACK_BUFFER_OVERRUN` hundreds of tests later — not at the callsite.
 
+**This rule applies to every method in a widget class, not only `__init__`.**
+The crash that motivated this rule was in `hardware_integration_page.py`'s `_set_status`
+method, which used a 5000 ms `QTimer.singleShot` to clear a status label. During test
+teardown the page was deleted within 5 s; the timer fired on the zombie object and silently
+corrupted the heap, crashing the suite ~400 tests later with `STATUS_STACK_BUFFER_OVERRUN`.
+
 ```python
 # WRONG — unparented; fires on zombie if widget is deleted within n ms
 def __init__(self):
     self._setup_ui()
     QTimer.singleShot(300, self._load_history)
+
+# WRONG — same problem in any other method
+def _set_status(self, msg):
+    self._status_label.setText(msg)
+    QTimer.singleShot(5000, lambda: self._status_label.setText(""))  # fires on zombie!
 
 # CORRECT — parented QTimer is auto-destroyed when the widget is deleted
 def __init__(self):
@@ -907,6 +923,14 @@ def __init__(self):
     _t.setSingleShot(True)
     _t.timeout.connect(self._load_history)
     _t.start(300)
+
+# CORRECT — parented one-shot in a regular method
+def _set_status(self, msg):
+    self._status_label.setText(msg)
+    _t = QTimer(self)
+    _t.setSingleShot(True)
+    _t.timeout.connect(lambda: self._status_label.setText(""))
+    _t.start(5000)
 ```
 
 This rule applies to **any delay**, including 0 ms. `QTimer.singleShot(0, slot)` is equally
@@ -917,6 +941,13 @@ deferred-delete event is processed.
 - `showEvent` / `closeEvent` handlers (widget is alive when shown; timer is short-lived)
 - Transient UI feedback slots (e.g., reset a button label after 2 s) where the lambda
   captures only local widget references and uses a defensive `try/except RuntimeError`
+
+**Enforcement:** grep-check before committing to catch any new violations:
+```powershell
+# Flag any QTimer.singleShot that binds to self — all must be parented QTimer(self)
+Select-String -Path ui -Include "*.py" -Recurse -Pattern "QTimer\.singleShot\(.*self\."
+```
+Any hit outside a `showEvent`/`closeEvent` body must be converted to a parented `QTimer(self)`.
 
 ### RULE-WIN6 (blocking): Test fixtures must patch ALL persistent-storage readers for the page under test
 When monkeypatching a page's storage functions in a test fixture, identify and patch **every**

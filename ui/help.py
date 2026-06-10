@@ -84,6 +84,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "A rogue DHCP server flag means two devices are handing out IP addresses — this can cause connection failures across the whole network.",
             "Lease data is read from the OS lease table — no packet capture needed, works without Npcap.",
+            "For real-time detection of rogue DHCP OFFER packets on the wire, see DHCP Rogue Monitor in Security Audit — that requires Npcap and catches attacks that don't complete a full lease.",
         ],
     },
     "Home Automation": {
@@ -99,6 +100,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Switch between interfaces using the dropdown if you have both Wi-Fi and Ethernet active.",
             "Spikes that correlate with Broadcast Storm events help confirm a storm is saturating the link.",
+            "For per-device bandwidth breakdown showing which device is consuming the most, see Bandwidth Usage (also in this section) — that requires Npcap for packet capture.",
         ],
     },
     "Bandwidth Usage": {
@@ -107,6 +109,7 @@ _PAGE_HELP: dict[str, dict] = {
             "Packet capture requires Npcap on Windows — install it from npcap.com for this tab to populate.",
             "Click a row to see the breakdown of protocols that device is using.",
             "The top-talker list shows which device is consuming the most bandwidth — useful for finding rogue downloaders.",
+            "For a real-time per-interface chart without Npcap, see Live Bandwidth (also in this section).",
         ],
     },
     "Active Connections": {
@@ -233,6 +236,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "The 'Explain This' strip shows a step-by-step ARP spoofing diagram — useful for understanding how the attack works.",
             "Requires Npcap on Windows and admin rights — the tab shows a banner if these are missing.",
+            "For an aggregate view of all security monitors including this one, see Security Overview in the Security Audit section.",
         ],
     },
     "SNMP Device Info": {
@@ -342,6 +346,8 @@ _PAGE_HELP: dict[str, dict] = {
         "what": "Aggregate security dashboard — KPI tiles for threat indicators, top findings table, and one-click audit launch.",
         "hidden": [
             "The grade circle updates after every scan — run a full security scan to get your latest grade.",
+            "Each finding in the top-15 table names the source page — click any row and navigate there directly to investigate.",
+            "For real-time ARP/DHCP/Storm monitors, use ARP Spoof Watch, DHCP Rogue Monitor, and Broadcast Storm in this section and in Analysis.",
         ],
     },
     "Port Scan (TCP)": {
@@ -349,6 +355,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "SYN scan is faster and quieter than a connect scan because it never completes the three-way handshake.",
             "Scan results feed into Device Risk Score and CVE Lookup automatically.",
+            "After running a port scan, go to CVE Lookup to cross-reference discovered service versions against the NVD vulnerability database.",
         ],
     },
     "Port Scan (UDP)": {
@@ -363,6 +370,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "CVE data is fetched from services.nvd.nist.gov — this is the only external call in this tab.",
             "Run a port scan first so there are service versions to look up — CVE Lookup needs version strings to match against.",
+            "To track whether CVEs get fixed over time, see CVE Tracker (also in Security Audit) — it records open/mitigated/resolved state per device across scans.",
         ],
     },
     "Threat Intel": {
@@ -402,6 +410,7 @@ _PAGE_HELP: dict[str, dict] = {
         "what": "Tracks active CVEs for your network devices over time — shows newly discovered vulnerabilities since last scan.",
         "hidden": [
             "Newly discovered CVEs appear with a 'New' badge — these are the ones to prioritise for patching.",
+            "CVE Tracker needs data to track — run CVE Lookup first to discover vulnerabilities, then come back here to monitor remediation progress.",
         ],
     },
     "Exposed to Internet": {
@@ -446,6 +455,7 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Requires Npcap on Windows — the monitor listens for DHCP OFFER frames on the wire.",
             "A rogue DHCP server can redirect your DNS to a malicious resolver — this is a common attack on public Wi-Fi.",
+            "For a snapshot of all current leases and assigned IPs without Npcap, see DHCP Leases in the Discover section.",
         ],
     },
     # ── Education ──────────────────────────────────────────────────────────────
