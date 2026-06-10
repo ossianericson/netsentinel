@@ -399,7 +399,8 @@ class _ScanTabsMixin:
         lay.setSpacing(6)
         lay.addWidget(_page_header(
             "Rogue Bridge Detection",
-            "STP/BPDU frame capture — identifies unauthorised Spanning Tree root bridges"
+            "Identifies devices claiming to be network switches via Spanning Tree Protocol"
+            " — a sign of misconfiguration or an unauthorized device."
         ))
         self._m2_status = QLabel("Not yet scanned.")
         self._m2_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")
@@ -493,7 +494,8 @@ class _ScanTabsMixin:
         lay.setSpacing(6)
         lay.addWidget(_page_header(
             "Broadcast Storm Analysis",
-            "Live packet capture — measures broadcast/multicast rates and storm level"
+            "Detects packet floods that can slow or crash your network"
+            " — usually a faulty switch or routing loop."
         ))
         self._m3_status = QLabel("Not yet scanned.")
         self._m3_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:2px 0;")

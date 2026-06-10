@@ -519,6 +519,18 @@ class SpeedTestPage(QWidget):
             stats_row.addWidget(tile, 1)
 
         gauge_body.addLayout(stats_row)
+
+        # Static speed context chip
+        _ctx = QLabel(
+            "< 10 Mbps — slow for streaming  ·  25–100 Mbps — typical home  ·  100+ Mbps — fast"
+        )
+        _ctx.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        _ctx.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; background:{BG_ALT_ROW};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 8px;"
+        )
+        gauge_body.addWidget(_ctx)
+
         top_row.addWidget(gauge_card, 6)
 
         root.addLayout(top_row, 3)

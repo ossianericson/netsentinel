@@ -26,7 +26,7 @@ from ui.styles import (
     GRADE_D_BG, GRADE_F_BG, GRADE_F_FG, GREEN,
     RED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
-from ui.tabs import _table
+from ui.tabs import _page_header, _table
 
 
 class _AnalysisTabsMixin:
@@ -333,6 +333,11 @@ class _AnalysisTabsMixin:
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(_page_header(
+            "IoT Behaviour",
+            "Compares current IoT device traffic against their normal patterns"
+            " — deviations often indicate compromise or malfunction.",
+        ))
         lay.addWidget(NpcapMissingBanner(parent=w))
 
         info = QLabel(
