@@ -9,6 +9,7 @@ cycle_done.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
@@ -19,6 +20,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -33,7 +35,7 @@ from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_SEL,
+    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )
@@ -145,6 +147,9 @@ class UptimePage(QWidget):
         hint = QLabel("Green ≥99% · Amber ≥95% · Red <95%")
         hint.setStyleSheet(f"font-size: 11px; color: {TEXT_SECONDARY};")
         tb_layout.addWidget(hint)
+        self._last_refresh_lbl = QLabel("")
+        self._last_refresh_lbl.setStyleSheet(f"font-size: 10px; color: {TEXT_MUTED}; padding-left: 12px;")
+        tb_layout.addWidget(self._last_refresh_lbl)
         card_layout.addWidget(title_bar)
 
         self._table = ExpandingTable(
@@ -170,7 +175,7 @@ class UptimePage(QWidget):
         self._table.setStyleSheet(
             f"""
             QTableWidget {{
-                border: none; gridline-color: TABLE_ROW_BORDER;
+                border: none; gridline-color: {TABLE_ROW_BORDER};
                 font-size: 11px; color: {TEXT_PRIMARY};
                 alternate-background-color: {BG_ALT_ROW};
             }}
@@ -209,11 +214,44 @@ class UptimePage(QWidget):
             from PyQt6.QtWidgets import QApplication as _QApp
             _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
 
+        def _upt_how_to_fix():
+            r = self._table.currentRow()
+            if r < 0:
+                return
+            ip_it = self._table.item(r, 0)
+            ip = ip_it.text() if ip_it else ""
+            row_data = next((x for x in self._rows if x.get("ip") == ip), None)
+            if not row_data:
+                return
+            pct_24 = row_data.get("24.0")
+            hostname = row_data.get("hostname") or ip
+            if pct_24 is None:
+                msg = (
+                    f"<b>{hostname}</b> — no uptime data collected yet.<br><br>"
+                    "The background availability monitor hasn't captured samples for this device. "
+                    "Make sure monitoring is running (Start Core Monitors on the Overview page)."
+                )
+            elif pct_24 >= _WARN:
+                msg = f"<b>{hostname}</b> shows {pct_24:.1f}% uptime — looks healthy, no action required."
+            else:
+                msg = (
+                    f"<b>{hostname}</b> shows {pct_24:.1f}% uptime over the last 24 hours.<br><br>"
+                    "<b>Steps to investigate:</b><br>"
+                    "1. Open <b>Availability History</b> to see the exact outage timestamps.<br>"
+                    "2. Check whether this device legitimately powers off (laptop, phone, IoT).<br>"
+                    "3. For always-on infrastructure: check cabling, switch port, and power supply.<br>"
+                    "4. Review <b>Inventory Changes</b> for JOIN / LEFT events around the same time.<br>"
+                    "5. Add the device to <b>Service Heartbeat</b> for port-level monitoring."
+                )
+            QMessageBox.information(self, "How to Fix", msg)
+
         install_copy_menu(self._table, [
-            ("separator",  None),
-            ("Copy host",  _upt_copy_host),
-            ("separator",  None),
-            ("Export row", _upt_export_row),
+            ("separator",    None),
+            ("Copy host",    _upt_copy_host),
+            ("separator",    None),
+            ("Export row",   _upt_export_row),
+            ("separator",    None),
+            ("How to Fix",   _upt_how_to_fix),
         ])
 
         card_layout.addWidget(self._table)
@@ -332,6 +370,7 @@ class UptimePage(QWidget):
                       f"{worst_pct}% ({worst_ip})" if worst_pct is not None else "—")
 
         self._table.setSortingEnabled(True)
+        self._last_refresh_lbl.setText(f"Updated {datetime.now().strftime('%H:%M:%S')}")
 
     # ── Detail panel ──────────────────────────────────────────────────────────
 

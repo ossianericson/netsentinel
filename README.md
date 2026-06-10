@@ -973,6 +973,25 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ---
 
+## About
+
+**NetSentinel — Network Security Scanner & Connectivity Monitor**
+
+NetSentinel will always remain free and open source.
+
+If you find this tool valuable, please consider supporting:
+
+- **[Wikipedia](https://donate.wikimedia.org/)** — free knowledge for everyone
+- **[Electronic Frontier Foundation](https://eff.org/donate)** — protecting digital rights
+
+Thank you for using NetSentinel.
+
+> **Disclaimer:** For use on networks you own or have explicit authorization to test.
+
+Built by **Ossian Ericson** · [GitHub](https://github.com/ossianericson/netsentinel)
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

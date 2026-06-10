@@ -370,8 +370,35 @@ class DhcpLeasePage(QWidget):
             act_copy_mac.triggered.connect(
                 lambda: QApplication.clipboard().setText(mac_item.text())
             )
+        menu.addSeparator()
+        _server_item = self._table.item(row, 4)
+        _server = _server_item.text() if _server_item else ""
+        act_fix = menu.addAction("How to Fix")
+        act_fix.triggered.connect(lambda: self._show_dhcp_fix(ip, _server))
 
         menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _show_dhcp_fix(self, ip: str, server: str) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        if server and server not in ("—", ""):
+            msg = (
+                f"<b>{ip}</b> was assigned by DHCP server <b>{server}</b>.<br><br>"
+                "If you don't recognise this DHCP server, it may be a rogue server "
+                "handing out addresses and redirecting your traffic.<br><br>"
+                "<b>Steps to investigate:</b><br>"
+                "1. Open the <b>Devices</b> page — find the device at this server IP and verify its vendor.<br>"
+                "2. Check your router admin panel to confirm the authorised DHCP server address.<br>"
+                "3. If the server is unexpected: isolate it and run a port scan on it.<br>"
+                "4. Enable DHCP snooping on your managed switch if available."
+            )
+        else:
+            msg = (
+                f"<b>{ip}</b> — DHCP lease found on your network.<br><br>"
+                "1. Open the <b>Devices</b> page to identify the vendor and label this device.<br>"
+                "2. If you don't recognise this IP, check the MAC address against known devices.<br>"
+                "3. Unknown devices should be investigated before being trusted on your network."
+            )
+        QMessageBox.information(self, "How to Fix", msg)
 
     def _find_in_inventory(self, ip: str) -> None:
         self.select_device.emit(ip)

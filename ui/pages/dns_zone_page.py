@@ -279,11 +279,53 @@ class DnsZonePage(QWidget):
             from PyQt6.QtWidgets import QApplication as _QApp
             _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
 
+        def _rec_how_to_fix():
+            r = self._rec_table.currentRow()
+            if r < 0:
+                return
+            type_it = self._rec_table.item(r, 1)
+            name_it = self._rec_table.item(r, 0)
+            rtype = type_it.text() if type_it else ""
+            name  = name_it.text() if name_it else ""
+            from PyQt6.QtWidgets import QMessageBox
+            if rtype in ("NS", "SOA"):
+                msg = (
+                    f"<b>{name}</b> is a <b>{rtype}</b> record — part of your DNS zone authority.<br><br>"
+                    "The fact that you could retrieve this via AXFR means your DNS server "
+                    "allows zone transfers from your IP address.<br><br>"
+                    "<b>Recommended action:</b> Restrict zone transfers (AXFR) to authorised "
+                    "secondary DNS servers only. On BIND: <code>allow-transfer { none; };</code>"
+                )
+            elif rtype == "A":
+                msg = (
+                    f"<b>{name}</b> is an <b>A</b> record pointing to an IP address.<br><br>"
+                    "If this zone was transferred, your full host list is exposed to anyone "
+                    "who can reach your DNS server.<br><br>"
+                    "<b>Recommended action:</b> Restrict AXFR access. Review whether all "
+                    "hostnames listed here should be publicly visible."
+                )
+            elif rtype == "MX":
+                msg = (
+                    f"<b>{name}</b> is an <b>MX</b> (mail exchange) record.<br><br>"
+                    "Mail server hostnames exposed via AXFR help attackers plan targeted phishing.<br><br>"
+                    "<b>Recommended action:</b> Restrict zone transfers. Ensure mail servers "
+                    "are patched and not running exposed admin interfaces."
+                )
+            else:
+                msg = (
+                    f"<b>{name}</b> is a <b>{rtype}</b> DNS record retrieved via zone transfer.<br><br>"
+                    "Zone transfer exposure leaks your full DNS structure to any requester.<br><br>"
+                    "<b>Recommended action:</b> Restrict AXFR to authorised secondary servers only."
+                )
+            QMessageBox.information(self, "How to Fix", msg)
+
         install_copy_menu(self._rec_table, [
             ("separator",     None),
             ("Copy record",   _rec_copy_record),
             ("separator",     None),
             ("Export row",    _rec_export),
+            ("separator",     None),
+            ("How to Fix",    _rec_how_to_fix),
         ])
 
         self._rec_empty = QLabel("No records — run AXFR or server refused transfer.")
@@ -323,11 +365,55 @@ class DnsZonePage(QWidget):
             from PyQt6.QtWidgets import QApplication as _QApp
             _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
 
+        def _svc_how_to_fix():
+            r = self._svc_table.currentRow()
+            if r < 0:
+                return
+            stype_it = self._svc_table.item(r, 0)
+            inst_it  = self._svc_table.item(r, 1)
+            stype = stype_it.text() if stype_it else ""
+            inst  = inst_it.text()  if inst_it  else ""
+            from PyQt6.QtWidgets import QMessageBox
+            label = inst or stype
+            if "_smb" in stype.lower() or "_afp" in stype.lower() or "_nfs" in stype.lower():
+                msg = (
+                    f"<b>{label}</b> is a file-sharing service advertising on mDNS.<br><br>"
+                    "File shares visible over mDNS are accessible to anyone on your network "
+                    "without prior knowledge of their address.<br><br>"
+                    "<b>Steps:</b><br>"
+                    "1. Verify this share is intentional — open the <b>Devices</b> page to "
+                    "identify the host.<br>"
+                    "2. Ensure the share requires authentication (username + password).<br>"
+                    "3. If unexpected, disable file sharing on that device."
+                )
+            elif "_http" in stype.lower() or "_https" in stype.lower():
+                msg = (
+                    f"<b>{label}</b> is a web service advertising on mDNS.<br><br>"
+                    "Web services on mDNS can expose admin panels, NAS UIs, or IoT dashboards.<br><br>"
+                    "<b>Steps:</b><br>"
+                    "1. Browse to the advertised address and confirm what is running.<br>"
+                    "2. Ensure it requires a login and is running a current firmware version.<br>"
+                    "3. If unexpected, investigate which device is hosting it."
+                )
+            else:
+                msg = (
+                    f"<b>{label}</b> ({stype}) is advertising on mDNS (Bonjour/Avahi).<br><br>"
+                    "mDNS services are visible to all devices on the same subnet. "
+                    "Unexpected services may indicate shadow IT or misconfigured devices.<br><br>"
+                    "<b>Steps:</b><br>"
+                    "1. Open the <b>Devices</b> page to identify the host advertising this service.<br>"
+                    "2. If you don't recognise the device, investigate before trusting it.<br>"
+                    "3. Disable mDNS/Bonjour on devices that don't need it."
+                )
+            QMessageBox.information(self, "How to Fix", msg)
+
         install_copy_menu(self._svc_table, [
             ("separator",   None),
             ("Copy record", _svc_copy_record),
             ("separator",   None),
             ("Export row",  _svc_export),
+            ("separator",   None),
+            ("How to Fix",  _svc_how_to_fix),
         ])
 
         self._svc_empty = QLabel("No mDNS services discovered. Click 'Enumerate mDNS'.")

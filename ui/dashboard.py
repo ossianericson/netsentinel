@@ -1419,65 +1419,106 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._update_lbl.setText(f"Update check failed: {exc}")
 
     def _show_about(self):
-        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
+        from PyQt6.QtWidgets import (
+            QDialog, QVBoxLayout, QLabel, QPushButton, QApplication, QFrame,
+        )
         from PyQt6.QtCore import Qt
         from PyQt6.QtGui import QFont
         dlg = QDialog(self)
         dlg.setWindowTitle("About NetSentinel")
-        dlg.setMinimumWidth(400)
+        dlg.setMinimumWidth(460)
         dlg.setStyleSheet(self.styleSheet())
         lay = QVBoxLayout(dlg)
-        lay.setSpacing(10)
-        lay.setContentsMargins(28, 24, 28, 20)
+        lay.setSpacing(0)
+        lay.setContentsMargins(32, 28, 32, 24)
 
+        # Title + version + subtitle
         title = QLabel("NetSentinel")
-        title.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        title.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{ACCENT};")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        version = QLabel(f"Version {QApplication.applicationVersion()}")
-        version.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
-        version.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ver_lbl = QLabel(f"v{QApplication.applicationVersion()}")
+        ver_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
+        ver_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        desc = QLabel("Network Security Scanner & Connectivity Monitor")
-        desc.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
-        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc.setWordWrap(True)
+        subtitle = QLabel("Network Security Scanner &amp; Connectivity Monitor")
+        subtitle.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setWordWrap(True)
 
-        author = QLabel("Built by <b>Ossian Ericson</b>")
-        author.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
-        author.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(title)
+        lay.addSpacing(2)
+        lay.addWidget(ver_lbl)
+        lay.addSpacing(6)
+        lay.addWidget(subtitle)
+        lay.addSpacing(18)
 
-        github = QLabel(
-            '<a href="https://github.com/ossianericson/netsentinel" '
-            f'style="color:{ACCENT};">github.com/ossianericson/netsentinel</a>'
+        # Divider
+        _div = QFrame()
+        _div.setFrameShape(QFrame.Shape.HLine)
+        _div.setStyleSheet(f"color:{BORDER};")
+        lay.addWidget(_div)
+        lay.addSpacing(14)
+
+        # Body — open source statement + supporter links
+        body = QLabel(
+            "NetSentinel will always remain free and open source.<br><br>"
+            "If you find this tool valuable, please consider supporting:<br>"
+            f'&nbsp;&nbsp;&#8226;&nbsp;<a href="https://donate.wikimedia.org/"'
+            f' style="color:{ACCENT};">Wikipedia</a>'
+            " — free knowledge for everyone<br>"
+            f'&nbsp;&nbsp;&#8226;&nbsp;<a href="https://eff.org/donate"'
+            f' style="color:{ACCENT};">Electronic Frontier Foundation</a>'
+            " — protecting digital rights<br><br>"
+            "Thank you for using NetSentinel."
         )
-        github.setOpenExternalLinks(True)
-        github.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        github.setStyleSheet("font-size:12px;")
+        body.setOpenExternalLinks(True)
+        body.setWordWrap(True)
+        body.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px;")
+        lay.addWidget(body)
+        lay.addSpacing(16)
 
+        # Divider
+        _div2 = QFrame()
+        _div2.setFrameShape(QFrame.Shape.HLine)
+        _div2.setStyleSheet(f"color:{BORDER};")
+        lay.addWidget(_div2)
+        lay.addSpacing(10)
+
+        # Disclaimer
+        disclaimer = QLabel(
+            "For use on networks you own or have explicit authorization to test."
+        )
+        disclaimer.setWordWrap(True)
+        disclaimer.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        disclaimer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(disclaimer)
+        lay.addSpacing(12)
+
+        # Author + links
+        author_lbl = QLabel(
+            "Built by <b>Ossian Ericson</b>"
+            f'&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="https://github.com/ossianericson/netsentinel"'
+            f' style="color:{ACCENT};">GitHub</a>'
+            f'&nbsp;&nbsp;&middot;&nbsp;&nbsp;<a href="https://www.linkedin.com/in/ossian-ericson/"'
+            f' style="color:{ACCENT};">LinkedIn</a>'
+        )
+        author_lbl.setOpenExternalLinks(True)
+        author_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        author_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:12px;")
+        lay.addWidget(author_lbl)
+        lay.addSpacing(18)
+
+        # Close button
         btn_close = QPushButton("Close")
         btn_close.setObjectName("btnNetRefresh")
         btn_close.setFixedWidth(100)
         btn_close.clicked.connect(dlg.accept)
-
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         btn_row.addWidget(btn_close)
         btn_row.addStretch()
-
-        disclaimer = QLabel(
-            "For use on networks you own or have explicit authorization to test."
-        )
-        disclaimer.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
-        disclaimer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        disclaimer.setWordWrap(True)
-
-        for w in (title, version, desc, author, github):
-            lay.addWidget(w)
-        lay.addSpacing(8)
-        lay.addWidget(disclaimer)
-        lay.addSpacing(4)
         lay.addLayout(btn_row)
 
         dlg.exec()

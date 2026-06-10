@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import QMenu
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_SEL,
+    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )
@@ -260,7 +260,7 @@ class CertPage(QWidget):
         self._table.setStyleSheet(
             f"""
             QTableWidget {{
-                border: none; gridline-color: TABLE_ROW_BORDER;
+                border: none; gridline-color: {TABLE_ROW_BORDER};
                 font-size: 11px; color: {TEXT_PRIMARY};
                 alternate-background-color: {BG_ALT_ROW};
             }}
@@ -459,7 +459,41 @@ class CertPage(QWidget):
             act_clear = menu.addAction("Clear snooze")
             act_clear.triggered.connect(lambda: self._clear_cert_snooze(host, port))
 
+        menu.addSeparator()
+        act_fix = menu.addAction("How to Fix")
+        act_fix.triggered.connect(lambda: self._show_cert_fix(host, port, row))
+
         menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _show_cert_fix(self, host: str, port: str, row: int) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        status_it  = self._table.item(row, 2)
+        days_it    = self._table.item(row, 3)
+        status = status_it.text() if status_it else ""
+        days_txt = days_it.text() if days_it else ""
+
+        if "OK" in status.upper() or ("VALID" in status.upper() and "EXPIR" not in status.upper()):
+            msg = f"<b>{host}:{port}</b> — certificate is valid, no action required."
+        elif "EXPIRED" in status.upper():
+            msg = (
+                f"<b>{host}:{port}</b> — certificate has already EXPIRED.<br><br>"
+                "<b>Immediate steps:</b><br>"
+                "1. Renew or replace the certificate on the server immediately.<br>"
+                "2. If using Let's Encrypt, run <code>certbot renew</code>.<br>"
+                "3. Restart the web server after installing the new certificate.<br>"
+                "4. Verify the renewed cert appears here within 5 minutes."
+            )
+        else:
+            msg = (
+                f"<b>{host}:{port}</b> — certificate expires in {days_txt}.<br><br>"
+                "<b>Steps to renew:</b><br>"
+                "1. Log into your certificate authority or hosting panel.<br>"
+                "2. Renew before expiry — most CAs allow renewal 30+ days early.<br>"
+                "3. For Let's Encrypt: run <code>certbot renew --force-renewal</code>.<br>"
+                "4. Install the new certificate and restart the service.<br>"
+                "5. Verify the new expiry date appears in this table."
+            )
+        QMessageBox.information(self, "How to Fix", msg)
 
     def _snooze_cert(self, host: str, port: str, days: int) -> None:
         import time as _t

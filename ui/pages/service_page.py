@@ -38,7 +38,7 @@ from modules.service_monitor import ServiceTarget
 from ui.styles import (
     ACCENT, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_SEL,
+    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )
@@ -218,6 +218,10 @@ class ServicePage(QWidget):
         bar_lbl.setStyleSheet(f"font-size: 13px; font-weight: bold; color: {TEXT_PRIMARY};")
         tb_layout.addWidget(bar_lbl)
         tb_layout.addStretch()
+        self._svc_refresh_lbl = QLabel("")
+        self._svc_refresh_lbl.setStyleSheet(f"font-size: 10px; color: {TEXT_MUTED};")
+        tb_layout.addWidget(self._svc_refresh_lbl)
+        tb_layout.addSpacing(10)
 
         self._txt_host = QLineEdit()
         self._txt_host.setPlaceholderText("Host / IP")
@@ -278,7 +282,7 @@ class ServicePage(QWidget):
         self._table.setStyleSheet(
             f"""
             QTableWidget {{
-                border: none; gridline-color: TABLE_ROW_BORDER;
+                border: none; gridline-color: {TABLE_ROW_BORDER};
                 font-size: 11px; color: {TEXT_PRIMARY};
                 alternate-background-color: {BG_ALT_ROW};
             }}
@@ -471,6 +475,9 @@ class ServicePage(QWidget):
         self._set_kpi(self._kpi_avg,   "AVG RTT (UP)",   avg_rtt)
 
         self._table.setSortingEnabled(True)
+        self._svc_refresh_lbl.setText(
+            f"Updated {datetime.now(tz=timezone.utc).astimezone().strftime('%H:%M:%S')}"
+        )
 
     @staticmethod
     def _cell(text: str) -> QTableWidgetItem:

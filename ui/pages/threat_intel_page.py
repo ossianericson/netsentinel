@@ -469,8 +469,43 @@ class ThreatIntelPage(QWidget):
         menu.addSeparator()
         act_export = menu.addAction("↓  Export Row")
         act_export.triggered.connect(lambda: self._export_row(row))
+        menu.addSeparator()
+        act_fix = menu.addAction("How to Fix")
+        _ind, _it = indicator, itype
+        act_fix.triggered.connect(lambda: self._show_threat_fix(_ind, _it))
 
         menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _show_threat_fix(self, indicator: str, itype: str) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        if itype == "ip":
+            msg = (
+                f"<b>{indicator}</b> is flagged as a malicious IP.<br><br>"
+                "<b>Steps to investigate:</b><br>"
+                "1. Open <b>Active Connections</b> and search for this IP to identify "
+                "which process or device contacted it.<br>"
+                "2. Block this IP at your firewall or router.<br>"
+                "3. If contacted by a workstation, run an antimalware scan on that machine.<br>"
+                "4. Check <b>AbuseIPDB</b> (right-click → Check IP) for more context.<br>"
+                "5. Review the <b>Inventory Changes</b> page for any new/unknown devices."
+            )
+        elif itype == "domain":
+            msg = (
+                f"<b>{indicator}</b> is flagged as a malicious domain.<br><br>"
+                "<b>Steps to investigate:</b><br>"
+                "1. Check your DNS logs or router DHCP leases to identify which device "
+                "resolved this domain.<br>"
+                "2. Add the domain to your DNS blocklist (Pi-hole, pfBlockerNG, etc.).<br>"
+                "3. Scan the device with an antimalware tool.<br>"
+                "4. Consider rotating any credentials used on that device."
+            )
+        else:
+            msg = (
+                f"<b>{indicator}</b> is flagged in the threat intelligence feed.<br><br>"
+                "Identify which device on your network encountered this indicator, "
+                "then block it at your firewall and scan the affected device."
+            )
+        QMessageBox.information(self, "How to Fix", msg)
 
     def _show_device_info(self, ip: str) -> None:
         if self._popover:
