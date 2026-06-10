@@ -360,10 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Feature Guide regrouped", "Feature Guide groups now organised by user purpose: Security covers all threat-detection tools (including Npcap monitors); Automation is a new group for scheduling, hooks, and integrations; Diagnostics covers utilities and visualization; Monitoring covers infrastructure. The 'Advanced' group has been removed."),
-        ("Chaos re-validated (2026-06-10)", "10,001 UIA interactions across mild/moderate/wild chaos levels (seeds 1/42/99); 0 exceptions, 0 crashes; all 62 pages pass systematic pre/post coverage."),
-        ("Devices page snapshot card", "After a scan, the Devices page shows a full device list with IP, hostname, MAC, manufacturer, type, and risk — no hardware plugin required."),
-        ("Simplified Getting Started", "Router and modem setup merged into a single 'Connect your hardware' step in the onboarding checklist."),
+        ("CVE Tracker empty state", "CVE Tracker now shows a 'Run Scan' prompt when no CVEs are tracked — no more blank page on first use."),
+        ("CVE → Threat Intel cross-navigation", "Right-click any CVE row and choose 'Check in Threat Intel' to jump directly to the Threat Intel page pre-filtered to that IP."),
+        ("About dialog fix", "About dialog no longer displays '&amp;' as literal text — now correctly shows '&'."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
