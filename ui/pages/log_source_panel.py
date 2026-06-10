@@ -849,8 +849,8 @@ class _LogSourcePanelMixin:
             src_lbl = QLabel(f"● {name}")
             src_lbl.setFixedWidth(120)
             src_lbl.setStyleSheet(
-                "color:LOG_SOURCE_PLUGIN; font-size:11px; font-weight:bold;"
-                " background:transparent; border:none;"
+                f"color:{LOG_SOURCE_PLUGIN}; font-size:11px; font-weight:bold;"
+                f" background:transparent; border:none;"
             )
             row_l.addWidget(src_lbl)
             db_btn = QPushButton("● Logging to DB" if enabled else "○  Not logging  ")

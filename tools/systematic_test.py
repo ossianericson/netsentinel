@@ -33,13 +33,16 @@ Requirements:
 """
 
 import argparse
+import ctypes
 import dataclasses
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
 import time
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -65,10 +68,15 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.0.0"
+_VERSION = "1.1.0"
 _WINDOW_RE = ".*NetSentinel.*"
 _CONNECT_TIMEOUT = 60
 _CONNECT_POLL = 1.0
+
+# ── Windows power management ───────────────────────────────────────────────────
+_ES_CONTINUOUS       = 0x80000000
+_ES_SYSTEM_REQUIRED  = 0x00000001
+_ES_DISPLAY_REQUIRED = 0x00000002
 
 def _discover_pages(skip_admin: bool = True) -> List[str]:
     """Parse ui/nav/builder.py at runtime to get the live registered page list.
@@ -162,12 +170,12 @@ def _is_main_window(win) -> bool:
         return False
 
 
-def _screenshot(label: str, log: logging.Logger) -> Optional[str]:
+def _screenshot(label: str, log: logging.Logger, output_dir: str = ".") -> Optional[str]:
     if not _HAS_PIL:
         return None
     try:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = f"systematic_{label}_{ts}.png"
+        path = os.path.join(output_dir, f"systematic_{label}_{ts}.png")
         ImageGrab.grab().save(path)
         log.info("Screenshot: %s", path)
         return path
@@ -192,6 +200,51 @@ def _setup_log(log_file: str) -> logging.Logger:
     fh.setFormatter(fmt)
     log.addHandler(fh)
     return log
+
+
+def _force_foreground(hwnd: int) -> None:
+    """Force a window to the foreground using the AttachThreadInput trick.
+
+    Plain SetForegroundWindow silently fails from background processes after
+    Windows engages focus-theft protection.  Attaching to the target thread's
+    input queue grants the permission needed before the call.
+    """
+    try:
+        user32   = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        cur_tid  = kernel32.GetCurrentThreadId()
+        tgt_tid  = user32.GetWindowThreadProcessId(hwnd, None)
+        attached = (tgt_tid and cur_tid != tgt_tid and
+                    bool(user32.AttachThreadInput(cur_tid, tgt_tid, True)))
+        try:
+            user32.ShowWindow(hwnd, 9)        # SW_RESTORE (un-minimise if needed)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(cur_tid, tgt_tid, False)
+    except Exception:
+        pass  # non-fatal — best-effort; window check in main loop catches real loss
+
+
+def _prevent_sleep_begin(log: logging.Logger) -> None:
+    """Prevent Windows sleep and screensaver while tests run."""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(
+            _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
+        )
+        log.info("[power] Sleep and screensaver suppressed")
+    except Exception as exc:
+        log.warning("[power] Could not suppress sleep: %s", exc)
+
+
+def _prevent_sleep_end(log: logging.Logger) -> None:
+    """Restore default Windows sleep/screensaver behaviour."""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(_ES_CONTINUOUS)
+        log.info("[power] Sleep and screensaver restored")
+    except Exception:
+        pass  # non-fatal
 
 
 # ── Page result dataclass ──────────────────────────────────────────────────────
@@ -226,6 +279,26 @@ class SystematicTester:
         self._proc: Optional[psutil.Process] = None
         self._win = None
         self._results: List[PageResult] = []
+        self._stop = threading.Event()
+
+    def _focus_heartbeat(self) -> None:
+        """Background thread: re-asserts window focus every focus_interval seconds.
+
+        Windows blocks SetForegroundWindow from background processes after a while.
+        The AttachThreadInput trick in _force_foreground bypasses this restriction
+        so the app stays in the foreground even during long waits between pages.
+        """
+        while not self._stop.is_set():
+            self._stop.wait(self.cfg.focus_interval)
+            try:
+                if self._win is not None and self._win.exists():
+                    hwnd = getattr(self._win, "handle", 0) or 0
+                    if hwnd:
+                        _force_foreground(hwnd)
+                    else:
+                        self._win.set_focus()
+            except Exception:
+                pass  # non-fatal — main loop checks window liveness independently
 
     # ── Launch & connect ──────────────────────────────────────────────────
 
@@ -338,7 +411,11 @@ class SystematicTester:
         self._dismiss_any_overlay()
         time.sleep(0.2)
         try:
-            self._win.set_focus()
+            hwnd = getattr(self._win, "handle", 0) or 0
+            if hwnd:
+                _force_foreground(hwnd)
+            else:
+                self._win.set_focus()
             time.sleep(0.1)
             self._win.type_keys("^k")
             time.sleep(0.5)
@@ -362,7 +439,11 @@ class SystematicTester:
     def _get_controls(self) -> List:
         """Return enabled, visible, non-blacklisted descendants within the window."""
         try:
-            self._win.set_focus()
+            hwnd = getattr(self._win, "handle", 0) or 0
+            if hwnd:
+                _force_foreground(hwnd)
+            else:
+                self._win.set_focus()
             time.sleep(0.15)
             all_ctrl = self._win.descendants()
         except Exception as exc:
@@ -538,24 +619,37 @@ class SystematicTester:
         self._dismiss_startup_overlays()
         time.sleep(1.5)
 
+        # Suppress sleep and start focus heartbeat
+        if self.cfg.prevent_sleep:
+            _prevent_sleep_begin(self.log)
+        self._stop.clear()
+        hb = threading.Thread(target=self._focus_heartbeat, daemon=True, name="sys_focus")
+        hb.start()
+
         crashed = False
-        for page in self.cfg.pages:
-            if not self._alive():
-                self.log.error("App died before page %r", page)
-                crashed = True
-                break
+        try:
+            for page in self.cfg.pages:
+                if not self._alive():
+                    self.log.error("App died before page %r", page)
+                    crashed = True
+                    break
 
-            res = self._test_page(page)
-            self._results.append(res)
+                res = self._test_page(page)
+                self._results.append(res)
 
-            if res.crashed:
-                if self.cfg.screenshots:
-                    _screenshot(f"crash_{page.replace(' ', '_')}", self.log)
-                crashed = True
-                break
+                if res.crashed:
+                    if self.cfg.screenshots:
+                        _screenshot(f"crash_{page.replace(' ', '_')}", self.log,
+                                    self.cfg.output_dir)
+                    crashed = True
+                    break
 
-            # Brief settle time between pages
-            time.sleep(0.5)
+                # Brief settle time between pages
+                time.sleep(0.5)
+        finally:
+            self._stop.set()
+            if self.cfg.prevent_sleep:
+                _prevent_sleep_end(self.log)
 
         # Print coverage report
         sep = "=" * 70
@@ -638,6 +732,8 @@ class Config:
     output_dir: str = "test_output"
     log_file: str = ""               # empty = auto-derive from output_dir
     screenshots: bool = True
+    prevent_sleep: bool = True       # suppress Windows sleep/screensaver
+    focus_interval: float = 5.0     # seconds between focus-heartbeat pulses
 
     def resolved_log_file(self) -> str:
         if self.log_file:
@@ -664,6 +760,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output-dir", default="test_output",
                    help="Directory for all generated output files (default: test_output)")
     p.add_argument("--no-screenshots", action="store_true")
+    p.add_argument("--focus-interval", type=float, default=5.0, metavar="SECS",
+                   help="Seconds between focus-heartbeat pulses (default 5)")
+    p.add_argument("--no-prevent-sleep", action="store_true",
+                   help="Do not suppress Windows sleep/screensaver")
     return p
 
 
@@ -683,6 +783,8 @@ def main() -> None:
         output_dir=args.output_dir,
         log_file=args.log,
         screenshots=not args.no_screenshots,
+        prevent_sleep=not args.no_prevent_sleep,
+        focus_interval=args.focus_interval,
     )
 
     sys.exit(SystematicTester(cfg).run())

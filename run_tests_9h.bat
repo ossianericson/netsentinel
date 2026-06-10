@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
 :: ─── 9-hour chaos suite ──────────────────────────────────────────────────────
 :: mild 1000  ≈ 58 min
@@ -9,10 +9,17 @@ setlocal
 :: total  ≈ 7.8 h  (buffer ~75 min)
 :: ─────────────────────────────────────────────────────────────────────────────
 
-set STAMP=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%%time:~6,2%
-set STAMP=%STAMP: =0%
+:: Locale-independent timestamp via PowerShell (avoids Swedish / EU date format issues)
+for /f "tokens=*" %%T in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set STAMP=%%T
+
 set FULLOUT=%USERPROFILE%\Documents\NetSentinel\test_output\9h_%STAMP%
 set OUT=%FULLOUT%
+
+:: Create output directory now so the test can write to it even if a step exits early
+mkdir "%OUT%" >nul 2>&1
+
+:: ── Pre-flight: disable Quick Edit + suppress sleep ───────────────────────────
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\test_setup.ps1"
 
 echo.
 echo ════════════════════════════════════════
@@ -22,29 +29,62 @@ echo  Started: %date% %time%
 echo ════════════════════════════════════════
 echo.
 
+:: ─── Step 1/5 ─────────────────────────────────────────────────────────────────
 echo [1/5] Systematic pre-run...
+set STEP_START=%time%
 python tools\systematic_test.py --source --pause 0.4 --output-dir "%OUT%\sys_pre"
-if errorlevel 1 echo WARNING: systematic pre-run reported errors
+if errorlevel 1 (
+    echo WARNING: systematic pre-run reported errors  [started %STEP_START%  ended %time%]
+) else (
+    echo OK: systematic pre-run complete              [started %STEP_START%  ended %time%]
+)
 
+:: ─── Step 2/5 ─────────────────────────────────────────────────────────────────
 echo.
 echo [2/5] Monkey mild  (1000 iter)...
+set STEP_START=%time%
 python tools\monkey_test.py --source -n 1000 --chaos mild --seed 1 --mem-limit 1000 --output-dir "%OUT%\monkey_mild"
-if errorlevel 1 echo WARNING: mild run reported errors
+if errorlevel 1 (
+    echo WARNING: mild run reported errors            [started %STEP_START%  ended %time%]
+) else (
+    echo OK: mild run complete                        [started %STEP_START%  ended %time%]
+)
 
+:: ─── Step 3/5 ─────────────────────────────────────────────────────────────────
 echo.
 echo [3/5] Monkey moderate  (3000 iter)...
+set STEP_START=%time%
 python tools\monkey_test.py --source -n 3000 --chaos moderate --seed 42 --mem-limit 1200 --output-dir "%OUT%\monkey_moderate"
-if errorlevel 1 echo WARNING: moderate run reported errors
+if errorlevel 1 (
+    echo WARNING: moderate run reported errors        [started %STEP_START%  ended %time%]
+) else (
+    echo OK: moderate run complete                    [started %STEP_START%  ended %time%]
+)
 
+:: ─── Step 4/5 ─────────────────────────────────────────────────────────────────
 echo.
 echo [4/5] Monkey wild  (6000 iter)...
+set STEP_START=%time%
 python tools\monkey_test.py --source -n 6000 --chaos wild --seed 99 --mem-limit 1500 --output-dir "%OUT%\monkey_wild"
-if errorlevel 1 echo WARNING: wild run reported errors
+if errorlevel 1 (
+    echo WARNING: wild run reported errors            [started %STEP_START%  ended %time%]
+) else (
+    echo OK: wild run complete                        [started %STEP_START%  ended %time%]
+)
 
+:: ─── Step 5/5 ─────────────────────────────────────────────────────────────────
 echo.
 echo [5/5] Systematic post-run...
+set STEP_START=%time%
 python tools\systematic_test.py --source --pause 0.4 --output-dir "%OUT%\sys_post"
-if errorlevel 1 echo WARNING: systematic post-run reported errors
+if errorlevel 1 (
+    echo WARNING: systematic post-run reported errors [started %STEP_START%  ended %time%]
+) else (
+    echo OK: systematic post-run complete             [started %STEP_START%  ended %time%]
+)
+
+:: ── Restore system settings ───────────────────────────────────────────────────
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\test_setup.ps1" -Restore
 
 echo.
 echo ════════════════════════════════════════

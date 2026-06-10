@@ -11,10 +11,10 @@ import webbrowser
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QFileDialog, QHBoxLayout, QLabel,
-    QPushButton, QSpinBox, QTextEdit, QVBoxLayout, QWidget,
+    QPushButton, QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ui.npcap_banner import NpcapMissingBanner

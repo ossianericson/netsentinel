@@ -35,6 +35,7 @@ Exit codes:
 
 import argparse
 import collections
+import ctypes
 import dataclasses
 import json
 import logging
@@ -80,6 +81,11 @@ _CONNECT_TIMEOUT = 60       # seconds to wait for the window after launch
 _CONNECT_POLL = 2.0         # seconds between connection attempts
 _HEALTH_INTERVAL = 2.0      # seconds between background health checks
 _UNRESPONSIVE_SECS = 20     # seconds without a completed iteration before hang alarm
+
+# ── Windows power management ───────────────────────────────────────────────────
+_ES_CONTINUOUS       = 0x80000000
+_ES_SYSTEM_REQUIRED  = 0x00000001
+_ES_DISPLAY_REQUIRED = 0x00000002
 
 # UIA control types the dispatcher knows how to handle
 _SUPPORTED_TYPES = frozenset({
@@ -182,6 +188,8 @@ class Config:
     cpu_wait_max: float = 12.0       # max seconds to wait for CPU to settle
     nav_prob: float = 0.15           # probability of a navigation action per iteration
     history_size: int = 15
+    focus_interval: float = 5.0     # seconds between focus-heartbeat pulses
+    prevent_sleep: bool = True       # suppress Windows sleep/screensaver
 
     def resolved_log_file(self) -> str:
         if self.log_file:
@@ -371,6 +379,51 @@ def _wait_cpu(proc: psutil.Process, threshold: float, timeout: float) -> bool:
     return True   # proceed even if CPU is still high
 
 
+def _force_foreground(hwnd: int) -> None:
+    """Force a window to the foreground using the AttachThreadInput trick.
+
+    Plain SetForegroundWindow silently fails from background processes after
+    Windows engages focus-theft protection.  Attaching to the target thread's
+    input queue grants the required permission.
+    """
+    try:
+        user32   = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        cur_tid  = kernel32.GetCurrentThreadId()
+        tgt_tid  = user32.GetWindowThreadProcessId(hwnd, None)
+        attached = (tgt_tid and cur_tid != tgt_tid and
+                    bool(user32.AttachThreadInput(cur_tid, tgt_tid, True)))
+        try:
+            user32.ShowWindow(hwnd, 9)        # SW_RESTORE (un-minimise if needed)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(cur_tid, tgt_tid, False)
+    except Exception:
+        pass  # non-fatal — best-effort; health monitor catches real window loss
+
+
+def _prevent_sleep_begin(log: logging.Logger) -> None:
+    """Prevent Windows sleep and screensaver while this process runs."""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(
+            _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
+        )
+        log.info("[power] Sleep and screensaver suppressed")
+    except Exception as exc:
+        log.warning("[power] Could not suppress sleep: %s", exc)
+
+
+def _prevent_sleep_end(log: logging.Logger) -> None:
+    """Restore default Windows sleep/screensaver behaviour."""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(_ES_CONTINUOUS)
+        log.info("[power] Sleep and screensaver restored")
+    except Exception:
+        pass  # non-fatal
+
+
 # ── Control interaction dispatcher ────────────────────────────────────────────
 
 def _act_button(ctrl, chaos: str) -> str:
@@ -538,9 +591,52 @@ class MonkeyTester:
         self._last_iter_time = time.time()
         self._stop = threading.Event()
 
+    # ── Focus heartbeat & power management ───────────────────────────────
+
+    def _focus_heartbeat(self) -> None:
+        """Background thread: re-asserts window focus every focus_interval seconds.
+
+        Windows blocks SetForegroundWindow from background processes after a while.
+        The AttachThreadInput trick in _force_foreground bypasses this restriction
+        so the tested app stays in the foreground between chaos iterations.
+        """
+        while not self._stop.is_set():
+            self._stop.wait(self.cfg.focus_interval)
+            try:
+                if self._win is not None and self._win.exists():
+                    hwnd = getattr(self._win, "handle", 0) or 0
+                    if hwnd:
+                        _force_foreground(hwnd)
+                    else:
+                        self._win.set_focus()
+            except Exception:
+                pass  # non-fatal — health monitor handles real window loss
+
+    def _kill_stale_netsentinel(self) -> None:
+        """Terminate any pre-existing NetSentinel processes before launching a new one.
+
+        Prevents the new run from accidentally connecting to a stale instance that
+        may be in a degraded state from a previous test run.
+        """
+        killed = 0
+        for proc in psutil.process_iter(["name", "cmdline", "pid"]):
+            try:
+                name    = (proc.info["name"] or "").lower()
+                cmdline = " ".join(proc.info["cmdline"] or []).lower()
+                if "netsentinel" in name or ("app.py" in cmdline and "netsentinel" in cmdline):
+                    proc.terminate()
+                    killed += 1
+                    self.log.info("[setup] Killed stale process: %s (PID %d)",
+                                  proc.info["name"], proc.info["pid"])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass  # non-fatal — process may have already exited
+        if killed:
+            time.sleep(1.5)   # let OS reclaim ports/handles before we relaunch
+
     # ── Launch & connect ──────────────────────────────────────────────────
 
     def _launch_exe(self) -> bool:
+        self._kill_stale_netsentinel()
         path = self.cfg.exe_path
         self.log.info("Launching exe: %s", path)
         try:
@@ -553,6 +649,7 @@ class MonkeyTester:
             return False
 
     def _launch_source(self) -> bool:
+        self._kill_stale_netsentinel()
         repo = Path(__file__).parent.parent
         entry = repo / "app.py"
         self.log.info("Launching source: python %s", entry)
@@ -924,9 +1021,14 @@ class MonkeyTester:
         # Dismiss any unexpected modal that appeared since last iteration
         self._dismiss_blocking_dialogs()
 
-        # Ensure the app window has focus before every interaction
+        # Ensure the app window has focus before every interaction.
+        # Use AttachThreadInput trick; fall back to set_focus() if hwnd unavailable.
         try:
-            self._win.set_focus()
+            hwnd = getattr(self._win, "handle", 0) or 0
+            if hwnd:
+                _force_foreground(hwnd)
+            else:
+                self._win.set_focus()
             time.sleep(0.1)
         except Exception:
             self.log.debug("set_focus() failed; continuing")
@@ -1009,9 +1111,13 @@ class MonkeyTester:
         self._dismiss_startup_overlays()
         time.sleep(2.0)   # let animations settle before first interaction
 
-        # Start background health monitor
+        # Suppress sleep and start background threads
+        if self.cfg.prevent_sleep:
+            _prevent_sleep_begin(self.log)
         hthread = threading.Thread(target=self._health_monitor, daemon=True, name="health")
         hthread.start()
+        fthread = threading.Thread(target=self._focus_heartbeat, daemon=True, name="focus")
+        fthread.start()
 
         self.log.info("Starting %d iterations…", self.cfg.iterations)
         crashed = False
@@ -1056,6 +1162,8 @@ class MonkeyTester:
                 break
 
         self._stop.set()
+        if self.cfg.prevent_sleep:
+            _prevent_sleep_end(self.log)
 
         # Final summary
         self.log.info("=" * 70)
@@ -1112,6 +1220,10 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Log file path (default: <output-dir>/monkey.log)")
     p.add_argument("--output-dir", default="test_output",
                    help="Directory for all generated output files (default: test_output)")
+    p.add_argument("--focus-interval", type=float, default=5.0, metavar="SECS",
+                   help="Seconds between focus-heartbeat pulses (default 5)")
+    p.add_argument("--no-prevent-sleep", action="store_true",
+                   help="Do not suppress Windows sleep/screensaver")
     return p
 
 
@@ -1137,6 +1249,8 @@ def main() -> None:
         mem_limit_mb=args.mem_limit,
         output_dir=args.output_dir,
         log_file=args.log,
+        focus_interval=args.focus_interval,
+        prevent_sleep=not args.no_prevent_sleep,
     )
 
     sys.exit(MonkeyTester(cfg).run())
