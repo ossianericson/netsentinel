@@ -108,8 +108,10 @@ netsentinel/
 │   ├── smb_enumerator.py       # SMB/Windows Share enumeration
 │   ├── snmp_poller.py
 │   ├── snmp_trap_receiver.py
+│   ├── firewall_rules.py       # Ensure Windows Firewall outbound rules for speedtest ports (all install paths)
 │   ├── speed_tester.py         # 3-tier cascade public API (S20-7 split)
 │   ├── speed_tester_backends.py  # Dataclasses + Ookla CLI + speedtest-cli + pure-Python backends (S20-7 split)
+│   ├── speed_tester_servers.py   # Server discovery: GeoLite2 coords, _fetch_client_coords cascade, parallel ping (S20-7b split)
 │   ├── storm_analyser.py
 │   ├── stp_detector.py
 │   ├── syn_scanner.py

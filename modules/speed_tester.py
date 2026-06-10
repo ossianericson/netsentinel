@@ -10,6 +10,7 @@ Backend strategy (tried in order):
                           (no extra deps; ~1 Gbps limited by HTTP overhead)
 
 Backend implementations live in modules/speed_tester_backends.py (S20-7 split).
+Server discovery and geo-filtering live in modules/speed_tester_servers.py (S20-7b split).
 
 Public API (unchanged):
 ────────────────────────────────────
@@ -35,8 +36,9 @@ from modules.speed_tester_backends import (
     SpeedServer, SpeedTestResult,
     _find_ookla_cli, _run_ookla_cli,
     _patch_ssl_for_312, _run_speedtest_cli,
-    _fetch_servers_python, _run_python_test,
+    _run_python_test,
 )
+from modules.speed_tester_servers import _fetch_servers_python
 
 # Re-export all public names so existing callers continue to work.
 __all__ = [
@@ -58,23 +60,39 @@ def speed_to_fraction(speed_mbps: float, max_mbps: float = 1000.0) -> float:
 # PUBLIC API
 # ─────────────────────────────────────────────────────────────────────────────
 
-def fetch_servers(limit: int = 20) -> List[SpeedServer]:
+def fetch_servers(
+    limit: int = 20,
+    on_status: Optional[Callable[[str], None]] = None,
+) -> List[SpeedServer]:
     """
     Fetch nearby Ookla-compatible servers sorted by latency.
-    Tries speedtest-cli first (8 s timeout), then pure-Python HTTP fallback.
+    Tries speedtest-cli first (5 s timeout), then pure-Python HTTP fallback.
     Raises RuntimeError only if both backends fail.
+    on_status: optional callback(msg) for progress messages.
     """
+    from modules.firewall_rules import ensure_app_rules
+    ensure_app_rules()
+
+    def _status(msg: str) -> None:
+        if on_status:
+            try:
+                on_status(msg)
+            except Exception:
+                pass  # non-fatal — UI callback may have been destroyed
+
     try:
         import speedtest as _st  # noqa: F401
         _patch_ssl_for_312()
         import socket as _socket
         _prev = _socket.getdefaulttimeout()
-        _socket.setdefaulttimeout(8)  # reduced from 30 — fall through faster on slow API
+        _socket.setdefaulttimeout(5)  # reduced from 8 — fall through faster on slow API
         try:
+            _status("Connecting to Speedtest network…")
             try:
                 client = _st.Speedtest(secure=True)
             except AttributeError:
                 client = _st.Speedtest(secure=False)
+            _status("Finding nearby servers…")
             client.get_servers()
             closest = client.get_closest_servers(limit=limit)
             try:
@@ -99,7 +117,7 @@ def fetch_servers(limit: int = 20) -> List[SpeedServer]:
     except Exception:
         pass  # speedtest-cli failed — fall through to pure-Python fallback
 
-    return _fetch_servers_python(limit)
+    return _fetch_servers_python(limit, on_status=_status)
 
 
 def run_test(
@@ -121,8 +139,14 @@ def run_test(
     on_sample(mbps, phase) callbacks:
         Fired with live throughput samples during download and upload.
     """
+    # Ensure Windows Firewall outbound rules exist for speedtest ports.
+    # No-op on non-Windows, silent fallback when not elevated.
+    from modules.firewall_rules import ensure_app_rules, ensure_ookla_rules
+    ensure_app_rules()
+
     cli = _find_ookla_cli()
     if cli:
+        ensure_ookla_rules(cli)
         try:
             return _run_ookla_cli(cli, server_id=server_id,
                                   on_progress=on_progress, on_sample=on_sample)

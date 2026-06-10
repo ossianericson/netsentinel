@@ -9,8 +9,10 @@ def test_import():
     assert hasattr(m, "_run_ookla_cli")
     assert hasattr(m, "_run_speedtest_cli")
     assert hasattr(m, "_run_python_test")
-    assert hasattr(m, "_fetch_servers_python")
     assert hasattr(m, "_patch_ssl_for_312")
+    # Server discovery moved to speed_tester_servers (S20-7b split)
+    import modules.speed_tester_servers as srv
+    assert hasattr(srv, "_fetch_servers_python")
 
 
 def test_speed_server_fields():

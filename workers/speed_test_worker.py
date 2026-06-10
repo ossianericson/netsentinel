@@ -31,8 +31,9 @@ from PyQt6.QtCore import QThread, pyqtSignal
 class FetchServersWorker(QThread):
     """Fetches nearby Ookla servers and their latencies."""
 
-    servers_ready = pyqtSignal(list)   # list[dict] — serialised SpeedServer
-    error         = pyqtSignal(str)
+    servers_ready  = pyqtSignal(list)   # list[dict] — serialised SpeedServer
+    status_changed = pyqtSignal(str)    # progress message for the UI
+    error          = pyqtSignal(str)
 
     def __init__(self, limit: int = 20, parent=None):
         super().__init__(parent)
@@ -41,7 +42,10 @@ class FetchServersWorker(QThread):
     def run(self) -> None:
         try:
             from modules.speed_tester import fetch_servers
-            servers = fetch_servers(self._limit)
+            servers = fetch_servers(
+                self._limit,
+                on_status=lambda msg: self.status_changed.emit(msg),
+            )
             self.servers_ready.emit([
                 {
                     "id":         s.id,

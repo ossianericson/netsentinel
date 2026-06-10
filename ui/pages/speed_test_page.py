@@ -900,6 +900,7 @@ class SpeedTestPage(QWidget):
 
         self._fetch_worker = FetchServersWorker(limit=20, parent=self)
         self._fetch_worker.servers_ready.connect(self._on_servers_ready)
+        self._fetch_worker.status_changed.connect(self._on_fetch_status)
         self._fetch_worker.error.connect(self._on_fetch_error)
         self._fetch_worker.start()
 
@@ -927,6 +928,14 @@ class SpeedTestPage(QWidget):
         # Pre-select the first (lowest latency)
         if self._server_list.count() > 0:
             self._server_list.setCurrentRow(0)
+
+    @pyqtSlot(str)
+    def _on_fetch_status(self, msg: str) -> None:
+        self._server_hint.setText(msg)
+        if self._server_list.count() == 1:
+            item = self._server_list.item(0)
+            if item:
+                item.setText(msg)
 
     @pyqtSlot(str)
     def _on_fetch_error(self, msg: str) -> None:

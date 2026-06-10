@@ -94,6 +94,8 @@ def _smoke_test() -> None:
         "modules.iot_baseline",
         "modules.root_cause_correlator",
         "modules.speed_tester",
+        "modules.speed_tester_servers",
+        "modules.firewall_rules",
         "modules.alert_engine",
         "modules.notification_router",
         "modules.utils",

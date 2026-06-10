@@ -28,6 +28,7 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # and _RULE_CTA / _cta_for_rule() helper for cross-page navigation from alerts.
     # Natural split: move AlertFired dataclass + _RULE_CTA to alert_suppressor.py (S20-4 split).
     "alert_engine.py": 620,
+
 }
 
 

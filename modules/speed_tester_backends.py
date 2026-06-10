@@ -2,8 +2,8 @@
 Speed test data types and backend implementations (Ookla CLI, speedtest-cli, pure-Python HTTP).
 
 Extracted from modules/speed_tester.py (S20-7 sprint split).
-All public names remain importable from modules.speed_tester for
-backwards compatibility via re-exports in that module.
+Server discovery and geolocation live in modules/speed_tester_servers.py (S20-7b split).
+All public names remain importable from modules.speed_tester for backwards compatibility.
 """
 
 from __future__ import annotations
@@ -332,76 +332,6 @@ def _http_get(url: str, timeout: int = _HTTP_TIMEOUT) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": _HTTP_UA})
     with urllib.request.urlopen(req, context=_get_ssl_ctx(), timeout=timeout) as r:
         return r.read()
-
-
-def _fetch_client_coords() -> tuple:
-    """Return (lat, lon) strings from speedtest.net config, or (None, None) on failure."""
-    try:
-        import xml.etree.ElementTree as _ET
-        xml_bytes = _http_get(
-            "https://www.speedtest.net/speedtest-config.php", timeout=8
-        )
-        root = _ET.fromstring(xml_bytes)
-        client = root.find("client")
-        if client is not None:
-            lat = client.get("lat")
-            lon = client.get("lon")
-            if lat and lon:
-                return lat, lon
-    except Exception:
-        pass  # non-fatal — server list will fall back to IP-based geo
-    return None, None
-
-
-def _fetch_servers_python(limit: int = 10) -> List[SpeedServer]:
-    """Fetch Ookla servers via their JSON API, geo-filtered by client coordinates."""
-    lat, lon = _fetch_client_coords()
-    if lat and lon:
-        url = (
-            f"https://www.speedtest.net/api/js/servers"
-            f"?engine=js&https_functional=true&limit={limit}&lat={lat}&lon={lon}"
-        )
-    else:
-        url = (
-            f"https://www.speedtest.net/api/js/servers"
-            f"?engine=js&https_functional=true&limit={limit}"
-        )
-    try:
-        data = json.loads(_http_get(url, timeout=15))
-    except Exception as exc:
-        raise RuntimeError(f"Cannot reach Speedtest server list: {exc}") from exc
-
-    servers: List[SpeedServer] = []
-    for s in data[:limit]:
-        servers.append(SpeedServer(
-            id=str(s.get("id", "")),
-            name=s.get("sponsor") or s.get("name") or "Unknown",
-            city=s.get("name") or "",
-            country=s.get("country") or "",
-            host=s.get("host") or "",
-            latency_ms=0.0,
-        ))
-
-    def _ping(server: SpeedServer) -> None:
-        try:
-            import socket as _sock
-            hostname = server.host.split(":")[0]
-            port = int(server.host.split(":")[1]) if ":" in server.host else 8080
-            times: list = []
-            for _ in range(3):
-                t0 = time.perf_counter()
-                s = _sock.create_connection((hostname, port), timeout=5)
-                s.close()
-                times.append((time.perf_counter() - t0) * 1000)
-                time.sleep(0.02)
-            server.latency_ms = round(sum(times) / len(times), 1)
-        except Exception:
-            server.latency_ms = 9999.0
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        list(ex.map(_ping, servers))
-
-    return sorted(servers, key=lambda s: s.latency_ms)
 
 
 def _download_worker(url: str, stop_event: threading.Event, deadline: float, counter: list) -> None:

@@ -133,6 +133,20 @@ Filename: "cmd.exe"; \
   Check: ShouldInstallOokla; \
   StatusMsg: "Installing Ookla Speedtest CLI (for 1 Gbps+ speed tests)..."
 
+; ── Speedtest firewall rules ──────────────────────────────────────────────────
+; Added with the installer's admin context so Windows Firewall never blocks
+; speed tests. Covers the Python backends running inside NetSentinel.exe.
+; Ports: 443 (HTTPS), 8080 (Ookla streams), 5060 (Ookla latency probes).
+; Delete first to handle clean reinstalls without duplicate rules.
+Filename: "cmd.exe"; Parameters: "/c netsh advfirewall firewall delete rule name=""NetSentinel Speedtest"" >nul 2>&1"; Flags: runhidden waituntilterminated
+Filename: "cmd.exe"; Parameters: "/c netsh advfirewall firewall delete rule name=""NetSentinel Speedtest UDP"" >nul 2>&1"; Flags: runhidden waituntilterminated
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""NetSentinel Speedtest"" dir=out action=allow protocol=TCP program=""{app}\{#MyAppExeName}"" remoteport=443,8080,5060"; Flags: runhidden waituntilterminated
+Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""NetSentinel Speedtest UDP"" dir=out action=allow protocol=UDP program=""{app}\{#MyAppExeName}"" remoteport=8080,5060"; Flags: runhidden waituntilterminated
+
+; Best-effort: add rules for speedtest.exe once Ookla CLI is installed.
+; Uses the WinGet per-user symlink path; silently skipped if not present.
+Filename: "cmd.exe"; Parameters: "/c if exist ""{localappdata}\Microsoft\WinGet\Links\speedtest.exe"" (netsh advfirewall firewall delete rule name=""NetSentinel Ookla Speedtest"" >nul 2>&1 & netsh advfirewall firewall add rule name=""NetSentinel Ookla Speedtest"" dir=out action=allow protocol=TCP program=""{localappdata}\Microsoft\WinGet\Links\speedtest.exe"" remoteport=443,8080,5060 & netsh advfirewall firewall add rule name=""NetSentinel Ookla Speedtest UDP"" dir=out action=allow protocol=UDP program=""{localappdata}\Microsoft\WinGet\Links\speedtest.exe"" remoteport=8080,5060)"; Flags: runhidden waituntilterminated; Tasks: installookla
+
 ; Install service after copy (optional task)
 Filename: "{app}\{#MyAppSvcName}"; Parameters: "install"; Flags: runhidden waituntilterminated; Tasks: installservice; StatusMsg: "Installing background service..."
 
@@ -147,6 +161,12 @@ Filename: "{app}\{#MyAppSvcName}"; Parameters: "uninstall"; Flags: runhidden; St
 ; Note: Ookla CLI is NOT uninstalled here — it's a separate package the user may
 ; want to keep for other uses. Users can uninstall it via:
 ;   winget uninstall Ookla.Speedtest.CLI
+
+; Remove speedtest firewall rules added at install time
+Filename: "cmd.exe"; Parameters: "/c netsh advfirewall firewall delete rule name=""NetSentinel Speedtest"" >nul 2>&1"; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c netsh advfirewall firewall delete rule name=""NetSentinel Speedtest UDP"" >nul 2>&1"; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c netsh advfirewall firewall delete rule name=""NetSentinel Ookla Speedtest"" >nul 2>&1"; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c netsh advfirewall firewall delete rule name=""NetSentinel Ookla Speedtest UDP"" >nul 2>&1"; Flags: runhidden
 
 [Code]
 // Helper: check whether a path segment is already in the system PATH

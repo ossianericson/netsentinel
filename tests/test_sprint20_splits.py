@@ -189,7 +189,9 @@ def test_import_speed_tester_backends():
     assert hasattr(stb, "_run_ookla_cli")
     assert hasattr(stb, "_run_speedtest_cli")
     assert hasattr(stb, "_run_python_test")
-    assert hasattr(stb, "_fetch_servers_python")
+    # Server discovery moved to speed_tester_servers (S20-7b split)
+    import modules.speed_tester_servers as sts
+    assert hasattr(sts, "_fetch_servers_python")
 
 
 def test_speed_server_dataclass():
