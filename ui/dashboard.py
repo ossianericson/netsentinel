@@ -1434,7 +1434,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         ver_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:12px;")
         ver_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        subtitle = QLabel("Network Security Scanner &amp; Connectivity Monitor")
+        subtitle = QLabel("Network Security Scanner & Connectivity Monitor")
         subtitle.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setWordWrap(True)
