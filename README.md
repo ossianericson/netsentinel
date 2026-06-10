@@ -352,6 +352,13 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.95
+**Fixed**
+- `tools/test_setup.ps1`: replaced UTF-8 box-drawing characters with ASCII equivalents to prevent PowerShell 5.1 parse error during test harness teardown
+
+**Validation**
+- Chaos/stability run (2026-06-10): 10,001 UIA interactions across mild (1,000 iter, seed 1), moderate (3,000 iter, seed 42), and wild (6,000 iter, seed 99) chaos levels — 0 exceptions, 0 crashes; all 62 pages navigable before and after chaos (systematic pre/post both passed)
+
 ### v1.9.94
 **Changed**
 - `ui/pages/home_page.py`: removed theme-chooser banner from the home page
