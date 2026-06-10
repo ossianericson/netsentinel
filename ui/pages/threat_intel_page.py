@@ -189,9 +189,10 @@ def _secondary_btn(text: str) -> QPushButton:
 class ThreatIntelPage(QWidget):
     """Threat Intelligence Feed — IP/domain blocklist with AbuseIPDB lookup."""
 
-    entries_updated = pyqtSignal(list)  # emitted after each feed load with list[ThreatEntry]
-    show_on_map     = pyqtSignal(str)   # emitted when user picks "Show on Geolocation Map"
-    scan_requested  = pyqtSignal()      # emitted by empty-state CTA to trigger feed refresh
+    entries_updated     = pyqtSignal(list)  # emitted after each feed load with list[ThreatEntry]
+    show_on_map         = pyqtSignal(str)   # emitted when user picks "Show on Geolocation Map"
+    scan_requested      = pyqtSignal()      # emitted by empty-state CTA to trigger feed refresh
+    show_in_connections = pyqtSignal(str)   # IP → navigate to Connections + filter
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -445,8 +446,12 @@ class ThreatIntelPage(QWidget):
         )
 
         if itype == "ip":
-            act_map = menu.addAction("🌍  Show on Geolocation Map")
+            act_map = menu.addAction("◆  Show on Geolocation Map")
             act_map.triggered.connect(lambda: self.show_on_map.emit(indicator))
+            act_conns = menu.addAction(f"◆  Find {indicator} in Active Connections")
+            act_conns.triggered.connect(
+                lambda _=False, ip=indicator: self.show_in_connections.emit(ip)
+            )
             if self._popover:
                 act_device = menu.addAction(f"Device Info — {indicator}")
                 act_device.triggered.connect(

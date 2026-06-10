@@ -430,3 +430,16 @@ class UptimePage(QWidget):
         item = QTableWidgetItem(text)
         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         return item
+
+    # ── Public navigation slot ────────────────────────────────────────────────
+
+    def focus_on_host(self, ip: str, mac: str = "") -> None:
+        """Public slot — scroll to and select the uptime row for this host."""
+        if not ip or ip in ("—", ""):
+            return
+        for row in range(self._table.rowCount()):
+            ip_it = self._table.item(row, 0)
+            if ip_it and ip_it.text() == ip:
+                self._table.setCurrentCell(row, 0)
+                self._table.scrollToItem(ip_it)
+                break

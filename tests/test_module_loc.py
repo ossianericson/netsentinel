@@ -23,6 +23,11 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # Grew by 10 lines after adding __all__ for CodeQL py/unused-import compliance.
     # Natural split: move __all__ + re-export block to metric_store_schema.py when convenient.
     "metric_store.py": 620,
+
+    # Grew by ~8 lines after adding cta_page/cta_filter fields to AlertFired dataclass
+    # and _RULE_CTA / _cta_for_rule() helper for cross-page navigation from alerts.
+    # Natural split: move AlertFired dataclass + _RULE_CTA to alert_suppressor.py (S20-4 split).
+    "alert_engine.py": 620,
 }
 
 

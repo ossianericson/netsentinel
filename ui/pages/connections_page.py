@@ -153,7 +153,11 @@ def _get_blocked_rules() -> list[str]:
 class ConnectionsPage(QWidget):
     """Active Connections — process-to-socket map with firewall control."""
 
-    scan_requested = pyqtSignal()
+    scan_requested         = pyqtSignal()
+    lookup_threat_intel    = pyqtSignal(str)   # IP → navigate to Threat Intel + check
+    show_on_map            = pyqtSignal(str)   # IP → navigate to Geo Map
+    focus_host_in_inventory = pyqtSignal(str)  # IP → navigate to Inventory + select device
+    filter_by_ip           = pyqtSignal(str)   # IP → pre-fill search (used by other pages)
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -800,31 +804,54 @@ class ConnectionsPage(QWidget):
         else:
             act_fw = menu.addAction(f"🔒  Block {c.exe_name} (add firewall rule)")
 
-        act_device = None
-        if c.remote_ip and self._popover:
+        # Cross-page actions — only shown when there is a routable remote IP
+        act_threat  = None
+        act_geo     = None
+        act_inv     = None
+        act_device  = None
+        remote_ip = c.remote_ip or ""
+        is_external = remote_ip and not c.is_local
+        if is_external:
             menu.addSeparator()
-            act_device = menu.addAction(f"Device Info — {c.remote_ip}")
+            act_threat = menu.addAction(f"◆  Lookup {remote_ip} in Threat Intel")
+            act_geo    = menu.addAction(f"◆  Show {remote_ip} on Geo Map")
+            act_inv    = menu.addAction(f"◆  Show device {remote_ip} in Inventory")
+        if remote_ip and self._popover:
+            if not is_external:
+                menu.addSeparator()
+            act_device = menu.addAction(f"Device Info — {remote_ip}")
 
         menu.addSeparator()
-        act_copy_ip  = menu.addAction("Copy Remote IP")
-        act_copy_exe = menu.addAction("Copy Process Name")
+        act_copy_ip   = menu.addAction("Copy Remote IP")
+        act_copy_exe  = menu.addAction("Copy Process Name")
         act_copy_path = menu.addAction("Copy EXE Path")
 
         action = menu.exec(self._tbl.viewport().mapToGlobal(pos))
         if action == act_fw:
             self._toggle_block(c, is_blocked)
+        elif act_threat and action == act_threat:
+            self.lookup_threat_intel.emit(remote_ip)
+        elif act_geo and action == act_geo:
+            self.show_on_map.emit(remote_ip)
+        elif act_inv and action == act_inv:
+            self.focus_host_in_inventory.emit(remote_ip)
         elif act_device and action == act_device:
             from PyQt6.QtGui import QCursor
-            self._popover.show_for(c.remote_ip, QCursor.pos())
+            self._popover.show_for(remote_ip, QCursor.pos())
         elif action == act_copy_ip:
             from PyQt6.QtWidgets import QApplication
-            QApplication.clipboard().setText(c.remote_ip or "")
+            QApplication.clipboard().setText(remote_ip)
         elif action == act_copy_exe:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(c.exe_name)
         elif action == act_copy_path:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(c.exe_path or "")
+
+    def focus_on_ip(self, ip: str) -> None:
+        """Pre-fill the search box with ip and refresh so only connections to/from that host show."""
+        self._search.setText(ip)
+        self._refresh()
 
     def _get_visible_conns(self) -> list:
         """Return the filtered connection list currently shown in the table."""

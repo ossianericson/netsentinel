@@ -563,3 +563,16 @@ class ServicePage(QWidget):
         lay.addWidget(btn_rm, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         return outer
+
+    # ── Public navigation slot ────────────────────────────────────────────────
+
+    def focus_on_host(self, ip: str, mac: str = "") -> None:
+        """Public slot — scroll to and select the first service row for this host."""
+        if not ip or ip in ("—", ""):
+            return
+        for row in range(self._table.rowCount()):
+            host_it = self._table.item(row, 1)
+            if host_it and host_it.text() == ip:
+                self._table.setCurrentCell(row, 1)
+                self._table.scrollToItem(host_it)
+                break

@@ -96,6 +96,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         from ui.pages.service_page import ServicePage
         self._service_page = ServicePage(store=self._store)
+        self._inventory_page.show_on_map.connect(self._show_ip_on_geo_map)
         self.global_time_range_changed.connect(self._service_page.set_global_hours)
 
         from ui.pages.reports_page import ReportsPage
@@ -171,6 +172,15 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         from ui.pages.connections_page import ConnectionsPage
         self._connections_page = ConnectionsPage(parent=None)
+        self._connections_page.show_on_map.connect(self._show_ip_on_geo_map)
+        self._connections_page.focus_host_in_inventory.connect(
+            lambda ip: (self._nav_rail_go_to("Inventory Changes"),
+                        self._inventory_page.select_device(ip))
+        )
+        self._inventory_page.show_connections_for.connect(
+            lambda ip: (self._connections_page.focus_on_ip(ip),
+                        self._nav_rail_go_to("Active Connections"))
+        )
 
         from ui.pages.live_bandwidth_page import LiveBandwidthPage
         self._live_bandwidth_page = LiveBandwidthPage(parent=None)
@@ -186,6 +196,14 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         from ui.pages.threat_intel_page import ThreatIntelPage
         self._threat_intel_page = ThreatIntelPage(parent=None)
         self._threat_intel_page.show_on_map.connect(self._show_ip_on_geo_map)
+        self._threat_intel_page.show_in_connections.connect(
+            lambda ip: (self._connections_page.focus_on_ip(ip),
+                        self._nav_rail_go_to("Active Connections"))
+        )
+        self._connections_page.lookup_threat_intel.connect(
+            lambda ip: (self._threat_intel_page.check_ip(ip),
+                        self._nav_rail_go_to("Threat Intel"))
+        )
 
         from ui.pages.security_overview_page import SecurityOverviewPage
         self._security_overview_page = SecurityOverviewPage(parent=None)
@@ -197,6 +215,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._cve_page = CvePage(self._store, parent=None)
         self._cve_page.navigate_to_inventory.connect(
             lambda ip: (self._nav_rail_go_to("Inventory Changes"), self._inventory_page.select_device(ip))
+        )
+        self._cve_page.navigate_to.connect(self._nav_rail_go_to)
+        self._inventory_page.check_cves_for.connect(
+            lambda ip: (self._cve_page.focus_on_host(ip),
+                        self._nav_rail_go_to("CVE Tracker"))
         )
 
         # ── DEVICE-1: device quick-profile popover ────────────────────────────

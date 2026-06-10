@@ -108,6 +108,32 @@ class AlertFired:
     severity:    str           # "INFO" | "WARNING" | "CRITICAL"
     ts:          int
     value:       Optional[float] = None   # the triggering metric value
+    cta_page:    Optional[str]  = None   # nav label of the page that can resolve this alert
+    cta_filter:  Optional[str]  = None   # opaque filter string passed to that page (e.g. IP)
+
+
+# ── CTA routing — maps rule_type → (nav_label, filter_string) ────────────────
+
+_RULE_CTA: Dict[str, str] = {
+    "RTT_THRESHOLD":  "DNS & Stability",
+    "LOSS_THRESHOLD": "DNS & Stability",
+    "HOST_DOWN":      "Inventory",
+    "HOST_DEGRADED":  "Inventory",
+    "NEW_DEVICE":     "Devices",
+    "DEVICE_GONE":    "Inventory",
+    "CERT_EXPIRY":    "TLS & Cert Monitor",
+    "CERT_EXPIRED":   "TLS & Cert Monitor",
+    "FLAP":           "Trend Forecasts",
+    "SERVICE_DOWN":   "Service Heartbeat",
+}
+
+
+def _cta_for_rule(rule_type: str, host: str) -> tuple[Optional[str], Optional[str]]:
+    """Return (cta_page, cta_filter) for an alert so the UI can deep-link to the right page."""
+    page = _RULE_CTA.get(rule_type)
+    if not page:
+        return None, None
+    return page, host
 
 
 # ── Engine ────────────────────────────────────────────────────────────────────
@@ -504,6 +530,7 @@ class AlertEngine:
         if last is not None and now - last < rule.cooldown_s:
             return None
         self._last_fired[key] = now
+        cta_page, cta_filter = _cta_for_rule(rule.rule_type, host)
         return AlertFired(
             rule_name=rule.name,
             rule_type=rule.rule_type,
@@ -512,6 +539,8 @@ class AlertEngine:
             severity=severity,
             ts=now,
             value=value,
+            cta_page=cta_page,
+            cta_filter=cta_filter,
         )
 
     def _update_state_history(self, states: Dict[str, str], now: int) -> None:

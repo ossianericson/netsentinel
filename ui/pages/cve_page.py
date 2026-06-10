@@ -222,6 +222,7 @@ class CvePage(QWidget):
     """CVE lifecycle tracker page — Security Audit section."""
 
     navigate_to_inventory = pyqtSignal(str)   # DEVICE-3: carries IP/host filter string
+    navigate_to           = pyqtSignal(str)   # general cross-page navigation
 
     def __init__(self, store: MetricStore, parent=None):
         super().__init__(parent)
@@ -563,11 +564,16 @@ class CvePage(QWidget):
         act_nvd     = menu.addAction("Open in NVD Browser")
         act_how_fix = menu.addAction("How to Fix")
 
-        act_device = None
+        act_device      = None
+        act_port_scan   = None
+        act_svc_monitor = None
         host = row_data.get("host") or ""
-        if host and self._popover:
+        if host:
             menu.addSeparator()
-            act_device = menu.addAction(f"Device Info — {host}")
+            act_port_scan   = menu.addAction(f"◆  Port scan {host} now")
+            act_svc_monitor = menu.addAction(f"◆  Monitor {host} — go to Service Heartbeat")
+            if self._popover:
+                act_device = menu.addAction(f"Device Info — {host}")
 
         menu.addSeparator()
         act_delete = menu.addAction("Delete Entry")
@@ -585,6 +591,12 @@ class CvePage(QWidget):
                 for c in range(self._table.columnCount())
             ] if row >= 0 else []
             _QApp.clipboard().setText("\t".join(parts))
+            return
+        if act_port_scan and chosen == act_port_scan:
+            self.navigate_to.emit("Port Scan (TCP)")
+            return
+        if act_svc_monitor and chosen == act_svc_monitor:
+            self.navigate_to.emit("Service Heartbeat")
             return
         if act_device and chosen == act_device:
             from PyQt6.QtGui import QCursor
@@ -819,3 +831,10 @@ class CvePage(QWidget):
 
         self._refresh()
         self._status_lbl.setText(f"Imported {imported} CVE(s) from {len(services)} service(s).")
+
+    # ── Public navigation slot ────────────────────────────────────────────────
+
+    def focus_on_host(self, ip: str, mac: str = "") -> None:
+        """Public slot — pre-filter CVE table to show only entries for this host."""
+        if ip and ip not in ("—", ""):
+            self._search_box.setText(ip)

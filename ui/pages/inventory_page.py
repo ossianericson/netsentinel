@@ -411,8 +411,11 @@ class InventoryPage(QWidget):
         Injected from app.py. Shows a placeholder if None.
     """
 
-    scan_requested = pyqtSignal()
-    device_selected = pyqtSignal(str)  # emits MAC when a row is double-clicked
+    scan_requested          = pyqtSignal()
+    device_selected         = pyqtSignal(str)   # emits MAC when a row is double-clicked
+    show_connections_for    = pyqtSignal(str)   # IP → navigate to Connections + filter
+    check_cves_for          = pyqtSignal(str)   # IP → navigate to CVE Tracker + filter
+    show_on_map             = pyqtSignal(str)   # IP → navigate to Geo Map
 
     REFRESH_MS = 15_000   # refresh every 15 s
 
@@ -813,13 +816,44 @@ class InventoryPage(QWidget):
                         import webbrowser
                         webbrowser.open(f"http://{ip}")
 
+        def _inv_check_connections():
+            r = self._table.currentRow()
+            if r >= 0:
+                ip_it = self._table.item(r, 3)
+                if ip_it:
+                    ip = ip_it.text().strip()
+                    if ip and ip != "—":
+                        self.show_connections_for.emit(ip)
+
+        def _inv_check_cves():
+            r = self._table.currentRow()
+            if r >= 0:
+                ip_it = self._table.item(r, 3)
+                if ip_it:
+                    ip = ip_it.text().strip()
+                    if ip and ip != "—":
+                        self.check_cves_for.emit(ip)
+
+        def _inv_show_on_map():
+            r = self._table.currentRow()
+            if r >= 0:
+                ip_it = self._table.item(r, 3)
+                if ip_it:
+                    ip = ip_it.text().strip()
+                    if ip and ip != "—":
+                        self.show_on_map.emit(ip)
+
         install_copy_menu(self._table, [
-            ("separator",       None),
-            ("Copy IP",         _inv_copy_ip),
-            ("Copy MAC",        _inv_copy_mac),
-            ("separator",       None),
-            ("Label Device",    _inv_label_device),
-            ("Open in Browser", _inv_open_browser),
+            ("separator",           None),
+            ("Copy IP",             _inv_copy_ip),
+            ("Copy MAC",            _inv_copy_mac),
+            ("separator",           None),
+            ("Label Device",        _inv_label_device),
+            ("Open in Browser",     _inv_open_browser),
+            ("separator",           None),
+            ("Check Connections",   _inv_check_connections),
+            ("Check CVEs",          _inv_check_cves),
+            ("Show on Geo Map",     _inv_show_on_map),
         ])
 
         card_lay.addWidget(self._table)
@@ -1332,6 +1366,10 @@ class InventoryPage(QWidget):
             ToastManager.show(f"✓ Saved to {os.path.basename(path)}", "success")
         except Exception as exc:
             ToastManager.show(f"Export failed: {exc}", "error")
+
+    def focus_on_host(self, ip: str, mac: str = "") -> None:
+        """Navigate to and highlight the device matching ip or mac (cross-page API)."""
+        self.select_device(ip or mac)
 
     def select_device(self, ip_or_mac: str) -> None:
         """DEVICE-1: Navigate to and select the row matching ip_or_mac (IP or MAC address)."""

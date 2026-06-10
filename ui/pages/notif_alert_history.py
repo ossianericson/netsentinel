@@ -36,6 +36,40 @@ from ui.styles import (
 )
 
 
+# ── Alert CTA routing ────────────────────────────────────────────────────────
+
+# Maps rule_name patterns (case-insensitive substrings) → nav label to open when clicked.
+# Default rule names come from _default_rules() in alert_suppressor.py.
+_RULE_NAME_CTA: dict[str, str] = {
+    "high rtt":         "DNS & Stability",
+    "loss threshold":   "DNS & Stability",
+    "host down":        "Inventory Changes",
+    "host degraded":    "Inventory Changes",
+    "new device":       "Devices",
+    "device gone":      "Inventory Changes",
+    "cert expir":       "TLS & Cert Monitor",
+    "host flapping":    "Trend Forecasts",
+    "flap":             "Trend Forecasts",
+    "service down":     "Service Heartbeat",
+    # legacy heuristics kept for user-renamed rules
+    "port scan":        "Port Scan (TCP)",
+    "arp":              "ARP Spoof Watch",
+    "dhcp":             "DHCP Rogue Monitor",
+    "rate_spike":       "Live Bandwidth",
+    "bandwidth":        "Live Bandwidth",
+    "cve":              "CVE Tracker",
+}
+
+
+def _cta_page_for_rule(rule_name: str) -> str | None:
+    """Return the nav label of the best page for this alert, or None."""
+    lower = rule_name.lower()
+    for pattern, page in _RULE_NAME_CTA.items():
+        if pattern in lower:
+            return page
+    return None
+
+
 # ── Alert sub-label helpers ───────────────────────────────────────────────────
 
 def _fmt_elapsed(seconds: int) -> str:
@@ -599,19 +633,10 @@ class _NotifAlertHistoryMixin:
             return
         rule = alert.get("rule_name", "")
         host = alert.get("host") or alert.get("ip") or ""
-        if "Port Scan" in rule or "PORT_SCAN" in rule:
-            self.navigate_to.emit("Port Scan (TCP)")
-        elif "THREAT_INTEL" in rule or "CVE" in rule or "Cert" in rule:
-            self.navigate_to.emit("Threat Intel")
-        elif "RATE_SPIKE" in rule or "Bandwidth" in rule:
-            self.navigate_to.emit("Live Bandwidth")
-        elif "ARP" in rule:
-            self.navigate_to.emit("ARP Spoof Watch")
-        elif "DHCP" in rule:
-            self.navigate_to.emit("DHCP Rogue Monitor")
-        elif any(k in rule for k in ("HOST_DOWN", "DEVICE_GONE", "DEVICE_")):
-            self.navigate_to.emit("Inventory Changes")
-            if host:
+        target = _cta_page_for_rule(rule)
+        if target:
+            self.navigate_to.emit(target)
+            if host and target in ("Inventory Changes", "Devices"):
                 self.select_inventory_device.emit(host)
         else:
             self.navigate_to.emit("Notifications")
