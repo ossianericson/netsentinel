@@ -352,6 +352,11 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.97
+**Changed**
+- `ui/pages/discover_data.py`: Feature Guide groups reworked by user purpose — `"Advanced"` group eliminated; threat-detection features (Rogue Bridge STP, Broadcast Storm, ARP Spoof Watch, IoT Behaviour Baseline, 802.11 Monitor, DHCP Lease Scanner, Rogue Device Detection, Active Monitors) consolidated into `"Security"`; scheduling and integration tools (REST API, Automation Hooks, Scheduled Scans, MQTT, Config Snapshots, Custom Triggers, Maintenance Windows) into new `"Automation"` group; monitoring infrastructure (Syslog, SNMP Traps, SNMP Device Info, Trend Forecasts) into `"Monitoring"`; utility/visualization tools (Geo Map, Network Doc, IP Calculator, Tools & Wake-on-LAN) into `"Diagnostics"`
+- RULE-D2 updated: canonical group mapping is now purpose-based, not nav-placement-based; `"Automation"` replaces `"Advanced"` as a valid group name
+
 ### v1.9.96
 **Fixed**
 - `ui/pages/discover_data.py`: corrected Feature Guide group assignments for 8 entries — Npcap-gated Analysis tools (Rogue Bridge STP, Broadcast Storm, ARP Spoof Watch, IoT Behaviour Baseline, 802.11 Monitor Mode) moved from `"Security"` to `"Advanced"`; Active Monitors moved to `"Monitoring"`; Rogue Device Detection and DHCP Lease Scanner moved to `"Diagnostics"` — group assignments now match the nav section each page lives in
