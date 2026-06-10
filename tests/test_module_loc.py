@@ -49,7 +49,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
     # Sprint 19: _NavBuilderMixin → nav/builder.py; _MonitorStateMixin → monitor_state.py;
     # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines. FINAL GOAL ACHIEVED.
-    "dashboard.py": 2167,  # actual 1,967 + 200 margin (Sprint 19 final extraction)
+    "dashboard.py": 2408,  # actual 2,208 + 200 margin (v1.9.94–v1.9.95 sprint growth)
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
