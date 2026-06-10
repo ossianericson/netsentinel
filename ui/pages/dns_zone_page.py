@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -167,8 +167,6 @@ def _field(placeholder: str, width: int = 180) -> QLineEdit:
 
 class DnsZonePage(QWidget):
     """DNS Zone Mapping — AXFR records + mDNS LAN service enumeration."""
-
-    scan_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)

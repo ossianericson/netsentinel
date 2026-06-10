@@ -664,6 +664,7 @@ def main():
     window._lab_mode_page.explore_protocol.connect(_on_explore_protocol)
     window._trigger_page.scan_requested.connect(window._start_full_scan)
     window._diagnosis_page.scan_requested.connect(window._start_full_scan)
+    window._cve_page.scan_requested.connect(window._start_full_scan)
     # H6: wire empty-state CTAs added in Sprint H6
     window._geo_map_page.scan_requested.connect(window._start_full_scan)
     window._timeline_page.scan_requested.connect(window._start_full_scan)

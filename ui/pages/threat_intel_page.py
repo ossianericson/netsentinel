@@ -544,6 +544,11 @@ class ThreatIntelPage(QWidget):
         self._lookup_field.setText(ip)
         self._run_lookup()
 
+    def focus_on_host(self, ip: str) -> None:
+        """Pre-filter the threat feed table to this IP (called from CVE Tracker)."""
+        if ip and ip not in ("—", ""):
+            self._threat_search.setText(ip)
+
     # ── Feed operations ───────────────────────────────────────────────────────
 
     def _load_cache(self) -> None:

@@ -22,7 +22,7 @@ matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 
-from PyQt6.QtCore import QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QTimer, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -83,8 +83,6 @@ def _kpi_tile(label: str, color: str = ACCENT) -> tuple[QFrame, QLabel]:
 
 class LiveBandwidthPage(QWidget):
     """Real-time bandwidth chart + per-interface breakdown table."""
-
-    scan_requested = pyqtSignal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)

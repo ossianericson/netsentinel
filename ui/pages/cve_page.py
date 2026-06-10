@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QHBoxLayout, QLabel, QLineEdit,
     QMenu, QPlainTextEdit, QPushButton, QSizePolicy,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore
@@ -221,8 +221,10 @@ class _ImportDialog(QDialog):
 class CvePage(QWidget):
     """CVE lifecycle tracker page — Security Audit section."""
 
-    navigate_to_inventory = pyqtSignal(str)   # DEVICE-3: carries IP/host filter string
-    navigate_to           = pyqtSignal(str)   # general cross-page navigation
+    navigate_to_inventory     = pyqtSignal(str)   # DEVICE-3: carries IP/host filter string
+    navigate_to               = pyqtSignal(str)   # general cross-page navigation
+    scan_requested            = pyqtSignal()      # emitted by empty-state CTA; wire to _start_full_scan
+    lookup_threat_intel_for   = pyqtSignal(str)   # IP → navigate to Threat Intel + pre-filter
 
     def __init__(self, store: MetricStore, parent=None):
         super().__init__(parent)
@@ -250,9 +252,34 @@ class CvePage(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
 
-        # Page title
+        # Page title (always visible)
         from ui.widgets.page_header import PageHeaderBar
         root.addWidget(PageHeaderBar("CVE Lifecycle Tracker"))
+
+        # Content stack: page 0 = empty state, page 1 = full content
+        self._content_stack = QStackedWidget()
+
+        # ── Page 0: empty state ──────────────────────────────────────────────
+        from ui.widgets.empty_state_card import EmptyStateCard
+        _empty = EmptyStateCard(
+            icon="⬡",
+            title="No CVEs tracked yet",
+            what_it_shows=(
+                "CVE data is populated after a port scan finds open services. "
+                "Run a full scan, then use \"Import from Scan\" to record "
+                "discovered service versions and track their CVEs."
+            ),
+            why_it_matters="CVE tracking requires service version strings from an active port scan.",
+            btn_label="Run Scan",
+        )
+        _empty.clicked.connect(self.scan_requested.emit)
+        self._content_stack.addWidget(_empty)
+
+        # ── Page 1: main content ─────────────────────────────────────────────
+        _page1 = QWidget()
+        _p1_lay = QVBoxLayout(_page1)
+        _p1_lay.setContentsMargins(0, 0, 0, 0)
+        _p1_lay.setSpacing(10)
 
         _cve_sub = QLabel(
             "Findings are populated by a full scan — click any row to review details "
@@ -261,7 +288,7 @@ class CvePage(QWidget):
         _cve_sub.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
         )
-        root.addWidget(_cve_sub)
+        _p1_lay.addWidget(_cve_sub)
 
         # KPI row
         kpi_row = QHBoxLayout()
@@ -275,7 +302,7 @@ class CvePage(QWidget):
         for t in (t1, t2, t3, t4, t5, t6):
             kpi_row.addWidget(t)
         kpi_row.addStretch()
-        root.addLayout(kpi_row)
+        _p1_lay.addLayout(kpi_row)
 
         # Toolbar
         toolbar = QHBoxLayout()
@@ -337,7 +364,7 @@ class CvePage(QWidget):
         toolbar.addWidget(btn_export)
         toolbar.addWidget(btn_refresh)
         toolbar.addWidget(btn_import)
-        root.addLayout(toolbar)
+        _p1_lay.addLayout(toolbar)
 
         # Table card
         card, card_lay = _card("CVE Inventory")
@@ -398,7 +425,9 @@ class CvePage(QWidget):
         self._lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_lay.addWidget(self._lbl_empty)
 
-        root.addWidget(card, 1)
+        _p1_lay.addWidget(card, 1)
+        self._content_stack.addWidget(_page1)
+        root.addWidget(self._content_stack, 1)
 
     # ── Data ──────────────────────────────────────────────────────────────────
 
@@ -409,6 +438,8 @@ class CvePage(QWidget):
         if state_filter == "All States":
             state_filter = None
         self._rows = self._store.list_cve_lifecycles(state_filter)
+        all_rows = self._store.list_cve_lifecycles(None)
+        self._content_stack.setCurrentIndex(0 if not all_rows else 1)
         self._apply_filter(self._search_box.text())
         self._update_kpis()
 
@@ -573,14 +604,16 @@ class CvePage(QWidget):
         act_nvd     = menu.addAction("Open in NVD Browser")
         act_how_fix = menu.addAction("How to Fix")
 
-        act_device      = None
-        act_port_scan   = None
-        act_svc_monitor = None
+        act_device          = None
+        act_port_scan       = None
+        act_svc_monitor     = None
+        act_threat_intel    = None
         host = row_data.get("host") or ""
         if host:
             menu.addSeparator()
-            act_port_scan   = menu.addAction(f"◆  Port scan {host} now")
-            act_svc_monitor = menu.addAction(f"◆  Monitor {host} — go to Service Heartbeat")
+            act_port_scan    = menu.addAction(f"◆  Port scan {host} now")
+            act_svc_monitor  = menu.addAction(f"◆  Monitor {host} — go to Service Heartbeat")
+            act_threat_intel = menu.addAction(f"◆  Check {host} in Threat Intel")
             if self._popover:
                 act_device = menu.addAction(f"Device Info — {host}")
 
@@ -606,6 +639,9 @@ class CvePage(QWidget):
             return
         if act_svc_monitor and chosen == act_svc_monitor:
             self.navigate_to.emit("Service Heartbeat")
+            return
+        if act_threat_intel and chosen == act_threat_intel:
+            self.lookup_threat_intel_for.emit(host)
             return
         if act_device and chosen == act_device:
             from PyQt6.QtGui import QCursor

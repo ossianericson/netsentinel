@@ -217,6 +217,10 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
             lambda ip: (self._nav_rail_go_to("Inventory Changes"), self._inventory_page.select_device(ip))
         )
         self._cve_page.navigate_to.connect(self._nav_rail_go_to)
+        self._cve_page.lookup_threat_intel_for.connect(
+            lambda ip: (self._threat_intel_page.focus_on_host(ip),
+                        self._nav_rail_go_to("Threat Intel"))
+        )
         self._inventory_page.check_cves_for.connect(
             lambda ip: (self._cve_page.focus_on_host(ip),
                         self._nav_rail_go_to("CVE Tracker"))

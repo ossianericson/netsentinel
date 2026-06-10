@@ -81,27 +81,28 @@ _FEATURES: list[dict] = [
     {
         "group": "New in this version",
         "icon": "★",
-        "name": "Weekly Digest",
+        "name": "Plain-English page subtitles",
         "desc": (
-            "Opt-in weekly summary of your network's health, alert history, and "
-            "device changes — delivered via your configured notification channel "
-            "at a time you choose. Added in v1.9.97."
+            "Broadcast Storm, Rogue Bridge, and IoT Behaviour pages now open with a "
+            "plain-English explanation of what the feature does and why it matters — "
+            "so you always know what you are looking at before data appears. v1.9.97."
         ),
-        "page": "Notifications",
+        "page": "Broadcast Storm",
         "requires": None,
-        "tags": ["new", "weekly", "digest", "summary", "report"],
+        "tags": ["new", "plain english", "explainer", "broadcast storm", "iot", "stp"],
     },
     {
         "group": "New in this version",
         "icon": "★",
-        "name": "Recent Actions (Command Palette)",
+        "name": "Automation group in Feature Guide",
         "desc": (
-            "The command palette now shows your last 5 actions so you can re-run "
-            "them with one click. Open with Ctrl+K or the search bar. Added in v1.9.97."
+            "The Feature Guide now has a dedicated Automation group covering hooks, "
+            "scheduled scans, MQTT, REST API, custom triggers, and maintenance windows — "
+            "making it easy to discover everything the scheduler can do. v1.9.97."
         ),
         "page": "Feature Guide",
         "requires": None,
-        "tags": ["new", "command palette", "recent", "actions", "quick"],
+        "tags": ["new", "automation", "feature guide", "hooks", "scheduler", "mqtt"],
     },
     # ── Monitoring ─────────────────────────────────────────────────────────────
     {
