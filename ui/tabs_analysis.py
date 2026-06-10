@@ -26,7 +26,7 @@ from ui.styles import (
     GRADE_D_BG, GRADE_F_BG, GRADE_F_FG, GREEN,
     RED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
-from ui.tabs import _page_header, _table
+from ui.tabs_helpers import _page_header, _table
 
 
 class _AnalysisTabsMixin:

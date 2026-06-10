@@ -137,7 +137,7 @@ def ensure_app_rules() -> bool:
 
     if _rule_exists(_RULE_TCP):
         _log.debug("Speedtest firewall rules already present")
-        return True
+        return _app_rules_done
 
     program = str(Path(sys.executable).resolve())
     ok = _add_outbound_rules(_RULE_TCP, _RULE_UDP, program)
