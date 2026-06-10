@@ -407,7 +407,7 @@ class _LogSourcePanelMixin:
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; padding:2px; }}"
             f"QMenu::item {{ padding:5px 14px; color:{TEXT_PRIMARY}; font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{ACCENT}22; }}"
+            f"QMenu::item:selected {{ background:{ACCENT}22; color:{TEXT_PRIMARY}; }}"
         )
         has_hidden = False
         for key, (label, _color) in _SOURCES.items():
@@ -610,7 +610,10 @@ class _LogSourcePanelMixin:
             f"color:{color}; font-size:10px; background:transparent; border:none;"
         )
         self._db_feedback_lbl.setVisible(True)
-        QTimer.singleShot(3000, lambda: self._db_feedback_lbl.setVisible(False))
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._db_feedback_lbl.setVisible(False))
+        _t.start(3000)
 
     # ── Challenge banner ──────────────────────────────────────────────────────
 

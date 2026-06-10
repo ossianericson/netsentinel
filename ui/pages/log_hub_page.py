@@ -874,7 +874,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         menu = QMenu(self)
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
-            f"QMenu::item:selected {{ background:{TABLE_SEL}; }}"
+            f"QMenu::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         )
 
         corr_act = None

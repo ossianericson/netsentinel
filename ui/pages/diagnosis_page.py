@@ -807,7 +807,10 @@ class DiagnosisPage(QWidget):
         QApplication.clipboard().setText("\n".join(lines))
         self._copy_btn.setText("Copied ✓")
         from PyQt6.QtCore import QTimer
-        QTimer.singleShot(2000, lambda: self._copy_btn.setText("Copy report"))
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._copy_btn.setText("Copy report"))
+        _t.start(2000)
 
     def _export_report(self) -> None:
         from PyQt6.QtWidgets import QFileDialog

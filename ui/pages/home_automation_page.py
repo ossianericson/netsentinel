@@ -350,7 +350,7 @@ class _PinnedTile(QFrame):
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         unpin = menu.addAction("Unpin from Overview")
         action = menu.exec(event.globalPos())
@@ -1067,7 +1067,7 @@ class HomeAutomationPage(QWidget):
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
             f"QMenu::item {{ padding:5px 20px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         act_edit   = menu.addAction("✏  Edit Device…")
         pin_label  = "📌  Unpin from Overview" if d.get("is_pinned") else "📌  Pin to Overview"

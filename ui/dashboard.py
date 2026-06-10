@@ -280,18 +280,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._update_available.connect(self._on_update_available)
         root.addWidget(self._update_bar)
 
-        # Main area: sidebar+content fills window; verdict strip hidden until scan
+        # Main area: sidebar+content fills window
         _main = self._build_tabs()
-        _verdict_area = self._build_verdict_area()
-        _verdict_area.setVisible(False)
-        # Auto-show verdict strip on first scan result without touching callsites
-        _orig_vu = self._verdict.update
-        def _vu(text: str, level: str = "UNKNOWN", _ov=_orig_vu):
-            _verdict_area.setVisible(True)
-            _ov(text, level)
-        self._verdict.update = _vu  # type: ignore[method-assign]
+        self._verdict_area = self._build_verdict_area()  # kept alive for exports; not shown
         root.addWidget(_main, 1)
-        root.addWidget(_verdict_area)
 
         # Status bar
         self._status_bar = QStatusBar()

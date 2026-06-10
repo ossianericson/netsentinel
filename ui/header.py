@@ -176,7 +176,7 @@ class AppHeaderMixin:
         _menu_s.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; padding:4px; font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
 
         _act_about = _menu_s.addAction("About NetSentinel")

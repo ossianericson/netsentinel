@@ -208,7 +208,10 @@ class OoklaCliBanner(QFrame):
             self.installed.emit()
             # Auto-hide after 6 seconds
             from PyQt6.QtCore import QTimer
-            QTimer.singleShot(6000, self.hide)
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self.hide)
+            _t.start(6000)
         else:
             self._msg.setText(
                 f"<span style='color:{RED};'>\u26a0 Installation failed:</span> {message}"

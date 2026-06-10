@@ -1113,7 +1113,10 @@ class InventoryPage(QWidget):
 
         if self._content_stack.currentIndex() == 0:
             self._content_stack.setCurrentIndex(1)
-            QTimer.singleShot(700, self._maybe_show_coach_devices)
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self._maybe_show_coach_devices)
+            _t.start(700)
 
         # DEVICE-2: build alert host set for dot lookup (one query, reused per row)
         try:

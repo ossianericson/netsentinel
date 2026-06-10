@@ -308,7 +308,10 @@ class RestApiPage(QWidget):
         self._endpoint_ref.setVisible(False)
         bl.addWidget(self._endpoint_ref)
 
-        QTimer.singleShot(200, self._probe_status)
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(self._probe_status)
+        _t.start(200)
         return card
 
     # ── Handlers ─────────────────────────────────────────────────────────────
@@ -461,7 +464,12 @@ class RestApiPage(QWidget):
         self._worker = RestApiWorker(store=self._store, parent=self)
         self._worker.set_bind(host, port)
         self._worker.error.connect(lambda msg: print(f"[REST API] {msg}", flush=True))
-        self._worker.started_ok.connect(lambda _: QTimer.singleShot(600, self._probe_status))
+        def _on_started_ok(_: object) -> None:
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self._probe_status)
+            _t.start(600)
+        self._worker.started_ok.connect(_on_started_ok)
         self._worker.start()
 
         self._lbl_dot.setStyleSheet(f"font-size:16px; color:{TEXT_MUTED}; border:none;")

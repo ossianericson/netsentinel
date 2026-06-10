@@ -124,7 +124,10 @@ class _Toast(QFrame):
 
         dismiss_ms = _AUTO_DISMISS_MS.get(kind, 0)
         if dismiss_ms > 0:
-            QTimer.singleShot(dismiss_ms, self._dismiss)
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self._dismiss)
+            _t.start(dismiss_ms)
 
     def _dismiss(self) -> None:
         mgr = ToastManager.instance()

@@ -795,7 +795,7 @@ class ConnectionsPage(QWidget):
             f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
             f"QMenu::item {{ padding:5px 20px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
 
         is_blocked = c.exe_name in self._blocked_rules

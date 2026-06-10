@@ -527,7 +527,10 @@ class _NotifAlertHistoryMixin:
         if self._router and self._log_detail_entry:
             self._router.retry_delivery(self._log_detail_entry)
             self._log_detail.setVisible(False)
-            QTimer.singleShot(2000, self.refresh_log)
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self.refresh_log)
+            _t.start(2000)
 
     def _clear_log(self) -> None:
         if self._router:

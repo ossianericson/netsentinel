@@ -51,7 +51,7 @@ def _show(
     menu = QMenu(table)
     menu.setStyleSheet(
         f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
-        f"QMenu::item:selected {{ background:{TABLE_SEL}; }}"
+        f"QMenu::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         f"QMenu::separator {{ background:{BORDER}; height:1px; margin:3px 6px; }}"
     )
 

@@ -7,7 +7,7 @@ overall verdict, and the RiskBadge / VerdictPanel widget classes.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
@@ -32,7 +32,6 @@ from ui.styles import (
     TEXT_SECONDARY,
     WHITE,
 )
-
 
 # ── Module-level colour helpers ───────────────────────────────────────────────
 
@@ -64,6 +63,8 @@ _VERDICT_COLLAPSED_KEY = "ui/verdict_collapsed"
 class VerdictPanel(QFrame):
     """Traffic-light coloured plain-English verdict box — collapsible via the ▼/▶ toggle."""
 
+    close_requested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("verdictFrame")
@@ -71,7 +72,7 @@ class VerdictPanel(QFrame):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # ── Header row: title + toggle button ────────────────────────────────
+        # ── Header row: title + toggle + dismiss ─────────────────────────────
         hdr = QWidget()
         hdr.setStyleSheet("background:transparent;")
         hdr_lay = QHBoxLayout(hdr)
@@ -81,20 +82,35 @@ class VerdictPanel(QFrame):
         self._title = QLabel("Overall Verdict")
         self._title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
 
-        self._toggle_btn = QPushButton("▼")
-        self._toggle_btn.setFixedSize(22, 22)
-        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._toggle_btn.setToolTip("Collapse / expand verdict")
-        self._toggle_btn.setStyleSheet(
+        _btn_style = (
             f"QPushButton {{ background:transparent; border:none;"
             f" color:{TEXT_MUTED}; font-size:11px; }}"
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
             f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
         )
+
+        self._toggle_btn = QPushButton("▼")
+        self._toggle_btn.setFixedSize(22, 22)
+        self._toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle_btn.setToolTip("Collapse / expand verdict")
+        self._toggle_btn.setStyleSheet(_btn_style)
         self._toggle_btn.clicked.connect(self._on_toggle)
+
+        self._close_btn = QPushButton("×")
+        self._close_btn.setFixedSize(22, 22)
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.setToolTip("Dismiss — reappears after next scan")
+        self._close_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; border:none;"
+            f" color:{TEXT_PRIMARY}; font-size:14px; font-weight:bold; }}"
+            f"QPushButton:hover {{ color:{RED}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
+        )
+        self._close_btn.clicked.connect(self.close_requested)
 
         hdr_lay.addWidget(self._title, 1)
         hdr_lay.addWidget(self._toggle_btn)
+        hdr_lay.addWidget(self._close_btn)
         outer.addWidget(hdr)
 
         # ── Body: multi-line verdict text ─────────────────────────────────────
@@ -286,6 +302,7 @@ class _MonitorStateMixin:
         lay.setSpacing(0)
 
         self._verdict = VerdictPanel()
+        self._verdict.close_requested.connect(w.hide)
         lay.addWidget(self._verdict, 1)
         return w
 
