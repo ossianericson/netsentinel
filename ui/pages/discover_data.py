@@ -81,19 +81,6 @@ _FEATURES: list[dict] = [
     {
         "group": "New in this version",
         "icon": "★",
-        "name": "Active Monitors",
-        "desc": (
-            "Single-glance security posture — one tile per detection monitor. "
-            "See what's running, what's clear, and jump to any detail page. "
-            "Added in v1.9."
-        ),
-        "page": "Active Monitors",
-        "requires": None,
-        "tags": ["new", "overview", "monitor", "security", "status"],
-    },
-    {
-        "group": "New in this version",
-        "icon": "★",
         "name": "Weekly Digest",
         "desc": (
             "Opt-in weekly summary of your network's health, alert history, and "
@@ -286,18 +273,6 @@ _FEATURES: list[dict] = [
     # ── Diagnostics ────────────────────────────────────────────────────────────
     {
         "group": "Diagnostics",
-        "icon": "◆",
-        "name": "Network Grade",
-        "desc": (
-            "Scores your network A–F across 8 dimensions: speed, latency, DNS, packet loss, "
-            "device security, STP health, and more. Each dimension has an actionable fix tip."
-        ),
-        "page": "Network Grade",
-        "requires": None,
-        "tags": ["grade", "score", "benchmark", "health", "rating", "A-F", "speed", "latency", "dns"],
-    },
-    {
-        "group": "Diagnostics",
         "icon": "⊟",
         "name": "Network Health Report",
         "desc": (
@@ -477,18 +452,6 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["dhcp", "lease", "rogue", "server", "gateway", "dns", "intercept", "mitm"],
         "badge": "updated", "badge_until": "2026-07-24",
-    },
-    {
-        "group": "Security",
-        "icon": "◉",
-        "name": "ARP Spoof Watch",
-        "desc": (
-            "Watches ARP traffic in real time and alerts when a MAC address conflict is "
-            "detected — a sign of a man-in-the-middle attack in progress."
-        ),
-        "page": "ARP Spoof Watch",
-        "requires": "Npcap",
-        "tags": ["arp", "spoof", "mitm", "mac", "conflict", "attack", "intercept", "poison"],
     },
     {
         "group": "Security",
@@ -707,9 +670,9 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["live", "lab", "inject", "event", "home", "amber", "card", "real-time"],
     },
-    # ── Advanced ───────────────────────────────────────────────────────────────
+    # ── Automation ─────────────────────────────────────────────────────────────
     {
-        "group": "Advanced",
+        "group": "Automation",
         "icon": "🌐",
         "name": "REST API",
         "desc": (
@@ -723,7 +686,7 @@ _FEATURES: list[dict] = [
         "tags": ["api", "rest", "http", "grafana", "home assistant", "json", "endpoint", "script", "dashboard"],
     },
     {
-        "group": "Advanced",
+        "group": "Monitoring",
         "icon": "⊕",
         "name": "Syslog Receiver",
         "desc": (
@@ -736,7 +699,7 @@ _FEATURES: list[dict] = [
         "tags": ["syslog", "udp", "router", "switch", "log", "514", "message"],
     },
     {
-        "group": "Advanced",
+        "group": "Monitoring",
         "icon": "⊕",
         "name": "SNMP Trap Receiver",
         "desc": (
@@ -748,7 +711,7 @@ _FEATURES: list[dict] = [
         "tags": ["snmp", "trap", "udp", "162", "managed", "switch", "router", "oid"],
     },
     {
-        "group": "Advanced",
+        "group": "Automation",
         "icon": "⊕",
         "name": "Automation Hooks",
         "desc": (
@@ -760,7 +723,7 @@ _FEATURES: list[dict] = [
         "tags": ["automation", "webhook", "script", "trigger", "event", "hook", "alert", "wol"],
     },
     {
-        "group": "Advanced",
+        "group": "Automation",
         "icon": "⏱",
         "name": "Scheduled Scans",
         "desc": (
@@ -772,7 +735,7 @@ _FEATURES: list[dict] = [
         "tags": ["schedule", "scan", "automatic", "interval", "timer", "periodic"],
     },
     {
-        "group": "Advanced",
+        "group": "Automation",
         "icon": "⊞",
         "name": "MQTT / Home Assistant",
         "desc": (
@@ -784,7 +747,7 @@ _FEATURES: list[dict] = [
         "tags": ["mqtt", "home assistant", "homeassistant", "broker", "iot", "smart home", "discovery", "entity"],
     },
     {
-        "group": "Advanced",
+        "group": "Diagnostics",
         "icon": "⊞",
         "name": "Geolocation Map",
         "desc": (
@@ -796,7 +759,7 @@ _FEATURES: list[dict] = [
         "tags": ["geo", "geolocation", "map", "ip", "location", "world", "maxmind", "country", "city"],
     },
     {
-        "group": "Advanced",
+        "group": "Diagnostics",
         "icon": "▣",
         "name": "Network Documentation",
         "desc": (
@@ -808,7 +771,7 @@ _FEATURES: list[dict] = [
         "tags": ["doc", "documentation", "report", "html", "markdown", "inventory", "snapshot", "export"],
     },
     {
-        "group": "Advanced",
+        "group": "Diagnostics",
         "icon": "⊟",
         "name": "IP & Subnet Calculator",
         "desc": (
@@ -820,7 +783,7 @@ _FEATURES: list[dict] = [
         "tags": ["ip", "subnet", "cidr", "calculator", "mask", "broadcast", "host", "range", "ipv4"],
     },
     {
-        "group": "Advanced",
+        "group": "Diagnostics",
         "icon": "⌂",
         "name": "Tools & Wake-on-LAN",
         "desc": (
@@ -1054,9 +1017,9 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["smb", "windows", "share", "file share", "exposed", "access", "enumerate"],
     },
-    # ── Advanced (missing entries) ─────────────────────────────────────────────
+    # ── Automation (continued) ─────────────────────────────────────────────────
     {
-        "group": "Advanced",
+        "group": "Automation",
         "icon": "⊕",
         "name": "Config Snapshots",
         "desc": (
@@ -1069,7 +1032,7 @@ _FEATURES: list[dict] = [
         "tags": ["config", "snapshot", "baseline", "diff", "change", "audit", "compliance", "compare"],
     },
     {
-        "group": "Advanced",
+        "group": "Automation",
         "icon": "⊕",
         "name": "Custom Triggers",
         "desc": (
@@ -1082,7 +1045,7 @@ _FEATURES: list[dict] = [
         "tags": ["trigger", "custom", "alert", "expression", "threshold", "logic", "rtt", "loss"],
     },
     {
-        "group": "Advanced",
+        "group": "Automation",
         "icon": "▷",
         "name": "Maintenance Windows",
         "desc": (
@@ -1095,7 +1058,7 @@ _FEATURES: list[dict] = [
         "tags": ["maintenance", "window", "suppress", "alert", "schedule", "recurring", "reboot"],
     },
     {
-        "group": "Advanced",
+        "group": "Monitoring",
         "icon": "◑",
         "name": "SNMP Device Info",
         "desc": (
@@ -1108,7 +1071,7 @@ _FEATURES: list[dict] = [
         "tags": ["snmp", "managed", "switch", "router", "mib", "counter", "cpu", "memory", "poll"],
     },
     {
-        "group": "Advanced",
+        "group": "Monitoring",
         "icon": "▶",
         "name": "Trend Forecasts",
         "desc": (

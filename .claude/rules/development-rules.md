@@ -712,11 +712,30 @@ Required fields (all six mandatory — missing any crashes on startup):
 {"group": "Monitoring", "icon": "⬡", "name": "...", "desc": "...", "page": "Nav Label", "requires": None}
 ```
 `group` must be one of the groups currently defined in `ui/pages/discover_data.py`:
-`"Start here"`, `"New in this version"`, `"Monitoring"`, `"Diagnostics"`, `"Security"`, `"Learning"`, `"Extend"`, `"Hidden features"`, `"Advanced"`.
+`"Start here"`, `"New in this version"`, `"Monitoring"`, `"Diagnostics"`, `"Security"`, `"Automation"`, `"Learning"`, `"Extend"`, `"Hidden features"`.
 
 Note casing: `"Hidden features"` (lowercase 'f'), not `"Hidden Features"`.
 Groups appear in the Feature Guide in the order entries are listed in `_FEATURES` — no separate ordering constant exists.
-Use `"Monitoring"` for passive background monitors, `"Diagnostics"` for active one-shot tools, `"Security"` for threat-detection features, `"Advanced"` for automation/integration/expert tools, `"Hidden features"` for discoverability tips that are not full pages.
+
+**Group → nav section mapping (canonical):**
+
+| Feature Guide group | Corresponding nav section | When to use |
+|---|---|---|
+| `"Start here"` | Getting Started | Core daily-use tools (Overview, Speed Test, DNS, What's Wrong?) |
+| `"Monitoring"` | Monitor | Passive background monitors, live data streams, infrastructure (Syslog, SNMP, Trends) |
+| `"Diagnostics"` | Discover, Reports, Analysis (utilities) | Network inventory, health reports, visualization tools, network utilities |
+| `"Security"` | Security Audit + Analysis (threat detection) | ALL threat-detection features regardless of nav section — admin probes, Npcap monitors, rogue detection |
+| `"Automation"` | Automation | Scheduling, hooks, integrations, API (REST API, MQTT, Automation Hooks, Custom Triggers, Scheduled Scans, Config Snapshots, Maintenance Windows) |
+| `"Learning"` | Education | Protocol visualizer, lab mode, feature guide, help |
+| `"Extend"` | Extend | Hardware integrations and plugin ecosystem |
+| `"Hidden features"` | — | Discoverability tips for features that are not full pages |
+| `"New in this version"` | — | Entries highlighted as recently added |
+
+**Key rules:**
+- Group by **user purpose**, not by nav placement. A threat-detection tool belongs in `"Security"` even if its page lives in the Analysis nav section (e.g. ARP Spoof Watch, IoT Behaviour, 802.11 Monitor, Broadcast Storm, Rogue Bridge).
+- `"Automation"` maps directly to the Automation nav section. All scheduling, hook, and integration features go here.
+- `"Diagnostics"` covers network inventory (Discover nav), health/report tools (Reports nav), and network utility tools.
+- A feature already in `"Start here"` may also appear in `"Security"` for discoverability — having it in both is intentional (e.g. ARP Spoof Watch).
 
 ---
 
