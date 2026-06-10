@@ -352,6 +352,13 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.96
+**Fixed**
+- `ui/pages/discover_data.py`: corrected Feature Guide group assignments for 8 entries — Npcap-gated Analysis tools (Rogue Bridge STP, Broadcast Storm, ARP Spoof Watch, IoT Behaviour Baseline, 802.11 Monitor Mode) moved from `"Security"` to `"Advanced"`; Active Monitors moved to `"Monitoring"`; Rogue Device Detection and DHCP Lease Scanner moved to `"Diagnostics"` — group assignments now match the nav section each page lives in
+
+**Changed**
+- RULE-D2 in APM instructions updated with canonical Feature Guide group → nav section mapping table
+
 ### v1.9.95
 **Fixed**
 - `tools/test_setup.ps1`: replaced UTF-8 box-drawing characters with ASCII equivalents to prevent PowerShell 5.1 parse error during test harness teardown
