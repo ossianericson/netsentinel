@@ -130,7 +130,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"font-size:12px; color:{ACCENT}; background:transparent; border:none;"
         )
         _text = QLabel(
-            "Complete your setup — connect your router or modem for real device names and signal data."
+            "Optional: connect your router or modem to see real device names and signal data — works without it."
         )
         _text.setStyleSheet(
             f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
@@ -194,6 +194,67 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         bar = getattr(self, "_hw_nudge_bar", None)
         if bar:
             bar.setVisible(False)
+
+    def _build_tip_card(
+        self, icon: str, name: str, desc_first: str, page: "str | None", dismissed_key: str
+    ) -> "QWidget":
+        bar = QFrame()
+        bar.setObjectName("tipCard")
+        bar.setStyleSheet(
+            f"QFrame#tipCard {{ background:{BG_HOVER}; border:1px solid {BORDER};"
+            f" border-radius:4px; }}"
+        )
+        _lay = QHBoxLayout(bar)
+        _lay.setContentsMargins(10, 4, 8, 4)
+        _lay.setSpacing(8)
+        _icon_lbl = QLabel(icon)
+        _icon_lbl.setFixedWidth(16)
+        _icon_lbl.setStyleSheet(
+            f"font-size:11px; color:{ACCENT}; background:transparent; border:none;"
+        )
+        _hdr = QLabel("Did you know?")
+        _hdr.setStyleSheet(
+            f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+        _txt = QLabel(f"{name} — {desc_first}")
+        _txt.setStyleSheet(
+            f"font-size:10px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _lay.addWidget(_icon_lbl)
+        _lay.addWidget(_hdr)
+        _lay.addSpacing(2)
+        _lay.addWidget(_txt, 1)
+        if page:
+            _go = QPushButton("Open →")
+            _go.setFixedHeight(20)
+            _go.setCursor(Qt.CursorShape.PointingHandCursor)
+            _go.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:9px;"
+                f" border:1px solid {ACCENT}; border-radius:3px; padding:0 6px; }}"
+                f"QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                f"QPushButton:pressed {{ background:{BORDER}; color:{TEXT_PRIMARY}; }}"
+            )
+            _go.clicked.connect(lambda _=False, p=page: self.navigate_to.emit(p))
+            _lay.addWidget(_go)
+        _dismiss = QPushButton("✕")
+        _dismiss.setFixedSize(18, 18)
+        _dismiss.setFlat(True)
+        _dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _dismiss.setStyleSheet(
+            f"QPushButton {{ color:{TEXT_SECONDARY}; background:transparent; border:none; font-size:9px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+
+        def _on_dismiss(_bar=bar) -> None:
+            QSettings("NetSentinel", "NetSentinel").setValue(dismissed_key, True)
+            self._tip_card_dismissed = True
+            _bar.setVisible(False)
+
+        _dismiss.clicked.connect(_on_dismiss)
+        _lay.addWidget(_dismiss)
+        return bar
 
     def _setup_ui(self) -> None:
         self.setObjectName("homePageRoot")
@@ -368,6 +429,61 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lv_lay.addWidget(_lv_icon)
         lv_lay.addWidget(self._lv_text, 1)
         lay.addWidget(self._last_visit_card)
+
+        # ── First-scan guidance (one-time, after very first scan) ─────────────
+        self._first_scan_banner = QFrame()
+        self._first_scan_banner.setObjectName("firstScanBanner")
+        self._first_scan_banner.setStyleSheet(
+            f"QFrame#firstScanBanner {{ background:{BG_CARD};"
+            f" border:1px solid {GREEN}44; border-left:3px solid {GREEN};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        self._first_scan_banner.setVisible(False)
+        _fsb_outer = QVBoxLayout(self._first_scan_banner)
+        _fsb_outer.setContentsMargins(14, 10, 14, 10)
+        _fsb_outer.setSpacing(6)
+        _fsb_top = QHBoxLayout()
+        _fsb_top.setSpacing(0)
+        self._first_scan_lbl = QLabel("First scan complete — here's where to look:")
+        self._first_scan_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;"
+        )
+        _fsb_dismiss = QPushButton("✕")
+        _fsb_dismiss.setFixedSize(20, 20)
+        _fsb_dismiss.setFlat(True)
+        _fsb_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _fsb_dismiss.setStyleSheet(
+            f"QPushButton {{ color:{TEXT_MUTED}; background:transparent; border:none;"
+            f" font-size:10px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+        )
+        _fsb_dismiss.clicked.connect(self._dismiss_first_scan_banner)
+        _fsb_top.addWidget(self._first_scan_lbl, 1)
+        _fsb_top.addWidget(_fsb_dismiss)
+        _fsb_outer.addLayout(_fsb_top)
+        _fsb_btns = QHBoxLayout()
+        _fsb_btns.setSpacing(8)
+        for _flbl, _fpg in (
+            ("◎  Overview", "Overview"),
+            ("◎  Devices", "Devices"),
+            ("◎  What's Wrong?", "What's Wrong?"),
+        ):
+            _fb = QPushButton(_flbl)
+            _fb.setFixedHeight(26)
+            _fb.setCursor(Qt.CursorShape.PointingHandCursor)
+            _fb.setStyleSheet(
+                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:11px;"
+                f" border:none; border-radius:3px; padding:0 10px; }}"
+                f"QPushButton:hover {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+                f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            )
+            _fb.clicked.connect(lambda _=False, p=_fpg: self.navigate_to.emit(p))
+            _fsb_btns.addWidget(_fb)
+        _fsb_btns.addStretch()
+        _fsb_outer.addLayout(_fsb_btns)
+        lay.addWidget(self._first_scan_banner)
 
         # ── DASH-1: "Action needed" card ─────────────────────────────────────
         self._action_card = QFrame()
@@ -1079,6 +1195,43 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             _pills_lay.addWidget(_p)
         _pills_lay.addStretch()
         lay.addWidget(self._monitoring_pills_row)
+
+        # Persistent hint label below pills (always visible with the pills row)
+        self._monitoring_pills_hint = QLabel(
+            "Continuous monitors — click any pill to configure"
+        )
+        self._monitoring_pills_hint.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        lay.addWidget(self._monitoring_pills_hint)
+
+        # ── "Did you know?" rotating tip card ────────────────────────────────
+        try:
+            from ui.pages.discover_data import _FEATURES as _feat_data
+            _tips = [f for f in _feat_data if f.get("group") == "Hidden features"]
+        except Exception:
+            _tips = []
+
+        if _tips:
+            _qs = QSettings("NetSentinel", "NetSentinel")
+            _tip_idx = int(_qs.value("home/tip_session_index", 0))
+            _tip = _tips[_tip_idx % len(_tips)]
+            _dismissed_key = f"home/tip_{_tip_idx}_dismissed"
+            _qs.setValue("home/tip_session_index", (_tip_idx + 1) % len(_tips))
+            self._tip_card_dismissed = bool(_qs.value(_dismissed_key, False, type=bool))
+            self._tip_card = self._build_tip_card(
+                _tip.get("icon", "⬡"),
+                _tip["name"],
+                _tip["desc"].split(".")[0],
+                _tip.get("page"),
+                _dismissed_key,
+            )
+        else:
+            self._tip_card_dismissed = True
+            self._tip_card = QWidget()
+
+        self._tip_card.setVisible(False)  # _set_first_run_mode shows it when data exists
+        lay.addWidget(self._tip_card)
 
         _nudge_row = QHBoxLayout()
         _nudge_row.setContentsMargins(0, 2, 0, 0)

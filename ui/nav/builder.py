@@ -1136,13 +1136,38 @@ class _NavBuilderMixin:
         else:
             pages_section = pages
 
+        # Feature items — enable intent-based searches like "slow internet", "rogue device"
+        feat_section: list = []
+        try:
+            from ui.pages.discover_data import _FEATURES as _feat_list
+            _feat_items: list = []
+            for _f in _feat_list:
+                _pg = _f.get("page")
+                if not _pg:
+                    continue
+                _name = _f["name"]
+                _desc = _f["desc"]
+                _first = _desc.split(".")[0] if "." in _desc else _desc[:80]
+                _tags = " ".join(_f.get("tags", []))
+                _feat_items.append({
+                    "icon": _f.get("icon", "⬡"),
+                    "label": f"{_name} — {_first}",
+                    "kind": "page",
+                    "real_label": _pg,
+                    "search": f"{_name} {_desc} {_tags}".lower(),
+                })
+            if _feat_items:
+                feat_section = [{"label": "Features", "kind": "separator"}] + _feat_items
+        except Exception:
+            pass  # non-fatal — discover_data not importable
+
         actions = [
             {"icon": "⟳", "label": "Run Full Scan",    "kind": "action"},
             {"icon": "⚙", "label": "Open Settings",    "kind": "action"},
             {"icon": "◄", "label": "Toggle Sidebar",   "kind": "action"},
             {"icon": "◈", "label": "Diagnose Network", "kind": "action"},
         ]
-        return recent_items + pages_section + actions
+        return recent_items + pages_section + feat_section + actions
 
     def _open_command_palette(self) -> None:
         from ui.command_palette import CommandPalette

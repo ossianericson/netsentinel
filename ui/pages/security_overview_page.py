@@ -159,6 +159,16 @@ class SecurityOverviewPage(QWidget):
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(10)
 
+        _subtitle = QLabel(
+            "Aggregate findings from all active security scans — "
+            "run a port scan, CVE check, or TLS audit to populate this page."
+        )
+        _subtitle.setWordWrap(True)
+        _subtitle.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        root.addWidget(_subtitle)
+
         root.addWidget(self._build_hero_card())
         root.addLayout(self._build_kpi_row())
 

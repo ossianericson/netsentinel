@@ -215,6 +215,12 @@ class _HomeDataMixin:
             self._alerts_hdr_row, self._alert_card,
         ):
             w.setVisible(not on)
+        if hasattr(self, "_monitoring_pills_hint"):
+            self._monitoring_pills_hint.setVisible(not on)
+        if hasattr(self, "_tip_card"):
+            self._tip_card.setVisible(
+                not on and not getattr(self, "_tip_card_dismissed", True)
+            )
         if on:
             self._hero_title.setText("Discover your network")
             self._hero_sub.setText(
@@ -245,6 +251,12 @@ class _HomeDataMixin:
         self._btn_rescan_compact.setVisible(on)
         self._monitoring_pills_row.setVisible(not on)
         self._monitoring_nudge.setVisible(False)
+        if hasattr(self, "_monitoring_pills_hint"):
+            self._monitoring_pills_hint.setVisible(not on)
+        if hasattr(self, "_tip_card"):
+            self._tip_card.setVisible(
+                not on and not getattr(self, "_tip_card_dismissed", True)
+            )
         self._btn_view_all_alerts.setVisible(on)
         if on:
             self._update_recurring_grade_display()
@@ -776,6 +788,9 @@ class _HomeDataMixin:
     def _check_scan_milestones(self, scan_count: int) -> None:
         """Show one-time milestone banner when scan count crosses a threshold."""
         qs = QSettings("NetSentinel", "NetSentinel")
+        if scan_count == 1 and not qs.value("milestone/first_scan_nudge", False, type=bool):
+            qs.setValue("milestone/first_scan_nudge", True)
+            self._show_first_scan_banner()
         if scan_count == 10 and not qs.value("milestone/scan_10", False, type=bool):
             qs.setValue("milestone/scan_10", True)
             grade = getattr(self, "_current_grade", "") or "—"
@@ -784,6 +799,24 @@ class _HomeDataMixin:
                 f"Your current network grade is {grade}. "
                 "Check Network Grade for a full breakdown."
             )
+
+    def _show_first_scan_banner(self) -> None:
+        """Display the post-first-scan guidance banner with nav links."""
+        if not hasattr(self, "_first_scan_banner"):
+            return
+        n = self._device_count
+        s = "s" if n != 1 else ""
+        self._first_scan_lbl.setText(
+            f"First scan complete — found {n} device{s}. Here's where to look:"
+        )
+        self._first_scan_banner.setVisible(True)
+
+    def _dismiss_first_scan_banner(self) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue(
+            "milestone/first_scan_nudge_dismissed", True
+        )
+        if hasattr(self, "_first_scan_banner"):
+            self._first_scan_banner.setVisible(False)
 
     def _check_logger_milestones(self) -> None:
         """Check 24h / 7d logging milestones; call at startup after store is ready."""

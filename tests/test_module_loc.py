@@ -146,7 +146,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Landing page — layout only; all data handlers extracted to home_data_mixin.py (Sprint 15).
     # Sprint 15: _MiniCard, _AlertRow → home_widgets.py; all handlers → home_data_mixin.py;
     #   home_page.py 2,238 → 1,128 lines. Target ≤1,200 achieved.
-    "pages/home_page.py": 1450,  # Sprint H8: +106 lines (recurring intro card + setup complete card)
+    "pages/home_page.py": 1470,  # Sprint H8: +106 lines; v1.9.98: +tip card + pills hint + first-scan banner
 
     # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15).
     # Natural split if needed: split update vs. scan result methods.

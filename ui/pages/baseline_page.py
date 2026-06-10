@@ -302,6 +302,17 @@ class BaselinePage(QWidget):
         self._empty_lbl.clicked.connect(self.scan_requested.emit)
         bl.addWidget(self._empty_lbl)
 
+        # Plain-English explanation (visible alongside table once snapshots exist)
+        _explain = QLabel(
+            "A baseline snapshot records your current device list and open ports. "
+            "Future snapshots are compared against it to detect unauthorized changes."
+        )
+        _explain.setWordWrap(True)
+        _explain.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; padding:2px 0;"
+        )
+        bl.addWidget(_explain)
+
         # Label input + action buttons
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
