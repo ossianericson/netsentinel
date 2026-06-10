@@ -352,6 +352,18 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.98
+**Fixed**
+- `ui/pages/cve_page.py`: CVE Tracker now shows an empty state with "Run Scan" CTA when no CVEs are tracked — previously showed a blank page
+- `ui/pages/threat_intel_page.py`: added `focus_on_host()` slot to pre-filter the threat feed to a specific IP (called from CVE Tracker cross-navigation)
+- `ui/dashboard.py`: About dialog displayed literal `&amp;` entity — replaced with plain `&`
+
+**Changed**
+- `ui/pages/cve_page.py`: right-click context menu now includes "Check in Threat Intel" — navigates to Threat Intel page pre-filtered to the selected IP
+- `ui/tabs.py`: wired `lookup_threat_intel_for` signal on CVE page to `focus_on_host()` on Threat Intel page with automatic nav jump
+- `ui/pages/live_bandwidth_page.py`: removed unused `scan_requested` signal (was defined but never emitted)
+- `ui/pages/dns_zone_page.py`: removed unused `scan_requested` signal (was defined but never emitted)
+
 ### v1.9.97
 **Changed**
 - `ui/pages/discover_data.py`: Feature Guide groups reworked by user purpose — `"Advanced"` group eliminated; threat-detection features (Rogue Bridge STP, Broadcast Storm, ARP Spoof Watch, IoT Behaviour Baseline, 802.11 Monitor, DHCP Lease Scanner, Rogue Device Detection, Active Monitors) consolidated into `"Security"`; scheduling and integration tools (REST API, Automation Hooks, Scheduled Scans, MQTT, Config Snapshots, Custom Triggers, Maintenance Windows) into new `"Automation"` group; monitoring infrastructure (Syslog, SNMP Traps, SNMP Device Info, Trend Forecasts) into `"Monitoring"`; utility/visualization tools (Geo Map, Network Doc, IP Calculator, Tools & Wake-on-LAN) into `"Diagnostics"`
