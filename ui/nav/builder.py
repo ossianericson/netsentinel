@@ -495,6 +495,7 @@ class _NavBuilderMixin:
         pinned: bool = False,
         admin_required: bool = False,
         audit_item: bool = False,
+        npcap_required: bool = False,
     ) -> None:
         """Register a page under the current rail section."""
         if not self._nav_sections:
@@ -507,6 +508,7 @@ class _NavBuilderMixin:
             page=widget,
             admin_required=admin_required,
             audit_item=audit_item,
+            npcap_required=npcap_required,
             pinned=label in self._nav_pinned_labels or pinned,
         )
         self._nav_sections[-1]["entries"].append(entry)
@@ -566,8 +568,14 @@ class _NavBuilderMixin:
             "Monitor":        "Monitor  ·  Ctrl+L → Network Logger",
             "Security Audit": (
                 "Security Audit\n"
-                "Items shown in red require admin rights or run\n"
-                "active probes against devices on your network."
+                "Red text = active security probe\n"
+                "[admin] badge = requires Run as Administrator\n"
+                "Items without a badge run passively."
+            ),
+            "Analysis": (
+                "Analysis\n"
+                "[Npcap] badge = requires Npcap driver installed\n"
+                "Other items run without additional drivers."
             ),
         }
         for sec in self._nav_sections:
@@ -594,7 +602,12 @@ class _NavBuilderMixin:
         if sec is None:
             return
         entries = [
-            (e.label, e.label in self._nav_pinned_labels, e.admin_required or e.audit_item)
+            (
+                e.label,
+                e.label in self._nav_pinned_labels,
+                e.admin_required or e.audit_item or e.npcap_required,
+                "admin" if e.admin_required else ("Npcap" if e.npcap_required else ""),
+            )
             for e in sec["entries"]
         ]
         self._nav_flyout.load_section(
@@ -939,11 +952,11 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Notifications",       self._notifications_page)
 
         self._nav_begin_section("Analysis", "cpu")
-        self._nav_add_rail_item("Broadcast Storm",     self._m3_tab)
-        self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab)
-        self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget)
-        self._nav_add_rail_item("802.11 Monitor",      self._wifi_monitor_page)
-        self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget)
+        self._nav_add_rail_item("Broadcast Storm",     self._m3_tab,                  npcap_required=True)
+        self._nav_add_rail_item("Rogue Bridge (STP)",  self._m2_tab,                  npcap_required=True)
+        self._nav_add_rail_item("IoT Behaviour",       self._iot_baseline_tab_widget, npcap_required=True)
+        self._nav_add_rail_item("802.11 Monitor",      self._wifi_monitor_page,       npcap_required=True)
+        self._nav_add_rail_item("ARP Spoof Watch",     self._arp_tab_widget,          npcap_required=True)
         self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
         self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
         self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
@@ -960,23 +973,23 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Maintenance Windows", self._maintenance_page)
 
         self._nav_begin_section("Security Audit", "shield")
-        self._nav_add_rail_item("Security Overview",    self._security_overview_page,     audit_item=True)
-        self._nav_add_rail_item("Port Scan (TCP)",      self._recon_syn_tab_widget,       admin_required=True, audit_item=True)
-        self._nav_add_rail_item("Port Scan (UDP)",      self._recon_udp_tab_widget,       admin_required=True, audit_item=True)
-        self._nav_add_rail_item("CVE Lookup",           self._recon_cve_tab_widget,       audit_item=True)
-        self._nav_add_rail_item("Threat Intel",         self._threat_intel_page,          audit_item=True)
-        self._nav_add_rail_item("TLS & Exposure",       self._cert_page,                  audit_item=True)
-        self._nav_add_rail_item("Login Test",           self._recon_cred_tab_widget,      admin_required=True, audit_item=True)
-        self._nav_add_rail_item("OS Detection",         self._recon_os_tab_widget,        audit_item=True)
-        self._nav_add_rail_item("Device Risk Score",    self._recon_risk_tab_widget,      audit_item=True)
-        self._nav_add_rail_item("CVE Tracker",          self._cve_page,                   audit_item=True)
-        self._nav_add_rail_item("Exposed to Internet",  self._recon_exposure_tab_widget,  audit_item=True)
-        self._nav_add_rail_item("Full Device Discovery", self._recon_discovery_tab_widget, audit_item=True)
-        self._nav_add_rail_item("Windows Shares (SMB)", self._recon_smb_tab_widget,       audit_item=True)
+        self._nav_add_rail_item("Security Overview",     self._security_overview_page,     audit_item=True)
+        self._nav_add_rail_item("Port Scan (TCP)",       self._recon_syn_tab_widget,       admin_required=True, audit_item=True)
+        self._nav_add_rail_item("Port Scan (UDP)",       self._recon_udp_tab_widget,       admin_required=True, audit_item=True)
+        self._nav_add_rail_item("CVE Lookup",            self._recon_cve_tab_widget,       audit_item=True)
+        self._nav_add_rail_item("Threat Intel",          self._threat_intel_page,          audit_item=True)
+        self._nav_add_rail_item("TLS & Exposure",        self._cert_page,                  audit_item=True)
+        self._nav_add_rail_item("Login Test",            self._recon_cred_tab_widget,      admin_required=True, audit_item=True)
+        self._nav_add_rail_item("OS Detection",          self._recon_os_tab_widget,        admin_required=True, audit_item=True)
+        self._nav_add_rail_item("Device Risk Score",     self._recon_risk_tab_widget,      audit_item=True)
+        self._nav_add_rail_item("CVE Tracker",           self._cve_page,                   audit_item=True)
+        self._nav_add_rail_item("Exposed to Internet",   self._recon_exposure_tab_widget,  audit_item=True)
+        self._nav_add_rail_item("Full Device Discovery", self._recon_discovery_tab_widget, admin_required=True, audit_item=True)
+        self._nav_add_rail_item("Windows Shares (SMB)",  self._recon_smb_tab_widget,       audit_item=True)
         self._nav_add_rail_item("Recon Plugins",         self._recon_plugin_tab_widget,    audit_item=True)
-        self._nav_add_rail_item("Private Endpoint Check", self._recon_pe_tab_widget,      audit_item=True)
-        self._nav_add_rail_item("Cloud Metadata Probe", self._recon_cloud_tab_widget,     audit_item=True)
-        self._nav_add_rail_item("DHCP Rogue Monitor",   self._dhcp_tab_widget,            audit_item=True)
+        self._nav_add_rail_item("Private Endpoint Check", self._recon_pe_tab_widget,       audit_item=True)
+        self._nav_add_rail_item("Cloud Metadata Probe",  self._recon_cloud_tab_widget,     audit_item=True)
+        self._nav_add_rail_item("DHCP Rogue Monitor",    self._dhcp_tab_widget,            admin_required=True, audit_item=True)
 
         self._nav_begin_section("Education", "book-open")
         self._nav_add_rail_item("Protocol Visualizer", self._protocol_viz_page)

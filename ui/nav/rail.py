@@ -259,6 +259,7 @@ class _NavEntry:
     action: Optional[Callable] = None
     admin_required: bool = False
     audit_item: bool = False
+    npcap_required: bool = False
     pinned: bool = False
 
 
@@ -475,11 +476,13 @@ class _FlyoutItem(QPushButton):
     pin_toggled = pyqtSignal(str, bool)       # (label, is_pinned_now)
     pin_move_requested = pyqtSignal(str, int) # (label, direction: -1=up, +1=down)
 
-    def __init__(self, label: str, pinned: bool = False, danger: bool = False, parent=None):
+    def __init__(self, label: str, pinned: bool = False, danger: bool = False,
+                 badge: str = "", parent=None):
         super().__init__(label, parent)
         self._label = label
         self._pinned = pinned
         self._dot: str = ""
+        self._badge: str = badge  # "" | "admin" | "Npcap"
         self.setCheckable(True)
         self.setMinimumHeight(28)
         self.setMaximumHeight(36)
@@ -514,14 +517,36 @@ class _FlyoutItem(QPushButton):
 
     def paintEvent(self, event) -> None:  # type: ignore[override]
         super().paintEvent(event)
+        if not self._dot and not self._badge:
+            return
+        from PyQt6.QtGui import QColor, QFont as _QFont, QPainter
+        from ui import styles as _s
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        right = self.width() - 8
         if self._dot:
-            from PyQt6.QtGui import QPainter, QColor
-            p = QPainter(self)
-            p.setRenderHint(QPainter.RenderHint.Antialiasing)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(self._dot))
-            p.drawEllipse(self.width() - 14, (self.height() - 7) // 2, 7, 7)
-            p.end()
+            p.drawEllipse(right - 7, (self.height() - 7) // 2, 7, 7)
+            right -= 15
+        if self._badge:
+            badge_color = _s.AUDIT_RED if self._badge == "admin" else _s.AMBER
+            font = _QFont("Segoe UI", 7)
+            font.setBold(True)
+            p.setFont(font)
+            fm = p.fontMetrics()
+            text_w = fm.horizontalAdvance(self._badge)
+            badge_w = text_w + 8
+            badge_h = 13
+            badge_x = right - badge_w - 2
+            badge_y = (self.height() - badge_h) // 2
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(badge_color))
+            p.drawRoundedRect(badge_x, badge_y, badge_w, badge_h, 3, 3)
+            p.setPen(QColor(Qt.GlobalColor.white))
+            p.drawText(badge_x, badge_y, badge_w, badge_h,
+                       Qt.AlignmentFlag.AlignCenter, self._badge)
+        p.end()
 
     def _show_ctx_menu(self, pos):
         from PyQt6.QtWidgets import QMenu
@@ -668,8 +693,10 @@ class _FlyoutPanel(QWidget):
                 w.deleteLater()
         self._items.clear()
         self._title_lbl.setText(title.upper())
-        for label, pinned, danger in entries:
-            btn = _FlyoutItem(label, pinned, danger)
+        for entry in entries:
+            label, pinned, danger = entry[0], entry[1], entry[2]
+            badge = entry[3] if len(entry) > 3 else ""
+            btn = _FlyoutItem(label, pinned, danger, badge)
             btn.setChecked(label == active_label)
             btn.clicked.connect(
                 lambda _c, b=btn, lbl=label: self._on_item_clicked(b, lbl, on_click)

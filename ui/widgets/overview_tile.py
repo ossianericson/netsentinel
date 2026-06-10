@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
-    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, AUDIT_RED,
     BG_CARD, BG_HOVER, BORDER,
     CARD_HDR_BORDER, CHART_DOWN, CHART_UP,
     GREEN, PRO_WARN_BG, RED, TEXT_MUTED,
@@ -1702,14 +1702,15 @@ class _SecurityScanPanel(QWidget):
 
     run_clicked = pyqtSignal(list)   # emits list of selected nav-label strings
 
-    # (nav_label, display_name, checked_by_default, is_active_probe)
+    # (nav_label, display_name, checked_by_default, is_active_probe, requirement)
+    # requirement: "" = none | "admin" = needs Run as Administrator | "Npcap" = needs Npcap driver
     _TOOLS = [
-        ("Threat Intel",         "Threat Intel",         True,  False),
-        ("TLS & Exposure",       "TLS & Exposure",       True,  False),
-        ("Device Risk Score",    "Device Risk Score",    True,  False),
-        ("CVE Lookup",           "CVE Lookup",           True,  False),
-        ("Port Scan (TCP)",      "Port Scan (TCP) ⚠",   False, True),
-        ("Exposed to Internet",  "Exposed to Internet ⚠",False, True),
+        ("Threat Intel",         "Threat Intel",        True,  False, ""),
+        ("TLS & Exposure",       "TLS & Exposure",      True,  False, ""),
+        ("Device Risk Score",    "Device Risk Score",   True,  False, ""),
+        ("CVE Lookup",           "CVE Lookup",          True,  False, ""),
+        ("Port Scan (TCP)",      "Port Scan (TCP)",     False, True,  "admin"),
+        ("Exposed to Internet",  "Exposed to Internet", False, True,  ""),
     ]
 
     def __init__(self, parent=None):
@@ -1753,8 +1754,9 @@ class _SecurityScanPanel(QWidget):
         warn_frame.setStyleSheet(
             f"QFrame {{ background:transparent; border:1px solid {AMBER}; border-radius:3px; }}"
         )
-        warn_inner = QHBoxLayout(warn_frame)
+        warn_inner = QVBoxLayout(warn_frame)
         warn_inner.setContentsMargins(8, 5, 8, 5)
+        warn_inner.setSpacing(3)
         warn_lbl = QLabel(
             "⚠  These tools actively probe devices on your network. "
             "Only use on networks you own or have permission to test."
@@ -1763,14 +1765,32 @@ class _SecurityScanPanel(QWidget):
         warn_lbl.setStyleSheet(
             f"font-size:10px; color:{AMBER}; border:none; background:transparent;"
         )
+        legend_lbl = QLabel(
+            f"<span style='background:{AUDIT_RED}; color:{WHITE}; border-radius:3px;"
+            f" padding:0 3px; font-size:9px; font-weight:bold;'>admin</span>"
+            f" &nbsp;= Run as Administrator required&nbsp;&nbsp;&nbsp;"
+            f"<span style='background:{AMBER}; color:{WHITE}; border-radius:3px;"
+            f" padding:0 3px; font-size:9px; font-weight:bold;'>Npcap</span>"
+            f" &nbsp;= Npcap driver required"
+        )
+        legend_lbl.setTextFormat(Qt.TextFormat.RichText)
+        legend_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+        )
         warn_inner.addWidget(warn_lbl)
+        warn_inner.addWidget(legend_lbl)
         body_lay.addWidget(warn_frame)
 
         # Tool checkboxes — 2 column grid
         chk_grid = QGridLayout()
         chk_grid.setSpacing(4)
         chk_grid.setContentsMargins(0, 0, 0, 0)
-        for i, (nav_lbl, display, checked, is_active) in enumerate(self._TOOLS):
+        for i, (nav_lbl, display, checked, is_active, req) in enumerate(self._TOOLS):
+            row_w = QWidget()
+            row_w.setStyleSheet("background:transparent;")
+            row_lay = QHBoxLayout(row_w)
+            row_lay.setContentsMargins(0, 0, 0, 0)
+            row_lay.setSpacing(4)
             chk = QCheckBox(display)
             chk.setChecked(checked)
             colour = AMBER if is_active else TEXT_PRIMARY
@@ -1780,7 +1800,17 @@ class _SecurityScanPanel(QWidget):
             )
             chk.stateChanged.connect(self._on_check_changed)
             self._checkboxes[nav_lbl] = chk
-            chk_grid.addWidget(chk, i // 2, i % 2)
+            row_lay.addWidget(chk)
+            if req:
+                badge_color = AUDIT_RED if req == "admin" else AMBER
+                badge_lbl = QLabel(req)
+                badge_lbl.setStyleSheet(
+                    f"font-size:8px; font-weight:bold; color:{WHITE};"
+                    f" background:{badge_color}; border-radius:3px; padding:0 3px;"
+                )
+                row_lay.addWidget(badge_lbl)
+            row_lay.addStretch()
+            chk_grid.addWidget(row_w, i // 2, i % 2)
         body_lay.addLayout(chk_grid)
 
         # Run row
