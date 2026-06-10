@@ -61,14 +61,15 @@ def speed_to_fraction(speed_mbps: float, max_mbps: float = 1000.0) -> float:
 def fetch_servers(limit: int = 20) -> List[SpeedServer]:
     """
     Fetch nearby Ookla-compatible servers sorted by latency.
-    Raises RuntimeError on network failure.
+    Tries speedtest-cli first (8 s timeout), then pure-Python HTTP fallback.
+    Raises RuntimeError only if both backends fail.
     """
     try:
         import speedtest as _st  # noqa: F401
         _patch_ssl_for_312()
         import socket as _socket
         _prev = _socket.getdefaulttimeout()
-        _socket.setdefaulttimeout(30)
+        _socket.setdefaulttimeout(8)  # reduced from 30 — fall through faster on slow API
         try:
             try:
                 client = _st.Speedtest(secure=True)
@@ -91,14 +92,12 @@ def fetch_servers(limit: int = 20) -> List[SpeedServer]:
                 )
                 for s in sorted(closest, key=lambda x: float(x.get("latency") or 9999))
             ]
-        except (_st.ConfigRetrievalError, AttributeError):
-            raise
         finally:
             _socket.setdefaulttimeout(_prev)
     except ImportError:
-        pass  # non-fatal
-    except Exception as exc:
-        raise RuntimeError(f"Server fetch failed: {exc}") from exc
+        pass  # speedtest-cli not installed — fall through to pure-Python
+    except Exception:
+        pass  # speedtest-cli failed — fall through to pure-Python fallback
 
     return _fetch_servers_python(limit)
 

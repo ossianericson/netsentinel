@@ -1711,14 +1711,19 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
             def run(self) -> None:
                 import socket
-                try:
-                    socket.setdefaulttimeout(3)
-                    socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(
-                        ("1.1.1.1", 53)
-                    )
-                    self.result.emit(True)
-                except OSError:
-                    self.result.emit(False)
+                # Try HTTPS (443) to two hosts — far less likely to be blocked
+                # than port 53 TCP which routers and firewalls commonly filter.
+                for host, port in (("1.1.1.1", 443), ("8.8.8.8", 443)):
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(3)
+                        s.connect((host, port))
+                        s.close()
+                        self.result.emit(True)
+                        return
+                    except OSError:
+                        pass  # host unreachable — try next candidate
+                self.result.emit(False)
 
         if getattr(self, "_lan_check_worker", None) and self._lan_check_worker.isRunning():
             return

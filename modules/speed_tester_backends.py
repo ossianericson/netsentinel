@@ -334,9 +334,38 @@ def _http_get(url: str, timeout: int = _HTTP_TIMEOUT) -> bytes:
         return r.read()
 
 
+def _fetch_client_coords() -> tuple:
+    """Return (lat, lon) strings from speedtest.net config, or (None, None) on failure."""
+    try:
+        import xml.etree.ElementTree as _ET
+        xml_bytes = _http_get(
+            "https://www.speedtest.net/speedtest-config.php", timeout=8
+        )
+        root = _ET.fromstring(xml_bytes)
+        client = root.find("client")
+        if client is not None:
+            lat = client.get("lat")
+            lon = client.get("lon")
+            if lat and lon:
+                return lat, lon
+    except Exception:
+        pass  # non-fatal — server list will fall back to IP-based geo
+    return None, None
+
+
 def _fetch_servers_python(limit: int = 10) -> List[SpeedServer]:
-    """Fetch Ookla servers via their JSON API."""
-    url = "https://www.speedtest.net/api/js/servers?engine=js&https_functional=true&limit=10"
+    """Fetch Ookla servers via their JSON API, geo-filtered by client coordinates."""
+    lat, lon = _fetch_client_coords()
+    if lat and lon:
+        url = (
+            f"https://www.speedtest.net/api/js/servers"
+            f"?engine=js&https_functional=true&limit={limit}&lat={lat}&lon={lon}"
+        )
+    else:
+        url = (
+            f"https://www.speedtest.net/api/js/servers"
+            f"?engine=js&https_functional=true&limit={limit}"
+        )
     try:
         data = json.loads(_http_get(url, timeout=15))
     except Exception as exc:
