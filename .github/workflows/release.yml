@@ -45,11 +45,9 @@ jobs:
           # cli.py
           (Get-Content cli.py) -replace '_VERSION\s*=\s*"[^"]+"', "_VERSION = `"$ver`"" |
             Set-Content cli.py
-          # packaging\AppxManifest.xml  — 4-part MSIX version (X.Y.Z.W format, not X.Y.Z.0.0)
-          # CRITICAL: pattern must be anchored with ^ so it only matches the Identity element's
-          # Version= attribute (which is on its own indented line).  An unanchored pattern also
-          # matches "Version=" as a substring of MinVersion= and MaxVersionTested=, overwriting
-          # them with the app version and breaking the CI test_appxmanifest_target_device_family_minversion.
+          # packaging\AppxManifest.xml — 4-part MSIX version (X.Y.Z.0)
+          # Anchored with ^ so it only matches the Identity element's Version= line,
+          # not MinVersion= or MaxVersionTested= in the TargetDeviceFamily element.
           (Get-Content "packaging\AppxManifest.xml") -replace '^\s+Version="[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"', "    Version=`"$ver.0`"" |
             Set-Content "packaging\AppxManifest.xml"
           echo "Patched to $ver"
@@ -104,21 +102,19 @@ jobs:
         run: |
           $ver = "${{ steps.tag_version.outputs.VERSION }}"
 
-          # Staging layout: AppxManifest.xml + Assets\ + NetSentinel\
           $stage = "msix-staging"
           New-Item -ItemType Directory -Force "$stage\NetSentinel" | Out-Null
           New-Item -ItemType Directory -Force "$stage\Assets"      | Out-Null
 
-          Copy-Item "dist\NetSentinel.exe" "$stage\NetSentinel\NetSentinel.exe"
-          Copy-Item "assets\icons\StoreLogo.png"         "$stage\Assets\"
-          Copy-Item "assets\icons\Square44x44Logo.png"   "$stage\Assets\"
-          Copy-Item "assets\icons\Square71x71Logo.png"   "$stage\Assets\"
-          Copy-Item "assets\icons\Square150x150Logo.png" "$stage\Assets\"
-          Copy-Item "assets\icons\Square310x310Logo.png" "$stage\Assets\"
-          Copy-Item "assets\icons\Wide310x150Logo.png"   "$stage\Assets\"
-          Copy-Item "assets\icons\SplashScreen.png"      "$stage\Assets\"
-
-          Copy-Item "packaging\AppxManifest.xml" "$stage\AppxManifest.xml"
+          Copy-Item "dist\NetSentinel.exe"                "$stage\NetSentinel\NetSentinel.exe"
+          Copy-Item "assets\icons\StoreLogo.png"          "$stage\Assets\"
+          Copy-Item "assets\icons\Square44x44Logo.png"    "$stage\Assets\"
+          Copy-Item "assets\icons\Square71x71Logo.png"    "$stage\Assets\"
+          Copy-Item "assets\icons\Square150x150Logo.png"  "$stage\Assets\"
+          Copy-Item "assets\icons\Square310x310Logo.png"  "$stage\Assets\"
+          Copy-Item "assets\icons\Wide310x150Logo.png"    "$stage\Assets\"
+          Copy-Item "assets\icons\SplashScreen.png"       "$stage\Assets\"
+          Copy-Item "packaging\AppxManifest.xml"          "$stage\AppxManifest.xml"
 
           $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
             -Filter "makeappx.exe" -Recurse |
@@ -276,7 +272,7 @@ jobs:
           path: dist/NetSentinel-cli-linux
           overwrite: true
 
-  # ── GitHub Release ─────────────────────────────────────────────────────────
+  # ── GitHub Release (production) ───────────────────────────────────────────
   release:
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-22.04
@@ -368,7 +364,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "NetSentinel ${{ github.ref_name }}"
           draft: false
-          prerelease: true
+          prerelease: false
           body_path: release_body.md
           files: |
             artifacts/windows-installer/NetSentinel-Setup-*.exe
@@ -410,27 +406,3 @@ jobs:
 
           python scripts/update_release_body.py $ARGS
 
-  # ── Staged rollout note ────────────────────────────────────────────────────
-  # The release above is created as prerelease: true.
-  # WinGet submission is intentionally NOT automatic — it happens manually:
-  #   Step 1: Wait 48h and verify no crash reports in GitHub Issues.
-  #   Step 2: Run "Promote Release" workflow to flip prerelease → stable.
-  #   Step 3: Run "WinGet Submit" workflow with the version number.
-  # Both workflows are in .github/workflows/ as workflow_dispatch triggers.
-  staged-rollout-note:
-    needs: [release]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Print staged rollout instructions
-        run: |
-          TAG="${{ github.ref_name }}"
-          VER="${TAG#v}"
-          echo "### Staged rollout checklist" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Release **$TAG** is live as a **pre-release**." >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Step | Action |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 1 | Wait 48h — monitor [Issues](https://github.com/${{ github.repository }}/issues) for crash reports |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 2 | Run **Promote Release** workflow with tag \`$TAG\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 3 | Run **WinGet Submit** workflow with version \`$VER\` |" >> "$GITHUB_STEP_SUMMARY"

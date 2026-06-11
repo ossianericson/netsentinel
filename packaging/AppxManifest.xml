@@ -73,8 +73,7 @@
           When enabled, launches in headless logger mode (no GUI window).
         -->
         <uap5:Extension Category="windows.startupTask"
-          Executable="NetSentinel\NetSentinel.exe"
-          Arguments="--startup-logger">
+          Executable="NetSentinel\NetSentinel.exe">
           <uap5:StartupTask
             TaskId="NetSentinelLogger"
             Enabled="false"
