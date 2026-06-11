@@ -1223,9 +1223,10 @@ class InventoryPage(QWidget):
             dtype  = (d.device_type if not isinstance(d, dict) else d.get("device_type", "")) or ""
             if not dtype:
                 dtype = (d.connection_type if not isinstance(d, dict) else d.get("connection_type", "")) or ""
-            if not dtype and vendor:
-                classified = classify_device(vendor=vendor)
-                dtype = classified.label if classified else ""
+            if not dtype or dtype == "Unknown Device":
+                _new = classify_device(d)
+                if _new and _new != "Unknown Device":
+                    dtype = _new
             level = (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")) or "UNKNOWN"
 
             row = self._snap_table.rowCount()

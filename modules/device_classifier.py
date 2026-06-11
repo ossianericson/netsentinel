@@ -137,7 +137,7 @@ _RULES: list[dict] = [
     },
     {
         "label": "Smart TV",
-        "hostname_re": r"samsung.?tv|lgtv|sony.?bravia|roku|firetv|apple.?tv|shield",
+        "hostname_re": r"samsung.?tv|lgtv|lgwebos|webostv|sony.?bravia|roku|firetv|apple.?tv|shield",
     },
     {
         "label": "Streaming Stick",
@@ -209,6 +209,42 @@ _RULES: list[dict] = [
     {
         "label": "Mesh Network Node",
         "hostname_re": r"eero|deco|orbi|velop|halo|nova|nest.?wifi|google.?wifi",
+    },
+    # ── Games consoles ────────────────────────────────────────────────────────
+    {
+        "label": "Games Console",
+        "vendor_re": r"sony interactive|playstation",
+    },
+    {
+        "label": "Games Console",
+        "hostname_re": r"ps[2345][\-_\.]|playstation|xbox|nintendo.?switch|\bwii\b",
+    },
+    {
+        "label": "Games Console",
+        "vendor_re": r"nintendo",
+    },
+    # ── Smart TV — additional hostname patterns ───────────────────────────────
+    {
+        "label": "Smart TV",
+        "hostname_re": r"lgwebos|webostv|lg[\-_]?webos|android[\-_]?tv",
+    },
+    {
+        "label": "Smart TV",
+        "hostname_re": r"samsung[\-_]?tv|bravia|panasonictv|philipstv|hisense[\-_]?tv",
+    },
+    # ── Audio — Sonos ─────────────────────────────────────────────────────────
+    {
+        "label": "Smart Speaker / Audio",
+        "vendor_re": r"sonos",
+    },
+    {
+        "label": "Smart Speaker / Audio",
+        "hostname_re": r"sonos[\-_]?|sonosbeam|sonosone|sonosplay|sonosera",
+    },
+    # ── Streaming — generic streamer hostname ─────────────────────────────────
+    {
+        "label": "Streaming Stick",
+        "hostname_re": r"\bstreamer\b|castdevice|cast[\-_]device",
     },
     # ── Fallback by OS ────────────────────────────────────────────────────────
     {

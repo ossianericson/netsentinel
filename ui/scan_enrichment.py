@@ -832,6 +832,38 @@ class ScanEnrichmentMixin:
                 else:
                     _d.hostname = _mac_to_host[_dmac]
 
+        # Re-classify any device still showing "Unknown Device" that now has
+        # a usable hostname from mesh/plugin enrichment.
+        try:
+            from modules.device_classifier import classify_device as _cd
+            from PyQt6.QtGui import QColor as _QC
+            from PyQt6.QtWidgets import QTableWidgetItem as _QTI
+            _mac_to_row: dict = {}
+            for _r in range(self._m1_table.rowCount()):
+                _mi = self._m1_table.item(_r, 2)
+                if _mi and _mi.text():
+                    _mac_to_row[_norm_mac(_mi.text())] = _r
+            for _d in self._m1_result.get("devices", []):
+                _cur_type = (_d.device_type if not isinstance(_d, dict) else _d.get("device_type", "")) or ""
+                if _cur_type and _cur_type != "Unknown Device":
+                    continue
+                _new_type = _cd(_d)
+                if not _new_type or _new_type == "Unknown Device":
+                    continue
+                if isinstance(_d, dict):
+                    _d["device_type"] = _new_type
+                else:
+                    _d.device_type = _new_type
+                _dmac2 = _norm_mac(_d.mac if not isinstance(_d, dict) else _d.get("mac", ""))
+                _row2 = _mac_to_row.get(_dmac2)
+                if _row2 is not None:
+                    _ti = _QTI(_new_type)
+                    _ti.setForeground(_QC(TEXT_PRIMARY))
+                    _ti.setToolTip("Device type inferred from hostname")
+                    self._m1_table.setItem(_row2, 5, _ti)
+        except Exception:
+            pass  # non-fatal — enrichment re-classification is best-effort
+
         # Refresh the Network Info tab device table with enriched hostnames
         try:
             self._net_devices_table.setRowCount(0)

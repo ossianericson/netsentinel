@@ -74,6 +74,14 @@ _GOOGLE: Dict[str, Dict[str, str]] = {
     "cc:fa:00": {"vendor": "Google", "model": "Google Device", "device_type": "IoT Device", "product_line": "Google"},
     "9c:5c:f9": {"vendor": "Google", "model": "Google Device", "device_type": "IoT Device", "product_line": "Google"},
     "b8:9a:2a": {"vendor": "Google", "model": "Google Device", "device_type": "IoT Device", "product_line": "Google"},
+    # Additional Chromecast / Cast-enabled device OUIs
+    "b8:7b:d4": {"vendor": "Google", "model": "Chromecast / Google TV", "device_type": "Streaming Stick", "product_line": "Chromecast"},
+    "88:3d:24": {"vendor": "Google", "model": "Chromecast (2nd Gen / Audio)", "device_type": "Streaming Stick", "product_line": "Chromecast"},
+    "dc:28:a8": {"vendor": "Google", "model": "Chromecast / Google Device", "device_type": "Streaming Stick", "product_line": "Chromecast"},
+    "6c:56:97": {"vendor": "Google", "model": "Google Device", "device_type": "IoT Device", "product_line": "Google"},
+    "14:7d:c5": {"vendor": "Google", "model": "Google Nest / Cast Device", "device_type": "Streaming Stick", "product_line": "Chromecast"},
+    "3c:84:6a": {"vendor": "Google", "model": "Google Cast / Chromecast", "device_type": "Streaming Stick", "product_line": "Chromecast"},
+    "60:03:08": {"vendor": "Google", "model": "Google Pixel / Android Device", "device_type": "Android Device", "product_line": "Google Pixel"},
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -202,6 +210,13 @@ _SAMSUNG: Dict[str, Dict[str, str]] = {
     # SmartThings Hub
     "f8:04:2e": {"vendor": "Samsung", "model": "Samsung SmartThings Hub", "device_type": "Smart Home Hub", "product_line": "SmartThings"},
     "34:14:5f": {"vendor": "Samsung", "model": "Samsung SmartThings v2/v3", "device_type": "Smart Home Hub", "product_line": "SmartThings"},
+    # Additional Samsung OUIs
+    "4c:c9:5e": {"vendor": "Samsung", "model": "Samsung Smart TV / Device", "device_type": "Smart TV", "product_line": "Samsung TV"},
+    "7c:64:56": {"vendor": "Samsung", "model": "Samsung Smart TV (QLED)", "device_type": "Smart TV", "product_line": "Samsung QLED"},
+    "00:26:37": {"vendor": "Samsung", "model": "Samsung Device", "device_type": "Android Device", "product_line": "Samsung"},
+    "84:25:db": {"vendor": "Samsung", "model": "Samsung Galaxy Phone", "device_type": "Android Device", "product_line": "Galaxy"},
+    "50:32:75": {"vendor": "Samsung", "model": "Samsung Galaxy Phone", "device_type": "Android Device", "product_line": "Galaxy"},
+    "b0:72:bf": {"vendor": "Samsung", "model": "Samsung Galaxy Device", "device_type": "Android Device", "product_line": "Galaxy"},
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -298,6 +313,9 @@ _PLAYSTATION: Dict[str, Dict[str, str]] = {
     "d4:4c:d6": {"vendor": "Sony Interactive Entertainment", "model": "PlayStation 5", "device_type": "Games Console", "product_line": "PlayStation 5"},
     "58:48:22": {"vendor": "Sony Interactive Entertainment", "model": "PlayStation 5 / PS5 Digital", "device_type": "Games Console", "product_line": "PlayStation 5"},
     "c0:ea:e4": {"vendor": "Sony Interactive Entertainment", "model": "PlayStation 5 (Slim)", "device_type": "Games Console", "product_line": "PlayStation 5"},
+    "78:c8:81": {"vendor": "Sony Interactive Entertainment", "model": "PlayStation 4 / PS4 Pro", "device_type": "Games Console", "product_line": "PlayStation 4"},
+    "6c:f0:49": {"vendor": "Sony Interactive Entertainment", "model": "PlayStation 4 Pro", "device_type": "Games Console", "product_line": "PlayStation 4"},
+    "f8:46:1c": {"vendor": "Sony Interactive Entertainment", "model": "PlayStation 4 Slim", "device_type": "Games Console", "product_line": "PlayStation 4"},
     "10:4f:a8": {"vendor": "Sony", "model": "PlayStation Vita", "device_type": "Games Console", "product_line": "PlayStation"},
     "00:1f:a7": {"vendor": "Sony", "model": "PlayStation 3 / Vita", "device_type": "Games Console", "product_line": "PlayStation"},
 }
@@ -350,6 +368,54 @@ _ROKU: Dict[str, Dict[str, str]] = {
     "68:ca:c4": {"vendor": "Roku", "model": "Roku Express 4K", "device_type": "Streaming Stick", "product_line": "Roku"},
     "fc:9b:09": {"vendor": "Roku", "model": "Roku Ultra (2nd Gen)", "device_type": "Streaming Stick", "product_line": "Roku"},
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SONOS — Smart Speakers / Audio
+# ─────────────────────────────────────────────────────────────────────────────
+_SONOS: Dict[str, Dict[str, str]] = {
+    "00:22:61": {"vendor": "Sonos", "model": "Sonos Speaker", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+    "b8:e9:37": {"vendor": "Sonos", "model": "Sonos One / Play:1", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+    "5c:aa:fd": {"vendor": "Sonos", "model": "Sonos Play:3 / Play:5", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+    "78:28:ca": {"vendor": "Sonos", "model": "Sonos Beam / Arc", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+    "94:9f:3e": {"vendor": "Sonos", "model": "Sonos Move / Roam", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+    "48:a6:b8": {"vendor": "Sonos", "model": "Sonos Era 100 / Era 300", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+    "34:7e:a8": {"vendor": "Sonos", "model": "Sonos Device", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+    "54:2a:1b": {"vendor": "Sonos", "model": "Sonos Device", "device_type": "Smart Speaker / Audio", "product_line": "Sonos"},
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HP / HEWLETT-PACKARD — PCs and Printers
+# ─────────────────────────────────────────────────────────────────────────────
+_HP: Dict[str, Dict[str, str]] = {
+    "7c:4d:8f": {"vendor": "HP", "model": "HP Desktop / Laptop", "device_type": "Windows PC", "product_line": "HP PC"},
+    "3c:d9:2b": {"vendor": "HP", "model": "HP EliteBook / ProBook", "device_type": "Windows PC", "product_line": "HP PC"},
+    "9c:b6:d0": {"vendor": "HP", "model": "HP LaserJet Printer", "device_type": "Print Server", "product_line": "HP Printer"},
+    "00:1e:0b": {"vendor": "HP", "model": "HP Desktop / Workstation", "device_type": "Windows PC", "product_line": "HP PC"},
+    "34:64:a9": {"vendor": "HP", "model": "HP ZBook / EliteBook", "device_type": "Windows PC", "product_line": "HP PC"},
+    "70:5a:0f": {"vendor": "HP", "model": "HP Device", "device_type": "Windows PC", "product_line": "HP PC"},
+    "d4:c9:ef": {"vendor": "HP", "model": "HP Printer / Scanner", "device_type": "Print Server", "product_line": "HP Printer"},
+    "a0:b3:cc": {"vendor": "HP", "model": "HP Device", "device_type": "Windows PC", "product_line": "HP PC"},
+    "f4:ce:46": {"vendor": "HP", "model": "HP Desktop PC", "device_type": "Windows PC", "product_line": "HP PC"},
+    "10:60:4b": {"vendor": "HP", "model": "HP Device", "device_type": "Windows PC", "product_line": "HP PC"},
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LENOVO — Laptops, Tablets, Desktops
+# ─────────────────────────────────────────────────────────────────────────────
+_LENOVO: Dict[str, Dict[str, str]] = {
+    "54:05:db": {"vendor": "Lenovo", "model": "Lenovo ThinkPad / IdeaPad", "device_type": "Windows PC", "product_line": "Lenovo PC"},
+    "f0:de:f1": {"vendor": "Lenovo", "model": "Lenovo Laptop", "device_type": "Windows PC", "product_line": "Lenovo PC"},
+    "28:d2:44": {"vendor": "Lenovo", "model": "Lenovo Desktop / ThinkCentre", "device_type": "Windows PC", "product_line": "Lenovo PC"},
+    "00:24:be": {"vendor": "Lenovo", "model": "Lenovo ThinkPad", "device_type": "Windows PC", "product_line": "Lenovo PC"},
+    "e4:54:e8": {"vendor": "Lenovo", "model": "Lenovo Device", "device_type": "Windows PC", "product_line": "Lenovo PC"},
+    "3c:97:0e": {"vendor": "Lenovo", "model": "Lenovo Tablet", "device_type": "Tablet", "product_line": "Lenovo Tablet"},
+    "ac:fd:ce": {"vendor": "Lenovo", "model": "Lenovo IdeaPad / Tab", "device_type": "Windows PC", "product_line": "Lenovo PC"},
+    "48:51:b7": {"vendor": "Lenovo", "model": "Lenovo ThinkPad / Yoga", "device_type": "Windows PC", "product_line": "Lenovo PC"},
+}
+
+_OUI_REGISTRY.update(_SONOS)
+_OUI_REGISTRY.update(_HP)
+_OUI_REGISTRY.update(_LENOVO)
 
 _OUI_REGISTRY.update(_LG)
 _OUI_REGISTRY.update(_SONY_TV)

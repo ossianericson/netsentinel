@@ -329,6 +329,38 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 dtype = d.connection_type if not isinstance(d, dict) else d.get("connection_type", "Unknown Device")
             verdict = d.verdict  if not isinstance(d, dict) else d.get("verdict", "")
             _add_row(self._m1_table, [ip, host or "—", mac, vendor, level, dtype, "", "", verdict], level)
+            # Vendor tooltip — explain why vendor may be unknown
+            _row_idx = self._m1_table.rowCount() - 1
+            _v_item = self._m1_table.item(_row_idx, 3)
+            if _v_item:
+                try:
+                    _mac_str = mac or ""
+                    _first_octet = int(_mac_str.replace(":", "").replace("-", "")[:2], 16) if len(_mac_str) >= 2 else 0
+                    _is_rand = bool(_first_octet & 0x02)
+                except (ValueError, IndexError):
+                    _is_rand = False
+                if _is_rand:
+                    _v_item.setToolTip(
+                        "MAC address uses privacy randomization\n"
+                        "(iOS/Android feature) — vendor lookup not\n"
+                        "possible by design. This is normal."
+                    )
+                elif vendor in ("Unknown", ""):
+                    _v_item.setToolTip(
+                        "OUI prefix not found in device database.\n"
+                        "The device may be uncommon or use a\n"
+                        "recently issued MAC range."
+                    )
+                else:
+                    _v_item.setToolTip(f"Identified from OUI/device database\n({mac[:8].upper()})")
+            # Device type tooltip when inferred from hostname/ports
+            _dt_item = self._m1_table.item(_row_idx, 5)
+            if _dt_item and dtype == "Unknown Device":
+                _dt_item.setToolTip(
+                    "Device type could not be determined.\n"
+                    "Run a full port scan (Security Audit →\n"
+                    "Port Scan) to improve classification."
+                )
 
         # Re-apply search/chip filter and restore persisted sort (FILTER-1 / FILTER-2)
         self._m1_apply_filter()

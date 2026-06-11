@@ -42,6 +42,8 @@ class DeviceInfo:
     verdict: str = ""
     forum_ref: str = ""
     remediation: str = ""
+    # Open TCP/UDP ports — populated by port scan enrichment when available
+    open_ports: List[int] = field(default_factory=list)
     # Mesh enrichment — populated by MeshWorker after the main ARP scan
     mesh_unit:      str   = ""   # e.g. "Floor2 Vardagsrum"
     mesh_band:      str   = ""   # "2.4G" | "5G" | "6G" | "Wired"
@@ -172,6 +174,51 @@ def _get_default_gateway() -> Optional[str]:
     return None
 
 
+def _ensure_gateway_in_arp(gateway_ip: str, arp_entries: List[tuple]) -> List[tuple]:
+    """
+    If the gateway is not already in the ARP entries, trigger an ARP resolution
+    so it is included in the scan results.  Uses ctypes SendARP on Windows and
+    a no-data UDP connect on other platforms — no subprocess, no PIPE.
+    """
+    if any(ip == gateway_ip for ip, _ in arp_entries):
+        return arp_entries
+
+    system = platform.system()
+    new_mac = ""
+
+    if system == "Windows":
+        try:
+            import ctypes
+            import struct
+            ip_bytes = socket.inet_aton(gateway_ip)
+            ip_int   = struct.unpack("I", ip_bytes)[0]
+            mac_buf  = (ctypes.c_ubyte * 6)()
+            mac_len  = ctypes.c_ulong(6)
+            if ctypes.windll.iphlpapi.SendARP(ip_int, 0, mac_buf, ctypes.byref(mac_len)) == 0:
+                new_mac = ":".join(f"{b:02x}" for b in mac_buf)
+        except Exception:
+            pass  # non-fatal — gateway may still appear on retry below
+
+    if not new_mac:
+        # Trigger OS ARP resolution with a zero-byte UDP connect — no data sent
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as _s:
+                _s.settimeout(0.5)
+                _s.connect((gateway_ip, 1))
+        except Exception:
+            pass  # non-fatal — ARP entry may still have been populated
+        for ip, mac in _get_arp_table():
+            if ip == gateway_ip:
+                new_mac = mac
+                break
+
+    if new_mac:
+        result = list(arp_entries)
+        result.append((gateway_ip, new_mac))
+        return result
+    return arp_entries
+
+
 def scan(offenders_path: Path) -> dict:
     """
     Run Module 1 scan.
@@ -182,6 +229,9 @@ def scan(offenders_path: Path) -> dict:
     offenders = _load_offenders(offenders_path)
     arp_entries = _get_arp_table()
     gateway_ip = _get_default_gateway()
+    # Ensure the gateway always appears even when the ARP cache has expired
+    if gateway_ip:
+        arp_entries = _ensure_gateway_in_arp(gateway_ip, arp_entries)
     ipv6_routers = _get_ipv6_routers()
 
     # Resolve the gateway MAC so we can exclude it from rogue-router checks
@@ -283,15 +333,20 @@ def scan(offenders_path: Path) -> dict:
             info.verdict = "No known issues found for this device."
 
         # --- Device-type classification ---
-        try:
-            from modules.device_classifier import classify
-            info.device_type = classify(
-                vendor=info.vendor,
-                hostname=info.hostname,
-                os_family=info.os_family,
-            )
-        except Exception:
-            info.device_type = "Unknown Device"
+        # Only run classifier when mac_registry didn't already provide a type.
+        # This preserves accurate product-line labels (e.g. "Streaming Stick")
+        # while still classifying unknown-OUI devices via vendor/hostname/ports.
+        if not info.device_type or info.device_type == "Unknown Device":
+            try:
+                from modules.device_classifier import classify
+                info.device_type = classify(
+                    vendor=info.vendor,
+                    hostname=info.hostname,
+                    os_family=info.os_family,
+                    open_ports=set(info.open_ports),
+                )
+            except Exception:
+                info.device_type = "Unknown Device"
 
         if info.risk_level == "HIGH":
             high_risk.append(info)
