@@ -117,7 +117,7 @@ def _make_table(headers: list[str]) -> QTableWidget:
 
 def _cell(text: str, align=Qt.AlignmentFlag.AlignLeft) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
-    item.setTextAlignment(int(align | Qt.AlignmentFlag.AlignVCenter))
+    item.setTextAlignment(align | Qt.AlignmentFlag.AlignVCenter)
     item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
     return item
 

@@ -34,17 +34,19 @@ _ES_DISPLAY_REQUIRED = 0x00000002
 
 # (page_label_for_ctrl_k, filename_slug, extra_wait_secs_after_nav)
 # Labels must be long enough to uniquely resolve in the fuzzy palette.
+# TIP: run a full scan before capturing so every page has real data to display.
+# Note: "What's Wrong" omits the trailing ? — special chars can confuse type_keys.
 PAGES = [
-    ("Home",                "01_home",             2.5),
-    ("Overview",            "02_overview",          2.5),
-    ("Devices",             "03_devices",           3.0),
-    ("Network Map",         "04_network_map",       3.0),
-    ("Speed Test",          "05_speed_test",        2.5),
-    ("Network Logger",      "06_network_logger",    2.5),
-    ("Security Overview",   "07_security_overview", 2.5),
-    ("Protocol Visualizer", "08_protocol_viz",      2.5),
-    ("Lab Mode",            "09_lab_mode",          2.5),
-    ("Geolocation Map",     "10_geo_map",           3.0),
+    ("Overview",            "01_overview",         3.0),  # grade ring + KPI tiles — best thumbnail
+    ("Devices",             "02_devices",           3.5),  # OUI / risk-classified device inventory
+    ("What's Wrong",        "03_diagnosis",         3.5),  # plain-English one-click diagnosis
+    ("Network Map",         "04_network_map",       3.5),  # topology graph
+    ("Speed Test",          "05_speed_test",        2.5),  # speed + modem signal panel
+    ("Network Logger",      "06_network_logger",    2.5),  # continuous RTT / modem / mesh log
+    ("Security Overview",   "07_security_overview", 3.5),  # aggregate security findings
+    ("Protocol Visualizer", "08_protocol_viz",      3.0),  # animated ARP/DNS/TCP/DHCP/STP
+    ("Lab Mode",            "09_lab_mode",          2.5),  # guided CompTIA / CCNA exercises
+    ("Geolocation Map",     "10_geo_map",           3.5),  # offline MaxMind IP geolocation map
 ]
 
 

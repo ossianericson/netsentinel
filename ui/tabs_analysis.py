@@ -649,11 +649,6 @@ class _AnalysisTabsMixin:
 
         # Dimension breakdown table
         self._bm_table = _table(["Dimension", "Grade", "Your Value", "Ideal", "Verdict", "Fix Tip"])
-        self._bm_table.setColumnWidth(0, 190)
-        self._bm_table.setColumnWidth(1, 50)
-        self._bm_table.setColumnWidth(2, 100)
-        self._bm_table.setColumnWidth(3, 90)
-        self._bm_table.setColumnWidth(4, 280)
 
         _cl.addWidget(info)
         _cl.addLayout(grade_row)
@@ -779,6 +774,8 @@ class _AnalysisTabsMixin:
                             lambda _checked, t=target: self._nav_rail_go_to(t)
                         )
                         self._bm_table.setCellWidget(row, 5, fix_btn)
+
+            self._bm_table.resizeColumnsToContents()
 
         except Exception as exc:
             self._bm_verdict_label.setText(f"⚠ Grading failed: {exc}")

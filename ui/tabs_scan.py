@@ -298,7 +298,7 @@ class _ScanTabsMixin:
     def _m1_sort_changed(self, col: int, order) -> None:
         qs = QSettings("NetSentinel", "NetSentinel")
         qs.setValue("home/m1_sort_col", col)
-        qs.setValue("home/m1_sort_order", int(order))
+        qs.setValue("home/m1_sort_order", order.value)
 
     def _m1_context_menu(self, pos):
         from PyQt6.QtWidgets import QMenu

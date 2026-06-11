@@ -7,6 +7,7 @@ tabs_network.py, and tabs_diag.py to avoid circular imports.
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
+    QHeaderView,
     QScrollArea,
     QTableWidget,
     QTableWidgetItem,
@@ -29,12 +30,12 @@ def _make_scroll_area(inner: QWidget) -> QScrollArea:
 def _table(headers: list) -> QTableWidget:
     t = QTableWidget(0, len(headers))
     t.setHorizontalHeaderLabels(headers)
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
     t.horizontalHeader().setStretchLastSection(True)
     t.setAlternatingRowColors(True)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
     t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
     t.verticalHeader().setVisible(False)
-    t.horizontalHeader().setDefaultSectionSize(120)
     t.setShowGrid(True)
     t.verticalHeader().setDefaultSectionSize(24)  # compact row height
     return t

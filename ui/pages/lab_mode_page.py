@@ -449,11 +449,10 @@ class LabModePage(QWidget):
         self._summary_card.hide()
         outer.addWidget(self._summary_card)
 
-        # findings panel — scrollable list of rows shown after scan
+        # findings panel — expands to fill all available vertical space
         self._findings_scroll = QScrollArea()
         self._findings_scroll.setWidgetResizable(True)
         self._findings_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self._findings_scroll.setMaximumHeight(220)
         self._findings_scroll.setStyleSheet("background:transparent;")
         self._findings_body = QWidget()
         self._findings_body.setStyleSheet("background:transparent;")
@@ -462,9 +461,46 @@ class LabModePage(QWidget):
         self._findings_vbox.setSpacing(3)
         self._findings_scroll.setWidget(self._findings_body)
         self._findings_scroll.hide()
-        outer.addWidget(self._findings_scroll)
+        outer.addWidget(self._findings_scroll, 1)  # stretch=1: fills remaining height
 
-        outer.addStretch()
+        # hint panel (hidden until toggled) — above buttons so it doesn't push them off-screen
+        self._hint_card = QFrame()
+        self._hint_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {AMBER}40;"
+            f" border-left:4px solid {AMBER}; border-radius:6px; }}"
+        )
+        hint_lay = QVBoxLayout(self._hint_card)
+        hint_lay.setContentsMargins(14, 10, 14, 10)
+        self._hint_lbl = QLabel()
+        self._hint_lbl.setWordWrap(True)
+        self._hint_lbl.setStyleSheet(
+            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        hint_lay.addWidget(self._hint_lbl)
+        self._hint_card.hide()
+        outer.addWidget(self._hint_card)
+
+        # solution panel (hidden until revealed) — above buttons
+        self._solution_card = QFrame()
+        self._solution_card.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {GREEN}40;"
+            f" border-left:4px solid {GREEN}; border-radius:6px; }}"
+        )
+        sol_lay = QVBoxLayout(self._solution_card)
+        sol_lay.setContentsMargins(14, 10, 14, 10)
+        sol_hdr = QLabel("Solution")
+        sol_hdr.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{GREEN}; background:transparent;"
+        )
+        sol_lay.addWidget(sol_hdr)
+        self._solution_lbl = QLabel()
+        self._solution_lbl.setWordWrap(True)
+        self._solution_lbl.setStyleSheet(
+            f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;"
+        )
+        sol_lay.addWidget(self._solution_lbl)
+        self._solution_card.hide()
+        outer.addWidget(self._solution_card)
 
         # action buttons row
         btn_row = QHBoxLayout()
@@ -519,45 +555,6 @@ class LabModePage(QWidget):
         btn_row.addStretch()
         btn_row.addWidget(self._next_btn)
         outer.addLayout(btn_row)
-
-        # hint panel (hidden until toggled)
-        self._hint_card = QFrame()
-        self._hint_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {AMBER}40;"
-            f" border-left:4px solid {AMBER}; border-radius:6px; }}"
-        )
-        hint_lay = QVBoxLayout(self._hint_card)
-        hint_lay.setContentsMargins(14, 10, 14, 10)
-        self._hint_lbl = QLabel()
-        self._hint_lbl.setWordWrap(True)
-        self._hint_lbl.setStyleSheet(
-            f"font-size:12px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
-        hint_lay.addWidget(self._hint_lbl)
-        self._hint_card.hide()
-        outer.addWidget(self._hint_card)
-
-        # solution panel (hidden until revealed)
-        self._solution_card = QFrame()
-        self._solution_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {GREEN}40;"
-            f" border-left:4px solid {GREEN}; border-radius:6px; }}"
-        )
-        sol_lay = QVBoxLayout(self._solution_card)
-        sol_lay.setContentsMargins(14, 10, 14, 10)
-        sol_hdr = QLabel("Solution")
-        sol_hdr.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{GREEN}; background:transparent;"
-        )
-        sol_lay.addWidget(sol_hdr)
-        self._solution_lbl = QLabel()
-        self._solution_lbl.setWordWrap(True)
-        self._solution_lbl.setStyleSheet(
-            f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;"
-        )
-        sol_lay.addWidget(self._solution_lbl)
-        self._solution_card.hide()
-        outer.addWidget(self._solution_card)
 
         return w
 
