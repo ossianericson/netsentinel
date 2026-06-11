@@ -20,7 +20,7 @@
   <Identity
     Name="OssianEricson.NetSentinel"
     Publisher="CN=4D6C5786-0D89-4E01-B2AA-FFB9E72FF4CA"
-    Version="2.0.1.0"
+    Version="2.1.0.0"
     ProcessorArchitecture="x64" />
 
   <mp:PhoneIdentity
