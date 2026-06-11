@@ -105,6 +105,8 @@ netsentinel/
 │   ├── scheduler.py
 │   ├── settings_io.py          # QSettings export/import to/from JSON (SET-3)
 │   ├── service_monitor.py      # Service heartbeat checker (TCP/HTTP/HTTPS probes)
+│   ├── service_diagnostics.py  # Service connectivity diagnostics engine — catalog, DiagnosticEngine, failure-layer classification (Sprint 3)
+│   ├── service_diagnostics_probes.py  # Low-level probes for service_diagnostics — DNS/TCP/HTTPS/ICMP/traceroute (Sprint 3)
 │   ├── smb_enumerator.py       # SMB/Windows Share enumeration
 │   ├── service_mapper.py       # Device-to-service mapping engine (device_type/vendor → ServiceInfo list)
 │   ├── snmp_poller.py

@@ -227,6 +227,80 @@ def create_app(store: MetricStore) -> "Flask":
         html = build_html(api_key=key)
         return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+    # ── Service diagnostics endpoints ─────────────────────────────────────────
+
+    @app.route("/service-catalog")
+    def service_catalog():
+        from modules.service_diagnostics import SERVICE_CATALOG
+        return jsonify([
+            {
+                "id":       e.id,
+                "name":     e.name,
+                "category": e.category,
+            }
+            for e in SERVICE_CATALOG.values()
+        ])
+
+    @app.route("/service-diagnostics/<service_id>")
+    def service_diagnostics(service_id: str):
+        from modules.service_diagnostics import DiagnosticEngine, SERVICE_CATALOG
+        if service_id not in SERVICE_CATALOG:
+            return jsonify({"error": f"Unknown service '{service_id}'"}), 404
+        do_trace = request.args.get("traceroute", "false").lower() == "true"
+        engine = DiagnosticEngine()
+        r = engine.run(service_id, traceroute=do_trace)
+        return jsonify({
+            "service_id":    r.service_id,
+            "service_name":  r.service_name,
+            "ts":            r.ts,
+            "failure_layer": r.failure_layer,
+            "summary":       r.summary,
+            "confidence":    r.confidence,
+            "layers": {
+                "dns":          {"passed": r.dns.passed,          "detail": r.dns.detail},
+                "reachability": {"passed": r.reachability.passed, "detail": r.reachability.detail},
+                "latency":      {"passed": r.latency.passed,      "detail": r.latency.detail},
+                "path":         {"passed": r.path.passed,         "detail": r.path.detail},
+            },
+            "dns_probes": [
+                {"hostname": p.hostname, "ipv4": p.ipv4, "ipv6": p.ipv6,
+                 "rtt_ms": p.rtt_ms, "error": p.error}
+                for p in r.dns_probes
+            ],
+            "tcp_probes": [
+                {"host": p.host, "port": p.port, "up": p.up,
+                 "rtt_ms": p.rtt_ms, "error": p.error}
+                for p in r.tcp_probes
+            ],
+            "https_probes": [
+                {"url": p.url, "up": p.up, "status_code": p.status_code,
+                 "rtt_ms": p.rtt_ms, "error": p.error}
+                for p in r.https_probes
+            ],
+            "icmp": (
+                {
+                    "min_ms":    r.icmp_result.min_ms,
+                    "avg_ms":    r.icmp_result.avg_ms,
+                    "max_ms":    r.icmp_result.max_ms,
+                    "loss_pct":  r.icmp_result.loss_pct,
+                    "jitter_ms": r.icmp_result.jitter_ms,
+                }
+                if r.icmp_result else None
+            ),
+            "trace": (
+                {
+                    "hop_count": r.trace.hop_count,
+                    "reached":   r.trace.reached,
+                    "anomalies": r.trace.anomalies,
+                    "hops": [
+                        {"hop": h.hop, "ip": h.ip, "rtt_ms": h.rtt_ms}
+                        for h in r.trace.hops
+                    ],
+                }
+                if r.trace else None
+            ),
+        })
+
     return app
 
 

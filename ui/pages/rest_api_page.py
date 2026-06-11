@@ -413,13 +413,15 @@ class RestApiPage(QWidget):
 
     def _update_endpoint_ref(self, base: str) -> None:
         _ENDPOINTS = [
-            ("/health",        "Health check"),
-            ("/dashboard",     "Browser dashboard"),
-            ("/devices",       "Discovered devices"),
-            ("/alerts",        "Recent alerts"),
-            ("/uptime/<ip>",   "Uptime % for a device"),
-            ("/speed-history", "Speed test history"),
-            ("/grade",         "Network grade and score"),
+            ("/health",                             "Health check"),
+            ("/dashboard",                          "Browser dashboard"),
+            ("/devices",                            "Discovered devices"),
+            ("/alerts",                             "Recent alerts"),
+            ("/uptime/<ip>",                        "Uptime % for a device"),
+            ("/speed-history",                      "Speed test history"),
+            ("/grade",                              "Network grade and score"),
+            ("/service-catalog",                    "List diagnosable services"),
+            ("/service-diagnostics/<service_id>",   "Run connectivity diagnostics for a service"),
         ]
         rows = []
         for path, desc in _ENDPOINTS:

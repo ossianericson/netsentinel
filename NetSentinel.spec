@@ -142,6 +142,8 @@ hiddenimports: list = [
     "modules.root_cause_correlator",
     "modules.scheduler",
     "modules.service_monitor",
+    "modules.service_diagnostics",
+    "modules.service_diagnostics_probes",
     "modules.smb_enumerator",
     "modules.snmp_poller",
     "modules.snmp_trap_receiver",
