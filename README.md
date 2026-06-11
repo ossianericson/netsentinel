@@ -352,6 +352,15 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v2.0.0
+**Added**
+- `packaging/AppxManifest.xml`: declared `windows.startupTask` (uap5, disabled by default) — enables user-controlled auto-start via Settings → Apps → Startup for Microsoft Store builds
+- `app.py`: `--startup-logger` flag — starts the app minimised to the system tray and auto-starts the Network Logger; fired by the Windows startup task when the user opts in
+
+**Changed**
+- `ui/system_tray.py`: "Launch at Startup" registry entry now registers `--startup-logger` instead of `--minimised`, so enabling auto-start also begins background logging
+- `ui/pages/settings_cards.py`: startup checkbox label updated to reflect that auto-start runs as a background logger
+
 ### v1.9.99
 **Fixed**
 - `ui/header.py`: snap-layout maximize button no longer crashes with `RPC_E_WRONG_THREAD` (0x8001010d) when a native file dialog is open — `_toggle_maximize()` is now invoked via `QMetaObject.invokeMethod` with `QueuedConnection` so it always runs on the Qt main thread

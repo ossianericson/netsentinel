@@ -370,9 +370,12 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.99")
+    app.setApplicationVersion("2.0.0")
 
     _start_minimised = "--minimised" in sys.argv
+    _startup_logger  = "--startup-logger" in sys.argv
+    if _startup_logger:
+        _start_minimised = True
 
     # ── Splash screen ─────────────────────────────────────────────────────────
     # PERF-1: splash screen with progress messages.
@@ -403,7 +406,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.99")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.0.0")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -756,6 +759,10 @@ def main():
     _MilestoneTimer.singleShot(
         2000, lambda: window._home_page._check_logger_milestones()
     )
+
+    # Startup task: auto-start Network Logger when launched by Windows startup task
+    if _startup_logger:
+        window._start_logger_if_needed()
 
     # ── Tracemalloc profiling (activated by NETSENTINEL_TRACEMALLOC=1 env var) ──
     # Set by tools/monkey_test.py --tracemalloc to identify retained object types

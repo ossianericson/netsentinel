@@ -11,15 +11,16 @@
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
-  IgnorableNamespaces="uap mp uap3 rescap desktop desktop2">
+  IgnorableNamespaces="uap mp uap3 uap5 rescap desktop desktop2">
 
   <Identity
     Name="OssianEricson.NetSentinel"
     Publisher="CN=4D6C5786-0D89-4E01-B2AA-FFB9E72FF4CA"
-    Version="1.9.99.0"
+    Version="2.0.0.0"
     ProcessorArchitecture="x64" />
 
   <mp:PhoneIdentity
@@ -65,6 +66,20 @@
         <!-- Allows the packaged Win32 exe to run with full trust (admin elevation) -->
         <desktop:Extension Category="windows.fullTrustProcess"
           Executable="NetSentinel\NetSentinel.exe" />
+        <!--
+          Optional startup task — background connectivity logger.
+          Enabled="false" means it is DISABLED by default; users must opt in via
+          Settings > Apps > Startup or Task Manager > Startup Apps.
+          When enabled, launches in headless logger mode (no GUI window).
+        -->
+        <uap5:Extension Category="windows.startupTask"
+          Executable="NetSentinel\NetSentinel.exe"
+          Arguments="--startup-logger">
+          <uap5:StartupTask
+            TaskId="NetSentinelLogger"
+            Enabled="false"
+            DisplayName="NetSentinel Background Logger" />
+        </uap5:Extension>
       </Extensions>
     </Application>
   </Applications>
