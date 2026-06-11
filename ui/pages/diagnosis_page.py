@@ -236,15 +236,15 @@ def _save_diag_history(result) -> None:
 
 class DiagnosisPage(QWidget):
 
-    navigate_to     = pyqtSignal(str)  # emits "Overview" when back link is clicked
-    diagnosis_saved = pyqtSignal()     # emitted after each completed run
-    scan_requested  = pyqtSignal()     # emitted when user clicks Run Diagnosis
+    navigate_to          = pyqtSignal(str)  # emits "Overview" when back link is clicked
+    diagnosis_saved      = pyqtSignal()     # emitted after each completed run
+    scan_requested       = pyqtSignal()     # emitted when user clicks Run Diagnosis
+    service_diag_requested = pyqtSignal(str)  # emitted for service_unreachable; arg = service_id
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
         self._store           = store
         self._worker          = None
-        self._svc_diag_worker = None
         self._gateway_ip      = None
         self._gateway_mac     = None
         self._symptom         = ""   # set by symptom tile before _start()
@@ -380,7 +380,7 @@ class DiagnosisPage(QWidget):
 
         def _on_symptom_clicked(btn):
             self._symptom = btn.property("symptom_key")
-            self._service_pick_row.setVisible(self._symptom == "service_unreachable")
+            self._service_pick_row.setEnabled(self._symptom == "service_unreachable")
 
         self._symptom_group.buttonClicked.connect(_on_symptom_clicked)
 
@@ -415,7 +415,7 @@ class DiagnosisPage(QWidget):
         sp_lay.addWidget(self._symptom_service_combo)
         sp_lay.addStretch()
         lay.addWidget(self._service_pick_row)
-        self._service_pick_row.setVisible(False)
+        self._service_pick_row.setEnabled(False)
 
         _tile_hint = QLabel("Select a symptom, then click Run Diagnosis — NetSentinel runs targeted checks and shows plain-English results in 15–30 seconds.")
         _tile_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -876,49 +876,29 @@ class DiagnosisPage(QWidget):
     # ── State machine ─────────────────────────────────────────────────────────
 
     def _start(self) -> None:
+        if self._symptom == "service_unreachable":
+            idx = self._symptom_service_combo.currentIndex()
+            service_id = self._symptom_service_combo.itemData(idx) if idx >= 0 else "netflix"
+            self.service_diag_requested.emit(service_id)
+            return
         self.scan_requested.emit()
         self._stack.setCurrentIndex(_RUNNING)
         self._progress_bar.setValue(0)
         self._step_lbl.setText("Starting…")
-        if self._symptom == "service_unreachable":
-            self._start_service_diag()
-        else:
-            from workers.diagnosis_worker import DiagnosisWorker
-            self._worker = DiagnosisWorker(
-                gateway_ip=self._gateway_ip,
-                gateway_mac=self._gateway_mac,
-                symptom=self._symptom,
-                parent=self,
-            )
-            self._worker.progress.connect(self._on_progress)
-            self._worker.finished.connect(self._on_finished)
-            self._worker.start()
-
-    def _start_service_diag(self) -> None:
-        from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
-        idx = self._symptom_service_combo.currentIndex()
-        service_id = self._symptom_service_combo.itemData(idx) if idx >= 0 else "netflix"
-        self._svc_diag_worker = ServiceDiagnosticsWorker(
-            service_id=service_id, traceroute=False, parent=self
+        from workers.diagnosis_worker import DiagnosisWorker
+        self._worker = DiagnosisWorker(
+            gateway_ip=self._gateway_ip,
+            gateway_mac=self._gateway_mac,
+            symptom=self._symptom,
+            parent=self,
         )
-        self._svc_diag_worker.result_ready.connect(self._on_svc_diag_result)
-        self._svc_diag_worker.error.connect(self._on_svc_diag_error)
-        self._svc_diag_worker.progress.connect(self._on_progress)
-        self._svc_diag_worker.start()
-
-    def _on_svc_diag_result(self, result) -> None:
-        synth = _svc_result_to_diag(result)
-        self._show_result(synth)
-
-    def _on_svc_diag_error(self, msg: str) -> None:
-        self._step_lbl.setText(msg)
-        self._reset()
+        self._worker.progress.connect(self._on_progress)
+        self._worker.finished.connect(self._on_finished)
+        self._worker.start()
 
     def _cancel(self) -> None:
         if self._worker:
             self._worker.stop()
-        if self._svc_diag_worker:
-            self._svc_diag_worker.stop()
         self._reset()
 
     def _reset(self) -> None:
@@ -927,11 +907,6 @@ class DiagnosisPage(QWidget):
             self._worker.quit()
             self._worker.wait(3000)
             self._worker = None
-        if self._svc_diag_worker:
-            self._svc_diag_worker.stop()
-            self._svc_diag_worker.quit()
-            self._svc_diag_worker.wait(3000)
-            self._svc_diag_worker = None
         self._stack.setCurrentIndex(_IDLE)
 
     def _copy_report(self) -> None:

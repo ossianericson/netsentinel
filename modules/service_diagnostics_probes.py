@@ -45,7 +45,7 @@ def dns_probe(hostname: str, server: Optional[str] = None) -> DnsProbeResult:
     try:
         infos = socket.getaddrinfo(hostname, None, socket.AF_INET6)
         if infos:
-            result.ipv6 = infos[0][4][0]
+            result.ipv6 = str(infos[0][4][0])
     except Exception:
         pass  # no AAAA record or IPv6 not available — non-fatal
 
@@ -158,7 +158,7 @@ def icmp_probe(host: str, count: int = 4) -> IcmpProbeResult:
     result = IcmpProbeResult(host=host)
     system = platform.system()
     extra: dict = (
-        {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+        {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if system == "Windows" else {}
     )
     try:
         if system == "Windows":
@@ -237,7 +237,7 @@ def traceroute_probe(host: str, max_hops: int = 15) -> TracerouteResult:
     result = TracerouteResult(host=host)
     system = platform.system()
     extra: dict = (
-        {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+        {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0)} if system == "Windows" else {}
     )
     try:
         if system == "Windows":
@@ -296,7 +296,7 @@ def _parse_traceroute(output: str, result: TracerouteResult, system: str) -> Non
         last_ip = result.hops[-1].ip
         if last_ip not in ("*", ""):
             try:
-                resolved = socket.gethostbyname(host)
+                resolved = socket.gethostbyname(result.host)
                 result.reached = last_ip == resolved
             except Exception:
                 pass  # can't confirm — non-fatal

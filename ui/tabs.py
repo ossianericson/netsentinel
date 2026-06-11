@@ -488,6 +488,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._active_modem_plugin_label: str = ""
         self._diagnosis_page.navigate_to.connect(self._on_overview_navigate)
         self._diagnosis_page.diagnosis_saved.connect(self._home_page.refresh_diag_summary)
+        self._diagnosis_page.service_diag_requested.connect(self._on_service_page_diagnose)
 
         # Populate home page suggestions on first build (deferred so _home_page exists)
         from PyQt6.QtCore import QTimer as _QTr

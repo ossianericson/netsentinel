@@ -646,6 +646,15 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except Exception:
             pass  # defensive guard — _hardware_integration_page may not be initialised yet
 
+        # Safety-net: re-apply enrichment 15 s after scan so hostnames appear even
+        # when the first plugin poll completes after _on_m1_result() returns.
+        if not hasattr(self, "_post_scan_enrich_timer"):
+            from PyQt6.QtCore import QTimer as _QTE
+            self._post_scan_enrich_timer = _QTE(self)
+            self._post_scan_enrich_timer.setSingleShot(True)
+            self._post_scan_enrich_timer.timeout.connect(self._apply_mesh_enrichment)
+        self._post_scan_enrich_timer.start(15_000)
+
         self._check_hw_autodetect()
 
         # Fetch WAN IP in background so geo map can resolve LAN devices later
