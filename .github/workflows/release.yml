@@ -406,3 +406,143 @@ jobs:
 
           python scripts/update_release_body.py $ARGS
 
+  # ── WinGet submission ──────────────────────────────────────────────────────
+  winget:
+    needs: [release]
+    runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: winget install --id Microsoft.Wingetcreate --source winget --silent --accept-package-agreements --accept-source-agreements
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+
+      - name: Compute installer SHA256
+        id: sha
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.ver.outputs.VERSION }}"
+          $url = "https://github.com/${{ github.repository }}/releases/download/v${ver}/NetSentinel-Setup-${ver}.exe"
+          $tmp = Join-Path $env:TEMP "NetSentinel-installer.exe"
+          Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
+          $hash = (Get-FileHash $tmp -Algorithm SHA256).Hash.ToUpper()
+          Remove-Item $tmp -Force
+          echo "HASH=$hash" >> $env:GITHUB_OUTPUT
+          echo "URL=$url" >> $env:GITHUB_OUTPUT
+          echo "Installer SHA256: $hash"
+
+      - name: Write manifest files
+        shell: pwsh
+        run: |
+          $ver  = "${{ steps.ver.outputs.VERSION }}"
+          $url  = "${{ steps.sha.outputs.URL }}"
+          $hash = "${{ steps.sha.outputs.HASH }}"
+          $dir  = "manifests\n\NetSentinel\NetSentinel\$ver"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+
+          @(
+            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json",
+            "PackageIdentifier: NetSentinel.NetSentinel",
+            "PackageVersion: $ver",
+            "DefaultLocale: en-US",
+            "ManifestType: version",
+            "ManifestVersion: 1.12.0"
+          ) | Set-Content "$dir\NetSentinel.NetSentinel.yaml" -Encoding UTF8
+
+          @(
+            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json",
+            "PackageIdentifier: NetSentinel.NetSentinel",
+            "PackageVersion: $ver",
+            "InstallerLocale: en-US",
+            "InstallerType: inno",
+            "Scope: machine",
+            "InstallModes:",
+            "- interactive",
+            "- silent",
+            "UpgradeBehavior: install",
+            "InstallerSwitches:",
+            "  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART",
+            "  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART",
+            "  Log: /`"{localappdata}\NetSentinel\install.log`"",
+            "Installers:",
+            "- Architecture: x64",
+            "  InstallerUrl: $url",
+            "  InstallerSha256: $hash",
+            "ManifestType: installer",
+            "ManifestVersion: 1.12.0"
+          ) | Set-Content "$dir\NetSentinel.NetSentinel.installer.yaml" -Encoding UTF8
+
+          @(
+            "# yaml-language-server: `$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json",
+            "PackageIdentifier: NetSentinel.NetSentinel",
+            "PackageVersion: $ver",
+            "PackageLocale: en-US",
+            "Publisher: NetSentinel Project",
+            "PublisherUrl: https://github.com/ossianericson/netsentinel",
+            "PublisherSupportUrl: https://github.com/ossianericson/netsentinel/issues",
+            "PackageName: NetSentinel",
+            "PackageUrl: https://github.com/ossianericson/netsentinel",
+            "License: MIT",
+            "LicenseUrl: https://raw.githubusercontent.com/ossianericson/netsentinel/main/LICENSE",
+            "ShortDescription: Network security scanner — rogue device detector, STP monitor, and connectivity analyser",
+            "Description: |-",
+            "  NetSentinel is a one-stop network diagnostic and security tool for Windows.",
+            "  It combines several tools that previously required separate utilities:",
+            "",
+            "    • Device Fingerprinter  — scans your LAN's ARP table and identifies every",
+            "      device by MAC OUI, hostname, and device type (camera, smart speaker, router, etc.)",
+            "    • Rogue Bridge Detector — captures 802.1D/RSTP BPDUs and flags any device",
+            "      that steals the Root Bridge role and causes periodic 15-45 second outages.",
+            "    • Broadcast Storm Analyser — measures broadcast/multicast packet rates and",
+            "      identifies which device is flooding the network.",
+            "    • IoT Behavioral Baseline — learns normal IoT traffic patterns and raises",
+            "      an alert if your smart fridge starts port-scanning or talking to a C2 server.",
+            "    • Root Cause Correlator — links trace results, storm data, and STP findings",
+            "      into a single plain-English verdict with actionable remediation steps.",
+            "    • Connection Stability Monitor — long-term background ping logger with",
+            "      outage detection, jitter analysis, and a 24-hour stability score.",
+            "    • TCP Port Scanner, OS Fingerprinter, CVE Lookup, DNS Leak Test, Speed Test,",
+            "      ARP spoof detector, DHCP monitor, SNMP poller, and more.",
+            "",
+            "  Most features require Administrator privileges for raw packet capture.",
+            "  Install Npcap (https://npcap.com) for STP, Storm, and ARP modules.",
+            "Moniker: netsentinel",
+            "Tags:",
+            "- network",
+            "- security",
+            "- scanner",
+            "- rogue-device",
+            "- stp",
+            "- lan",
+            "- diagnostics",
+            "- iot",
+            "- monitoring",
+            "- arp",
+            "- broadcast-storm",
+            "- wifi",
+            "- dns",
+            "- port-scanner",
+            "ReleaseNotesUrl: https://github.com/ossianericson/netsentinel/releases/tag/v$ver",
+            "ManifestType: defaultLocale",
+            "ManifestVersion: 1.12.0"
+          ) | Set-Content "$dir\NetSentinel.NetSentinel.locale.en-US.yaml" -Encoding UTF8
+
+          echo "Manifests written to $dir"
+
+      - name: Submit to winget-pkgs
+        shell: pwsh
+        env:
+          WINGET_PAT: ${{ secrets.WINGET_PAT }}
+        run: |
+          $ver = "${{ steps.ver.outputs.VERSION }}"
+          $dir = "manifests\n\NetSentinel\NetSentinel\$ver"
+          wingetcreate submit $dir --token $env:WINGET_PAT
