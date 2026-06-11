@@ -129,6 +129,7 @@ class _ChartCard(QFrame):
         # Figure
         self._fig = Figure(figsize=(8, height / 96), dpi=96, facecolor=BG_CARD)
         self._ax  = self._fig.add_subplot(111)
+        self._fig.set_tight_layout({"pad": 0.8})  # applied once; avoids per-redraw accumulation
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -508,7 +509,6 @@ class HistoryPage(QWidget):
             ax.text(1.0, 100, " 100ms threshold", color=AMBER, fontsize=8,
                     va="bottom", ha="right", transform=ax.get_yaxis_transform(), alpha=0.8)
 
-        self._rtt_card.fig.tight_layout(pad=0.8)
         self._rtt_card.canvas.draw_idle()
         self._setup_rtt_hover(hosts)
 
@@ -555,7 +555,6 @@ class HistoryPage(QWidget):
         ax.legend(handles=patches, fontsize=8, loc="upper right", framealpha=0.9)
         ax.xaxis_date()
 
-        self._avail_card.fig.tight_layout(pad=0.8)
         self._avail_card.canvas.draw_idle()
 
     def _update_kpis(self) -> None:

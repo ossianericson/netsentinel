@@ -186,6 +186,7 @@ class _NavBuilderMixin:
 
         if self._fade_anim is not None and self._fade_anim.state() == QPropertyAnimation.State.Running:
             self._fade_anim.stop()
+            self._fade_anim.deleteLater()  # drop C++ child so it doesn't outlive the navigation
             cur = self._stack.currentWidget()
             if cur:
                 cur.setGraphicsEffect(None)
@@ -202,7 +203,10 @@ class _NavBuilderMixin:
         effect = QGraphicsOpacityEffect(cur)
         cur.setGraphicsEffect(effect)
 
-        fade_out = QPropertyAnimation(effect, b"opacity", cur)
+        # No widget parent — self._fade_anim holds the only strong reference.
+        # When self._fade_anim is replaced below the Python ref drops to zero and
+        # deleteLater() queues C++ cleanup so it never accumulates on a page widget.
+        fade_out = QPropertyAnimation(effect, b"opacity")
         fade_out.setDuration(80)
         fade_out.setStartValue(1.0)
         fade_out.setEndValue(0.0)
@@ -210,16 +214,23 @@ class _NavBuilderMixin:
         self._fade_anim = fade_out
 
         def _on_fade_out_done():
+            fade_out.deleteLater()
             cur.setGraphicsEffect(None)
             self._stack.setCurrentWidget(target_widget)
             in_effect = QGraphicsOpacityEffect(target_widget)
             target_widget.setGraphicsEffect(in_effect)
-            fade_in = QPropertyAnimation(in_effect, b"opacity", target_widget)
+            fade_in = QPropertyAnimation(in_effect, b"opacity")  # no widget parent
             fade_in.setDuration(80)
             fade_in.setStartValue(0.0)
             fade_in.setEndValue(1.0)
             fade_in.setEasingCurve(QEasingCurve.Type.OutQuad)
-            fade_in.finished.connect(lambda: target_widget.setGraphicsEffect(None))
+
+            def _on_fade_in_done():
+                target_widget.setGraphicsEffect(None)
+                self._fade_anim = None
+                fade_in.deleteLater()
+
+            fade_in.finished.connect(_on_fade_in_done)
             self._fade_anim = fade_in
             fade_in.start()
 

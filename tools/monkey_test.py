@@ -191,6 +191,7 @@ class Config:
     history_size: int = 15
     focus_interval: float = 5.0     # seconds between focus-heartbeat pulses
     prevent_sleep: bool = True       # suppress Windows sleep/screensaver
+    tracemalloc: bool = False        # enable in-process tracemalloc snapshots in app
 
     def resolved_log_file(self) -> str:
         if self.log_file:
@@ -655,7 +656,13 @@ class MonkeyTester:
         entry = repo / "app.py"
         self.log.info("Launching source: python %s", entry)
         try:
-            raw = subprocess.Popen([sys.executable, str(entry)], cwd=str(repo))
+            env = None
+            if self.cfg.tracemalloc:
+                import os as _os
+                env = _os.environ.copy()
+                env["NETSENTINEL_TRACEMALLOC"] = "1"
+                self.log.info("tracemalloc enabled — snapshots every 60s in app log")
+            raw = subprocess.Popen([sys.executable, str(entry)], cwd=str(repo), env=env)
             self._proc = psutil.Process(raw.pid)
             self.log.info("PID: %d", raw.pid)
             return True
@@ -1225,6 +1232,10 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Seconds between focus-heartbeat pulses (default 5)")
     p.add_argument("--no-prevent-sleep", action="store_true",
                    help="Do not suppress Windows sleep/screensaver")
+    p.add_argument("--tracemalloc", action="store_true",
+                   help="Enable tracemalloc profiling inside the app (sets NETSENTINEL_TRACEMALLOC=1; "
+                        "requires --source; writes top-20 allocation snapshots to the app's debug log "
+                        "every 60 s so you can identify the retained object type)")
     return p
 
 
@@ -1239,6 +1250,10 @@ def main() -> None:
         print(f"ERROR: exe not found: {args.exe_path}", file=sys.stderr)
         sys.exit(2)
 
+    if args.tracemalloc and not args.source:
+        print("WARNING: --tracemalloc only works with --source (ignored for exe/connect mode)",
+              file=sys.stderr)
+
     cfg = Config(
         exe_path=args.exe_path,
         use_source=args.source,
@@ -1252,6 +1267,7 @@ def main() -> None:
         log_file=args.log,
         focus_interval=args.focus_interval,
         prevent_sleep=not args.no_prevent_sleep,
+        tracemalloc=args.tracemalloc and args.source,
     )
 
     sys.exit(MonkeyTester(cfg).run())

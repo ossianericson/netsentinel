@@ -230,6 +230,7 @@ class _RttMiniChart(QWidget):
         super().__init__(parent)
         self._fig    = Figure(figsize=(3.5, 1.4), dpi=96, facecolor=BG_CARD)
         self._ax     = self._fig.add_subplot(111)
+        self._fig.set_tight_layout({"pad": 0.5})  # applied once; avoids per-redraw accumulation
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
@@ -253,7 +254,6 @@ class _RttMiniChart(QWidget):
         ax.text(0.5, 0.5, "No data", transform=ax.transAxes,
                 ha="center", va="center", color=TEXT_MUTED, fontsize=9)
         ax.grid(True, color=CHART_GRID, linewidth=0.6)
-        self._fig.tight_layout(pad=0.5)
         self._canvas.draw_idle()
 
     def plot(self, points: list) -> None:
@@ -286,7 +286,6 @@ class _RttMiniChart(QWidget):
             ax.scatter(drops, [0] * len(drops), color=RED, marker="x", s=30)
 
         ax.set_xlabel("Min ago", color=TEXT_SECONDARY, fontsize=8)
-        self._fig.tight_layout(pad=0.5)
         self._canvas.draw_idle()
 
 

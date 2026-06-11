@@ -785,11 +785,14 @@ class _SmoothProgressBar(QProgressBar):
             return
         if self._anim is not None:
             self._anim.stop()
+            self._anim.deleteLater()  # drop C++ child — prevents accumulation on this widget
+            self._anim = None
         anim = QVariantAnimation(self)
         anim.setStartValue(float(self.value()))
         anim.setEndValue(float(target))
         anim.setDuration(250)
         anim.setEasingCurve(QEasingCurve.Type.InOutSine)
         anim.valueChanged.connect(lambda v: self.setValue(int(v)))
+        anim.finished.connect(anim.deleteLater)  # self-clean when animation completes normally
         anim.start()
         self._anim = anim

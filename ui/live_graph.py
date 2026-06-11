@@ -45,7 +45,7 @@ class LiveGraphWidget(QWidget):
         layout.addWidget(self._canvas)
 
         self._style_axes()
-        self._fig.tight_layout(pad=1.0)
+        self._fig.set_tight_layout({"pad": 1.0})  # applied once; avoids per-redraw accumulation
 
     def _style_axes(self):
         ax = self._ax
@@ -104,7 +104,6 @@ class LiveGraphWidget(QWidget):
             edgecolor=BORDER,
             labelcolor=TEXT_PRIMARY,
         )
-        self._fig.tight_layout(pad=1.0)
         self._canvas.draw_idle()
 
     def reset(self):

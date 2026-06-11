@@ -139,6 +139,7 @@ class ReportsPage(QWidget):
         preview_card, preview_lay = _card("Network Health — Last 7 Days")
         self._preview_fig = Figure(facecolor=CHART_BG, figsize=(6, 1.4), dpi=96)
         self._preview_ax = self._preview_fig.add_subplot(111)
+        self._preview_fig.set_tight_layout({"pad": 0.4})  # applied once; avoids per-redraw accumulation
         self._preview_canvas = FigureCanvas(self._preview_fig)
         self._preview_canvas.setFixedHeight(140)
         self._preview_canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -335,7 +336,6 @@ class ReportsPage(QWidget):
                     color=TEXT_MUTED, fontsize=9)
             self._preview_status.setVisible(False)
 
-        self._preview_fig.tight_layout(pad=0.4)
         self._preview_canvas.draw()
 
     def _query_preview_data(self):

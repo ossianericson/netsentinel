@@ -757,6 +757,45 @@ def main():
         2000, lambda: window._home_page._check_logger_milestones()
     )
 
+    # ── Tracemalloc profiling (activated by NETSENTINEL_TRACEMALLOC=1 env var) ──
+    # Set by tools/monkey_test.py --tracemalloc to identify retained object types
+    # during long chaos runs.  Logs the top-20 allocation sites every 60 s to the
+    # standard Python logger so the output appears in netsentinel_debug.log.
+    if os.environ.get("NETSENTINEL_TRACEMALLOC") == "1":
+        import tracemalloc as _tm
+        import logging as _logging
+        import threading as _threading
+        _tm.start(25)  # keep 25 frames of traceback per allocation
+        _tm_log = _logging.getLogger("netsentinel.tracemalloc")
+        _tm_baseline: list = []
+
+        def _tm_snapshot_loop() -> None:
+            import time as _time
+            _time.sleep(60)   # let the app warm up before first snapshot
+            while True:
+                _time.sleep(60)
+                try:
+                    snap = _tm.take_snapshot()
+                    stats = snap.statistics("lineno")
+                    _tm_log.info("=== tracemalloc top-20 (by current size) ===")
+                    for s in stats[:20]:
+                        _tm_log.info("  %s", s)
+                    if _tm_baseline:
+                        diff = snap.compare_to(_tm_baseline[-1], "lineno")
+                        _tm_log.info("=== tracemalloc diff vs previous snapshot ===")
+                        for d in diff[:20]:
+                            _tm_log.info("  %s", d)
+                    _tm_baseline[:] = [snap]  # keep only the last snapshot for diff
+                except Exception as _e:
+                    _tm_log.warning("tracemalloc snapshot failed: %s", _e)
+
+        _tm_thread = _threading.Thread(target=_tm_snapshot_loop, daemon=True,
+                                       name="tracemalloc-sampler")
+        _tm_thread.start()
+        import logging as _llog
+        _llog.getLogger("netsentinel.tracemalloc").setLevel(_llog.DEBUG)
+    # ─────────────────────────────────────────────────────────────────────────
+
     ret = app.exec()
     avail_worker.stop()
     avail_worker.wait(5000)

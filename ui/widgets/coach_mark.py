@@ -70,12 +70,18 @@ class _HighlightRing(QWidget):
                 return
             m = self._MARGIN
             tl = self._target.mapTo(p, self._target.rect().topLeft())
-            self.setGeometry(
-                tl.x() - m,
-                tl.y() - m,
-                self._target.width() + 2 * m,
-                self._target.height() + 2 * m,
-            )
+            x = tl.x() - m
+            y = tl.y() - m
+            w = self._target.width() + 2 * m
+            h = self._target.height() + 2 * m
+            # Clamp to parent bounds so the ring border is always visible inside the window
+            if x < 0:
+                w += x
+                x = 0
+            if y < 0:
+                h += y
+                y = 0
+            self.setGeometry(x, y, max(0, w), max(0, h))
         except Exception:
             pass  # non-fatal — target may be unmapped or deleted
 
