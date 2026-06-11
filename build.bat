@@ -1,6 +1,6 @@
 ﻿@echo off
 echo ================================================
-echo  NetSentinel v2.0.0 — Windows Build Script
+echo  NetSentinel v2.0.1 — Windows Build Script
 echo ================================================
 echo.
 echo Usage:
