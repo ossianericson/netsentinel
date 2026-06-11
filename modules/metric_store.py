@@ -249,25 +249,35 @@ class MetricStore(MetricStoreQueryMixin):
         device_type: Optional[str] = None,
         is_authorized: Optional[bool] = True,
         ts: Optional[int] = None,
+        services: Optional[str] = None,
+        mac_randomized: Optional[bool] = None,
+        confidence: Optional[float] = None,
     ) -> None:
         now = ts or int(time.time())
         auth_val: Optional[int] = None if is_authorized is None else int(is_authorized)
+        rand_val: Optional[int] = None if mac_randomized is None else int(mac_randomized)
         self._execute_write(
             """
             INSERT INTO known_device
                 (mac, ip, hostname, vendor, device_type,
-                 first_seen, last_seen, is_authorized)
-            VALUES(?, ?, ?, ?, ?, ?, ?, COALESCE(?, 1))
+                 first_seen, last_seen, is_authorized,
+                 services, mac_randomized, confidence)
+            VALUES(?, ?, ?, ?, ?, ?, ?, COALESCE(?, 1),
+                   ?, COALESCE(?, 0), COALESCE(?, 0.0))
             ON CONFLICT(mac) DO UPDATE SET
-                ip           = excluded.ip,
-                hostname     = COALESCE(excluded.hostname, hostname),
-                vendor       = COALESCE(excluded.vendor,   vendor),
-                device_type  = COALESCE(excluded.device_type, device_type),
-                last_seen    = excluded.last_seen,
+                ip            = excluded.ip,
+                hostname      = COALESCE(excluded.hostname, hostname),
+                vendor        = COALESCE(excluded.vendor,   vendor),
+                device_type   = COALESCE(excluded.device_type, device_type),
+                last_seen     = excluded.last_seen,
                 is_authorized = CASE WHEN ? IS NULL THEN is_authorized
-                                     ELSE ? END
+                                     ELSE ? END,
+                services      = COALESCE(excluded.services, services),
+                mac_randomized = COALESCE(excluded.mac_randomized, mac_randomized),
+                confidence    = COALESCE(excluded.confidence, confidence)
             """,
             (mac, ip, hostname, vendor, device_type, now, now, auth_val,
+             services, rand_val, confidence,
              auth_val, auth_val),
         )
 

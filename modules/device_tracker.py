@@ -13,11 +13,13 @@ Architecture rules observed:
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 from modules.metric_store import MetricStore
+from modules.service_mapper import get_services as _get_services
 
 
 # ── Result types ──────────────────────────────────────────────────────────────
@@ -111,6 +113,16 @@ class DeviceTracker:
             seen_macs.add(td.mac)
             is_new = td.mac not in known
 
+            services_json: Optional[str] = None
+            if td.device_type and td.device_type != "Unknown Device":
+                svc_list = _get_services(
+                    device_type=td.device_type or "",
+                    vendor=td.vendor or "",
+                    hostname=td.hostname or "",
+                )
+                if svc_list:
+                    services_json = json.dumps([s.name for s in svc_list])
+
             self._store.upsert_known_device(
                 mac=td.mac,
                 ip=td.ip or None,
@@ -119,6 +131,7 @@ class DeviceTracker:
                 device_type=td.device_type or None,
                 is_authorized=None,   # do not override existing flag
                 ts=now,
+                services=services_json,
             )
 
             if is_new:

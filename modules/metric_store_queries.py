@@ -153,7 +153,8 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
         rows = self._execute_read(
             "SELECT mac, ip, hostname, vendor, device_type, "
             "first_seen, last_seen, is_authorized, "
-            "custom_name, room, category, notes, is_pinned, tags FROM known_device",
+            "custom_name, room, category, notes, is_pinned, tags, "
+            "services, mac_randomized, confidence FROM known_device",
             (),
         )
         return {
@@ -166,6 +167,9 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
                 category=r["category"] or "unknown",
                 notes=r["notes"], is_pinned=bool(r["is_pinned"]),
                 tags=r["tags"],
+                services=r["services"],
+                mac_randomized=bool(r["mac_randomized"]),
+                confidence=float(r["confidence"] or 0.0),
             )
             for r in rows
         }

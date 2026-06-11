@@ -106,6 +106,7 @@ netsentinel/
 │   ├── settings_io.py          # QSettings export/import to/from JSON (SET-3)
 │   ├── service_monitor.py      # Service heartbeat checker (TCP/HTTP/HTTPS probes)
 │   ├── smb_enumerator.py       # SMB/Windows Share enumeration
+│   ├── service_mapper.py       # Device-to-service mapping engine (device_type/vendor → ServiceInfo list)
 │   ├── snmp_poller.py
 │   ├── snmp_trap_receiver.py
 │   ├── firewall_rules.py       # Ensure Windows Firewall outbound rules for speedtest ports (all install paths)

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 8
+_SCHEMA_VERSION = 9
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -260,6 +260,10 @@ _MIGRATIONS = [
     "ALTER TABLE speed_test ADD COLUMN lte_pci INTEGER",
     "ALTER TABLE speed_test ADD COLUMN lte_earfcn INTEGER",
     "ALTER TABLE known_device ADD COLUMN tags TEXT",
+    # schema v9 — service mapping and classification quality columns
+    "ALTER TABLE known_device ADD COLUMN services TEXT DEFAULT NULL",
+    "ALTER TABLE known_device ADD COLUMN mac_randomized INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE known_device ADD COLUMN confidence REAL NOT NULL DEFAULT 0.0",
 ]
 
 
@@ -403,6 +407,9 @@ class KnownDevice:
     notes: Optional[str] = None
     is_pinned: bool = False
     tags: Optional[str] = None
+    services: Optional[str] = None      # JSON array of service names
+    mac_randomized: bool = False
+    confidence: float = 0.0
 
 
 @dataclass

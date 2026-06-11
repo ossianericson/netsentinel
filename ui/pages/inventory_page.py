@@ -201,6 +201,8 @@ class _DeviceDrawer(QFrame):
         self._tags_val       = QLabel("—")
         self._notes_val      = QLabel("—")
         self._notes_val.setWordWrap(True)
+        self._services_val   = QLabel("—")
+        self._services_val.setWordWrap(True)
 
         _row("First seen",   self._first_seen_val)
         _row("Last seen",    self._last_seen_val)
@@ -209,6 +211,7 @@ class _DeviceDrawer(QFrame):
         _row("Custom name",  self._custom_val)
         _row("Tags",         self._tags_val)
         _row("Notes",        self._notes_val)
+        _row("Services",     self._services_val)
         lay.addStretch()
 
         self._anim = QPropertyAnimation(self, b"geometry", self)
@@ -237,6 +240,12 @@ class _DeviceDrawer(QFrame):
             self._notes_val.setText(kd.notes or "—")
             if kd.custom_name:
                 self._title_lbl.setText(kd.custom_name)
+            try:
+                import json as _json
+                names = _json.loads(kd.services) if kd.services else []
+                self._services_val.setText(", ".join(names) if names else "—")
+            except Exception:
+                self._services_val.setText("—")
         try:
             events = store.query_device_events(hours=720, event_types=None)
             count = sum(1 for e in events if (e.mac or "").lower() == mac.lower())
