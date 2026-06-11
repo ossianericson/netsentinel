@@ -69,3 +69,12 @@ repomix-output.txt
 # Test/chaos tester output — screenshots, crash reports, logs
 test_output/
 
+# Test runner output files (monkey test, run_tests_*.bat, ad-hoc manual runs)
+inventory_events.csv
+last_run.txt
+test_results*.txt
+test_out.txt
+test_full_results.txt
+test_results_verbose.txt
+TEMP*.json
+
