@@ -98,6 +98,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._service_page = ServicePage(store=self._store)
         self._inventory_page.show_on_map.connect(self._show_ip_on_geo_map)
         self.global_time_range_changed.connect(self._service_page.set_global_hours)
+        self._service_page.diagnose_service.connect(self._on_service_page_diagnose)
 
         from ui.pages.reports_page import ReportsPage
         self._reports_page = ReportsPage(store=self._store)
@@ -980,3 +981,9 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         # Keep self._tabs pointing at something for any legacy code that checks it
         self._tabs = container
         return container
+
+    def _on_service_page_diagnose(self, service_id: str) -> None:
+        """Navigate to Service Diagnostics, pre-selecting service_id if provided."""
+        if service_id:
+            self._service_diagnostics_page.set_service(service_id)
+        self._nav_rail_go_to("Service Diagnostics")

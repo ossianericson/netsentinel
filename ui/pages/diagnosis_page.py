@@ -11,13 +11,14 @@ from __future__ import annotations
 
 import json as _json
 import time as _t
-from typing import Optional
+from dataclasses import dataclass as _dc, field as _df
+from typing import Any, List, Optional
 
 import datetime as _dt
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
-    QApplication, QButtonGroup, QDialog, QDialogButtonBox, QFrame,
+    QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFrame,
     QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
     QStackedWidget, QVBoxLayout, QWidget,
 )
@@ -60,6 +61,8 @@ _CTA_MAP: dict[str, tuple[str, str]] = {
     "Broadcast Storm":                           ("Open Broadcast Storm →",    "Broadcast Storm"),
     "Degraded IoT Device — Excessive Broadcasting": ("Open IoT Behaviour →",  "IoT Behaviour"),
     "Rogue Network Bridge":                      ("Open Rogue Bridge (STP) →", "Rogue Bridge (STP)"),
+    "Service Outage":                            ("Run Service Diagnostics →", "Service Diagnostics"),
+    "External Routing Issue":                    ("Run Service Diagnostics →", "Service Diagnostics"),
 }
 
 _REMEDIATION: dict[str, list[str]] = {
@@ -121,11 +124,89 @@ _REMEDIATION: dict[str, list[str]] = {
         "2. Disconnect it if it is not a managed switch.",
         "3. Enable BPDU Guard on switch ports that connect end devices.",
     ],
+    "Service Outage": [
+        "1. The service appears to be down or unreachable from your network.",
+        "2. Check the service's official status page (e.g. status.netflix.com, store.steampowered.com/status) for a known outage.",
+        "3. Try from another device or a mobile hotspot to rule out local network issues.",
+        "4. Open Service Diagnostics for a full DNS / TCP / latency / path breakdown.",
+        "5. If only you are affected, power-cycle your modem and router.",
+    ],
+    "External Routing Issue": [
+        "1. Your connection reaches the internet but the route to this service is degraded.",
+        "2. This is typically an ISP or CDN routing problem outside your control.",
+        "3. Power-cycling your modem can sometimes re-establish a better route.",
+        "4. Connecting via a VPN may route around the congested path.",
+        "5. Open Service Diagnostics with 'Include traceroute' enabled to inspect each hop.",
+    ],
 }
 
 _IDLE    = 0
 _RUNNING = 1
 _DONE    = 2
+
+
+# ── Service-unreachable integration helpers ───────────────────────────────────
+
+@_dc
+class _SvcFinding:
+    severity: str
+    headline: str
+    remediation: str
+    category: str
+    verify_step: str = ""
+
+
+@_dc
+class _SynthDiagResult:
+    global_severity: str
+    plain_summary: str
+    findings: List[Any] = _df(default_factory=list)
+
+
+_LAYER_SEV_CAT: dict[str, tuple[str, str]] = {
+    "device":        ("HIGH",   "Local Network / Router Unreachable"),
+    "local_network": ("HIGH",   "Local Network / Router Unreachable"),
+    "dns":           ("HIGH",   "DNS Resolution Failure"),
+    "isp":           ("MEDIUM", "External ISP Issue"),
+    "routing":       ("MEDIUM", "External Routing Issue"),
+    "remote_outage": ("MEDIUM", "Service Outage"),
+}
+
+_LAYER_HEADLINE: dict[str, str] = {
+    "device":        "Local device or adapter problem — cannot reach the service",
+    "local_network": "Local network failure — service unreachable from this device",
+    "dns":           "DNS resolution failed for service hosts",
+    "isp":           "ISP-level connectivity problem detected",
+    "routing":       "Routing anomaly between your ISP and the service",
+    "remote_outage": "Service appears down or unreachable from multiple paths",
+}
+
+
+def _svc_result_to_diag(result: Any) -> _SynthDiagResult:
+    layer = getattr(result, "failure_layer", "none")
+    name  = getattr(result, "service_name",  "Service")
+    summary = getattr(result, "summary", "") or ""
+
+    if layer == "none" or layer not in _LAYER_SEV_CAT:
+        return _SynthDiagResult(
+            global_severity="INFO",
+            plain_summary=summary or f"{name} is reachable.",
+            findings=[],
+        )
+
+    sev, category = _LAYER_SEV_CAT[layer]
+    headline = f"{name}: {_LAYER_HEADLINE.get(layer, 'Service unreachable')}"
+    finding = _SvcFinding(
+        severity=sev,
+        headline=headline,
+        remediation=summary,
+        category=category,
+    )
+    return _SynthDiagResult(
+        global_severity=sev,
+        plain_summary=summary or f"{name}: {layer}",
+        findings=[finding],
+    )
 
 
 def _save_diag_history(result) -> None:
@@ -163,6 +244,7 @@ class DiagnosisPage(QWidget):
         super().__init__(parent)
         self._store           = store
         self._worker          = None
+        self._svc_diag_worker = None
         self._gateway_ip      = None
         self._gateway_mac     = None
         self._symptom         = ""   # set by symptom tile before _start()
@@ -263,6 +345,7 @@ class DiagnosisPage(QWidget):
             ("My internet is slow",          "slow"),
             ("My connection keeps dropping", "dropping"),
             ("I can't connect at all",       "noconn"),
+            ("A service is unreachable",     "service_unreachable"),
         ]
 
         tiles_row = QHBoxLayout()
@@ -297,10 +380,42 @@ class DiagnosisPage(QWidget):
 
         def _on_symptom_clicked(btn):
             self._symptom = btn.property("symptom_key")
+            self._service_pick_row.setVisible(self._symptom == "service_unreachable")
 
         self._symptom_group.buttonClicked.connect(_on_symptom_clicked)
 
         lay.addLayout(tiles_row)
+
+        # Service picker — shown only when "service_unreachable" tile is selected
+        self._service_pick_row = QWidget()
+        self._service_pick_row.setStyleSheet("background:transparent;")
+        sp_lay = QHBoxLayout(self._service_pick_row)
+        sp_lay.setContentsMargins(0, 0, 0, 0)
+        sp_lay.setSpacing(8)
+        sp_label = QLabel("Service:")
+        sp_label.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        self._symptom_service_combo = QComboBox()
+        self._symptom_service_combo.setMinimumWidth(200)
+        from modules.service_diagnostics import SERVICE_CATALOG
+        _streaming = sorted(
+            (e for e in SERVICE_CATALOG.values() if e.category == "streaming"),
+            key=lambda e: e.name,
+        )
+        _gaming = sorted(
+            (e for e in SERVICE_CATALOG.values() if e.category == "gaming"),
+            key=lambda e: e.name,
+        )
+        for _e in _streaming:
+            self._symptom_service_combo.addItem(f"{_e.name}  (Streaming)", _e.id)
+        for _e in _gaming:
+            self._symptom_service_combo.addItem(f"{_e.name}  (Gaming)", _e.id)
+        sp_lay.addWidget(sp_label)
+        sp_lay.addWidget(self._symptom_service_combo)
+        sp_lay.addStretch()
+        lay.addWidget(self._service_pick_row)
+        self._service_pick_row.setVisible(False)
 
         _tile_hint = QLabel("Select a symptom, then click Run Diagnosis — NetSentinel runs targeted checks and shows plain-English results in 15–30 seconds.")
         _tile_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -762,23 +877,48 @@ class DiagnosisPage(QWidget):
 
     def _start(self) -> None:
         self.scan_requested.emit()
-        from workers.diagnosis_worker import DiagnosisWorker
         self._stack.setCurrentIndex(_RUNNING)
         self._progress_bar.setValue(0)
         self._step_lbl.setText("Starting…")
-        self._worker = DiagnosisWorker(
-            gateway_ip=self._gateway_ip,
-            gateway_mac=self._gateway_mac,
-            symptom=self._symptom,
-            parent=self,
+        if self._symptom == "service_unreachable":
+            self._start_service_diag()
+        else:
+            from workers.diagnosis_worker import DiagnosisWorker
+            self._worker = DiagnosisWorker(
+                gateway_ip=self._gateway_ip,
+                gateway_mac=self._gateway_mac,
+                symptom=self._symptom,
+                parent=self,
+            )
+            self._worker.progress.connect(self._on_progress)
+            self._worker.finished.connect(self._on_finished)
+            self._worker.start()
+
+    def _start_service_diag(self) -> None:
+        from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
+        idx = self._symptom_service_combo.currentIndex()
+        service_id = self._symptom_service_combo.itemData(idx) if idx >= 0 else "netflix"
+        self._svc_diag_worker = ServiceDiagnosticsWorker(
+            service_id=service_id, traceroute=False, parent=self
         )
-        self._worker.progress.connect(self._on_progress)
-        self._worker.finished.connect(self._on_finished)
-        self._worker.start()
+        self._svc_diag_worker.result_ready.connect(self._on_svc_diag_result)
+        self._svc_diag_worker.error.connect(self._on_svc_diag_error)
+        self._svc_diag_worker.progress.connect(self._on_progress)
+        self._svc_diag_worker.start()
+
+    def _on_svc_diag_result(self, result) -> None:
+        synth = _svc_result_to_diag(result)
+        self._show_result(synth)
+
+    def _on_svc_diag_error(self, msg: str) -> None:
+        self._step_lbl.setText(msg)
+        self._reset()
 
     def _cancel(self) -> None:
         if self._worker:
             self._worker.stop()
+        if self._svc_diag_worker:
+            self._svc_diag_worker.stop()
         self._reset()
 
     def _reset(self) -> None:
@@ -787,6 +927,11 @@ class DiagnosisPage(QWidget):
             self._worker.quit()
             self._worker.wait(3000)
             self._worker = None
+        if self._svc_diag_worker:
+            self._svc_diag_worker.stop()
+            self._svc_diag_worker.quit()
+            self._svc_diag_worker.wait(3000)
+            self._svc_diag_worker = None
         self._stack.setCurrentIndex(_IDLE)
 
     def _copy_report(self) -> None:

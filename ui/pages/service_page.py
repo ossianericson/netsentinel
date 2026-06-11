@@ -59,6 +59,7 @@ class ServicePage(QWidget):
 
     services_changed = pyqtSignal(list)   # list[ServiceTarget]
     scan_requested   = pyqtSignal()       # emitted when first service added from empty state
+    diagnose_service = pyqtSignal(str)    # emits service_id (or "") → navigate to Service Diagnostics
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -346,12 +347,22 @@ class ServicePage(QWidget):
                 )
             QMessageBox.information(self, "How to Fix", msg)
 
+        def _svc_diagnose():
+            r = self._table.currentRow()
+            if r < 0:
+                return
+            host_it = self._table.item(r, 1)
+            host = host_it.text().strip() if host_it else ""
+            service_id = self._find_service_id(host)
+            self.diagnose_service.emit(service_id)
+
         install_copy_menu(self._table, [
             ("separator",     None),
             ("Copy target",   _svc_copy_url),
             ("Copy status",   _svc_copy_status),
             ("separator",     None),
             ("How to Fix",    _svc_how_to_fix),
+            ("Diagnose →",    _svc_diagnose),
         ])
         card_layout.addWidget(self._table)
         cl.addWidget(card, stretch=1)
@@ -570,6 +581,22 @@ class ServicePage(QWidget):
         lay.addWidget(btn_rm, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         return outer
+
+    # ── Service catalog lookup ────────────────────────────────────────────────
+
+    @staticmethod
+    def _find_service_id(host: str) -> str:
+        """Return SERVICE_CATALOG id whose probe_hosts contains host, or ''."""
+        if not host:
+            return ""
+        try:
+            from modules.service_diagnostics import SERVICE_CATALOG
+            for entry in SERVICE_CATALOG.values():
+                if host in entry.probe_hosts:
+                    return entry.id
+        except Exception:
+            pass  # non-fatal — catalog unavailable
+        return ""
 
     # ── Public navigation slot ────────────────────────────────────────────────
 

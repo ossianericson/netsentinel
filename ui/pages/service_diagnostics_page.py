@@ -401,6 +401,14 @@ class ServiceDiagnosticsPage(QWidget):
         self._run_btn.setText("Run Diagnostics")
         self._run_btn.setEnabled(True)
 
+    def set_service(self, service_id: str) -> None:
+        """Pre-select a service in the combo box by ID and focus the run button."""
+        for i in range(self._service_combo.count()):
+            if self._service_combo.itemData(i) == service_id:
+                self._service_combo.setCurrentIndex(i)
+                break
+        self._run_btn.setFocus()
+
     def _set_status(self, msg: str, is_error: bool = False) -> None:
         color = RED if is_error else TEXT_MUTED
         self._status_lbl.setStyleSheet(f"color:{color}; font-size:12px;")

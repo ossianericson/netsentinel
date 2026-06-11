@@ -360,10 +360,8 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Chaos-run crash fix", "Fixed a Windows fatal exception (RPC_E_WRONG_THREAD) that could kill the app when a native file-save dialog was open and the snap-layout maximize button was activated — the window-state toggle is now queued on the Qt main thread."),
-        ("Deco plugin stability", "The TP-Link Deco hardware plugin dependency is now pre-loaded at startup, preventing a crash loop on the next launch after the above error."),
-        ("Monkey test tuning", "Test harness health-monitor timeout raised to 45 s — eliminates false-positive terminations when the Threat Intel 'Update Feeds' action downloads a large feed."),
-        ("Memory leak fix", "Eliminated a progressive memory accumulation in navigation animations and live chart redraws — matplotlib Line2D and FuncAnimation objects are now properly released between updates."),
+        ("Service unreachable diagnosis", "The 'What's Wrong?' page now has a fourth symptom tile — 'A service is unreachable'. Select a streaming or gaming service from the picker, run diagnosis, and get a plain-English verdict with remediation steps."),
+        ("Service Heartbeat → Diagnose", "Right-click any monitored service in the Service Heartbeat page and choose 'Diagnose →' to jump directly to Service Diagnostics with that service pre-selected."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
