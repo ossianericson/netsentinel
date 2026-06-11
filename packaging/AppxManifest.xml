@@ -13,8 +13,8 @@
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
-  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
-  IgnorableNamespaces="uap mp uap3 rescap desktop desktop6">
+  xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
+  IgnorableNamespaces="uap mp uap3 rescap desktop desktop2">
 
   <Identity
     Name="OssianEricson.NetSentinel"
@@ -87,24 +87,25 @@
     Covers the Python speed-test backends that run inside NetSentinel.exe.
     Ports: 443 (HTTPS), 8080 (Ookla streams), 5060 (Ookla latency probes).
     Requires runFullTrust capability (already declared above).
-    desktop6 namespace requires Windows 10 1903+; listed in IgnorableNamespaces
-    so the package still installs on older builds (rules just won't be created).
+    desktop2 namespace (windows.firewallRules is a desktop/2 extension, not desktop/6).
+    Listed in IgnorableNamespaces so the package still installs on older builds
+    (rules just won't be created).
   -->
   <Extensions>
-    <desktop6:Extension Category="windows.firewallRules">
-      <desktop6:FirewallRules Executable="NetSentinel\NetSentinel.exe">
-        <desktop6:Rule Direction="out" IPProtocol="TCP"
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="NetSentinel\NetSentinel.exe">
+        <desktop2:Rule Direction="out" IPProtocol="TCP"
           RemotePortMin="443" RemotePortMax="443" Profile="all" />
-        <desktop6:Rule Direction="out" IPProtocol="TCP"
+        <desktop2:Rule Direction="out" IPProtocol="TCP"
           RemotePortMin="8080" RemotePortMax="8080" Profile="all" />
-        <desktop6:Rule Direction="out" IPProtocol="UDP"
+        <desktop2:Rule Direction="out" IPProtocol="UDP"
           RemotePortMin="8080" RemotePortMax="8080" Profile="all" />
-        <desktop6:Rule Direction="out" IPProtocol="TCP"
+        <desktop2:Rule Direction="out" IPProtocol="TCP"
           RemotePortMin="5060" RemotePortMax="5060" Profile="all" />
-        <desktop6:Rule Direction="out" IPProtocol="UDP"
+        <desktop2:Rule Direction="out" IPProtocol="UDP"
           RemotePortMin="5060" RemotePortMax="5060" Profile="all" />
-      </desktop6:FirewallRules>
-    </desktop6:Extension>
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
   </Extensions>
 
 </Package>
