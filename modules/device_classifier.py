@@ -13,7 +13,46 @@ over data that has already been collected.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from typing import Optional
+
+
+# ── Classification result type ────────────────────────────────────────────────
+
+@dataclass
+class ClassificationResult:
+    """
+    Rich return type from classify_with_evidence().
+
+    device_type   : Human-readable label e.g. "Smart TV", "Games Console".
+    vendor        : Vendor string passed in (may be empty).
+    confidence    : 0.0–1.0 estimate of classification quality.
+    evidence      : Which discriminators fired e.g. ["vendor", "hostname:bravia"].
+    mac_randomized: True when the U/L bit indicates a locally administered MAC.
+    """
+    device_type: str
+    vendor: str = ""
+    confidence: float = 0.0
+    evidence: list[str] = field(default_factory=list)
+    mac_randomized: bool = False
+
+
+def is_randomized_mac(mac: str) -> bool:
+    """
+    Return True when the MAC's U/L bit (second-least-significant bit of the
+    first octet) is set, indicating a locally administered / OS-randomised
+    address rather than a genuine burnt-in OUI.
+
+    Accepts any common MAC format: XX:XX:XX:XX:XX:XX, XX-XX-XX-XX-XX-XX,
+    XXXXXXXXXXXX, or mixed case.
+    """
+    normalized = mac.replace(":", "").replace("-", "").replace(".", "")
+    if len(normalized) < 2:
+        return False
+    try:
+        return bool(int(normalized[:2], 16) & 0x02)
+    except ValueError:
+        return False
 
 
 # ── Label taxonomy ────────────────────────────────────────────────────────────
@@ -119,7 +158,7 @@ _RULES: list[dict] = [
     },
     {
         "label": "IoT Device",
-        "vendor_re": r"espressif|particle|arduino|raspberry pi foundation|seeed|sonoff|tasmota",
+        "vendor_re": r"espressif|particle|arduino|seeed|sonoff|tasmota",
     },
     {
         "label": "Smart Speaker / Display",
@@ -168,6 +207,17 @@ _RULES: list[dict] = [
         "os_re": r"linux",
         "any_ports": {22},
     },
+    # ── Tablets ───────────────────────────────────────────────────────────────
+    {
+        "label": "Tablet",
+        "hostname_re": r"sm-t\d{3}|galaxy[\-_]?tab",
+    },
+    {
+        "label": "Tablet",
+        "vendor_re": r"amazon",
+        "hostname_re": r"fire[\-_]?hd\d*|kindle[\-_]?fire",
+    },
+    # ── iPhone / iPad ─────────────────────────────────────────────────────────
     {
         "label": "iPhone / iPad",
         "vendor_re": r"apple",
@@ -181,6 +231,11 @@ _RULES: list[dict] = [
         "label": "Android Device",
         "vendor_re": r"samsung|oneplus|google|xiaomi|oppo|vivo|realme|motorola|lenovo",
         "hostname_re": r"android|galaxy|pixel|oneplus",
+    },
+    {
+        # Samsung model numbers (SM-G/SM-A/SM-S phones; SM-T already caught by Tablet rule)
+        "label": "Android Device",
+        "hostname_re": r"sm-[a-z]\d{2,}",
     },
     # ── VoIP / telephony ─────────────────────────────────────────────────────
     {
@@ -223,6 +278,11 @@ _RULES: list[dict] = [
         "label": "Games Console",
         "vendor_re": r"nintendo",
     },
+    {
+        # Standalone PS4/PS5 hostnames; existing rule requires a trailing separator
+        "label": "Games Console",
+        "hostname_re": r"\bps[45]\b|playstation[\-_][45]",
+    },
     # ── Smart TV — additional hostname patterns ───────────────────────────────
     {
         "label": "Smart TV",
@@ -231,6 +291,10 @@ _RULES: list[dict] = [
     {
         "label": "Smart TV",
         "hostname_re": r"samsung[\-_]?tv|bravia|panasonictv|philipstv|hisense[\-_]?tv",
+    },
+    {
+        "label": "Smart TV",
+        "hostname_re": r"google[\-_]?tv|googletv",
     },
     # ── Audio — Sonos ─────────────────────────────────────────────────────────
     {
@@ -245,6 +309,15 @@ _RULES: list[dict] = [
     {
         "label": "Streaming Stick",
         "hostname_re": r"\bstreamer\b|castdevice|cast[\-_]device",
+    },
+    # ── Single Board Computer ─────────────────────────────────────────────────
+    {
+        "label": "Single Board Computer",
+        "vendor_re": r"raspberry pi|raspberrypi",
+    },
+    {
+        "label": "Single Board Computer",
+        "hostname_re": r"raspberrypi|raspberry[\-_]pi|\brpi\d*\b|libreelec|dietpi|armbian|orangepi|bananapi|odroid|rock[\-_]?pi",
     },
     # ── Fallback by OS ────────────────────────────────────────────────────────
     {
@@ -319,6 +392,108 @@ def classify(
         return rule["label"]
 
     return "Unknown Device"
+
+
+def classify_with_evidence(
+    vendor: str = "",
+    hostname: str = "",
+    open_ports: Optional[set[int]] = None,
+    os_family: str = "",
+    mac: str = "",
+) -> ClassificationResult:
+    """
+    Like classify() but returns a ClassificationResult with a confidence
+    score and a list of which discriminators fired.
+
+    Parameters
+    ----------
+    vendor      Vendor / manufacturer string (from OUI or banner).
+    hostname    Reverse-DNS hostname or NetBIOS name.
+    open_ports  Set of open TCP port numbers.
+    os_family   OS guess string, e.g. "Windows", "Linux/macOS".
+    mac         Raw MAC address; used to detect locally administered MACs.
+
+    Returns
+    -------
+    ClassificationResult — never None; falls back to device_type="Unknown Device".
+    """
+    if open_ports is None:
+        open_ports = set()
+
+    mac_rand = is_randomized_mac(mac) if mac else False
+    v = vendor.lower()
+    h = hostname.lower()
+    o = os_family.lower()
+
+    for rule in _RULES:
+        # Precompute which discriminators match for this rule
+        v_match = bool(v and "vendor_re" in rule and re.search(rule["vendor_re"], v))
+        h_match = bool(h and "hostname_re" in rule and re.search(rule["hostname_re"], h))
+        o_match = bool(o and "os_re" in rule and re.search(rule["os_re"], o))
+        p_match = bool("ports" in rule and rule["ports"].issubset(open_ports))
+        ap_match = bool("any_ports" in rule and rule["any_ports"].intersection(open_ports))
+
+        # Mirror the gating logic from classify() exactly
+        if "vendor_re" in rule and not v_match:
+            if len([k for k in rule if k not in ("label", "vendor_re")]) == 0:
+                continue
+        if "hostname_re" in rule and not h_match:
+            continue
+        if "os_re" in rule and not o_match:
+            continue
+        if "ports" in rule and not p_match:
+            continue
+        if "any_ports" in rule and not ap_match:
+            continue
+        if "any_ports_b" in rule and not rule["any_ports_b"].intersection(open_ports):
+            continue
+        if "vendor_re" in rule and not v_match:
+            continue
+
+        # Rule matched — build evidence list and compute confidence
+        evidence: list[str] = []
+        confidence = 0.0
+
+        if v_match:
+            # Vendor match is worth less when the MAC may be randomised
+            boost = 0.20 if mac_rand else 0.40
+            label = "vendor(randomized-mac-penalty)" if mac_rand else "vendor"
+            evidence.append(label)
+            confidence += boost
+        if h_match:
+            evidence.append(f"hostname:{hostname[:40]}")
+            confidence += 0.30
+        if o_match:
+            evidence.append(f"os:{os_family}")
+            confidence += 0.15
+        if p_match:
+            evidence.append(f"ports:{sorted(rule['ports'])}")
+            confidence += 0.20
+        if ap_match:
+            matched_p = rule["any_ports"].intersection(open_ports)
+            evidence.append(f"any-ports:{sorted(matched_p)}")
+            confidence += 0.15
+        if mac_rand:
+            evidence.append("randomized-mac")
+
+        return ClassificationResult(
+            device_type=rule["label"],
+            vendor=vendor,
+            confidence=min(1.0, confidence),
+            evidence=evidence,
+            mac_randomized=mac_rand,
+        )
+
+    fallback_evidence: list[str] = ["no-rule-matched"]
+    if mac_rand:
+        fallback_evidence.append("randomized-mac")
+    return ClassificationResult(
+        device_type="Unknown Device",
+        vendor=vendor,
+        confidence=0.0,
+        evidence=fallback_evidence,
+        mac_randomized=mac_rand,
+    )
 
 
 def classify_device(device) -> str:

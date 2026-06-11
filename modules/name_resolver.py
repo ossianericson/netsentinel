@@ -22,6 +22,7 @@ import socket
 import subprocess
 from dataclasses import dataclass, field
 
+from modules.device_classifier import is_randomized_mac
 from modules.mac_registry import lookup as mac_lookup
 
 
@@ -39,6 +40,7 @@ class ResolvedName:
     product_line: str = ""
     source: str = ""         # which method provided display_name
     all_names: list = field(default_factory=list)  # all names found
+    mac_randomized: bool = False  # True when U/L bit indicates a randomised MAC
 
     @property
     def label(self) -> str:
@@ -254,6 +256,7 @@ def resolve(
     ResolvedName instance.
     """
     result = ResolvedName(ip=ip, mac=mac)
+    result.mac_randomized = is_randomized_mac(mac) if mac else False
 
     # ── Step 1: MAC registry (instant) ──────────────────────────────────────
     if mac:
