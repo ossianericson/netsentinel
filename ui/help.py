@@ -294,6 +294,14 @@ _PAGE_HELP: dict[str, dict] = {
             "Forecasts are only meaningful after several days of Network Logger data — short runs produce wide confidence intervals.",
         ],
     },
+    "Service Diagnostics": {
+        "what": "Probes DNS, TCP reachability, latency, and network path to determine whether a streaming or gaming service is reachable and where any failure originates.",
+        "hidden": [
+            "Enable 'Include traceroute' to see every network hop between you and the service — useful when your ISP routes traffic unexpectedly.",
+            "The failure layer badge tells you in plain English who is responsible: 'Device problem', 'ISP issue', 'Remote outage', etc.",
+            "Confidence % reflects how many independent probes agreed — 80%+ is conclusive, below 50% means mixed signals.",
+        ],
+    },
     # ── Automation ─────────────────────────────────────────────────────────────
     "Automation Hooks": {
         "what": "Webhook and script triggers on network events — device down, high RTT, new device discovered.",

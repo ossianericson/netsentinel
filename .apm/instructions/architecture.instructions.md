@@ -198,6 +198,7 @@ netsentinel/
 │   │   ├── reports_page.py
 │   │   ├── rest_api_page.py        # REST API — enable toggle, port, API key, live status probe, endpoint reference
 │   │   ├── security_overview_page.py # Security Overview — aggregate security findings dashboard
+│   │   ├── service_diagnostics_page.py  # Service Diagnostics — streaming/gaming service probe page (Sprint 4)
 │   │   ├── service_page.py
 │   │   ├── settings_cards.py       # _SettingsCardsMixin — all settings card builders for SettingsPage; includes appearance/display cards (S14-3c)
 │   │   ├── settings_appearance.py  # _SettingsAppearanceMixin — INCOMPLETE SPLIT: appearance card stubs (Sprint 13); not inherited by SettingsPage — appearance methods remain in settings_cards.py
@@ -269,6 +270,7 @@ netsentinel/
 │   ├── report_scheduler_worker.py
 │   ├── rest_api_worker.py
 │   ├── scan_worker.py
+│   ├── service_diagnostics_worker.py  # ServiceDiagnosticsWorker — QThread for DiagnosticEngine.run() (Sprint 4)
 │   ├── service_worker.py
 │   ├── snmp_trap_worker.py
 │   ├── speed_test_worker.py    # FetchServersWorker + SpeedTestWorker

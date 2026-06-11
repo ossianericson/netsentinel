@@ -971,8 +971,9 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
         self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
         self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
-        self._nav_add_rail_item("Geolocation Map",     self._geo_map_page)
-        self._nav_add_rail_item("Trend Forecasts",     self._trend_page)
+        self._nav_add_rail_item("Geolocation Map",       self._geo_map_page)
+        self._nav_add_rail_item("Trend Forecasts",       self._trend_page)
+        self._nav_add_rail_item("Service Diagnostics",   self._service_diagnostics_page)
 
         self._nav_begin_section("Automation", "zap")
         self._nav_add_rail_item("Automation Hooks",    self._automation_page)

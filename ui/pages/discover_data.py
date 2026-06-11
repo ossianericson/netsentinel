@@ -402,6 +402,23 @@ _FEATURES: list[dict] = [
         "requires": None,
         "tags": ["mtr", "traceroute", "tracert", "hop", "latency", "packet loss", "isp", "route"],
     },
+    {
+        "group": "Diagnostics",
+        "icon": "◆",
+        "name": "Service Diagnostics",
+        "desc": (
+            "Checks whether a streaming or gaming service (Netflix, Steam, PSN, etc.) is "
+            "reachable from your network. Probes DNS, TCP, HTTPS, and latency in sequence, "
+            "then reports the exact failure layer: device, local network, DNS, ISP, routing, "
+            "or remote outage — so you know who to call."
+        ),
+        "page": "Service Diagnostics",
+        "requires": None,
+        "tags": [
+            "service", "streaming", "gaming", "netflix", "steam", "psn", "xbox",
+            "diagnose", "reachable", "dns", "tcp", "latency", "isp", "outage",
+        ],
+    },
     # ── Security ───────────────────────────────────────────────────────────────
     {
         "group": "Security",

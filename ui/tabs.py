@@ -272,6 +272,9 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._discover_page = FeatureGuidePage(parent=None)
         self._discover_page.navigate_to.connect(self._nav_rail_go_to)
 
+        from ui.pages.service_diagnostics_page import ServiceDiagnosticsPage
+        self._service_diagnostics_page = ServiceDiagnosticsPage(parent=None)
+
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
         self._hardware_integration_page.plugin_result.connect(self._on_hardware_plugin_result)
