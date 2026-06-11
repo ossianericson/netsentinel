@@ -370,7 +370,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("1.9.98")
+    app.setApplicationVersion("1.9.99")
 
     _start_minimised = "--minimised" in sys.argv
 
@@ -403,7 +403,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.98")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v1.9.99")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -509,6 +509,16 @@ def main():
     from modules.maintenance_window import MaintenanceWindowManager
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
+
+    # Pre-warm tplinkrouterc6u on the main STA thread before any plugin workers
+    # start.  tplinkrouterc6u.common.encryption uses Windows COM-based crypto;
+    # importing it from a background QThread raises RPC_E_WRONG_THREAD (0x8001010d).
+    # Importing here puts the module in sys.modules so the lazy import in
+    # deco_client._ensure_client() becomes a no-op when called from the worker.
+    try:
+        import tplinkrouterc6u  # noqa: F401
+    except ImportError:
+        pass  # optional dep — not installed; Deco hardware plugin will surface the error gracefully
 
     _splash_msg("Starting background workers…")
     avail_worker = AvailabilityWorker(store=store, interval_s=60)

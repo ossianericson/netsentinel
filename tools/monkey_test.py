@@ -80,7 +80,8 @@ _WINDOW_RE = ".*NetSentinel.*"
 _CONNECT_TIMEOUT = 60       # seconds to wait for the window after launch
 _CONNECT_POLL = 2.0         # seconds between connection attempts
 _HEALTH_INTERVAL = 2.0      # seconds between background health checks
-_UNRESPONSIVE_SECS = 20     # seconds without a completed iteration before hang alarm
+_UNRESPONSIVE_SECS = 45     # seconds without a completed iteration before hang alarm
+                            # (raised from 20 — "Update Feeds" on Threat Intel takes ~26 s)
 
 # ── Windows power management ───────────────────────────────────────────────────
 _ES_CONTINUOUS       = 0x80000000

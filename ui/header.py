@@ -420,7 +420,16 @@ class AppHeaderMixin:
                     if msg == WM_NCLBUTTONDOWN:
                         return 0  # swallow — we act on release
                     if msg == WM_NCLBUTTONUP:
-                        win._toggle_maximize()
+                        # Use QueuedConnection so _toggle_maximize() runs on the
+                        # Qt main thread regardless of which thread Windows delivered
+                        # the WM_NCLBUTTONUP message from.  Direct call here risks
+                        # RPC_E_WRONG_THREAD (0x8001010d) when a native file dialog
+                        # is open and Windows uses cross-thread SendMessage.
+                        from PyQt6.QtCore import QMetaObject, Qt as _Qt
+                        QMetaObject.invokeMethod(
+                            win, "_toggle_maximize",
+                            _Qt.ConnectionType.QueuedConnection,
+                        )
                         return 0
                 return _DefSubclassProc(hwnd, msg, wparam, lparam)
 

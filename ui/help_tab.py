@@ -360,9 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("CVE Tracker empty state", "CVE Tracker now shows a 'Run Scan' prompt when no CVEs are tracked — no more blank page on first use."),
-        ("CVE → Threat Intel cross-navigation", "Right-click any CVE row and choose 'Check in Threat Intel' to jump directly to the Threat Intel page pre-filtered to that IP."),
-        ("About dialog fix", "About dialog no longer displays '&amp;' as literal text — now correctly shows '&'."),
+        ("Chaos-run crash fix", "Fixed a Windows fatal exception (RPC_E_WRONG_THREAD) that could kill the app when a native file-save dialog was open and the snap-layout maximize button was activated — the window-state toggle is now queued on the Qt main thread."),
+        ("Deco plugin stability", "The TP-Link Deco hardware plugin dependency is now pre-loaded at startup, preventing a crash loop on the next launch after the above error."),
+        ("Monkey test tuning", "Test harness health-monitor timeout raised to 45 s — eliminates false-positive terminations when the Threat Intel 'Update Feeds' action downloads a large feed."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

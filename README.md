@@ -352,6 +352,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v1.9.99
+**Fixed**
+- `ui/header.py`: snap-layout maximize button no longer crashes with `RPC_E_WRONG_THREAD` (0x8001010d) when a native file dialog is open — `_toggle_maximize()` is now invoked via `QMetaObject.invokeMethod` with `QueuedConnection` so it always runs on the Qt main thread
+- `app.py`: `tplinkrouterc6u` (Deco hardware plugin dep) is now pre-imported on the main STA thread before any background workers start — eliminates `RPC_E_WRONG_THREAD` crash loop on app restart after a wild chaos run
+- `tools/monkey_test.py`: raised `_UNRESPONSIVE_SECS` from 20 s to 45 s — "Update Feeds" on Threat Intel page takes ~26 s on a slow connection; the 20 s threshold caused false-positive test terminations
+
 ### v1.9.98
 **Fixed**
 - `ui/pages/cve_page.py`: CVE Tracker now shows an empty state with "Run Scan" CTA when no CVEs are tracked — previously showed a blank page
