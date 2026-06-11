@@ -117,6 +117,6 @@ only on your machine.
 
 ## Contact
 
-Privacy questions: **ossian.ericson@gmail.com**
+Privacy questions: open an issue at [github.com/ossianericson/netsentinel](https://github.com/ossianericson/netsentinel/issues)
 
 Security issues: see [SECURITY.md](SECURITY.md)

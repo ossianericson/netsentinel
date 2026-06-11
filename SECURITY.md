@@ -23,9 +23,9 @@ Open a private advisory directly in this repository:
 
 GitHub encrypts the report end-to-end and notifies the maintainer without public disclosure.
 
-### Fallback: Email
+### Fallback: GitHub profile
 
-If you cannot use GitHub's advisory system, email **ossian.ericson@gmail.com** with:
+If you cannot use GitHub's advisory system, open a message via the [GitHub profile](https://github.com/ossianericson) or use the advisory link above and describe:
 
 - A description of the vulnerability
 - Steps to reproduce

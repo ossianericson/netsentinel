@@ -358,6 +358,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release delete "${{ github.ref_name }}" --yes 2>/dev/null || true
 
+      - name: Build release body from README changelog
+        run: python scripts/extract_changelog.py "${{ steps.ver.outputs.VERSION }}"
+
       - name: Create GitHub Release
         id: gh_release
         uses: softprops/action-gh-release@v3
@@ -366,42 +369,7 @@ jobs:
           name: "NetSentinel ${{ github.ref_name }}"
           draft: false
           prerelease: true
-          body: |
-            ## NetSentinel ${{ github.ref_name }}
-
-            ### Recommended install
-
-            ```powershell
-            winget install NetSentinel.NetSentinel
-            ```
-
-            Or download manually:
-
-            | Platform | File | Notes |
-            |---|---|---|
-            | **Windows** | `NetSentinel-Setup-*.exe` | Installer — adds to Start Menu + PATH. Use winget (above) instead if possible. |
-            | **Windows** | `NetSentinel-svc.exe` | Background Windows service (not in winget). |
-            | **macOS** | `NetSentinel-macOS.zip` | GUI — unzip, right-click → Open. |
-            | **macOS** | `NetSentinel-cli-macOS` | Headless CLI. |
-            | **Linux** | `NetSentinel` | GUI — `chmod +x NetSentinel && sudo ./NetSentinel` |
-            | **Linux** | `NetSentinel-cli-linux` | Headless CLI. |
-
-            ### What it does
-            One tool that replaces a drawer full of network utilities:
-            - Rogue device fingerprinting with curated OUI registry (Google, TP-Link, Apple, Amazon, Samsung, LG, PlayStation, Nintendo, Xbox, Roku, Netgear, Asus)
-            - STP/BPDU rogue Root Bridge detection
-            - Broadcast & multicast storm analysis
-            - IoT Behavioral Baseline — learns normal device traffic, alerts on deviations
-            - Root Cause Correlator — distinguishes ISP fault from local network fault
-            - Network Grade (A–F) across 8 dimensions — uptime, latency, jitter, DNS, speed, safety, STP, storm
-            - ISP Accountability Report — HTML export with MTR hop table and outage log for support tickets
-            - How-to-Fix context menus on every scan result
-            - Hidden SSID and co-channel WiFi interference detection
-            - Live ping + DNS latency correlation
-            - On-demand diagnostics: speed test, DNS leak, traceroute, public IP
-            - Long-term background connectivity logger with stability scoring
-            - TCP port scanner, OS fingerprinter, CVE lookup, MTR, and more
-            - HTML, JSON, CSV, Nmap XML report export
+          body_path: release_body.md
           files: |
             artifacts/windows-installer/NetSentinel-Setup-*.exe
             artifacts/windows-msix/NetSentinel-*.msix

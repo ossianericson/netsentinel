@@ -31,7 +31,7 @@ This updates all 12 tracked locations atomically and runs the consistency test s
 
 ### Reporting security vulnerabilities
 
-Please do not open a public issue. Email **ossian.ericson@gmail.com** with steps to reproduce and impact — response within 48 hours.
+Please do not open a public issue. Use the [private vulnerability reporting](https://github.com/ossianericson/netsentinel/security/advisories/new) form — response within 48 hours.
 
 ---
 

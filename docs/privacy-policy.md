@@ -60,4 +60,4 @@ You can delete these files at any time to remove all stored data.
 
 If you have questions about this privacy policy, open an issue at
 [github.com/ossianericson/netsentinel](https://github.com/ossianericson/netsentinel/issues)
-or email **ossian.ericson@gmail.com**.
+or open an issue on [GitHub](https://github.com/ossianericson/netsentinel/issues).
