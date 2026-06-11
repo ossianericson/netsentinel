@@ -261,11 +261,15 @@ def scan(offenders_path: Path) -> dict:
         info = DeviceInfo(ip=ip, mac=mac)
         name_info = resolved.get(ip)
         info.hostname = getattr(name_info, "hostname", "") if name_info else ""
-        # Enrich vendor/model from registry if offenders.json won't override
-        if name_info and getattr(name_info, "model", ""):
-            info.vendor = getattr(name_info, "vendor", info.vendor) or info.vendor
-            if not info.device_type:
-                info.device_type = getattr(name_info, "device_type", "") or ""
+        # Enrich vendor/device_type from MAC registry — use vendor presence, not model,
+        # so entries that have vendor but no specific model still enrich correctly.
+        if name_info:
+            _ni_vendor = getattr(name_info, "vendor", "") or ""
+            _ni_dtype  = getattr(name_info, "device_type", "") or ""
+            if _ni_vendor:
+                info.vendor = _ni_vendor
+            if _ni_dtype and not info.device_type:
+                info.device_type = _ni_dtype
 
         # --- Link-local detection (rogue DHCP indicator) ---
         if ip.startswith("169.254."):

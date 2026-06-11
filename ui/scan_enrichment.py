@@ -687,9 +687,12 @@ class ScanEnrichmentMixin:
         _all_plugin: dict = {}
         for _pe in self._plugin_enrichments.values():
             _all_plugin.update(_pe)
-        # Only proceed if there is a scan result AND at least one enrichment source.
-        if not self._m1_result or (not self._mesh_enrichment and not _all_plugin):
+        # Require a scan result to do anything.
+        if not self._m1_result:
             return
+        # Track whether live mesh/plugin data is present so we can gate the
+        # mesh-specific hostname-override and synthesis steps below.
+        _has_mesh_data = bool(self._mesh_enrichment or _all_plugin)
 
         from PyQt6.QtGui import QColor
         from modules.deco_client import _norm_mac

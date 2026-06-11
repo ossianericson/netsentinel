@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import QTableWidgetItem
 
 from ui.tabs import _add_row
@@ -22,6 +22,33 @@ from ui.scan_enrichment import ScanEnrichmentMixin
 
 if TYPE_CHECKING:
     pass
+
+
+class _VendorBatchWorker(QThread):
+    """Background OUI vendor lookup for devices showing 'Unknown' vendor.
+
+    Processes MACs one at a time so the macvendors.com rate limit (≈1 req/s)
+    is respected. Emits vendor_resolved(mac, vendor) for each hit so the table
+    cell can be updated immediately rather than waiting for all lookups.
+    """
+
+    vendor_resolved = pyqtSignal(str, str)  # (normalised_mac, vendor_name)
+
+    def __init__(self, macs: list[str], parent=None) -> None:
+        super().__init__(parent)
+        self._macs = macs
+
+    def run(self) -> None:
+        try:
+            from modules.mac_lookup import lookup_vendor
+            for mac in self._macs:
+                if not mac:
+                    continue
+                vendor = lookup_vendor(mac)
+                if vendor:
+                    self.vendor_resolved.emit(mac.lower(), vendor)
+        except Exception:
+            pass  # non-fatal — table shows 'Unknown' if lookup fails
 
 
 class ScanResultMixin(ScanEnrichmentMixin):
@@ -299,6 +326,74 @@ class ScanResultMixin(ScanEnrichmentMixin):
             f"CGNAT: {'Yes' if result.cgnat else 'No'} | "
             f"UPnP mappings: {len(result.upnp_mappings)}"
         )
+
+    def _start_vendor_lookups(self, devices: list) -> None:
+        """Kick off background OUI vendor lookup for devices still showing Unknown vendor.
+
+        Results arrive via _on_vendor_resolved() and update the table and DeviceInfo
+        in-place, so vendor data fills in asynchronously on the first scan instead of
+        requiring a second scan for the lookup cache to warm up.
+        """
+        from modules.device_classifier import is_randomized_mac
+        pending = []
+        for d in devices:
+            mac    = (d.mac    if not isinstance(d, dict) else d.get("mac",    "")) or ""
+            vendor = (d.vendor if not isinstance(d, dict) else d.get("vendor", "")) or ""
+            if vendor not in ("Unknown", "") or not mac:
+                continue
+            if is_randomized_mac(mac):
+                continue  # privacy MAC — OUI lookup meaningless by design
+            pending.append(mac)
+
+        if not pending:
+            return
+
+        # Cancel any still-running lookup from a previous scan
+        existing = getattr(self, "_vendor_batch_worker", None)
+        if existing and existing.isRunning():
+            existing.vendor_resolved.disconnect()
+            existing.terminate()
+            existing.wait(200)
+
+        worker = _VendorBatchWorker(pending, self)
+        worker.vendor_resolved.connect(self._on_vendor_resolved)
+        self._vendor_batch_worker = worker
+        worker.start()
+
+    def _on_vendor_resolved(self, mac: str, vendor: str) -> None:
+        """Update table cell and DeviceInfo when an async OUI lookup returns a result."""
+        if not self._m1_result or not vendor:
+            return
+        norm = mac.lower().replace("-", "").replace(":", "")
+
+        def _norm(m: str) -> str:
+            return m.lower().replace("-", "").replace(":", "")
+
+        # Update DeviceInfo objects
+        for d in self._m1_result.get("devices", []):
+            d_mac = (d.mac if not isinstance(d, dict) else d.get("mac", "")) or ""
+            if _norm(d_mac) == norm:
+                if isinstance(d, dict):
+                    d["vendor"] = vendor
+                else:
+                    d.vendor = vendor
+
+        # Update the vendor cell (col 3) in _m1_table
+        try:
+            from PyQt6.QtGui import QColor as _QC
+            for row in range(self._m1_table.rowCount()):
+                mac_item = self._m1_table.item(row, 2)
+                if not mac_item:
+                    continue
+                if _norm(mac_item.text()) == norm:
+                    v_item = self._m1_table.item(row, 3)
+                    if v_item and v_item.text() in ("Unknown", ""):
+                        v_item.setText(vendor)
+                        v_item.setForeground(_QC(TEXT_PRIMARY))
+                        v_item.setToolTip(f"Vendor resolved from OUI database\n({mac_item.text()[:8].upper()})")
+                    break
+        except Exception:
+            pass  # non-fatal — table update is best-effort
 
     def _on_m1_result(self, data: dict):
         import time as _t
@@ -630,10 +725,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 if not getattr(self, "_onboarding_active", False):
                     self._nav_rail_go_to("Overview")
 
-        # Re-apply cached mesh/plugin enrichment immediately so names/nodes are
-        # visible without waiting for the async worker.
-        if self._mesh_enrichment or any(self._plugin_enrichments.values()):
-            self._apply_mesh_enrichment()
+        # Always apply enrichment — re-classifies device types and rebuilds dependent
+        # views even on the first scan; also layers in cached mesh/plugin data when present.
+        self._apply_mesh_enrichment()
+
+        # Async OUI vendor lookup for devices still showing Unknown vendor.
+        # Updates table cells and DeviceInfo objects as results arrive.
+        self._start_vendor_lookups(devices)
 
         # Wake any router/AP plugin workers so fresh client data arrives quickly
         # rather than waiting up to 60 s for the next scheduled poll cycle.
