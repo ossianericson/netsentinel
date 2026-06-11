@@ -47,6 +47,7 @@ jobs:
           TAG="${{ inputs.tag }}"
           gh release edit "$TAG" \
             --prerelease=false \
+            --latest \
             --repo "${{ github.repository }}"
           echo "Release $TAG promoted to stable."
 
