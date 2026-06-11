@@ -23,7 +23,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtCore import QSettings, QTimer, Qt
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
@@ -61,7 +61,7 @@ def set_run_on_startup(enabled: bool) -> None:
         if enabled:
             exe = _resolve_exe_path()
             winreg.SetValueEx(key, _STARTUP_NAME, 0, winreg.REG_SZ,
-                              f'"{exe}" --minimised')
+                              f'"{exe}" --startup-logger')
         else:
             try:
                 winreg.DeleteValue(key, _STARTUP_NAME)
@@ -237,6 +237,9 @@ class SystemTrayManager:
 
     def _on_menu_about_to_show(self) -> None:
         """Refresh dynamic state each time the menu opens."""
+        is_visible = self._window.isVisible()
+        self._act_show.setEnabled(not is_visible)
+        self._act_hide.setEnabled(is_visible)
         if hasattr(self, "_act_startup"):
             self._act_startup.setChecked(get_run_on_startup())
 
@@ -297,9 +300,19 @@ class SystemTrayManager:
             self._show_window()
 
     def _show_window(self) -> None:
-        self._window.show()
+        if self._window.isMinimized():
+            self._window.showNormal()
+        else:
+            self._window.show()
         self._window.raise_()
         self._window.activateWindow()
+        # Windows foreground lock can block the first activateWindow() when the
+        # window has never been shown (e.g. --startup-logger mode). A deferred
+        # second call after the event loop processes the show request succeeds.
+        _t = QTimer(self._window)
+        _t.setSingleShot(True)
+        _t.timeout.connect(self._window.activateWindow)
+        _t.start(150)
         self._act_show.setEnabled(False)
         self._act_hide.setEnabled(True)
 

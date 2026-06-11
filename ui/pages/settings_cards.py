@@ -919,7 +919,7 @@ class _SettingsCardsMixin:
         self._chk_minimize_tray.toggled.connect(self._on_minimize_tray_toggled)
         bl.addWidget(self._chk_minimize_tray)
         self._chk_startup = QCheckBox(
-            "Start NetSentinel automatically when Windows starts  (launches minimised to tray)"
+            "Start NetSentinel automatically when Windows starts  (runs in tray, starts background logger)"
         )
         self._chk_startup.setStyleSheet(
             f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
