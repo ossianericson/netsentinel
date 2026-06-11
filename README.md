@@ -1,9 +1,9 @@
-[![Version](https://img.shields.io/github/v/release/ossianericson/netsentinel?style=flat-square)](https://github.com/ossianericson/netsentinel/releases/latest)
+[![Version](https://img.shields.io/github/v/release/ossianericson/netsentinel?include_prereleases&style=flat-square)](https://github.com/ossianericson/netsentinel/releases/latest)
 [![License](https://img.shields.io/github/license/ossianericson/netsentinel?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](#install)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-2000%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-3000%2B-brightgreen?style=flat-square)](tests/)
 
 # NetSentinel
 
