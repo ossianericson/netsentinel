@@ -352,6 +352,16 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v2.1.1
+**Fixed**
+- `modules/rogue_device.py`: proxy-ARP deduplication — IPs sharing the gateway MAC are collected in `proxy_arp_ips` and excluded from device results so the gateway never appears twice
+- `modules/rogue_device.py`: gateway device always classified as `Router / Gateway` via `is_gateway` parameter, chip-OUI heuristic, and consumer-hostname sanity check — misclassification from `Lite-On` OUI or `Playstation 4` hostname resolved
+- `ui/scan_enrichment.py`: gateway hostname guard in plugin enrichment loop — plugin client entries whose IP matches the gateway are skipped so the gateway hostname cannot be overwritten
+- `ui/scan_enrichment.py`: gateway MAC filtered from `_plugin_enrichments` so the router's own MAC never appears as a client device in enrichment data
+- `ui/scan_enrichment.py`: IP-keyed hostname sync (`_apply_mesh_enrichment`) skips the gateway `DeviceInfo` object to prevent the mesh/table-cell sync from overwriting the gateway hostname
+- `ui/scan_enrichment.py`: post-enrichment device-type cell sync writes `DeviceInfo.device_type` back to the Devices table for all devices with a known type — guards against the race where the cell was written before `is_gateway` classification ran
+- `tests/test_scan_enrichment.py`: regression test for shared-MAC (proxy-ARP) sync — two `DeviceInfo` objects with the same MAC; gateway hostname protected, non-gateway hostname updated
+
 ### v2.1.0
 **Added**
 - `modules/service_mapper.py` — device_type/vendor → `ServiceInfo` list mapping engine; feeds Service Diagnostics and Service Heartbeat (Sprint 2)
