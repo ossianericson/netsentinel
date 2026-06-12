@@ -13,12 +13,14 @@ import pytest
 # ── Import test ───────────────────────────────────────────────────────────────
 
 def test_module_importable():
-    import modules.service_diagnostics_probes as m
-    assert hasattr(m, "dns_probe")
-    assert hasattr(m, "tcp_probe")
-    assert hasattr(m, "https_probe")
-    assert hasattr(m, "icmp_probe")
-    assert hasattr(m, "traceroute_probe")
+    from modules.service_diagnostics_probes import (
+        dns_probe, https_probe, icmp_probe, tcp_probe, traceroute_probe,
+    )
+    assert dns_probe is not None
+    assert tcp_probe is not None
+    assert https_probe is not None
+    assert icmp_probe is not None
+    assert traceroute_probe is not None
 
 
 # ── DnsProbeResult ────────────────────────────────────────────────────────────

@@ -58,11 +58,6 @@ _LAYER_LABELS = {
     "remote_outage":  ("Remote outage", AMBER),
 }
 
-_STREAMING_IDS = {
-    s.id for s in __import__("modules.service_diagnostics", fromlist=["_STREAMING"])._STREAMING
-}
-
-
 def _layer_badge(failure_layer: str) -> tuple[str, str]:
     """Return (label, colour) for a failure layer string."""
     return _LAYER_LABELS.get(failure_layer, (failure_layer, TEXT_SECONDARY))

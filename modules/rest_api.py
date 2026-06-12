@@ -248,7 +248,10 @@ def create_app(store: MetricStore) -> "Flask":
             return jsonify({"error": f"Unknown service '{service_id}'"}), 404
         do_trace = request.args.get("traceroute", "false").lower() == "true"
         engine = DiagnosticEngine()
-        r = engine.run(service_id, traceroute=do_trace)
+        try:
+            r = engine.run(service_id, traceroute=do_trace)
+        except Exception:
+            return jsonify({"error": "Diagnostic run failed"}), 500
         return jsonify({
             "service_id":    r.service_id,
             "service_name":  r.service_name,

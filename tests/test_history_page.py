@@ -10,10 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-try:
-    import PyQt6.QtWidgets  # noqa: F401 — guard: skip whole module if PyQt6 absent
-except ImportError:
-    pytest.skip("PyQt6 not available", allow_module_level=True)
+pytest.importorskip("PyQt6.QtWidgets")
 
 
 # ── _HistoryRefreshWorker ─────────────────────────────────────────────────────
