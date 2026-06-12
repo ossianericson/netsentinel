@@ -1,4 +1,8 @@
-"""Tests for modules/threat_intel.py — threat intelligence feed."""
+"""Tests for modules/threat_intel.py — threat intelligence feed.
+
+Also covers P3 regression: ThreatIntelPage._fill_table must cap rows at
+_MAX_TABLE_ROWS to prevent a 20-26 s main-thread freeze on large feeds.
+"""
 import json
 from modules.threat_intel import (
     ThreatEntry, ThreatIntelDB, _is_public_ip,
@@ -115,3 +119,55 @@ def test_threat_intel_db_size():
     ]
     db = ThreatIntelDB.from_entries(entries)
     assert len(db) == 10
+
+
+# ── P3 regression: _fill_table must cap rows at _MAX_TABLE_ROWS ───────────────
+
+def test_fill_table_max_rows_constant_defined():
+    """_MAX_TABLE_ROWS must be defined and have a sane value (P3 regression)."""
+    from ui.pages.threat_intel_page import ThreatIntelPage
+    cap = ThreatIntelPage._MAX_TABLE_ROWS
+    assert isinstance(cap, int)
+    assert 1_000 <= cap <= 20_000, f"_MAX_TABLE_ROWS={cap} is outside expected 1k-20k range"
+
+
+def test_fill_table_caps_at_max_rows(qt_app):
+    """_fill_table with N > _MAX_TABLE_ROWS must only insert _MAX_TABLE_ROWS rows.
+
+    Regression for P3: rendering 50k+ rows caused a 20-26 s main-thread freeze.
+    """
+    import pytest
+    if qt_app is None:
+        pytest.skip("No QApplication")
+
+    from ui.pages.threat_intel_page import ThreatIntelPage
+
+    cap = ThreatIntelPage._MAX_TABLE_ROWS
+    # Build cap+50 entries to exercise the limiting code path
+    entries = [
+        ThreatEntry(
+            indicator=f"198.51.100.{i % 256}",
+            itype="ip",
+            categories=["test"],
+            source="test",
+            confidence=50,
+            last_seen="2024-01-01",
+        )
+        for i in range(cap + 50)
+    ]
+
+    page = ThreatIntelPage()
+    page._threat_entries = entries
+    page._fill_table(entries)
+
+    assert page._table.rowCount() == cap, (
+        f"Expected exactly {cap} rows, got {page._table.rowCount()}"
+    )
+
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal
+    if qt_app:
+        for _ in range(3):
+            qt_app.processEvents()

@@ -6,14 +6,14 @@ MetricStore. Zoom controls: 1h / 12h / 24h / 7d.
 
 Architecture rules observed:
   • This file imports PyQt6 and ui/styles — it is a UI page.
-  • It does NOT import workers/ or start threads.
+  • All MetricStore queries run in _HistoryRefreshWorker (off the main thread).
   • MetricStore is injected as a constructor parameter.
   • All colours come from ui/styles — no hardcoded hex values.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")  # must be set before figure imports
@@ -21,7 +21,7 @@ import matplotlib.dates as mdates
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox, QFrame, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget,
@@ -149,6 +149,92 @@ class _ChartCard(QFrame):
     def canvas(self):
         return self._canvas
 
+    def clear_for_hide(self) -> None:
+        """Release matplotlib artists on page hide to reduce RSS."""
+        self._ax.cla()
+        self._canvas.draw_idle()
+
+
+# ── Background refresh worker ─────────────────────────────────────────────────
+
+class _HistoryRefreshWorker(QThread):
+    """
+    Runs all MetricStore queries for HistoryPage off the main thread.
+
+    Fetches RTT series, device state history, and uptime percentages for the
+    requested time window, then emits the pre-fetched data as a dict so the
+    UI thread only needs to do rendering — no DB calls on the main thread.
+
+    Signals
+    -------
+    result_ready(dict)  — always emitted (even on error, with empty data)
+    """
+
+    result_ready: pyqtSignal = pyqtSignal(dict)
+
+    _CHART_HOST_LIMIT = 6  # cap series plotted in RTT / availability charts
+
+    def __init__(
+        self,
+        store: "MetricStore",
+        window_h: int,
+        selected: str,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self._store    = store
+        self._window_h = window_h
+        self._selected = selected  # "(all hosts)" or a specific host string
+
+    def run(self) -> None:
+        try:
+            data = self._fetch()
+        except Exception:
+            data = {
+                "window_h": self._window_h,
+                "selected": self._selected,
+                "hosts": [],
+                "series_hosts": [],
+                "rtt_series": {},
+                "state_series": {},
+                "uptime": {},
+            }
+        self.result_ready.emit(data)
+
+    def _fetch(self) -> dict:
+        store = self._store
+        h     = self._window_h
+
+        all_hosts: List[str] = store.query_all_rtt_hosts(hours=h)
+
+        # Determine which hosts to fetch detailed series data for
+        if self._selected and self._selected not in ("", "(all hosts)"):
+            if self._selected in all_hosts:
+                series_hosts = [self._selected]
+            else:
+                series_hosts = all_hosts[: self._CHART_HOST_LIMIT]
+        else:
+            series_hosts = all_hosts[: self._CHART_HOST_LIMIT]
+
+        rtt_series: Dict[str, list]   = {}
+        state_series: Dict[str, list] = {}
+        uptime: Dict[str, Optional[float]] = {}
+
+        for host in series_hosts:
+            rtt_series[host]   = store.query_rtt_history(host, hours=h)
+            state_series[host] = store.query_device_state_history(host, hours=h)
+            uptime[host]       = store.query_uptime_pct(host, hours=h)
+
+        return {
+            "window_h": h,
+            "selected": self._selected,
+            "hosts": all_hosts,
+            "series_hosts": series_hosts,
+            "rtt_series": rtt_series,
+            "state_series": state_series,
+            "uptime": uptime,
+        }
+
 
 # ── Main page ────────────────────────────────────────────────────────────────
 
@@ -184,7 +270,8 @@ class HistoryPage(QWidget):
         self._auto_timer.timeout.connect(self._refresh)
         self._hover_cid: "Optional[int]" = None
         self._hover_annot = None
-        self._hover_pts: list = []   # list of (datetime, rtt, jitter, loss) per plotted point
+        self._hover_pts: list = []
+        self._refresh_worker: Optional[_HistoryRefreshWorker] = None
 
         self._build_ui()
 
@@ -192,8 +279,33 @@ class HistoryPage(QWidget):
             self._refresh()
             self._auto_timer.start()
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._store and not self._auto_timer.isActive():
+            self._auto_timer.start()
+        if self._store:
+            self._refresh()
+
     def hideEvent(self, event) -> None:
         self._disconnect_hover()
+        self._hover_pts = []
+        # Stop any in-flight worker so it doesn't call back into hidden UI
+        if self._refresh_worker and self._refresh_worker.isRunning():
+            try:
+                self._refresh_worker.result_ready.disconnect()
+            except RuntimeError:
+                pass  # already disconnected
+            self._refresh_worker.quit()
+            self._refresh_worker.wait(300)
+        # Release matplotlib artist memory (removes figures from Gcf manager)
+        try:
+            import matplotlib.pyplot as _plt
+            _plt.close(self._rtt_card.fig)
+            _plt.close(self._avail_card.fig)
+            self._rtt_card.clear_for_hide()
+            self._avail_card.clear_for_hide()
+        except Exception:
+            pass  # non-fatal — page may be partially initialised
         super().hideEvent(event)
 
     def _disconnect_hover(self) -> None:
@@ -204,17 +316,19 @@ class HistoryPage(QWidget):
                 pass  # non-fatal
             self._hover_cid = None
 
-    def _setup_rtt_hover(self, hosts: list) -> None:
-        """VIZ-4: connect motion_notify_event for hover tooltip on RTT chart."""
+    def _setup_rtt_hover(self, rtt_series: dict) -> None:
+        """VIZ-4: connect motion_notify_event for hover tooltip on RTT chart.
+
+        Accepts pre-fetched rtt_series dict (host → list[RTTPoint]) so no
+        additional DB queries are made on the main thread.
+        """
         import datetime
         self._disconnect_hover()
-        if not self._store or not hosts:
+        if not rtt_series:
             return
-        # Rebuild flat point list for nearest-point lookup
         pts_data = []
-        for host in hosts[:6]:
-            rows = self._store.query_rtt_history(host, hours=self._window_h)
-            for p in rows:
+        for host, pts in rtt_series.items():
+            for p in pts:
                 if p.rtt_ms >= 0:
                     pts_data.append((
                         datetime.datetime.fromtimestamp(p.ts),
@@ -226,7 +340,6 @@ class HistoryPage(QWidget):
         if not pts_data:
             return
         self._hover_pts = pts_data
-        # Create persistent annotation (hidden initially)
         ax = self._rtt_card.ax
         self._hover_annot = ax.annotate(
             "", xy=(0, 0), xytext=(10, 10),
@@ -244,14 +357,13 @@ class HistoryPage(QWidget):
                     self._rtt_card.canvas.draw_idle()
                 return
             import datetime as _dt
-            ex, ey = event.xdata, event.ydata
-            if ex is None or ey is None:
+            ex = event.xdata
+            if ex is None:
                 return
-            # Find nearest point (by x distance in days float)
             best = min(self._hover_pts, key=lambda p: abs(
                 _dt.datetime.toordinal(p[0]) + p[0].hour / 24.0 - ex
             ))
-            jit_str = f"{best[2]:.1f} ms" if best[2] is not None else "—"
+            jit_str  = f"{best[2]:.1f} ms" if best[2] is not None else "—"
             loss_str = f"{best[3]:.1f}%" if best[3] is not None else "—"
             label = (
                 f"{best[4]}\n"
@@ -275,7 +387,6 @@ class HistoryPage(QWidget):
         # ── Page title row ────────────────────────────────────────────────────
         from ui.widgets.page_header import PageHeaderBar as _PHB
         _title_hdr = _PHB("Availability History")
-        # Title bar integrates with zoom buttons below; add header then controls row
         root.addWidget(_title_hdr)
         title_row = QHBoxLayout()
         title_row.addStretch()
@@ -314,6 +425,15 @@ class HistoryPage(QWidget):
         refresh_btn.clicked.connect(self._refresh)
         title_row.addWidget(refresh_btn)
         root.addLayout(title_row)
+
+        # Loading label — shown while worker runs
+        self._loading_lbl = QLabel("Loading…")
+        self._loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._loading_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        self._loading_lbl.hide()
+        root.addWidget(self._loading_lbl)
 
         # Content stack: page 0 = empty state, page 1 = data content
         self._content_stack = QStackedWidget()
@@ -432,60 +552,85 @@ class HistoryPage(QWidget):
     def _on_host_changed(self, host: str) -> None:
         self._refresh()
 
-    # ── Refresh / draw ────────────────────────────────────────────────────────
+    def _set_controls_enabled(self, enabled: bool) -> None:
+        for btn in self._zoom_btns.values():
+            btn.setEnabled(enabled)
+        self._host_combo.setEnabled(enabled)
+        self._loading_lbl.setVisible(not enabled)
+
+    # ── Async refresh ─────────────────────────────────────────────────────────
 
     @pyqtSlot()
     def _refresh(self) -> None:
         if not self._store or not self.isVisible():
             return
-        self._populate_host_combo()
-        has_data = self._host_combo.count() > 0
+        # Cancel previous worker if still running
+        if self._refresh_worker and self._refresh_worker.isRunning():
+            try:
+                self._refresh_worker.result_ready.disconnect()
+            except RuntimeError:
+                pass  # already disconnected
+            self._refresh_worker.quit()
+            self._refresh_worker.wait(200)
+
+        selected = self._host_combo.currentText()
+        self._set_controls_enabled(False)
+
+        self._refresh_worker = _HistoryRefreshWorker(
+            self._store, self._window_h, selected, parent=self
+        )
+        self._refresh_worker.result_ready.connect(self._on_history_data)
+        self._refresh_worker.start()
+
+    @pyqtSlot(dict)
+    def _on_history_data(self, data: dict) -> None:
+        """Render charts using pre-fetched data from _HistoryRefreshWorker."""
+        self._set_controls_enabled(True)
+
+        hosts = data.get("hosts", [])
+        has_data = bool(hosts)
         self._content_stack.setCurrentIndex(1 if has_data else 0)
+
+        self._populate_host_combo_from_data(hosts, data.get("selected", ""))
+
         if not has_data:
             return
-        self._draw_rtt()
-        self._draw_availability()
-        self._update_kpis()
 
-    def _populate_host_combo(self) -> None:
-        hosts = self._store.query_all_rtt_hosts(hours=self._window_h)
-        current = self._host_combo.currentText()
+        self._draw_rtt(data)
+        self._draw_availability(data)
+        self._update_kpis(data)
+
+    def _populate_host_combo_from_data(self, hosts: list, selected: str) -> None:
         self._host_combo.blockSignals(True)
         self._host_combo.clear()
         if hosts:
             self._host_combo.addItem("(all hosts)")
             for h in sorted(hosts):
                 self._host_combo.addItem(h)
-            idx = self._host_combo.findText(current)
+            idx = self._host_combo.findText(selected)
             self._host_combo.setCurrentIndex(max(0, idx))
         self._host_combo.blockSignals(False)
 
-    def _draw_rtt(self) -> None:
+    # ── Draw (all accept pre-fetched data; no DB calls on main thread) ─────────
+
+    def _draw_rtt(self, data: dict) -> None:
         import datetime
         ax = self._rtt_card.ax
         ax.cla()
         _style_ax(ax, "RTT History (ms)")
 
-        if not self._store:
-            self._rtt_card.canvas.draw_idle()
-            return
-
-        selected = self._host_combo.currentText()
-        if selected and selected != "(all hosts)":
-            hosts = [selected]
-        else:
-            hosts = self._store.query_all_rtt_hosts(hours=self._window_h)
+        series_hosts = data.get("series_hosts", [])
+        rtt_series   = data.get("rtt_series", {})
 
         plotted = False
-        for i, host in enumerate(hosts[:6]):   # cap at 6 series for readability
-            pts = self._store.query_rtt_history(host, hours=self._window_h)
+        for i, host in enumerate(series_hosts):
+            pts   = rtt_series.get(host, [])
             if not pts:
                 continue
             color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
-            # Separate successful pings from timeouts
-            times_ok  = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms >= 0]
-            rtts_ok   = [p.rtt_ms for p in pts if p.rtt_ms >= 0]
-            times_to  = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms < 0]
+            times_ok = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms >= 0]
+            rtts_ok  = [p.rtt_ms for p in pts if p.rtt_ms >= 0]
+            times_to = [datetime.datetime.fromtimestamp(p.ts) for p in pts if p.rtt_ms < 0]
 
             if times_ok:
                 ax.plot(times_ok, rtts_ok, color=color, linewidth=1.5,
@@ -502,54 +647,44 @@ class HistoryPage(QWidget):
                     fontsize=10, transform=ax.transAxes)
         else:
             ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
-            if len(hosts) > 1:
+            if len(series_hosts) > 1:
                 ax.legend(fontsize=8, framealpha=0.9, loc="upper right")
-            # VIZ-4: dashed threshold reference line at 100 ms
             ax.axhline(100, color=AMBER, linewidth=1.0, linestyle="--", alpha=0.7, zorder=2)
             ax.text(1.0, 100, " 100ms threshold", color=AMBER, fontsize=8,
                     va="bottom", ha="right", transform=ax.get_yaxis_transform(), alpha=0.8)
 
         self._rtt_card.canvas.draw_idle()
-        self._setup_rtt_hover(hosts)
+        self._setup_rtt_hover(rtt_series)
 
-    def _draw_availability(self) -> None:
+    def _draw_availability(self, data: dict) -> None:
         import datetime
         ax = self._avail_card.ax
         ax.cla()
         _style_ax(ax, "Device Availability")
 
-        if not self._store:
-            self._avail_card.canvas.draw_idle()
-            return
+        series_hosts  = data.get("series_hosts", [])
+        state_series  = data.get("state_series", {})
 
-        selected = self._host_combo.currentText()
-        if selected and selected != "(all hosts)":
-            ips = [selected]
-        else:
-            ips = self._store.query_all_rtt_hosts(hours=self._window_h)
-
-        if not ips:
+        if not series_hosts:
             ax.text(0.5, 0.5, "No availability data in this window",
                     ha="center", va="center", color=TEXT_SECONDARY,
                     fontsize=10, transform=ax.transAxes)
             self._avail_card.canvas.draw_idle()
             return
 
+        ips = series_hosts
         ax.set_yticks(range(len(ips)))
         ax.set_yticklabels(ips[::-1], fontsize=8, color=TEXT_PRIMARY)
         ax.set_ylim(-0.5, len(ips) - 0.5)
 
         for y, ip in enumerate(reversed(ips)):
-            hist = self._store.query_device_state_history(ip, hours=self._window_h)
-            if not hist:
-                continue
+            hist = state_series.get(ip, [])
             for pt in hist:
-                dt = datetime.datetime.fromtimestamp(pt.ts)
+                dt    = datetime.datetime.fromtimestamp(pt.ts)
                 color = _STATE_COLORS.get(pt.state, TEXT_MUTED)
                 ax.barh(y, 1 / 60, left=mdates.date2num(dt),
                         height=0.6, color=color, linewidth=0)
 
-        # Legend patches
         import matplotlib.patches as mpatches
         patches = [mpatches.Patch(color=v, label=k) for k, v in _STATE_COLORS.items()]
         ax.legend(handles=patches, fontsize=8, loc="upper right", framealpha=0.9)
@@ -557,32 +692,29 @@ class HistoryPage(QWidget):
 
         self._avail_card.canvas.draw_idle()
 
-    def _update_kpis(self) -> None:
-        if not self._store:
-            return
-        selected = self._host_combo.currentText()
-        hosts = (
-            [selected] if selected and selected != "(all hosts)"
-            else self._store.query_all_rtt_hosts(hours=self._window_h)
-        )
+    def _update_kpis(self, data: dict) -> None:
+        hosts      = data.get("hosts", [])
+        rtt_series = data.get("rtt_series", {})
+        uptime_map = data.get("uptime", {})
+
         self._kpi_hosts.set_value(str(len(hosts)))
 
-        if not hosts:
+        if not rtt_series:
             for tile in (self._kpi_uptime, self._kpi_avg_rtt,
                          self._kpi_min_rtt, self._kpi_max_rtt):
                 tile.set_value("—")
             return
 
-        all_rtts = []
-        uptimes  = []
-        for host in hosts:
-            pts = self._store.query_rtt_history(host, hours=self._window_h)
-            ok  = [p.rtt_ms for p in pts if p.rtt_ms >= 0]
+        all_rtts: list = []
+        uptimes:  list = []
+        for host, pts in rtt_series.items():
+            ok = [p.rtt_ms for p in pts if p.rtt_ms >= 0]
             all_rtts.extend(ok)
-            uptimes.append(self._store.query_uptime_pct(host, hours=self._window_h))
+            u = uptime_map.get(host)
+            if u is not None:
+                uptimes.append(u)
 
-        known = [u for u in uptimes if u is not None]
-        avg_uptime = sum(known) / len(known) if known else None
+        avg_uptime = sum(uptimes) / len(uptimes) if uptimes else None
         self._kpi_uptime.set_value(f"{avg_uptime:.1f}%" if avg_uptime is not None else "—")
 
         if all_rtts:

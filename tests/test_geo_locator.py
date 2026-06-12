@@ -266,3 +266,70 @@ def test_get_locator_same_instance():
 def test_db_path_ends_with_mmdb():
     p = db_path()
     assert p.name == "GeoLite2-City.mmdb"
+
+
+# ── P2 regression: GeoMapPage must close/reload locator on hide/show ──────────
+
+def test_geo_locator_close_and_reload_roundtrip():
+    """GeoLocator.close() followed by reload() must not raise (P2 regression).
+
+    GeoMapPage.hideEvent() calls get_locator().close() and showEvent() calls
+    get_locator().reload().  Exercises that roundtrip with graceful degradation.
+    """
+    loc = GeoLocator()
+    initial_available = loc.is_available
+
+    # close() must set is_available to False regardless of initial state
+    loc.close()
+    assert loc.is_available is False, "close() must mark locator unavailable"
+
+    # close() again must be idempotent
+    loc.close()
+    assert loc.is_available is False
+
+    # reload() must not raise, and restores availability to initial state
+    loc.reload()
+    assert loc.is_available == initial_available
+
+    # lookup() must return a GeoResult regardless of db state
+    result = loc.lookup("8.8.8.8")
+    assert isinstance(result, GeoResult)
+    assert result.ip == "8.8.8.8"
+
+
+def test_geo_map_page_hides_closes_locator(qt_app, monkeypatch):
+    """GeoMapPage.hideEvent() must call get_locator().close() (P2 regression)."""
+    import pytest
+    if qt_app is None:
+        pytest.skip("No QApplication")
+
+    from unittest.mock import MagicMock, patch
+    from ui.pages.geo_map_page import GeoMapPage
+
+    mock_locator = MagicMock()
+    mock_locator.is_available = False
+
+    close_called: list = []
+    reload_called: list = []
+
+    mock_locator.close.side_effect = lambda: close_called.append(1)
+    mock_locator.reload.side_effect = lambda: reload_called.append(1)
+
+    # Patch at the import site inside geo_map_page (not in modules.geo_locator)
+    with patch("ui.pages.geo_map_page.get_locator", return_value=mock_locator):
+        page = GeoMapPage()
+        # Invoke event handlers directly — page.hide() is a no-op on a widget that
+        # was never shown (Qt only fires hideEvent when transitioning from visible).
+        from PyQt6.QtGui import QHideEvent, QShowEvent
+        page.hideEvent(QHideEvent())
+        assert len(close_called) >= 1, "get_locator().close() not called in hideEvent()"
+        page.showEvent(QShowEvent())
+        assert len(reload_called) >= 1, "get_locator().reload() not called in showEvent()"
+
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal
+    if qt_app:
+        for _ in range(3):
+            qt_app.processEvents()

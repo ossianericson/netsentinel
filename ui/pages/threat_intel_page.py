@@ -629,6 +629,10 @@ class ThreatIntelPage(QWidget):
 
         self._fill_table(visible)
 
+    # Maximum rows rendered in the table at one time.  Feeds with 50k+ entries
+    # can take 20-26 s to populate — capping prevents main-thread freeze.
+    _MAX_TABLE_ROWS = 5_000
+
     def _fill_table(self, entries: list) -> None:
         clear_skeleton_rows(self._table)
         self._table.setRowCount(0)
@@ -639,7 +643,13 @@ class ThreatIntelPage(QWidget):
             return
 
         self._empty_lbl.hide()
-        for entry in entries:
+        display = entries[: self._MAX_TABLE_ROWS]
+        if len(entries) > self._MAX_TABLE_ROWS:
+            self._status_lbl.setText(
+                f"Showing first {self._MAX_TABLE_ROWS:,} of {len(entries):,} indicators"
+                " — use the filter to narrow results."
+            )
+        for entry in display:
             row = self._table.rowCount()
             self._table.insertRow(row)
             self._table.setItem(row, 0, _cell(entry.indicator))

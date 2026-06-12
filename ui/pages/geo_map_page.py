@@ -286,6 +286,24 @@ class GeoMapPage(QWidget):
         self._build_ui()
         self._refresh_db_status()
 
+    # ── Page lifecycle ────────────────────────────────────────────────────────
+
+    def hideEvent(self, event) -> None:
+        """Release the MaxMind mmdb file handle when this page is hidden."""
+        try:
+            get_locator().close()
+        except Exception:
+            pass  # non-fatal — locator may already be closed
+        super().hideEvent(event)
+
+    def showEvent(self, event) -> None:
+        """Re-open the MaxMind mmdb when the page becomes visible again."""
+        super().showEvent(event)
+        try:
+            get_locator().reload()
+        except Exception:
+            pass  # non-fatal — mmdb may not be installed yet
+
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
