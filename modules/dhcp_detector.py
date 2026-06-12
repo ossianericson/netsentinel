@@ -13,7 +13,7 @@ Gracefully degrades when Scapy is unavailable.
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 SCAPY_AVAILABLE = False
 try:
@@ -50,6 +50,8 @@ class DHCPScanResult:
     offers: List[DHCPOffer] = field(default_factory=list)
     legitimate_server: str = ""   # IP of the expected / first-seen DHCP server
     plain_verdict: str = ""
+    # MAC → DhcpFingerprint gathered from client DHCP packets during the scan window
+    fingerprints: Dict[str, "DhcpFingerprint"] = field(default_factory=dict)  # type: ignore[name-defined]
 
 
 # ── Packet builder ────────────────────────────────────────────────────────────
@@ -89,6 +91,7 @@ class DHCPDetector:
         self.stop_event     = stop_event or threading.Event()
         self._sniffer       = None
         self._seen_servers: set = set()
+        self._fingerprints: dict = {}   # mac → DhcpFingerprint from client packets
 
     def _handle(self, pkt):
         try:
@@ -96,6 +99,22 @@ class DHCPDetector:
                 return
             dhcp_opts = {opt[0]: opt[1] for opt in pkt[DHCP].options if isinstance(opt, (list, tuple)) and len(opt) >= 2}
             msg_type  = dhcp_opts.get("message-type", 0)
+
+            # ── Client packets: harvest VCI (option 60) + hostname (option 12) ──
+            # DHCPDISCOVER (1) and DHCPREQUEST (3) come from clients and carry the
+            # vendor class identifier and self-reported hostname.  Skip our own probe
+            # packet (src MAC de:ad:be:ef:ca:fe) so we don't fingerprint ourselves.
+            if msg_type in (1, 3) and pkt.haslayer(Ether):
+                client_mac = pkt[Ether].src.lower()
+                if client_mac and client_mac != "de:ad:be:ef:ca:fe":
+                    try:
+                        from modules.dhcp_fingerprint import fingerprint_from_options
+                        fp = fingerprint_from_options(dhcp_opts)
+                        if fp.confidence or fp.hostname:
+                            self._fingerprints[client_mac] = fp
+                    except Exception:
+                        pass  # non-fatal — fingerprinting is best-effort
+
             if msg_type != 2:   # 2 = DHCPOFFER
                 return
 
@@ -186,6 +205,11 @@ class DHCPDetector:
         except Exception:
             pass  # non-fatal
 
+    @property
+    def fingerprints(self) -> dict:
+        """Return the collected {mac: DhcpFingerprint} dict (snapshot, not live)."""
+        return dict(self._fingerprints)
+
 
 # ── Public scan entry point ───────────────────────────────────────────────────
 
@@ -243,6 +267,14 @@ def scan(
 
     detector.stop()
 
+    # Populate fingerprint cache from client packets captured during the scan window
+    fingerprints: dict = detector.fingerprints
+    try:
+        from modules.dhcp_fingerprint import update_cache as _upd_cache
+        _upd_cache(fingerprints)
+    except Exception:
+        pass  # non-fatal
+
     rogues = [o for o in offers if o.is_rogue]
     if rogues:
         plain = (
@@ -266,4 +298,5 @@ def scan(
         offers=offers,
         legitimate_server=offers[0].server_ip if offers else "",
         plain_verdict=plain,
+        fingerprints=fingerprints,
     )

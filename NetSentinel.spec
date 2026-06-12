@@ -99,6 +99,7 @@ hiddenimports: list = [
     "modules.device_classifier",
     "modules.device_tracker",
     "modules.dhcp_detector",
+    "modules.dhcp_fingerprint",
     "modules.dhcp_lease_scanner",
     "modules.dns_correlator",
     "modules.dns_zone_scanner",

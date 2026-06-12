@@ -1116,6 +1116,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._dhcp_worker = DHCPDetectorWorker(duration=10)
         self._dhcp_worker.offer_found.connect(self._on_dhcp_offer)
         self._dhcp_worker.result.connect(lambda r: self._dhcp_status.setText(r.plain_verdict), Qt.ConnectionType.QueuedConnection)
+        self._dhcp_worker.result.connect(self._on_dhcp_scan_result, Qt.ConnectionType.QueuedConnection)
         self._dhcp_worker.status.connect(self._dhcp_status.setText)
         self._dhcp_worker.error.connect(lambda e: self._dhcp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
         self._dhcp_worker.finished.connect(self._push_monitor_pills)

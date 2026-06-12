@@ -191,6 +191,17 @@ def _snmp_sysname(ip: str, community: str = "public") -> str:
     return ""
 
 
+def _dhcp_option12_name(mac: str) -> str:
+    """Look up DHCP option 12 hostname from the fingerprint cache (instant, no I/O)."""
+    if not mac:
+        return ""
+    try:
+        from modules.dhcp_fingerprint import get_option12_hostname
+        return get_option12_hostname(mac)
+    except Exception:
+        return ""  # non-fatal
+
+
 def _dhcp_lease_name(ip: str) -> str:
     """Parse OS DHCP lease files for a hostname associated with the IP."""
     system = platform.system()
@@ -282,8 +293,14 @@ def resolve(
 
     names: dict = {k: v.result() for k, v in futures.items()}
 
+    # DHCP option 12 hostname — instant cache lookup, added after async futures
+    if mac:
+        opt12 = _dhcp_option12_name(mac)
+        if opt12:
+            names["dhcp-option12"] = opt12
+
     # Collect non-empty names
-    for src in ("rdns", "netbios", "mdns", "snmp", "dhcp"):
+    for src in ("rdns", "netbios", "mdns", "dhcp-option12", "snmp", "dhcp"):
         n = names.get(src, "")
         if n:
             result.all_names.append((src, n))
@@ -292,7 +309,7 @@ def resolve(
 
     # ── Step 3: pick best display name ───────────────────────────────────────
     # Priority: model from registry > NetBIOS (usually friendly) >
-    #           mDNS > DHCP lease > rDNS (often just the IP reversed)
+    #           mDNS > DHCP option 12 > DHCP lease > rDNS (often just IP reversed)
     if result.model:
         result.display_name = result.model
         result.source = "mac-registry"
@@ -302,6 +319,9 @@ def resolve(
     elif names.get("mdns"):
         result.display_name = names["mdns"]
         result.source = "mdns"
+    elif names.get("dhcp-option12"):
+        result.display_name = names["dhcp-option12"]
+        result.source = "dhcp-option12"
     elif names.get("dhcp"):
         result.display_name = names["dhcp"]
         result.source = "dhcp"

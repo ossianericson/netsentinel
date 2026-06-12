@@ -1239,6 +1239,95 @@ class ScanEnrichmentMixin:
         )
         self._m1_group_btn.setText("▼▼  Collapse All" if all_expanded else "▶▶  Expand All")
 
+    def _on_dhcp_scan_result(self, scan_result: object) -> None:
+        """
+        Receive a completed DHCPScanResult and apply any VCI fingerprints to the
+        Devices table.  The dhcp_detector.scan() already called update_cache(), so
+        the module-level cache is populated; we just need to propagate upgrades into
+        the live table and DeviceInfo objects.
+        """
+        try:
+            from modules.dhcp_fingerprint import update_cache as _upd
+            fps = getattr(scan_result, "fingerprints", {})
+            if fps:
+                _upd(fps)
+        except Exception:
+            pass  # non-fatal
+        self._apply_dhcp_fingerprints()
+
+    def _apply_dhcp_fingerprints(self) -> None:
+        """
+        For each device still showing 'Unknown Device', look up its MAC in the DHCP
+        fingerprint cache.  If a high-confidence VCI match exists, upgrade device_type
+        (and os_family when missing) and update the corresponding table cell.
+
+        This runs after the DHCP scan window closes, so the cache is fully populated.
+        Priority relative to other enrichment:
+            is_gateway  →  Router/Gateway       (highest)
+            MAC registry model hit              (specific model)
+            DHCP VCI fingerprint (high conf)    ← this method
+            Passive protocol observation        (next)
+            OUI + hostname heuristics           (existing classifier)
+            "Unknown Device"                    (fallback)
+        """
+        if not self._m1_result:
+            return
+        try:
+            from modules.dhcp_fingerprint import get_fingerprint as _get_fp
+            from modules.deco_client import _norm_mac
+            from PyQt6.QtGui import QColor
+            from PyQt6.QtWidgets import QTableWidgetItem as _QTI
+            from ui import styles as _s
+
+            _mac_to_row: dict = {}
+            if hasattr(self, "_m1_table"):
+                for _r in range(self._m1_table.rowCount()):
+                    _mi = self._m1_table.item(_r, 2)
+                    if _mi and _mi.text():
+                        _mac_to_row[_norm_mac(_mi.text())] = _r
+
+            for _d in self._m1_result.get("devices", []):
+                _cur_type = (
+                    _d.device_type if not isinstance(_d, dict)
+                    else _d.get("device_type", "")
+                ) or ""
+                if _cur_type and _cur_type != "Unknown Device":
+                    continue  # already classified — don't overwrite
+
+                _mac = (
+                    _d.mac if not isinstance(_d, dict) else _d.get("mac", "")
+                ) or ""
+                if not _mac:
+                    continue
+
+                fp = _get_fp(_mac)
+                if not fp or fp.confidence != "high" or not fp.device_hint:
+                    continue
+
+                # Upgrade device_type on DeviceInfo
+                if isinstance(_d, dict):
+                    _d["device_type"] = fp.device_hint
+                    if fp.os_hint and not _d.get("os_family"):
+                        _d["os_family"] = fp.os_hint
+                else:
+                    _d.device_type = fp.device_hint
+                    if fp.os_hint and not getattr(_d, "os_family", ""):
+                        try:
+                            _d.os_family = fp.os_hint
+                        except AttributeError:
+                            pass  # dataclass may be frozen
+
+                # Update Device Type cell (col 5) in the Devices table
+                _row = _mac_to_row.get(_norm_mac(_mac))
+                if _row is not None and hasattr(self, "_m1_table"):
+                    _ti = _QTI(fp.device_hint)
+                    _ti.setForeground(QColor(_s.TEXT_PRIMARY))
+                    _ti.setToolTip(fp.evidence or "Device type from DHCP VCI fingerprint")
+                    self._m1_table.setItem(_row, 5, _ti)
+
+        except Exception:
+            pass  # non-fatal — DHCP fingerprint enrichment is best-effort
+
     def _on_passive_observation(self, obs: object) -> None:
         """
         Handle a PassiveObservation from the passive listener.

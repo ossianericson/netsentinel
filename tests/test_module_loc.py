@@ -178,7 +178,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers + M1 table helpers.
     # Sprint 18: _apply_mesh_enrichment + _m1_* + _filter_m1_by_nl moved here from dashboard.py.
     # If grows past 1,500, split: mesh_enrichment.py (apply + m1 helpers), plugin_enrichment.py.
-    "scan_enrichment.py": 1429,  # actual 1,229 + 200 margin (Sprint 18)
+    "scan_enrichment.py": 1678,  # actual 1,478 + 200 margin (Sprint 3: dhcp fingerprint enrichment)
 
     # _AnalysisTabsMixin — IPv6/Cloud/Correlator/IoT/Benchmark tab builders.
     # Sprint 18: wired into TabBuilderMixin; duplicates removed from dashboard.py.

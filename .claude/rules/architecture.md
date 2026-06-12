@@ -52,6 +52,7 @@ netsentinel/
 │   ├── device_classifier.py    # OUI → device type + risk score
 │   ├── device_tracker.py
 │   ├── dhcp_detector.py
+│   ├── dhcp_fingerprint.py     # DHCP option 60 (VCI) + option 12 fingerprinting — OS/device type from DHCP traffic (Sprint 3)
 │   ├── dhcp_lease_scanner.py
 │   ├── diagnostic_card.py      # Shareable PNG/HTML card (grade, ISP, top 3 findings)
 │   ├── digest_builder.py       # Weekly digest content builder (device changes, outage summary)
