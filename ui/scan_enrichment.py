@@ -875,6 +875,22 @@ class ScanEnrichmentMixin:
                     _ti.setForeground(_QC(TEXT_PRIMARY))
                     _ti.setToolTip("Device type inferred from hostname")
                     self._m1_table.setItem(_row2, 5, _ti)
+
+            # Sync device_type cells from DeviceInfo for all devices that have a
+            # known type — guards against the race where the table cell was written
+            # from a stale DeviceInfo before is_gateway classification ran.
+            for _d in self._m1_result.get("devices", []):
+                _dip   = _d.ip         if not isinstance(_d, dict) else _d.get("ip", "")
+                _dtype = (_d.device_type if not isinstance(_d, dict) else _d.get("device_type", "")) or ""
+                if not _dtype or _dtype == "Unknown Device":
+                    continue
+                for _r in range(self._m1_table.rowCount()):
+                    _ri = self._m1_table.item(_r, 0)
+                    if _ri and _ri.text() == _dip:
+                        _ti = _QTI(_dtype)
+                        _ti.setForeground(_QC(TEXT_PRIMARY))
+                        self._m1_table.setItem(_r, 5, _ti)
+                        break
         except Exception:
             pass  # non-fatal — enrichment re-classification is best-effort
 

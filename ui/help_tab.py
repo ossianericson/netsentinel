@@ -360,8 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Service unreachable diagnosis", "The 'What's Wrong?' page now has a fourth symptom tile — 'A service is unreachable'. Select a streaming or gaming service from the picker, run diagnosis, and get a plain-English verdict with remediation steps."),
-        ("Service Heartbeat → Diagnose", "Right-click any monitored service in the Service Heartbeat page and choose 'Diagnose →' to jump directly to Service Diagnostics with that service pre-selected."),
+        ("Gateway identification fixes", "The gateway is now always shown as 'Router / Gateway' regardless of OUI vendor or hostname — fixes a misclassification where Lite-On / gaming-console hostnames caused the gateway to appear as an unknown device."),
+        ("Proxy-ARP deduplication", "IPs that share the gateway MAC (proxy ARP) are now detected and excluded from the device list — the gateway no longer appears twice after a scan."),
+        ("Plugin hostname guard", "Plugin and mesh enrichment can no longer overwrite the gateway's hostname with a client device name (e.g. 'PlayStation 4')."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

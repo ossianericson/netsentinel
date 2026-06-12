@@ -284,6 +284,37 @@ def test_ip_keyed_sync_skips_gateway_deviceinfo():
     _cleanup(table)
 
 
+def test_shared_mac_sync_skips_gateway_updates_client():
+    """Fix 3: when two DeviceInfo objects share the same MAC (proxy-ARP scenario),
+    the IP-keyed sync must guard the gateway and still update the non-gateway device."""
+    from modules.rogue_device import DeviceInfo
+
+    GW_IP      = "192.168.1.1"
+    CLIENT_IP  = "192.168.1.71"
+    SHARED_MAC = "aa:bb:cc:dd:ee:01"  # proxy-ARP: both IPs report the gateway MAC
+
+    table = _make_table([
+        (GW_IP,     "RouterHostname", SHARED_MAC),
+        (CLIENT_IP, "PS4-Enriched",   SHARED_MAC),
+    ])
+    d_gw     = DeviceInfo(ip=GW_IP,     mac=SHARED_MAC, hostname="RouterHostname")
+    d_client = DeviceInfo(ip=CLIENT_IP, mac=SHARED_MAC, hostname="")
+
+    stub = _make_stub(
+        table,
+        m1_result={"devices": [d_gw, d_client]},
+        net_info={"gateway": GW_IP, "gateway_mac": SHARED_MAC},
+    )
+    stub._apply_mesh_enrichment()
+
+    assert d_gw.hostname == "RouterHostname", \
+        "Gateway DeviceInfo.hostname must not be overwritten even when MAC is shared"
+    assert d_client.hostname == "PS4-Enriched", \
+        "Non-gateway DeviceInfo.hostname must be updated from its table cell by IP"
+
+    _cleanup(table)
+
+
 def test_ip_keyed_sync_no_gateway_info_updates_all():
     """When _net_info has no gateway, the sync loop updates all DeviceInfo objects."""
     from modules.rogue_device import DeviceInfo
