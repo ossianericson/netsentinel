@@ -139,10 +139,13 @@ class ScanEnrichmentMixin:
         # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
         # Key by instance_id (stable across renames/restarts), not path or hw_name.
         inst_id = data.get("_instance_id") or data.get("_path", hw_name)
+        # Exclude the gateway's own MAC so the router's MAC never appears as a
+        # "client" entry — the root vector for hostname clobbering (Bug C/D).
+        _gw_mac_filter = _norm_mac(self._net_info.get("gateway_mac", "")) if self._net_info else ""
         self._plugin_enrichments[inst_id] = {
             _norm_mac(c.get("mac", "")): c
             for c in clients
-            if c.get("mac")
+            if c.get("mac") and _norm_mac(c.get("mac", "")) != _gw_mac_filter
         }
         # Store node list so topology can group devices by AP/satellite.
         # If the plugin returned clients but no nodes (single-AP router),
@@ -743,15 +746,16 @@ class ScanEnrichmentMixin:
         plugin_enrichment = _all_plugin
         plugin_name = getattr(self, "_plugin_hardware_name", "plugin")
         if plugin_enrichment:
+            _gw_ip_guard = self._net_info.get("gateway") if self._net_info else None
             # Build IP index as fallback for MAC-randomized devices (iOS/Android)
             plugin_by_ip = {c.get("ip"): c for c in plugin_enrichment.values() if c.get("ip")}
             for row in range(self._m1_table.rowCount()):
+                ip_item  = self._m1_table.item(row, 0)
+                row_ip   = ip_item.text() if ip_item else ""
                 mac_item = self._m1_table.item(row, 2)
                 pc = plugin_enrichment.get(_norm_mac(mac_item.text())) if mac_item else None
-                if pc is None:
-                    ip_item = self._m1_table.item(row, 0)
-                    if ip_item:
-                        pc = plugin_by_ip.get(ip_item.text())
+                if pc is None and ip_item:
+                    pc = plugin_by_ip.get(row_ip)
                 if not pc:
                     continue
                 plugin_any_matched = True
@@ -761,12 +765,15 @@ class ScanEnrichmentMixin:
                     _mac_fill.setForeground(QColor(TEXT_PRIMARY))
                     _mac_fill.setToolTip(f"MAC from {plugin_name}")
                     self._m1_table.setItem(row, 2, _mac_fill)
-                hostname = pc.get("hostname", "")
-                if hostname and not _mac_re.match(hostname):
-                    name_item = QTableWidgetItem(hostname)
-                    name_item.setForeground(QColor(TEXT_PRIMARY))
-                    name_item.setToolTip(f"Name from {plugin_name}")
-                    self._m1_table.setItem(row, 1, name_item)
+                # Never overwrite the gateway row's hostname with a client hostname
+                # from the plugin.  Band/node enrichment is still valid for the router.
+                if not (_gw_ip_guard and row_ip == _gw_ip_guard):
+                    hostname = pc.get("hostname", "")
+                    if hostname and not _mac_re.match(hostname):
+                        name_item = QTableWidgetItem(hostname)
+                        name_item.setForeground(QColor(TEXT_PRIMARY))
+                        name_item.setToolTip(f"Name from {plugin_name}")
+                        self._m1_table.setItem(row, 1, name_item)
                 # Fall back to hw name so single-AP plugins still enable grouping
                 unit = pc.get("unit", "") or plugin_name
                 if unit:
@@ -818,22 +825,26 @@ class ScanEnrichmentMixin:
 
         # Sync every enriched hostname from the table back onto the DeviceInfo
         # objects so the topology render sees the same names as the Devices table.
-        # This captures all enrichment sources (mesh, mDNS, DHCP, NetBIOS).
-        _mac_to_host: dict = {}
+        # Keyed by IP (not MAC) to avoid hostname collision when two devices share
+        # the same MAC entry (proxy ARP / gateway MAC misidentification).
+        _sync_gw_ip = self._net_info.get("gateway") if self._net_info else None
+        _ip_to_host: dict = {}
         for _r in range(self._m1_table.rowCount()):
-            _h = self._m1_table.item(_r, 1)
-            _m = self._m1_table.item(_r, 2)
-            if _h and _m and _m.text():
+            _h  = self._m1_table.item(_r, 1)
+            _ip = self._m1_table.item(_r, 0)
+            if _h and _ip and _ip.text() and _ip.text() != "—":
                 txt = _h.text().strip()
                 if txt and txt != "—":
-                    _mac_to_host[_norm_mac(_m.text())] = txt
+                    _ip_to_host[_ip.text()] = txt
         for _d in self._m1_result.get("devices", []):
-            _dmac = _norm_mac(_d.mac if not isinstance(_d, dict) else _d.get("mac", ""))
-            if _dmac in _mac_to_host:
+            _dip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
+            if _sync_gw_ip and _dip == _sync_gw_ip:
+                continue  # never overwrite gateway hostname from table-cell sync
+            if _dip in _ip_to_host:
                 if isinstance(_d, dict):
-                    _d["hostname"] = _mac_to_host[_dmac]
+                    _d["hostname"] = _ip_to_host[_dip]
                 else:
-                    _d.hostname = _mac_to_host[_dmac]
+                    _d.hostname = _ip_to_host[_dip]
 
         # Re-classify any device still showing "Unknown Device" that now has
         # a usable hostname from mesh/plugin enrichment.
