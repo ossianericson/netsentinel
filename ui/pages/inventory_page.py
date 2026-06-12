@@ -24,7 +24,7 @@ from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea,
-    QStackedWidget, QTableWidget, QTableWidgetItem, QTextEdit,
+    QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem, QTextEdit,
     QVBoxLayout, QWidget,
 )
 
@@ -586,6 +586,116 @@ class _ScanCompareDialog(QDialog):
         return self._ts_a, self._ts_b
 
 
+# ── Segment editor dialog ─────────────────────────────────────────────────────
+
+class _SegmentEditorDialog(QDialog):
+    """Create or edit a network segment (name, CIDR, colour, description)."""
+
+    def __init__(self, segment=None, parent=None) -> None:
+        super().__init__(parent)
+        from modules.network_segments import SEGMENT_PALETTE
+        self._palette = SEGMENT_PALETTE
+        self._segment = segment  # None = create new
+        self.setWindowTitle("Edit Segment" if segment else "New Segment")
+        self.setMinimumWidth(380)
+        self.setModal(True)
+        self.setStyleSheet(
+            f"QDialog {{ background:{BG_CARD}; }}"
+            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QLineEdit, QTextEdit {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
+            f"QLineEdit:focus, QTextEdit:focus {{ border-color:{ACCENT}; }}"
+            f"QComboBox {{ background:{BG_DARK}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:4px; padding:3px 6px; }}"
+        )
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(20, 16, 20, 16)
+        lay.setSpacing(12)
+
+        hdr = QLabel("Segment" if not segment else segment.name)
+        hdr.setStyleSheet(f"font-size:13px; font-weight:bold; color:{TEXT_PRIMARY};")
+        lay.addWidget(hdr)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+        form.setHorizontalSpacing(12)
+
+        def _lbl(t: str) -> QLabel:
+            lb = QLabel(t)
+            lb.setStyleSheet(f"font-size:11px; color:{TEXT_MUTED};")
+            return lb
+
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("e.g. IoT VLAN")
+        if segment:
+            self._name_edit.setText(segment.name)
+
+        self._cidr_edit = QLineEdit()
+        self._cidr_edit.setPlaceholderText("e.g. 192.168.1.0/24")
+        if segment:
+            self._cidr_edit.setText(segment.cidr)
+            self._cidr_edit.setReadOnly(True)
+            self._cidr_edit.setStyleSheet(
+                f"QLineEdit {{ background:{BG_DARK}; color:{TEXT_MUTED};"
+                f" border:1px solid {BORDER}; border-radius:4px; padding:4px; }}"
+            )
+
+        self._color_combo = QComboBox()
+        _color_names = [
+            "Blue", "Green", "Red", "Amber",
+            "Purple", "Teal", "Orange", "Indigo",
+        ]
+        for i, (hex_c, name) in enumerate(zip(self._palette, _color_names)):
+            self._color_combo.addItem(f"● {name}", hex_c)
+            # Set item foreground to the palette colour
+            self._color_combo.setItemData(
+                i, QColor(hex_c),
+                Qt.ItemDataRole.ForegroundRole,
+            )
+        if segment:
+            idx = self._palette.index(segment.color) if segment.color in self._palette else 0
+            self._color_combo.setCurrentIndex(idx)
+
+        self._desc_edit = QTextEdit()
+        self._desc_edit.setPlaceholderText("Optional description…")
+        self._desc_edit.setFixedHeight(64)
+        if segment:
+            self._desc_edit.setPlainText(segment.description)
+
+        form.addRow(_lbl("Name"),        self._name_edit)
+        form.addRow(_lbl("CIDR"),        self._cidr_edit)
+        form.addRow(_lbl("Colour"),      self._color_combo)
+        form.addRow(_lbl("Description"), self._desc_edit)
+        lay.addLayout(form)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:4px 14px; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+        )
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        lay.addWidget(btns)
+
+    def result_segment(self):
+        """Return a dict with the edited values; call after exec() == Accepted."""
+        return {
+            "name": self._name_edit.text().strip() or "Unnamed Segment",
+            "cidr": self._cidr_edit.text().strip(),
+            "color": self._color_combo.currentData() or self._palette[0],
+            "description": self._desc_edit.toPlainText().strip(),
+        }
+
+
 # ── Main page ────────────────────────────────────────────────────────────────
 
 class InventoryPage(QWidget):
@@ -616,6 +726,9 @@ class InventoryPage(QWidget):
         self._last_refresh_ts = 0.0
         self._compare_mode = False
         self._scan_devices: list = []  # last scan result, set via set_scan_devices()
+        self._current_segments: list = []   # NetworkSegment list from last scan
+        self._active_seg_ids: Optional[set] = None  # None = show all
+        self._seg_pills: dict = {}           # {segment_id_or_cidr: QPushButton}
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
@@ -699,6 +812,39 @@ class InventoryPage(QWidget):
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(8)
 
+        # ── Segment filter bar (hidden until scan data arrives) ───────────────
+        self._seg_bar_frame = QFrame()
+        self._seg_bar_frame.setVisible(False)
+        self._seg_bar_frame.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; padding:4px 8px; }}"
+        )
+        seg_bar_outer = QHBoxLayout(self._seg_bar_frame)
+        seg_bar_outer.setContentsMargins(8, 4, 8, 4)
+        seg_bar_outer.setSpacing(0)
+        _seg_lbl = QLabel("Segment:")
+        _seg_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            f" background:transparent; border:none; padding-right:6px;"
+        )
+        seg_bar_outer.addWidget(_seg_lbl)
+        self._seg_scroll = QScrollArea()
+        self._seg_scroll.setWidgetResizable(True)
+        self._seg_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._seg_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._seg_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._seg_scroll.setFixedHeight(36)
+        self._seg_scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+        _seg_inner = QWidget()
+        _seg_inner.setStyleSheet("background:transparent;")
+        self._seg_pill_row = QHBoxLayout(_seg_inner)
+        self._seg_pill_row.setContentsMargins(0, 2, 0, 2)
+        self._seg_pill_row.setSpacing(6)
+        self._seg_pill_row.addStretch()
+        self._seg_scroll.setWidget(_seg_inner)
+        seg_bar_outer.addWidget(self._seg_scroll, 1)
+        cl.addWidget(self._seg_bar_frame)
+
         # ── Current Devices snapshot card ──────────────────────────────────────
         snap_card = QFrame()
         snap_card.setObjectName("snapCard")
@@ -730,7 +876,7 @@ class InventoryPage(QWidget):
         snap_hdr_lay.addWidget(self._snap_count_lbl)
         snap_card_lay.addWidget(snap_hdr)
 
-        cols_snap = ["●", "IP Address", "Label", "Hostname", "MAC Address", "Manufacturer", "Type", "Risk"]
+        cols_snap = ["●", "Segment", "IP Address", "Label", "Hostname", "MAC Address", "Manufacturer", "Type", "Risk"]
         self._snap_table = QTableWidget(0, len(cols_snap))
         self._snap_table.setHorizontalHeaderLabels(cols_snap)
         self._snap_table.verticalHeader().setVisible(False)
@@ -759,12 +905,13 @@ class InventoryPage(QWidget):
         )
         _sh = self._snap_table.horizontalHeader()
         _sh.resizeSection(0, 22)   # ●
-        _sh.resizeSection(1, 110)  # IP Address
-        _sh.resizeSection(2, 110)  # Label
-        _sh.resizeSection(3, 140)  # Hostname
-        _sh.resizeSection(4, 140)  # MAC Address
-        _sh.resizeSection(5, 140)  # Manufacturer
-        _sh.resizeSection(6, 100)  # Type
+        _sh.resizeSection(1, 24)   # Segment colour dot
+        _sh.resizeSection(2, 110)  # IP Address
+        _sh.resizeSection(3, 110)  # Label
+        _sh.resizeSection(4, 140)  # Hostname
+        _sh.resizeSection(5, 140)  # MAC Address
+        _sh.resizeSection(6, 140)  # Manufacturer
+        _sh.resizeSection(7, 100)  # Type
         _sh.setStretchLastSection(True)
         self._snap_table.setMaximumHeight(200)
         snap_card_lay.addWidget(self._snap_table)
@@ -1396,10 +1543,12 @@ class InventoryPage(QWidget):
             self._snap_table.setVisible(False)
             self._snap_empty_lbl.setVisible(True)
             self._snap_count_lbl.setText("Run a scan to see all devices")
+            self._seg_bar_frame.setVisible(False)
             return
 
         from modules.device_classifier import classify_device
         from modules.device_tracker import get_all_annotations as _get_all_ann
+        from modules.network_segments import classify_device_segment
         _RISK_COLOR = {
             "HIGH": RED, "STORM": RED, "MEDIUM": AMBER,
             "WARNING": AMBER, "LOW": GREEN, "CLEAN": GREEN,
@@ -1410,6 +1559,9 @@ class InventoryPage(QWidget):
                 _annotations = _get_all_ann(self._store)
             except Exception:
                 pass  # non-fatal — table may not exist on first run
+
+        # Use segments loaded by set_segments() (called from scan_wiring after scan)
+        segments = self._current_segments
 
         for d in devices:
             ip     = (d.ip       if not isinstance(d, dict) else d.get("ip", "?")) or "?"
@@ -1426,25 +1578,49 @@ class InventoryPage(QWidget):
             level = (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")) or "UNKNOWN"
             label = _annotations.get(mac.lower(), {}).get("user_label", "")
 
+            # Segment classification
+            seg = classify_device_segment(ip, segments) if segments else None
+            seg_key = seg.id if (seg and seg.id > 0) else (seg.cidr if seg else None)
+
             row = self._snap_table.rowCount()
             self._snap_table.insertRow(row)
 
-            # Status dot col
+            # Col 0: status dot
             status_color = _RISK_COLOR.get(level, TEXT_MUTED)
             dot_item = QTableWidgetItem("●")
             dot_item.setForeground(QColor(status_color))
             dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             self._snap_table.setItem(row, 0, dot_item)
 
-            # IP and data cols — Label col (2) uses accent colour when set
-            for col, val in enumerate([ip, label, host or "—", mac, vendor or "—", dtype or "—", level], 1):
+            # Col 1: segment colour dot
+            if seg:
+                seg_dot = QTableWidgetItem("●")
+                seg_dot.setForeground(QColor(seg.color))
+                seg_dot.setToolTip(seg.name)
+                seg_dot.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                # Store seg_key as user data for filtering
+                seg_dot.setData(Qt.ItemDataRole.UserRole, seg_key)
+            else:
+                seg_dot = QTableWidgetItem("○")
+                seg_dot.setForeground(QColor(TEXT_MUTED))
+                seg_dot.setToolTip("Unknown segment")
+                seg_dot.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                seg_dot.setData(Qt.ItemDataRole.UserRole, None)
+            self._snap_table.setItem(row, 1, seg_dot)
+
+            # Cols 2–8: IP, Label, Hostname, MAC, Vendor, Type, Risk
+            for col, val in enumerate([ip, label, host or "—", mac, vendor or "—", dtype or "—", level], 2):
                 item = _plain_item(val)
-                if col == 2 and label:
+                if col == 3 and label:
                     item.setForeground(QColor(ACCENT))
                 self._snap_table.setItem(row, col, item)
             self._snap_table.setRowHeight(row, 24)
 
         self._snap_table.setSortingEnabled(True)
+
+        # Apply current segment filter (hide rows not in active segments)
+        self._apply_segment_filter()
+
         online = sum(
             1 for d in devices
             if (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "")) not in ("", "UNKNOWN", None)
@@ -1457,6 +1633,179 @@ class InventoryPage(QWidget):
         # Switch to content view if still on empty state
         if self._content_stack.currentIndex() == 0:
             self._content_stack.setCurrentIndex(1)
+
+    @pyqtSlot(list)
+    def set_segments(self, segments: list) -> None:
+        """Store current segments and rebuild pill bar (called from scan_wiring)."""
+        self._current_segments = segments
+        self._rebuild_segment_pills(segments)
+
+    def _rebuild_segment_pills(self, segments: list) -> None:
+        """Rebuild the horizontal pill bar from *segments*."""
+        # Clear existing pills
+        while self._seg_pill_row.count() > 1:  # keep trailing stretch
+            item = self._seg_pill_row.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+        self._seg_pills.clear()
+
+        if not segments:
+            self._seg_bar_frame.setVisible(False)
+            return
+
+        # Count devices per segment for pill labels
+        seg_counts: dict = {}
+        for d in self._scan_devices:
+            ip = (d.ip if not isinstance(d, dict) else d.get("ip", "")) or ""
+            try:
+                from modules.network_segments import classify_device_segment
+                s = classify_device_segment(ip, segments)
+                key = s.id if (s and s.id > 0) else (s.cidr if s else "__none__")
+            except Exception:
+                key = "__none__"
+            seg_counts[key] = seg_counts.get(key, 0) + 1
+
+        all_count = len(self._scan_devices)
+
+        # "All" pill
+        all_pill = self._make_seg_pill(
+            f"All ({all_count})", None, active=self._active_seg_ids is None
+        )
+        all_pill.clicked.connect(lambda: self._toggle_segment(None))
+        self._seg_pill_row.insertWidget(0, all_pill)
+        self._seg_pills["__all__"] = all_pill
+
+        for idx, seg in enumerate(segments):
+            key = seg.id if seg.id > 0 else seg.cidr
+            count = seg_counts.get(seg.id if seg.id > 0 else seg.cidr, 0)
+            if count == 0:
+                count = seg_counts.get(seg.cidr, 0)
+            pill = self._make_seg_pill(
+                f"{seg.name} ({count})",
+                seg.color,
+                active=(self._active_seg_ids is not None and key in self._active_seg_ids),
+            )
+            pill.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            pill.customContextMenuRequested.connect(
+                lambda _pos, s=seg: self._open_seg_context(s)
+            )
+            pill.clicked.connect(lambda _c=False, k=key: self._toggle_segment(k))
+            self._seg_pill_row.insertWidget(idx + 1, pill)
+            self._seg_pills[key] = pill
+
+        self._seg_bar_frame.setVisible(True)
+
+    def _make_seg_pill(self, text: str, color: Optional[str], active: bool) -> QPushButton:
+        btn = QPushButton(text)
+        btn.setCheckable(True)
+        btn.setChecked(active)
+        btn.setFixedHeight(24)
+        btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._apply_pill_style(btn, color, active)
+        return btn
+
+    def _apply_pill_style(self, btn: QPushButton, color: Optional[str], active: bool) -> None:
+        dot_color = color or ACCENT
+        if active:
+            btn.setStyleSheet(
+                f"QPushButton {{ background:{dot_color}22; color:{TEXT_PRIMARY};"
+                f" border:1.5px solid {dot_color}; border-radius:12px;"
+                f" font-size:11px; padding:0 10px; font-weight:bold; }}"
+                f"QPushButton:hover {{ background:{dot_color}33; color:{TEXT_PRIMARY}; }}"
+                f"QPushButton:pressed {{ background:{dot_color}44; color:{TEXT_PRIMARY}; }}"
+            )
+        else:
+            btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+                f" border:1px solid {BORDER}; border-radius:12px;"
+                f" font-size:11px; padding:0 10px; }}"
+                f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY};"
+                f" border-color:{dot_color}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+            )
+
+    def _toggle_segment(self, seg_key) -> None:
+        """Toggle a segment pill; None = select all (clear filter)."""
+        if seg_key is None:
+            # "All" selected — clear filter
+            self._active_seg_ids = None
+            for key, btn in self._seg_pills.items():
+                active = key == "__all__"
+                color = None if key == "__all__" else None
+                if key != "__all__":
+                    # find colour from current segments
+                    color = self._seg_color_for_key(key)
+                btn.setChecked(active)
+                self._apply_pill_style(btn, color, active)
+        else:
+            # Toggle this specific segment
+            if self._active_seg_ids is None:
+                self._active_seg_ids = {seg_key}
+            elif seg_key in self._active_seg_ids:
+                self._active_seg_ids.discard(seg_key)
+                if not self._active_seg_ids:
+                    self._active_seg_ids = None  # all cleared → show all
+            else:
+                self._active_seg_ids.add(seg_key)
+
+            # Update pill appearances
+            all_active = self._active_seg_ids is None
+            if "__all__" in self._seg_pills:
+                self._seg_pills["__all__"].setChecked(all_active)
+                self._apply_pill_style(self._seg_pills["__all__"], None, all_active)
+            for key, btn in self._seg_pills.items():
+                if key == "__all__":
+                    continue
+                active = (self._active_seg_ids is not None and key in self._active_seg_ids)
+                btn.setChecked(active)
+                color = self._seg_color_for_key(key)
+                self._apply_pill_style(btn, color, active)
+
+        self._apply_segment_filter()
+
+    def _seg_color_for_key(self, key) -> Optional[str]:
+        for seg in self._current_segments:
+            k = seg.id if seg.id > 0 else seg.cidr
+            if k == key:
+                return seg.color
+        return None
+
+    def _apply_segment_filter(self) -> None:
+        """Show/hide snap_table rows based on _active_seg_ids."""
+        if self._active_seg_ids is None:
+            # Show all
+            for row in range(self._snap_table.rowCount()):
+                self._snap_table.showRow(row)
+            return
+        for row in range(self._snap_table.rowCount()):
+            seg_item = self._snap_table.item(row, 1)
+            row_key = seg_item.data(Qt.ItemDataRole.UserRole) if seg_item else None
+            match = row_key in self._active_seg_ids
+            self._snap_table.setRowHidden(row, not match)
+
+    def _open_seg_context(self, seg) -> None:
+        """Right-click context menu on a segment pill."""
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; }}"
+            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        )
+        edit_act = menu.addAction("Edit Segment")
+        action = menu.exec(self.cursor().pos())
+        if action == edit_act:
+            dlg = _SegmentEditorDialog(segment=seg, parent=self)
+            if dlg.exec() == QDialog.DialogCode.Accepted and self._store:
+                vals = dlg.result_segment()
+                seg.name = vals["name"]
+                seg.color = vals["color"]
+                seg.description = vals["description"]
+                try:
+                    self._store.upsert_segment(seg)
+                except Exception:
+                    pass  # non-fatal — DB write failure should not crash the UI
+                self._rebuild_segment_pills(self._current_segments)
+                self.set_scan_devices(self._scan_devices)
 
     # ── Detail panel ──────────────────────────────────────────────────────────
 

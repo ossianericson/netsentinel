@@ -82,6 +82,7 @@ netsentinel/
 │   ├── network_infrastructure.py  # VLAN, gateway, routing table helpers
 │   ├── network_log_writer.py   # Log dataclasses, file reader, summary + analysis engine (S20-6 split)
 │   ├── network_logger.py       # Background ping logger (CSV → ~/Documents/NetSentinel/logs)
+│   ├── network_segments.py     # NetworkSegment dataclass + auto_detect_segments/classify/merge (Sprint 4)
 │   ├── nl_query.py             # Natural language query parser for device and event search
 │   ├── notification_channels.py    # Per-channel delivery functions (S20-3 split)
 │   ├── notification_router.py

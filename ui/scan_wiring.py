@@ -410,6 +410,33 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if hasattr(self, "_home_page") and devices:
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
         if hasattr(self, "_inventory_page"):
+            # Auto-detect segments before populating the snapshot table
+            try:
+                from modules.network_segments import (
+                    auto_detect_segments, merge_segments,
+                )
+                _gw = ""
+                _net_info = getattr(self, "_last_net_info", {}) or {}
+                _gw = _net_info.get("gateway", "") or ""
+                _detected = auto_detect_segments(devices, _gw)
+                _stored: list = []
+                if _store_ref:
+                    try:
+                        _stored = _store_ref.get_segments()
+                    except Exception:
+                        pass  # non-fatal — table may not exist on first run
+                _merged = merge_segments(_detected, _stored)
+                # Upsert new auto-created entries only
+                for _seg in _merged:
+                    if _seg.id == 0 and _store_ref:
+                        try:
+                            _new_id = _store_ref.upsert_segment(_seg)
+                            _seg.id = _new_id
+                        except Exception:
+                            pass  # non-fatal — proceed without DB id
+                self._inventory_page.set_segments(_merged)
+            except Exception:
+                pass  # non-fatal — segment detection is best-effort
             self._inventory_page.set_scan_devices(devices)
         self._m1_table.setRowCount(0)
         _store_ref = getattr(self, "_store", None)

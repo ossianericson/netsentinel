@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 from modules.metric_store_schema import (
     CertCheckPoint, HaDetectedPoint, KnownDevice, ServiceCheckPoint,
 )
+from modules.network_segments import NetworkSegment
 from modules.metric_store_queries_uptime import _UptimeQueriesMixin
 from modules.metric_store_queries_metrics import _MetricsQueriesMixin
 
@@ -301,3 +302,24 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             rows = self._execute_read(f"SELECT COUNT(*) AS n FROM {tbl}", ())
             result[tbl] = rows[0]["n"] if rows else 0
         return result
+
+    # ── Read: network segments ────────────────────────────────────────────────
+
+    def get_segments(self) -> List[NetworkSegment]:
+        """Return all stored network segments ordered by id."""
+        rows = self._execute_read(
+            "SELECT id, name, cidr, color, description, auto_created "
+            "FROM network_segments ORDER BY id",
+            (),
+        )
+        return [
+            NetworkSegment(
+                id=r["id"],
+                name=r["name"],
+                cidr=r["cidr"],
+                color=r["color"],
+                description=r["description"] or "",
+                auto_created=r["auto_created"],
+            )
+            for r in rows
+        ]

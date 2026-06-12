@@ -615,3 +615,46 @@ class MetricStore(MetricStoreQueryMixin):
             (int(_time.time()), grade, score, verdict),
         )
 
+    # ── Write: network segments ───────────────────────────────────────────────
+
+    def upsert_segment(self, seg) -> int:
+        """Insert or update a NetworkSegment row.
+
+        If seg.id > 0 the existing row is updated in-place.
+        If seg.id == 0 a new row is inserted and the new id is returned.
+        User-defined segments (auto_created=0) are never overwritten by
+        auto-detection; callers must check seg.auto_created before calling.
+        """
+        if seg.id > 0:
+            self._execute_write(
+                "UPDATE network_segments SET name=?, color=?, description=? WHERE id=?",
+                (seg.name, seg.color, seg.description, seg.id),
+            )
+            return seg.id
+
+        with self._write_lock:
+            try:
+                cur = self._conn.execute(
+                    "INSERT INTO network_segments (name, cidr, color, description, auto_created) "
+                    "VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(cidr) DO UPDATE SET "
+                    "  name = CASE WHEN auto_created=0 THEN name ELSE excluded.name END, "
+                    "  color = CASE WHEN auto_created=0 THEN color ELSE excluded.color END, "
+                    "  auto_created = auto_created",
+                    (seg.name, seg.cidr, seg.color, seg.description, seg.auto_created),
+                )
+                self._conn.commit()
+                new_id = cur.lastrowid or 0
+                rows = self._execute_read(
+                    "SELECT id FROM network_segments WHERE cidr=? LIMIT 1",
+                    (seg.cidr,),
+                )
+                return rows[0]["id"] if rows else new_id
+            except Exception:
+                return 0  # non-fatal — caller can proceed without a DB id
+
+    def delete_segment(self, segment_id: int) -> None:
+        """Delete a segment row by primary key."""
+        self._execute_write("DELETE FROM network_segments WHERE id=?", (segment_id,))
+
+

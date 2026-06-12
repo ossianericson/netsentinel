@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 10
+_SCHEMA_VERSION = 11
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -254,6 +254,17 @@ CREATE TABLE IF NOT EXISTS device_ip_history (
     UNIQUE (mac, ip)
 );
 CREATE INDEX IF NOT EXISTS idx_dih_mac ON device_ip_history(mac);
+
+-- Network segment / zone definitions (schema v11)
+CREATE TABLE IF NOT EXISTS network_segments (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL,
+    cidr         TEXT    NOT NULL UNIQUE,
+    color        TEXT    NOT NULL DEFAULT '#0078D4',
+    description  TEXT    NOT NULL DEFAULT '',
+    auto_created INTEGER NOT NULL DEFAULT 0,
+    created_at   DATETIME DEFAULT (datetime('now'))
+);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────
