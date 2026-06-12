@@ -172,6 +172,8 @@ def _smoke_test() -> None:
         "ui.pages.hardware_integration_page",
         "ui.pages.wifi_monitor_page",
         "workers.wifi_monitor_worker",
+        "modules.passive_observer",
+        "workers.passive_observer_worker",
     ]
     for _mod in _checks:
         try:
@@ -491,6 +493,7 @@ def main():
     from workers.snmp_trap_worker import SnmpTrapWorker
     from workers.syslog_worker import SyslogWorker
     from workers.rest_api_worker import RestApiWorker
+    from workers.passive_observer_worker import PassiveObserverWorker
 
     store  = MetricStore()           # uses default portable path
     alerts = AlertEngine(store=store)
@@ -542,6 +545,9 @@ def main():
     syslog_worker = SyslogWorker()
     syslog_worker.start()
 
+    passive_observer_worker = PassiveObserverWorker()
+    passive_observer_worker.start()
+
     # REST API worker — only starts when user has enabled it in Settings
     _qs = QSettings("NetSentinel", "NetSentinel")
     rest_api_worker: RestApiWorker | None = None
@@ -562,6 +568,9 @@ def main():
     from ui.dashboard import Dashboard
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
                        maint_manager=maint_manager)
+
+    # Wire passive observer → enrichment handler
+    passive_observer_worker.observation_ready.connect(window._on_passive_observation)
 
     # Wire notification router → toast callback + notifications page
     notif_router.set_toast_callback(window._show_alert_toast)

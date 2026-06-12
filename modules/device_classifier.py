@@ -540,6 +540,35 @@ def classify_with_evidence(
     )
 
 
+def classify_from_observation(obs: object) -> ClassificationResult:
+    """
+    Return a ClassificationResult derived directly from a PassiveObservation.
+
+    The observation's device_hint is already a resolved label (produced by the
+    SSDP/mDNS classification tables), so we wrap it without further heuristics.
+    Confidence is mapped from the string flag: "high" → 0.85, "low" → 0.40.
+    """
+    hint = getattr(obs, "device_hint", "") or ""
+    confidence_str = getattr(obs, "confidence", "low")
+    protocol = getattr(obs, "protocol", "")
+    service_type = getattr(obs, "service_type", "")
+
+    if not hint:
+        return ClassificationResult(
+            device_type="Unknown Device",
+            confidence=0.0,
+            evidence=[f"passive-{protocol}:no-hint"],
+        )
+
+    confidence = 0.85 if confidence_str == "high" else 0.40
+    evidence = [f"passive-{protocol}:{service_type}"]
+    return ClassificationResult(
+        device_type=hint,
+        confidence=confidence,
+        evidence=evidence,
+    )
+
+
 def classify_device(device, is_gateway: bool = False) -> str:
     """
     Convenience wrapper that accepts a DeviceInfo dataclass instance or a

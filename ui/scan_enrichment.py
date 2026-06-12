@@ -1239,6 +1239,98 @@ class ScanEnrichmentMixin:
         )
         self._m1_group_btn.setText("▼▼  Collapse All" if all_expanded else "▶▶  Expand All")
 
+    def _on_passive_observation(self, obs: object) -> None:
+        """
+        Handle a PassiveObservation from the passive listener.
+
+        Upgrades the device_type of any scanned device that currently shows
+        "Unknown Device" or has a lower-confidence classification.
+        Only "high" confidence passive observations replace existing labels.
+        """
+        try:
+            from modules.device_classifier import classify_from_observation as _cfo
+            from PyQt6.QtGui import QColor
+            from PyQt6.QtWidgets import QTableWidgetItem as _QTI
+            from ui import styles as _s
+
+            if not self._m1_result:
+                return
+
+            obs_ip   = getattr(obs, "ip", "")
+            obs_conf = getattr(obs, "confidence", "low")
+            if not obs_ip:
+                return
+
+            new_result = _cfo(obs)
+            new_type   = new_result.device_type
+            if not new_type or new_type == "Unknown Device":
+                return
+
+            for _d in self._m1_result.get("devices", []):
+                _dip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
+                if _dip != obs_ip:
+                    continue
+                _cur = (_d.device_type if not isinstance(_d, dict)
+                        else _d.get("device_type", "")) or ""
+                # Only overwrite if current label is unknown or the observation is high confidence
+                if _cur and _cur != "Unknown Device" and obs_conf != "high":
+                    break
+                # Don't overwrite a high-confidence existing label with a low-confidence one
+                if _cur and _cur not in ("Unknown Device", "") and obs_conf == "low":
+                    break
+
+                if isinstance(_d, dict):
+                    _d["device_type"] = new_type
+                    _methods = _d.get("discovery_methods", [])
+                    _proto = getattr(obs, "protocol", "")
+                    _tag   = f"passive-{_proto}" if _proto else "passive"
+                    if _tag not in _methods:
+                        _methods.append(_tag)
+                        _d["discovery_methods"] = _methods
+                else:
+                    _d.device_type = new_type
+                    _proto = getattr(obs, "protocol", "")
+                    _tag   = f"passive-{_proto}" if _proto else "passive"
+                    _methods = list(getattr(_d, "discovery_methods", None) or [])
+                    if _tag not in _methods:
+                        _methods.append(_tag)
+                        try:
+                            _d.discovery_methods = _methods
+                        except AttributeError:
+                            pass  # dataclass may be frozen in some code paths
+
+                # Update the M1 table cell
+                if hasattr(self, "_m1_table"):
+                    for _r in range(self._m1_table.rowCount()):
+                        _ri = self._m1_table.item(_r, 0)
+                        if _ri and _ri.text() == obs_ip:
+                            _ti = _QTI(new_type)
+                            _ti.setForeground(QColor(_s.TEXT_PRIMARY))
+                            _summary = getattr(obs, "raw_summary", "")
+                            _ti.setToolTip(
+                                f"Observed via {_summary}" if _summary else
+                                f"Observed via passive-{getattr(obs, 'protocol', '')}"
+                            )
+                            self._m1_table.setItem(_r, 5, _ti)
+                            break
+                break
+        except Exception:
+            pass  # non-fatal — passive enrichment is best-effort
+
+    def _apply_passive_observations(self) -> None:
+        """
+        Apply all buffered passive observations to the current scan result.
+
+        Called once after a full scan completes so that observations that
+        arrived before the scan was done are not lost.
+        """
+        try:
+            from modules.passive_observer import get_observations as _get_obs
+            for _obs in _get_obs():
+                self._on_passive_observation(_obs)
+        except Exception:
+            pass  # non-fatal
+
     @pyqtSlot(str)
     def _filter_m1_by_nl(self, text: str):
         """Filter Device Fingerprinter rows using the NL query engine."""

@@ -320,6 +320,8 @@ hiddenimports: list = [
     "workers.plugin_polling_worker",
     "workers.plugin_worker",
     "workers.wifi_monitor_worker",
+    "modules.passive_observer",
+    "workers.passive_observer_worker",
     "ui.pages.hardware_integration_page",
     "ui.pages.plugin_guide",
     "ui.pages.plugin_wizard_mixin",

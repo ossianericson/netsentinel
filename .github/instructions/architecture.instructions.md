@@ -126,6 +126,7 @@ netsentinel/
 │   ├── utils.py                # Core: get_app_data_dir(), is_admin(), ping_sweep, send_wol
 │   ├── utils_net.py            # Network info: get_network_info(), get_dhcp_info(), get_interface_details() (S2-3 split)
 │   ├── utils_platform.py       # IPv6 scanning: get_ipv6_devices(), ping_sweep_ipv6() (S2-3 split)
+│   ├── passive_observer.py     # Passive SSDP + mDNS listener — device-type hints without sending packets (Sprint 1)
 │   ├── web_dashboard.py        # build_html() — self-contained /dashboard HTML page
 │   ├── wifi_heatmap.py         # WiFi signal IDW interpolation and heatmap data builder
 │   ├── wifi_scanner.py         # 802.11 network enumeration (SSIDs, BSSIDs, signal levels)
@@ -276,6 +277,7 @@ netsentinel/
 │   ├── speed_test_worker.py    # FetchServersWorker + SpeedTestWorker
 │   ├── syslog_worker.py
 │   ├── threat_intel_worker.py
+│   ├── passive_observer_worker.py  # PassiveObserverWorker — SSDP + mDNS listener bridge → Qt signals (Sprint 1)
 │   └── wifi_monitor_worker.py  # WifiMonitorWorker — passive 802.11 capture thread (Npcap)
 ├── tests/
 └── tools/

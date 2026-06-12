@@ -729,6 +729,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # views even on the first scan; also layers in cached mesh/plugin data when present.
         self._apply_mesh_enrichment()
 
+        # Apply any passive SSDP/mDNS observations buffered before the scan finished.
+        self._apply_passive_observations()
+
         # Async OUI vendor lookup for devices still showing Unknown vendor.
         # Updates table cells and DeviceInfo objects as results arrive.
         self._start_vendor_lookups(devices)
