@@ -81,11 +81,11 @@ class PluginPollingWorker(QThread):
     def trigger_now(self) -> None:
         """Wake the inter-poll sleep immediately — runs plugin right away.
 
-        Safe to call while a poll is in progress: the trigger fires after the
-        current poll finishes, starting the next iteration without sleeping.
-        CPython bool reads/writes are GIL-protected; no explicit lock needed.
+        No-op while a poll is already in progress to avoid queuing redundant
+        back-to-back runs. CPython bool reads/writes are GIL-protected.
         """
-        self._trigger.set()
+        if not self._poll_in_progress:
+            self._trigger.set()
 
     def get_effective_interval(self) -> int:
         """Return the current sleep interval accounting for exponential backoff (P6-1).

@@ -380,7 +380,7 @@ class DiagnosisPage(QWidget):
 
         def _on_symptom_clicked(btn):
             self._symptom = btn.property("symptom_key")
-            self._service_pick_row.setEnabled(self._symptom == "service_unreachable")
+            self._service_pick_row.setVisible(self._symptom == "service_unreachable")
 
         self._symptom_group.buttonClicked.connect(_on_symptom_clicked)
 
@@ -415,7 +415,7 @@ class DiagnosisPage(QWidget):
         sp_lay.addWidget(self._symptom_service_combo)
         sp_lay.addStretch()
         lay.addWidget(self._service_pick_row)
-        self._service_pick_row.setEnabled(False)
+        self._service_pick_row.setVisible(False)
 
         _tile_hint = QLabel("Select a symptom, then click Run Diagnosis — NetSentinel runs targeted checks and shows plain-English results in 15–30 seconds.")
         _tile_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
