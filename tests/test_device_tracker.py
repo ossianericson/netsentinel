@@ -216,3 +216,107 @@ class TestEdgeCases:
         before = int(time.time())
         result = tracker.process_scan([_dev()])
         assert result.scan_ts >= before
+
+
+# ── Annotations ───────────────────────────────────────────────────────────────
+
+from modules.device_tracker import (
+    get_all_annotations, get_annotations, record_ip_observation,
+    get_ip_history, save_annotations,
+)
+
+
+class TestAnnotations:
+    def test_save_and_get(self, store):
+        save_annotations("aa:bb:cc:11:22:33", store, user_label="Living Room TV")
+        ann = get_annotations("aa:bb:cc:11:22:33", store)
+        assert ann["user_label"] == "Living Room TV"
+
+    def test_get_missing_returns_empty_dict(self, store):
+        assert get_annotations("ff:ff:ff:ff:ff:ff", store) == {}
+
+    def test_all_fields_persisted(self, store):
+        save_annotations(
+            "aa:bb:cc:00:00:01", store,
+            user_label="Router",
+            location="Rack 1",
+            owner="IT",
+            notes="Replaced 2024",
+            asset_tag="INV-001",
+        )
+        ann = get_annotations("aa:bb:cc:00:00:01", store)
+        assert ann["location"] == "Rack 1"
+        assert ann["owner"] == "IT"
+        assert ann["notes"] == "Replaced 2024"
+        assert ann["asset_tag"] == "INV-001"
+
+    def test_upsert_overwrites_existing(self, store):
+        save_annotations("aa:bb:cc:00:00:02", store, user_label="Old Label")
+        save_annotations("aa:bb:cc:00:00:02", store, user_label="New Label")
+        ann = get_annotations("aa:bb:cc:00:00:02", store)
+        assert ann["user_label"] == "New Label"
+
+    def test_mac_normalised_to_lower(self, store):
+        save_annotations("AA:BB:CC:00:00:03", store, user_label="Test")
+        ann = get_annotations("aa:bb:cc:00:00:03", store)
+        assert ann["user_label"] == "Test"
+
+    def test_get_all_annotations_returns_all(self, store):
+        save_annotations("aa:bb:cc:00:00:04", store, user_label="A")
+        save_annotations("aa:bb:cc:00:00:05", store, user_label="B")
+        all_ann = get_all_annotations(store)
+        assert all_ann.get("aa:bb:cc:00:00:04", {}).get("user_label") == "A"
+        assert all_ann.get("aa:bb:cc:00:00:05", {}).get("user_label") == "B"
+
+    def test_get_all_annotations_empty_store(self, store):
+        assert get_all_annotations(store) == {}
+
+
+# ── IP History ────────────────────────────────────────────────────────────────
+
+class TestIpHistory:
+    def test_record_and_retrieve(self, store):
+        record_ip_observation("aa:bb:cc:11:22:33", "192.168.1.10", store)
+        hist = get_ip_history("aa:bb:cc:11:22:33", store)
+        assert len(hist) == 1
+        assert hist[0]["ip"] == "192.168.1.10"
+        assert hist[0]["seen_count"] == 1
+
+    def test_upsert_increments_count(self, store):
+        record_ip_observation("aa:bb:cc:00:00:06", "10.0.0.1", store)
+        record_ip_observation("aa:bb:cc:00:00:06", "10.0.0.1", store)
+        record_ip_observation("aa:bb:cc:00:00:06", "10.0.0.1", store)
+        hist = get_ip_history("aa:bb:cc:00:00:06", store)
+        assert len(hist) == 1
+        assert hist[0]["seen_count"] == 3
+
+    def test_multiple_ips_tracked(self, store):
+        record_ip_observation("aa:bb:cc:00:00:07", "10.0.0.5", store)
+        record_ip_observation("aa:bb:cc:00:00:07", "10.0.0.9", store)
+        hist = get_ip_history("aa:bb:cc:00:00:07", store)
+        ips = {h["ip"] for h in hist}
+        assert ips == {"10.0.0.5", "10.0.0.9"}
+
+    def test_empty_mac_ignored(self, store):
+        record_ip_observation("", "10.0.0.1", store)
+        assert get_ip_history("", store) == []
+
+    def test_empty_ip_ignored(self, store):
+        record_ip_observation("aa:bb:cc:00:00:08", "", store)
+        assert get_ip_history("aa:bb:cc:00:00:08", store) == []
+
+    def test_mac_normalised_to_lower(self, store):
+        record_ip_observation("AA:BB:CC:00:00:09", "10.0.0.2", store)
+        hist = get_ip_history("aa:bb:cc:00:00:09", store)
+        assert len(hist) == 1
+
+    def test_history_sorted_by_last_seen_desc(self, store):
+        record_ip_observation("aa:bb:cc:00:00:0a", "10.0.0.1", store)
+        record_ip_observation("aa:bb:cc:00:00:0a", "10.0.0.2", store)
+        # Manually set first IP's last_seen to be older
+        store._execute_write(
+            "UPDATE device_ip_history SET last_seen = '2020-01-01 00:00:00' WHERE ip = ?",
+            ("10.0.0.1",),
+        )
+        hist = get_ip_history("aa:bb:cc:00:00:0a", store)
+        assert hist[0]["ip"] == "10.0.0.2"

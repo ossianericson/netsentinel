@@ -13,10 +13,11 @@ Architecture rules observed:
 
 from __future__ import annotations
 
+import datetime
 import json
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from modules.metric_store import MetricStore
 from modules.service_mapper import get_services as _get_services
@@ -184,3 +185,110 @@ class DeviceTracker:
 
         result.total_known = len(self._store.get_known_devices())
         return result
+
+
+# ── Module-level annotation / IP-history helpers (Sprint 2) ──────────────────
+
+def _utcnow() -> str:
+    return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def record_ip_observation(mac: str, ip: str, store: "MetricStore") -> None:
+    """Upsert mac+ip combo into device_ip_history."""
+    if not mac or not ip:
+        return
+    now = _utcnow()
+    store._execute_write(
+        """
+        INSERT INTO device_ip_history (mac, ip, first_seen, last_seen, seen_count)
+        VALUES (?, ?, ?, ?, 1)
+        ON CONFLICT(mac, ip) DO UPDATE SET
+            last_seen  = excluded.last_seen,
+            seen_count = seen_count + 1
+        """,
+        (mac.lower(), ip, now, now),
+    )
+
+
+def get_ip_history(mac: str, store: "MetricStore") -> List[Dict]:
+    """Return [{ip, first_seen, last_seen, seen_count}] sorted by last_seen desc."""
+    rows = store._execute_read(
+        """
+        SELECT ip, first_seen, last_seen, seen_count
+        FROM device_ip_history
+        WHERE mac = ?
+        ORDER BY last_seen DESC
+        """,
+        (mac.lower(),),
+    )
+    return [
+        {"ip": r[0], "first_seen": r[1], "last_seen": r[2], "seen_count": r[3]}
+        for r in rows
+    ]
+
+
+def save_annotations(mac: str, store: "MetricStore", **kwargs) -> None:
+    """Upsert user_label/location/owner/notes/asset_tag for a MAC."""
+    now = _utcnow()
+    store._execute_write(
+        """
+        INSERT INTO device_annotations (mac, user_label, location, owner, notes, asset_tag, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(mac) DO UPDATE SET
+            user_label = excluded.user_label,
+            location   = excluded.location,
+            owner      = excluded.owner,
+            notes      = excluded.notes,
+            asset_tag  = excluded.asset_tag,
+            updated_at = excluded.updated_at
+        """,
+        (
+            mac.lower(),
+            kwargs.get("user_label", ""),
+            kwargs.get("location", ""),
+            kwargs.get("owner", ""),
+            kwargs.get("notes", ""),
+            kwargs.get("asset_tag", ""),
+            now,
+        ),
+    )
+
+
+def get_annotations(mac: str, store: "MetricStore") -> Dict:
+    """Return annotation dict for a MAC; empty dict if not found."""
+    rows = store._execute_read(
+        "SELECT user_label, location, owner, notes, asset_tag, updated_at "
+        "FROM device_annotations WHERE mac = ?",
+        (mac.lower(),),
+    )
+    if not rows:
+        return {}
+    r = rows[0]
+    return {
+        "user_label": r[0] or "",
+        "location":   r[1] or "",
+        "owner":      r[2] or "",
+        "notes":      r[3] or "",
+        "asset_tag":  r[4] or "",
+        "updated_at": r[5] or "",
+    }
+
+
+def get_all_annotations(store: "MetricStore") -> Dict[str, Dict]:
+    """Return {mac: annotation_dict} for all annotated devices."""
+    rows = store._execute_read(
+        "SELECT mac, user_label, location, owner, notes, asset_tag, updated_at "
+        "FROM device_annotations",
+        (),
+    )
+    result: Dict[str, Dict] = {}
+    for r in rows:
+        result[r[0]] = {
+            "user_label": r[1] or "",
+            "location":   r[2] or "",
+            "owner":      r[3] or "",
+            "notes":      r[4] or "",
+            "asset_tag":  r[5] or "",
+            "updated_at": r[6] or "",
+        }
+    return result

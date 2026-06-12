@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 9
+_SCHEMA_VERSION = 10
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -231,6 +231,29 @@ CREATE TABLE IF NOT EXISTS grade_result (
     score   REAL    NOT NULL,
     verdict TEXT    NOT NULL DEFAULT ''
 );
+
+-- User-authored device annotations — labels, location, owner (schema v10)
+CREATE TABLE IF NOT EXISTS device_annotations (
+    mac         TEXT PRIMARY KEY,
+    user_label  TEXT DEFAULT '',
+    location    TEXT DEFAULT '',
+    owner       TEXT DEFAULT '',
+    notes       TEXT DEFAULT '',
+    asset_tag   TEXT DEFAULT '',
+    updated_at  DATETIME DEFAULT (datetime('now'))
+);
+
+-- Per-device IP address history — how many times each IP was seen (schema v10)
+CREATE TABLE IF NOT EXISTS device_ip_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    mac         TEXT NOT NULL,
+    ip          TEXT NOT NULL,
+    first_seen  DATETIME NOT NULL,
+    last_seen   DATETIME NOT NULL,
+    seen_count  INTEGER DEFAULT 1,
+    UNIQUE (mac, ip)
+);
+CREATE INDEX IF NOT EXISTS idx_dih_mac ON device_ip_history(mac);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────

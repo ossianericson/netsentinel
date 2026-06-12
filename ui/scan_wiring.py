@@ -412,11 +412,18 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if hasattr(self, "_inventory_page"):
             self._inventory_page.set_scan_devices(devices)
         self._m1_table.setRowCount(0)
+        _store_ref = getattr(self, "_store", None)
         for d in devices:
             level   = d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")
             ip      = d.ip       if not isinstance(d, dict) else d.get("ip", "?")
             host    = d.hostname if not isinstance(d, dict) else d.get("hostname", "")
             mac     = d.mac      if not isinstance(d, dict) else d.get("mac", "?")
+            if _store_ref and mac and mac not in ("?", "00:00:00:00:00:00") and ip and ip != "?":
+                try:
+                    from modules.device_tracker import record_ip_observation as _rec_ip
+                    _rec_ip(mac, ip, _store_ref)
+                except Exception:
+                    pass  # non-fatal — table may not exist on schema upgrade
             vendor  = d.vendor   if not isinstance(d, dict) else d.get("vendor", "Unknown")
             dtype   = d.device_type if not isinstance(d, dict) else d.get("device_type", "")
             # Fall back to connection_type when device_type is blank
