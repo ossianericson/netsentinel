@@ -79,6 +79,14 @@ _RULES: list[dict] = [
         "vendor_re": r"asus|netgear|tp.?link|d.?link|linksys|belkin|arris|motorola|sagemcom|technicolor|fritz|avm|huawei|zte|xiaomi",
     },
     {
+        # Chip/component vendors (Liteon, Realtek, Azurewave, etc.) whose OUI
+        # appears on a router's WiFi card rather than the router brand's OUI.
+        # Presence of a web admin port is strong evidence this is router hardware.
+        "label": "Router / Gateway",
+        "vendor_re": r"liteon|realtek semiconductor|azurewave|alps electric|murata|fn-link|ampak|ralink technology",
+        "any_ports": {80, 443, 8080, 8443},
+    },
+    {
         "label": "Network Switch",
         "vendor_re": r"cisco|netgear|hp|hewlett.packard|d.?link|trendnet|dell|extreme networks",
         "any_ports": {23, 22, 80, 443},
@@ -329,11 +337,18 @@ _RULES: list[dict] = [
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+_MESH_HOSTNAME_RE = re.compile(
+    r"eero|deco|orbi|velop|halo|nova|nest.?wifi|google.?wifi|\bmesh\b",
+    re.IGNORECASE,
+)
+
+
 def classify(
     vendor: str = "",
     hostname: str = "",
     open_ports: Optional[set[int]] = None,
     os_family: str = "",
+    is_gateway: bool = False,
 ) -> str:
     """
     Return a human-readable device-type label.
@@ -344,6 +359,11 @@ def classify(
     hostname    Reverse-DNS hostname or NetBIOS name.
     open_ports  Set of open TCP port numbers.
     os_family   OS guess string, e.g. "Windows", "Linux/macOS".
+    is_gateway  When True the device is known to be the network gateway —
+                bypass OUI/hostname heuristics and return the router label
+                directly.  Hostname is still checked for mesh-node patterns
+                so a Deco/Eero gateway gets "Mesh Network Node" rather than
+                the generic "Router / Gateway".
 
     Returns
     -------
@@ -352,6 +372,14 @@ def classify(
     """
     if open_ports is None:
         open_ports = set()
+
+    # Gateway devices are definitively routers.  Bypass the OUI/hostname
+    # classifier (which can be misled by chip-maker OUIs like Liteon) and
+    # return the correct label immediately.
+    if is_gateway:
+        if _MESH_HOSTNAME_RE.search(hostname):
+            return "Mesh Network Node"
+        return "Router / Gateway"
 
     v = vendor.lower()
     h = hostname.lower()
@@ -400,6 +428,7 @@ def classify_with_evidence(
     open_ports: Optional[set[int]] = None,
     os_family: str = "",
     mac: str = "",
+    is_gateway: bool = False,
 ) -> ClassificationResult:
     """
     Like classify() but returns a ClassificationResult with a confidence
@@ -412,6 +441,8 @@ def classify_with_evidence(
     open_ports  Set of open TCP port numbers.
     os_family   OS guess string, e.g. "Windows", "Linux/macOS".
     mac         Raw MAC address; used to detect locally administered MACs.
+    is_gateway  When True the device is known to be the network gateway —
+                returns confidence=1.0 with evidence ["is_gateway"].
 
     Returns
     -------
@@ -421,6 +452,19 @@ def classify_with_evidence(
         open_ports = set()
 
     mac_rand = is_randomized_mac(mac) if mac else False
+
+    if is_gateway:
+        label = (
+            "Mesh Network Node" if _MESH_HOSTNAME_RE.search(hostname)
+            else "Router / Gateway"
+        )
+        return ClassificationResult(
+            device_type=label,
+            vendor=vendor,
+            confidence=1.0,
+            evidence=["is_gateway"],
+            mac_randomized=mac_rand,
+        )
     v = vendor.lower()
     h = hostname.lower()
     o = os_family.lower()
@@ -496,7 +540,7 @@ def classify_with_evidence(
     )
 
 
-def classify_device(device) -> str:
+def classify_device(device, is_gateway: bool = False) -> str:
     """
     Convenience wrapper that accepts a DeviceInfo dataclass instance or a
     plain dict (as returned by Module 1) and calls classify().
@@ -513,4 +557,5 @@ def classify_device(device) -> str:
         ports     = set(getattr(device, "open_ports", []) or [])
 
     return classify(vendor=vendor, hostname=hostname,
-                    open_ports=ports, os_family=os_family)
+                    open_ports=ports, os_family=os_family,
+                    is_gateway=is_gateway)

@@ -26,6 +26,18 @@ try:
 except Exception:
     _resolve_name = None  # type: ignore
 
+# Hostnames that definitively identify consumer/endpoint devices — impossible
+# for a network gateway.  When the gateway IP resolves to one of these (e.g.
+# via a stale mDNS cache collision), discard the hostname before classifying.
+_CONSUMER_HOSTNAME_RE = re.compile(
+    r"playstation|ps[2-5]\b|xbox|nintendo|\bswitch\b|\bwii\b|"
+    r"iphone|ipad|ipod|android|galaxy|\bsm-[a-z]\d|"
+    r"alexa|\becho\b|kindle|fire.?stick|fire.?tv|fire.?hd|"
+    r"chromecast|\broku\b|shield.?tv|apple.?tv|"
+    r"macbook|mac.?pro|mac.?mini",
+    re.IGNORECASE,
+)
+
 
 @dataclass
 class DeviceInfo:
@@ -340,6 +352,13 @@ def scan(offenders_path: Path) -> dict:
         # Only run classifier when mac_registry didn't already provide a type.
         # This preserves accurate product-line labels (e.g. "Streaming Stick")
         # while still classifying unknown-OUI devices via vendor/hostname/ports.
+        _is_gw = (ip == gateway_ip)
+        # Sanity-check the gateway hostname: mDNS/ARP cache collisions can
+        # resolve a consumer-device name (e.g. "Playstation 4") for the gateway
+        # IP.  Clear it before classification so the display and classifier both
+        # get a clean slate.
+        if _is_gw and info.hostname and _CONSUMER_HOSTNAME_RE.search(info.hostname):
+            info.hostname = ""
         if not info.device_type or info.device_type == "Unknown Device":
             try:
                 from modules.device_classifier import classify
@@ -348,6 +367,7 @@ def scan(offenders_path: Path) -> dict:
                     hostname=info.hostname,
                     os_family=info.os_family,
                     open_ports=set(info.open_ports),
+                    is_gateway=_is_gw,
                 )
             except Exception:
                 info.device_type = "Unknown Device"

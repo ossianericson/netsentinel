@@ -202,3 +202,80 @@ def test_classify_with_evidence_matches_classify():
         plain = classify(**kwargs)
         rich = classify_with_evidence(**kwargs)
         assert rich.device_type == plain, f"Mismatch for {kwargs}: {rich.device_type!r} != {plain!r}"
+
+
+# ── is_gateway behaviour ─────────────────────────────────────────────────────
+
+def test_is_gateway_returns_router():
+    # Gateway with no recognisable hostname → generic router label
+    result = classify(vendor="Liteon Technology Corporation", hostname="", is_gateway=True)
+    assert result == "Router / Gateway"
+
+
+def test_is_gateway_with_ps4_hostname_returns_router():
+    # The exact bug: Liteon OUI + "Playstation 4" hostname must not produce "Games Console"
+    result = classify(
+        vendor="Liteon Technology Corporation",
+        hostname="Playstation 4",
+        is_gateway=True,
+    )
+    assert result == "Router / Gateway"
+
+
+def test_is_gateway_with_deco_hostname_returns_mesh_node():
+    # Mesh routers with recognisable hostname should get the mesh label
+    result = classify(vendor="TP-Link", hostname="deco-main", is_gateway=True)
+    assert result == "Mesh Network Node"
+
+
+def test_is_gateway_eero_hostname():
+    result = classify(vendor="", hostname="eero-kitchen", is_gateway=True)
+    assert result == "Mesh Network Node"
+
+
+def test_is_gateway_orbi_hostname():
+    result = classify(vendor="Netgear", hostname="orbi-router", is_gateway=True)
+    assert result == "Mesh Network Node"
+
+
+def test_is_gateway_false_does_not_force_router():
+    # is_gateway=False (default) must not bypass normal rules
+    result = classify(vendor="", hostname="PS5", is_gateway=False)
+    assert result == "Games Console"
+
+
+def test_classify_with_evidence_is_gateway_confidence_one():
+    r = classify_with_evidence(vendor="Liteon Technology Corporation", hostname="", is_gateway=True)
+    assert r.device_type == "Router / Gateway"
+    assert r.confidence == 1.0
+    assert "is_gateway" in r.evidence
+
+
+def test_classify_with_evidence_is_gateway_mesh():
+    r = classify_with_evidence(vendor="", hostname="deco-floor2", is_gateway=True)
+    assert r.device_type == "Mesh Network Node"
+    assert r.confidence == 1.0
+
+
+# ── Chip-maker OUI + web-port rule ──────────────────────────────────────────
+
+def test_liteon_with_web_port_returns_router():
+    # Liteon OUI + port 80 → should be classified as a router, not Unknown
+    result = classify(vendor="Liteon Technology Corporation", hostname="", open_ports={80})
+    assert result == "Router / Gateway"
+
+
+def test_realtek_with_https_port_returns_router():
+    result = classify(vendor="Realtek Semiconductor Corp.", hostname="", open_ports={443})
+    assert result == "Router / Gateway"
+
+
+def test_azurewave_with_admin_port_returns_router():
+    result = classify(vendor="AzureWave Technology Inc.", hostname="", open_ports={8080})
+    assert result == "Router / Gateway"
+
+
+def test_liteon_without_web_port_not_forced_router():
+    # Liteon with NO web ports should fall through (no rule forces it to Router)
+    result = classify(vendor="Liteon Technology Corporation", hostname="", open_ports=set())
+    assert result != "Router / Gateway"

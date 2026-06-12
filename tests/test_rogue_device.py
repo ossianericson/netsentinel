@@ -53,3 +53,73 @@ def test_scan_returns_known_keys(tmp_path):
     result = scan(offenders_path=offenders)
     assert "plain_verdict" in result
     assert "total_count" in result
+
+
+# ── Gateway device-type and hostname sanity tests ────────────────────────────
+
+from modules.rogue_device import _CONSUMER_HOSTNAME_RE
+
+
+def test_consumer_hostname_re_matches_playstation():
+    assert _CONSUMER_HOSTNAME_RE.search("Playstation 4")
+
+
+def test_consumer_hostname_re_matches_xbox():
+    assert _CONSUMER_HOSTNAME_RE.search("Xbox Series X")
+
+
+def test_consumer_hostname_re_matches_iphone():
+    assert _CONSUMER_HOSTNAME_RE.search("iPhone-12")
+
+
+def test_consumer_hostname_re_no_match_for_deco():
+    assert not _CONSUMER_HOSTNAME_RE.search("deco-main")
+
+
+def test_consumer_hostname_re_no_match_for_generic_router():
+    assert not _CONSUMER_HOSTNAME_RE.search("gateway.local")
+
+
+def test_gateway_device_type_is_router(tmp_path, monkeypatch):
+    """Gateway IP must be classified as Router / Gateway regardless of OUI."""
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    gw_ip = "192.168.1.1"
+    liteon_mac = "5c:93:a2:11:22:33"
+
+    monkeypatch.setattr("modules.rogue_device._get_arp_table", lambda: [(gw_ip, liteon_mac)])
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: gw_ip)
+    monkeypatch.setattr("modules.rogue_device._resolve_name", None)
+    monkeypatch.setattr("modules.rogue_device._mac_registry_lookup", None)
+
+    result = scan(offenders_path=offenders)
+    devices = result["devices"]
+    assert len(devices) == 1
+    assert devices[0].device_type == "Router / Gateway"
+
+
+def test_gateway_consumer_hostname_is_cleared(tmp_path, monkeypatch):
+    """Gateway IP with a PS4 hostname must have its hostname cleared."""
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    gw_ip = "192.168.1.1"
+    liteon_mac = "5c:93:a2:11:22:33"
+
+    from unittest.mock import MagicMock
+    fake_name_info = MagicMock()
+    fake_name_info.hostname = "Playstation 4"
+    fake_name_info.vendor = ""
+    fake_name_info.device_type = ""
+
+    monkeypatch.setattr("modules.rogue_device._get_arp_table", lambda: [(gw_ip, liteon_mac)])
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: gw_ip)
+    monkeypatch.setattr("modules.rogue_device._resolve_name", lambda _ips, **_kw: {gw_ip: fake_name_info})
+    monkeypatch.setattr("modules.rogue_device._mac_registry_lookup", None)
+
+    result = scan(offenders_path=offenders)
+    devices = result["devices"]
+    assert len(devices) == 1
+    assert devices[0].hostname == ""
+    assert devices[0].device_type == "Router / Gateway"
