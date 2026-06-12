@@ -99,6 +99,51 @@ def test_gateway_device_type_is_router(tmp_path, monkeypatch):
     assert devices[0].device_type == "Router / Gateway"
 
 
+def test_proxy_arp_ip_detected_and_excluded(tmp_path, monkeypatch):
+    """IPs that share the gateway MAC (proxy ARP) must be excluded from results."""
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    gw_ip  = "192.168.1.1"
+    gw_mac = "a8:59:35:11:22:33"
+    ps4_ip = "192.168.1.71"
+
+    monkeypatch.setattr(
+        "modules.rogue_device._get_arp_table",
+        lambda: [(gw_ip, gw_mac), (ps4_ip, gw_mac)],
+    )
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: gw_ip)
+    monkeypatch.setattr("modules.rogue_device._resolve_name", None)
+    monkeypatch.setattr("modules.rogue_device._mac_registry_lookup", None)
+
+    result = scan(offenders_path=offenders)
+
+    # ps4_ip shares the gateway MAC — must land in proxy_arp_ips
+    assert ps4_ip in result["proxy_arp_ips"]
+    # Only the gateway itself should appear in devices
+    assert result["total_count"] == 1
+    ips = [d.ip for d in result["devices"]]
+    assert gw_ip in ips
+    assert ps4_ip not in ips
+
+
+def test_proxy_arp_ips_empty_when_no_shared_mac(tmp_path, monkeypatch):
+    """proxy_arp_ips must be empty when every IP has a unique MAC."""
+    offenders = tmp_path / "offenders.json"
+    offenders.write_text(json.dumps([]))
+
+    monkeypatch.setattr(
+        "modules.rogue_device._get_arp_table",
+        lambda: [("192.168.1.1", "aa:bb:cc:00:00:01"), ("192.168.1.2", "aa:bb:cc:00:00:02")],
+    )
+    monkeypatch.setattr("modules.rogue_device._get_default_gateway", lambda: "192.168.1.1")
+    monkeypatch.setattr("modules.rogue_device._resolve_name", None)
+    monkeypatch.setattr("modules.rogue_device._mac_registry_lookup", None)
+
+    result = scan(offenders_path=offenders)
+    assert result["proxy_arp_ips"] == set()
+
+
 def test_gateway_consumer_hostname_is_cleared(tmp_path, monkeypatch):
     """Gateway IP with a PS4 hostname must have its hostname cleared."""
     offenders = tmp_path / "offenders.json"

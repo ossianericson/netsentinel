@@ -253,23 +253,40 @@ def scan(offenders_path: Path) -> dict:
             gateway_mac = mac
             break
 
+    # Detect proxy-ARP IPs: router answers ARP for wireless clients that are
+    # not directly reachable at Layer 2 (e.g. Deco mesh clients on a separate
+    # wireless segment).  The MAC shown for these IPs is the router's own MAC,
+    # so their real hardware address is unknowable from ARP alone.
+    proxy_arp_ips: set = set()
+    if gateway_mac:
+        for _ip, _mac in arp_entries:
+            if _mac == gateway_mac and _ip != gateway_ip:
+                proxy_arp_ips.add(_ip)
+
     results: List[DeviceInfo] = []
     high_risk: List[DeviceInfo] = []
 
-    # Resolve names via multi-method resolver (falls back to rDNS only if unavailable)
+    # Resolve names only for IPs that will actually be processed (skip proxy-ARP IPs).
+    _resolve_entries = [(ip, mac) for ip, mac in arp_entries if ip not in proxy_arp_ips]
     if _resolve_name is not None:
         from modules.name_resolver import resolve_batch
         resolved = resolve_batch(
-            [{"ip": ip, "mac": mac} for ip, mac in arp_entries],
+            [{"ip": ip, "mac": mac} for ip, mac in _resolve_entries],
             use_netbios=True, use_mdns=True, use_snmp=False, use_dhcp=True,
         )
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-            hostname_futures = {ip: ex.submit(_resolve_hostname, ip) for ip, _ in arp_entries}
+            hostname_futures = {ip: ex.submit(_resolve_hostname, ip) for ip, _ in _resolve_entries}
         resolved = {ip: type("_N", (), {"hostname": fut.result(), "vendor": "", "model": "", "device_type": ""})()
                     for ip, fut in hostname_futures.items()}
 
     for ip, mac in arp_entries:
+        if ip in proxy_arp_ips:
+            # Real device — real MAC unknown (router answered via proxy ARP).
+            # Skip: the mesh/hardware plugin synthesizes this row with the correct
+            # MAC from the router API.  proxy_arp_ips is returned in the result dict
+            # so the enrichment layer can re-add an annotated row if no plugin is active.
+            continue
         info = DeviceInfo(ip=ip, mac=mac)
         name_info = resolved.get(ip)
         info.hostname = getattr(name_info, "hostname", "") if name_info else ""
@@ -403,4 +420,8 @@ def scan(offenders_path: Path) -> dict:
         "high_risk_count": len(high_risk),
         "total_count": len(results),
         "plain_verdict": plain_verdict,
+        # IPs skipped because the router answered ARP on their behalf (proxy ARP).
+        # The enrichment layer uses this set to re-add annotated rows for uncovered
+        # IPs when no mesh/hardware plugin is active.
+        "proxy_arp_ips": proxy_arp_ips,
     }
