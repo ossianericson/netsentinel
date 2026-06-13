@@ -57,9 +57,10 @@ def _ts_label(ts: int) -> str:
 class ServicePage(QWidget):
     """Displays TCP service/port heartbeat status for all monitored services."""
 
-    services_changed = pyqtSignal(list)   # list[ServiceTarget]
-    scan_requested   = pyqtSignal()       # emitted when first service added from empty state
-    diagnose_service = pyqtSignal(str)    # emits service_id (or "") → navigate to Service Diagnostics
+    services_changed  = pyqtSignal(list)   # list[ServiceTarget]
+    scan_requested    = pyqtSignal()       # emitted when first service added from empty state
+    diagnose_service  = pyqtSignal(str)    # emits service_id (or "") → navigate to Service Diagnostics
+    check_now_requested = pyqtSignal()     # emitted after adding a service to wake the worker
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -92,17 +93,19 @@ class ServicePage(QWidget):
         targets = [ServiceTarget(t["host"], t["port"], t.get("label", "")) for t in self._configured]
         self.services_changed.emit(targets)
 
-    def _add_service(self, host: str, port: int, label: str) -> None:
+    def _add_service(self, host: str, port: int, label: str) -> bool:
+        """Add a service target. Returns True if the service was actually added."""
         host = host.strip()
         if not host:
-            return
+            return False
         for t in self._configured:
             if t["host"] == host and t["port"] == port:
-                return
+                return False
         self._configured.append({"host": host, "port": port, "label": label.strip() or f"{host}:{port}"})
         self._save_targets()
         self._emit_targets()
         self._content_stack.setCurrentIndex(1)
+        return True
 
     def _remove_service(self, host: str, port: int) -> None:
         self._configured = [t for t in self._configured if not (t["host"] == host and t["port"] == port)]
@@ -163,10 +166,12 @@ class ServicePage(QWidget):
         e0_add.setFixedHeight(30)
 
         def _add_from_empty():
-            self._add_service(e0_host.text(), e0_port.value(), e0_label.text())
-            e0_host.clear()
-            e0_label.clear()
-            self.scan_requested.emit()
+            added = self._add_service(e0_host.text(), e0_port.value(), e0_label.text())
+            if added:
+                e0_host.clear()
+                e0_label.clear()
+                self.check_now_requested.emit()
+                self.scan_requested.emit()
 
         e0_add.clicked.connect(_add_from_empty)
         e0_host.returnPressed.connect(_add_from_empty)

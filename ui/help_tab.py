@@ -360,9 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Network segment grouping", "Devices are now automatically grouped into colour-coded /24 subnets after each scan. Use the pill filter bar above the Devices table to show only one segment at a time, or multi-select to compare. Right-click a pill to rename the segment or change its colour."),
-        ("Segment column in device table", "A colour dot in the new Segment column shows which subnet each device belongs to at a glance."),
-        ("Gateway identification fixes", "The gateway is always shown as 'Router / Gateway' regardless of OUI vendor or hostname — fixes a misclassification where Lite-On / gaming-console hostnames caused the gateway to appear as an unknown device."),
+        ("Classification confidence indicators", "The Type column in the Devices table now shows a confidence indicator: ★ user override (blue), ● high confidence (green), ◑ medium (amber), ○ low/unknown (grey). Hover for the exact confidence percentage."),
+        ("Override Device Type", "Right-click any device in the snapshot table and choose 'Override Device Type…' to permanently pin a device to any type. Your correction survives all future enrichment runs. Clear it any time via the same menu or the device drawer."),
+        ("Classification section in device drawer", "Click a device row to open the detail drawer — a new Classification section at the top shows the current type, evidence used (OUI, hostname, passive observation), confidence level, and a Clear Override button when an override is active."),
+        ("Network segment grouping", "Devices are automatically grouped into colour-coded /24 subnets. Use the pill filter bar above the Devices table to filter by segment, and right-click a pill to rename or recolour it."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

@@ -333,10 +333,23 @@ def main():
     except Exception:
         faulthandler.enable()  # fallback: write to stderr
 
-    # Catch unhandled Python exceptions and show them instead of silent exit.
+    # Catch unhandled Python exceptions (including PyQt6 slot exceptions) and
+    # write them to the crash log so they are never silently swallowed when
+    # the user runs the app without a console (shortcut / frozen exe).
     def _excepthook(exc_type, exc_value, exc_tb):
         import traceback as _tb
-        _fatal("Unhandled Error", "".join(_tb.format_exception(exc_type, exc_value, exc_tb)))
+        msg = "".join(_tb.format_exception(exc_type, exc_value, exc_tb))
+        # Always write to the crash log first so we have a record even if the
+        # dialog itself raises another exception.
+        try:
+            from modules.utils import get_app_data_dir as _gad
+            _elog = _gad() / "netsentinel_exceptions.log"
+            import datetime as _dt
+            with open(str(_elog), "a", encoding="utf-8") as _f:
+                _f.write(f"\n--- {_dt.datetime.now().isoformat()} ---\n{msg}")
+        except Exception:
+            pass  # non-fatal — log write failure must not mask the original error
+        _fatal("Unhandled Error", msg)
 
     sys.excepthook = _excepthook
     # ─────────────────────────────────────────────────────────────────────────
@@ -616,6 +629,7 @@ def main():
         from modules.service_monitor import ServiceTarget as _SvcTarget
         svc_worker.set_targets([_SvcTarget(t["host"], t["port"], t.get("label", "")) for t in _svc_targets])
     window._service_page.services_changed.connect(svc_worker.set_targets)
+    window._service_page.check_now_requested.connect(svc_worker.check_now)
 
     def _on_svc_check(results: list) -> None:
         fired = alerts.evaluate_service_checks(results)
