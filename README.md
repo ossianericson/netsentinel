@@ -352,6 +352,24 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v2.1.4
+**Added**
+- `modules/lldp_scanner.py` — LLDP/CDP neighbor scanner; passive sniff + active frame mode; raw TLV parser; `LldpNeighbor` dataclass with `is_infrastructure` property (Sprint 5)
+- `workers/lldp_worker.py` — `LldpWorker` QThread; 15-second sniff in 3-second slices; emits `result_ready(list[LldpNeighbor])`; no-op when not admin (Sprint 5)
+- `modules/topology_snapshot.py` — `TopologySnapshot`, `TopologyDiff`; save/load/diff topology state; change detection for new/removed/moved devices (Sprint 4)
+- `ui/topology_widget.py`: LLDP overlay layer — draws LLDP infrastructure nodes (squares) and leaf nodes (diamonds) with teal edges from gateway; info banner when admin rights are needed (Sprint 5)
+- `ui/topology_widget.py`: topology diff overlay — new devices highlighted green, removed devices dimmed red; diff legend in lower-left corner (Sprint 4)
+- `ui/topology_widget.py`: zoom controls (+ / − / Reset) in lower-right corner; zoom-to-fit on first render; mouse-wheel zoom (Sprint 2)
+- `ui/topology_widget.py`: node click → `DeviceDrawer` — clicking any device node on the topology map opens the device detail side drawer (Sprint 1)
+- `ui/topology_widget.py`: health overlays on edges — edge colour reflects link state (green = healthy, amber = degraded, red = down) from availability monitor data (Sprint 3)
+- `ui/scan_wiring.py`: `_on_lldp_result()` slot and `_start_lldp_discovery()` — wired into `_on_m1_result()` to auto-launch LLDP scan after every device discovery (Sprint 5)
+- `tests/test_lldp_scanner.py` — 11 tests covering import, dataclass, TLV parsing (chassis MAC, system name, capabilities, management IPv4, truncated data), mocked sniff, and worker lifecycle (RULE-T1, RULE-T2) (Sprint 5)
+- `tests/test_topology_snapshot.py` — tests for `TopologySnapshot` save/load/diff (Sprint 4)
+
+**Changed**
+- `modules/topology_layout.py`: layout now keyed on scan-derived `compute_scan_id()` hash so saved positions survive interface changes without poisoning unrelated scans (Sprint 2)
+- Topology map segment pill colours now reflect `NetworkSegment.colour` from `modules/network_segments.py` (Sprint 2)
+
 ### v2.1.3
 **Added**
 - MetricStore schema v13: `device_classification_overrides` table — user-set type overrides survive all enrichment re-runs permanently

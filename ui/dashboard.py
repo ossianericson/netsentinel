@@ -135,11 +135,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._admin = is_admin()
 
         # Scan results cache
-        self._m1_result = None
-        self._m2_result = None
-        self._m3_result = None
-        self._m4_result = None
-        self._m5_result = None
+        self._m1_result   = None
+        self._m2_result   = None
+        self._m3_result   = None
+        self._m4_result   = None
+        self._m5_result   = None
+        self._lldp_result = None  # list[LldpNeighbor] from Sprint 5 LLDP worker
 
         # Mesh enrichment — populated when MeshRouterPage scan completes
         self._mesh_enrichment: dict = {}   # normalised MAC → MeshClient

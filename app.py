@@ -174,6 +174,8 @@ def _smoke_test() -> None:
         "workers.wifi_monitor_worker",
         "modules.passive_observer",
         "workers.passive_observer_worker",
+        "modules.lldp_scanner",
+        "workers.lldp_worker",
     ]
     for _mod in _checks:
         try:
@@ -385,7 +387,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.3")
+    app.setApplicationVersion("2.1.4")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -421,7 +423,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.3")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.4")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
