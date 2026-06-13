@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 13
+_SCHEMA_VERSION = 14
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -285,6 +285,14 @@ CREATE TABLE IF NOT EXISTS device_classification_overrides (
     device_type     TEXT NOT NULL,
     overridden_at   DATETIME DEFAULT (datetime('now'))
 );
+
+-- Topology change-detection snapshots (schema v14)
+CREATE TABLE IF NOT EXISTS topology_snapshots (
+    id        INTEGER PRIMARY KEY,
+    ts        INTEGER NOT NULL,
+    data_json TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_topo_snap_ts ON topology_snapshots(ts DESC);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────

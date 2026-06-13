@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
 
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
-    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, GREEN,
+    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, GREEN, TEAL,
     MAIN_STYLE, NAV_DIVIDER,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -1004,7 +1004,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         lbl = QLabel("Network topology — run a Device Fingerprint scan first.")
         lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
-        # Toolbar: Fit · Zoom In · Zoom Out · (stretch) · Reset Layout
+        # Toolbar: Fit · Zoom In · Zoom Out · Show Changes · (stretch) · Reset Layout
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 0, 0, 2)
         toolbar.setSpacing(4)
@@ -1022,9 +1022,33 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         btn_zin.setToolTip("Zoom in 20%")
         btn_zout.setToolTip("Zoom out 20%")
         btn_rst.setToolTip("Clear saved positions and re-layout from scratch")
+
+        # Sprint 4 — Show Changes toggle
+        btn_diff = QPushButton("Show Changes")
+        btn_diff.setObjectName("btnNetRefresh")
+        btn_diff.setCheckable(True)
+        btn_diff.setFixedWidth(110)
+        btn_diff.setToolTip(
+            "Overlay added/removed devices and links vs. the previous scan"
+        )
+        self._btn_topo_diff = btn_diff
+
+        # Badge label: "3 new  ·  1 gone" (hidden until a diff exists)
+        self._topo_diff_lbl = QLabel()
+        self._topo_diff_lbl.setStyleSheet(
+            f"color:{TEAL};font-size:11px;font-weight:600;padding:0 6px;"
+        )
+        self._topo_diff_lbl.setVisible(False)
+
+        # Diff state
+        self._topo_diff      = None   # TopologyDiff | None — set by scan_wiring
+        self._topo_diff_mode = False
+
         toolbar.addWidget(btn_fit)
         toolbar.addWidget(btn_zin)
         toolbar.addWidget(btn_zout)
+        toolbar.addWidget(btn_diff)
+        toolbar.addWidget(self._topo_diff_lbl)
         toolbar.addStretch()
         toolbar.addWidget(btn_rst)
 
@@ -1034,12 +1058,26 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         btn_zin.clicked.connect(self._topology_widget.zoom_in)
         btn_zout.clicked.connect(self._topology_widget.zoom_out)
         btn_rst.clicked.connect(self._topology_widget.reset_layout)
+        btn_diff.toggled.connect(self._on_topo_diff_toggled)
 
         lay.addWidget(lbl)
         lay.addLayout(toolbar)
         lay.addWidget(self._topology_widget, 1)
         self._topology_drawer = _DeviceDrawer(w)
         return w
+
+    @pyqtSlot(bool)
+    def _on_topo_diff_toggled(self, checked: bool) -> None:
+        """Re-render topology with or without the change-detection overlay."""
+        self._topo_diff_mode = checked
+        if not hasattr(self, "_topology_widget"):
+            return
+        kw = dict(self._topology_widget._last_render_kwargs)
+        kw["diff"] = self._topo_diff if checked else None
+        try:
+            self._topology_widget.render(**kw)
+        except Exception:
+            pass  # non-fatal — diff overlay is best-effort
 
     @pyqtSlot(str)
     def _on_topology_node_clicked(self, ip: str) -> None:

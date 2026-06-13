@@ -32,7 +32,7 @@ from PyQt6.QtWidgets import QMenu, QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK, BLUE, BORDER,
-    CHART_PURPLE, CHART_TITLE, GREEN, RED,
+    CHART_PURPLE, CHART_TITLE, GREEN, RED, TEAL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 from modules.topology_layout import (
@@ -86,6 +86,10 @@ class TopologyWidget(QWidget):
         # Sprint 3 — edge health overlays
         self._gw_pos: Optional[tuple] = None  # gateway (x, y) for health overlay lines
 
+        # Sprint 4 — diff overlay: cache prev render positions for ghost nodes
+        self._prev_pos_map: dict = {}   # node positions from the previous render call
+        self._prev_ip_map:  dict = {}   # node IPs from the previous render call
+
         self._canvas.mpl_connect("button_press_event",  self._on_button_press)
         self._canvas.mpl_connect("motion_notify_event", self._on_motion)
 
@@ -111,6 +115,7 @@ class TopologyWidget(QWidget):
         edges: Optional[List[TopologyEdge]] = None,
         down_ips: Optional[set] = None,
         new_ips: Optional[set] = None,
+        diff: Optional[Any] = None,   # TopologyDiff | None
     ) -> None:
         # Cache args so reset_layout() can replay the last render.
         self._last_render_kwargs = dict(
@@ -124,7 +129,12 @@ class TopologyWidget(QWidget):
             edges=edges,
             down_ips=down_ips,
             new_ips=new_ips,
+            diff=diff,
         )
+        # Sprint 4 — save previous positions before clearing so ghost nodes
+        # have coordinates during diff overlay rendering.
+        self._prev_pos_map = dict(self._pos_map)
+        self._prev_ip_map  = dict(self._ip_map)
         self._segments = segments or []
         self._pos_map = {}
         self._ip_map = {}
@@ -169,6 +179,10 @@ class TopologyWidget(QWidget):
                 down_ips or set(),
                 new_ips or set(),
             )
+
+        # Sprint 4 — topology diff overlay (added/removed nodes and edges)
+        if diff is not None and not diff.is_empty:
+            self._draw_diff_overlays(ax, diff)
 
         # Extend y-axis below 0 so labels placed at (y - 0.07) near the bottom
         # are never clipped by the axes patch boundary.
@@ -626,6 +640,111 @@ class TopologyWidget(QWidget):
                     edgecolor=BLUE, linewidth=2.2, alpha=0.45, zorder=5,
                 )
                 ax.add_patch(ring)
+
+    # ── Sprint 4: topology diff overlay ──────────────────────────────────────
+
+    def _draw_diff_overlays(self, ax, diff: Any) -> None:
+        """Draw added/removed node badges and ghost edges on top of the base layout."""
+        import matplotlib.patches as _mp
+        from matplotlib.lines import Line2D as _L2D
+
+        # Build reverse lookups
+        ip_to_nk      = {ip: nk for nk, ip in self._ip_map.items()}
+        prev_ip_to_nk = {ip: nk for nk, ip in self._prev_ip_map.items()}
+
+        # ── Added nodes — cyan "+" badge centred on the node ──────────────
+        for ip in diff.added_ips:
+            nk = ip_to_nk.get(ip)
+            if nk and nk in self._pos_map:
+                nx, ny = self._pos_map[nk]
+                ax.annotate(
+                    "+",
+                    xy=(nx, ny),
+                    ha="center", va="center",
+                    fontsize=9, fontweight="bold",
+                    color=BG_CARD, zorder=7,
+                    bbox=dict(
+                        boxstyle="circle,pad=0.3",
+                        fc=TEAL, ec=TEAL, linewidth=0,
+                    ),
+                )
+
+        # ── Removed nodes — faded ghost circle at previous position ───────
+        for ip in diff.removed_ips:
+            nk = prev_ip_to_nk.get(ip)
+            if nk and nk in self._prev_pos_map:
+                gx, gy = self._prev_pos_map[nk]
+                ghost = _mp.Circle(
+                    (gx, gy), radius=0.034,
+                    fill=True,
+                    facecolor=TEXT_MUTED, edgecolor=TEXT_MUTED,
+                    linewidth=1.5, linestyle="--",
+                    alpha=0.25, zorder=3,
+                )
+                ax.add_patch(ghost)
+                ax.annotate(
+                    f"gone\n{ip}",
+                    xy=(gx, gy), xytext=(0, -18),
+                    textcoords="offset points",
+                    ha="center", va="top",
+                    fontsize=7, color=TEXT_MUTED,
+                    alpha=0.55, zorder=4,
+                )
+
+        gw_pos = self._gw_pos
+
+        # ── New edges — GREEN dashed line ─────────────────────────────────
+        if gw_pos:
+            for src_ip, dst_ip in diff.added_edges:
+                nk = ip_to_nk.get(dst_ip)
+                if nk and nk in self._pos_map:
+                    gx, gy = gw_pos
+                    nx, ny = self._pos_map[nk]
+                    ax.plot([gx, nx], [gy, ny],
+                            color=GREEN, linewidth=1.8,
+                            linestyle="--", alpha=0.75, zorder=2)
+
+        # ── Removed edges — RED dotted line at previous positions ─────────
+        if gw_pos and self._prev_pos_map:
+            for src_ip, dst_ip in diff.removed_edges:
+                nk = prev_ip_to_nk.get(dst_ip)
+                if nk and nk in self._prev_pos_map:
+                    gx, gy = gw_pos
+                    nx, ny = self._prev_pos_map[nk]
+                    ax.plot([gx, nx], [gy, ny],
+                            color=RED, linewidth=1.8,
+                            linestyle=":", alpha=0.5, zorder=2)
+
+        # ── Diff legend (upper-left, alongside the existing risk legend) ──
+        legend_items = []
+        if diff.added_ips:
+            legend_items.append(
+                _L2D([0], [0], marker="o", color="w",
+                     markerfacecolor=TEAL, markersize=8, label="New device")
+            )
+        if diff.removed_ips:
+            legend_items.append(
+                _L2D([0], [0], marker="o", color="w",
+                     markerfacecolor=TEXT_MUTED, markersize=8,
+                     alpha=0.4, label="Device gone")
+            )
+        if diff.added_edges:
+            legend_items.append(
+                _L2D([0], [0], color=GREEN, linewidth=2,
+                     linestyle="--", label="New link")
+            )
+        if diff.removed_edges:
+            legend_items.append(
+                _L2D([0], [0], color=RED, linewidth=2,
+                     linestyle=":", label="Link gone")
+            )
+        if legend_items:
+            ax.legend(
+                handles=legend_items, loc="upper left", fontsize=8,
+                labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
+                edgecolor=BORDER, framealpha=0.9,
+                title="Changes", title_fontsize=8,
+            )
 
     # ── shared legend ─────────────────────────────────────────────────────────
 

@@ -743,6 +743,32 @@ class ScanResultMixin(ScanEnrichmentMixin):
             except Exception:
                 pass  # non-fatal — health overlays degrade gracefully
 
+            # Sprint 4 — topology change detection: load previous snapshot,
+            # compute diff before render, save current snapshot after.
+            _topo_diff = None
+            _topo_curr_snap = None
+            try:
+                if self._store is not None:
+                    from modules.topology_snapshot import (
+                        build_snapshot as _build_topo_snap,
+                        diff_snapshots as _diff_topo,
+                        load_last_snapshot as _load_topo_snap,
+                        save_snapshot as _save_topo_snap,
+                    )
+                    _topo_curr_snap = _build_topo_snap(
+                        data.get("devices", []), gw_ip
+                    )
+                    _topo_prev_snap = _load_topo_snap(self._store)
+                    if _topo_prev_snap is not None:
+                        _computed = _diff_topo(_topo_curr_snap, _topo_prev_snap)
+                        self._topo_diff = _computed
+                        if getattr(self, "_topo_diff_mode", False):
+                            _topo_diff = _computed
+                    else:
+                        self._topo_diff = None
+            except Exception:
+                pass  # non-fatal — diff overlay is best-effort
+
             self._topology_widget.render(
                 data.get("devices", []), gw_ip, gw_mac,
                 mesh_units=getattr(self, "_mesh_units", None),
@@ -752,7 +778,30 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 edges=_topo_edges or None,
                 down_ips=_topo_down_ips or None,
                 new_ips=_topo_new_ips or None,
+                diff=_topo_diff,
             )
+
+            # Persist current snapshot (after render so DB write doesn't block)
+            try:
+                if _topo_curr_snap is not None and self._store is not None:
+                    _save_topo_snap(_topo_curr_snap, self._store)
+            except Exception:
+                pass  # non-fatal
+
+            # Update the "N new · M gone" badge label
+            try:
+                _diff_lbl = getattr(self, "_topo_diff_lbl", None)
+                if _diff_lbl is not None:
+                    _diff_text = (
+                        self._topo_diff.summary
+                        if self._topo_diff and not self._topo_diff.is_empty
+                        else ""
+                    )
+                    _diff_lbl.setText(_diff_text)
+                    _diff_lbl.setVisible(bool(_diff_text))
+            except Exception:
+                pass  # non-fatal
+
         except AttributeError:
             pass  # topology widget not yet initialised
         except Exception as _topo_exc:
