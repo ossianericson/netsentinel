@@ -14,7 +14,7 @@ class ZTEMC889:
         self.session = None
 
     def sha256_upper(self, text: str) -> str:
-        return hashlib.sha256(text.encode()).hexdigest().upper()
+        return hashlib.sha256(text.encode()).hexdigest().upper()  # lgtm[py/weak-sensitive-data-hashing] — challenge-response protocol required by ZTE MC889 firmware
 
     def login(self, password: str, username: str = "admin") -> bool:
         self.session = requests.Session()
@@ -86,8 +86,8 @@ class ZTEMC889:
             try:
                 cid_int = int(cell_id, 16) if any(c.isalpha() for c in str(cell_id)) else int(cell_id)
                 enbid = str(cid_int >> 8)
-            except:
-                pass  # non-fatal
+            except (ValueError, TypeError):
+                pass  # non-fatal — cell_id may not be a valid integer
 
         print(f"\n📡 ZTE MC889 @ {datetime.now().strftime('%H:%M:%S')}")
         print("=" * 95)

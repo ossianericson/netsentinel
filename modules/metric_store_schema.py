@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 11
+_SCHEMA_VERSION = 12
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -265,6 +265,19 @@ CREATE TABLE IF NOT EXISTS network_segments (
     auto_created INTEGER NOT NULL DEFAULT 0,
     created_at   DATETIME DEFAULT (datetime('now'))
 );
+
+-- Device change audit trail (schema v12)
+CREATE TABLE IF NOT EXISTS device_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    mac         TEXT    NOT NULL,
+    event_type  TEXT    NOT NULL,
+    old_value   TEXT    NOT NULL DEFAULT '',
+    new_value   TEXT    NOT NULL DEFAULT '',
+    source      TEXT    NOT NULL DEFAULT '',
+    ts          DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_devev_mac_ts ON device_events(mac, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_devev_ts     ON device_events(ts DESC);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────

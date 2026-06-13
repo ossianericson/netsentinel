@@ -1317,6 +1317,17 @@ class ScanEnrichmentMixin:
                         except AttributeError:
                             pass  # dataclass may be frozen
 
+                # Record class upgrade in device audit trail
+                _store_ref = getattr(self, "_store", None)
+                if _store_ref and _mac:
+                    try:
+                        from modules.device_tracker import record_event as _rec_ev
+                        _rec_ev(_mac, "class_changed",
+                                _cur_type or "Unknown Device", fp.device_hint,
+                                "dhcp", _store_ref)
+                    except Exception:
+                        pass  # non-fatal — audit trail is best-effort
+
                 # Update Device Type cell (col 5) in the Devices table
                 _row = _mac_to_row.get(_norm_mac(_mac))
                 if _row is not None and hasattr(self, "_m1_table"):
@@ -1387,6 +1398,19 @@ class ScanEnrichmentMixin:
                             _d.discovery_methods = _methods
                         except AttributeError:
                             pass  # dataclass may be frozen in some code paths
+
+                # Record class upgrade in device audit trail
+                _mac_str = (_d.get("mac", "") if isinstance(_d, dict)
+                            else getattr(_d, "mac", "")) or ""
+                _store_ref = getattr(self, "_store", None)
+                if _store_ref and _mac_str:
+                    try:
+                        from modules.device_tracker import record_event as _rec_ev
+                        _rec_ev(_mac_str, "class_changed",
+                                _cur or "Unknown Device", new_type,
+                                "passive", _store_ref)
+                    except Exception:
+                        pass  # non-fatal — audit trail is best-effort
 
                 # Update the M1 table cell
                 if hasattr(self, "_m1_table"):

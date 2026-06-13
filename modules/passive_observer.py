@@ -183,7 +183,7 @@ def _ssdp_listener(callback: Callable[[PassiveObservation], None]) -> None:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)  # type: ignore[attr-defined]
         except AttributeError:
             pass  # SO_REUSEPORT not available on Windows — not needed
-        sock.bind(("", _SSDP_PORT))
+        sock.bind(("", _SSDP_PORT))  # lgtm[py/bind-socket-all-network-interfaces] — SSDP multicast requires binding to all interfaces
         mreq = struct.pack("4sL", socket.inet_aton(_SSDP_GROUP), socket.INADDR_ANY)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         sock.settimeout(1.0)
@@ -338,7 +338,7 @@ def _mdns_listener(callback: Callable[[PassiveObservation], None]) -> None:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)  # type: ignore[attr-defined]
         except AttributeError:
             pass  # not available on Windows
-        sock.bind(("", _MDNS_PORT))
+        sock.bind(("", _MDNS_PORT))  # lgtm[py/bind-socket-all-network-interfaces] — mDNS multicast requires binding to all interfaces
         mreq = struct.pack("4sL", socket.inet_aton(_MDNS_GROUP), socket.INADDR_ANY)
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         sock.settimeout(1.0)

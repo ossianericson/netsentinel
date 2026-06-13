@@ -114,7 +114,7 @@ def detect_zte(host: str, timeout: float = 3.0) -> bool:
         r = requests.get(
             f"https://{host}/goform/goform_get_cmd_process"
             f"?isTest=false&cmd=LD&_={ts}",
-            verify=False,
+            verify=False,  # lgtm[py/request-without-cert-validation] — ZTE modem uses self-signed cert on LAN
             timeout=timeout,
         )
         return bool(r.json().get("LD"))
@@ -154,7 +154,7 @@ class ZteMC889Client:
     @staticmethod
     def _sha256_upper(text: str) -> str:
         """SHA-256 hex digest, upper-cased.  Required by MC889 firmware — do not alter."""
-        return hashlib.sha256(text.encode()).hexdigest().upper()
+        return hashlib.sha256(text.encode()).hexdigest().upper()  # lgtm[py/weak-sensitive-data-hashing] — challenge-response protocol mandated by device firmware
 
     def login(self, password: str, username: str = "admin") -> None:
         """
@@ -173,7 +173,7 @@ class ZteMC889Client:
             "Referer":    f"https://{self.host}/index.html",
             "User-Agent": "Mozilla/5.0",
         })
-        session.verify = False
+        session.verify = False  # lgtm[py/request-without-cert-validation] — ZTE modem uses self-signed cert on LAN
 
         # Step 1: fetch LD nonce (cache-busted with millisecond timestamp)
         try:

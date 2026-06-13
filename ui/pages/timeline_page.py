@@ -30,10 +30,11 @@ from ui.styles import (
 )
 
 _SOURCE_PAGE_MAP = {
-    "Devices":     "Devices",
-    "Alerts":      "Notifications",
-    "CVEs":        "CVE Tracker",
-    "Speed Tests": "Speed Test",
+    "Devices":        "Devices",
+    "Alerts":         "Notifications",
+    "CVEs":           "CVE Tracker",
+    "Speed Tests":    "Speed Test",
+    "Device Changes": "Devices",
 }
 
 if TYPE_CHECKING:
@@ -42,16 +43,18 @@ if TYPE_CHECKING:
 
 # ── Source tags ────────────────────────────────────────────────────────────────
 
-_SOURCE_DEVICE = "Devices"
-_SOURCE_ALERTS = "Alerts"
-_SOURCE_CVE    = "CVEs"
-_SOURCE_SPEED  = "Speed Tests"
+_SOURCE_DEVICE  = "Devices"
+_SOURCE_ALERTS  = "Alerts"
+_SOURCE_CVE     = "CVEs"
+_SOURCE_SPEED   = "Speed Tests"
+_SOURCE_CHANGES = "Device Changes"
 
 _SOURCE_COLORS = {
-    _SOURCE_DEVICE: ACCENT,
-    _SOURCE_ALERTS: AMBER,
-    _SOURCE_CVE:    RED,
-    _SOURCE_SPEED:  GREEN,
+    _SOURCE_DEVICE:  ACCENT,
+    _SOURCE_ALERTS:  AMBER,
+    _SOURCE_CVE:     RED,
+    _SOURCE_SPEED:   GREEN,
+    _SOURCE_CHANGES: TEXT_MUTED,
 }
 
 
@@ -103,7 +106,7 @@ class TimelinePage(QWidget):
         super().__init__(parent)
         self._store   = store
         self._active_sources: set[str] = {
-            _SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED
+            _SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED, _SOURCE_CHANGES,
         }
         self._events: list[_Ev] = []
         self._tl_search_timer = QTimer(self)
@@ -149,10 +152,11 @@ class TimelinePage(QWidget):
 
         self._glance_labels: dict[str, QLabel] = {}
         for key, label, color in [
-            ("alerts",  "Alerts",      AMBER),
-            ("devices", "New Devices", ACCENT),
-            ("cves",    "CVEs",        RED),
-            ("speed",   "Speed Tests", GREEN),
+            ("alerts",   "Alerts",          AMBER),
+            ("devices",  "Device Events",   ACCENT),
+            ("cves",     "CVEs",            RED),
+            ("speed",    "Speed Tests",     GREEN),
+            ("changes",  "Device Changes",  TEXT_MUTED),
         ]:
             tile = QLabel(f"<b>—</b> {label}")
             tile.setStyleSheet(
@@ -172,7 +176,7 @@ class TimelinePage(QWidget):
         chip_row.addWidget(chip_lbl)
 
         self._chip_btns: dict[str, QPushButton] = {}
-        for src in (_SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED):
+        for src in (_SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED, _SOURCE_CHANGES):
             btn = QPushButton(src)
             btn.setCheckable(True)
             btn.setChecked(True)
@@ -323,6 +327,43 @@ class TimelinePage(QWidget):
             except Exception:
                 pass  # non-fatal
 
+        # Device change audit events
+        if _SOURCE_CHANGES in self._active_sources:
+            try:
+                from modules.device_tracker import get_all_device_events as _get_dev_ev
+                _CHANGE_LABELS = {
+                    "ip_changed":        "IP changed",
+                    "hostname_changed":  "Hostname changed",
+                    "class_changed":     "Type identified",
+                    "vendor_changed":    "Vendor resolved",
+                    "first_seen":        "First seen",
+                    "went_offline":      "Went offline",
+                    "came_online":       "Came online",
+                    "annotation_changed": "Annotation updated",
+                }
+                for ev in _get_dev_ev(self._store, limit=500, hours=168):
+                    _ts_str = ev.get("ts", "")
+                    try:
+                        _ts = datetime.datetime.strptime(str(_ts_str), "%Y-%m-%d %H:%M:%S").timestamp()
+                    except Exception:
+                        continue
+                    _etype = ev.get("event_type", "")
+                    _label = _CHANGE_LABELS.get(_etype, _etype)
+                    _mac   = ev.get("mac", "?")
+                    _old   = ev.get("old_value", "")
+                    _new   = ev.get("new_value", "")
+                    _src   = ev.get("source", "")
+                    _detail = (f"{_old} → {_new}" if _old and _new else (_new or _src))
+                    events.append(_Ev(
+                        ts     = _ts,
+                        source = _SOURCE_CHANGES,
+                        title  = f"{_label}: {_mac[:17]}",
+                        detail = _detail,
+                        severity = "info",
+                    ))
+            except Exception:
+                pass  # non-fatal
+
         events.sort(key=lambda e: e.ts, reverse=True)
         return events[:200]
 
@@ -447,11 +488,13 @@ class TimelinePage(QWidget):
         devices = sum(1 for e in today if e.source == _SOURCE_DEVICE)
         cves    = sum(1 for e in today if e.source == _SOURCE_CVE)
         speed   = sum(1 for e in today if e.source == _SOURCE_SPEED)
+        changes = sum(1 for e in today if e.source == _SOURCE_CHANGES)
 
         self._glance_labels["alerts"].setText(f"<b>{alerts}</b> Alerts")
         self._glance_labels["devices"].setText(f"<b>{devices}</b> Device Events")
         self._glance_labels["cves"].setText(f"<b>{cves}</b> CVEs")
         self._glance_labels["speed"].setText(f"<b>{speed}</b> Speed Tests")
+        self._glance_labels["changes"].setText(f"<b>{changes}</b> Device Changes")
 
     # ── Chip interaction ──────────────────────────────────────────────────────
 

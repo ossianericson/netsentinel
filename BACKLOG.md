@@ -16,6 +16,13 @@ All future development is **polish and user-requested changes only**:
 
 ## Completed Items (condensed — see README.md changelog for detail)
 
+### v2.1.2 (2026-06-12) — Sprint 4
+- ✅ `modules/network_segments.py` — `NetworkSegment` dataclass; `auto_detect_segments()` groups /24 subnets; `classify_device_segment()`; `merge_segments()` (stored user-defined wins)
+- ✅ MetricStore schema v11: `network_segments` table with CIDR, colour, `auto_created` flag
+- ✅ `inventory_page.py`: colour-coded segment pill bar (multi-select filter), Segment `●` column, `_SegmentEditorDialog`
+- ✅ `ui/scan_wiring.py`: segments auto-detected and persisted after every scan
+- ✅ `tests/test_network_segments.py`: 15 tests including scaling guard
+
 ### v2.1.0 (2026-06-11) — Sprint 5
 - ✅ What's Wrong? "A service is unreachable" symptom tile with service combobox (`diagnosis_page.py`)
 - ✅ `service_page.py` "Diagnose →" context action — navigates to Service Diagnostics pre-loaded for the selected service

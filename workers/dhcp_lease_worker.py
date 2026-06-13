@@ -6,8 +6,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-import modules.dhcp_lease_scanner as _scanner
-from modules.dhcp_lease_scanner import DhcpLease
+from modules.dhcp_lease_scanner import DhcpLease, scan as _scan
 from typing import List
 
 
@@ -25,7 +24,7 @@ class DhcpLeaseWorker(QThread):
 
     def run(self) -> None:
         try:
-            leases: List[DhcpLease] = _scanner.scan()
+            leases: List[DhcpLease] = _scan()
             self.result_ready.emit(leases)
         except Exception as exc:
             self.error.emit(str(exc))

@@ -83,6 +83,26 @@ class AvailabilityWorker(QThread):
                         change.previous or "",
                         change.current,
                     )
+                    # Record availability transitions in device audit trail
+                    try:
+                        from modules.device_tracker import record_event as _rec_ev
+                        _known = self._monitor._store.get_known_devices()
+                        _mac = next(
+                            (kd.mac for kd in _known.values()
+                             if kd.ip == change.host),
+                            None,
+                        )
+                        if _mac:
+                            if change.current in ("DOWN", "DEGRADED"):
+                                _rec_ev(_mac, "went_offline",
+                                        change.previous or "", change.current,
+                                        "availability", self._monitor._store)
+                            elif change.current in ("UP", "RECOVERED"):
+                                _rec_ev(_mac, "came_online",
+                                        change.previous or "", change.current,
+                                        "availability", self._monitor._store)
+                    except Exception:
+                        pass  # non-fatal — audit trail is best-effort
             except Exception as exc:  # noqa: BLE001
                 self.error.emit(str(exc))
 

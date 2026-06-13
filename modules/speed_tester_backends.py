@@ -325,6 +325,7 @@ def _get_ssl_ctx() -> ssl.SSLContext:
         _SSL_CTX = ssl.create_default_context()
         _SSL_CTX.check_hostname = False
         _SSL_CTX.verify_mode = ssl.CERT_NONE
+        _SSL_CTX.minimum_version = ssl.TLSVersion.TLSv1_2
     return _SSL_CTX
 
 

@@ -197,7 +197,8 @@ def _probe_service(sock: "socket.socket", port: int, ip: str, timeout: float) ->
             try:
                 ctx = _ssl.create_default_context()
                 ctx.check_hostname = False
-                ctx.verify_mode    = _ssl.CERT_NONE
+                ctx.verify_mode    = _ssl.CERT_NONE  # banner-grab only — cert not evaluated
+                ctx.minimum_version = _ssl.TLSVersion.TLSv1_2
                 tls = ctx.wrap_socket(sock, server_hostname=ip)
                 tls.sendall(b"HEAD / HTTP/1.0\r\nHost: " + ip.encode() + b"\r\n\r\n")
                 raw  = tls.recv(1024)

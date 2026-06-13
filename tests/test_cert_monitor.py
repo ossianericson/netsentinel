@@ -123,7 +123,7 @@ class TestMetricStoreCert:
         rows = store.query_cert_status(hours=24 * 60)
         hosts = {r.host for r in rows}
         assert "old.com" not in hosts
-        assert "new.com" in hosts
+        assert any(h == "new.com" for h in hosts)
 
     def test_get_row_counts_includes_cert_check(self, store):
         store.record_cert_check("example.com", 443, days_remaining=90)
@@ -133,7 +133,7 @@ class TestMetricStoreCert:
 
     def test_schema_version_is_2(self, store):
         rows = store._execute_read("SELECT value FROM meta WHERE key='schema_version'", ())
-        assert rows[0]["value"] == "11"
+        assert rows[0]["value"] == "12"
 
 
 # ── CertMonitor ───────────────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ class TestAlertEngineCert:
         ]
         fired = engine.evaluate_cert_checks(results)
         assert len(fired) == 1
-        assert "alpha.com" in fired[0].host
+        assert fired[0].host in ("alpha.com", "alpha.com:443")
 
     def test_default_rules_include_cert_rules(self):
         from modules.alert_engine import AlertEngine

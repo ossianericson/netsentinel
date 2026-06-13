@@ -360,9 +360,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Gateway identification fixes", "The gateway is now always shown as 'Router / Gateway' regardless of OUI vendor or hostname — fixes a misclassification where Lite-On / gaming-console hostnames caused the gateway to appear as an unknown device."),
-        ("Proxy-ARP deduplication", "IPs that share the gateway MAC (proxy ARP) are now detected and excluded from the device list — the gateway no longer appears twice after a scan."),
-        ("Plugin hostname guard", "Plugin and mesh enrichment can no longer overwrite the gateway's hostname with a client device name (e.g. 'PlayStation 4')."),
+        ("Network segment grouping", "Devices are now automatically grouped into colour-coded /24 subnets after each scan. Use the pill filter bar above the Devices table to show only one segment at a time, or multi-select to compare. Right-click a pill to rename the segment or change its colour."),
+        ("Segment column in device table", "A colour dot in the new Segment column shows which subnet each device belongs to at a glance."),
+        ("Gateway identification fixes", "The gateway is always shown as 'Router / Gateway' regardless of OUI vendor or hostname — fixes a misclassification where Lite-On / gaming-console hostnames caused the gateway to appear as an unknown device."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

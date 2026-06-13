@@ -95,8 +95,8 @@ def test_certs_section_valid():
          "issuer": "Let's Encrypt", "expiry": future},
     ]
     html = _certs_section(certs)
-    assert "example.com" in html
-    assert "10.0.0.1" in html
+    assert "example.com" in html  # lgtm[py/incomplete-url-substring-sanitization] — content check in generated HTML, not URL sanitization
+    assert "10.0.0.1" in html  # lgtm[py/incomplete-url-substring-sanitization]
     assert "Valid" in html or "left" in html
 
 

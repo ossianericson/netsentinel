@@ -5,7 +5,10 @@ import time
 import pytest
 
 from modules.metric_store import MetricStore
-from modules.device_tracker import DeviceTracker, _normalise
+from modules.device_tracker import (
+    DeviceTracker, _normalise,
+    record_event, get_device_events, get_all_device_events,
+)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -320,3 +323,80 @@ class TestIpHistory:
         )
         hist = get_ip_history("aa:bb:cc:00:00:0a", store)
         assert hist[0]["ip"] == "10.0.0.2"
+
+
+# ── TestDeviceAuditEvents ─────────────────────────────────────────────────────
+
+class TestDeviceAuditEvents:
+    """Tests for record_event / get_device_events / get_all_device_events."""
+
+    def test_record_and_retrieve_single_event(self, store):
+        record_event("aa:bb:cc:11:22:33", "ip_changed", "10.0.0.1", "10.0.0.2", "scan", store)
+        events = get_device_events("aa:bb:cc:11:22:33", store)
+        assert len(events) == 1
+        ev = events[0]
+        assert ev["event_type"] == "ip_changed"
+        assert ev["old_value"] == "10.0.0.1"
+        assert ev["new_value"] == "10.0.0.2"
+        assert ev["source"] == "scan"
+
+    def test_events_returned_newest_first(self, store):
+        mac = "aa:bb:cc:11:22:44"
+        record_event(mac, "first_seen",    "", "10.0.0.1", "scan", store)
+        record_event(mac, "class_changed", "Unknown Device", "Laptop", "dhcp", store)
+        record_event(mac, "went_offline",  "UP", "DOWN", "availability", store)
+        events = get_device_events(mac, store)
+        assert len(events) == 3
+        # All three event types must be present
+        types = {ev["event_type"] for ev in events}
+        assert types == {"first_seen", "class_changed", "went_offline"}
+
+    def test_limit_is_respected(self, store):
+        mac = "aa:bb:cc:11:22:55"
+        for i in range(10):
+            record_event(mac, "ip_changed", f"10.0.0.{i}", f"10.0.0.{i+1}", "scan", store)
+        events = get_device_events(mac, store, limit=5)
+        assert len(events) == 5
+
+    def test_empty_mac_ignored(self, store):
+        record_event("", "ip_changed", "a", "b", "scan", store)
+        events = get_device_events("", store)
+        assert events == []
+
+    def test_mac_normalised_to_lower(self, store):
+        record_event("AA:BB:CC:11:22:66", "first_seen", "", "10.0.0.1", "scan", store)
+        events = get_device_events("aa:bb:cc:11:22:66", store)
+        assert len(events) == 1
+
+    def test_get_device_events_filters_by_mac(self, store):
+        record_event("aa:bb:cc:11:22:77", "first_seen", "", "10.0.0.1", "scan", store)
+        record_event("aa:bb:cc:11:22:88", "first_seen", "", "10.0.0.2", "scan", store)
+        events = get_device_events("aa:bb:cc:11:22:77", store)
+        assert len(events) == 1
+        assert events[0]["new_value"] == "10.0.0.1"
+
+    def test_get_all_device_events_returns_all_macs(self, store):
+        record_event("aa:bb:cc:11:22:aa", "first_seen", "", "10.0.0.1", "scan", store)
+        record_event("aa:bb:cc:11:22:bb", "first_seen", "", "10.0.0.2", "scan", store)
+        all_evs = get_all_device_events(store, limit=100, hours=1)
+        macs = {ev["mac"] for ev in all_evs}
+        assert "aa:bb:cc:11:22:aa" in macs
+        assert "aa:bb:cc:11:22:bb" in macs
+
+    def test_get_all_device_events_respects_limit(self, store):
+        for i in range(20):
+            record_event(f"aa:bb:cc:11:22:{i:02x}", "first_seen", "", str(i), "scan", store)
+        all_evs = get_all_device_events(store, limit=5, hours=1)
+        assert len(all_evs) <= 5
+
+    def test_get_all_device_events_empty_when_no_data(self, store):
+        all_evs = get_all_device_events(store, limit=100, hours=1)
+        assert all_evs == []
+
+    def test_first_seen_recorded_by_process_scan(self, store):
+        tracker = DeviceTracker(store=store, gone_threshold_s=3600)
+        devices = [{"mac": "aa:bb:cc:11:22:cc", "ip": "10.0.0.5",
+                    "hostname": "new-host", "vendor": "Apple", "device_type": "Laptop"}]
+        tracker.process_scan(devices)
+        events = get_device_events("aa:bb:cc:11:22:cc", store)
+        assert any(ev["event_type"] == "first_seen" for ev in events)

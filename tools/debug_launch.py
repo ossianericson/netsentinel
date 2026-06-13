@@ -39,7 +39,7 @@ for _old in _existing:
     except OSError:
         pass  # log rotation errors are non-fatal
 
-_log = open(_ROTATED_PATH, "w", encoding="utf-8")  # noqa: WPS515 lgtm[py/file-not-closed]
+_log = open(_ROTATED_PATH, "w", encoding="utf-8")  # lgtm[py/file-not-closed] — log file kept open for process lifetime; atexit closes it  # noqa: WPS515
 atexit.register(_log.close)
 
 # Update the stable symlink/copy immediately so any process reading

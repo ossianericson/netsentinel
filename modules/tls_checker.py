@@ -43,8 +43,8 @@ def check_cert(host: str, port: int = 443, timeout: float = 5.0) -> CertInfo:
     try:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
-        ctx.verify_mode    = ssl.CERT_NONE   # we inspect manually
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_2  # still require TLS 1.2+
+        ctx.verify_mode    = ssl.CERT_NONE   # we inspect manually — cert is evaluated in code below
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2  # lgtm[py/insecure-protocol] — TLS 1.2+ enforced; CERT_NONE is intentional for manual inspection  # still require TLS 1.2+
         with socket.create_connection((host, port), timeout=timeout) as raw:
             with ctx.wrap_socket(raw, server_hostname=host) as tls:
                 cert = tls.getpeercert()

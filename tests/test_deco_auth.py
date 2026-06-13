@@ -83,7 +83,7 @@ def main():
 
     # Hash = MD5(username + plaintext_password) — per tpEncrypt.js setHash(user, pw)
     username = keys_body.get("result", {}).get("username", "")
-    pw_hash  = hashlib.md5((username + password).encode()).hexdigest()
+    pw_hash  = hashlib.md5((username + password).encode()).hexdigest()  # lgtm[py/weak-sensitive-data-hashing] — MD5 mandated by TP-Link Deco tpEncrypt.js setHash() protocol
     print(f"  username: {username!r}  hash: {pw_hash}")
 
     # Deco inner payload: {"params": {"password": crypted_pwd}, "operation": "login"}

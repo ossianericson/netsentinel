@@ -13,7 +13,7 @@ from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QTableWidgetItem, QTextEdit, QVBoxLayout,
+    QScrollArea, QTabWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
     QWidget,
 )
 
@@ -45,6 +45,7 @@ class _DeviceLabelDialog(QDialog):
 
         known = store.get_known_devices()
         device = known.get(mac.lower()) or known.get(mac)
+        self._old_name = (device.custom_name or "") if device else ""
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(20, 16, 20, 16)
@@ -103,12 +104,20 @@ class _DeviceLabelDialog(QDialog):
         lay.addWidget(btns)
 
     def _save(self) -> None:
-        name = self._name.text().strip() or None
-        tags = self._tags.text().strip() or None
+        name  = self._name.text().strip() or None
+        tags  = self._tags.text().strip() or None
         notes = self._notes.toPlainText().strip() or None
         self._store.update_device_ha_info(
             self._mac, custom_name=name, tags=tags, notes=notes
         )
+        _new_name = name or ""
+        if _new_name != self._old_name:
+            try:
+                from modules.device_tracker import record_event as _rec_ev
+                _rec_ev(self._mac, "annotation_changed",
+                        self._old_name, _new_name, "user", self._store)
+            except Exception:
+                pass  # non-fatal — audit trail is best-effort
         self.accept()
 
 
@@ -135,6 +144,7 @@ class _DeviceDrawer(QFrame):
         lay.setContentsMargins(14, 12, 14, 12)
         lay.setSpacing(8)
 
+        # ── Header (always visible above tabs) ───────────────────────────────
         hdr_row = QHBoxLayout()
         self._title_lbl = QLabel("Device")
         self._title_lbl.setStyleSheet(
@@ -153,14 +163,24 @@ class _DeviceDrawer(QFrame):
         hdr_row.addWidget(close_btn)
         lay.addLayout(hdr_row)
 
-        self._mac_lbl    = QLabel("")
+        self._mac_lbl = QLabel("")
         self._mac_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
         lay.addWidget(self._mac_lbl)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color:{BORDER}; background:{BORDER}; max-height:1px;")
-        lay.addWidget(sep)
+        # ── Tab widget ────────────────────────────────────────────────────────
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(
+            f"QTabWidget::pane {{ border:1px solid {BORDER}; }}"
+            f"QTabBar::tab {{ font-size:10px; padding:3px 10px; color:{TEXT_SECONDARY}; }}"
+            f"QTabBar::tab:selected {{ color:{ACCENT}; font-weight:bold; }}"
+        )
+        lay.addWidget(self._tabs, 1)
+
+        # ── Details tab ───────────────────────────────────────────────────────
+        _details_w = QWidget()
+        _details_lay = QVBoxLayout(_details_w)
+        _details_lay.setContentsMargins(0, 8, 0, 0)
+        _details_lay.setSpacing(6)
 
         def _row(label: str, value_lbl: QLabel) -> None:
             r = QHBoxLayout()
@@ -169,25 +189,44 @@ class _DeviceDrawer(QFrame):
             value_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
             r.addWidget(l)
             r.addWidget(value_lbl, 1)
-            lay.addLayout(r)
+            _details_lay.addLayout(r)
 
-        self._first_seen_val = QLabel("—")
-        self._last_seen_val  = QLabel("—")
+        self._first_seen_val  = QLabel("—")
+        self._last_seen_val   = QLabel("—")
         self._event_count_val = QLabel("—")
-        self._vendor_val     = QLabel("—")
-        self._custom_val     = QLabel("—")
-        self._tags_val       = QLabel("—")
-        self._notes_val      = QLabel("—")
+        self._vendor_val      = QLabel("—")
+        self._custom_val      = QLabel("—")
+        self._tags_val        = QLabel("—")
+        self._notes_val       = QLabel("—")
         self._notes_val.setWordWrap(True)
 
-        _row("First seen",   self._first_seen_val)
-        _row("Last seen",    self._last_seen_val)
-        _row("Events",       self._event_count_val)
-        _row("Vendor",       self._vendor_val)
-        _row("Custom name",  self._custom_val)
-        _row("Tags",         self._tags_val)
-        _row("Notes",        self._notes_val)
-        lay.addStretch()
+        _row("First seen",  self._first_seen_val)
+        _row("Last seen",   self._last_seen_val)
+        _row("Events",      self._event_count_val)
+        _row("Vendor",      self._vendor_val)
+        _row("Custom name", self._custom_val)
+        _row("Tags",        self._tags_val)
+        _row("Notes",       self._notes_val)
+        _details_lay.addStretch()
+        self._tabs.addTab(_details_w, "Details")
+
+        # ── History tab ───────────────────────────────────────────────────────
+        _hist_container = QWidget()
+        _hist_outer = QVBoxLayout(_hist_container)
+        _hist_outer.setContentsMargins(0, 4, 0, 0)
+        _hist_outer.setSpacing(0)
+
+        self._history_inner = QWidget()
+        self._history_layout = QVBoxLayout(self._history_inner)
+        self._history_layout.setContentsMargins(2, 2, 2, 2)
+        self._history_layout.setSpacing(3)
+
+        _scroll = QScrollArea()
+        _scroll.setWidgetResizable(True)
+        _scroll.setWidget(self._history_inner)
+        _scroll.setStyleSheet(f"QScrollArea {{ border:none; background:{BG_CARD}; }}")
+        _hist_outer.addWidget(_scroll, 1)
+        self._tabs.addTab(_hist_container, "History")
 
         self._anim = QPropertyAnimation(self, b"geometry", self)
         self._anim.setDuration(180)
@@ -221,6 +260,106 @@ class _DeviceDrawer(QFrame):
             self._event_count_val.setText(str(count) if count else "0")
         except Exception:
             self._event_count_val.setText("—")
+        self._populate_history(mac, store)
+
+    def _populate_history(self, mac: str, store: "Optional[MetricStore]") -> None:
+        """Clear and refill the History tab with device_events rows."""
+        while self._history_layout.count() > 0:
+            item = self._history_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if store is None:
+            _lbl = QLabel("No store available")
+            _lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+            self._history_layout.addWidget(_lbl)
+            self._history_layout.addStretch()
+            return
+
+        try:
+            from modules.device_tracker import get_device_events
+            events = get_device_events(mac, store, limit=30)
+        except Exception:
+            events = []
+
+        if not events:
+            _lbl = QLabel("No history recorded yet")
+            _lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; padding:4px;")
+            self._history_layout.addWidget(_lbl)
+            self._history_layout.addStretch()
+            return
+
+        _COLORS = {
+            "ip_changed":        RED,
+            "hostname_changed":  AMBER,
+            "class_changed":     GREEN,
+            "vendor_changed":    GREEN,
+            "first_seen":        GREEN,
+            "went_offline":      RED,
+            "came_online":       GREEN,
+            "annotation_changed": ACCENT,
+        }
+        _LABELS = {
+            "ip_changed":        "IP changed",
+            "hostname_changed":  "Hostname changed",
+            "class_changed":     "Type identified",
+            "vendor_changed":    "Vendor resolved",
+            "first_seen":        "First seen",
+            "went_offline":      "Went offline",
+            "came_online":       "Came online",
+            "annotation_changed": "Annotation updated",
+        }
+
+        for ev in events:
+            etype = ev.get("event_type", "")
+            color = _COLORS.get(etype, TEXT_MUTED)
+            label = _LABELS.get(etype, etype)
+            old_v = ev.get("old_value", "")
+            new_v = ev.get("new_value", "")
+            ts    = ev.get("ts", "")
+
+            _rel = ""
+            try:
+                _dt = datetime.datetime.strptime(str(ts), "%Y-%m-%d %H:%M:%S")
+                _delta = datetime.datetime.utcnow() - _dt
+                if _delta.days > 0:
+                    _rel = f"{_delta.days}d ago"
+                elif _delta.seconds >= 3600:
+                    _rel = f"{_delta.seconds // 3600}h ago"
+                elif _delta.seconds >= 60:
+                    _rel = f"{_delta.seconds // 60}m ago"
+                else:
+                    _rel = "just now"
+            except Exception:
+                _rel = str(ts)[:10] if ts else ""
+
+            _desc = (f"{old_v} → {new_v}" if old_v and new_v
+                     else (new_v or ""))
+
+            row_w = QWidget()
+            row_lay = QHBoxLayout(row_w)
+            row_lay.setContentsMargins(2, 1, 2, 1)
+            row_lay.setSpacing(4)
+
+            dot = QLabel("●")
+            dot.setStyleSheet(f"color:{color}; font-size:8px; background:transparent;")
+            dot.setFixedWidth(10)
+
+            text_lbl = QLabel(f"<b>{label}</b>" + (f"<br><span style='color:{TEXT_MUTED};'>{_desc}</span>" if _desc else ""))
+            text_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            text_lbl.setWordWrap(True)
+
+            time_lbl = QLabel(_rel)
+            time_lbl.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED};")
+            time_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+
+            row_lay.addWidget(dot)
+            row_lay.addWidget(text_lbl, 1)
+            row_lay.addWidget(time_lbl)
+
+            self._history_layout.addWidget(row_w)
+
+        self._history_layout.addStretch()
 
     def open_drawer(self) -> None:
         parent = self.parent()

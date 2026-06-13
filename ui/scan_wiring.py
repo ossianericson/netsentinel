@@ -440,6 +440,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._inventory_page.set_scan_devices(devices)
         self._m1_table.setRowCount(0)
         _store_ref = getattr(self, "_store", None)
+        # Snapshot known devices before the loop so we can detect IP/hostname changes
+        _known_before: dict = _store_ref.get_known_devices() if _store_ref else {}
         for d in devices:
             level   = d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")
             ip      = d.ip       if not isinstance(d, dict) else d.get("ip", "?")
@@ -451,6 +453,19 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     _rec_ip(mac, ip, _store_ref)
                 except Exception:
                     pass  # non-fatal — table may not exist on schema upgrade
+                # ── Device change audit events ────────────────────────────────
+                _old_kd = _known_before.get(mac.lower())
+                if _old_kd:
+                    try:
+                        from modules.device_tracker import record_event as _rec_ev
+                        if _old_kd.ip and ip and ip != _old_kd.ip:
+                            _rec_ev(mac, "ip_changed", _old_kd.ip, ip, "scan", _store_ref)
+                        _old_hn = _old_kd.hostname or ""
+                        _new_hn = host or ""
+                        if _old_hn and _new_hn and _new_hn != _old_hn:
+                            _rec_ev(mac, "hostname_changed", _old_hn, _new_hn, "scan", _store_ref)
+                    except Exception:
+                        pass  # non-fatal — audit trail is best-effort
             vendor  = d.vendor   if not isinstance(d, dict) else d.get("vendor", "Unknown")
             dtype   = d.device_type if not isinstance(d, dict) else d.get("device_type", "")
             # Fall back to connection_type when device_type is blank

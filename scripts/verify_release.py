@@ -166,9 +166,15 @@ def main() -> None:
     print("\n[3/3] VirusTotal")
     if release:
         body = release.get("body", "") or ""
-        vt_line = next((l for l in body.splitlines() if "virustotal.com" in l.lower()), None)
+        import re
+        import urllib.parse as _urlparse
+        vt_line = next(
+            (l for l in body.splitlines()
+             if any(_urlparse.urlparse(tok).hostname in ("virustotal.com", "www.virustotal.com")
+                    for tok in l.split() if tok.startswith("http"))),
+            None,
+        )
         if vt_line:
-            import re
             match = re.search(r"https://www\.virustotal\.com/\S+", vt_line)
             if match:
                 print(f"  VT link  : {match.group()}")

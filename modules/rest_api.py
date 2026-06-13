@@ -251,7 +251,7 @@ def create_app(store: MetricStore) -> "Flask":
         try:
             r = engine.run(service_id, traceroute=do_trace)
         except Exception:
-            return jsonify({"error": "Diagnostic run failed"}), 500
+            return jsonify({"error": "Diagnostic run failed"}), 500  # lgtm[py/stack-trace-exposure] — fixed message, no stack trace in response
         return jsonify({
             "service_id":    r.service_id,
             "service_name":  r.service_name,

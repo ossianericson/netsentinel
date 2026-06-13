@@ -143,6 +143,17 @@ class DeviceTracker:
                     detail=f"New device: {td.vendor or 'Unknown'} / {td.device_type or '—'}",
                     ts=now,
                 )
+                try:
+                    record_event(
+                        mac=td.mac,
+                        event_type="first_seen",
+                        old_value="",
+                        new_value=td.ip or "",
+                        source="scan",
+                        store=self._store,
+                    )
+                except Exception:
+                    pass  # non-fatal — audit table may not exist on schema upgrade
                 result.new_devices.append(td)
 
         # ── Gone detection ────────────────────────────────────────────────────
@@ -272,6 +283,84 @@ def get_annotations(mac: str, store: "MetricStore") -> Dict:
         "asset_tag":  r[4] or "",
         "updated_at": r[5] or "",
     }
+
+
+def record_event(
+    mac: str,
+    event_type: str,
+    old_value: str,
+    new_value: str,
+    source: str,
+    store: "MetricStore",
+) -> None:
+    """Write a row to the device_events audit table."""
+    if not mac:
+        return
+    now = _utcnow()
+    store._execute_write(
+        """
+        INSERT INTO device_events (mac, event_type, old_value, new_value, source, ts)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (mac.lower(), event_type, old_value or "", new_value or "", source or "", now),
+    )
+
+
+def get_device_events(
+    mac: str,
+    store: "MetricStore",
+    limit: int = 50,
+) -> List[Dict]:
+    """Return [{event_type, old_value, new_value, source, ts}] newest-first."""
+    rows = store._execute_read(
+        """
+        SELECT event_type, old_value, new_value, source, ts
+        FROM device_events
+        WHERE mac = ?
+        ORDER BY ts DESC
+        LIMIT ?
+        """,
+        (mac.lower(), limit),
+    )
+    return [
+        {
+            "event_type": r[0],
+            "old_value":  r[1] or "",
+            "new_value":  r[2] or "",
+            "source":     r[3] or "",
+            "ts":         r[4],
+        }
+        for r in rows
+    ]
+
+
+def get_all_device_events(
+    store: "MetricStore",
+    limit: int = 500,
+    hours: int = 168,
+) -> List[Dict]:
+    """Return recent device change events across all MACs, newest-first."""
+    rows = store._execute_read(
+        """
+        SELECT mac, event_type, old_value, new_value, source, ts
+        FROM device_events
+        WHERE ts >= datetime('now', ? || ' hours')
+        ORDER BY ts DESC
+        LIMIT ?
+        """,
+        (f"-{hours}", limit),
+    )
+    return [
+        {
+            "mac":        r[0],
+            "event_type": r[1],
+            "old_value":  r[2] or "",
+            "new_value":  r[3] or "",
+            "source":     r[4] or "",
+            "ts":         r[5],
+        }
+        for r in rows
+    ]
 
 
 def get_all_annotations(store: "MetricStore") -> Dict[str, Dict]:
