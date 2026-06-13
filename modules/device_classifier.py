@@ -569,6 +569,13 @@ def classify_from_observation(obs: object) -> ClassificationResult:
     )
 
 
+def get_all_device_types() -> list:
+    """Return sorted list of all valid device type labels for the UI dropdown."""
+    types: set = {rule["label"] for rule in _RULES}
+    types.update(["Router / Gateway", "Mesh Network Node", "Unknown Device"])
+    return sorted(types)
+
+
 def classify_device(device, is_gateway: bool = False) -> str:
     """
     Convenience wrapper that accepts a DeviceInfo dataclass instance or a

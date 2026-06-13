@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 12
+_SCHEMA_VERSION = 13
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -278,6 +278,13 @@ CREATE TABLE IF NOT EXISTS device_events (
 );
 CREATE INDEX IF NOT EXISTS idx_devev_mac_ts ON device_events(mac, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_devev_ts     ON device_events(ts DESC);
+
+-- User device type overrides — permanent, override all enrichment (schema v13)
+CREATE TABLE IF NOT EXISTS device_classification_overrides (
+    mac             TEXT PRIMARY KEY,
+    device_type     TEXT NOT NULL,
+    overridden_at   DATETIME DEFAULT (datetime('now'))
+);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────

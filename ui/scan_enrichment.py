@@ -1300,6 +1300,15 @@ class ScanEnrichmentMixin:
                 if not _mac:
                     continue
 
+                # Override guard — never touch user-overridden devices
+                _store_ref2 = getattr(self, "_store", None)
+                if _store_ref2:
+                    try:
+                        if _store_ref2.get_classification_override(_mac):
+                            continue
+                    except Exception:
+                        pass  # non-fatal
+
                 fp = _get_fp(_mac)
                 if not fp or fp.confidence != "high" or not fp.device_hint:
                     continue
@@ -1370,6 +1379,20 @@ class ScanEnrichmentMixin:
                 _dip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
                 if _dip != obs_ip:
                     continue
+
+                # Override guard — never touch user-overridden devices
+                _mac_ov = (
+                    _d.get("mac", "") if isinstance(_d, dict)
+                    else getattr(_d, "mac", "")
+                ) or ""
+                _store_ov = getattr(self, "_store", None)
+                if _mac_ov and _store_ov:
+                    try:
+                        if _store_ov.get_classification_override(_mac_ov):
+                            break
+                    except Exception:
+                        pass  # non-fatal
+
                 _cur = (_d.device_type if not isinstance(_d, dict)
                         else _d.get("device_type", "")) or ""
                 # Only overwrite if current label is unknown or the observation is high confidence

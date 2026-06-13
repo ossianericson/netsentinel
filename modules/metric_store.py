@@ -287,6 +287,24 @@ class MetricStore(MetricStoreQueryMixin):
             (int(authorized), mac),
         )
 
+    # ── Write: Classification overrides ──────────────────────────────────────
+
+    def set_classification_override(self, mac: str, device_type: str) -> None:
+        """Permanently override the device type for a MAC (survives all enrichment)."""
+        self._execute_write(
+            "INSERT INTO device_classification_overrides (mac, device_type) "
+            "VALUES (?, ?) ON CONFLICT(mac) DO UPDATE SET "
+            "device_type = excluded.device_type, overridden_at = datetime('now')",
+            (mac.lower(), device_type),
+        )
+
+    def clear_classification_override(self, mac: str) -> None:
+        """Remove the user type override for this MAC, restoring auto-classification."""
+        self._execute_write(
+            "DELETE FROM device_classification_overrides WHERE mac = ?",
+            (mac.lower(),),
+        )
+
     # ── Write: TLS certificate checks ─────────────────────────────────────────
 
     def record_cert_check(

@@ -279,3 +279,40 @@ def test_liteon_without_web_port_not_forced_router():
     # Liteon with NO web ports should fall through (no rule forces it to Router)
     result = classify(vendor="Liteon Technology Corporation", hostname="", open_ports=set())
     assert result != "Router / Gateway"
+
+
+# ── get_all_device_types() tests (Sprint 6) ──────────────────────────────────
+
+def test_get_all_device_types_returns_list():
+    from modules.device_classifier import get_all_device_types
+    result = get_all_device_types()
+    assert isinstance(result, list)
+    assert len(result) > 0
+
+
+def test_get_all_device_types_is_sorted():
+    from modules.device_classifier import get_all_device_types
+    result = get_all_device_types()
+    assert result == sorted(result)
+
+
+def test_get_all_device_types_contains_required_labels():
+    from modules.device_classifier import get_all_device_types
+    result = get_all_device_types()
+    for required in ("Router / Gateway", "Mesh Network Node", "Unknown Device"):
+        assert required in result, f"Expected '{required}' in get_all_device_types()"
+
+
+def test_get_all_device_types_contains_classifier_labels():
+    from modules.device_classifier import get_all_device_types, _RULES
+    result = get_all_device_types()
+    rule_labels = {r["label"] for r in _RULES}
+    for label in rule_labels:
+        assert label in result, f"Rule label '{label}' missing from get_all_device_types()"
+
+
+def test_get_all_device_types_all_strings():
+    from modules.device_classifier import get_all_device_types
+    result = get_all_device_types()
+    for item in result:
+        assert isinstance(item, str) and item, f"Non-string or empty item: {item!r}"

@@ -175,6 +175,24 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             for r in rows
         }
 
+    # ── Read: Classification overrides ───────────────────────────────────────
+
+    def get_classification_override(self, mac: str) -> Optional[str]:
+        """Return the user-set device_type override for this MAC, or None."""
+        rows = self._execute_read(
+            "SELECT device_type FROM device_classification_overrides WHERE mac = ?",
+            (mac.lower(),),
+        )
+        return rows[0]["device_type"] if rows else None
+
+    def get_all_classification_overrides(self) -> Dict[str, str]:
+        """Return a dict mapping lowercase MAC → device_type for all active overrides."""
+        rows = self._execute_read(
+            "SELECT mac, device_type FROM device_classification_overrides",
+            (),
+        )
+        return {r["mac"]: r["device_type"] for r in rows}
+
     # ── Read: Home Automation ─────────────────────────────────────────────────
 
     def query_ha_detected(self, hours: float = 168.0) -> List[HaDetectedPoint]:

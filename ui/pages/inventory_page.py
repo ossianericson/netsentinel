@@ -23,9 +23,9 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
-    QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QPushButton, QScrollArea,
-    QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem, QTextEdit,
-    QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QLineEdit, QMenu, QPlainTextEdit, QPushButton,
+    QScrollArea, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
+    QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ui.expanding_table import ExpandingTable
@@ -135,6 +135,97 @@ class _DeviceLabelDialog(QDialog):
         self.accept()
 
 
+# ── Device type override dialog (Sprint 6) ──────────────────────────────────
+
+class _TypeOverrideDialog(QDialog):
+    """Let the user permanently pin a device to a specific type."""
+
+    def __init__(self, mac: str, current_type: str,
+                 current_override: Optional[str],
+                 store: "MetricStore", parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Override Device Type")
+        self.setFixedWidth(340)
+        self.setModal(True)
+        self._mac   = mac
+        self._store = store
+
+        from modules.device_classifier import get_all_device_types
+        all_types = get_all_device_types()
+
+        lay = QVBoxLayout(self)
+        lay.setSpacing(10)
+        lay.setContentsMargins(16, 16, 16, 16)
+
+        info = QLabel(f"<b>{mac}</b><br>Current type: {current_type}")
+        info.setTextFormat(Qt.TextFormat.RichText)
+        info.setWordWrap(True)
+        info.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY};")
+        lay.addWidget(info)
+
+        self._combo = QComboBox()
+        self._combo.addItems(all_types)
+        self._combo.setStyleSheet(
+            f"QComboBox {{ font-size:11px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:3px 6px; }}"
+        )
+        sel = current_override or current_type
+        idx = self._combo.findText(sel)
+        if idx >= 0:
+            self._combo.setCurrentIndex(idx)
+        lay.addWidget(self._combo)
+
+        btns = QHBoxLayout()
+        set_btn = QPushButton("Set Override")
+        set_btn.setFixedHeight(28)
+        set_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f" border-radius:3px; font-size:11px; padding:0 12px; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        set_btn.clicked.connect(self._set_override)
+        btns.addWidget(set_btn)
+
+        if current_override:
+            clr_btn = QPushButton("Clear Override")
+            clr_btn.setFixedHeight(28)
+            clr_btn.setStyleSheet(
+                f"QPushButton {{ background:{BG_CARD}; color:{RED};"
+                f" border:1px solid {RED}; border-radius:3px; font-size:11px; }}"
+                f"QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
+                f"QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}"
+            )
+            clr_btn.clicked.connect(self._clear_override)
+            btns.addWidget(clr_btn)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setFixedHeight(28)
+        cancel_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; font-size:11px; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+        )
+        cancel_btn.clicked.connect(self.reject)
+        btns.addWidget(cancel_btn)
+        lay.addLayout(btns)
+
+    def _set_override(self) -> None:
+        try:
+            self._store.set_classification_override(self._mac, self._combo.currentText())
+        except Exception:
+            pass  # non-fatal
+        self.accept()
+
+    def _clear_override(self) -> None:
+        try:
+            self._store.clear_classification_override(self._mac)
+        except Exception:
+            pass  # non-fatal
+        self.accept()
+
+
 # ── Device history drawer (DEVICE-2) ─────────────────────────────────────────
 
 class _DeviceDrawer(QFrame):
@@ -230,6 +321,67 @@ class _DeviceDrawer(QFrame):
                 f" padding-top:4px;"
             )
             lay.addWidget(h)
+
+        # ── Classification section (Sprint 6) ─────────────────────────────────
+        self._class_frame = QFrame()
+        self._class_frame.setVisible(False)
+        _cf_lay = QVBoxLayout(self._class_frame)
+        _cf_lay.setContentsMargins(0, 4, 0, 4)
+        _cf_lay.setSpacing(3)
+
+        _ch = QLabel("CLASSIFICATION")
+        _ch.setStyleSheet(
+            f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+            f" text-transform:uppercase; letter-spacing:1px;"
+        )
+        _cf_lay.addWidget(_ch)
+
+        _ct_row = QHBoxLayout()
+        self._class_type_val = QLabel("—")
+        self._class_type_val.setStyleSheet(
+            f"font-size:10px; font-weight:bold; color:{TEXT_PRIMARY};"
+        )
+        self._class_override_badge = QLabel("★ Override")
+        self._class_override_badge.setVisible(False)
+        self._class_override_badge.setStyleSheet(
+            f"font-size:9px; color:{ACCENT}; padding:1px 4px;"
+            f" border:1px solid {ACCENT}; border-radius:2px;"
+        )
+        _ct_row.addWidget(self._class_type_val)
+        _ct_row.addWidget(self._class_override_badge)
+        _ct_row.addStretch()
+        _cf_lay.addLayout(_ct_row)
+
+        self._class_conf_val = QLabel("Confidence: —")
+        self._class_conf_val.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        _cf_lay.addWidget(self._class_conf_val)
+
+        self._class_evidence_val = QLabel("")
+        self._class_evidence_val.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
+        self._class_evidence_val.setWordWrap(True)
+        _cf_lay.addWidget(self._class_evidence_val)
+
+        self._class_clear_btn = QPushButton("Clear Override")
+        self._class_clear_btn.setFixedHeight(24)
+        self._class_clear_btn.setVisible(False)
+        self._class_clear_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{RED}; border:1px solid {RED};"
+            f" border-radius:3px; font-size:10px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}"
+        )
+        self._class_clear_btn.clicked.connect(self._clear_type_override)
+        _cf_lay.addWidget(self._class_clear_btn)
+
+        lay.addWidget(self._class_frame)
+
+        self._class_sep = QFrame()
+        self._class_sep.setFrameShape(QFrame.Shape.HLine)
+        self._class_sep.setStyleSheet(
+            f"color:{BORDER}; background:{BORDER}; max-height:1px;"
+        )
+        self._class_sep.setVisible(False)
+        lay.addWidget(self._class_sep)
 
         # ── Device info section ────────────────────────────────────────────────
         self._first_seen_val  = QLabel("—")
@@ -329,6 +481,54 @@ class _DeviceDrawer(QFrame):
             return
         devices = store.get_known_devices()
         kd = devices.get(mac.lower()) or devices.get(mac)
+
+        # ── Classification section ─────────────────────────────────────────────
+        _override: Optional[str] = None
+        try:
+            _override = store.get_classification_override(mac)
+        except Exception:
+            pass  # non-fatal — table may not exist on first run
+        if kd:
+            self._class_frame.setVisible(True)
+            self._class_sep.setVisible(True)
+            _cur_type = _override or kd.device_type or "Unknown Device"
+            self._class_type_val.setText(_cur_type)
+            if _override:
+                self._class_override_badge.setVisible(True)
+                self._class_conf_val.setText("Permanently overridden by user")
+                self._class_clear_btn.setVisible(True)
+            else:
+                self._class_override_badge.setVisible(False)
+                _conf = float(kd.confidence or 0.0)
+                if _conf >= 0.7:
+                    _label = f"{_conf:.0%} (high)"
+                elif _conf >= 0.3:
+                    _label = f"{_conf:.0%} (medium)"
+                elif _conf > 0.0:
+                    _label = f"{_conf:.0%} (low)"
+                else:
+                    _label = "unknown"
+                self._class_conf_val.setText(f"Confidence: {_label}")
+                self._class_clear_btn.setVisible(False)
+            try:
+                from modules.device_classifier import classify_with_evidence as _cwe
+                _cr = _cwe(
+                    vendor=kd.vendor or "",
+                    hostname=kd.hostname or "",
+                    open_ports=set(),
+                    os_family="",
+                    mac=mac,
+                    is_gateway=False,
+                )
+                if _cr.evidence:
+                    self._class_evidence_val.setText(
+                        "Evidence: " + ", ".join(_cr.evidence[:4])
+                    )
+                else:
+                    self._class_evidence_val.setText("Evidence: OUI lookup only")
+            except Exception:
+                self._class_evidence_val.setText("")  # non-fatal
+
         if kd:
             self._first_seen_val.setText(
                 datetime.datetime.fromtimestamp(kd.first_seen).strftime("%Y-%m-%d %H:%M")
@@ -371,6 +571,15 @@ class _DeviceDrawer(QFrame):
 
         # ── IP History ────────────────────────────────────────────────────────
         self._rebuild_ip_history(mac, store)
+
+    def _clear_type_override(self) -> None:
+        if not self._current_store or not self._current_mac:
+            return
+        try:
+            self._current_store.clear_classification_override(self._current_mac)
+        except Exception:
+            pass  # non-fatal
+        self.load(self._current_mac, self._current_store)
 
     def _rebuild_ip_history(self, mac: str, store: "Optional[MetricStore]") -> None:
         """Clear and repopulate the IP history rows."""
@@ -913,6 +1122,10 @@ class InventoryPage(QWidget):
         _sh.resizeSection(6, 140)  # Manufacturer
         _sh.resizeSection(7, 100)  # Type
         _sh.setStretchLastSection(True)
+        self._snap_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._snap_table.customContextMenuRequested.connect(
+            self._snap_table_context_menu
+        )
         self._snap_table.setMaximumHeight(200)
         snap_card_lay.addWidget(self._snap_table)
 
@@ -1560,23 +1773,54 @@ class InventoryPage(QWidget):
             except Exception:
                 pass  # non-fatal — table may not exist on first run
 
+        # Load all overrides once for the confidence indicator
+        _overrides: dict = {}
+        if self._store:
+            try:
+                _overrides = self._store.get_all_classification_overrides()
+            except Exception:
+                pass  # non-fatal — table may not exist on first run
+
         # Use segments loaded by set_segments() (called from scan_wiring after scan)
         segments = self._current_segments
 
         for d in devices:
-            ip     = (d.ip       if not isinstance(d, dict) else d.get("ip", "?")) or "?"
-            host   = (d.hostname if not isinstance(d, dict) else d.get("hostname", "")) or ""
-            mac    = (d.mac      if not isinstance(d, dict) else d.get("mac", "?")) or "?"
-            vendor = (d.vendor   if not isinstance(d, dict) else d.get("vendor", "")) or ""
-            dtype  = (d.device_type if not isinstance(d, dict) else d.get("device_type", "")) or ""
+            ip       = (d.ip       if not isinstance(d, dict) else d.get("ip", "?")) or "?"
+            host     = (d.hostname if not isinstance(d, dict) else d.get("hostname", "")) or ""
+            mac      = (d.mac      if not isinstance(d, dict) else d.get("mac", "?")) or "?"
+            vendor   = (d.vendor   if not isinstance(d, dict) else d.get("vendor", "")) or ""
+            dtype    = (d.device_type if not isinstance(d, dict) else d.get("device_type", "")) or ""
             if not dtype:
                 dtype = (d.connection_type if not isinstance(d, dict) else d.get("connection_type", "")) or ""
             if not dtype or dtype == "Unknown Device":
                 _new = classify_device(d)
                 if _new and _new != "Unknown Device":
                     dtype = _new
-            level = (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")) or "UNKNOWN"
-            label = _annotations.get(mac.lower(), {}).get("user_label", "")
+            level    = (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")) or "UNKNOWN"
+            label    = _annotations.get(mac.lower(), {}).get("user_label", "")
+            conf     = float((d.confidence if not isinstance(d, dict) else d.get("confidence", 0.0)) or 0.0)
+            _is_gw   = bool((d.is_gateway if not isinstance(d, dict) else d.get("is_gateway", False)) or False)
+            _mac_key = mac.lower()
+            _is_ovr  = _mac_key in _overrides
+
+            # Confidence indicator prefix (★ override, ● high, ◑ medium, ○ low)
+            if _is_ovr:
+                _ci_char  = "★"
+                _ci_color = ACCENT
+                _ci_tip   = f"User override: {_overrides[_mac_key]}"
+            elif conf >= 0.7 or _is_gw:
+                _ci_char  = "●"
+                _ci_color = GREEN
+                _ci_tip   = f"Confidence: {conf:.0%} (high)"
+            elif conf >= 0.3:
+                _ci_char  = "◑"
+                _ci_color = AMBER
+                _ci_tip   = f"Confidence: {conf:.0%} (medium)"
+            else:
+                _ci_char  = "○"
+                _ci_color = TEXT_MUTED
+                _ci_tip   = "Confidence: unknown" if conf == 0.0 else f"Confidence: {conf:.0%} (low)"
+            dtype_display = f"{_ci_char} {dtype or '—'}"
 
             # Segment classification
             seg = classify_device_segment(ip, segments) if segments else None
@@ -1609,10 +1853,14 @@ class InventoryPage(QWidget):
             self._snap_table.setItem(row, 1, seg_dot)
 
             # Cols 2–8: IP, Label, Hostname, MAC, Vendor, Type, Risk
-            for col, val in enumerate([ip, label, host or "—", mac, vendor or "—", dtype or "—", level], 2):
+            _vals = [ip, label, host or "—", mac, vendor or "—", dtype_display, level]
+            for col, val in enumerate(_vals, 2):
                 item = _plain_item(val)
                 if col == 3 and label:
                     item.setForeground(QColor(ACCENT))
+                elif col == 7:
+                    item.setForeground(QColor(_ci_color))
+                    item.setToolTip(_ci_tip)
                 self._snap_table.setItem(row, col, item)
             self._snap_table.setRowHeight(row, 24)
 
@@ -1633,6 +1881,48 @@ class InventoryPage(QWidget):
         # Switch to content view if still on empty state
         if self._content_stack.currentIndex() == 0:
             self._content_stack.setCurrentIndex(1)
+
+    def _snap_table_context_menu(self, pos) -> None:
+        """Right-click context menu for the Current Devices snapshot table."""
+        idx = self._snap_table.indexAt(pos)
+        if not idx.isValid():
+            return
+        row = idx.row()
+        mac_item  = self._snap_table.item(row, 5)  # col 5 = MAC Address
+        dtype_item = self._snap_table.item(row, 7)  # col 7 = Type
+        if not mac_item:
+            return
+        mac = mac_item.text().strip()
+        raw_dtype = (dtype_item.text().strip() if dtype_item else "") or ""
+        # Strip confidence indicator prefix
+        for _pfx in ("★ ", "● ", "◑ ", "○ "):
+            if raw_dtype.startswith(_pfx):
+                raw_dtype = raw_dtype[len(_pfx):]
+                break
+
+        current_override: Optional[str] = None
+        if self._store:
+            try:
+                current_override = self._store.get_classification_override(mac)
+            except Exception:
+                pass  # non-fatal
+
+        menu = QMenu(self)
+        act_override = menu.addAction("Override Device Type…")
+        act_clear    = menu.addAction("Clear Type Override")
+        act_clear.setEnabled(bool(current_override))
+
+        action = menu.exec(self._snap_table.viewport().mapToGlobal(pos))
+        if action == act_override and self._store:
+            dlg = _TypeOverrideDialog(mac, raw_dtype, current_override, self._store, self)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                self.set_scan_devices(self._scan_devices)
+        elif action == act_clear and self._store:
+            try:
+                self._store.clear_classification_override(mac)
+            except Exception:
+                pass  # non-fatal
+            self.set_scan_devices(self._scan_devices)
 
     @pyqtSlot(list)
     def set_segments(self, segments: list) -> None:
