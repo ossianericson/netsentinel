@@ -59,6 +59,12 @@ hiddenimports: list = [
     "PyQt6.QtSvg",
     "PyQt6.QtOpenGL",
     "PyQt6.QtOpenGLWidgets",
+    # PyQt6-WebEngine — lazy-imported in network_map_page; must be explicit so
+    # PyInstaller's hook-PyQt6.QtWebEngineWidgets.py fires and bundles
+    # QtWebEngineProcess.exe, .pak resources, ICU data and locale files.
+    "PyQt6.QtWebEngineWidgets",
+    "PyQt6.QtWebEngineCore",
+    "PyQt6.QtWebChannel",
     # Matplotlib backend used by ui/live_graph.py
     "matplotlib.backends.backend_qtagg",
     # Scapy loads all protocol layers lazily; collect them explicitly
@@ -343,6 +349,18 @@ for _pkg in ("scapy", "PyQt6", "matplotlib", "flask", "keyring"):
     datas         += _d
     binaries      += _b
     hiddenimports += _h
+
+# Collect WebEngine data files (pak resources, ICU data, qtwebengine_locales,
+# QtWebEngineProcess binary).  These are not part of the base PyQt6 package so
+# collect_all("PyQt6") alone does not pull them in.
+for _pkg in ("PyQt6.QtWebEngineWidgets", "PyQt6.QtWebEngineCore", "PyQt6.QtWebChannel"):
+    try:
+        _d, _b, _h = collect_all(_pkg)
+        datas         += _d
+        binaries      += _b
+        hiddenimports += _h
+    except Exception:
+        pass  # non-fatal — package absent in build env; interactive map falls back to Classic
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(

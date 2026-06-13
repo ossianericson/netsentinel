@@ -384,6 +384,10 @@ def main():
     except Exception:
         pass  # non-Windows or ctypes unavailable — AppUserModelID is cosmetic only
 
+    # Required for QtWebEngineWidgets (Interactive Network Map).  Must be set
+    # before QApplication is created — Qt rejects lazy WebEngine imports otherwise.
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")

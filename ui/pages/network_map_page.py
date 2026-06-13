@@ -39,7 +39,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE,
-    BG_CARD, BG_DARK, BORDER,
+    BG_CARD, BG_DARK, BG_HOVER, BORDER,
     TEAL, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -53,6 +53,18 @@ log = logging.getLogger(__name__)
 
 _SETTINGS_KEY_LAYOUT = "network_map/layout"
 _SETTINGS_KEY_VIEW   = "network_map/active_view"  # "interactive" | "classic"
+
+# Compact inline style for toolbar buttons — overrides the wide-padding
+# #btnNetRefresh QSS which is designed for full-size action buttons, not
+# the tight fixed-width buttons (32–116 px) used in the map toolbar.
+_TOOLBAR_BTN_SS = (
+    f"QPushButton{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+    f"border-radius:4px;padding:3px 10px;font-size:12px;font-weight:500;}}"
+    f"QPushButton:hover{{background:{BG_HOVER};border-color:{ACCENT};color:{ACCENT};}}"
+    f"QPushButton:pressed{{background:{ACCENT};color:{WHITE};border-color:{ACCENT_DARK};}}"
+    f"QPushButton:checked{{background:{ACCENT};color:{WHITE};border-color:{ACCENT_DARK};}}"
+    f"QPushButton:disabled{{background:{BG_CARD};color:{TEXT_MUTED};border-color:{BORDER};}}"
+)
 
 
 # ── QWebChannel bridge (server-side Python object) ───────────────────────────
@@ -227,10 +239,10 @@ class NetworkMapPage(QWidget):
         content_lay.addWidget(self._inner_tab, 1)
         self._outer_stack.addWidget(content)
 
-        # Restore last-used view tab
+        # Restore last-used view tab; fall back to Classic if WebEngine unavailable
         s = QSettings()
         saved_view = s.value(_SETTINGS_KEY_VIEW, "interactive")
-        if saved_view == "classic":
+        if saved_view == "classic" or not self._web_available:
             self._inner_tab.setCurrentIndex(1)
 
     def _build_toolbar(self) -> QHBoxLayout:
@@ -243,8 +255,12 @@ class NetworkMapPage(QWidget):
         self._layout_combo.setFixedWidth(116)
         self._layout_combo.setStyleSheet(
             f"QComboBox{{background:{BG_CARD};border:1px solid {BORDER};"
-            f"border-radius:3px;padding:3px 8px;font-size:12px;color:{TEXT_PRIMARY};}}"
-            f"QComboBox::drop-down{{border:none;}}"
+            f"border-radius:4px;padding:3px 8px;font-size:12px;color:{TEXT_PRIMARY};}}"
+            f"QComboBox:hover{{border-color:{ACCENT};}}"
+            f"QComboBox::drop-down{{border:none;width:18px;}}"
+            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            f"border:1px solid {BORDER};selection-background-color:{BG_HOVER};"
+            f"selection-color:{TEXT_PRIMARY};}}"
         )
         for label in LAYOUT_NAMES:
             self._layout_combo.addItem(label)
@@ -259,7 +275,7 @@ class NetworkMapPage(QWidget):
             b = QPushButton(label)
             b.setFixedWidth(w)
             b.setToolTip(tip)
-            b.setObjectName("btnNetRefresh")
+            b.setStyleSheet(_TOOLBAR_BTN_SS)
             return b
 
         btn_fit  = _btn("Fit",  "Fit topology to window")
@@ -274,7 +290,7 @@ class NetworkMapPage(QWidget):
         self._btn_focus.setToolTip(
             "Highlight only the selected node and its direct neighbours"
         )
-        self._btn_focus.setObjectName("btnNetRefresh")
+        self._btn_focus.setStyleSheet(_TOOLBAR_BTN_SS)
 
         # Show Changes toggle (exposed as property for scan_wiring compat)
         self._btn_diff = QPushButton("Show Changes")
@@ -283,7 +299,7 @@ class NetworkMapPage(QWidget):
         self._btn_diff.setToolTip(
             "Overlay added/removed devices and links vs. the previous scan"
         )
-        self._btn_diff.setObjectName("btnNetRefresh")
+        self._btn_diff.setStyleSheet(_TOOLBAR_BTN_SS)
 
         # Diff badge label
         self._diff_label = QLabel()
@@ -320,9 +336,18 @@ class NetworkMapPage(QWidget):
         """Lazy-import QWebEngineView; populate placeholder if unavailable."""
         try:
             from PyQt6.QtWebEngineWidgets import QWebEngineView
+            from PyQt6.QtWebEngineCore import QWebEngineScript, QWebEnginePage
             from PyQt6.QtWebChannel import QWebChannel
+            from PyQt6.QtCore import QUrl as _QUrl
+
+            # javaScriptConsoleMessage is a virtual method, not a signal —
+            # must subclass QWebEnginePage to intercept it.
+            class _LogPage(QWebEnginePage):
+                def javaScriptConsoleMessage(self, level, message, line, source):  # noqa: N802
+                    log.debug("JS [%s:%s] %s", source, line, message)
 
             self._web_view = QWebEngineView(self._interactive_container)
+            self._web_view.setPage(_LogPage(self._web_view))
             self._web_view.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
             )
@@ -335,12 +360,35 @@ class NetworkMapPage(QWidget):
             self._web_channel.registerObject("bridge", self._bridge)
             self._web_view.page().setWebChannel(self._web_channel)
 
+            # Inject qwebchannel.js at document-creation time so QWebChannel is
+            # defined before the page's own inline scripts execute.  Using
+            # <script src="qrc://..."> inside setHtml() is blocked by Qt6's
+            # about:blank origin policy; QWebEngineScript injection bypasses it.
+            _qwc = QWebEngineScript()
+            _qwc.setName("qwebchannel_init")
+            _qwc.setSourceUrl(_QUrl("qrc:///qtwebchannel/qwebchannel.js"))
+            _qwc.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+            _qwc.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+            self._web_view.page().scripts().insert(_qwc)
+
             # Remove placeholder, add real view
             self._web_placeholder.setParent(None)
             self._web_container_layout.addWidget(self._web_view)
             self._web_available = True
-        except ImportError:
-            pass  # non-fatal — classic view only; placeholder stays visible
+
+            # Show a light placeholder so the view is never a dark rectangle
+            # before the first scan populates it.
+            self._web_view.setHtml(
+                f"<html><body style='background:{BG_DARK};display:flex;"
+                f"align-items:center;justify-content:center;height:100vh;"
+                f"font-family:sans-serif;color:{TEXT_SECONDARY};font-size:13px;'>"
+                f"Run a scan to populate the interactive map</body></html>"
+            )
+        except Exception as exc:
+            import traceback
+            log.warning("WebEngine init failed: %s: %s", type(exc).__name__, exc)
+            traceback.print_exc()
+            # non-fatal — classic view only; placeholder stays visible
 
     # ── Public render API (mirrors TopologyWidget) ────────────────────────────
 

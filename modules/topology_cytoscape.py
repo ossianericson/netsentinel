@@ -622,17 +622,19 @@ body {{ background:#F4F4F4; font-family:-apple-system,BlinkMacSystemFont,sans-se
 <div id="cy"></div>
 <div id="tip"></div>
 {cytoscape_script}
-<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 <script>
 "use strict";
 var cy, qtBridge, focusMode = false, changesVisible = false;
 var elements = {elements_json};
 var layoutName = {layout_json};
 
-// QWebChannel bridge
-new QWebChannel(qt.webChannelTransport, function(channel) {{
-  qtBridge = channel.objects.bridge;
-}});
+// QWebChannel bridge — injected via QWebEngineScript at document-creation
+// time; guard required in case the injection races or is absent.
+if (typeof QWebChannel !== 'undefined' && typeof qt !== 'undefined') {{
+  new QWebChannel(qt.webChannelTransport, function(channel) {{
+    qtBridge = channel.objects.bridge;
+  }});
+}}
 
 // Initialize Cytoscape
 cy = cytoscape({{

@@ -927,12 +927,28 @@ class ScanEnrichmentMixin:
             gw_ip  = self._net_info.get("gateway")     if self._net_info else None
             gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
             _eff_units, _eff_enrich = self._effective_mesh_render_params()
-            self._topology_widget.render(
-                self._m1_result.get("devices", []), gw_ip, gw_mac,
-                mesh_units=_eff_units,
-                mesh_enrichment=_eff_enrich,
-                modem_data=getattr(self, "_last_modem_data", None),
-            )
+            _map_page = getattr(self, "_network_map_page", None)
+            if _map_page is not None:
+                # Merge enrichment into existing kwargs so segments/edges/lldp/diff are
+                # preserved from the initial scan render — both classic and Cytoscape views
+                # are updated via NetworkMapPage.render() in one call.
+                _kw = dict(_map_page._last_render_kwargs) if _map_page._last_render_kwargs else {}
+                _kw.update({
+                    "devices":         self._m1_result.get("devices", []),
+                    "gateway_ip":      gw_ip,
+                    "gateway_mac":     gw_mac,
+                    "mesh_units":      _eff_units,
+                    "mesh_enrichment": _eff_enrich,
+                    "modem_data":      getattr(self, "_last_modem_data", None),
+                })
+                _map_page.render(**_kw)
+            else:
+                self._topology_widget.render(
+                    self._m1_result.get("devices", []), gw_ip, gw_mac,
+                    mesh_units=_eff_units,
+                    mesh_enrichment=_eff_enrich,
+                    modem_data=getattr(self, "_last_modem_data", None),
+                )
         except Exception:
             pass  # non-fatal
 
