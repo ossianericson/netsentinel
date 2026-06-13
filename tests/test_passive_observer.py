@@ -10,12 +10,15 @@ import pytest
 # ── Import tests ───────────────────────────────────────────────────────────────
 
 def test_import_passive_observer():
-    import modules.passive_observer as _m
-    assert hasattr(_m, "PassiveObservation")
-    assert hasattr(_m, "start_passive_observation")
-    assert hasattr(_m, "stop_passive_observation")
-    assert hasattr(_m, "get_observations")
-    assert hasattr(_m, "enrich_mac")
+    from modules.passive_observer import (
+        PassiveObservation, start_passive_observation,
+        stop_passive_observation, get_observations, enrich_mac,
+    )
+    assert PassiveObservation is not None
+    assert start_passive_observation is not None
+    assert stop_passive_observation is not None
+    assert get_observations is not None
+    assert enrich_mac is not None
 
 
 def test_import_passive_observer_worker():
@@ -267,10 +270,8 @@ def test_ssdp_hint_table(nt_fragment, expected_hint, expected_conf):
 
 def test_passive_observer_worker_starts_and_stops():
     """Worker must start, run briefly, and stop cleanly (RULE-T2)."""
-    try:
-        from PyQt6.QtWidgets import QApplication
-    except ImportError:
-        pytest.skip("PyQt6 not available")
+    _qtw = pytest.importorskip("PyQt6.QtWidgets")
+    QApplication = _qtw.QApplication
 
     from workers.passive_observer_worker import PassiveObserverWorker
 

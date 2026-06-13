@@ -216,8 +216,8 @@ def build_cytoscape_elements(
         try:
             from modules.deco_client import _norm_mac  # type: ignore[attr-defined]
         except ImportError:
-            def _norm_mac(m: str) -> str:
-                return m.lower().replace("-", ":").strip()
+            def _norm_mac(mac: str) -> str:
+                return mac.lower().replace("-", ":").strip()
 
         for unit in mesh_units:
             u_mac = _norm_mac(getattr(unit, "mac", "") or "")

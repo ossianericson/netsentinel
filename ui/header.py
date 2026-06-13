@@ -285,8 +285,8 @@ class AppHeaderMixin:
         _btn_min.clicked.connect(self.showMinimized)
         lay.addWidget(_btn_min)
 
-        self._maximize_btn = _ChromeButton("\uE922")   # ChromeMaximize
-        self._maximize_btn.setToolTip("Maximise")
+        self._maximize_btn = _ChromeButton("\uE922")   # FullScreen (enter full screen)
+        self._maximize_btn.setToolTip("Full Screen")
         self._maximize_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._maximize_btn.setFont(_wc_font)
         self._maximize_btn.setStyleSheet(
@@ -313,11 +313,10 @@ class AppHeaderMixin:
 
     # ── Frameless window — helpers ───────────────────────────────────────────
 
+    @pyqtSlot()
     def _toggle_maximize(self):
         from PyQt6.QtCore import Qt
-        if self.windowState() & Qt.WindowState.WindowMaximized:
-            # Capture and clear _pre_maximize_geo BEFORE showNormal() so the
-            # changeEvent handler (which also clears it) cannot race us.
+        if self.windowState() & Qt.WindowState.WindowFullScreen:
             pre_geo = self._pre_maximize_geo
             self._pre_maximize_geo = None
             self.showNormal()
@@ -325,17 +324,18 @@ class AppHeaderMixin:
                 self.setGeometry(pre_geo)
         else:
             self._pre_maximize_geo = self.geometry()
-            self.showMaximized()
+            self.showFullScreen()
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if getattr(self, "_maximize_btn", None) is not None:
             from PyQt6.QtCore import QEvent, Qt
             if event.type() == QEvent.Type.WindowStateChange:
-                is_max = bool(self.windowState() & Qt.WindowState.WindowMaximized)
-                self._maximize_btn.setText("\uE923" if is_max else "\uE922")
-                self._maximize_btn.setToolTip("Restore" if is_max else "Maximise")
-                if not is_max:
+                is_fs = bool(self.windowState() & Qt.WindowState.WindowFullScreen)
+                # \uE923 = ChromeRestore (exit full screen), \uE922 = ChromeMaximize (enter)
+                self._maximize_btn.setText("\uE923" if is_fs else "\uE922")
+                self._maximize_btn.setToolTip("Exit Full Screen" if is_fs else "Full Screen")
+                if not is_fs:
                     self._pre_maximize_geo = None
                 if hasattr(self, "_edge_grips"):
                     self._place_edge_grips()

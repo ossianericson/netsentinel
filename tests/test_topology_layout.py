@@ -7,12 +7,14 @@ import pytest
 # ── Import test ───────────────────────────────────────────────────────────────
 
 def test_module_imports():
-    import modules.topology_layout as _m
-    assert hasattr(_m, "NodePosition")
-    assert hasattr(_m, "load_layout")
-    assert hasattr(_m, "save_layout")
-    assert hasattr(_m, "clear_layout")
-    assert hasattr(_m, "compute_scan_id")
+    from modules.topology_layout import (
+        NodePosition, load_layout, save_layout, clear_layout, compute_scan_id,
+    )
+    assert NodePosition is not None
+    assert load_layout is not None
+    assert save_layout is not None
+    assert clear_layout is not None
+    assert compute_scan_id is not None
 
 
 # ── NodePosition dataclass ────────────────────────────────────────────────────

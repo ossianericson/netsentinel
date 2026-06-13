@@ -17,7 +17,8 @@ import pytest
 # ── import guard ──────────────────────────────────────────────────────────────
 
 def test_import():
-    import modules.topology_cytoscape  # noqa: F401
+    from modules.topology_cytoscape import build_cytoscape_elements
+    assert build_cytoscape_elements is not None
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

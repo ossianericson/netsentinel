@@ -142,7 +142,7 @@ def _parse_lldp_tlvs(payload: bytes) -> dict:
 def _get_local_ip(iface: str) -> str:
     """Return the first IPv4 address bound to *iface*, or empty string."""
     try:
-        from scapy.utils import get_if_addr
+        from scapy.arch import get_if_addr
         addr = get_if_addr(iface)
         return addr if addr and addr != "0.0.0.0" else ""
     except Exception:
@@ -205,7 +205,7 @@ def scan_lldp_neighbors(
 
     if not passive:
         try:
-            from scapy.utils import get_if_hwaddr
+            from scapy.arch import get_if_hwaddr
             local_mac = get_if_hwaddr(iface)
             _send_lldp_frame(iface, local_mac)
             log.debug("LLDP: sent active announcement on %s", iface)
@@ -216,7 +216,7 @@ def scan_lldp_neighbors(
         progress_cb(f"LLDP: listening on {iface} for {timeout}s…")
 
     # Sniff in short bursts so we can emit progress ticks
-    collected = []
+    collected: list = []
     slice_s   = min(3, timeout)
     elapsed   = 0
     while elapsed < timeout:

@@ -9,12 +9,15 @@ import pytest
 # ── Import test ───────────────────────────────────────────────────────────────
 
 def test_import():
-    import modules.network_segments as ns
-    assert hasattr(ns, "NetworkSegment")
-    assert hasattr(ns, "auto_detect_segments")
-    assert hasattr(ns, "classify_device_segment")
-    assert hasattr(ns, "merge_segments")
-    assert hasattr(ns, "SEGMENT_PALETTE")
+    from modules.network_segments import (
+        NetworkSegment, auto_detect_segments, classify_device_segment,
+        merge_segments, SEGMENT_PALETTE,
+    )
+    assert NetworkSegment is not None
+    assert auto_detect_segments is not None
+    assert classify_device_segment is not None
+    assert merge_segments is not None
+    assert SEGMENT_PALETTE is not None
 
 
 # ── NetworkSegment dataclass ──────────────────────────────────────────────────

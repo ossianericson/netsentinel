@@ -13,9 +13,9 @@ import pytest
 
 def test_lldp_scanner_imports():
     """modules.lldp_scanner must import cleanly without runtime dependencies."""
-    import modules.lldp_scanner as _m
-    assert hasattr(_m, "LldpNeighbor")
-    assert hasattr(_m, "scan_lldp_neighbors")
+    from modules.lldp_scanner import LldpNeighbor, scan_lldp_neighbors
+    assert LldpNeighbor is not None
+    assert scan_lldp_neighbors is not None
 
 
 def test_lldp_neighbor_dataclass():
@@ -114,9 +114,6 @@ def test_parse_lldp_tlvs_truncated():
 
 def test_scan_lldp_neighbors_no_scapy(monkeypatch):
     """scan_lldp_neighbors must return [] when scapy sniff raises ImportError."""
-    def _broken_sniff(*args, **kwargs):
-        raise ImportError("scapy not available")
-
     with patch("modules.lldp_scanner.scan_lldp_neighbors") as _patched:
         _patched.side_effect = ImportError("scapy not available")
         # Direct call via the patched version
@@ -168,11 +165,9 @@ def test_scan_lldp_neighbors_sniff_mocked():
 
 # ── RULE-T2: worker lifecycle ─────────────────────────────────────────────────
 
-try:
-    import PyQt6.QtWidgets  # noqa: F401 — availability check only
-    _HAS_QT = True
-except ImportError:
-    _HAS_QT = False
+import importlib.util as _ilu
+_HAS_QT = _ilu.find_spec("PyQt6.QtWidgets") is not None
+del _ilu
 
 
 @pytest.mark.skipif(not _HAS_QT, reason="PyQt6 not available")

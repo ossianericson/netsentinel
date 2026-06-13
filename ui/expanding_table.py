@@ -30,10 +30,11 @@ class ExpandingTable(QTableWidget):
                  detail_height: int = 110,
                  parent=None):
         super().__init__(rows, cols, parent)
-        self._detail_builder  = detail_builder
-        self._detail_height   = detail_height
-        self._detail_row      = -1   # display-row index of the open detail (-1 = closed)
-        self._expanded_logical = -1  # logical data-row index currently expanded
+        self._detail_builder      = detail_builder
+        self._detail_height       = detail_height
+        self._detail_row          = -1   # display-row index of the open detail (-1 = closed)
+        self._expanded_logical    = -1   # logical data-row index currently expanded
+        self._sorting_before_detail = False  # was sorting on before we opened a detail?
         self.cellClicked.connect(self._on_cell_clicked)
 
     # ── Row index conversions ─────────────────────────────────────────────────
@@ -54,6 +55,10 @@ class ExpandingTable(QTableWidget):
             self.removeRow(self._detail_row)
         self._detail_row      = -1
         self._expanded_logical = -1
+        # Restore sorting if it was disabled only to protect the detail insertion
+        if self._sorting_before_detail:
+            self._sorting_before_detail = False
+            self.setSortingEnabled(True)
 
     # ── Click handler ─────────────────────────────────────────────────────────
 
@@ -66,11 +71,18 @@ class ExpandingTable(QTableWidget):
 
         toggling = (logical == self._expanded_logical)
 
-        # Collapse any currently open detail first
+        # Collapse any currently open detail first (also restores sorting if needed)
         self.clear_detail()
 
         if toggling:
             return  # same row clicked twice → collapse only
+
+        # Disable sorting before inserting the detail row.  With sorting enabled Qt
+        # immediately tries to rank the new (item-less) row, hits a null item in the
+        # sort comparator, and crashes.  We re-enable sorting in clear_detail().
+        if self.isSortingEnabled():
+            self._sorting_before_detail = True
+            self.setSortingEnabled(False)
 
         # After clear_detail(), display == logical for all rows (no injected row).
         detail_pos = logical + 1

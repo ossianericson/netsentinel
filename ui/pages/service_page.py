@@ -36,7 +36,7 @@ from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 from modules.metric_store import MetricStore, ServiceCheckPoint
 from modules.service_monitor import ServiceTarget
 from ui.styles import (
-    ACCENT, BG_ALT_ROW, BG_CARD,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
     GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
@@ -248,14 +248,30 @@ class ServicePage(QWidget):
         btn_add = QPushButton("+ Add")
         btn_add.setFixedHeight(24)
         btn_add.setStyleSheet(
-            f"font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" background:transparent; padding:0 10px;"
+            f"QPushButton {{ font-size:11px; color:{ACCENT}; border:1px solid {ACCENT};"
+            f" background:transparent; padding:0 10px; }}"
+            f"QPushButton:hover   {{ color:{ACCENT_LITE}; border-color:{ACCENT_LITE}; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; border-color:{ACCENT_DARK}; }}"
         )
 
         def _add_from_bar():
-            self._add_service(self._txt_host.text(), self._spin_port.value(), self._txt_label.text())
-            self._txt_host.clear()
-            self._txt_label.clear()
+            host = self._txt_host.text().strip()
+            if not host:
+                self._txt_host.setStyleSheet(
+                    f"font-size:11px; border:1px solid {RED}; padding:2px 5px;"
+                )
+                _t = QTimer(self)
+                _t.setSingleShot(True)
+                _t.timeout.connect(lambda: self._txt_host.setStyleSheet(
+                    f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;"
+                ))
+                _t.start(1500)
+                return
+            added = self._add_service(host, self._spin_port.value(), self._txt_label.text())
+            if added:
+                self._txt_host.clear()
+                self._txt_label.clear()
+                self.check_now_requested.emit()
 
         btn_add.clicked.connect(_add_from_bar)
         self._txt_host.returnPressed.connect(_add_from_bar)
@@ -420,6 +436,10 @@ class ServicePage(QWidget):
     # ── Table population ──────────────────────────────────────────────────────
 
     def _populate(self, rows: List[ServiceCheckPoint]) -> None:
+        # Only show services that are still in the configured target list so that
+        # removed services don't reappear from stale DB history data.
+        configured_set = {(t["host"], t["port"]) for t in self._configured}
+        rows = [r for r in rows if (r.host, r.port) in configured_set]
         self._rows = list(rows)
         clear_skeleton_rows(self._table)
         self._table.setSortingEnabled(False)
@@ -504,9 +524,23 @@ class ServicePage(QWidget):
     # ── Detail panel ──────────────────────────────────────────────────────────
 
     def _build_service_detail(self, logical_row: int) -> QWidget:
-        if logical_row >= len(self._rows):
+        # Use the host:port from the visible table row (sort-order-safe lookup)
+        # rather than self._rows[logical_row] which is insertion-order based.
+        host_it = self._table.item(logical_row, 1)
+        port_it = self._table.item(logical_row, 2)
+        if not host_it or not port_it:
             return QWidget()
-        r = self._rows[logical_row]
+        try:
+            lookup_host = host_it.text()
+            lookup_port = int(port_it.text())
+        except (ValueError, AttributeError):
+            return QWidget()
+        r = next(
+            (row for row in self._rows if row.host == lookup_host and row.port == lookup_port),
+            None,
+        )
+        if r is None:
+            return QWidget()
         status_color = GREEN if r.up else RED
 
         outer = QWidget()

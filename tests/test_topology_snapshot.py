@@ -8,13 +8,16 @@ from datetime import datetime
 # ── Import test ───────────────────────────────────────────────────────────────
 
 def test_module_imports():
-    import modules.topology_snapshot as _m
-    assert hasattr(_m, "TopologySnapshot")
-    assert hasattr(_m, "TopologyDiff")
-    assert hasattr(_m, "build_snapshot")
-    assert hasattr(_m, "save_snapshot")
-    assert hasattr(_m, "load_last_snapshot")
-    assert hasattr(_m, "diff_snapshots")
+    from modules.topology_snapshot import (
+        TopologySnapshot, TopologyDiff, build_snapshot,
+        save_snapshot, load_last_snapshot, diff_snapshots,
+    )
+    assert TopologySnapshot is not None
+    assert TopologyDiff is not None
+    assert build_snapshot is not None
+    assert save_snapshot is not None
+    assert load_last_snapshot is not None
+    assert diff_snapshots is not None
 
 
 # ── TopologySnapshot dataclass ────────────────────────────────────────────────

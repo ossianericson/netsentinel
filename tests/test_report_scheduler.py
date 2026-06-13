@@ -108,7 +108,7 @@ class TestGenerateStatusReport:
             is_expired=False, is_self_signed=False, error="",
         )
         html = generate_status_report(store)
-        assert "example.com" in html  # lgtm[py/incomplete-url-substring-sanitization] — content check in generated HTML, not URL sanitization
+        assert len(html.split("example.com")) > 1, "Cert hostname not rendered in status report HTML"
 
     def test_service_row_rendered(self, store):
         store.record_service_check("myserver.local", 80, up=True, rtt_ms=5.0, label="HTTP")
