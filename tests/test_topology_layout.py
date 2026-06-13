@@ -150,3 +150,49 @@ def test_pruning_keeps_recent_entries(tmp_layout_path):
     # File must not have more than _MAX_SCAN_IDS entries
     raw = json.loads(tmp_layout_path.read_text())
     assert len(raw) <= _MAX_SCAN_IDS
+
+
+# ── TopologyEdge dataclass ────────────────────────────────────────────────────
+
+def test_topology_edge_exported():
+    from modules.topology_layout import TopologyEdge
+    assert TopologyEdge is not None
+
+
+def test_topology_edge_fields():
+    from modules.topology_layout import TopologyEdge
+    e = TopologyEdge(
+        src_ip="192.168.1.1",
+        dst_ip="192.168.1.10",
+        latency_ms=25.4,
+        packet_loss=0.05,
+        bandwidth_mbps=100.0,
+        status="up",
+    )
+    assert e.src_ip == "192.168.1.1"
+    assert e.dst_ip == "192.168.1.10"
+    assert abs(e.latency_ms - 25.4) < 1e-9
+    assert e.status == "up"
+
+
+def test_topology_edge_optional_fields_none():
+    from modules.topology_layout import TopologyEdge
+    e = TopologyEdge(
+        src_ip="10.0.0.1",
+        dst_ip="10.0.0.5",
+        latency_ms=None,
+        packet_loss=None,
+        bandwidth_mbps=None,
+        status="unknown",
+    )
+    assert e.latency_ms is None
+    assert e.packet_loss is None
+    assert e.bandwidth_mbps is None
+    assert e.status == "unknown"
+
+
+def test_topology_edge_all_statuses():
+    from modules.topology_layout import TopologyEdge
+    for status in ("up", "degraded", "down", "unknown"):
+        e = TopologyEdge("1.1.1.1", "2.2.2.2", None, None, None, status)
+        assert e.status == status

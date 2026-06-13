@@ -38,6 +38,18 @@ class NodePosition:
     pinned: bool = False
 
 
+@dataclass
+class TopologyEdge:
+    """Live health data for one gateway ↔ device edge."""
+
+    src_ip: str
+    dst_ip: str
+    latency_ms: float | None      # most recent RTT (ms); None = no data
+    packet_loss: float | None     # 0.0–1.0 fraction; None = no data
+    bandwidth_mbps: float | None  # interface bandwidth; None = unknown
+    status: str                   # "up" | "degraded" | "down" | "unknown"
+
+
 # ── I/O helpers ────────────────────────────────────────────────────────────────
 
 def _layout_path() -> Path:

@@ -592,6 +592,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 tr = self._device_tracker.process_scan(data.get("devices", []))
                 self._last_scan_new  = len(tr.new_devices)
                 self._last_scan_gone = len(tr.gone_devices)
+                self._last_new_ips: set = {d.ip for d in tr.new_devices if d.ip}
                 if tr.new_devices:
                     if hasattr(self, "_live_bandwidth_page"):
                         self._live_bandwidth_page.annotate_event("Device joined", GREEN)
@@ -688,17 +689,69 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # Show benchmark content pane (user can now grade without being sent elsewhere)
         if hasattr(self, "_bm_stack"):
             self._bm_stack.setCurrentIndex(1)
-        # Refresh topology widget with new device list + segment colours
+        # Refresh topology widget with new device list + segment colours + health
         try:
             gw_ip  = self._net_info.get("gateway") if self._net_info else None
             gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
             _topo_segs = getattr(self, "_last_segments", None)
+
+            # Sprint 3 — build edge health overlays from MetricStore
+            _topo_edges: list = []
+            _topo_down_ips: set = set()
+            _topo_new_ips: set = getattr(self, "_last_new_ips", set())
+            try:
+                if self._store is not None and gw_ip:
+                    from modules.topology_layout import TopologyEdge as _TE
+                    for _d in data.get("devices", []):
+                        _ip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
+                        if not _ip or _ip == gw_ip or _ip in ("?", "0.0.0.0"):
+                            continue
+                        _state_hist = self._store.query_device_state_history(_ip, hours=2.0)
+                        _latest = _state_hist[-1] if _state_hist else None
+                        _status = "unknown"
+                        _latency: float | None = None
+                        _loss: float | None = None
+                        if _latest:
+                            _s = _latest.state
+                            _status = (
+                                "down"     if _s == "DOWN"     else
+                                "degraded" if _s == "DEGRADED" else
+                                "up"
+                            )
+                            _latency = _latest.rtt_ms
+                            if _status == "down":
+                                _topo_down_ips.add(_ip)
+                        if _latency is None:
+                            _rtt_hist = self._store.query_rtt_history(_ip, hours=2.0)
+                            if _rtt_hist:
+                                _last_rtt = _rtt_hist[-1]
+                                _latency = _last_rtt.rtt_ms
+                                _loss = _last_rtt.loss_pct / 100.0
+                                if _status == "unknown":
+                                    _status = (
+                                        "degraded" if (_latency > 100 or _loss > 0.2)
+                                        else "up"
+                                    )
+                        _topo_edges.append(_TE(
+                            src_ip=gw_ip,
+                            dst_ip=_ip,
+                            latency_ms=_latency,
+                            packet_loss=_loss,
+                            bandwidth_mbps=None,
+                            status=_status,
+                        ))
+            except Exception:
+                pass  # non-fatal — health overlays degrade gracefully
+
             self._topology_widget.render(
                 data.get("devices", []), gw_ip, gw_mac,
                 mesh_units=getattr(self, "_mesh_units", None),
                 mesh_enrichment=getattr(self, "_mesh_enrichment", None),
                 modem_data=getattr(self, "_last_modem_data", None),
                 segments=_topo_segs,
+                edges=_topo_edges or None,
+                down_ips=_topo_down_ips or None,
+                new_ips=_topo_new_ips or None,
             )
         except AttributeError:
             pass  # topology widget not yet initialised

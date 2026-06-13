@@ -36,7 +36,7 @@ from ui.styles import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 from modules.topology_layout import (
-    NodePosition, clear_layout, compute_scan_id, load_layout, save_layout,
+    NodePosition, TopologyEdge, clear_layout, compute_scan_id, load_layout, save_layout,
 )
 
 RISK_NODE_COLOR: Dict[str, str] = {
@@ -83,6 +83,9 @@ class TopologyWidget(QWidget):
         self._segments: list = []            # list[NetworkSegment] for border colours
         self._last_render_kwargs: dict = {}  # cached args for reset_layout()
 
+        # Sprint 3 — edge health overlays
+        self._gw_pos: Optional[tuple] = None  # gateway (x, y) for health overlay lines
+
         self._canvas.mpl_connect("button_press_event",  self._on_button_press)
         self._canvas.mpl_connect("motion_notify_event", self._on_motion)
 
@@ -105,6 +108,9 @@ class TopologyWidget(QWidget):
         mesh_enrichment: Optional[Dict[str, Any]] = None,
         modem_data: Optional[Dict[str, Any]] = None,
         segments: Optional[List[Any]] = None,
+        edges: Optional[List[TopologyEdge]] = None,
+        down_ips: Optional[set] = None,
+        new_ips: Optional[set] = None,
     ) -> None:
         # Cache args so reset_layout() can replay the last render.
         self._last_render_kwargs = dict(
@@ -115,6 +121,9 @@ class TopologyWidget(QWidget):
             mesh_enrichment=mesh_enrichment,
             modem_data=modem_data,
             segments=segments,
+            edges=edges,
+            down_ips=down_ips,
+            new_ips=new_ips,
         )
         self._segments = segments or []
         self._pos_map = {}
@@ -151,6 +160,15 @@ class TopologyWidget(QWidget):
 
         # Save current positions now that they've been finalised.
         self._save_current_positions()
+
+        # Sprint 3 — edge health overlays and node status dots
+        if edges or down_ips or new_ips:
+            self._draw_health_overlays(
+                ax,
+                edges or [],
+                down_ips or set(),
+                new_ips or set(),
+            )
 
         # Extend y-axis below 0 so labels placed at (y - 0.07) near the bottom
         # are never clipped by the axes patch boundary.
@@ -284,6 +302,7 @@ class TopologyWidget(QWidget):
             "internet": (0.5, y_internet),
             "gateway":  (0.5, y_gateway),
         }
+        self._gw_pos = (0.5, y_gateway)  # Sprint 3 — used by health overlays
         if has_modem:
             positions["__modem__"] = (0.5, y_modem)
 
@@ -416,6 +435,7 @@ class TopologyWidget(QWidget):
             "__internet__": (0.5, Y_INTERNET),
             "__gateway__":  (0.5, Y_GATEWAY),
         }
+        self._gw_pos = (0.5, Y_GATEWAY)  # Sprint 3 — used by health overlays
         if has_modem:
             pos["__modem__"] = (0.5, Y_MODEM)
 
@@ -540,6 +560,72 @@ class TopologyWidget(QWidget):
         self._legend(ax, mesh=True, modem=has_modem)
         ax.set_title("Network Topology — Mesh", color=CHART_TITLE,
                      fontsize=11, fontweight="bold", pad=4)
+
+    # ── Sprint 3: edge health overlays + node status dots ─────────────────────
+
+    def _edge_health_style(self, edge: TopologyEdge) -> tuple:
+        """Return (colour, linewidth) for a health-coloured edge."""
+        bw = edge.bandwidth_mbps
+        if bw is not None:
+            lw = max(0.8, min(3.0, bw / 100.0 * 3.0))
+        else:
+            lw = 1.4
+        if edge.status == "down":
+            return RED, max(lw, 1.8)
+        if edge.status == "degraded":
+            return AMBER, max(lw, 1.4)
+        if edge.status == "up":
+            return GREEN, lw
+        return BORDER, 1.0  # unknown — let the base grey line show through
+
+    def _draw_health_overlays(
+        self,
+        ax,
+        edges: List[TopologyEdge],
+        down_ips: set,
+        new_ips: set,
+    ) -> None:
+        """Draw coloured edge lines and node status dots after the base layout."""
+        import matplotlib.patches as _mp
+
+        gw_pos = self._gw_pos
+
+        # ── Edge health lines ──────────────────────────────────────────────
+        if edges and gw_pos:
+            edge_by_dst = {e.dst_ip: e for e in edges}
+            gx, gy = gw_pos
+            for nk, (nx, ny) in self._pos_map.items():
+                ip = self._ip_map.get(nk, "")
+                if not ip or ip not in edge_by_dst:
+                    continue
+                edge = edge_by_dst[ip]
+                if edge.status == "unknown":
+                    continue  # grey base line already conveys unknown state
+                color, lw = self._edge_health_style(edge)
+                ax.plot([gx, nx], [gy, ny], color=color, linewidth=lw,
+                        zorder=2, alpha=0.85, solid_capstyle="round")
+                if edge.latency_ms is not None:
+                    mx, my = (gx + nx) / 2, (gy + ny) / 2
+                    ax.annotate(
+                        f"{edge.latency_ms:.0f} ms",
+                        xy=(mx, my), fontsize=7, ha="center", va="center",
+                        zorder=5, color=TEXT_PRIMARY,
+                        bbox=dict(boxstyle="round,pad=0.15", fc=BG_CARD,
+                                  ec=BORDER, alpha=0.92, linewidth=0.8),
+                    )
+
+        # ── Node status dots ───────────────────────────────────────────────
+        for nk, (nx, ny) in self._pos_map.items():
+            ip = self._ip_map.get(nk, "")
+            if ip in down_ips:
+                ax.scatter(nx, ny, s=65, c=RED, zorder=5,
+                           marker="o", edgecolors=BG_CARD, linewidths=1.5)
+            if ip in new_ips:
+                ring = _mp.Circle(
+                    (nx, ny), radius=0.036, fill=False,
+                    edgecolor=BLUE, linewidth=2.2, alpha=0.45, zorder=5,
+                )
+                ax.add_patch(ring)
 
     # ── shared legend ─────────────────────────────────────────────────────────
 
