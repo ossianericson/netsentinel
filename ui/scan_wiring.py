@@ -435,6 +435,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         except Exception:
                             pass  # non-fatal — proceed without DB id
                 self._inventory_page.set_segments(_merged)
+                self._last_segments = _merged
             except Exception:
                 pass  # non-fatal — segment detection is best-effort
             self._inventory_page.set_scan_devices(devices)
@@ -687,15 +688,17 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # Show benchmark content pane (user can now grade without being sent elsewhere)
         if hasattr(self, "_bm_stack"):
             self._bm_stack.setCurrentIndex(1)
-        # Refresh topology widget with new device list
+        # Refresh topology widget with new device list + segment colours
         try:
             gw_ip  = self._net_info.get("gateway") if self._net_info else None
             gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+            _topo_segs = getattr(self, "_last_segments", None)
             self._topology_widget.render(
                 data.get("devices", []), gw_ip, gw_mac,
                 mesh_units=getattr(self, "_mesh_units", None),
                 mesh_enrichment=getattr(self, "_mesh_enrichment", None),
                 modem_data=getattr(self, "_last_modem_data", None),
+                segments=_topo_segs,
             )
         except AttributeError:
             pass  # topology widget not yet initialised

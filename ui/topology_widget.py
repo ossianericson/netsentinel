@@ -28,12 +28,15 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
+from PyQt6.QtWidgets import QMenu, QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK, BLUE, BORDER,
     CHART_PURPLE, CHART_TITLE, GREEN, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+)
+from modules.topology_layout import (
+    NodePosition, clear_layout, compute_scan_id, load_layout, save_layout,
 )
 
 RISK_NODE_COLOR: Dict[str, str] = {
@@ -47,6 +50,10 @@ GATEWAY_COLOR  = ACCENT
 INTERNET_COLOR = ACCENT
 MESH_SAT_COLOR = CHART_PURPLE   # satellite nodes — distinct from all risk colours
 MODEM_COLOR    = GREEN           # WAN modem node
+
+_PIN_LINEWIDTH = 3.0    # border width for pinned nodes
+_SEG_LINEWIDTH = 2.0    # border width when a segment colour is applied
+_DEF_LINEWIDTH = 1.5    # default border width
 
 
 class TopologyWidget(QWidget):
@@ -64,10 +71,18 @@ class TopologyWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._canvas)
         self._style_axes()
+
         self._pos_map: dict = {}       # node_key → (x, y) data coords
         self._ip_map: dict = {}        # node_key → device IP string
         self._tooltip_map: dict = {}   # node_key → tooltip text (hostname/IP/risk)
         self._hover_ann = None
+
+        # Sprint 2 — layout persistence
+        self._scan_id: str = "default"
+        self._pinned: set[str] = set()       # node_keys the user has pinned
+        self._segments: list = []            # list[NetworkSegment] for border colours
+        self._last_render_kwargs: dict = {}  # cached args for reset_layout()
+
         self._canvas.mpl_connect("button_press_event",  self._on_button_press)
         self._canvas.mpl_connect("motion_notify_event", self._on_motion)
 
@@ -89,7 +104,19 @@ class TopologyWidget(QWidget):
         mesh_units: Optional[List[Any]] = None,
         mesh_enrichment: Optional[Dict[str, Any]] = None,
         modem_data: Optional[Dict[str, Any]] = None,
+        segments: Optional[List[Any]] = None,
     ) -> None:
+        # Cache args so reset_layout() can replay the last render.
+        self._last_render_kwargs = dict(
+            devices=devices,
+            gateway_ip=gateway_ip,
+            gateway_mac=gateway_mac,
+            mesh_units=mesh_units,
+            mesh_enrichment=mesh_enrichment,
+            modem_data=modem_data,
+            segments=segments,
+        )
+        self._segments = segments or []
         self._pos_map = {}
         self._ip_map = {}
         self._tooltip_map = {}
@@ -109,11 +136,21 @@ class TopologyWidget(QWidget):
             self._canvas.draw()
             return
 
+        # Compute scan signature and load any saved positions.
+        self._scan_id = compute_scan_id(devices)
+        saved = load_layout(self._scan_id)
+        # Rebuild pinned set from saved layout (covers nodes from this scan_id only).
+        self._pinned = {k for k, v in saved.items() if v.pinned}
+
         if mesh_units and mesh_enrichment:
             self._render_mesh(ax, devices, gateway_ip, mesh_units, mesh_enrichment,
-                              modem_data=modem_data)
+                              modem_data=modem_data, saved=saved)
         else:
-            self._render_flat(ax, devices, gateway_ip, gateway_mac, modem_data=modem_data)
+            self._render_flat(ax, devices, gateway_ip, gateway_mac,
+                              modem_data=modem_data, saved=saved)
+
+        # Save current positions now that they've been finalised.
+        self._save_current_positions()
 
         # Extend y-axis below 0 so labels placed at (y - 0.07) near the bottom
         # are never clipped by the axes patch boundary.
@@ -139,9 +176,88 @@ class TopologyWidget(QWidget):
         self._style_axes()
         self._canvas.draw()
 
+    # ── toolbar actions ───────────────────────────────────────────────────────
+
+    def fit_view(self) -> None:
+        """Fit topology to the visible axes bounds."""
+        self._ax.autoscale()
+        self._canvas.draw()
+
+    def zoom_in(self) -> None:
+        """Zoom in 20% on both axes."""
+        self._zoom(0.8)
+
+    def zoom_out(self) -> None:
+        """Zoom out 20% on both axes."""
+        self._zoom(1.25)
+
+    def reset_layout(self) -> None:
+        """Clear saved positions for the current scan and re-render."""
+        clear_layout(self._scan_id)
+        self._pinned.clear()
+        if self._last_render_kwargs:
+            self.render(**self._last_render_kwargs)
+
+    def _zoom(self, factor: float) -> None:
+        ax = self._ax
+        xl = ax.get_xlim()
+        yl = ax.get_ylim()
+        xc = (xl[0] + xl[1]) / 2
+        yc = (yl[0] + yl[1]) / 2
+        xh = (xl[1] - xl[0]) / 2 * factor
+        yh = (yl[1] - yl[0]) / 2 * factor
+        ax.set_xlim(xc - xh, xc + xh)
+        ax.set_ylim(yc - yh, yc + yh)
+        self._canvas.draw()
+
+    # ── layout persistence helpers ────────────────────────────────────────────
+
+    def _save_current_positions(self) -> None:
+        """Persist _pos_map (device nodes only) to the layout file."""
+        if not self._pos_map:
+            return
+        positions: Dict[str, NodePosition] = {}
+        for nk, (x, y) in self._pos_map.items():
+            positions[nk] = NodePosition(
+                node_id=nk,
+                x=x,
+                y=y,
+                pinned=(nk in self._pinned),
+            )
+        save_layout(self._scan_id, positions)
+
+    def _apply_saved_positions(
+        self, positions: dict, saved: Dict[str, NodePosition]
+    ) -> None:
+        """Override computed positions with saved pinned-node positions."""
+        for nk, np in saved.items():
+            if np.pinned and nk in positions:
+                positions[nk] = (np.x, np.y)
+
+    def _segment_edge_color(self, ip: str) -> tuple[str, float]:
+        """Return (edge_hex_colour, linewidth) for a device node at *ip*."""
+        if not self._segments or not ip:
+            return BG_CARD, _DEF_LINEWIDTH
+        try:
+            from modules.network_segments import classify_device_segment
+            seg = classify_device_segment(ip, self._segments)
+            if seg:
+                lw = _PIN_LINEWIDTH if (
+                    # use the node_key — try both mac and ip variants
+                    ip in self._pinned
+                ) else _SEG_LINEWIDTH
+                return seg.color, lw
+        except Exception:
+            pass  # non-fatal — fall back to default
+        return BG_CARD, _DEF_LINEWIDTH
+
     # ── flat star layout ──────────────────────────────────────────────────────
 
-    def _render_flat(self, ax, devices, gateway_ip, gateway_mac, modem_data=None) -> None:
+    def _render_flat(self, ax, devices, gateway_ip, gateway_mac,
+                     modem_data=None, saved=None) -> None:
+        if saved is None:
+            saved = {}
+
         nodes: List[dict] = [
             {"id": "internet", "label": "☁  Internet", "color": INTERNET_COLOR, "size": 1200},
             {"id": "gateway",  "label": f"Gateway\n{gateway_ip or '?'}", "color": GATEWAY_COLOR, "size": 1000},
@@ -156,10 +272,10 @@ class TopologyWidget(QWidget):
                 "label": f"{host[:14]}\n{ip}",
                 "color": RISK_NODE_COLOR.get(risk, RISK_NODE_COLOR["UNKNOWN"]),
                 "size":  700,
+                "ip":    ip,
             })
 
         n = len(nodes) - 2
-        # Modem node inserts between Internet and Gateway — compress their y positions
         has_modem = bool(modem_data)
         y_internet = 0.92
         y_modem    = 0.76
@@ -178,6 +294,9 @@ class TopologyWidget(QWidget):
                 0.5  + radius * math.cos(angle),
                 0.26 + radius * 0.6 * math.sin(angle),
             )
+
+        # Apply pinned saved positions before populating _pos_map
+        self._apply_saved_positions(positions, saved)
 
         # Populate interactive node maps for click/hover
         for d, node in zip(devices, nodes[2:]):
@@ -204,12 +323,26 @@ class TopologyWidget(QWidget):
             nx, ny = positions[node["id"]]
             ax.plot([gx, nx], [gy, ny], color=BORDER, linewidth=1.0, zorder=1)
 
-        for node in nodes:
-            _scatter(ax, positions[node["id"]], node["color"], node["size"], node["label"])
+        # Draw infrastructure nodes (no segment colouring)
+        for node in nodes[:2]:
+            _scatter(ax, positions[node["id"]], node["color"], node["size"],
+                     node["label"], edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         if has_modem:
             _scatter(ax, positions["__modem__"], MODEM_COLOR, 900,
-                     _modem_label(modem_data))
+                     _modem_label(modem_data), edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+
+        # Draw device nodes with segment edge colours
+        for d, node in zip(devices, nodes[2:]):
+            ip = node.get("ip", _attr(d, "ip", "?"))
+            nk = node["id"]
+            ec, lw = self._segment_edge_color(ip)
+            # Pinned nodes get thicker border regardless of segment colour
+            if nk in self._pinned:
+                lw = _PIN_LINEWIDTH
+                ec = ec if ec != BG_CARD else ACCENT
+            _scatter(ax, positions[node["id"]], node["color"], node["size"],
+                     node["label"], edge_color=ec, linewidth=lw)
 
         self._legend(ax, mesh=False, modem=has_modem)
         ax.set_title("Network Topology", color=CHART_TITLE, fontsize=11, fontweight="bold", pad=4)
@@ -217,7 +350,10 @@ class TopologyWidget(QWidget):
     # ── mesh 3-tier layout ────────────────────────────────────────────────────
 
     def _render_mesh(self, ax, devices, gateway_ip, mesh_units, mesh_enrichment,
-                     modem_data=None) -> None:
+                     modem_data=None, saved=None) -> None:
+        if saved is None:
+            saved = {}
+
         try:
             from modules.deco_client import _norm_mac
         except ImportError:
@@ -227,23 +363,13 @@ class TopologyWidget(QWidget):
         master     = next((u for u in mesh_units if getattr(u, "role", "") == "master"), None)
         satellites = [u for u in mesh_units if getattr(u, "role", "") != "master"]
 
-        # Build the set of MACs that are already drawn as dedicated infrastructure
-        # nodes (gateway + all satellites).  Any ARP-scan device sharing one of
-        # these MACs would appear twice on the map — suppress them from the
-        # client/unassigned pools.
         infra_macs: set[str] = set()
         for unit in mesh_units:
             m = _norm_mac(getattr(unit, "mac", "") or "")
             if m:
                 infra_macs.add(m)
-        # Also exclude any device whose IP is the gateway IP (router reachable
-        # via ARP but already represented by the __gateway__ node).
         infra_ips: set[str] = {gateway_ip} if gateway_ip else set()
 
-        # Group ARP-scan devices by which mesh satellite they connect to.
-        # Only group when unit_name matches a known satellite name; devices whose
-        # unit_name is empty or refers to an unknown node fall through to unassigned
-        # rather than disappearing into a by_unit bucket that is never rendered.
         known_unit_names = {getattr(u, "name", "") for u in satellites}
         by_unit: Dict[str, list] = defaultdict(list)
         unassigned: list = []
@@ -259,10 +385,6 @@ class TopologyWidget(QWidget):
             else:
                 unassigned.append(d)
 
-        # Inject mesh-only clients (Deco API knows them but ARP scan missed them,
-        # e.g. phones that did not respond to ARP, or the local machine itself).
-        # Clients on a satellite go into by_unit; clients on the master (or any
-        # unknown unit) go into unassigned so they render attached to the gateway.
         covered_macs = {_norm_mac(_attr(d, "mac", "") or "") for d in devices}
         for mc in mesh_enrichment.values():
             mc_mac = _norm_mac(mc.mac)
@@ -279,21 +401,14 @@ class TopologyWidget(QWidget):
             else:
                 unassigned.append(stub)
 
-        # ── Y tiers — three clearly separated rows ────────────────────────────
-        # Unassigned devices get their own tier between gateway and satellites
-        # so their dashed edges never cross through satellite positions.
         has_modem   = bool(modem_data)
         Y_INTERNET  = 0.91
-        Y_MODEM     = 0.80    # WAN modem — between internet and gateway (only when present)
+        Y_MODEM     = 0.80
         Y_GATEWAY   = 0.68 if has_modem else 0.73
-        Y_UNASSIGNED = 0.56   # direct-to-gateway devices — above satellite row
-        Y_SATELLITE  = 0.42   # mesh satellite nodes
-        Y_CLIENT     = 0.16   # leaf client devices
+        Y_UNASSIGNED = 0.56
+        Y_SATELLITE  = 0.42
+        Y_CLIENT     = 0.16
 
-        # ── X positions for satellites ────────────────────────────────────────
-        # Use 0.13–0.87 margins so labels at the edges don't clip.
-        # Satellites are always evenly spread across the full width;
-        # none will land at x=0.5 unless there is exactly one satellite.
         n_sats = len(satellites)
         X_L, X_R = 0.13, 0.87
 
@@ -311,12 +426,9 @@ class TopologyWidget(QWidget):
                 sx = X_L + i * (X_R - X_L) / (n_sats - 1)
             pos[unit.mac] = (sx, Y_SATELLITE)
 
-        # ── Client positions — spread under their satellite ───────────────────
-        # Half-spread = 40 % of the inter-satellite gap, capped so no two
-        # satellites' client clouds touch each other.
         if n_sats > 1:
             sat_gap   = (X_R - X_L) / (n_sats - 1)
-            max_half  = sat_gap * 0.42          # never overlap adjacent satellite
+            max_half  = sat_gap * 0.42
         else:
             max_half  = 0.30
 
@@ -329,12 +441,14 @@ class TopologyWidget(QWidget):
                 cx = sx if nc == 1 else sx - half + j * 2 * half / (nc - 1)
                 pos[_dev_id(d)] = (cx, Y_CLIENT)
 
-        # ── Unassigned devices — centred on gateway, own tier ─────────────────
         nu = len(unassigned)
         u_half = min(0.22, max(0.04, nu * 0.055))
         for j, d in enumerate(unassigned):
             cx = 0.5 if nu == 1 else 0.5 - u_half + j * 2 * u_half / (nu - 1)
             pos[_dev_id(d)] = (cx, Y_UNASSIGNED)
+
+        # Apply pinned saved positions before populating _pos_map
+        self._apply_saved_positions(pos, saved)
 
         # Populate interactive node maps for click/hover
         for unit in satellites:
@@ -383,26 +497,45 @@ class TopologyWidget(QWidget):
                 ax.plot([gx, cx], [gy, cy], color=BORDER, linewidth=0.7,
                         linestyle="--", alpha=0.55, zorder=1)
 
-        # ── Draw nodes and labels (zorder=3/4) ───────────────────────────────
-        _scatter(ax, pos["__internet__"], INTERNET_COLOR, 1200, "☁  Internet")
+        # ── Draw infrastructure nodes ─────────────────────────────────────────
+        _scatter(ax, pos["__internet__"], INTERNET_COLOR, 1200, "☁  Internet",
+                 edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
         if has_modem:
-            _scatter(ax, pos["__modem__"], MODEM_COLOR, 900, _modem_label(modem_data))
+            _scatter(ax, pos["__modem__"], MODEM_COLOR, 900, _modem_label(modem_data),
+                     edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         gw_name  = master.name if master else "Gateway"
         gw_label = f"{gw_name}\n{gateway_ip or ''}"
-        _scatter(ax, pos["__gateway__"], GATEWAY_COLOR, 1000, gw_label)
+        _scatter(ax, pos["__gateway__"], GATEWAY_COLOR, 1000, gw_label,
+                 edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
 
         for unit in satellites:
             nc    = len(by_unit.get(unit.name, []))
             label = f"⬡  {unit.name}\n{nc} client{'s' if nc != 1 else ''}"
-            _scatter(ax, pos[unit.mac], MESH_SAT_COLOR, 900, label)
+            _scatter(ax, pos[unit.mac], MESH_SAT_COLOR, 900, label,
+                     edge_color=BG_CARD, linewidth=_DEF_LINEWIDTH)
+
+        # ── Draw device nodes with segment edge colours ───────────────────────
+        def _draw_device_seg(d: Any) -> None:
+            dev_id = _dev_id(d)
+            if dev_id not in pos:
+                return
+            ip    = _attr(d, "ip",         "?")
+            host  = _attr(d, "hostname",   "") or _attr(d, "vendor", "") or "Device"
+            risk  = _attr(d, "risk_level", "UNKNOWN") or "UNKNOWN"
+            color = RISK_NODE_COLOR.get(risk, RISK_NODE_COLOR["UNKNOWN"])
+            ec, lw = self._segment_edge_color(ip)
+            if dev_id in self._pinned:
+                lw = _PIN_LINEWIDTH
+                ec = ec if ec != BG_CARD else ACCENT
+            _scatter(ax, pos[dev_id], color, 600, f"{host[:13]}\n{ip}",
+                     edge_color=ec, linewidth=lw)
 
         for unit in satellites:
             for d in by_unit.get(unit.name, []):
-                _draw_device(ax, d, pos)
-
+                _draw_device_seg(d)
         for d in unassigned:
-            _draw_device(ax, d, pos)
+            _draw_device_seg(d)
 
         self._legend(ax, mesh=True, modem=has_modem)
         ax.set_title("Network Topology — Mesh", color=CHART_TITLE,
@@ -427,10 +560,10 @@ class TopologyWidget(QWidget):
 
     # ── interactive event handlers ────────────────────────────────────────────
 
-    def _on_button_press(self, event) -> None:
-        """Emit node_clicked(ip) when user clicks within 20 px of a device node."""
-        if event.inaxes is None or event.button != 1 or not self._ip_map:
-            return
+    def _nearest_node(self, event) -> Optional[str]:
+        """Return the node_key nearest to the mouse event, or None if >20 px away."""
+        if event.inaxes is None or not self._ip_map:
+            return None
         best_dist = float("inf")
         best_key = None
         for node_key, (nx, ny) in self._pos_map.items():
@@ -441,8 +574,34 @@ class TopologyWidget(QWidget):
             if dist < best_dist:
                 best_dist = dist
                 best_key = node_key
-        if best_dist <= 20 and best_key is not None:
+        return best_key if best_dist <= 20 else None
+
+    def _on_button_press(self, event) -> None:
+        """Left-click emits node_clicked(ip). Right-click shows Pin context menu."""
+        if event.inaxes is None or not self._ip_map:
+            return
+        best_key = self._nearest_node(event)
+        if best_key is None:
+            return
+
+        if event.button == 1:
+            # Left click — open device drawer
             self.node_clicked.emit(self._ip_map[best_key])
+
+        elif event.button == 3:
+            # Right click — pin/unpin context menu
+            menu = QMenu(self)
+            if best_key in self._pinned:
+                action = menu.addAction("Unpin node")
+            else:
+                action = menu.addAction("Pin node")
+            chosen = menu.exec(self._canvas.cursor().pos())
+            if chosen is action:
+                if best_key in self._pinned:
+                    self._pinned.discard(best_key)
+                else:
+                    self._pinned.add(best_key)
+                self._save_current_positions()
 
     def _on_motion(self, event) -> None:
         """Show tooltip annotation and PointingHandCursor when hovering over a node."""
@@ -454,17 +613,8 @@ class TopologyWidget(QWidget):
                 self._canvas.draw_idle()
             self._canvas.setCursor(Qt.CursorShape.ArrowCursor)
             return
-        best_dist = float("inf")
-        best_key = None
-        for node_key, (nx, ny) in self._pos_map.items():
-            if node_key not in self._ip_map:
-                continue
-            node_disp = self._ax.transData.transform((nx, ny))
-            dist = math.hypot(event.x - node_disp[0], event.y - node_disp[1])
-            if dist < best_dist:
-                best_dist = dist
-                best_key = node_key
-        if best_dist <= 20 and best_key is not None:
+        best_key = self._nearest_node(event)
+        if best_key is not None:
             nx, ny = self._pos_map[best_key]
             new_text = self._tooltip_map.get(best_key, "")
             self._hover_ann.xy = (nx, ny)
@@ -509,12 +659,11 @@ def _dev_id(d: Any) -> str:
     return (mac or ip or str(id(d))).lower()
 
 
-def _scatter(ax, pos: tuple, color: str, size: int, label: str) -> None:
+def _scatter(ax, pos: tuple, color: str, size: int, label: str,
+             edge_color: str = BG_CARD, linewidth: float = _DEF_LINEWIDTH) -> None:
     x, y = pos
     ax.scatter(x, y, s=size, c=color, zorder=3, alpha=0.9,
-               edgecolors=BG_CARD, linewidths=1.5)
-    # Offset in display points so the gap is pixel-constant at any widget size.
-    # Marker radius in points = sqrt(area/π); add 4pt (~5px) gap below the edge.
+               edgecolors=edge_color, linewidths=linewidth)
     marker_r = math.sqrt(size / math.pi)
     ax.annotate(label, xy=(x, y), xytext=(0, -(marker_r + 4)),
                 textcoords="offset points",
@@ -531,14 +680,3 @@ def _modem_label(data: dict) -> str:
     bar_str = ("●" * bars + "○" * (5 - bars)) if bars is not None else ""
     line2 = "  ·  ".join(filter(None, [nt, band, bar_str]))
     return f"5G Modem\n{line2}" if line2 else "5G Modem"
-
-
-def _draw_device(ax, d: Any, pos: Dict[str, tuple]) -> None:
-    dev_id = _dev_id(d)
-    if dev_id not in pos:
-        return
-    ip    = _attr(d, "ip",         "?")
-    host  = _attr(d, "hostname",   "") or _attr(d, "vendor", "") or "Device"
-    risk  = _attr(d, "risk_level", "UNKNOWN") or "UNKNOWN"
-    color = RISK_NODE_COLOR.get(risk, RISK_NODE_COLOR["UNKNOWN"])
-    _scatter(ax, pos[dev_id], color, 600, f"{host[:13]}\n{ip}")

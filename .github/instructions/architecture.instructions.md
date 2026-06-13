@@ -84,6 +84,7 @@ netsentinel/
 │   ├── network_logger.py       # Background ping logger (CSV → ~/Documents/NetSentinel/logs)
 │   ├── network_segments.py     # NetworkSegment dataclass + auto_detect_segments/classify/merge (Sprint 4)
 │   ├── nl_query.py             # Natural language query parser for device and event search
+│   ├── topology_layout.py      # NodePosition dataclass + load/save/clear layout + compute_scan_id (Sprint 2)
 │   ├── notification_channels.py    # Per-channel delivery functions (S20-3 split)
 │   ├── notification_router.py
 │   ├── os_fingerprint.py

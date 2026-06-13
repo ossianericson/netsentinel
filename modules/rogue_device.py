@@ -61,6 +61,9 @@ class DeviceInfo:
     mesh_band:      str   = ""   # "2.4G" | "5G" | "6G" | "Wired"
     mesh_up_kbps:   float = 0.0
     mesh_down_kbps: float = 0.0
+    # Classification quality — populated by scan enrichment
+    confidence:  float = 0.0   # 0.0–1.0 classifier confidence score
+    is_gateway:  bool  = False  # True when this IP matches the detected gateway
 
 
 def _resolve_hostname(ip: str) -> str:
@@ -370,6 +373,7 @@ def scan(offenders_path: Path) -> dict:
         # This preserves accurate product-line labels (e.g. "Streaming Stick")
         # while still classifying unknown-OUI devices via vendor/hostname/ports.
         _is_gw = (ip == gateway_ip)
+        info.is_gateway = _is_gw
         # Sanity-check the gateway hostname: mDNS/ARP cache collisions can
         # resolve a consumer-device name (e.g. "Playstation 4") for the gateway
         # IP.  Clear it before classification so the display and classifier both

@@ -121,6 +121,7 @@ hiddenimports: list = [
     "modules.network_log_writer",
     "modules.network_logger",
     "modules.network_segments",
+    "modules.topology_layout",
     "modules.nl_query",
     "modules.notification_channels",
     "modules.notification_router",

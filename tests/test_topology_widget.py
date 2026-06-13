@@ -64,9 +64,9 @@ def test_master_client_appears_in_unassigned(topology):
     drawn_labels: list[str] = []
     original_scatter = tw._scatter
 
-    def capturing_scatter(ax, pos, color, size, label):
+    def capturing_scatter(ax, pos, color, size, label, **kwargs):
         drawn_labels.append(label)
-        original_scatter(ax, pos, color, size, label)
+        original_scatter(ax, pos, color, size, label, **kwargs)
 
     with patch.object(tw, "_scatter", side_effect=capturing_scatter):
         topology.render(
@@ -178,9 +178,9 @@ def test_satellite_client_still_groups_under_satellite(topology):
     drawn_labels: list[str] = []
     original_scatter = tw._scatter
 
-    def capturing_scatter(ax, pos, color, size, label):
+    def capturing_scatter(ax, pos, color, size, label, **kwargs):
         drawn_labels.append(label)
-        original_scatter(ax, pos, color, size, label)
+        original_scatter(ax, pos, color, size, label, **kwargs)
 
     with patch.object(tw, "_scatter", side_effect=capturing_scatter):
         topology.render(
