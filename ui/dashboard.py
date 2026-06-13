@@ -997,15 +997,36 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     def _build_topology_tab(self) -> QWidget:
         from ui.topology_widget import TopologyWidget
+        from ui.widgets.device_detail_pane import _DeviceDrawer
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
         lbl = QLabel("Network topology — run a Device Fingerprint scan first.")
         lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         self._topology_widget = TopologyWidget()
+        self._topology_widget.node_clicked.connect(self._on_topology_node_clicked)
         lay.addWidget(lbl)
         lay.addWidget(self._topology_widget, 1)
+        self._topology_drawer = _DeviceDrawer(w)
         return w
+
+    @pyqtSlot(str)
+    def _on_topology_node_clicked(self, ip: str) -> None:
+        """Open _DeviceDrawer for the topology node the user clicked."""
+        if not getattr(self, "_m1_result", None) or not hasattr(self, "_topology_drawer"):
+            return
+        devices = self._m1_result.get("devices", [])
+        mac = ""
+        for d in devices:
+            d_ip = d.get("ip", "") if isinstance(d, dict) else getattr(d, "ip", "")
+            if d_ip == ip:
+                mac = d.get("mac", "") if isinstance(d, dict) else getattr(d, "mac", "")
+                break
+        if not mac:
+            return
+        self._topology_drawer.load(mac, self._store)
+        if not self._topology_drawer.isVisible():
+            self._topology_drawer.open_drawer()
 
     # ── ARP monitor tab ───────────────────────────────────────────────────────
 

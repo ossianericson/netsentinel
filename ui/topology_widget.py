@@ -27,6 +27,7 @@ matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
@@ -51,6 +52,8 @@ MODEM_COLOR    = GREEN           # WAN modem node
 class TopologyWidget(QWidget):
     """Matplotlib-based network topology graph embedded in PyQt6."""
 
+    node_clicked = pyqtSignal(str)  # emits device IP on node click
+
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._fig    = Figure(figsize=(8, 5), dpi=96, facecolor=BG_DARK)
@@ -61,6 +64,12 @@ class TopologyWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._canvas)
         self._style_axes()
+        self._pos_map: dict = {}       # node_key → (x, y) data coords
+        self._ip_map: dict = {}        # node_key → device IP string
+        self._tooltip_map: dict = {}   # node_key → tooltip text (hostname/IP/risk)
+        self._hover_ann = None
+        self._canvas.mpl_connect("button_press_event",  self._on_button_press)
+        self._canvas.mpl_connect("motion_notify_event", self._on_motion)
 
     def _style_axes(self) -> None:
         ax = self._ax
@@ -81,6 +90,10 @@ class TopologyWidget(QWidget):
         mesh_enrichment: Optional[Dict[str, Any]] = None,
         modem_data: Optional[Dict[str, Any]] = None,
     ) -> None:
+        self._pos_map = {}
+        self._ip_map = {}
+        self._tooltip_map = {}
+        self._hover_ann = None
         ax = self._ax
         ax.cla()
         self._style_axes()
@@ -107,8 +120,21 @@ class TopologyWidget(QWidget):
         ax.set_xlim(-0.02, 1.02)
         ax.set_ylim(-0.12, 1.02)
         self._canvas.draw()
+        if self._pos_map:
+            self._hover_ann = self._ax.annotate(
+                "", xy=(0.5, 0.5), xytext=(0, 14),
+                textcoords="offset points",
+                ha="center", va="bottom", fontsize=8, zorder=6,
+                color=TEXT_PRIMARY,
+                bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=BORDER, alpha=0.95),
+            )
+            self._hover_ann.set_visible(False)
 
     def clear(self) -> None:
+        self._pos_map = {}
+        self._ip_map = {}
+        self._tooltip_map = {}
+        self._hover_ann = None
         self._ax.cla()
         self._style_axes()
         self._canvas.draw()
@@ -152,6 +178,17 @@ class TopologyWidget(QWidget):
                 0.5  + radius * math.cos(angle),
                 0.26 + radius * 0.6 * math.sin(angle),
             )
+
+        # Populate interactive node maps for click/hover
+        for d, node in zip(devices, nodes[2:]):
+            nk  = node["id"]
+            ip  = _attr(d, "ip", "?")
+            if ip and ip != "?" and nk in positions:
+                host = _attr(d, "hostname", "") or _attr(d, "vendor", "") or "Device"
+                risk = _attr(d, "risk_level", "UNKNOWN") or "UNKNOWN"
+                self._pos_map[nk] = positions[nk]
+                self._ip_map[nk] = ip
+                self._tooltip_map[nk] = f"{host[:20]}\n{ip}\nRisk: {risk}"
 
         gx, gy = positions["gateway"]
         ix, iy = positions["internet"]
@@ -299,6 +336,27 @@ class TopologyWidget(QWidget):
             cx = 0.5 if nu == 1 else 0.5 - u_half + j * 2 * u_half / (nu - 1)
             pos[_dev_id(d)] = (cx, Y_UNASSIGNED)
 
+        # Populate interactive node maps for click/hover
+        for unit in satellites:
+            for d in by_unit.get(unit.name, []):
+                did = _dev_id(d)
+                ip  = _attr(d, "ip", "") or ""
+                if ip and did in pos:
+                    host = _attr(d, "hostname", "") or _attr(d, "vendor", "") or "Device"
+                    risk = _attr(d, "risk_level", "UNKNOWN") or "UNKNOWN"
+                    self._pos_map[did] = pos[did]
+                    self._ip_map[did] = ip
+                    self._tooltip_map[did] = f"{host[:20]}\n{ip}\nRisk: {risk}"
+        for d in unassigned:
+            did = _dev_id(d)
+            ip  = _attr(d, "ip", "") or ""
+            if ip and did in pos:
+                host = _attr(d, "hostname", "") or _attr(d, "vendor", "") or "Device"
+                risk = _attr(d, "risk_level", "UNKNOWN") or "UNKNOWN"
+                self._pos_map[did] = pos[did]
+                self._ip_map[did] = ip
+                self._tooltip_map[did] = f"{host[:20]}\n{ip}\nRisk: {risk}"
+
         # ── Draw all edges first (zorder=1) so nodes paint over them ─────────
         gx, gy = pos["__gateway__"]
         ix, iy = pos["__internet__"]
@@ -366,6 +424,60 @@ class TopologyWidget(QWidget):
         ax.legend(handles=handles, loc="lower right", fontsize=8,
                   labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
                   edgecolor=BORDER, framealpha=0.9)
+
+    # ── interactive event handlers ────────────────────────────────────────────
+
+    def _on_button_press(self, event) -> None:
+        """Emit node_clicked(ip) when user clicks within 20 px of a device node."""
+        if event.inaxes is None or event.button != 1 or not self._ip_map:
+            return
+        best_dist = float("inf")
+        best_key = None
+        for node_key, (nx, ny) in self._pos_map.items():
+            if node_key not in self._ip_map:
+                continue
+            node_disp = self._ax.transData.transform((nx, ny))
+            dist = math.hypot(event.x - node_disp[0], event.y - node_disp[1])
+            if dist < best_dist:
+                best_dist = dist
+                best_key = node_key
+        if best_dist <= 20 and best_key is not None:
+            self.node_clicked.emit(self._ip_map[best_key])
+
+    def _on_motion(self, event) -> None:
+        """Show tooltip annotation and PointingHandCursor when hovering over a node."""
+        if self._hover_ann is None:
+            return
+        if event.inaxes is None or not self._ip_map:
+            if self._hover_ann.get_visible():
+                self._hover_ann.set_visible(False)
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.CursorShape.ArrowCursor)
+            return
+        best_dist = float("inf")
+        best_key = None
+        for node_key, (nx, ny) in self._pos_map.items():
+            if node_key not in self._ip_map:
+                continue
+            node_disp = self._ax.transData.transform((nx, ny))
+            dist = math.hypot(event.x - node_disp[0], event.y - node_disp[1])
+            if dist < best_dist:
+                best_dist = dist
+                best_key = node_key
+        if best_dist <= 20 and best_key is not None:
+            nx, ny = self._pos_map[best_key]
+            new_text = self._tooltip_map.get(best_key, "")
+            self._hover_ann.xy = (nx, ny)
+            if self._hover_ann.get_text() != new_text or not self._hover_ann.get_visible():
+                self._hover_ann.set_text(new_text)
+                self._hover_ann.set_visible(True)
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            if self._hover_ann.get_visible():
+                self._hover_ann.set_visible(False)
+                self._canvas.draw_idle()
+            self._canvas.setCursor(Qt.CursorShape.ArrowCursor)
 
 
 # ── module-level helpers ──────────────────────────────────────────────────────

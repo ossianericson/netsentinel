@@ -82,6 +82,81 @@ def test_master_client_appears_in_unassigned(topology):
     )
 
 
+def test_node_clicked_emits_ip(topology):
+    """Clicking on a device node emits node_clicked with the correct IP."""
+    from unittest.mock import MagicMock
+    devices = [
+        {"ip": "192.168.1.10", "mac": "aa:bb:cc:dd:ee:01",
+         "hostname": "mypc", "risk_level": "CLEAN"},
+    ]
+    topology.render(devices=devices, gateway_ip="192.168.1.1")
+
+    # Device should be registered in _ip_map
+    node_key = "aa:bb:cc:dd:ee:01"
+    if node_key not in topology._pos_map:
+        node_key = "192.168.1.10"
+    assert node_key in topology._pos_map, "Device node missing from _pos_map after render"
+    assert node_key in topology._ip_map,  "Device node missing from _ip_map after render"
+    assert topology._ip_map[node_key] == "192.168.1.10"
+
+    # Simulate a click exactly on the node (0 px offset)
+    nx, ny = topology._pos_map[node_key]
+    disp = topology._ax.transData.transform((nx, ny))
+
+    emitted: list = []
+    topology.node_clicked.connect(lambda ip: emitted.append(ip))
+
+    event = MagicMock()
+    event.button = 1
+    event.inaxes = topology._ax
+    event.xdata = nx
+    event.ydata = ny
+    event.x = float(disp[0])
+    event.y = float(disp[1])
+
+    topology._on_button_press(event)
+
+    assert len(emitted) == 1, f"Expected node_clicked once, got: {emitted}"
+    assert emitted[0] == "192.168.1.10"
+
+
+def test_node_clicked_not_emitted_outside_axes(topology):
+    """Click with inaxes=None never emits node_clicked."""
+    from unittest.mock import MagicMock
+    devices = [
+        {"ip": "192.168.1.20", "mac": "bb:cc:dd:ee:ff:01",
+         "hostname": "switch", "risk_level": "LOW"},
+    ]
+    topology.render(devices=devices, gateway_ip="192.168.1.1")
+
+    emitted: list = []
+    topology.node_clicked.connect(lambda ip: emitted.append(ip))
+
+    event = MagicMock()
+    event.button = 1
+    event.inaxes = None
+
+    topology._on_button_press(event)
+    assert emitted == [], "No signal expected for out-of-axes click"
+
+
+def test_pos_map_empty_before_render(topology):
+    """_pos_map/_ip_map/_tooltip_map start empty and reset on clear()."""
+    assert topology._pos_map == {}
+    assert topology._ip_map == {}
+    assert topology._tooltip_map == {}
+    devices = [
+        {"ip": "10.0.0.5", "mac": "cc:dd:ee:ff:00:01",
+         "hostname": "cam", "risk_level": "MEDIUM"},
+    ]
+    topology.render(devices=devices, gateway_ip="10.0.0.1")
+    assert topology._pos_map, "_pos_map should be populated after render"
+    topology.clear()
+    assert topology._pos_map == {}, "_pos_map should be empty after clear()"
+    assert topology._ip_map == {}
+    assert topology._hover_ann is None
+
+
 def test_satellite_client_still_groups_under_satellite(topology):
     """Mesh-only client on a satellite must still appear under that satellite."""
     master = SimpleNamespace(role="master", name="Main", mac="aa:bb:cc:dd:ee:01")
