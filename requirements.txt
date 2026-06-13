@@ -2,6 +2,7 @@
 # This prevents silent breaking changes from upstream releases while
 # still receiving bug fixes. Update these intentionally, not accidentally.
 PyQt6~=6.11
+PyQt6-WebEngine~=6.8      # Interactive topology map (QWebEngineView + Cytoscape.js)
 scapy~=2.7
 matplotlib~=3.10
 pyinstaller~=6.20

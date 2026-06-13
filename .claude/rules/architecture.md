@@ -84,6 +84,7 @@ netsentinel/
 │   ├── network_logger.py       # Background ping logger (CSV → ~/Documents/NetSentinel/logs)
 │   ├── network_segments.py     # NetworkSegment dataclass + auto_detect_segments/classify/merge (Sprint 4)
 │   ├── nl_query.py             # Natural language query parser for device and event search
+│   ├── topology_cytoscape.py   # Cytoscape.js element/HTML builder — pure Python, no PyQt (Sprint 6)
 │   ├── topology_layout.py      # NodePosition dataclass + load/save/clear layout + compute_scan_id (Sprint 2)
 │   ├── topology_snapshot.py    # TopologySnapshot + TopologyDiff + save/load/diff — change detection (Sprint 4)
 │   ├── notification_channels.py    # Per-channel delivery functions (S20-3 split)
@@ -130,6 +131,7 @@ netsentinel/
 │   ├── utils.py                # Core: get_app_data_dir(), is_admin(), ping_sweep, send_wol
 │   ├── utils_net.py            # Network info: get_network_info(), get_dhcp_info(), get_interface_details() (S2-3 split)
 │   ├── utils_platform.py       # IPv6 scanning: get_ipv6_devices(), ping_sweep_ipv6() (S2-3 split)
+│   ├── lldp_scanner.py         # LLDP/CDP neighbor scanner — passive/active frame capture, raw TLV parser, LldpNeighbor dataclass (Sprint 5)
 │   ├── passive_observer.py     # Passive SSDP + mDNS listener — device-type hints without sending packets (Sprint 1)
 │   ├── web_dashboard.py        # build_html() — self-contained /dashboard HTML page
 │   ├── wifi_heatmap.py         # WiFi signal IDW interpolation and heatmap data builder
@@ -203,6 +205,7 @@ netsentinel/
 │   │   ├── reports_page.py
 │   │   ├── rest_api_page.py        # REST API — enable toggle, port, API key, live status probe, endpoint reference
 │   │   ├── security_overview_page.py # Security Overview — aggregate security findings dashboard
+│   │   ├── network_map_page.py     # Network Map — QWebEngineView Cytoscape.js topology + classic fallback (Sprint 6)
 │   │   ├── service_diagnostics_page.py  # Service Diagnostics — streaming/gaming service probe page (Sprint 4)
 │   │   ├── service_page.py
 │   │   ├── settings_cards.py       # _SettingsCardsMixin — all settings card builders for SettingsPage; includes appearance/display cards (S14-3c)
@@ -282,6 +285,7 @@ netsentinel/
 │   ├── syslog_worker.py
 │   ├── threat_intel_worker.py
 │   ├── passive_observer_worker.py  # PassiveObserverWorker — SSDP + mDNS listener bridge → Qt signals (Sprint 1)
+│   ├── lldp_worker.py          # LldpWorker — 15-second LLDP neighbor sniff; emits result_ready(list[LldpNeighbor]) (Sprint 5)
 │   └── wifi_monitor_worker.py  # WifiMonitorWorker — passive 802.11 capture thread (Npcap)
 ├── tests/
 └── tools/

@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
 
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
-    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, GREEN, TEAL,
+    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, GREEN,
     MAIN_STYLE, NAV_DIVIDER,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -994,89 +994,48 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             from PyQt6.QtWidgets import QMessageBox as _MB
             _MB.warning(self, "Export Failed", str(exc))
 
-    # ── Topology tab ──────────────────────────────────────────────────────────
+    # ── Topology tab (Sprint 6 — NetworkMapPage) ─────────────────────────────
 
     def _build_topology_tab(self) -> QWidget:
-        from ui.topology_widget import TopologyWidget
+        from ui.pages.network_map_page import NetworkMapPage
         from ui.widgets.device_detail_pane import _DeviceDrawer
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(8, 8, 8, 8)
-        lbl = QLabel("Network topology — run a Device Fingerprint scan first.")
-        lbl.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
 
-        # Toolbar: Fit · Zoom In · Zoom Out · Show Changes · (stretch) · Reset Layout
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(0, 0, 0, 2)
-        toolbar.setSpacing(4)
-        btn_fit  = QPushButton("Fit")
-        btn_zin  = QPushButton("+")
-        btn_zout = QPushButton("−")
-        btn_rst  = QPushButton("Reset Layout")
-        for btn in (btn_fit, btn_zin, btn_zout, btn_rst):
-            btn.setObjectName("btnNetRefresh")
-        btn_fit.setFixedWidth(52)
-        btn_zin.setFixedWidth(32)
-        btn_zout.setFixedWidth(32)
-        btn_rst.setFixedWidth(96)
-        btn_fit.setToolTip("Fit topology to window")
-        btn_zin.setToolTip("Zoom in 20%")
-        btn_zout.setToolTip("Zoom out 20%")
-        btn_rst.setToolTip("Clear saved positions and re-layout from scratch")
+        page = NetworkMapPage(store=self._store)
+        self._network_map_page = page
 
-        # Sprint 4 — Show Changes toggle
-        btn_diff = QPushButton("Show Changes")
-        btn_diff.setObjectName("btnNetRefresh")
-        btn_diff.setCheckable(True)
-        btn_diff.setFixedWidth(110)
-        btn_diff.setToolTip(
-            "Overlay added/removed devices and links vs. the previous scan"
-        )
-        self._btn_topo_diff = btn_diff
+        # self._topology_widget → classic (matplotlib) widget kept for
+        # backward-compat with network_doc_page which accesses ._fig
+        self._topology_widget = page.classic_widget
 
-        # Badge label: "3 new  ·  1 gone" (hidden until a diff exists)
-        self._topo_diff_lbl = QLabel()
-        self._topo_diff_lbl.setStyleSheet(
-            f"color:{TEAL};font-size:11px;font-weight:600;padding:0 6px;"
-        )
-        self._topo_diff_lbl.setVisible(False)
+        # Expose the diff toolbar controls from the page so that
+        # scan_wiring.py's getattr(self, "_btn_topo_diff") / "_topo_diff_lbl"
+        # references continue to work without modification.
+        self._btn_topo_diff = page.btn_diff
+        self._topo_diff_lbl = page.diff_label
 
-        # Diff state
+        # Diff state — still managed by Dashboard for cross-scan persistence
         self._topo_diff      = None   # TopologyDiff | None — set by scan_wiring
         self._topo_diff_mode = False
 
-        toolbar.addWidget(btn_fit)
-        toolbar.addWidget(btn_zin)
-        toolbar.addWidget(btn_zout)
-        toolbar.addWidget(btn_diff)
-        toolbar.addWidget(self._topo_diff_lbl)
-        toolbar.addStretch()
-        toolbar.addWidget(btn_rst)
+        page.node_clicked.connect(self._on_topology_node_clicked)
+        page.scan_requested.connect(self._start_full_scan)
+        page.btn_diff.toggled.connect(self._on_topo_diff_toggled)
 
-        self._topology_widget = TopologyWidget()
-        self._topology_widget.node_clicked.connect(self._on_topology_node_clicked)
-        btn_fit.clicked.connect(self._topology_widget.fit_view)
-        btn_zin.clicked.connect(self._topology_widget.zoom_in)
-        btn_zout.clicked.connect(self._topology_widget.zoom_out)
-        btn_rst.clicked.connect(self._topology_widget.reset_layout)
-        btn_diff.toggled.connect(self._on_topo_diff_toggled)
-
-        lay.addWidget(lbl)
-        lay.addLayout(toolbar)
-        lay.addWidget(self._topology_widget, 1)
-        self._topology_drawer = _DeviceDrawer(w)
-        return w
+        self._topology_drawer = _DeviceDrawer(page)
+        return page
 
     @pyqtSlot(bool)
     def _on_topo_diff_toggled(self, checked: bool) -> None:
         """Re-render topology with or without the change-detection overlay."""
         self._topo_diff_mode = checked
-        if not hasattr(self, "_topology_widget"):
+        if not hasattr(self, "_network_map_page"):
             return
-        kw = dict(self._topology_widget._last_render_kwargs)
+        kw = dict(self._network_map_page._last_render_kwargs)
+        if not kw:
+            return
         kw["diff"] = self._topo_diff if checked else None
         try:
-            self._topology_widget.render(**kw)
+            self._network_map_page.render(**kw)
         except Exception:
             pass  # non-fatal — diff overlay is best-effort
 
@@ -1926,13 +1885,13 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _topo_key = (data.get("wan_ip"), data.get("network_type"))
         if (_topo_key != getattr(self, "_last_modem_topo_key", None)
                 and getattr(self, "_m1_result", None)
-                and hasattr(self, "_topology_widget")):
+                and hasattr(self, "_network_map_page")):
             self._last_modem_topo_key = _topo_key
             try:
                 gw_ip  = self._net_info.get("gateway")     if self._net_info else None
                 gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
                 _mu, _me = self._effective_mesh_render_params()
-                self._topology_widget.render(
+                self._network_map_page.render(
                     self._m1_result.get("devices", []), gw_ip, gw_mac,
                     mesh_units=_mu, mesh_enrichment=_me, modem_data=data,
                 )

@@ -769,7 +769,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             except Exception:
                 pass  # non-fatal — diff overlay is best-effort
 
-            self._topology_widget.render(
+            self._network_map_page.render(
                 data.get("devices", []), gw_ip, gw_mac,
                 mesh_units=getattr(self, "_mesh_units", None),
                 mesh_enrichment=getattr(self, "_mesh_enrichment", None),
@@ -803,7 +803,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 pass  # non-fatal
 
         except AttributeError:
-            pass  # topology widget not yet initialised
+            pass  # network_map_page not yet initialised
         except Exception as _topo_exc:
             self._set_status(f"Topology render error: {_topo_exc}")
         # Re-apply any active NL search now that new data is loaded
@@ -920,6 +920,53 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # bundled plugin gateway that isn't already imported
         self._check_integration_banner(devices)
 
+        # Sprint 5 — LLDP multi-hop discovery: start background sniff on the
+        # active interface to discover managed switches invisible to ARP scanning.
+        self._start_lldp_discovery()
+
+
+    def _on_lldp_result(self, neighbors: list) -> None:
+        """Handle LLDP neighbor results from LldpWorker."""
+        self._lldp_result = neighbors
+        try:
+            admin_needed = not neighbors and not getattr(self, "_lldp_admin_ok", True)
+            self._network_map_page.update_lldp_neighbors(
+                neighbors, admin_needed=admin_needed
+            )
+        except AttributeError:
+            pass  # non-fatal — network_map_page may not be initialised
+
+    def _start_lldp_discovery(self) -> None:
+        """Launch LldpWorker on the active interface after a scan completes."""
+        try:
+            from workers.lldp_worker import LldpWorker
+            from modules.utils import is_admin
+
+            self._lldp_admin_ok = is_admin()
+
+            iface = ""
+            net_info = getattr(self, "_net_info", None) or {}
+            iface = net_info.get("interface", "") or ""
+
+            if not iface:
+                return  # cannot sniff without a known interface
+
+            # Cancel any previous still-running worker
+            prev = getattr(self, "_lldp_worker", None)
+            if prev and prev.isRunning():
+                try:
+                    prev.result_ready.disconnect()
+                except Exception:
+                    pass  # non-fatal — signal may already be disconnected
+                prev.terminate()
+                prev.wait(300)
+
+            worker = LldpWorker(iface=iface, passive=True, parent=self)
+            worker.result_ready.connect(self._on_lldp_result)
+            self._lldp_worker = worker
+            worker.start()
+        except Exception:
+            pass  # non-fatal — LLDP discovery is best-effort
 
     def _on_plugin_result(self, res):
         if res.error:

@@ -29,6 +29,10 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # Natural split: move AlertFired dataclass + _RULE_CTA to alert_suppressor.py (S20-4 split).
     "alert_engine.py": 620,
 
+    # Cytoscape.js element builder + complete self-contained HTML/CSS/JS template.
+    # Natural split: extract _HTML_TEMPLATE + _build_style() → topology_cytoscape_html.py.
+    "topology_cytoscape.py": 800,
+
 }
 
 
