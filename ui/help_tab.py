@@ -360,10 +360,11 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Classification confidence indicators", "The Type column in the Devices table now shows a confidence indicator: ★ user override (blue), ● high confidence (green), ◑ medium (amber), ○ low/unknown (grey). Hover for the exact confidence percentage."),
-        ("Override Device Type", "Right-click any device in the snapshot table and choose 'Override Device Type…' to permanently pin a device to any type. Your correction survives all future enrichment runs. Clear it any time via the same menu or the device drawer."),
-        ("Classification section in device drawer", "Click a device row to open the detail drawer — a new Classification section at the top shows the current type, evidence used (OUI, hostname, passive observation), confidence level, and a Clear Override button when an override is active."),
-        ("Network segment grouping", "Devices are automatically grouped into colour-coded /24 subnets. Use the pill filter bar above the Devices table to filter by segment, and right-click a pill to rename or recolour it."),
+        ("LLDP multi-hop discovery", "The Network Map now discovers managed switches and routers via LLDP. Run as administrator to see infrastructure nodes (squares) and leaf devices (diamonds) positioned between your gateway and the rest of the network — revealing the true tree topology instead of a flat star."),
+        ("Topology diff overlays", "New devices that appeared since the last scan are highlighted in green on the map; removed devices are shown in red. A diff legend appears in the lower-left corner when changes are present."),
+        ("Topology zoom controls", "Use the + / − / Reset buttons in the lower-right corner of the Network Map, or scroll the mouse wheel, to zoom in and out. The map fits to content automatically on first render."),
+        ("Click a topology node to inspect it", "Clicking any device node on the Network Map opens the device detail drawer — the same drawer accessible from the Devices table."),
+        ("Live health on topology edges", "Edges on the Network Map are coloured green (healthy), amber (degraded), or red (down) based on the latest availability monitor data."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

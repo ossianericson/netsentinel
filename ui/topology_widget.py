@@ -50,6 +50,7 @@ GATEWAY_COLOR  = ACCENT
 INTERNET_COLOR = ACCENT
 MESH_SAT_COLOR = CHART_PURPLE   # satellite nodes — distinct from all risk colours
 MODEM_COLOR    = GREEN           # WAN modem node
+LLDP_NODE_COLOR = TEAL           # LLDP-discovered infrastructure nodes
 
 _PIN_LINEWIDTH = 3.0    # border width for pinned nodes
 _SEG_LINEWIDTH = 2.0    # border width when a segment colour is applied
@@ -90,6 +91,9 @@ class TopologyWidget(QWidget):
         self._prev_pos_map: dict = {}   # node positions from the previous render call
         self._prev_ip_map:  dict = {}   # node IPs from the previous render call
 
+        # Sprint 5 — LLDP overlay
+        self._lldp_neighbors: list = []  # list[LldpNeighbor] from last render
+
         self._canvas.mpl_connect("button_press_event",  self._on_button_press)
         self._canvas.mpl_connect("motion_notify_event", self._on_motion)
 
@@ -115,7 +119,9 @@ class TopologyWidget(QWidget):
         edges: Optional[List[TopologyEdge]] = None,
         down_ips: Optional[set] = None,
         new_ips: Optional[set] = None,
-        diff: Optional[Any] = None,   # TopologyDiff | None
+        diff: Optional[Any] = None,         # TopologyDiff | None
+        lldp_neighbors: Optional[List[Any]] = None,  # list[LldpNeighbor] | None
+        lldp_admin_needed: bool = False,    # show "run as admin" info banner
     ) -> None:
         # Cache args so reset_layout() can replay the last render.
         self._last_render_kwargs = dict(
@@ -130,7 +136,10 @@ class TopologyWidget(QWidget):
             down_ips=down_ips,
             new_ips=new_ips,
             diff=diff,
+            lldp_neighbors=lldp_neighbors,
+            lldp_admin_needed=lldp_admin_needed,
         )
+        self._lldp_neighbors = lldp_neighbors or []
         # Sprint 4 — save previous positions before clearing so ghost nodes
         # have coordinates during diff overlay rendering.
         self._prev_pos_map = dict(self._pos_map)
@@ -183,6 +192,17 @@ class TopologyWidget(QWidget):
         # Sprint 4 — topology diff overlay (added/removed nodes and edges)
         if diff is not None and not diff.is_empty:
             self._draw_diff_overlays(ax, diff)
+
+        # Sprint 5 — LLDP neighbor overlay
+        if lldp_neighbors:
+            self._draw_lldp_overlays(ax, lldp_neighbors)
+        elif lldp_admin_needed:
+            ax.text(
+                0.5, 0.01,
+                "⬡  Run as administrator to discover managed switch topology via LLDP",
+                ha="center", va="bottom", fontsize=8,
+                color=TEAL, transform=ax.transAxes, alpha=0.80,
+            )
 
         # Extend y-axis below 0 so labels placed at (y - 0.07) near the bottom
         # are never clipped by the axes patch boundary.
@@ -744,6 +764,129 @@ class TopologyWidget(QWidget):
                 labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
                 edgecolor=BORDER, framealpha=0.9,
                 title="Changes", title_fontsize=8,
+            )
+
+    # ── Sprint 5: LLDP neighbor overlay ──────────────────────────────────────
+
+    def update_lldp_neighbors(
+        self,
+        neighbors: List[Any],
+        admin_needed: bool = False,
+    ) -> None:
+        """Re-render the topology with LLDP neighbor data added as an overlay.
+
+        Calling this after render() overlays LLDP-discovered switches/routers
+        without requiring a full re-scan.  The updated kwargs are stored in
+        _last_render_kwargs so reset_layout() preserves them.
+        """
+        if not self._last_render_kwargs:
+            return
+        kw = dict(self._last_render_kwargs)
+        kw["lldp_neighbors"]    = neighbors
+        kw["lldp_admin_needed"] = admin_needed
+        self.render(**kw)
+
+    def _draw_lldp_overlays(self, ax, neighbors: List[Any]) -> None:
+        """Draw LLDP-discovered nodes and their uplink edges onto *ax*.
+
+        Visual rules (per Sprint 5 spec):
+          • All LLDP nodes:              diamond marker ("D"), TEAL fill
+          • Infrastructure nodes         (bridge / router capability):
+                                         square marker ("s"), TEAL fill
+          • Gateway → LLDP edge:         solid, linewidth=2.5, TEAL
+          • ARP leaf edges:              dashed, linewidth=1.0, BORDER (unchanged)
+        """
+        from matplotlib.lines import Line2D as _L2D
+
+        if not neighbors or self._gw_pos is None:
+            return
+
+        gx, gy = self._gw_pos
+        # Spread LLDP nodes just above the device row (y ≈ 0.44)
+        n_lldp   = len(neighbors)
+        lldp_y   = 0.44
+        x_spread = min(0.35, 0.08 * n_lldp)
+
+        infra_nodes = []   # (x, y, label) for square-marker nodes
+        leaf_nodes  = []   # (x, y, label) for diamond-marker nodes
+
+        for idx, nb in enumerate(neighbors):
+            if n_lldp == 1:
+                nx = 0.5
+            else:
+                nx = (0.5 - x_spread) + idx * (2 * x_spread / (n_lldp - 1))
+            ny = lldp_y
+
+            # Edge: gateway → LLDP node
+            ax.plot(
+                [gx, nx], [gy, ny],
+                color=LLDP_NODE_COLOR, linewidth=2.5,
+                zorder=2, alpha=0.85, solid_capstyle="round",
+            )
+
+            is_infra = bool(
+                {"bridge", "router"} & set(getattr(nb, "capabilities", []))
+            )
+            name    = (getattr(nb, "neighbor_hostname", "") or
+                       getattr(nb, "chassis_id", "") or "Switch")
+            chassis = getattr(nb, "chassis_id", "")
+            label   = f"{name[:14]}\n{chassis[:17]}"
+
+            if is_infra:
+                infra_nodes.append((nx, ny, label))
+            else:
+                leaf_nodes.append((nx, ny, label))
+
+        # Draw square-marker infrastructure nodes
+        for nx, ny, label in infra_nodes:
+            ax.scatter(
+                nx, ny, s=700, c=LLDP_NODE_COLOR,
+                marker="s", zorder=3, alpha=0.90,
+                edgecolors=BG_CARD, linewidths=1.5,
+            )
+            ax.annotate(
+                label, xy=(nx, ny), xytext=(0, -18),
+                textcoords="offset points",
+                ha="center", va="top", fontsize=7,
+                color=TEXT_PRIMARY, zorder=4, clip_on=False,
+                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.90),
+            )
+
+        # Draw diamond-marker leaf LLDP nodes
+        for nx, ny, label in leaf_nodes:
+            ax.scatter(
+                nx, ny, s=600, c=LLDP_NODE_COLOR,
+                marker="D", zorder=3, alpha=0.90,
+                edgecolors=BG_CARD, linewidths=1.5,
+            )
+            ax.annotate(
+                label, xy=(nx, ny), xytext=(0, -16),
+                textcoords="offset points",
+                ha="center", va="top", fontsize=7,
+                color=TEXT_PRIMARY, zorder=4, clip_on=False,
+                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.90),
+            )
+
+        # LLDP legend items (appended below the main risk legend)
+        lldp_items = []
+        if infra_nodes:
+            lldp_items.append(
+                _L2D([0], [0], marker="s", color="w",
+                     markerfacecolor=LLDP_NODE_COLOR, markersize=8,
+                     label="LLDP switch/router")
+            )
+        if leaf_nodes:
+            lldp_items.append(
+                _L2D([0], [0], marker="D", color="w",
+                     markerfacecolor=LLDP_NODE_COLOR, markersize=8,
+                     label="LLDP device")
+            )
+        if lldp_items:
+            ax.legend(
+                handles=lldp_items, loc="lower left", fontsize=8,
+                labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
+                edgecolor=BORDER, framealpha=0.9,
+                title="LLDP", title_fontsize=8,
             )
 
     # ── shared legend ─────────────────────────────────────────────────────────
