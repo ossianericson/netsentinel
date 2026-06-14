@@ -19,6 +19,6 @@ pip-audit>=2.7.0
 pip-tools>=7.5.3
 
 # Monkey / chaos testing (tools/monkey_test.py)
-pywinauto>=0.6.8
+pywinauto>=0.6.9
 psutil>=5.9.0
 Pillow>=12.2.0
