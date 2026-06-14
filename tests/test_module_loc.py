@@ -93,7 +93,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
     # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1100,  # actual 1081 after Cat2-V4 SNMP interface error handler
+    "scan_wiring.py": 1200,  # actual 1182 after startup cache restore methods
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.
