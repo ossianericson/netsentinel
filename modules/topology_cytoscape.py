@@ -356,12 +356,15 @@ def build_cytoscape_elements(
             **({"position": _scale_pos(node_pos.x, node_pos.y)} if node_pos else {}),
         })
 
-        # Edge to gateway (or satellite parent when in a mesh)
+        # Edge to gateway (or satellite parent when in a mesh).
+        # ID encodes the *actual* source so incremental updateTopology() removes
+        # the old flat edge (id="e-{gw_id}-…") and inserts the new satellite
+        # edge (id="e-{sat_id}-…") — Cytoscape edges are source/target-immutable.
         src_id = parent_id if parent_id else gw_id
         cyto_edges.append({
             "group": "edges",
             "data": {
-                "id":     f"e-{gw_id}-{dev_id}",
+                "id":     f"e-{src_id}-{dev_id}",
                 "source": src_id,
                 "target": dev_id,
             },

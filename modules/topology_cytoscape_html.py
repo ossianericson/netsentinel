@@ -138,22 +138,29 @@ function _makeLayoutOpts(name, animate) {
   if (name === 'breadthfirst') {
     o.directed      = true;
     o.roots         = '#__internet__';
-    o.grid          = false;
-    o.spacingFactor = 2.1;
+    o.grid          = true;   // straight rows per level — internet top, devices bottom
+    o.spacingFactor = 1.4;    // enough room for 20+ leaf devices in the bottom row
   }
   if (name === 'cose') {
-    o.gravity         = 120;   // centripetal pull — prevents rightward drift
-    o.nodeRepulsion   = 8000;
-    o.idealEdgeLength = 100;
+    o.gravity         = 20;    // gentle centripetal pull — prevents clustering without over-centering
+    o.nodeRepulsion   = 2000;  // stronger repulsion — gives each device room to breathe
+    o.idealEdgeLength = 90;    // slightly tighter links keep structure readable
     o.edgeElasticity  = 0.45;
-    o.numIter         = 800;
-    o.coolingFactor   = 0.95;
-    o.initialTemp     = 1000;
-    o.randomize       = false; // deterministic start — no random position noise
+    o.numIter         = 500;
+    o.coolingFactor   = 0.97;
+    o.initialTemp     = 800;
+    o.randomize       = false;
   }
   if (name === 'concentric') {
-    o.concentric = function(node) { return node.degree(); };
-    o.levelWidth = function() { return 1; };
+    // 3 clean rings: infrastructure (center) → intermediate nodes → leaf devices (outer)
+    o.concentric = function(node) {
+      if (node.hasClass('internet') || node.hasClass('gateway') || node.hasClass('modem')) return 3;
+      if (node.degree() > 2) return 2;  // mesh nodes / switches (multiple connections)
+      return 1;                          // leaf devices (one connection)
+    };
+    o.levelWidth    = function() { return 1; };
+    o.minNodeSpacing = 20;
+    o.spacingFactor  = 1.3;
   }
   return o;
 }
@@ -341,7 +348,11 @@ window.setLayout = function(name) {
   layoutName = name;
   cy.nodes().unlock();
   var opts = _makeLayoutOpts(name, true);
-  opts.stop = function() { _layoutRunning = false; _pinInfrastructure(); };
+  opts.stop = function() {
+    _layoutRunning = false;
+    _pinInfrastructure();
+    cy.fit(undefined, 50);
+  };
   cy.layout(opts).run();
 };
 
@@ -352,7 +363,11 @@ window.resetLayout = function() {
   _layoutRunning = true;
   cy.nodes().unlock();
   var opts = _makeLayoutOpts(layoutName, true);
-  opts.stop = function() { _layoutRunning = false; _pinInfrastructure(); cy.fit(undefined, 50); };
+  opts.stop = function() {
+    _layoutRunning = false;
+    _pinInfrastructure();
+    cy.fit(undefined, 50);
+  };
   cy.layout(opts).run();
 };
 

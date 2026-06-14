@@ -307,3 +307,120 @@ def test_element_builder_scaling():
         f"Scaling ratio {ratio:.1f}x for 10x input suggests O(n²) regression "
         f"(t_small={t_small:.3f}ms, t_large={t_large:.3f}ms)"
     )
+
+
+# ── mesh edge routing regression tests ───────────────────────────────────────
+# These guard against the bug where edge IDs always used gw_id instead of the
+# actual src_id, preventing incremental updateTopology() from rewiring clients
+# from the flat gateway edge to their satellite parent node.
+
+class TestMeshEdgeRouting:
+
+    def _make_units(self):
+        from types import SimpleNamespace
+        master = SimpleNamespace(name="MasterDeco", role="master", mac="aa:bb:cc:00:00:01")
+        sat    = SimpleNamespace(name="SatDeco",    role="slave",  mac="aa:bb:cc:00:00:02")
+        return [master, sat]
+
+    def test_flat_device_edge_uses_gateway_id(self):
+        """Without mesh data, edge source and edge ID both reference the gateway.
+        Gateway Cytoscape node ID is always the IP (not MAC) per gw_id=gateway_ip."""
+        from modules.topology_cytoscape import build_cytoscape_elements
+        devices = [_make_device("192.168.1.100", mac="aa:bb:cc:00:01:00")]
+        result  = build_cytoscape_elements(
+            devices=devices,
+            gateway_ip="192.168.1.1",
+            gateway_mac="aa:bb:cc:00:00:01",
+        )
+        edges = [e for e in result["elements"] if e.get("group") == "edges"]
+        client_edge = next(
+            (e for e in edges if e["data"].get("target") == "aa:bb:cc:00:01:00"), None
+        )
+        assert client_edge is not None, "Client node has no edge"
+        gw_id = "192.168.1.1"  # gw_id = gateway_ip in topology_cytoscape.py
+        assert client_edge["data"]["source"] == gw_id
+        assert client_edge["data"]["id"] == f"e-{gw_id}-aa:bb:cc:00:01:00"
+
+    def test_mesh_client_edge_source_is_satellite(self):
+        """Mesh client must have an edge from its satellite node, not the gateway.
+        The edge ID must encode the satellite so window.updateTopology() can rewire."""
+        from modules.topology_cytoscape import build_cytoscape_elements
+        devices = [{
+            "ip":         "192.168.1.100",
+            "mac":        "aa:bb:cc:00:01:00",
+            "hostname":   "my-phone",
+            "risk_level": "CLEAN",
+            "mesh_unit":  "SatDeco",
+        }]
+        result = build_cytoscape_elements(
+            devices=devices,
+            gateway_ip="192.168.1.1",
+            gateway_mac="aa:bb:cc:00:00:01",
+            mesh_units=self._make_units(),
+        )
+        edges = [e for e in result["elements"] if e.get("group") == "edges"]
+        client_edge = next(
+            (e for e in edges if e["data"].get("target") == "aa:bb:cc:00:01:00"), None
+        )
+        assert client_edge is not None, "Mesh client has no edge"
+        sat_id = "aa:bb:cc:00:00:02"
+        assert client_edge["data"]["source"] == sat_id, (
+            f"Expected source={sat_id!r}, got {client_edge['data']['source']!r}"
+        )
+        assert client_edge["data"]["id"] == f"e-{sat_id}-aa:bb:cc:00:01:00", (
+            "Edge ID must encode the actual source node for incremental rewiring"
+        )
+
+    def test_mesh_edge_id_differs_from_flat_edge_id(self):
+        """The satellite-edge ID must differ from the flat-edge ID so that
+        window.updateTopology() removes the old flat edge and inserts the new one.
+        Cytoscape edges are source/target-immutable; only ID removal/re-add works."""
+        from modules.topology_cytoscape import build_cytoscape_elements
+        dev_mac = "aa:bb:cc:00:01:00"
+        gw_mac  = "aa:bb:cc:00:00:01"
+
+        flat_result = build_cytoscape_elements(
+            devices=[_make_device("192.168.1.100", mac=dev_mac)],
+            gateway_ip="192.168.1.1", gateway_mac=gw_mac,
+        )
+        mesh_result = build_cytoscape_elements(
+            devices=[{"ip": "192.168.1.100", "mac": dev_mac, "risk_level": "CLEAN",
+                      "hostname": "", "vendor": "", "mesh_unit": "SatDeco"}],
+            gateway_ip="192.168.1.1", gateway_mac=gw_mac,
+            mesh_units=self._make_units(),
+        )
+
+        def _client_edge_id(res):
+            for e in res["elements"]:
+                if e.get("group") == "edges" and e["data"].get("target") == dev_mac:
+                    return e["data"]["id"]
+            return None
+
+        flat_id = _client_edge_id(flat_result)
+        mesh_id = _client_edge_id(mesh_result)
+        assert flat_id is not None, "Flat result has no client edge"
+        assert mesh_id is not None, "Mesh result has no client edge"
+        assert flat_id != mesh_id, (
+            f"Flat edge ID {flat_id!r} must differ from mesh edge ID {mesh_id!r} "
+            "so incremental updateTopology() can swap them"
+        )
+
+    def test_unassigned_device_stays_on_gateway(self):
+        """Devices with no mesh_unit remain connected to the gateway even in mesh mode."""
+        from modules.topology_cytoscape import build_cytoscape_elements
+        devices = [{"ip": "192.168.1.50", "mac": "aa:bb:cc:00:02:00",
+                    "hostname": "", "risk_level": "CLEAN", "mesh_unit": ""}]
+        result = build_cytoscape_elements(
+            devices=devices,
+            gateway_ip="192.168.1.1",
+            gateway_mac="aa:bb:cc:00:00:01",
+            mesh_units=self._make_units(),
+        )
+        edges = [e for e in result["elements"] if e.get("group") == "edges"]
+        client_edge = next(
+            (e for e in edges if e["data"].get("target") == "aa:bb:cc:00:02:00"), None
+        )
+        assert client_edge is not None, "Unassigned device has no edge"
+        assert client_edge["data"]["source"] == "192.168.1.1", (
+            "Unassigned device must stay connected to gateway (gw_id = gateway_ip)"
+        )

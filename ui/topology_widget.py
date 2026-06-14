@@ -170,8 +170,10 @@ class TopologyWidget(QWidget):
         # Rebuild pinned set from saved layout (covers nodes from this scan_id only).
         self._pinned = {k for k, v in saved.items() if v.pinned}
 
-        if mesh_units and mesh_enrichment:
-            self._render_mesh(ax, devices, gateway_ip, mesh_units, mesh_enrichment,
+        if mesh_units:
+            # mesh_enrichment may be {} when devices carry d.mesh_unit already
+            # (set by _apply_mesh_enrichment); pass {} not None to avoid AttributeError
+            self._render_mesh(ax, devices, gateway_ip, mesh_units, mesh_enrichment or {},
                               modem_data=modem_data, saved=saved)
         else:
             self._render_flat(ax, devices, gateway_ip, gateway_mac,
