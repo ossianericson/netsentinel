@@ -11,7 +11,7 @@ mypy>=2.1.0
 
 # Dependency CVE scanning (GAP-3) — also enforced in CI (ci.yml audit job)
 # run: pip-audit -r requirements.txt --desc on --severity critical
-pip-audit>=2.7.0
+pip-audit>=2.10.1
 
 # Dependency version locking (GAP-6)
 # Generate a lock file: pip-compile requirements.txt -o requirements-lock.txt
