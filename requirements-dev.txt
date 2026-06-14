@@ -16,7 +16,7 @@ pip-audit>=2.7.0
 # Dependency version locking (GAP-6)
 # Generate a lock file: pip-compile requirements.txt -o requirements-lock.txt
 # Update: pip-compile --upgrade requirements.txt -o requirements-lock.txt
-pip-tools>=7.4.0
+pip-tools>=7.5.3
 
 # Monkey / chaos testing (tools/monkey_test.py)
 pywinauto>=0.6.8
