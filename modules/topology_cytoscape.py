@@ -40,11 +40,10 @@ _VENDOR_CLASS_MAP: Dict[str, str] = {
 
 # Cytoscape built-in layout names exposed in the toolbar dropdown
 LAYOUT_NAMES: Dict[str, str] = {
-    "Hierarchy":    "breadthfirst",
-    "Physics":      "cose",
-    "Breadthfirst": "breadthfirst",
-    "Concentric":   "concentric",
-    "Grid":         "grid",
+    "Hierarchy":  "breadthfirst",
+    "Physics":    "cose",
+    "Concentric": "concentric",
+    "Grid":       "grid",
 }
 
 
@@ -114,6 +113,26 @@ def _cytoscape_script_tag() -> str:
 
 # ── element builder ───────────────────────────────────────────────────────────
 
+def _bw_class(bps: float) -> str:
+    """Return a traffic CSS class based on bits-per-second value."""
+    mbps = bps / 1_000_000
+    if mbps >= 5.0:
+        return "traffic-high"
+    if mbps >= 0.5:
+        return "traffic-medium"
+    if bps > 0:
+        return "traffic-low"
+    return ""
+
+
+def _bw_label(bps: float) -> str:
+    """Format bps as a compact string for node tooltip / label."""
+    mbps = bps / 1_000_000
+    if mbps >= 0.1:
+        return f"{mbps:.1f} Mbps"
+    return f"{bps / 1000:.0f} Kbps"
+
+
 def build_cytoscape_elements(
     devices: list,
     edges: Optional[list] = None,                  # list[TopologyEdge]
@@ -128,6 +147,7 @@ def build_cytoscape_elements(
     modem_data: Optional[dict] = None,
     down_ips: Optional[set] = None,
     new_ips: Optional[set] = None,
+    bw_by_mac: Optional[Dict[str, float]] = None,  # mac → total_bps (traffic overlay)
 ) -> Dict[str, list]:
     """Convert scan data into a Cytoscape.js elements list and stylesheet.
 
@@ -306,19 +326,34 @@ def build_cytoscape_elements(
             except Exception:
                 pass  # non-fatal
 
+        # ── Traffic overlay ──────────────────────────────────────────────────
+        bps = (bw_by_mac or {}).get(mac, 0.0)
+        tc  = _bw_class(bps) if bw_by_mac is not None else ""
+        if tc:
+            classes += f" {tc}"
+        bw_str = _bw_label(bps) if bps > 0 else ""
+
+        node_label = f"{host[:16]}\n{ip}"
+        if bw_str:
+            node_label += f"\n{bw_str}"
+
+        tip_text = f"{host}\n{ip}\n{mac or ''}\nRisk: {risk}"
+        if bw_str:
+            tip_text += f"\nTraffic: {bw_str}"
+
         node_pos = positions.get(dev_id) or positions.get(ip)
         nodes.append({
             "group": "nodes",
             "data": {
-                "id":       dev_id,
-                "label":    f"{host[:16]}\n{ip}",
-                "ip":       ip,
-                "mac":      mac,
-                "risk":     risk,
-                "vendor":   vendor,
-                "tip":      f"{host}\n{ip}\n{mac or ''}\nRisk: {risk}",
+                "id":        dev_id,
+                "label":     node_label,
+                "ip":        ip,
+                "mac":       mac,
+                "risk":      risk,
+                "vendor":    vendor,
+                "tip":       tip_text,
                 "seg_color": seg_color,
-                **({"parent": parent_id} if parent_id else {}),
+                "bw_mbps":   round(bps / 1_000_000, 3),
             },
             "classes": classes.strip(),
             **({"position": _scale_pos(node_pos.x, node_pos.y)} if node_pos else {}),
@@ -437,18 +472,21 @@ def _build_style() -> list:
         {
             "selector": "node",
             "style": {
-                "label":            "data(label)",
-                "text-valign":      "bottom",
-                "text-halign":      "center",
-                "text-wrap":        "wrap",
-                "text-max-width":   "100px",
-                "font-size":        "10px",
-                "color":            "#1A1A2E",
-                "background-color": "#5A6A7A",
-                "width":            "36px",
-                "height":           "36px",
-                "border-width":     "2px",
-                "border-color":     "#D4D4D4",
+                "label":              "data(label)",
+                "text-valign":        "bottom",
+                "text-halign":        "center",
+                "text-wrap":          "wrap",
+                "text-max-width":     "120px",
+                "font-size":          "11px",
+                "font-family":        "-apple-system, BlinkMacSystemFont, sans-serif",
+                "text-outline-width": "2px",
+                "text-outline-color": "#FFFFFF",
+                "color":              "#1A1A2E",
+                "background-color":   "#5A6A7A",
+                "width":              "44px",
+                "height":             "44px",
+                "border-width":       "2px",
+                "border-color":       "#D4D4D4",
             },
         },
         # ── Risk levels ───────────────────────────────────────────────────────
@@ -457,6 +495,15 @@ def _build_style() -> list:
         {"selector": "node.risk-low",     "style": {"background-color": "#0078D4"}},
         {"selector": "node.risk-clean",   "style": {"background-color": "#2E7D32"}},
         {"selector": "node.risk-unknown", "style": {"background-color": "#5A6A7A"}},
+        # ── Segment membership ring (outline around node) ─────────────────────
+        {
+            "selector": "node[seg_color != '']",
+            "style": {
+                "outline-color":   "data(seg_color)",
+                "outline-width":   "4px",
+                "outline-opacity": "0.55",
+            },
+        },
         # ── Infrastructure nodes ──────────────────────────────────────────────
         {
             "selector": "node.internet",
@@ -558,6 +605,38 @@ def _build_style() -> list:
                 "overlay-opacity":  "0.1",
             },
         },
+        # ── Traffic overlay ───────────────────────────────────────────────────
+        {
+            "selector": "node.traffic-high",
+            "style": {
+                "border-color":     "#D93025",
+                "border-width":     "4px",
+                "shadow-blur":      "12px",
+                "shadow-color":     "#D93025",
+                "shadow-offset-x":  "0px",
+                "shadow-offset-y":  "0px",
+                "shadow-opacity":   "0.55",
+            },
+        },
+        {
+            "selector": "node.traffic-medium",
+            "style": {
+                "border-color":    "#F59E0B",
+                "border-width":    "3px",
+                "shadow-blur":     "8px",
+                "shadow-color":    "#F59E0B",
+                "shadow-offset-x": "0px",
+                "shadow-offset-y": "0px",
+                "shadow-opacity":  "0.4",
+            },
+        },
+        {
+            "selector": "node.traffic-low",
+            "style": {
+                "border-color": "#2E7D32",
+                "border-width": "3px",
+            },
+        },
         # ── Hidden (Show Changes toggle) ──────────────────────────────────────
         {"selector": ".hidden", "style": {"display": "none"}},
         # ── Base edge ─────────────────────────────────────────────────────────
@@ -637,11 +716,18 @@ if (typeof QWebChannel !== 'undefined' && typeof qt !== 'undefined') {{
 }}
 
 // Initialize Cytoscape
+var initLayout = (function() {{
+  var o = {{ name: layoutName, animate: false, padding: 60,
+             spacingFactor: 1.75, nodeDimensionsIncludeLabels: true }};
+  if (layoutName === 'breadthfirst') {{ o.directed = true; o.roots = '#__internet__'; }}
+  return o;
+}})();
+
 cy = cytoscape({{
   container: document.getElementById('cy'),
   elements:  elements,
   style:     {style_json},
-  layout:    {{ name: layoutName, animate: false, padding: 60 }},
+  layout:    initLayout,
   minZoom:   0.08,
   maxZoom:   5.0,
   wheelSensitivity: 0.25,
@@ -686,13 +772,19 @@ cy.on('tap', function() {{ if (focusMode) window._applyFocus(); }});
 
 // ── Python-callable global functions ──────────────────────────────────────────
 window.setLayout = function(name) {{
-  cy.layout({{ name: name, animate: true, animationDuration: 350, padding: 60 }}).run();
+  var o = {{ name: name, animate: true, animationDuration: 350, padding: 60,
+             spacingFactor: 1.75, nodeDimensionsIncludeLabels: true }};
+  if (name === 'breadthfirst') {{ o.directed = true; o.roots = cy.$('#__internet__'); }}
+  cy.layout(o).run();
 }};
 
 window.fitView = function() {{ cy.fit(undefined, 50); }};
 
 window.resetLayout = function() {{
-  cy.layout({{ name: layoutName, animate: true, animationDuration: 350, padding: 60 }}).run();
+  var o = {{ name: layoutName, animate: true, animationDuration: 350, padding: 60,
+             spacingFactor: 1.75, nodeDimensionsIncludeLabels: true }};
+  if (layoutName === 'breadthfirst') {{ o.directed = true; o.roots = cy.$('#__internet__'); }}
+  cy.layout(o).run();
 }};
 
 window.toggleFocus = function(enabled) {{
@@ -741,6 +833,7 @@ def build_cytoscape_html(
     down_ips: Optional[set] = None,
     new_ips: Optional[set] = None,
     initial_layout: str = "breadthfirst",
+    bw_by_mac: Optional[Dict[str, float]] = None,
 ) -> str:
     """Return a complete self-contained HTML string for QWebEngineView.
 
@@ -761,6 +854,7 @@ def build_cytoscape_html(
         modem_data=modem_data,
         down_ips=down_ips,
         new_ips=new_ips,
+        bw_by_mac=bw_by_mac,
     )
 
     # Determine layout: if we have saved positions, use preset layout

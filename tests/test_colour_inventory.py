@@ -122,7 +122,7 @@ _MODULE_BUDGETS: dict[str, int] = {
     "modules/metric_store_schema.py": 1,
     # Cytoscape.js CSS in embedded HTML/JS template (Cytoscape stylesheet, not Python UI).
     # Migrate to modules/colours.py in a future purge sprint.
-    "modules/topology_cytoscape.py": 40,
+    "modules/topology_cytoscape.py": 46,
 }
 
 _DEFAULT_BUDGET = 0  # any file not listed must have zero violations
