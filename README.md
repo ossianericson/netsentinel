@@ -352,6 +352,13 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v2.1.5
+**Fixed**
+- RULE 10 contradiction with RULE-AH3 resolved; all matplotlib chart backgrounds now use `ui/styles.py` tokens
+- `QTimer.singleShot` calls replaced with parented `QTimer(self)` instances across widget classes (RULE-WIN5 hardening)
+- `app.py` wiring refactor — always-on worker signals connected after `Dashboard` construction per RULE-DW2
+- Network Map interactive view: hierarchical top-down Cytoscape.js layout and LLDP hint + WebEngine fallback polish
+
 ### v2.1.4
 **Added**
 - `modules/lldp_scanner.py` — LLDP/CDP neighbor scanner; passive sniff + active frame mode; raw TLV parser; `LldpNeighbor` dataclass with `is_infrastructure` property (Sprint 5)
