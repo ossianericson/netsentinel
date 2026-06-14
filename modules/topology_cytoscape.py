@@ -164,6 +164,20 @@ def build_cytoscape_elements(
     gw_id    = gateway_ip or "__gateway__"
     modem_id = "__modem__"
 
+    # Pre-detect mesh master name so the gateway node label matches the classic
+    # view (which merges the master unit into the gateway node rather than
+    # creating a separate node for it).
+    _gw_display_name = "Gateway"
+    if mesh_units:
+        try:
+            _master_unit = next(
+                (u for u in mesh_units if getattr(u, "role", "") == "master"), None
+            )
+            if _master_unit:
+                _gw_display_name = getattr(_master_unit, "name", None) or "Gateway"
+        except Exception:
+            pass  # non-fatal — fall back to "Gateway"
+
     # Internet cloud
     inet_pos = positions.get(inet_id)
     nodes.append({
@@ -212,7 +226,8 @@ def build_cytoscape_elements(
             "classes": "arp-edge",
         })
 
-    # Gateway node
+    # Gateway node — when a mesh master unit exists its name is shown here
+    # (matching the classic view) instead of creating a duplicate node.
     gw_pos = positions.get(gw_id) or positions.get(gateway_mac or "")
     gw_classes = "gateway"
     if gateway_ip in down_ips:
@@ -221,10 +236,10 @@ def build_cytoscape_elements(
         "group": "nodes",
         "data": {
             "id":    gw_id,
-            "label": f"Gateway\n{gateway_ip or '?'}",
+            "label": f"{_gw_display_name}\n{gateway_ip or '?'}",
             "ip":    gateway_ip or "",
             "mac":   gateway_mac or "",
-            "tip":   f"Gateway  {gateway_ip or '?'}",
+            "tip":   f"Gateway  {_gw_display_name}  {gateway_ip or '?'}",
         },
         "classes": gw_classes,
         **({"position": _scale_pos(gw_pos.x, gw_pos.y)} if gw_pos else {}),
@@ -243,31 +258,33 @@ def build_cytoscape_elements(
             u_mac = _norm_mac(getattr(unit, "mac", "") or "")
             if u_mac:
                 mesh_mac_set.add(u_mac)
+            u_role = getattr(unit, "role", "")
+            if u_role == "master":
+                # Master unit is already represented by the gateway node;
+                # adding it again would create a duplicate node.
+                continue
             u_id = u_mac or getattr(unit, "name", "") or str(id(unit))
             u_pos = positions.get(u_id)
-            u_role = getattr(unit, "role", "")
-            u_cls = "gateway" if u_role == "master" else "mesh-sat"
             nodes.append({
                 "group": "nodes",
                 "data": {
                     "id":    u_id,
                     "label": getattr(unit, "name", "Satellite"),
                     "ip":    getattr(unit, "ip", "") or "",
-                    "tip":   f"Mesh  {getattr(unit, 'name', '')}  ({u_role})",
+                    "tip":   f"Mesh  {getattr(unit, 'name', '')}  (satellite)",
                 },
-                "classes": u_cls,
+                "classes": "mesh-sat",
                 **({"position": _scale_pos(u_pos.x, u_pos.y)} if u_pos else {}),
             })
-            if u_role != "master":
-                cyto_edges.append({
-                    "group": "edges",
-                    "data": {
-                        "id":     f"e-gw-{u_id}",
-                        "source": gw_id,
-                        "target": u_id,
-                    },
-                    "classes": "mesh-edge",
-                })
+            cyto_edges.append({
+                "group": "edges",
+                "data": {
+                    "id":     f"e-gw-{u_id}",
+                    "source": gw_id,
+                    "target": u_id,
+                },
+                "classes": "mesh-edge",
+            })
 
     # ── Device nodes ────────────────────────────────────────────────────────
     diff_added = set(getattr(diff, "added_ips", []) if diff else [])
