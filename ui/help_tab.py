@@ -360,11 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("LLDP multi-hop discovery", "The Network Map now discovers managed switches and routers via LLDP. Run as administrator to see infrastructure nodes (squares) and leaf devices (diamonds) positioned between your gateway and the rest of the network — revealing the true tree topology instead of a flat star."),
-        ("Topology diff overlays", "New devices that appeared since the last scan are highlighted in green on the map; removed devices are shown in red. A diff legend appears in the lower-left corner when changes are present."),
-        ("Topology zoom controls", "Use the + / − / Reset buttons in the lower-right corner of the Network Map, or scroll the mouse wheel, to zoom in and out. The map fits to content automatically on first render."),
-        ("Click a topology node to inspect it", "Clicking any device node on the Network Map opens the device detail drawer — the same drawer accessible from the Devices table."),
-        ("Live health on topology edges", "Edges on the Network Map are coloured green (healthy), amber (degraded), or red (down) based on the latest availability monitor data."),
+        ("SNMP interface error counters", "The SNMP Device Info page now shows per-interface error metrics (ifInErrors / ifOutErrors) alongside the existing traffic counters, making it easier to spot a degraded port or uplink without opening a CLI."),
+        ("Startup cache restore", "The Network Map and classic topology now render immediately from the last scan stored in the database — no need to rescan before the map is populated after restarting the app."),
+        ("Interactive map blank fix", "The Cytoscape.js interactive map no longer goes blank after a mesh-enriched scan. Master mesh nodes are now correctly routed to the gateway node rather than a non-existent Cytoscape element."),
+        ("Unified mesh satellite assignment", "The classic topology and interactive map now use the same satellite-assignment logic as the Devices table — devices are always drawn under the correct Deco mesh node."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

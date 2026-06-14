@@ -13,7 +13,6 @@ Covers:
 
 import pytest
 
-import modules.app_traffic_classifier as atc
 from modules.app_traffic_classifier import (
     AppFlowEntry,
     AppHostSnapshot,
@@ -28,7 +27,7 @@ from modules.colours import APP_CATEGORY_COLORS  # type: ignore[attr-defined]
 # ── Import smoke ──────────────────────────────────────────────────────────────
 
 def test_import():
-    assert atc is not None
+    assert classify_port is not None
 
 
 # ── classify_port ─────────────────────────────────────────────────────────────
