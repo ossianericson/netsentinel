@@ -87,6 +87,14 @@ _PAGE_HELP: dict[str, dict] = {
             "For real-time detection of rogue DHCP OFFER packets on the wire, see DHCP Rogue Monitor in Security Audit — that requires Npcap and catches attacks that don't complete a full lease.",
         ],
     },
+    "DNS Zone Map": {
+        "what": "Enumerates DNS zones via AXFR and discovers local services via mDNS to map your network's naming landscape.",
+        "hidden": [
+            "AXFR (zone transfer) only works if the DNS server is configured to allow it — many modern servers disable this by default.",
+            "mDNS discovery finds services on the .local domain without any server configuration — printers, Bonjour services, and IoT hubs all show up here.",
+            "A successful AXFR from an internal DNS server reveals every hostname in the zone — useful for auditing stale DNS records.",
+        ],
+    },
     "Home Automation": {
         "what": "Device join/leave events, alerts, and per-device uptime states forwarded to Home Assistant or an MQTT broker.",
         "hidden": [
@@ -156,6 +164,30 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Many home networks have IPv6 active without the owner knowing — this tab reveals the full device census.",
             "Link-local addresses (fe80::) are not routable — global unicast addresses (2xxx:) are the ones exposed to the internet.",
+        ],
+    },
+    "Uptime & SLA": {
+        "what": "Per-device uptime percentages over 24 h, 7 d, and 30 d windows, derived from Network Logger ping history.",
+        "hidden": [
+            "Data accumulates from the Network Logger — run it continuously for meaningful SLA percentages.",
+            "Devices below 99% uptime over 7 days are worth investigating — check Availability History for the exact outage timestamps.",
+            "Use the 30-day view for SLA reporting — export the table as CSV for compliance records.",
+        ],
+    },
+    "Syslog Viewer": {
+        "what": "Live viewer for syslog messages (UDP 514) from routers, switches, and servers on your network.",
+        "hidden": [
+            "Configure your router to send syslog to this machine's IP — the port is 514 UDP by default.",
+            "Filter by severity or hostname using the filter bar — Error and Warning messages are the most actionable.",
+            "Syslog can also be viewed inside the Network Logger 'Activity Log' tab alongside ping and DNS data.",
+        ],
+    },
+    "SNMP Trap Receiver": {
+        "what": "Receives SNMP trap notifications (UDP 162) from managed switches, routers, and servers.",
+        "hidden": [
+            "Configure your managed switch to send traps to this machine's IP — use community string 'public' to start.",
+            "Critical and Warning traps from managed switches often signal hardware failures or link-state changes before they cause an outage.",
+            "Traps can also be viewed alongside other events in the Network Logger 'Activity Log' tab.",
         ],
     },
     "Network Timeline": {
@@ -310,6 +342,14 @@ _PAGE_HELP: dict[str, dict] = {
             "Enable 'Include traceroute' to see every network hop between you and the service — useful when your ISP routes traffic unexpectedly.",
             "The failure layer badge tells you in plain English who is responsible: 'Device problem', 'ISP issue', 'Remote outage', etc.",
             "Confidence % reflects how many independent probes agreed — 80%+ is conclusive, below 50% means mixed signals.",
+        ],
+    },
+    "Root Cause Correlator": {
+        "what": "Synthesises all scan findings into a prioritised plain-English list of network problems, ranked by likely impact.",
+        "hidden": [
+            "Run a full scan first — the correlator works from the most recent scan results.",
+            "The top-ranked finding is the single most impactful problem detected — fix that before looking at the rest.",
+            "Findings are grouped by category (connectivity, security, performance) so you can tackle a whole category at once.",
         ],
     },
     # ── Automation ─────────────────────────────────────────────────────────────

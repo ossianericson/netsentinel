@@ -941,6 +941,7 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("WiFi Networks",       self._m4_tab)
         self._nav_add_rail_item("WiFi Heatmap",        self._wifi_heatmap_page)
         self._nav_add_rail_item("DHCP Leases",         self._dhcp_lease_page)
+        self._nav_add_rail_item("DNS Zone Map",        self._dns_zone_page)
         self._nav_add_rail_item("Home Automation",     self._ha_page)
 
         self._nav_begin_section("Monitor", "monitor")
@@ -955,6 +956,9 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
         self._nav_add_rail_item("Service Heartbeat",   self._service_page)
         self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
+        self._nav_add_rail_item("Uptime & SLA",        self._uptime_page)
+        self._nav_add_rail_item("Syslog Viewer",       self._syslog_page)
+        self._nav_add_rail_item("SNMP Trap Receiver",  self._snmp_trap_page)
 
         self._nav_begin_section("Reports", "bar-chart")
         self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)
@@ -974,7 +978,8 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
         self._nav_add_rail_item("Geolocation Map",       self._geo_map_page)
         self._nav_add_rail_item("Trend Forecasts",       self._trend_page)
-        self._nav_add_rail_item("Service Diagnostics",   self._service_diagnostics_page)
+        self._nav_add_rail_item("Service Diagnostics",    self._service_diagnostics_page)
+        self._nav_add_rail_item("Root Cause Correlator", self._correlator_tab_widget)
 
         self._nav_begin_section("Automation", "zap")
         self._nav_add_rail_item("Automation Hooks",    self._automation_page)

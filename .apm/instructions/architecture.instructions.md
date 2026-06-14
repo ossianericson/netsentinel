@@ -84,7 +84,8 @@ netsentinel/
 │   ├── network_logger.py       # Background ping logger (CSV → ~/Documents/NetSentinel/logs)
 │   ├── network_segments.py     # NetworkSegment dataclass + auto_detect_segments/classify/merge (Sprint 4)
 │   ├── nl_query.py             # Natural language query parser for device and event search
-│   ├── topology_cytoscape.py   # Cytoscape.js element/HTML builder — pure Python, no PyQt (Sprint 6)
+│   ├── topology_cytoscape.py      # Cytoscape.js element builder + stylesheet — pure Python, no PyQt (Sprint 6)
+│   ├── topology_cytoscape_html.py # HTML/JS page template builder for Cytoscape map (RULE-AH1 split from topology_cytoscape.py)
 │   ├── topology_layout.py      # NodePosition dataclass + load/save/clear layout + compute_scan_id (Sprint 2)
 │   ├── topology_snapshot.py    # TopologySnapshot + TopologyDiff + save/load/diff — change detection (Sprint 4)
 │   ├── notification_channels.py    # Per-channel delivery functions (S20-3 split)
@@ -198,6 +199,7 @@ netsentinel/
 │   │   ├── network_doc_page.py     # Network Doc — one-click HTML/Markdown snapshot
 │   │   ├── notif_alert_history.py   # _NotifAlertHistoryMixin — alert history table + delivery/retry log + bulk actions (Sprint 17)
 │   │   ├── notif_channel_panels.py  # _NotifChannelsMixin — email/toast/webhook/alert-rules card builders + test helpers (S14-3a)
+│   │   ├── notif_dep_card.py        # _NotifDepMixin — alert dependency tree card; QSettings persistence; _AddDepDialog (O1)
 │   │   ├── notif_extra_channels.py  # _NotifExtraChannelsMixin — Pushover/Ntfy/Telegram/Escalation/WeeklyDigest builders (Sprint 13)
 │   │   ├── notifications_page.py
 │   │   ├── ookla_cli_banner.py     # Dismissible install banner for Ookla CLI
@@ -353,10 +355,10 @@ Add new icons to `_LUCIDE` before using them in `_nav_begin_section()`. Do not u
 
 **Nav section placement guide** (use the correct section when adding new pages):
 - Getting Started — daily-use core tools (Overview, Speed Test, DNS, Home, What's Wrong?)
-- Discover — network inventory and topology (Devices, Network Map, WiFi, DHCP, Home Automation)
-- Monitor — live data and history streams (Network Logger, Live Bandwidth, Active Connections, Availability History, Service Heartbeat)
+- Discover — network inventory and topology (Devices, Network Map, WiFi, DHCP, DNS Zone Map, Home Automation)
+- Monitor — live data and history streams (Active Monitors, Network Logger, Network Timeline, Live Bandwidth, App Traffic, Active Connections, Availability History, Inventory Changes, Bandwidth Usage, Service Heartbeat, IPv6 Devices, Uptime & SLA, Syslog Viewer, SNMP Trap Receiver)
 - Reports — grading, ISP reports, docs, notifications (Network Grade, Health Report, Network Doc, IP Calculator, Notifications)
-- Analysis — deep packet / protocol tools, advanced diagnostics (Broadcast Storm, Rogue Bridge (STP), IoT Behaviour, Monitor Overview, 802.11 Monitor, ARP Spoof Watch, Hop-by-Hop Trace, SNMP Device Info, Tools & Wake-on-LAN, Geolocation Map, Trend Forecasts)
+- Analysis — deep packet / protocol tools, advanced diagnostics (Broadcast Storm, Rogue Bridge (STP), IoT Behaviour, 802.11 Monitor, ARP Spoof Watch, Hop-by-Hop Trace, SNMP Device Info, Tools & Wake-on-LAN, Geolocation Map, Trend Forecasts, Service Diagnostics, Root Cause Correlator)
 - Automation — scheduled scans, hooks, MQTT, REST API, integrations (Automation Hooks, Scheduled Scans, Custom Triggers, MQTT, REST API, Config Snapshots, Maintenance Windows)
 - Security Audit — RED-labelled; elevated-privilege scan tools (Security Overview, Port Scan, CVE, Threat Intel, TLS, Login Test, OS Detection, Risk Score, Exposure, Discovery, SMB, Plugins, Private Endpoint, Cloud Metadata, DHCP Rogue)
 - Education — learning tools (Protocol Visualizer, Lab Mode, Feature Guide, Help)

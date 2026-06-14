@@ -286,6 +286,18 @@ _FEATURES: list[dict] = [
             "speedtest", "enrichment", "autorun",
         ],
     },
+    {
+        "group": "Monitoring",
+        "icon": "◈",
+        "name": "Uptime & SLA",
+        "desc": (
+            "Per-device uptime percentages over 24 h, 7 d, and 30 d windows, derived from "
+            "Network Logger ping history. Export the table as CSV for SLA reporting."
+        ),
+        "page": "Uptime & SLA",
+        "requires": None,
+        "tags": ["uptime", "sla", "availability", "percentage", "24h", "7d", "30d", "history", "report"],
+    },
     # ── Diagnostics ────────────────────────────────────────────────────────────
     {
         "group": "Diagnostics",
@@ -336,6 +348,32 @@ _FEATURES: list[dict] = [
         "page": "What's Wrong?",
         "requires": None,
         "tags": ["diagnose", "root cause", "analysis", "correlate", "why", "problem", "fix", "slow", "dropping"],
+    },
+    {
+        "group": "Diagnostics",
+        "icon": "⊕",
+        "name": "Root Cause Correlator",
+        "desc": (
+            "Synthesises all scan findings into a prioritised plain-English list of network "
+            "problems, ranked by likely impact. Shows findings grouped by category: "
+            "connectivity, security, and performance."
+        ),
+        "page": "Root Cause Correlator",
+        "requires": None,
+        "tags": ["root cause", "correlator", "findings", "priority", "analysis", "diagnose", "correlate", "verdict"],
+    },
+    {
+        "group": "Diagnostics",
+        "icon": "◔",
+        "name": "DNS Zone Map",
+        "desc": (
+            "Enumerates DNS zones via AXFR and discovers local services via mDNS. "
+            "Maps every hostname the DNS server knows — useful for finding stale records "
+            "and understanding what the network exposes."
+        ),
+        "page": "DNS Zone Map",
+        "requires": None,
+        "tags": ["dns", "zone", "axfr", "mdns", "zone transfer", "hostname", "local", "bonjour", "enumeration"],
     },
     {
         "group": "Diagnostics",
@@ -724,10 +762,11 @@ _FEATURES: list[dict] = [
         "name": "Syslog Receiver",
         "desc": (
             "Listens on UDP 514 for syslog messages from routers, switches, and servers. "
-            "Enable the Syslog source toggle in Monitor to view them. "
+            "Navigate to Syslog Viewer for a dedicated live view, or enable the Syslog "
+            "source toggle in Network Logger to see syslog alongside other monitoring data. "
             "Configure your router to forward syslog to this machine's IP."
         ),
-        "page": "Network Logger",
+        "page": "Syslog Viewer",
         "requires": None,
         "tags": ["syslog", "udp", "router", "switch", "log", "514", "message"],
     },
@@ -737,9 +776,10 @@ _FEATURES: list[dict] = [
         "name": "SNMP Trap Receiver",
         "desc": (
             "Receives SNMP traps on UDP 162 from managed switches and routers. "
-            "Enable the SNMP source toggle in Monitor to view them."
+            "Navigate to SNMP Trap Receiver for a dedicated view, or enable the SNMP "
+            "source toggle in Network Logger to see traps alongside other monitoring data."
         ),
-        "page": "Network Logger",
+        "page": "SNMP Trap Receiver",
         "requires": None,
         "tags": ["snmp", "trap", "udp", "162", "managed", "switch", "router", "oid"],
     },

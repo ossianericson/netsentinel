@@ -92,12 +92,21 @@ def test_all_nav_labels_have_page_help():
 
 
 def test_features_page_refs_are_valid_nav_labels():
-    """S11-4-2: Every _FEATURES 'page' value is a valid nav label or None (RULE-D2)."""
-    DISCOVER_SRC = (ROOT / "ui" / "pages" / "discover_page.py").read_text(encoding="utf-8")
+    """S11-4-2: Every _FEATURES 'page' value is a valid nav label or None (RULE-D2).
+
+    Reads from discover_data.py (the canonical data source) and also scans
+    discover_page.py as a safety net.  The original test read only discover_page.py
+    which only had 3 'page' entries — the bulk of the data lives in discover_data.py.
+    """
+    # Primary data source
+    DISCOVER_DATA_SRC = (ROOT / "ui" / "pages" / "discover_data.py").read_text(encoding="utf-8")
+    # Also check the page module itself as a safety net
+    DISCOVER_PAGE_SRC = (ROOT / "ui" / "pages" / "discover_page.py").read_text(encoding="utf-8")
     nav_labels = set(_static_nav_labels())
 
+    combined = DISCOVER_DATA_SRC + "\n" + DISCOVER_PAGE_SRC
     # Capture the full quoted label or the bare keyword None
-    page_refs_raw = re.findall(r'"page"\s*:\s*("(?:[^"]+)"|None)', DISCOVER_SRC)
+    page_refs_raw = re.findall(r'"page"\s*:\s*("(?:[^"]+)"|None)', combined)
 
     stale = [
         ref.strip('"')
@@ -107,4 +116,116 @@ def test_features_page_refs_are_valid_nav_labels():
     assert not stale, (
         f"_FEATURES entries reference non-existent nav labels: {stale}\n"
         "Fix the 'page' field to match an exact _nav_add_rail_item() label, or set to None."
+    )
+
+
+# ── Section placement gate ────────────────────────────────────────────────────
+
+#: Expected section for specific pages (subset — only pages where placement is
+#: non-obvious or was previously wrong).  Labels not in this dict are not checked.
+_EXPECTED_SECTIONS: dict[str, str] = {
+    # Monitor section
+    "Active Monitors":    "Monitor",
+    "Network Logger":     "Monitor",
+    "Network Timeline":   "Monitor",
+    "Live Bandwidth":     "Monitor",
+    "App Traffic":        "Monitor",
+    "Active Connections": "Monitor",
+    "Availability History": "Monitor",
+    "Inventory Changes":  "Monitor",
+    "Bandwidth Usage":    "Monitor",
+    "Service Heartbeat":  "Monitor",
+    "IPv6 Devices":       "Monitor",
+    "Uptime & SLA":       "Monitor",
+    "Syslog Viewer":      "Monitor",
+    "SNMP Trap Receiver": "Monitor",
+    # Discover section
+    "Devices":            "Discover",
+    "Network Map":        "Discover",
+    "WiFi Networks":      "Discover",
+    "WiFi Heatmap":       "Discover",
+    "DHCP Leases":        "Discover",
+    "DNS Zone Map":       "Discover",
+    "Home Automation":    "Discover",
+    # Analysis section
+    "Root Cause Correlator": "Analysis",
+    "Trend Forecasts":       "Analysis",
+    "Service Diagnostics":   "Analysis",
+    "Geolocation Map":       "Analysis",
+    # Security Audit section
+    "Security Overview":  "Security Audit",
+    "Port Scan (TCP)":    "Security Audit",
+    # Education section
+    "Protocol Visualizer": "Education",
+    "Lab Mode":            "Education",
+    "Feature Guide":       "Education",
+}
+
+
+def test_nav_section_placement():
+    """Pages in _EXPECTED_SECTIONS must be registered under the correct rail section."""
+    body = _method_body("_build_pro_nav")
+
+    # Build {label: section} from the nav builder source
+    actual_sections: dict[str, str] = {}
+    current_section = ""
+    for line in body.splitlines():
+        sec_m = re.search(r'_nav_begin_section\(\s*"([^"]+)"', line)
+        if sec_m:
+            current_section = sec_m.group(1)
+            continue
+        lbl_m = re.search(r'_nav_add_rail_item\(\s*"([^"]+)"', line)
+        if lbl_m:
+            actual_sections[lbl_m.group(1)] = current_section
+
+    wrong = []
+    for label, expected_sec in _EXPECTED_SECTIONS.items():
+        actual_sec = actual_sections.get(label)
+        if actual_sec is None:
+            wrong.append(f"  {label!r}: not found in _build_pro_nav()")
+        elif actual_sec != expected_sec:
+            wrong.append(f"  {label!r}: in {actual_sec!r}, expected {expected_sec!r}")
+    assert not wrong, (
+        "Nav section placement errors:\n" + "\n".join(wrong) + "\n"
+        "Fix: move the _nav_add_rail_item() call to the correct _nav_begin_section() block."
+    )
+
+
+def test_legacy_nav_add_page_labels_all_in_pro_nav():
+    """Any legacy _nav_add_page() call must also have an entry in _build_pro_nav().
+
+    _nav_add_page() is dead code from the old flat nav and silently fails at runtime.
+    Pages registered *only* via _nav_add_page() are unreachable.  This gate ensures
+    that every such label is also registered via the live path: _nav_add_rail_item().
+
+    Labels that appear in _LEGACY_RENAMES have been renamed — they resolve to a current
+    label and are not flagged as orphaned.
+    """
+    # Old nav label → current _build_pro_nav() label (pages that were simply renamed)
+    _LEGACY_RENAMES: dict[str, str] = {
+        "DNS & Outages":         "DNS & Stability",
+        "Devices on Network":    "Devices",
+        "Auto Reports":          "Scheduled Scans",
+        "Threat Intelligence":   "Threat Intel",
+        "TLS & exposure":        "TLS & Exposure",
+        "Known CVEs":            "CVE Tracker",
+        "Login Test (SSH/SMB)":  "Login Test",
+    }
+
+    TABS_SRC = (ROOT / "ui" / "tabs.py").read_text(encoding="utf-8")
+    # _nav_add_page(icon, label, widget) — capture the SECOND quoted string (label)
+    legacy_labels = re.findall(r'_nav_add_page\(\s*"[^"]*"\s*,\s*"([^"]+)"', TABS_SRC)
+    if not legacy_labels:
+        return  # no legacy calls — nothing to check
+
+    pro_nav_labels = set(_static_nav_labels())
+    orphaned = [
+        lbl for lbl in legacy_labels
+        if lbl not in pro_nav_labels
+        and _LEGACY_RENAMES.get(lbl) not in pro_nav_labels
+    ]
+    assert not orphaned, (
+        f"Pages registered ONLY via dead _nav_add_page() — unreachable at runtime: {orphaned}\n"
+        "Add each to _build_pro_nav() via _nav_add_rail_item() under the correct section,\n"
+        "or add to _LEGACY_RENAMES if the page was renamed."
     )
