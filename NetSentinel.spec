@@ -337,6 +337,7 @@ hiddenimports: list = [
     "modules.lldp_scanner",
     "workers.passive_observer_worker",
     "workers.lldp_worker",
+    "workers.bandwidth_worker",
     "ui.pages.hardware_integration_page",
     "ui.pages.plugin_guide",
     "ui.pages.plugin_wizard_mixin",

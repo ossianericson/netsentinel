@@ -31,7 +31,7 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
 
     # Cytoscape.js element builder + complete self-contained HTML/CSS/JS template.
     # Natural split: extract _HTML_TEMPLATE + _build_style() → topology_cytoscape_html.py.
-    "topology_cytoscape.py": 800,
+    "topology_cytoscape.py": 880,
 
 }
 

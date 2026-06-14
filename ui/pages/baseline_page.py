@@ -58,6 +58,46 @@ from modules.config_baseline import (
 )
 
 
+# ── Port name helpers (V5: port/service diff enrichment) ─────────────────────
+
+_WELL_KNOWN_PORTS: dict = {
+    20: "FTP-data", 21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
+    53: "DNS", 67: "DHCP", 68: "DHCP", 80: "HTTP", 110: "POP3",
+    111: "RPC", 119: "NNTP", 123: "NTP", 135: "MSRPC", 137: "NetBIOS",
+    138: "NetBIOS", 139: "NetBIOS", 143: "IMAP", 161: "SNMP", 162: "SNMP",
+    179: "BGP", 194: "IRC", 389: "LDAP", 443: "HTTPS", 445: "SMB",
+    465: "SMTPS", 500: "IKE", 514: "Syslog", 515: "LPD", 587: "SMTP",
+    631: "IPP", 636: "LDAPS", 993: "IMAPS", 995: "POP3S",
+    1080: "SOCKS", 1194: "OpenVPN", 1433: "MSSQL", 1521: "Oracle",
+    1723: "PPTP", 1883: "MQTT", 2049: "NFS", 2181: "ZooKeeper",
+    3306: "MySQL", 3389: "RDP", 3690: "SVN", 4443: "HTTPS-alt",
+    4444: "Metasploit", 4899: "Radmin", 5000: "UPnP/dev", 5432: "PostgreSQL",
+    5555: "ADB", 5900: "VNC", 5985: "WinRM", 5986: "WinRM-S",
+    6379: "Redis", 6667: "IRC", 8080: "HTTP-alt", 8443: "HTTPS-alt",
+    8888: "Jupyter", 9000: "PHP-FPM", 9090: "Prometheus", 9200: "ElasticSearch",
+    27017: "MongoDB", 27018: "MongoDB",
+}
+
+# Ports where an unexpected open is a security concern
+_SUSPICIOUS_PORTS: frozenset = frozenset({
+    23, 111, 135, 137, 138, 139, 445,
+    4444, 4899, 5555, 6667,
+})
+
+
+def _port_label(port: int) -> str:
+    """Return 'PORT (service)' or just 'PORT'."""
+    svc = _WELL_KNOWN_PORTS.get(port)
+    return f"{port} ({svc})" if svc else str(port)
+
+
+def _opened_port_color(port: int) -> str:
+    """Return a colour token for a newly opened port."""
+    if port in _SUSPICIOUS_PORTS:
+        return RED
+    return AMBER
+
+
 # ── Background worker ─────────────────────────────────────────────────────────
 
 class _SnapshotWorker(QThread):
@@ -565,10 +605,12 @@ class BaselinePage(QWidget):
         for ip in diff.removed_devices:
             _add_row(ip, "Device", "Removed", RED)
         for ip, ch in sorted(diff.changed_ports.items()):
-            if ch["added"]:
-                _add_row(ip, "Ports", f"Opened: {', '.join(str(p) for p in ch['added'])}", AMBER)
-            if ch["removed"]:
-                _add_row(ip, "Ports", f"Closed: {', '.join(str(p) for p in ch['removed'])}", TEXT_PRIMARY)
+            for p in ch.get("added", []):
+                col = _opened_port_color(p)
+                risk_tag = " ⚠" if p in _SUSPICIOUS_PORTS else ""
+                _add_row(ip, "Port Opened", f"{_port_label(p)}{risk_tag}", col)
+            for p in ch.get("removed", []):
+                _add_row(ip, "Port Closed", _port_label(p), TEXT_MUTED)
         for ip, ch in sorted(diff.changed_fields.items()):
             for field_name, vals in ch.items():
                 _add_row(ip, field_name.capitalize(),

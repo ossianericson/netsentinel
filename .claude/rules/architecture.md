@@ -286,6 +286,7 @@ netsentinel/
 │   ├── threat_intel_worker.py
 │   ├── passive_observer_worker.py  # PassiveObserverWorker — SSDP + mDNS listener bridge → Qt signals (Sprint 1)
 │   ├── lldp_worker.py          # LldpWorker — 15-second LLDP neighbor sniff; emits result_ready(list[LldpNeighbor]) (Sprint 5)
+│   ├── bandwidth_worker.py     # BandwidthOverlayWorker — per-MAC Scapy sniffer bridge → Qt signals for traffic overlay (Cat2-V1)
 │   └── wifi_monitor_worker.py  # WifiMonitorWorker — passive 802.11 capture thread (Npcap)
 ├── tests/
 └── tools/

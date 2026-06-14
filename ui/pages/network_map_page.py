@@ -48,6 +48,7 @@ from modules.topology_layout import (
     NodePosition, TopologyEdge, clear_layout, compute_scan_id, load_layout, save_layout,
 )
 from modules.topology_cytoscape import LAYOUT_NAMES, build_cytoscape_html
+from workers.bandwidth_worker import BandwidthOverlayWorker
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +142,9 @@ class NetworkMapPage(QWidget):
         self._web_view: Any = None
         self._bridge: Optional[_CytoscapeBridge] = None
         self._diff_mode = False
+        self._traffic_overlay = False
+        self._bw_by_mac: Dict[str, float] = {}
+        self._bw_worker: Optional[BandwidthOverlayWorker] = None
 
         self._build_ui()
 
@@ -320,6 +324,15 @@ class NetworkMapPage(QWidget):
         )
         self._diff_label.setVisible(False)
 
+        # Traffic Overlay toggle — live per-MAC bandwidth (requires Scapy + admin)
+        self._btn_traffic = QPushButton("Traffic Overlay")
+        self._btn_traffic.setCheckable(True)
+        self._btn_traffic.setFixedWidth(116)
+        self._btn_traffic.setToolTip(
+            "Color-code nodes by live bandwidth (requires Scapy + administrator)"
+        )
+        self._btn_traffic.setStyleSheet(_TOOLBAR_BTN_SS)
+
         # Export button
         btn_export = _btn("Export PNG", "Export the interactive map as a PNG image", 90)
         btn_export.clicked.connect(self._on_export)
@@ -330,6 +343,7 @@ class NetworkMapPage(QWidget):
         btn_zout.clicked.connect(self.zoom_out)
         self._btn_focus.toggled.connect(self._on_focus_toggled)
         self._btn_diff.toggled.connect(self._on_diff_toggled)
+        self._btn_traffic.toggled.connect(self._on_traffic_toggled)
 
         toolbar.addWidget(self._layout_combo)
         toolbar.addWidget(btn_fit)
@@ -338,6 +352,7 @@ class NetworkMapPage(QWidget):
         toolbar.addWidget(self._btn_focus)
         toolbar.addWidget(self._btn_diff)
         toolbar.addWidget(self._diff_label)
+        toolbar.addWidget(self._btn_traffic)
         toolbar.addStretch()
         toolbar.addWidget(btn_export)
         toolbar.addWidget(btn_rst)
@@ -501,6 +516,7 @@ class NetworkMapPage(QWidget):
                 down_ips=kw.get("down_ips"),
                 new_ips=kw.get("new_ips"),
                 initial_layout=layout,
+                bw_by_mac=self._bw_by_mac if self._traffic_overlay else None,
             )
             self._web_view.setHtml(html)
         except Exception:
@@ -581,6 +597,54 @@ class NetworkMapPage(QWidget):
                 )
             except Exception:
                 pass  # non-fatal — diff overlay is best-effort
+
+    @pyqtSlot(bool)
+    def _on_traffic_toggled(self, checked: bool) -> None:
+        self._traffic_overlay = checked
+        if checked:
+            if self._bw_worker is None or not self._bw_worker.isRunning():
+                self._bw_worker = BandwidthOverlayWorker(interval_s=5.0, parent=self)
+                self._bw_worker.snapshot_ready.connect(self._on_bw_snapshot)
+                self._bw_worker.error.connect(self._on_bw_error)
+                self._bw_worker.start()
+        else:
+            if self._bw_worker is not None and self._bw_worker.isRunning():
+                self._bw_worker.stop()
+                self._bw_worker = None
+            self._bw_by_mac.clear()
+            if self._last_render_kwargs:
+                self._refresh_web_view(
+                    diff=self._last_render_kwargs.get("diff") if self._diff_mode else None
+                )
+
+    @pyqtSlot(object)
+    def _on_bw_snapshot(self, snapshot: object) -> None:
+        """Receive a BandwidthSnapshot; update the traffic overlay."""
+        try:
+            self._bw_by_mac = {
+                e.mac: e.total_bps
+                for e in snapshot.entries  # type: ignore[union-attr]
+                if e.total_bps > 0
+            }
+        except Exception:
+            return
+        if self._traffic_overlay and self._last_render_kwargs:
+            self._refresh_web_view(
+                diff=self._last_render_kwargs.get("diff") if self._diff_mode else None
+            )
+
+    @pyqtSlot(str)
+    def _on_bw_error(self, msg: str) -> None:
+        """Handle bandwidth worker errors — untoggle the button and show a hint."""
+        log.warning("Traffic Overlay: %s", msg)
+        self._btn_traffic.blockSignals(True)
+        self._btn_traffic.setChecked(False)
+        self._btn_traffic.blockSignals(False)
+        self._traffic_overlay = False
+        self._bw_worker = None
+        # Surface the error briefly in the LLDP hint label (already present on the page)
+        self._lldp_hint_label.setText(f"Traffic Overlay unavailable: {msg.splitlines()[0]}")
+        self._lldp_hint_label.setVisible(True)
 
     @pyqtSlot(int)
     def _on_view_tab_changed(self, index: int) -> None:
