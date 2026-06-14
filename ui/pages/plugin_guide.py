@@ -167,6 +167,7 @@ class PluginGuide(QScrollArea):
         path, _ = QFileDialog.getSaveFileName(
             self, "Save integration template", "netsentinel_hardware.py",
             "Python files (*.py)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

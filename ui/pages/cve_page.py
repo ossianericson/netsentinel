@@ -813,7 +813,8 @@ class CvePage(QWidget):
         rows = getattr(self, "_displayed_rows", self._rows)
         default_name = f"cve_export_{ts}.csv"
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export CVE Tracker", default_name, "CSV files (*.csv)"
+            self, "Export CVE Tracker", default_name, "CSV files (*.csv)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

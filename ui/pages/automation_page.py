@@ -203,6 +203,7 @@ class RuleEditorDialog(QDialog):
             self, "Select Script",
             str(Path.home()),
             "Scripts (*.ps1 *.bat *.cmd *.py *.sh *.exe);;All files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if path:
             self._script_path.setText(path)

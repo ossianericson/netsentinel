@@ -2119,6 +2119,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             "Export Report",
             str(Path(default_dir) / f"netsentinel_report_{ts}.html"),
             "HTML Report (*.html);;JSON Export (*.json);;CSV Device List (*.csv);;Nmap XML (*.xml);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path_str:
             return

@@ -427,6 +427,7 @@ class WifiHeatmapPage(QWidget):
             self, "Import Floor Plan",
             str(Path.home()),
             "Images (*.png *.jpg *.jpeg *.bmp *.gif)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
@@ -474,7 +475,9 @@ class WifiHeatmapPage(QWidget):
         surveys = list_surveys()
         if not surveys:
             path, _ = QFileDialog.getOpenFileName(
-                self, "Load Survey", str(surveys_dir()), "JSON (*.json)")
+                self, "Load Survey", str(surveys_dir()), "JSON (*.json)",
+                options=QFileDialog.Option.DontUseNativeDialog,
+            )
             if not path:
                 return
             surveys = [Path(path)]
@@ -484,7 +487,9 @@ class WifiHeatmapPage(QWidget):
             chosen = surveys[0]
         else:
             path, _ = QFileDialog.getOpenFileName(
-                self, "Load Survey", str(surveys_dir()), "JSON (*.json)")
+                self, "Load Survey", str(surveys_dir()), "JSON (*.json)",
+                options=QFileDialog.Option.DontUseNativeDialog,
+            )
             if not path:
                 return
             chosen = Path(path)
@@ -638,6 +643,7 @@ class WifiHeatmapPage(QWidget):
             self, "Export Heatmap",
             str(Path.home() / "wifi_heatmap.png"),
             "PNG (*.png)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

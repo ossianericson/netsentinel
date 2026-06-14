@@ -394,6 +394,7 @@ class NetworkDocPage(QWidget):
             self, "Save Network Doc",
             str(Path.home() / "network_documentation.html"),
             "HTML files (*.html);;All files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if dest:
             import shutil

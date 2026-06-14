@@ -2192,7 +2192,8 @@ class InventoryPage(QWidget):
         from PyQt6.QtWidgets import QFileDialog
         from ui.widgets.toast import ToastManager
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Inventory Events", "inventory_events.csv", "CSV files (*.csv)"
+            self, "Export Inventory Events", "inventory_events.csv", "CSV files (*.csv)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
@@ -2251,7 +2252,8 @@ class InventoryPage(QWidget):
         if not rows:
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Selected Devices", "inventory_selection.csv", "CSV files (*.csv)"
+            self, "Export Selected Devices", "inventory_selection.csv", "CSV files (*.csv)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

@@ -722,6 +722,7 @@ class _LogSourcePanelMixin:
             self, "Save Filtered Log CSV",
             f"netsentinel_log_filtered_{ts_label}.csv",
             "CSV files (*.csv)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
@@ -777,7 +778,8 @@ class _LogSourcePanelMixin:
     def _do_export(self, start, end, dlg: QDialog) -> None:
         path, _ = QFileDialog.getSaveFileName(
             self, "Save Log CSV",
-            f"netsentinel_log_{start}_{end}.csv", "CSV files (*.csv)"
+            f"netsentinel_log_{start}_{end}.csv", "CSV files (*.csv)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

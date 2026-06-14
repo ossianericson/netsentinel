@@ -368,7 +368,8 @@ class ReportsPage(QWidget):
 
     def _browse_dir(self) -> None:
         d = QFileDialog.getExistingDirectory(
-            self, "Select output directory", self._txt_dir.text()
+            self, "Select output directory", self._txt_dir.text(),
+            options=QFileDialog.Option.ShowDirsOnly | QFileDialog.Option.DontUseNativeDialog,
         )
         if d:
             self._txt_dir.setText(d)
@@ -424,7 +425,8 @@ class ReportsPage(QWidget):
         default_name = "netsentinel-report.pdf"
         path, _ = QFileDialog.getSaveFileName(
             self, "Export PDF Report", str(Path.home() / default_name),
-            "PDF Files (*.pdf)"
+            "PDF Files (*.pdf)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

@@ -901,6 +901,7 @@ class LabModePage(QWidget):
             "Save Lab Report",
             str(get_app_data_dir() / "reports" / default_name),
             "HTML files (*.html)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

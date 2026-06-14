@@ -762,7 +762,8 @@ class _LoggerTabMixin:
 
         log_dir = str(Path.home() / "Documents" / "NetSentinel" / "logs")
         path_str, _ = QFileDialog.getOpenFileName(
-            self, "Open NetSentinel Log", log_dir, "CSV Log Files (*.csv);;All Files (*)"
+            self, "Open NetSentinel Log", log_dir, "CSV Log Files (*.csv);;All Files (*)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path_str:
             return

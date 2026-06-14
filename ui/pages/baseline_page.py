@@ -587,7 +587,8 @@ class BaselinePage(QWidget):
         from PyQt6.QtWidgets import QFileDialog
         from ui.widgets.toast import ToastManager
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Drift Report", "baseline_diff.html", "HTML files (*.html)"
+            self, "Export Drift Report", "baseline_diff.html", "HTML files (*.html)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

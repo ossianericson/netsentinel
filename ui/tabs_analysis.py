@@ -835,7 +835,8 @@ class _AnalysisTabsMixin:
             docs_dir.mkdir(parents=True, exist_ok=True)
             path_str, _ = QFileDialog.getSaveFileName(
                 self, "Save Network Health Report", str(docs_dir / default_name),
-                "HTML Report (*.html);;All Files (*)"
+                "HTML Report (*.html);;All Files (*)",
+                options=QFileDialog.Option.DontUseNativeDialog,
             )
             if not path_str:
                 return

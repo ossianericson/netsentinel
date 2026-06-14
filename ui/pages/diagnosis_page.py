@@ -944,7 +944,8 @@ class DiagnosisPage(QWidget):
         from PyQt6.QtWidgets import QFileDialog
         from ui.widgets.toast import ToastManager
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Diagnosis Report", "diagnosis_report.txt", "Text files (*.txt)"
+            self, "Export Diagnosis Report", "diagnosis_report.txt", "Text files (*.txt)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

@@ -713,6 +713,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         path, _ = QFileDialog.getOpenFileName(
             self, "Import plugin bundle", "",
             "NetSentinel plugin bundles (*.nspkg);;ZIP files (*.zip)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
@@ -744,6 +745,7 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         path, _ = QFileDialog.getOpenFileName(
             self, "Select hardware integration script", "",
             "Python files (*.py)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

@@ -88,10 +88,13 @@ _ES_CONTINUOUS       = 0x80000000
 _ES_SYSTEM_REQUIRED  = 0x00000001
 _ES_DISPLAY_REQUIRED = 0x00000002
 
-# UIA control types the dispatcher knows how to handle
+# UIA control types the dispatcher knows how to handle.
+# Hyperlink is intentionally excluded — clicking UIA Hyperlink controls
+# activates their default action (follows the link), which opens Chrome,
+# IE, Spotify, or any registered URI-scheme handler outside the app.
 _SUPPORTED_TYPES = frozenset({
     "Button", "Edit", "ComboBox", "CheckBox", "RadioButton",
-    "ListItem", "TabItem", "Slider", "TreeItem", "Hyperlink",
+    "ListItem", "TabItem", "Slider", "TreeItem",
     "MenuItem", "SplitButton",
 })
 
@@ -144,10 +147,22 @@ _BLACKLIST: List[str] = [
     # --- App lifecycle ---
     "quit",
     "exit application",
-    # --- Export / file creation (clutters disk) ---
+    # --- File open/save dialogs (Windows native) — must never be opened ---
+    # A Windows file picker steals focus from the app and stalls the harness.
+    "browse",           # any "Browse…" button for file/folder selection
+    "floor plan",       # WiFi Heatmap — floor plan image import
+    "choose file",      # generic file picker label
+    "select file",      # generic file picker label
+    "load plugin",      # plugin file loader
+    "import plugin",    # plugin file loader
+    "save as",          # Save As… dialog
+    "generate report",  # triggers a file-save dialog
+    # --- Export / file creation (clutters disk, may open save dialogs) ---
     "export pdf",
-    "save pdf",
     "export csv",
+    "export json",
+    "export report",
+    "save pdf",
     "save report",
     # --- Credential / auth dialogs that block automation ---
     "sign in",
@@ -500,15 +515,6 @@ def _act_treeitem(ctrl, chaos: str) -> str:
     return "click"
 
 
-def _act_hyperlink(ctrl, chaos: str) -> str:
-    # Never follow external links — just verify focusability
-    try:
-        ctrl.set_focus()
-        return "focus"
-    except Exception:
-        return "skip_hyperlink"
-
-
 def _act_fallback(ctrl, chaos: str) -> str:
     ctrl.click_input()
     return "click_fallback"
@@ -524,7 +530,6 @@ _DISPATCHER: Dict[str, Callable] = {
     "TabItem":      _act_tabitem,
     "Slider":       _act_slider,
     "TreeItem":     _act_treeitem,
-    "Hyperlink":    _act_hyperlink,
     "MenuItem":     _act_button,
     "SplitButton":  _act_button,
 }

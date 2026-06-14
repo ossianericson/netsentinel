@@ -220,14 +220,26 @@ class NetworkMapPage(QWidget):
         ic_lay = QVBoxLayout(self._interactive_container)
         ic_lay.setContentsMargins(0, 0, 0, 0)
         self._web_placeholder = QLabel(
-            "Interactive map requires PyQt6-WebEngine.\n"
-            "Install with:  pip install PyQt6-WebEngine"
+            "Interactive view requires PyQtWebEngine.\n"
+            "pip install PyQt6-WebEngine\n\n"
+            "The Classic view below works without it."
         )
         self._web_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._web_placeholder.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;")
+        self._web_placeholder.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:12px;")
         ic_lay.addWidget(self._web_placeholder)
         self._web_container_layout = ic_lay
         self._try_init_webengine()
+
+        # LLDP admin hint for Interactive view — toggled by render()
+        self._lldp_hint_label = QLabel(
+            "⬡  Run as administrator to discover managed switch topology via LLDP"
+        )
+        self._lldp_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lldp_hint_label.setStyleSheet(
+            f"color:{TEXT_SECONDARY};font-size:11px;padding:3px 8px;"
+        )
+        self._lldp_hint_label.setVisible(False)
+        self._web_container_layout.addWidget(self._lldp_hint_label)
 
         # Classic tab: TopologyWidget (matplotlib)
         self._classic_widget = TopologyWidget()
@@ -429,6 +441,9 @@ class NetworkMapPage(QWidget):
         if self._outer_stack.currentIndex() == 0:
             self._outer_stack.setCurrentIndex(1)
 
+        # Show LLDP admin hint on Interactive tab when rights needed and no neighbors
+        self._lldp_hint_label.setVisible(lldp_admin_needed and not lldp_neighbors)
+
         # Classic view (always rendered)
         try:
             self._classic_widget.render(
@@ -598,7 +613,8 @@ class NetworkMapPage(QWidget):
 
         path, _ = QFileDialog.getSaveFileName(
             self, "Save Network Map", str(get_app_data_dir() / "network_map.png"),
-            "PNG Image (*.png)"
+            "PNG Image (*.png)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

@@ -1393,7 +1393,8 @@ class _SettingsCardsMixin:
         from modules.utils import get_app_data_dir
         default_path = str(get_app_data_dir() / "netsentinel_settings.json")
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Settings", default_path, "JSON files (*.json)"
+            self, "Export Settings", default_path, "JSON files (*.json)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
@@ -1407,7 +1408,8 @@ class _SettingsCardsMixin:
     def _on_import_settings(self) -> None:
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
         path, _ = QFileDialog.getOpenFileName(
-            self, "Import Settings", "", "JSON files (*.json)"
+            self, "Import Settings", "", "JSON files (*.json)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return

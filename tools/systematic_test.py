@@ -121,14 +121,29 @@ _BLACKLIST: List[str] = [
     "", "", "", "", "", "",
     "_chromebutton",
     "quit", "exit application",
-    "export pdf", "save pdf", "export csv", "save report",
+    # --- File open/save dialogs (Windows native) — must never be opened ---
+    # A Windows file picker steals focus and stalls the test run permanently.
+    "browse",           # any "Browse…" button for file/folder selection
+    "floor plan",       # WiFi Heatmap — floor plan image import
+    "choose file",
+    "select file",
+    "load plugin",
+    "import plugin",
+    "save as",
+    "generate report",
+    # --- Export / file creation ---
+    "export pdf", "export csv", "export json", "export report",
+    "save pdf", "save report",
     "sign in", "authenticate",
     "factory reset", "restore defaults",
 ]
 
+# Hyperlink is intentionally excluded — clicking UIA Hyperlink controls
+# activates their default action (follows the link), which opens Chrome,
+# IE, Spotify, or any registered URI-scheme handler outside the app.
 _SUPPORTED_TYPES = frozenset({
     "Button", "CheckBox", "RadioButton", "ComboBox", "Edit",
-    "ListItem", "TabItem", "Slider", "Hyperlink", "SplitButton",
+    "ListItem", "TabItem", "Slider", "SplitButton",
 })
 
 
@@ -404,6 +419,52 @@ class SystematicTester:
         except Exception:
             self.log.debug("ESC dismiss failed")
 
+    def _dismiss_blocking_dialogs(self) -> None:
+        """Close any Windows file-picker or modal error dialog that escaped the blacklist.
+
+        This is a backstop: the _BLACKLIST should prevent file dialogs from
+        ever opening.  This method catches anything that slips through so the
+        harness doesn't stall waiting for a dialog that will never auto-close.
+        """
+        _FILE_DLG_CANCEL = ["Cancel", "Avbryt", "Annullera", "Close"]
+        try:
+            for win in Desktop(backend="uia").windows():
+                try:
+                    title = (win.window_text() or "").lower()
+                    cls   = (win.element_info.class_name or "")
+                except Exception:
+                    continue
+                if not title or "netsentinel" in title:
+                    continue
+
+                # Windows common file dialog (Open / Save As) — class #32770.
+                is_file_dialog = cls == "#32770"
+
+                is_blocking = any(kw in title for kw in [
+                    "error", "exception", "unhandled", "crash",
+                    "warning", "confirm", "are you sure",
+                ])
+
+                if not (is_file_dialog or is_blocking):
+                    continue
+
+                kind = "file dialog" if is_file_dialog else "blocking dialog"
+                self.log.warning("Dismissing %s: %r (class=%r)", kind, title, cls)
+                btn_names = _FILE_DLG_CANCEL if is_file_dialog else ["OK", "Close", "Cancel", "No"]
+                for btn_name in btn_names:
+                    try:
+                        win.child_window(title=btn_name, control_type="Button").click()
+                        time.sleep(0.3)
+                        return
+                    except Exception:
+                        continue
+                try:
+                    win.type_keys("%{F4}")
+                except Exception:
+                    self.log.debug("Alt+F4 on %s failed", kind)
+        except Exception as exc:
+            self.log.debug("Dialog scan: %s", exc)
+
     # ── Navigation ────────────────────────────────────────────────────────
 
     def _navigate_to(self, page: str) -> bool:
@@ -505,7 +566,7 @@ class SystematicTester:
         """Interact with a control.  Returns (action, result)."""
         ctype = _safe_type(ctrl)
         try:
-            if ctype in ("Button", "SplitButton", "Hyperlink"):
+            if ctype in ("Button", "SplitButton"):
                 ctrl.click_input()
                 return "click", "ok"
             elif ctype == "CheckBox":
@@ -562,6 +623,9 @@ class SystematicTester:
             return res
         res.navigated = True
 
+        # Dismiss any dialog that surfaced during navigation (e.g. onboarding overlays)
+        self._dismiss_blocking_dialogs()
+
         if not self._alive():
             res.crashed = True
             res.note = "crashed after navigation"
@@ -593,7 +657,10 @@ class SystematicTester:
                 res.controls_errored += 1
                 self.log.debug("  [!!] %-12s %s  name=%r", ctype, result, name)
 
-            # Dismiss any overlay / dialog the click may have opened
+            # Close any Windows file dialog or blocking modal the click opened.
+            # Call this before ESC so a file picker gets a proper Cancel click
+            # rather than being left open (ESC doesn't always close them).
+            self._dismiss_blocking_dialogs()
             self._dismiss_any_overlay()
             time.sleep(self.cfg.pause)
 

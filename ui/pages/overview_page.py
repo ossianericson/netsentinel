@@ -696,6 +696,7 @@ class OverviewPage(QWidget):
             self, "Save Card as PNG",
             f"netsentinel_card_{self._card_data.generated_at[:10]}.png",
             "PNG images (*.png)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if path:
             self._render_pixmap().save(path, "PNG")
@@ -714,6 +715,7 @@ class OverviewPage(QWidget):
             self, "Save Card as HTML",
             f"netsentinel_card_{self._card_data.generated_at[:10]}.html",
             "HTML files (*.html)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if path:
             out = save_card_html(self._card_data.to_dict(), Path(path))

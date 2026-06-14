@@ -711,7 +711,8 @@ class _NotifAlertHistoryMixin:
     def _export_alert_history_csv(self) -> None:
         from ui.widgets.toast import ToastManager
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export Alert History", "alert_history.csv", "CSV files (*.csv)"
+            self, "Export Alert History", "alert_history.csv", "CSV files (*.csv)",
+            options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not path:
             return
