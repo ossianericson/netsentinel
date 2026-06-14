@@ -491,6 +491,12 @@ IP_CALC_HOST_FG    = "#88CC88"   # ip calculator — host bit foreground (light 
 
 LOG_SOURCE_PLUGIN  = "#A78BFA"   # log hub — plugin source label colour (violet)
 
+# ── Danger-button interaction states ──────────────────────────────────────────
+# Fixed semantic colours for Stop / destructive action buttons.
+# These do not vary by theme; the base RED constant varies per theme.
+RED_HOVER = "#E53935"   # danger-button hover state — Material Red 600
+RED_DARK  = "#B71C1C"   # danger-button pressed state — Material Red 900
+
 GRADE_B_COLOR      = "#4CAF8A"   # network grade — B grade colour (green-teal)
 
 BLACK              = "#000000"   # pure black (specific UI use cases)

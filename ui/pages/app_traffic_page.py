@@ -46,7 +46,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE,
     BG_ALT_ROW, BG_CARD, BORDER,
     CHART_AXIS, CHART_BG, CHART_GRID, CHART_PLOT_BG,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    GREEN, RED, RED_DARK, RED_HOVER, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     TH_BG, TH_BORDER, TH_TEXT, WHITE,
 )
@@ -282,8 +282,8 @@ class AppTrafficPage(QWidget):
         self._toggle_btn.setStyleSheet(
             f"QPushButton {{ background:{RED}; color:{WHITE}; border:none;"
             f" border-radius:3px; font-size:11px; font-weight:bold; padding:0 14px; }}"
-            f"QPushButton:hover   {{ background:#E53935; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:#B71C1C; color:{WHITE}; }}"
+            f"QPushButton:hover   {{ background:{RED_HOVER}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{RED_DARK}; color:{WHITE}; }}"
         )
         self._status_lbl.setText(f"Monitoring  •  {_INTERVAL_S:.0f} s window")
 

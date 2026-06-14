@@ -133,6 +133,7 @@ netsentinel/
 │   ├── utils_platform.py       # IPv6 scanning: get_ipv6_devices(), ping_sweep_ipv6() (S2-3 split)
 │   ├── lldp_scanner.py         # LLDP/CDP neighbor scanner — passive/active frame capture, raw TLV parser, LldpNeighbor dataclass (Sprint 5)
 │   ├── passive_observer.py     # Passive SSDP + mDNS listener — device-type hints without sending packets (Sprint 1)
+│   ├── app_traffic_classifier.py  # Port→category heuristics + AppTrafficSniffer/Monitor — per-host protocol breakdown (Cat2-V2)
 │   ├── web_dashboard.py        # build_html() — self-contained /dashboard HTML page
 │   ├── wifi_heatmap.py         # WiFi signal IDW interpolation and heatmap data builder
 │   ├── wifi_scanner.py         # 802.11 network enumeration (SSIDs, BSSIDs, signal levels)
@@ -187,6 +188,7 @@ netsentinel/
 │   │   ├── inventory_page.py
 │   │   ├── ip_calculator_page.py   # IP subnet calculator
 │   │   ├── lab_mode_page.py        # LabModePage — guided exercises; inject_live_challenge()
+│   │   ├── app_traffic_page.py     # App Traffic — per-host protocol breakdown (Web/DNS/Streaming/Gaming/VPN/P2P; port heuristics; Cat2-V2)
 │   │   ├── live_bandwidth_page.py
 │   │   ├── log_hub_page.py         # Network Logger — unified chronological log (RTT, Modem, Mesh, Syslog, SNMP); emits live_challenge_detected
 │   │   ├── log_source_panel.py     # _LogSourcePanelMixin — panel builders + source management for LogHubPage (S14-3b split)
@@ -287,6 +289,7 @@ netsentinel/
 │   ├── passive_observer_worker.py  # PassiveObserverWorker — SSDP + mDNS listener bridge → Qt signals (Sprint 1)
 │   ├── lldp_worker.py          # LldpWorker — 15-second LLDP neighbor sniff; emits result_ready(list[LldpNeighbor]) (Sprint 5)
 │   ├── bandwidth_worker.py     # BandwidthOverlayWorker — per-MAC Scapy sniffer bridge → Qt signals for traffic overlay (Cat2-V1)
+│   ├── app_traffic_worker.py   # AppTrafficWorker — 10-second interval sniffer bridge for per-host protocol breakdown (Cat2-V2)
 │   └── wifi_monitor_worker.py  # WifiMonitorWorker — passive 802.11 capture thread (Npcap)
 ├── tests/
 └── tools/

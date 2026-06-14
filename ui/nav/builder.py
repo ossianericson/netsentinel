@@ -948,6 +948,7 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Network Logger",      self._logging_container)
         self._nav_add_rail_item("Network Timeline",    self._timeline_page)
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
+        self._nav_add_rail_item("App Traffic",         self._app_traffic_page)
         self._nav_add_rail_item("Active Connections",  self._connections_page)
         self._nav_add_rail_item("Availability History", self._history_page)
         self._nav_add_rail_item("Inventory Changes",   self._inventory_page)

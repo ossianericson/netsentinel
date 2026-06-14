@@ -103,6 +103,16 @@ _PAGE_HELP: dict[str, dict] = {
             "For per-device bandwidth breakdown showing which device is consuming the most, see Bandwidth Usage (also in this section) — that requires Npcap for packet capture.",
         ],
     },
+    "App Traffic": {
+        "what": "Per-host protocol breakdown — which categories of traffic (Web, DNS, Streaming, Gaming, VPN, P2P…) each device is using, sampled every 10 seconds.",
+        "hidden": [
+            "Requires Npcap on Windows (install from npcap.com) and administrator privileges for packet capture.",
+            "Select a specific host from the dropdown to drill into its protocol detail table.",
+            "Traffic is classified by destination TCP/UDP port — devices using non-standard ports appear as 'Other'.",
+            "Leave monitoring running for a few minutes to distinguish constant background traffic from bursty sessions.",
+            "Unexpected 'P2P' or 'VPN' traffic from a device you don't control is worth investigating.",
+        ],
+    },
     "Bandwidth Usage": {
         "what": "Per-device bandwidth usage collected during packet capture sessions.",
         "hidden": [

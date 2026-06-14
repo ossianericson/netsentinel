@@ -91,6 +91,7 @@ hiddenimports: list = [
     # ── modules/ — every backend module listed explicitly ─────────────────────
     "modules.alert_engine",
     "modules.alert_suppressor",
+    "modules.app_traffic_classifier",
     "modules.arp_monitor",
     "modules.availability_monitor",
     "modules.bandwidth_monitor",
@@ -233,6 +234,7 @@ hiddenimports: list = [
     "ui.pages.inventory_page",
     "ui.pages.ip_calculator_page",
     "ui.pages.lab_mode_page",
+    "ui.pages.app_traffic_page",
     "ui.pages.live_bandwidth_page",
     "ui.pages.log_hub_page",
     "ui.pages.log_source_panel",
@@ -318,6 +320,7 @@ hiddenimports: list = [
     "workers.diagnosis_worker",
     "workers.dns_zone_worker",
     "workers.ha_worker",
+    "workers.app_traffic_worker",
     "workers.iface_bw_worker",
     "workers.process_worker",
     "workers.report_scheduler_worker",

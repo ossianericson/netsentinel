@@ -431,10 +431,16 @@ class TopologyWidget(QWidget):
                 continue
             if (_attr(d, "ip", "") or "") in infra_ips:
                 continue
-            mac = _norm_mac(_attr(d, "mac", ""))
-            mc  = mesh_enrichment.get(mac)
-            if mc and mc.unit_name in known_unit_names:
-                by_unit[mc.unit_name].append(d)
+            # Prefer d.mesh_unit (pre-computed by _apply_mesh_enrichment so it
+            # matches the Devices table) and fall back to a live lookup.
+            _munit = _attr(d, "mesh_unit", "") or ""
+            if not _munit:
+                mac = _norm_mac(_attr(d, "mac", ""))
+                mc  = mesh_enrichment.get(mac)
+                if mc:
+                    _munit = mc.unit_name
+            if _munit and _munit in known_unit_names:
+                by_unit[_munit].append(d)
             else:
                 unassigned.append(d)
 

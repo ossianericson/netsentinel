@@ -186,6 +186,9 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         from ui.pages.live_bandwidth_page import LiveBandwidthPage
         self._live_bandwidth_page = LiveBandwidthPage(parent=None)
 
+        from ui.pages.app_traffic_page import AppTrafficPage
+        self._app_traffic_page = AppTrafficPage(parent=None)
+
         from ui.pages.dhcp_lease_page import DhcpLeasePage
         self._dhcp_lease_page = DhcpLeasePage(parent=None)
         self._dhcp_lease_page.navigate_to.connect(self._nav_rail_go_to)

@@ -175,6 +175,21 @@ _FEATURES: list[dict] = [
     },
     {
         "group": "Monitoring",
+        "icon": "◆",
+        "name": "App Traffic",
+        "desc": (
+            "Per-host protocol breakdown: see which apps and categories (Web, DNS, Streaming, "
+            "Gaming, VPN, P2P, IoT…) each device is using in real time. "
+            "Detects unexpected traffic like BitTorrent or hidden VPN tunnels. "
+            "Requires Npcap and administrator privileges."
+        ),
+        "page": "App Traffic",
+        "requires": "Npcap + Admin",
+        "tags": ["traffic", "protocol", "app", "bandwidth", "host", "per-host", "npcap",
+                 "web", "dns", "streaming", "gaming", "vpn", "p2p", "iot", "breakdown"],
+    },
+    {
+        "group": "Monitoring",
         "icon": "◑",
         "name": "Service Heartbeat",
         "desc": (

@@ -330,15 +330,26 @@ def build_cytoscape_elements(
                 pass  # non-fatal — no segment colouring
 
         # Parent: which mesh satellite is this client under?
+        # Prefer d.mesh_unit (pre-computed by _apply_mesh_enrichment so it matches the
+        # Devices table) and fall back to a live lookup in mesh_enrichment.
         parent_id = ""
-        if mesh_units and mesh_enrichment:
+        if mesh_units:
             try:
                 from modules.deco_client import _norm_mac as _nm  # type: ignore[attr-defined]
-                mc = mesh_enrichment.get(_nm(mac))
-                if mc:
+                _munit = _attr(d, "mesh_unit", "") or ""
+                if not _munit and mesh_enrichment:
+                    mc = mesh_enrichment.get(_nm(mac))
+                    if mc:
+                        _munit = mc.unit_name
+                if _munit:
                     for unit in mesh_units:
-                        if getattr(unit, "name", "") == mc.unit_name:
-                            parent_id = _nm(getattr(unit, "mac", "") or "") or getattr(unit, "name", "")
+                        if getattr(unit, "name", "") == _munit:
+                            if getattr(unit, "role", "") == "master":
+                                # Master is merged into the gateway node (no separate
+                                # Cytoscape node exists for it), so route to gw_id.
+                                parent_id = gw_id
+                            else:
+                                parent_id = _nm(getattr(unit, "mac", "") or "") or getattr(unit, "name", "")
                             break
             except Exception:
                 pass  # non-fatal

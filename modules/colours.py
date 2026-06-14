@@ -84,3 +84,40 @@ CHART_DARK_LINES   = [
     CHART_DARK_ACCENT, "#a78bfa", "#34d399", "#fb923c",
     CHART_DARK_DNS,    "#facc15", "#60a5fa", "#4ade80",
 ]
+
+# ── Application traffic category colours ─────────────────────────────────────
+# Used by modules/app_traffic_classifier.py and ui/pages/app_traffic_page.py.
+# Data-dimension colours (not UI chrome) — theme-independent.
+APP_WEB     = "#2196F3"   # Web / HTTP / HTTPS
+APP_DNS     = "#4CAF50"   # DNS
+APP_STREAM  = "#E91E63"   # Streaming (Plex, RTMP)
+APP_SSH     = "#F44336"   # SSH / RDP / Admin
+APP_EMAIL   = "#FF9800"   # Email (SMTP / IMAP)
+APP_GAMING  = "#9C27B0"   # Gaming (Steam, Xbox, PlayStation)
+APP_VPN     = "#009688"   # VPN (OpenVPN, WireGuard, IPSec)
+APP_P2P     = "#FF5722"   # P2P / BitTorrent
+APP_FILE    = "#795548"   # File Share (SMB, FTP, NFS)
+APP_DB      = "#607D8B"   # Database (MySQL, PostgreSQL, Redis)
+APP_IOT     = "#8BC34A"   # IoT / MQTT / Smart Home
+APP_SYS     = "#9E9E9E"   # System (NTP, SNMP, Syslog)
+APP_DISC    = "#00BCD4"   # Discovery (mDNS, SSDP)
+APP_VOIP    = "#CDDC39"   # VoIP / SIP
+APP_OTHER   = "#BDBDBD"   # Uncategorised
+
+APP_CATEGORY_COLORS: dict = {
+    "Web":        APP_WEB,
+    "DNS":        APP_DNS,
+    "Streaming":  APP_STREAM,
+    "SSH/Admin":  APP_SSH,
+    "Email":      APP_EMAIL,
+    "Gaming":     APP_GAMING,
+    "VPN":        APP_VPN,
+    "P2P":        APP_P2P,
+    "File Share": APP_FILE,
+    "Database":   APP_DB,
+    "IoT":        APP_IOT,
+    "System":     APP_SYS,
+    "Discovery":  APP_DISC,
+    "VoIP":       APP_VOIP,
+    "Other":      APP_OTHER,
+}
