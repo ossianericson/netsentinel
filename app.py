@@ -699,6 +699,14 @@ def main():
     _wire_cross_page(window)
     _wire_scan_ctas(window)
 
+    # Pre-populate Devices table and Network Map from the last MetricStore scan so
+    # the app is never blank on startup — a live scan replaces this data normally.
+    _splash_msg("Restoring last scan…")
+    try:
+        window._restore_cached_scan()
+    except Exception:
+        pass  # non-fatal — startup cache restore is best-effort
+
     # ── Show window / close splash ────────────────────────────────────────────
     if not _start_minimised:
         _splash_msg("Ready.", process_events=False)

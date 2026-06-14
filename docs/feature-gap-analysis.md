@@ -1,6 +1,6 @@
 # NetSentinel — Feature Gap Analysis vs. Open-Source Benchmark Tools
 
-**Date:** June 2026 | **Version baseline:** NetSentinel v2.1.4
+**Date:** June 2026 | **Version baseline:** NetSentinel v2.1.5
 
 ---
 
@@ -13,7 +13,7 @@ However, the benchmark tools reveal **four structural gaps** that represent real
 1. **Flow-level traffic analysis** — ntopng and LibreNMS give users per-application, per-host bandwidth breakdowns; NetSentinel shows interface totals only.
 2. **Switch-port-level asset location** — Netdisco's "where is this device physically connected?" lookup (MAC table + LLDP correlation) is absent.
 3. **Alert operational maturity** — dependency trees, on-call schedules, and downtime comments (Nagios/Icinga2/LibreNMS) are missing, causing alert fatigue in multi-device environments.
-4. **Config/inventory persistence** — no IP Address Management (IPAM) hierarchy, no per-device software inventory, no device change log beyond scan snapshots.
+4. **Config/inventory persistence** — no IP Address Management (IPAM) hierarchy, no per-device software inventory, no device change log beyond scan snapshots. *(Partially addressed in v2.1.5: startup cache restore pre-populates Devices table and Network Map from `known_device` + topology snapshot so the app is never blank — see UX gap below.)*
 
 The remaining gaps are either low-priority niche capabilities or represent deliberate scope decisions (no server backend, no multi-tenant support) that should be preserved.
 
@@ -60,6 +60,7 @@ Before the gaps: capabilities NetSentinel has that **none** of the benchmark too
 
 | # | Feature Name | Priority | Benchmark Source(s) | Why It Matters for NetSentinel | Complexity |
 |---|---|---|---|---|---|
+| D0 ✅ | **Startup inventory cache restore** — Devices table and Network Map pre-populated from `known_device` (MetricStore) and last topology snapshot at launch; stale indicator shown until live scan runs | **Done** | — | Eliminates blank-on-startup UX gap. `known_device` is the persistence layer; topology snapshot provides edge data for the map. Shipped v2.1.5. | Small |
 | D1 | **Switch-port MAC table correlation** — "Where is this device physically connected?" (switch IP, interface, VLAN) | **High** | Netdisco | The #1 question in any managed LAN: "which port is 192.168.1.42 on?" Netdisco answers this by correlating SNMP MAC address tables with LLDP topology. NetSentinel shows the device but not its physical location in the switch fabric. Critical for SMB users managing a 24-port switch. | Large |
 | D2 | **Per-device installed software inventory** (via SNMP MIB-II hrSWInstalled or WMI/psutil) | **Medium** | Checkmk, LibreNMS | Knowing a device runs Apache 2.4.48 is more actionable than knowing port 80 is open. Checkmk's HW/SW inventory fills this. Could feed the CVE tracker directly. | Medium |
 | D3 | **SNMP device configuration backup** — snapshot running-config from routers/switches, detect config drift | **Medium** | LibreNMS (RANCID integration) | IT admins want to know when a switch config changed. LibreNMS stores config snapshots and diffs them. NetSentinel has `config_baseline.py` for device inventory but not for device configs themselves. | Medium |
@@ -77,7 +78,7 @@ Before the gaps: capabilities NetSentinel has that **none** of the benchmark too
 | V1 ✅ | **Traffic overlay on topology map** — colour-code nodes by current bandwidth utilization ("Weathermap" for the home lab) | **High** | LibreNMS Weathermap plugin, ntopng | ✅ **Done (2026-06-14):** `BandwidthOverlayWorker` + Cytoscape.js node CSS classes (`traffic-high/medium/low`) wired into `network_map_page.py` "Traffic Overlay" toggle. Scapy/Npcap required; graceful error fallback. | Medium |
 | V2 | **Per-host application traffic breakdown** — which apps/protocols each device is using (Netflix, BitTorrent, SSH, DNS, etc.) displayed as a stacked bar or pie | **High** | ntopng (via nDPI), Wireshark statistics | ntopng's DPI identifies 3000+ applications without credentials. Even a lightweight version using port→application heuristics would be far more useful than "device uses 4.2 MB/s." This is what non-technical users actually want to see. | Large |
 | V3 | **Protocol flow sequence diagram** — interactive timeline showing packet exchanges between two hosts (like Wireshark's "Follow Stream" but visual) | **Medium** | Wireshark flow graph | The Protocol Visualizer page has animated ARP/DNS/TCP/DHCP diagrams but they're canned animations. A real-traffic sequence diagram from a live or uploaded pcap would be a powerful educational and diagnostic tool. | Large |
-| V4 | **Interface error / discard metrics graph** — per-port CRC errors, input errors, output drops, collisions from SNMP ifTable | **Medium** | LibreNMS, Checkmk | Port errors are the first sign of a failing cable or duplex mismatch. NetSentinel polls SNMP but doesn't visualize per-port error counters over time. A half-duplex mismatch causing 15% packet loss would be invisible in the current UI. | Medium |
+| V4 ✅ | **Interface error / discard metrics graph** — per-port CRC errors, input errors, output drops, collisions from SNMP ifTable | **Medium** | LibreNMS, Checkmk | ✅ **Done (2026-06-14):** `modules/snmp_poller.py` extended with `IfErrorEntry` dataclass + `poll_if_errors()` (GET-based ifTable walk for indices 1..ifNumber). `SNMPIfErrorWorker` added to `workers/scan_worker.py`. SNMP Device Info tab extended with "Interface Error & Discard Counters" card: per-interface table + grouped matplotlib bar chart (In/Out Errors, In/Out Discards per interface). Clicking a device row auto-fills the host field. | Medium |
 | V5 ✅ | **Scan comparison / diff view** — per-port colour-coded diff between two scan results (new ports opened with service names, suspicious port warnings, devices added/removed) | **Medium** | Nmap ndiff, Netdisco history | ✅ **Done (2026-06-14):** `baseline_page.py` diff display upgraded to per-port rows with `_WELL_KNOWN_PORTS` service name enrichment, `_SUSPICIOUS_PORTS` red/amber colouring, and ⚠ risk tags. | Medium |
 | V6 | **Per-segment traffic heatmap** (time-of-day activity by subnet/device group) | **Low** | ntopng | Shows which devices are active at 3 AM — powerful for IoT anomaly detection when combined with the existing IoT baselines. | Medium |
 
@@ -214,7 +215,7 @@ Before the gaps: capabilities NetSentinel has that **none** of the benchmark too
 | Topology Visualization | ◆◆◆◇◇ Good | Traffic overlay (V1), protocol flow graph (V3) |
 | Alert & Monitoring | ◆◆◆◇◇ Good | Dependency suppression (O1), acknowledgement (O2) |
 | Security / WiFi | ◆◆◆◆◇ Strong | Deauth/WPS detection (P3, P1) |
-| Inventory Management | ◆◆◇◇◇ Partial | Software inventory (D2), IPAM (D5), audit log (O5) |
+| Inventory Management | ◆◆◆◇◇ Good | Software inventory (D2), IPAM (D5), audit log (O5) — startup cache restore shipped v2.1.5 |
 | Automation / API | ◆◆◆◇◇ Good | NetFlow (A2), Nagios compat (A1), Prometheus (A6) |
 | Education | ◆◆◆◆◆ Best-in-class | No meaningful gap |
 | Reporting | ◆◆◆◆◇ Strong | SLA reporting (O6), scan comparison (V5) |

@@ -16,7 +16,7 @@ Polls a small set of informational OIDs:
 import socket
 import struct
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 # ── BER/ASN.1 minimal encoder/decoder ────────────────────────────────────────
@@ -213,6 +213,82 @@ def poll(
             "Device may not have SNMP enabled or community string may be wrong."
         )
     return result
+
+
+# ── ifTable error polling ─────────────────────────────────────────────────────
+
+# OID base paths for ifTable (RFC 1213 MIB-II)
+_IF_DESCR_BASE    = "1.3.6.1.2.1.2.2.1.2"    # ifDescr
+_IF_IN_ERRORS     = "1.3.6.1.2.1.2.2.1.14"   # ifInErrors
+_IF_OUT_ERRORS    = "1.3.6.1.2.1.2.2.1.20"   # ifOutErrors
+_IF_IN_DISCARDS   = "1.3.6.1.2.1.2.2.1.13"   # ifInDiscards
+_IF_OUT_DISCARDS  = "1.3.6.1.2.1.2.2.1.19"   # ifOutDiscards
+
+
+def _snmp_get_int(host: str, oid: str, community: str, timeout: float) -> Optional[int]:
+    """GET a single Counter32/Integer OID and return it as int, or None on error."""
+    raw = _snmp_get_single(host, oid, community, timeout)
+    if "<error" in raw or "<parse" in raw or "<no" in raw:
+        return None
+    try:
+        return int(raw.replace(",", "").strip())
+    except ValueError:
+        return None
+
+
+@dataclass
+class IfErrorEntry:
+    """Per-interface error and discard counters from SNMP ifTable."""
+    if_index:    int
+    if_descr:    str     = ""
+    in_errors:   int     = 0
+    out_errors:  int     = 0
+    in_discards: int     = 0
+    out_discards: int    = 0
+
+    @property
+    def total_issues(self) -> int:
+        return self.in_errors + self.out_errors + self.in_discards + self.out_discards
+
+    @property
+    def has_issues(self) -> bool:
+        return self.total_issues > 0
+
+
+def poll_if_errors(
+    host: str,
+    community: str = "public",
+    timeout: float = 2.0,
+    max_interfaces: int = 64,
+) -> List[IfErrorEntry]:
+    """Poll per-interface error and discard counters via SNMP GET.
+
+    Uses ifNumber to bound the index range, then GETs each OID individually.
+    Returns a list of IfErrorEntry sorted by ifIndex.  Empty list if host
+    does not respond or SNMP is not enabled.
+    """
+    if_count_str = _snmp_get_single(host, "1.3.6.1.2.1.2.1.0", community, timeout)
+    try:
+        n = min(int(if_count_str), max_interfaces)
+    except (ValueError, TypeError):
+        n = max_interfaces
+
+    entries: List[IfErrorEntry] = []
+    for idx in range(1, n + 1):
+        descr_raw = _snmp_get_single(host, f"{_IF_DESCR_BASE}.{idx}", community, timeout)
+        if "<error" in descr_raw:
+            continue  # interface index may not exist — skip
+        descr = descr_raw if "<" not in descr_raw else f"if{idx}"
+        entry = IfErrorEntry(
+            if_index    = idx,
+            if_descr    = descr,
+            in_errors   = _snmp_get_int(host, f"{_IF_IN_ERRORS}.{idx}",   community, timeout) or 0,
+            out_errors  = _snmp_get_int(host, f"{_IF_OUT_ERRORS}.{idx}",  community, timeout) or 0,
+            in_discards = _snmp_get_int(host, f"{_IF_IN_DISCARDS}.{idx}", community, timeout) or 0,
+            out_discards= _snmp_get_int(host, f"{_IF_OUT_DISCARDS}.{idx}",community, timeout) or 0,
+        )
+        entries.append(entry)
+    return entries
 
 
 def poll_hosts(

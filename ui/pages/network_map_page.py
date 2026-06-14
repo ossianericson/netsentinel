@@ -345,6 +345,14 @@ class NetworkMapPage(QWidget):
         self._btn_diff.toggled.connect(self._on_diff_toggled)
         self._btn_traffic.toggled.connect(self._on_traffic_toggled)
 
+        # Stale-cache indicator — shown when the map is pre-populated from DB,
+        # hidden as soon as a live scan completes via render().
+        self._stale_label = QLabel("● Cached — run a scan to refresh")
+        self._stale_label.setStyleSheet(
+            f"color:{TEXT_MUTED};font-size:11px;font-style:italic;padding:0 6px;"
+        )
+        self._stale_label.setVisible(False)
+
         toolbar.addWidget(self._layout_combo)
         toolbar.addWidget(btn_fit)
         toolbar.addWidget(btn_zin)
@@ -353,6 +361,7 @@ class NetworkMapPage(QWidget):
         toolbar.addWidget(self._btn_diff)
         toolbar.addWidget(self._diff_label)
         toolbar.addWidget(self._btn_traffic)
+        toolbar.addWidget(self._stale_label)
         toolbar.addStretch()
         toolbar.addWidget(btn_export)
         toolbar.addWidget(btn_rst)
@@ -456,6 +465,10 @@ class NetworkMapPage(QWidget):
         if self._outer_stack.currentIndex() == 0:
             self._outer_stack.setCurrentIndex(1)
 
+        # A live scan supersedes any cached view — hide the stale indicator
+        if hasattr(self, "_stale_label"):
+            self._stale_label.setVisible(False)
+
         # Show LLDP admin hint on Interactive tab when rights needed and no neighbors
         self._lldp_hint_label.setVisible(lldp_admin_needed and not lldp_neighbors)
 
@@ -485,6 +498,32 @@ class NetworkMapPage(QWidget):
         self._scan_id = compute_scan_id(devices)
         if self._bridge is not None:
             self._bridge.set_scan_id(self._scan_id)
+
+    def render_from_cache(self, devices: List[Any], store=None) -> None:
+        """Render the last-known topology at startup without a live scan.
+
+        Uses the most recent topology snapshot from MetricStore to infer the
+        gateway IP (source with the most edges = gateway).  Falls back to a
+        gateway-less render when no snapshot exists.  The stale label in the
+        toolbar is shown until a live scan calls render().
+        """
+        gateway_ip: Optional[str] = None
+        if store is not None:
+            try:
+                from modules.topology_snapshot import load_last_snapshot as _load_snap
+                from collections import Counter
+                snap = _load_snap(store)
+                if snap and snap.edges:
+                    src_counts: Counter = Counter(e[0] for e in snap.edges)
+                    gateway_ip = src_counts.most_common(1)[0][0] if src_counts else None
+            except Exception:
+                pass  # non-fatal — render without gateway
+
+        self.render(devices=devices, gateway_ip=gateway_ip)
+
+        # Mark the map as stale (live scan will clear this via render())
+        if hasattr(self, "_stale_label"):
+            self._stale_label.setVisible(True)
 
     def _refresh_web_view(self, diff: Optional[Any] = None) -> None:
         """Rebuild and load the Cytoscape HTML into the web view."""

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QSplitter,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
@@ -28,8 +29,8 @@ from PyQt6.QtWidgets import (
 
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
-    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, GREEN,
-    MAIN_STYLE, NAV_DIVIDER,
+    ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, CHART_BG, CHART_GRID,
+    CHART_PLOT_BG, GREEN, MAIN_STYLE, NAV_DIVIDER,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from modules.utils import get_offenders_path, is_admin
@@ -519,7 +520,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         for attr in ("_net_info_worker", "_diag_worker", "_prescan_worker",
                      "_mtr_worker", "_ps_worker", "_ipv6_worker", "_cloud_worker",
                      "_arp_worker", "_dhcp_worker", "_bw_worker", "_sched_worker",
-                     "_snmp_worker", "_syn_worker", "_udp_worker", "_cve_worker",
+                     "_snmp_worker", "_snmp_if_worker", "_syn_worker", "_udp_worker", "_cve_worker",
                      "_exposure_worker", "_os_worker", "_cred_worker",
                      "_discovery_worker", "_smb_worker", "_pe_worker",
                      "_plugin_worker"):
@@ -1350,6 +1351,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(6)
+
+        # ── Device poll section ───────────────────────────────────────────────
         self._snmp_status = QLabel("SNMP poller not running.")
         self._snmp_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl_row = QHBoxLayout()
@@ -1375,10 +1379,92 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._snmp_table = _table(["Host", "Name", "Description", "Uptime", "Interfaces", "Contact"])
         self._snmp_table.setColumnWidth(0, 120)
         self._snmp_table.setColumnWidth(2, 350)
+        self._snmp_table.itemSelectionChanged.connect(self._on_snmp_table_selection)
         lay.addWidget(self._snmp_status)
         lay.addLayout(ctrl_row)
         lay.addWidget(self._snmp_table, 1)
+
+        # ── Interface error metrics card ──────────────────────────────────────
+        if_card = QWidget()
+        if_card.setStyleSheet(
+            f"QWidget{{background:{BG_CARD};border:1px solid {BORDER};}}"
+        )
+        if_lay = QVBoxLayout(if_card)
+        if_lay.setContentsMargins(8, 6, 8, 6)
+        if_lay.setSpacing(4)
+
+        title_row = QHBoxLayout()
+        lbl_if = QLabel("◆ Interface Error & Discard Counters")
+        lbl_if.setStyleSheet(
+            f"font-weight:600;color:{TEXT_PRIMARY};font-size:12px;border:none;"
+        )
+        self._snmp_if_status = QLabel("Select a device above and click Poll.")
+        self._snmp_if_status.setStyleSheet(
+            f"color:{TEXT_SECONDARY};font-size:11px;border:none;"
+        )
+        self._snmp_if_host = QLineEdit()
+        self._snmp_if_host.setFixedWidth(130)
+        self._snmp_if_host.setPlaceholderText("host IP")
+        btn_if = QPushButton("▶  Poll Interface Errors")
+        btn_if.setObjectName("btnNetRefresh")
+        btn_if.clicked.connect(self._start_snmp_if_poll)
+        title_row.addWidget(lbl_if)
+        title_row.addStretch()
+        title_row.addWidget(self._snmp_if_status)
+        title_row.addWidget(QLabel("Host:"))
+        title_row.addWidget(self._snmp_if_host)
+        title_row.addWidget(btn_if)
+        if_lay.addLayout(title_row)
+
+        content_split = QSplitter(Qt.Orientation.Horizontal)
+        self._snmp_if_table = _table(
+            ["Interface", "In Errors", "Out Errors", "In Discards", "Out Discards"]
+        )
+        self._snmp_if_table.setColumnWidth(0, 140)
+        for _c in range(1, 5):
+            self._snmp_if_table.setColumnWidth(_c, 90)
+        content_split.addWidget(self._snmp_if_table)
+
+        # Matplotlib error bar chart (RULE 10 — theme constants)
+        self._snmp_if_fig    = None
+        self._snmp_if_ax     = None
+        self._snmp_if_canvas = None
+        try:
+            from matplotlib.figure import Figure
+            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+            self._snmp_if_fig = Figure(facecolor=CHART_BG, figsize=(4, 2.5))
+            self._snmp_if_fig.subplots_adjust(left=0.12, right=0.98, top=0.88, bottom=0.22)
+            self._snmp_if_ax  = self._snmp_if_fig.add_subplot(111)
+            self._snmp_if_ax.set_facecolor(CHART_PLOT_BG)
+            self._snmp_if_ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
+            self._snmp_if_ax.grid(True, color=CHART_GRID, linewidth=0.8)
+            for sp in ("top", "right"):
+                self._snmp_if_ax.spines[sp].set_visible(False)
+            for sp in ("bottom", "left"):
+                self._snmp_if_ax.spines[sp].set_color(BORDER)
+            self._snmp_if_ax.set_title(
+                "Error distribution per interface", fontsize=9,
+                color=TEXT_PRIMARY, pad=4,
+            )
+            self._snmp_if_canvas = FigureCanvasQTAgg(self._snmp_if_fig)
+            content_split.addWidget(self._snmp_if_canvas)
+        except Exception:
+            pass  # matplotlib not available — chart omitted gracefully
+
+        content_split.setStretchFactor(0, 3)
+        content_split.setStretchFactor(1, 2)
+        if_lay.addWidget(content_split, 1)
+        lay.addWidget(if_card, 1)
         return w
+
+    @pyqtSlot()
+    def _on_snmp_table_selection(self) -> None:
+        """Auto-fill the interface-errors host field when a row is selected."""
+        rows = self._snmp_table.selectedItems()
+        if rows:
+            host_item = self._snmp_table.item(rows[0].row(), 0)
+            if host_item:
+                self._snmp_if_host.setText(host_item.text())
 
     @pyqtSlot()
     def _start_snmp_poll(self):
@@ -1403,8 +1489,32 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._snmp_worker = SNMPWorker(hosts=hosts, community=community)
         self._snmp_worker.host_result.connect(self._on_snmp_result)
         self._snmp_worker.status.connect(self._snmp_status.setText)
-        self._snmp_worker.error.connect(lambda e: self._snmp_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._snmp_worker.error.connect(
+            lambda e: self._snmp_status.setText(f"⚠ {e}"),
+            Qt.ConnectionType.QueuedConnection,
+        )
         self._snmp_worker.start()
+
+    @pyqtSlot()
+    def _start_snmp_if_poll(self) -> None:
+        from workers.scan_worker import SNMPIfErrorWorker
+        if self._snmp_if_worker and self._snmp_if_worker.isRunning():
+            return
+        host = self._snmp_if_host.text().strip()
+        if not host:
+            self._snmp_if_status.setText("Enter a host IP first.")
+            return
+        community = self._snmp_community.text().strip() or "public"
+        self._snmp_if_table.setRowCount(0)
+        self._snmp_if_status.setText(f"Polling {host}…")
+        self._snmp_if_worker = SNMPIfErrorWorker(host=host, community=community)
+        self._snmp_if_worker.result_ready.connect(self._on_snmp_if_result)
+        self._snmp_if_worker.status.connect(self._snmp_if_status.setText)
+        self._snmp_if_worker.error.connect(
+            lambda e: self._snmp_if_status.setText(f"⚠ {e}"),
+            Qt.ConnectionType.QueuedConnection,
+        )
+        self._snmp_if_worker.start()
 
     @pyqtSlot()
     def _save_snmp_community(self) -> None:

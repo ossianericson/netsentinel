@@ -780,6 +780,38 @@ class SNMPWorker(QThread):
             self.error.emit(f"SNMP error: {exc}")
 
 
+class SNMPIfErrorWorker(QThread):
+    """Polls ifTable error/discard counters for a single host."""
+    result_ready = pyqtSignal(list)   # list[IfErrorEntry]
+    status       = pyqtSignal(str)
+    error        = pyqtSignal(str)
+
+    def __init__(
+        self,
+        host: str,
+        community: str = "public",
+        timeout: float = 2.0,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.host      = host
+        self.community = community
+        self.timeout   = timeout
+
+    def run(self):
+        try:
+            from modules.snmp_poller import poll_if_errors
+            self.status.emit(f"Polling interface errors on {self.host}…")
+            entries = poll_if_errors(self.host, self.community, self.timeout)
+            self.result_ready.emit(entries)
+            total = sum(e.total_issues for e in entries)
+            self.status.emit(
+                f"Interface poll done — {len(entries)} interface(s), {total} total error/discard events."
+            )
+        except Exception as exc:
+            self.error.emit(f"Interface error poll failed: {exc}")
+
+
 # ── Recon workers ─────────────────────────────────────────────────────────────
 
 class SYNScanWorker(QThread):

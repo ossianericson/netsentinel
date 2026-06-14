@@ -14,9 +14,9 @@ from PyQt6.QtWidgets import QTableWidgetItem
 from ui.tabs import _add_row
 
 from ui.styles import (
-    ACCENT_LITE, AMBER, AMBER_BG,
+    ACCENT_LITE, AMBER, AMBER_BG, BLUE, BORDER,
+    CHART_GRID, CHART_PLOT_BG,
     GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
-    BLUE,
 )
 from ui.scan_enrichment import ScanEnrichmentMixin
 
@@ -188,6 +188,60 @@ class ScanResultMixin(ScanEnrichmentMixin):
             result.sys_uptime, result.if_count, result.sys_contact,
         ]):
             self._snmp_table.setItem(row, col, QTableWidgetItem(str(val)))
+
+    def _on_snmp_if_result(self, entries: list) -> None:
+        """Populate interface error table and bar chart (V4 — Cat2)."""
+        from PyQt6.QtGui import QColor
+        self._snmp_if_table.setRowCount(0)
+        for entry in entries:
+            row = self._snmp_if_table.rowCount()
+            self._snmp_if_table.insertRow(row)
+            cells = [
+                entry.if_descr,
+                str(entry.in_errors),
+                str(entry.out_errors),
+                str(entry.in_discards),
+                str(entry.out_discards),
+            ]
+            for col, val in enumerate(cells):
+                item = QTableWidgetItem(val)
+                if col > 0 and int(val) > 0:
+                    item.setForeground(QColor(RED if int(val) > 10 else AMBER))
+                self._snmp_if_table.setItem(row, col, item)
+
+        # Update chart
+        ax = getattr(self, "_snmp_if_ax", None)
+        canvas = getattr(self, "_snmp_if_canvas", None)
+        if ax is None or canvas is None or not entries:
+            return
+        ax.clear()
+        ax.set_facecolor(CHART_PLOT_BG)
+        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color=CHART_GRID, linewidth=0.8, axis="y")
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        for sp in ("bottom", "left"):
+            ax.spines[sp].set_color(BORDER)
+
+        labels  = [e.if_descr[:12] for e in entries]
+        in_err  = [e.in_errors   for e in entries]
+        out_err = [e.out_errors  for e in entries]
+        in_dis  = [e.in_discards for e in entries]
+        out_dis = [e.out_discards for e in entries]
+        xs = list(range(len(labels)))
+        w  = 0.2
+        ax.bar([x - 1.5 * w for x in xs], in_err,  w, label="In Errors",    color=RED)
+        ax.bar([x - 0.5 * w for x in xs], out_err, w, label="Out Errors",   color=AMBER)
+        ax.bar([x + 0.5 * w for x in xs], in_dis,  w, label="In Discards",  color=BLUE)
+        ax.bar([x + 1.5 * w for x in xs], out_dis, w, label="Out Discards", color=GREEN)
+        ax.set_xticks(xs)
+        ax.set_xticklabels(labels, rotation=25, ha="right")
+        ax.legend(fontsize=7, framealpha=0.7)
+        ax.set_title("Error distribution per interface", fontsize=9, color=TEXT_PRIMARY, pad=4)
+        try:
+            canvas.draw()
+        except Exception:
+            pass  # non-fatal if canvas is detached
 
     def _on_syn_result(self, result):
         from PyQt6.QtGui import QColor
@@ -1001,6 +1055,107 @@ class ScanResultMixin(ScanEnrichmentMixin):
             f"({len(res.findings)} finding{'s' if len(res.findings) != 1 else ''})."
         )
         self._plugin_status.setStyleSheet(f"color:{color};font-size:11px;")
+
+    # ── Startup cache restore ─────────────────────────────────────────────────
+
+    def _restore_cached_scan(self) -> None:
+        """Pre-populate Devices table and Network Map from last-known MetricStore data.
+
+        Called once at startup before any live scan.  Risk levels are omitted
+        (shown as "—") because they are point-in-time and stale.  A status label
+        tells the user when the data was last refreshed.  A live scan always
+        replaces this view via the normal _on_m1_result() path.
+        """
+        _store_ref = getattr(self, "_store", None)
+        if _store_ref is None:
+            return
+        try:
+            known = _store_ref.get_known_devices()
+        except Exception:
+            return  # non-fatal — store may not be initialised yet
+
+        devices = [
+            {
+                "ip":          kd.ip or "?",
+                "hostname":    kd.custom_name or kd.hostname or "",
+                "mac":         kd.mac or "?",
+                "vendor":      kd.vendor or "Unknown",
+                "risk_level":  "UNKNOWN",
+                "device_type": kd.device_type or "Unknown Device",
+                "verdict":     "",
+            }
+            for kd in known.values()
+            if kd.ip and kd.ip not in ("?", "0.0.0.0", "")
+        ]
+        if not devices:
+            return  # first-ever launch — leave empty state in place
+
+        devices.sort(key=lambda d: d["ip"])
+
+        # Populate the Devices table (Risk column shows "—", not a stale level)
+        self._m1_table.setRowCount(0)
+        for d in devices:
+            _add_row(
+                self._m1_table,
+                [d["ip"], d["hostname"] or "—", d["mac"], d["vendor"],
+                 "—", d["device_type"], "", "", ""],
+                "UNKNOWN",
+            )
+
+        # Switch from empty-state placeholder to table view
+        if hasattr(self, "_m1_stack"):
+            self._m1_stack.setCurrentIndex(1)
+
+        # Stale status label
+        _age = self._cached_scan_age_str(_store_ref)
+        self._m1_status.setText(
+            f"Cached — last scanned {_age}  ·  Run Scan to refresh"
+        )
+        self._m1_status.setStyleSheet(
+            f"color:{TEXT_MUTED};font-size:11px;padding:2px 0;"
+        )
+
+        # Set _m1_result so downstream pages have a device list to work with
+        self._m1_result = {
+            "devices":         devices,
+            "from_cache":      True,
+            "total_count":     len(devices),
+            "high_risk_count": 0,
+        }
+
+        # Feed Inventory page with cached device list
+        if hasattr(self, "_inventory_page"):
+            try:
+                self._inventory_page.set_scan_devices(devices)
+            except Exception:
+                pass  # non-fatal
+
+        # Feed Network Map from the last topology snapshot
+        if hasattr(self, "_network_map_page"):
+            try:
+                self._network_map_page.render_from_cache(devices, _store_ref)
+            except Exception:
+                pass  # non-fatal
+
+    def _cached_scan_age_str(self, store) -> str:
+        """Return a human-readable age string for the most recent topology snapshot."""
+        try:
+            from modules.topology_snapshot import load_last_snapshot as _load_snap
+            snap = _load_snap(store)
+            if snap is None:
+                return "unknown time ago"
+            import datetime as _dt
+            delta = _dt.datetime.now() - snap.timestamp
+            total_s = int(delta.total_seconds())
+            hours, remainder = divmod(total_s, 3600)
+            minutes = remainder // 60
+            if hours >= 48:
+                return f"{hours // 24}d ago"
+            if hours >= 1:
+                return f"{hours}h ago"
+            return f"{minutes}m ago"
+        except Exception:
+            return "unknown time ago"
 
     def _on_pe_result(self, res):
         from PyQt6.QtGui import QColor

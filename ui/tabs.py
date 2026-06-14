@@ -502,6 +502,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._bw_worker:         Optional[object] = None
         self._sched_worker:      Optional[object] = None
         self._snmp_worker:       Optional[object] = None
+        self._snmp_if_worker:    Optional[object] = None
         self._syn_worker:        Optional[object] = None
         self._udp_worker:        Optional[object] = None
         self._cve_worker:        Optional[object] = None
