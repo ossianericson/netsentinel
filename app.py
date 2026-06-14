@@ -326,6 +326,19 @@ def _wire_notifications(window, alerts, notif_router, maint_manager, report_work
     report_worker.error.connect(window._reports_page.on_worker_error)
     window._reports_page.set_worker(report_worker)
 
+    # Load persisted alert dependency trees and push them into the live engine
+    from ui.pages.notif_dep_card import _load_deps as _load_alert_deps
+    for _dep in _load_alert_deps():
+        _parent   = _dep.get("parent", "")
+        _children = _dep.get("children", [])
+        if _parent and _children:
+            alerts.set_dependency_map(_parent, _children)
+
+    # Keep the live engine in sync when the user adds/removes dependencies in the UI
+    window._notifications_page.notify_dep_changed.connect(
+        lambda parent, children: alerts.set_dependency_map(parent, children)
+    )
+
 
 def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
     avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
@@ -496,7 +509,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.6")
+    app.setApplicationVersion("2.1.7")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -532,7 +545,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.6")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.7")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
