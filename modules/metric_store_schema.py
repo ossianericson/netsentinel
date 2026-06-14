@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 14
+_SCHEMA_VERSION = 15
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -208,17 +208,18 @@ CREATE TABLE IF NOT EXISTS plugin_log (
 CREATE INDEX IF NOT EXISTS idx_plugin_log_ts   ON plugin_log(ts);
 CREATE INDEX IF NOT EXISTS idx_plugin_log_name ON plugin_log(plugin_name);
 
--- Alert acknowledgement + escalation tracking (schema v7)
+-- Alert acknowledgement + escalation tracking (schema v7, comment added v15)
 CREATE TABLE IF NOT EXISTS alert_fired (
-    id          INTEGER PRIMARY KEY,
-    ts          INTEGER NOT NULL,
-    rule_name   TEXT    NOT NULL,
-    host        TEXT    NOT NULL DEFAULT '',
-    severity    TEXT    NOT NULL DEFAULT 'WARNING',
-    message     TEXT    NOT NULL DEFAULT '',
-    acked_ts    INTEGER,
-    acked_by    TEXT,
-    escalated   INTEGER NOT NULL DEFAULT 0
+    id            INTEGER PRIMARY KEY,
+    ts            INTEGER NOT NULL,
+    rule_name     TEXT    NOT NULL,
+    host          TEXT    NOT NULL DEFAULT '',
+    severity      TEXT    NOT NULL DEFAULT 'WARNING',
+    message       TEXT    NOT NULL DEFAULT '',
+    acked_ts      INTEGER,
+    acked_by      TEXT,
+    acked_comment TEXT,
+    escalated     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_af_ts    ON alert_fired(ts);
 CREATE INDEX IF NOT EXISTS idx_af_acked ON alert_fired(acked_ts);
@@ -326,6 +327,8 @@ _MIGRATIONS = [
     "ALTER TABLE known_device ADD COLUMN services TEXT DEFAULT NULL",
     "ALTER TABLE known_device ADD COLUMN mac_randomized INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE known_device ADD COLUMN confidence REAL NOT NULL DEFAULT 0.0",
+    # schema v15 — ack comment for per-alert acknowledgement with owner+note
+    "ALTER TABLE alert_fired ADD COLUMN acked_comment TEXT",
 ]
 
 

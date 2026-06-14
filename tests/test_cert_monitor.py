@@ -133,7 +133,7 @@ class TestMetricStoreCert:
 
     def test_schema_version_is_2(self, store):
         rows = store._execute_read("SELECT value FROM meta WHERE key='schema_version'", ())
-        assert rows[0]["value"] == "14"
+        assert rows[0]["value"] == "15"
 
 
 # ── CertMonitor ───────────────────────────────────────────────────────────────

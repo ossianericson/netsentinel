@@ -47,7 +47,11 @@ from ui.topology_widget import TopologyWidget
 from modules.topology_layout import (
     NodePosition, TopologyEdge, clear_layout, compute_scan_id, load_layout, save_layout,
 )
-from modules.topology_cytoscape import LAYOUT_NAMES, build_cytoscape_html
+from modules.topology_cytoscape import (
+    LAYOUT_NAMES,
+    build_cytoscape_html,
+    build_elements_for_update,
+)
 from workers.bandwidth_worker import BandwidthOverlayWorker
 
 log = logging.getLogger(__name__)
@@ -145,6 +149,10 @@ class NetworkMapPage(QWidget):
         self._traffic_overlay = False
         self._bw_by_mac: Dict[str, float] = {}
         self._bw_worker: Optional[BandwidthOverlayWorker] = None
+        # True once setHtml() has been called; subsequent renders use
+        # window.updateTopology() to preserve node positions instead of
+        # reloading the entire page (which resets layout and causes drift).
+        self._topology_loaded = False
 
         self._build_ui()
 
@@ -324,6 +332,15 @@ class NetworkMapPage(QWidget):
         )
         self._diff_label.setVisible(False)
 
+        # Lock Layout toggle — freezes all node positions; disables topology updates
+        self._btn_lock = QPushButton("Lock Layout")
+        self._btn_lock.setCheckable(True)
+        self._btn_lock.setFixedWidth(96)
+        self._btn_lock.setToolTip(
+            "Freeze all node positions — re-scans update data but cannot move nodes"
+        )
+        self._btn_lock.setStyleSheet(_TOOLBAR_BTN_SS)
+
         # Traffic Overlay toggle — live per-MAC bandwidth (requires Scapy + admin)
         self._btn_traffic = QPushButton("Traffic Overlay")
         self._btn_traffic.setCheckable(True)
@@ -343,6 +360,7 @@ class NetworkMapPage(QWidget):
         btn_zout.clicked.connect(self.zoom_out)
         self._btn_focus.toggled.connect(self._on_focus_toggled)
         self._btn_diff.toggled.connect(self._on_diff_toggled)
+        self._btn_lock.toggled.connect(self._on_lock_toggled)
         self._btn_traffic.toggled.connect(self._on_traffic_toggled)
 
         # Stale-cache indicator — shown when the map is pre-populated from DB,
@@ -360,6 +378,7 @@ class NetworkMapPage(QWidget):
         toolbar.addWidget(self._btn_focus)
         toolbar.addWidget(self._btn_diff)
         toolbar.addWidget(self._diff_label)
+        toolbar.addWidget(self._btn_lock)
         toolbar.addWidget(self._btn_traffic)
         toolbar.addWidget(self._stale_label)
         toolbar.addStretch()
@@ -526,40 +545,74 @@ class NetworkMapPage(QWidget):
             self._stale_label.setVisible(True)
 
     def _refresh_web_view(self, diff: Optional[Any] = None) -> None:
-        """Rebuild and load the Cytoscape HTML into the web view."""
+        """Load or incrementally update the Cytoscape view.
+
+        First call: builds the full self-contained HTML and calls setHtml()
+        to create the Cytoscape instance with saved positions and initial layout.
+
+        Subsequent calls: calls window.updateTopology() via runJavaScript() so
+        the live Cytoscape instance receives only the changed data — existing
+        node positions are fully preserved, preventing layout drift.
+
+        Reset Layout clears _topology_loaded so the next call forces a full
+        reload with fresh positions.
+        """
         if not self._web_available or self._web_view is None:
             return
         kw = self._last_render_kwargs
         if not kw:
             return
 
-        scan_id  = self._scan_id
-        saved    = load_layout(scan_id) if scan_id else {}
-        layout   = LAYOUT_NAMES.get(
-            self._layout_combo.currentText(), "breadthfirst"
-        )
-
-        try:
-            html = build_cytoscape_html(
-                devices=kw.get("devices", []),
-                edges=kw.get("edges"),
-                diff=diff,
-                lldp_neighbors=kw.get("lldp_neighbors"),
-                segments=kw.get("segments"),
-                positions=saved if saved else None,
-                gateway_ip=kw.get("gateway_ip"),
-                gateway_mac=kw.get("gateway_mac"),
-                mesh_units=kw.get("mesh_units"),
-                mesh_enrichment=kw.get("mesh_enrichment"),
-                modem_data=kw.get("modem_data"),
-                down_ips=kw.get("down_ips"),
-                new_ips=kw.get("new_ips"),
-                initial_layout=layout,
-                bw_by_mac=self._bw_by_mac if self._traffic_overlay else None,
-            )
-            self._web_view.setHtml(html)
-        except Exception:
-            log.debug("network_map_page: Cytoscape HTML build failed", exc_info=True)
+        if not self._topology_loaded:
+            # ── Full initial render ───────────────────────────────────────────
+            scan_id = self._scan_id
+            saved   = load_layout(scan_id) if scan_id else {}
+            layout  = LAYOUT_NAMES.get(self._layout_combo.currentText(), "breadthfirst")
+            try:
+                html = build_cytoscape_html(
+                    devices=kw.get("devices", []),
+                    edges=kw.get("edges"),
+                    diff=diff,
+                    lldp_neighbors=kw.get("lldp_neighbors"),
+                    segments=kw.get("segments"),
+                    positions=saved if saved else None,
+                    gateway_ip=kw.get("gateway_ip"),
+                    gateway_mac=kw.get("gateway_mac"),
+                    mesh_units=kw.get("mesh_units"),
+                    mesh_enrichment=kw.get("mesh_enrichment"),
+                    modem_data=kw.get("modem_data"),
+                    down_ips=kw.get("down_ips"),
+                    new_ips=kw.get("new_ips"),
+                    initial_layout=layout,
+                    bw_by_mac=self._bw_by_mac if self._traffic_overlay else None,
+                )
+                self._web_view.setHtml(html)
+                self._topology_loaded = True
+            except Exception:
+                log.debug("network_map_page: Cytoscape HTML build failed", exc_info=True)
+        else:
+            # ── Incremental update — preserves all node positions ─────────────
+            try:
+                elements = build_elements_for_update(
+                    devices=kw.get("devices", []),
+                    edges=kw.get("edges"),
+                    diff=diff,
+                    lldp_neighbors=kw.get("lldp_neighbors"),
+                    segments=kw.get("segments"),
+                    gateway_ip=kw.get("gateway_ip"),
+                    gateway_mac=kw.get("gateway_mac"),
+                    mesh_units=kw.get("mesh_units"),
+                    mesh_enrichment=kw.get("mesh_enrichment"),
+                    modem_data=kw.get("modem_data"),
+                    down_ips=kw.get("down_ips"),
+                    new_ips=kw.get("new_ips"),
+                    bw_by_mac=self._bw_by_mac if self._traffic_overlay else None,
+                )
+                self._run_js(
+                    f"window.updateTopology({json.dumps(elements)});"
+                )
+            except Exception:
+                log.debug("network_map_page: incremental update failed", exc_info=True)
 
     def update_lldp_neighbors(
         self,
@@ -590,6 +643,9 @@ class NetworkMapPage(QWidget):
 
     def reset_layout(self) -> None:
         clear_layout(self._scan_id)
+        # Force a full setHtml() on the next render so the layout algorithm
+        # runs fresh from scratch, discarding all previous node positions.
+        self._topology_loaded = False
         if self._last_render_kwargs:
             self.render(**self._last_render_kwargs)
 
@@ -636,6 +692,13 @@ class NetworkMapPage(QWidget):
                 )
             except Exception:
                 pass  # non-fatal — diff overlay is best-effort
+
+    @pyqtSlot(bool)
+    def _on_lock_toggled(self, checked: bool) -> None:
+        """Freeze or unfreeze all node positions in the interactive view."""
+        self._run_js(
+            f"window.lockLayout && window.lockLayout({'true' if checked else 'false'});"
+        )
 
     @pyqtSlot(bool)
     def _on_traffic_toggled(self, checked: bool) -> None:
@@ -688,7 +751,10 @@ class NetworkMapPage(QWidget):
     @pyqtSlot(int)
     def _on_view_tab_changed(self, index: int) -> None:
         QSettings().setValue(_SETTINGS_KEY_VIEW, "interactive" if index == 0 else "classic")
-        # Refresh the interactive view when switching to it if data is pending
+        # Populate the interactive view when switching to it.
+        # If already loaded we still call _refresh_web_view so that any data
+        # that arrived while the Classic tab was visible is applied as an
+        # incremental update (positions are preserved by updateTopology).
         if index == 0 and self._web_available and self._last_render_kwargs:
             self._refresh_web_view(
                 diff=self._last_render_kwargs.get("diff") if self._diff_mode else None

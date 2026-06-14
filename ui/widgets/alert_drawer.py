@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -489,6 +490,87 @@ class AlertDrawer(QFrame):
             )
             bl.addWidget(lbl)
 
+        # ── Ack info (shown when already acknowledged) ────────────────────────
+        ack_sep = QFrame()
+        ack_sep.setFixedHeight(1)
+        ack_sep.setStyleSheet(f"background:{BORDER}; border:none;")
+        bl.addWidget(ack_sep)
+
+        self._ack_info_lbl = QLabel()
+        self._ack_info_lbl.setWordWrap(True)
+        self._ack_info_lbl.setStyleSheet(
+            f"color:{GREEN}; font-size:10px; background:transparent; border:none;"
+        )
+        self._ack_info_lbl.setVisible(False)
+        bl.addWidget(self._ack_info_lbl)
+
+        self._ack_comment_lbl = QLabel()
+        self._ack_comment_lbl.setWordWrap(True)
+        self._ack_comment_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; font-style:italic;"
+            f" background:transparent; border:none;"
+        )
+        self._ack_comment_lbl.setVisible(False)
+        bl.addWidget(self._ack_comment_lbl)
+
+        # ── Inline ack form (shown when user clicks Acknowledge) ──────────────
+        self._ack_form = QFrame()
+        self._ack_form.setVisible(False)
+        self._ack_form.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border:1px solid {BORDER}; border-radius:3px; }}"
+        )
+        ack_form_lay = QVBoxLayout(self._ack_form)
+        ack_form_lay.setContentsMargins(8, 8, 8, 8)
+        ack_form_lay.setSpacing(6)
+
+        ack_form_hdr = QLabel("Acknowledge alert")
+        ack_form_hdr.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:bold;"
+            f" background:transparent; border:none;"
+        )
+        ack_form_lay.addWidget(ack_form_hdr)
+
+        self._ack_name_edit = QLineEdit()
+        self._ack_name_edit.setPlaceholderText("Your name (optional)")
+        self._ack_name_edit.setFixedHeight(24)
+        self._ack_name_edit.setStyleSheet(
+            f"QLineEdit {{ font-size:10px; color:{TEXT_PRIMARY}; background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:2px; padding:0 4px; }}"
+        )
+        ack_form_lay.addWidget(self._ack_name_edit)
+
+        self._ack_comment_edit = QLineEdit()
+        self._ack_comment_edit.setPlaceholderText("Comment, e.g. tracking JIRA-123 (optional)")
+        self._ack_comment_edit.setFixedHeight(24)
+        self._ack_comment_edit.setStyleSheet(self._ack_name_edit.styleSheet())
+        ack_form_lay.addWidget(self._ack_comment_edit)
+
+        ack_btn_row = QHBoxLayout()
+        self._ack_confirm_btn = QPushButton("✓ Confirm")
+        self._ack_confirm_btn.setFixedHeight(24)
+        self._ack_confirm_btn.setStyleSheet(
+            f"QPushButton {{ background:{GREEN}; color:white; border:none;"
+            f" border-radius:3px; font-size:10px; font-weight:bold; padding:0 8px; }}"
+            f"QPushButton:hover {{ opacity:0.9; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._ack_confirm_btn.clicked.connect(self._on_ack_confirm)
+
+        _ack_cancel_btn = QPushButton("Cancel")
+        _ack_cancel_btn.setFixedHeight(24)
+        _ack_cancel_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:10px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+        )
+        _ack_cancel_btn.clicked.connect(lambda: self._ack_form.setVisible(False))
+        ack_btn_row.addWidget(self._ack_confirm_btn)
+        ack_btn_row.addWidget(_ack_cancel_btn)
+        ack_btn_row.addStretch()
+        ack_form_lay.addLayout(ack_btn_row)
+        bl.addWidget(self._ack_form)
+
         bl.addStretch()
         scroll.setWidget(body)
         root.addWidget(scroll, 1)
@@ -606,6 +688,23 @@ class AlertDrawer(QFrame):
         already_acked = bool(alert.get("acked_ts"))
         self._ack_btn.setEnabled(not already_acked)
         self._ack_btn.setText("✓ Acknowledged" if already_acked else "✓ Acknowledge")
+        self._ack_form.setVisible(False)
+
+        if already_acked:
+            acked_by = alert.get("acked_by") or "user"
+            acked_ts = alert.get("acked_ts")
+            acked_date = time.strftime("%Y-%m-%d %H:%M", time.localtime(acked_ts)) if acked_ts else "—"
+            self._ack_info_lbl.setText(f"✓ Acknowledged by {acked_by} on {acked_date}")
+            self._ack_info_lbl.setVisible(True)
+            comment = alert.get("acked_comment") or ""
+            if comment:
+                self._ack_comment_lbl.setText(f'"{comment}"')
+                self._ack_comment_lbl.setVisible(True)
+            else:
+                self._ack_comment_lbl.setVisible(False)
+        else:
+            self._ack_info_lbl.setVisible(False)
+            self._ack_comment_lbl.setVisible(False)
 
         self._dev_lbl.setText(self._build_device_context(host))
 
@@ -675,18 +774,40 @@ class AlertDrawer(QFrame):
     # ── Action handlers ───────────────────────────────────────────────────────
 
     def _on_ack(self) -> None:
+        """Show the inline ack form; actual write happens in _on_ack_confirm."""
+        alert = self._current_alert
+        if not alert or not self._store:
+            return
+        if alert.get("acked_ts"):
+            return
+        self._ack_name_edit.clear()
+        self._ack_comment_edit.clear()
+        self._ack_form.setVisible(True)
+
+    def _on_ack_confirm(self) -> None:
         alert = self._current_alert
         if not alert or not self._store:
             return
         alert_id = alert.get("id")
         if alert_id is None:
             return
+        name    = self._ack_name_edit.text().strip() or "user"
+        comment = self._ack_comment_edit.text().strip()
         try:
-            self._store.acknowledge_alert(int(alert_id))
+            self._store.acknowledge_alert(int(alert_id), acked_by=name, comment=comment)
         except Exception:
             return
+        self._ack_form.setVisible(False)
         self._ack_btn.setEnabled(False)
         self._ack_btn.setText("✓ Acknowledged")
+        self._ack_info_lbl.setText(
+            f"✓ Acknowledged by {name} on "
+            f"{time.strftime('%Y-%m-%d %H:%M', time.localtime())}"
+        )
+        self._ack_info_lbl.setVisible(True)
+        if comment:
+            self._ack_comment_lbl.setText(f'"{comment}"')
+            self._ack_comment_lbl.setVisible(True)
         self.acknowledged.emit(int(alert_id))
 
     def _on_snooze(self) -> None:

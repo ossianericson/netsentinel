@@ -35,10 +35,11 @@ from ui.pages.notif_channel_panels import (
 )
 from ui.pages.notif_extra_channels import _NotifExtraChannelsMixin
 from ui.pages.notif_alert_history import _NotifAlertHistoryMixin
+from ui.pages.notif_dep_card import _NotifDepMixin
 
 
 class NotificationsPage(
-    _NotifAlertHistoryMixin, _NotifExtraChannelsMixin, _NotifChannelsMixin, QWidget
+    _NotifDepMixin, _NotifAlertHistoryMixin, _NotifExtraChannelsMixin, _NotifChannelsMixin, QWidget
 ):
     """Notification routing configuration and delivery log page."""
 
@@ -47,6 +48,7 @@ class NotificationsPage(
     automation_rule_requested = pyqtSignal(str, str)
     select_inventory_device  = pyqtSignal(str)
     alert_acknowledged       = pyqtSignal()
+    notify_dep_changed       = pyqtSignal(str, list)  # (parent_ip, children_list)
     _test_done               = pyqtSignal(str, str)
 
     def __init__(self, router=None, parent: QWidget | None = None):
@@ -91,6 +93,7 @@ class NotificationsPage(
         il.addWidget(self._build_telegram_card())
         il.addWidget(self._build_escalation_card())
         il.addWidget(self._build_weekly_digest_card())
+        il.addWidget(self._build_dep_card())
         il.addWidget(self._build_log_card())
         il.addStretch()
 

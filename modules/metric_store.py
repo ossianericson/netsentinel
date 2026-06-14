@@ -525,11 +525,17 @@ class MetricStore(MetricStoreQueryMixin):
         )
         return rows[0]["id"] if rows else -1
 
-    def acknowledge_alert(self, alert_id: int, acked_by: str = "user", ts: Optional[int] = None) -> None:
+    def acknowledge_alert(
+        self,
+        alert_id: int,
+        acked_by: str = "user",
+        ts: Optional[int] = None,
+        comment: str = "",
+    ) -> None:
         now = ts or int(time.time())
         self._execute_write(
-            "UPDATE alert_fired SET acked_ts=?, acked_by=? WHERE id=?",
-            (now, acked_by, alert_id),
+            "UPDATE alert_fired SET acked_ts=?, acked_by=?, acked_comment=? WHERE id=?",
+            (now, acked_by or "user", comment or None, alert_id),
         )
 
     def mark_alert_escalated(self, alert_id: int) -> None:

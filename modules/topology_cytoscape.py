@@ -1,4 +1,4 @@
-"""
+﻿"""
 topology_cytoscape.py — Cytoscape.js element and HTML builder for the Network Map page.
 
 Converts the unified topology data model (devices, TopologyEdges, TopologyDiff,
@@ -15,9 +15,6 @@ Architecture rules:
 """
 from __future__ import annotations
 
-import json
-import sys
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # ── constants ─────────────────────────────────────────────────────────────────
@@ -81,34 +78,6 @@ def _risk_class(risk: str) -> str:
 def _scale_pos(x: float, y: float) -> Dict[str, float]:
     """Convert 0–1 saved coordinates to Cytoscape canvas pixel coords."""
     return {"x": round(x * _CANVAS_W, 1), "y": round(y * _CANVAS_H, 1)}
-
-
-def _cytoscape_script_tag() -> str:
-    """Return an inline <script> block with the Cytoscape.js library.
-
-    Checks for the bundled file at assets/js/cytoscape.min.js first.
-    Falls back to the CDN for development use when the file is absent.
-    """
-    candidates = [
-        Path(__file__).parent.parent / "assets" / "js" / "cytoscape.min.js",
-    ]
-    if getattr(sys, "frozen", False):
-        candidates.insert(
-            0,
-            Path(sys._MEIPASS) / "assets" / "js" / "cytoscape.min.js",  # type: ignore[attr-defined]
-        )
-    for path in candidates:
-        if path.exists():
-            try:
-                src = path.read_text(encoding="utf-8")
-                return f"<script>{src}</script>"
-            except OSError:
-                pass  # non-fatal — fall through to CDN
-    # CDN fallback (development only — production should always bundle the file)
-    return (
-        '<script src="https://cdnjs.cloudflare.com/ajax/libs/'
-        'cytoscape/3.30.4/cytoscape.min.js"></script>'
-    )
 
 
 # ── element builder ───────────────────────────────────────────────────────────
@@ -706,193 +675,11 @@ def _build_style() -> list:
     ]
 
 
-# ── HTML builder ──────────────────────────────────────────────────────────────
-
-_HTML_TEMPLATE = """\
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-* {{ box-sizing:border-box; margin:0; padding:0; }}
-body {{ background:#F4F4F4; font-family:-apple-system,BlinkMacSystemFont,sans-serif; overflow:hidden; }}
-#cy {{ width:100vw; height:100vh; }}
-#tip {{
-  position:absolute; display:none; z-index:999; pointer-events:none;
-  background:#FFFFFF; border:1px solid #D4D4D4; border-radius:4px;
-  padding:6px 10px; font-size:12px; color:#1A1A2E; max-width:220px;
-  box-shadow:0 2px 8px rgba(0,0,0,.15); white-space:pre-wrap;
-}}
-</style>
-</head>
-<body>
-<div id="cy"></div>
-<div id="tip"></div>
-{cytoscape_script}
-<script>
-"use strict";
-var cy, qtBridge, focusMode = false, changesVisible = false;
-var elements = {elements_json};
-var layoutName = {layout_json};
-
-// QWebChannel bridge — injected via QWebEngineScript at document-creation
-// time; guard required in case the injection races or is absent.
-if (typeof QWebChannel !== 'undefined' && typeof qt !== 'undefined') {{
-  new QWebChannel(qt.webChannelTransport, function(channel) {{
-    qtBridge = channel.objects.bridge;
-  }});
-}}
-
-// Initialize Cytoscape
-var initLayout = (function() {{
-  var o = {{ name: layoutName, animate: false, padding: 60,
-             spacingFactor: 1.75, nodeDimensionsIncludeLabels: true }};
-  if (layoutName === 'breadthfirst') {{ o.directed = true; o.roots = '#__internet__'; }}
-  return o;
-}})();
-
-cy = cytoscape({{
-  container: document.getElementById('cy'),
-  elements:  elements,
-  style:     {style_json},
-  layout:    initLayout,
-  minZoom:   0.08,
-  maxZoom:   5.0,
-  wheelSensitivity: 0.25,
-}});
-
-// ── Tap (click) on node with IP → emit nodeClicked ───────────────────────────
-cy.on('tap', 'node[ip]', function(evt) {{
-  var ip = evt.target.data('ip');
-  if (ip && qtBridge) qtBridge.nodeClicked(ip);
-}});
-
-// ── Drag free → persist position ──────────────────────────────────────────────
-cy.on('dragfree', 'node', function(evt) {{
-  var node = evt.target;
-  var pos  = node.position();
-  var cw   = cy.width()  || {canvas_w};
-  var ch   = cy.height() || {canvas_h};
-  if (qtBridge) {{
-    qtBridge.savePosition(
-      node.id(),
-      (pos.x / cw).toFixed(4),
-      (pos.y / ch).toFixed(4)
-    );
-  }}
-}});
-
-// ── Hover tooltip ─────────────────────────────────────────────────────────────
-var tip = document.getElementById('tip');
-cy.on('mouseover', 'node', function(evt) {{
-  var d = evt.target.data();
-  tip.textContent = d.tip || d.label || '';
-  tip.style.display = 'block';
-}});
-cy.on('mouseout', 'node', function() {{ tip.style.display = 'none'; }});
-document.getElementById('cy').addEventListener('mousemove', function(e) {{
-  tip.style.left = (e.clientX + 16) + 'px';
-  tip.style.top  = (e.clientY - 10) + 'px';
-}});
-
-// ── Selection → Focus Mode update ─────────────────────────────────────────────
-cy.on('tap', function() {{ if (focusMode) window._applyFocus(); }});
-
-// ── Python-callable global functions ──────────────────────────────────────────
-window.setLayout = function(name) {{
-  var o = {{ name: name, animate: true, animationDuration: 350, padding: 60,
-             spacingFactor: 1.75, nodeDimensionsIncludeLabels: true }};
-  if (name === 'breadthfirst') {{ o.directed = true; o.roots = cy.$('#__internet__'); }}
-  cy.layout(o).run();
-}};
-
-window.fitView = function() {{ cy.fit(undefined, 50); }};
-
-window.resetLayout = function() {{
-  var o = {{ name: layoutName, animate: true, animationDuration: 350, padding: 60,
-             spacingFactor: 1.75, nodeDimensionsIncludeLabels: true }};
-  if (layoutName === 'breadthfirst') {{ o.directed = true; o.roots = cy.$('#__internet__'); }}
-  cy.layout(o).run();
-}};
-
-window.toggleFocus = function(enabled) {{
-  focusMode = enabled;
-  window._applyFocus();
-}};
-
-window._applyFocus = function() {{
-  cy.elements().removeClass('faded');
-  if (!focusMode) return;
-  var sel = cy.nodes(':selected');
-  if (!sel.length) return;
-  var hood = sel.closedNeighborhood();
-  cy.elements().not(hood).addClass('faded');
-}};
-
-window.toggleChanges = function(show) {{
-  changesVisible = show;
-  var ghosts = cy.elements('.ghost, .removed-edge, .new-edge');
-  if (show) {{ ghosts.removeClass('hidden'); }}
-  else      {{ ghosts.addClass('hidden'); }}
-}};
-
-window.exportPng = function() {{
-  var data = cy.png({{ full: true, scale: 2, bg: '#F4F4F4' }});
-  if (qtBridge) qtBridge.exportPng(data);
-}};
-</script>
-</body>
-</html>
-"""
-
-
-def build_cytoscape_html(
-    devices: list,
-    edges: Optional[list] = None,
-    diff: Optional[Any] = None,
-    lldp_neighbors: Optional[list] = None,
-    segments: Optional[list] = None,
-    positions: Optional[Dict[str, Any]] = None,
-    gateway_ip: Optional[str] = None,
-    gateway_mac: Optional[str] = None,
-    mesh_units: Optional[list] = None,
-    mesh_enrichment: Optional[dict] = None,
-    modem_data: Optional[dict] = None,
-    down_ips: Optional[set] = None,
-    new_ips: Optional[set] = None,
-    initial_layout: str = "breadthfirst",
-    bw_by_mac: Optional[Dict[str, float]] = None,
-) -> str:
-    """Return a complete self-contained HTML string for QWebEngineView.
-
-    The HTML embeds Cytoscape.js (from the local bundle when available),
-    a QWebChannel bridge, and all interaction logic.
-    """
-    result = build_cytoscape_elements(
-        devices=devices,
-        edges=edges,
-        diff=diff,
-        lldp_neighbors=lldp_neighbors,
-        segments=segments,
-        positions=positions,
-        gateway_ip=gateway_ip,
-        gateway_mac=gateway_mac,
-        mesh_units=mesh_units,
-        mesh_enrichment=mesh_enrichment,
-        modem_data=modem_data,
-        down_ips=down_ips,
-        new_ips=new_ips,
-        bw_by_mac=bw_by_mac,
-    )
-
-    # Determine layout: if we have saved positions, use preset layout
-    layout = "preset" if positions else initial_layout
-
-    return _HTML_TEMPLATE.format(
-        cytoscape_script=_cytoscape_script_tag(),
-        elements_json=json.dumps(result["elements"]),
-        style_json=json.dumps(result["style"]),
-        layout_json=json.dumps(layout),
-        canvas_w=_CANVAS_W,
-        canvas_h=_CANVAS_H,
-    )
+# ── Re-exports from topology_cytoscape_html ───────────────────────────────────
+# HTML/JS page builder split to a separate module (RULE-AH1 LOC budget).
+# Callers that import build_cytoscape_html or build_elements_for_update from
+# this module continue to work without change.
+from modules.topology_cytoscape_html import (  # noqa: F401, E402
+    build_cytoscape_html,
+    build_elements_for_update,
+)

@@ -17,7 +17,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 SCAPY_AVAILABLE = False
 try:
@@ -191,7 +191,7 @@ class AppTrafficSniffer:
         self._lock = threading.Lock()
         # {mac: {(category, app): bytes}}
         self._flows: Dict[str, Dict[Tuple[str, str], int]] = {}
-        self._sniffer = None
+        self._sniffer: Optional[Any] = None
 
     def _handle(self, pkt) -> None:
         try:

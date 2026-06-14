@@ -123,6 +123,9 @@ _MODULE_BUDGETS: dict[str, int] = {
     # Cytoscape.js CSS in embedded HTML/JS template (Cytoscape stylesheet, not Python UI).
     # Migrate to modules/colours.py in a future purge sprint.
     "modules/topology_cytoscape.py": 46,
+    # HTML/CSS strings in Cytoscape HTML builder template.
+    # Migrate to modules/colours.py in a future purge sprint.
+    "modules/topology_cytoscape_html.py": 5,
 }
 
 _DEFAULT_BUDGET = 0  # any file not listed must have zero violations

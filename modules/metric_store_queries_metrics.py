@@ -104,7 +104,8 @@ class _MetricsQueriesMixin:
         """Return alerts that have not been acknowledged."""
         cutoff = int(time.time()) - older_than_s
         rows = self._execute_read(
-            "SELECT id, ts, rule_name, host, severity, message, acked_ts, acked_by, escalated "
+            "SELECT id, ts, rule_name, host, severity, message, "
+            "acked_ts, acked_by, acked_comment, escalated "
             "FROM alert_fired WHERE acked_ts IS NULL AND ts <= ? "
             "ORDER BY ts ASC",
             (cutoff,),
@@ -115,7 +116,8 @@ class _MetricsQueriesMixin:
         """Return recent fired alerts, newest first."""
         since = int(time.time()) - int(hours * 3600)
         rows = self._execute_read(
-            "SELECT id, ts, rule_name, host, severity, message, acked_ts, acked_by, escalated "
+            "SELECT id, ts, rule_name, host, severity, message, "
+            "acked_ts, acked_by, acked_comment, escalated "
             "FROM alert_fired WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
             (since, limit),
         )
