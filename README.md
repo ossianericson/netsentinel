@@ -352,6 +352,15 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v2.1.6
+**Added**
+- `modules/snmp_poller.py`: Cat2-V4 SNMP interface error metrics — `ifInErrors`/`ifOutErrors` polled per interface; stored in MetricStore and surfaced in SNMP Device Info page
+
+**Fixed**
+- Cat1-D0 startup cache restore — Network Map and topology widget now render from MetricStore cache on startup without requiring a rescan
+- Interactive Network Map blank after scan — Cytoscape.js JS error when master mesh node was referenced as a parent (no separate node exists; master now routes devices to the gateway node)
+- Classic and Interactive topology satellite assignments now match the Devices table — both views prefer pre-computed `d.mesh_unit` attribute set by `_apply_mesh_enrichment()` over an independent `mesh_enrichment` dict lookup
+
 ### v2.1.5
 **Fixed**
 - RULE 10 contradiction with RULE-AH3 resolved; all matplotlib chart backgrounds now use `ui/styles.py` tokens
