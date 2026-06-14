@@ -302,6 +302,111 @@ def _check_pyqt():
         )
 
 
+# ── Post-Dashboard wiring helpers ────────────────────────────────────────────
+
+def _wire_logging(window, passive_observer_worker, snmp_trap_worker, syslog_worker):
+    passive_observer_worker.observation_ready.connect(window._on_passive_observation)
+    snmp_trap_worker.trap_received.connect(window._snmp_trap_page.on_trap_received)
+    snmp_trap_worker.trap_received.connect(window._log_hub_page.on_snmp_trap)
+    snmp_trap_worker.status.connect(window._snmp_trap_page.on_status)
+    snmp_trap_worker.error.connect(window._snmp_trap_page.on_error)
+    syslog_worker.message_received.connect(window._syslog_page.on_message_received)
+    syslog_worker.message_received.connect(window._log_hub_page.on_syslog_message)
+    syslog_worker.status.connect(window._syslog_page.on_status)
+    syslog_worker.error.connect(window._syslog_page.on_error)
+    window._log_hub_page.start_logger_requested.connect(window._log_hub_page.show_network_log)
+
+
+def _wire_notifications(window, alerts, notif_router, maint_manager, report_worker):
+    notif_router.set_toast_callback(window._show_alert_toast)
+    window._notifications_page.set_router(notif_router)
+    window._notifications_page.set_alert_engine(alerts)
+    window._maintenance_page.set_manager(maint_manager)
+    report_worker.report_saved.connect(window._reports_page.on_report_saved)
+    report_worker.error.connect(window._reports_page.on_worker_error)
+    window._reports_page.set_worker(report_worker)
+
+
+def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
+    avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
+    avail_worker.cycle_done.connect(window._inventory_page.on_cycle_done)
+    avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
+    avail_worker.cycle_done.connect(window._home_page.on_cycle_done)
+
+    cert_worker.check_done.connect(window._cert_page.on_check_done)
+    _cert_targets = window._cert_page._load_targets()
+    if _cert_targets:
+        from modules.cert_monitor import CertTarget as _CertTarget
+        cert_worker.set_targets([_CertTarget(host=t["host"], ports=t.get("ports", [443])) for t in _cert_targets])
+    window._cert_page.certs_changed.connect(cert_worker.set_targets)
+
+    svc_worker.check_done.connect(window._service_page.on_check_done)
+    _svc_targets = window._service_page._load_targets()
+    if _svc_targets:
+        from modules.service_monitor import ServiceTarget as _SvcTarget
+        svc_worker.set_targets([_SvcTarget(t["host"], t["port"], t.get("label", "")) for t in _svc_targets])
+    window._service_page.services_changed.connect(svc_worker.set_targets)
+    window._service_page.check_now_requested.connect(svc_worker.check_now)
+
+    def _on_svc_check(results: list) -> None:
+        fired = alerts.evaluate_service_checks(results)
+        for a in fired:
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+        window._overview_page.on_svc_done(results)
+
+    svc_worker.check_done.connect(_on_svc_check)
+
+    def _on_cert_check(results: list) -> None:
+        fired = alerts.evaluate_cert_checks(results)
+        for a in fired:
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+        window._overview_page.on_cert_done(results)
+
+    cert_worker.check_done.connect(_on_cert_check)
+
+    def _on_cycle(result_dict: dict) -> None:
+        fired = alerts.evaluate_cycle(result_dict)
+        for a in fired:
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            window._overview_page.on_alert(a)
+        window._overview_page.on_cycle_done(result_dict)
+
+    avail_worker.cycle_done.connect(_on_cycle)
+
+
+def _wire_cross_page(window):
+    window._threat_intel_page.entries_updated.connect(window._geo_map_page.set_threat_entries)
+    window._hardware_integration_page.plugin_page_added.connect(window._home_page.on_hardware_added)
+    window._home_page._freshness_strip.navigate_to.connect(window._nav_rail_go_to)
+
+
+def _wire_scan_ctas(window):
+    window._network_doc_page.scan_requested.connect(window._start_full_scan)
+    window._history_page.scan_requested.connect(window._start_full_scan)
+    window._uptime_page.scan_requested.connect(window._start_full_scan)
+    window._inventory_page.scan_requested.connect(window._start_full_scan)
+    window._ha_page.scan_requested.connect(window._start_full_scan)
+    window._cert_page.scan_requested.connect(window._start_full_scan)
+    window._service_page.scan_requested.connect(window._start_full_scan)
+    window._speed_test_page.scan_requested.connect(window._start_full_scan)
+    window._lab_mode_page.scan_requested.connect(window._start_full_scan)
+
+    def _on_explore_protocol(proto_key: str) -> None:
+        window._nav_rail_go_to("Protocol Visualizer")
+        window._protocol_viz_page.select_protocol(proto_key)
+
+    window._lab_mode_page.explore_protocol.connect(_on_explore_protocol)
+    window._trigger_page.scan_requested.connect(window._start_full_scan)
+    window._diagnosis_page.scan_requested.connect(window._start_full_scan)
+    window._cve_page.scan_requested.connect(window._start_full_scan)
+    window._geo_map_page.scan_requested.connect(window._start_full_scan)
+    window._timeline_page.scan_requested.connect(window._start_full_scan)
+    window._trend_page.scan_requested.connect(window._start_full_scan)
+
+
 def main():
     # Guard sys.stderr/stdout being None in windowed PyInstaller builds
     if sys.stderr is None:
@@ -588,133 +693,11 @@ def main():
     window = Dashboard(store=store, alert_engine=alerts, notif_router=notif_router,
                        maint_manager=maint_manager)
 
-    # Wire passive observer → enrichment handler
-    passive_observer_worker.observation_ready.connect(window._on_passive_observation)
-
-    # Wire notification router → toast callback + notifications page
-    notif_router.set_toast_callback(window._show_alert_toast)
-    window._notifications_page.set_router(notif_router)
-    window._notifications_page.set_alert_engine(alerts)
-    window._maintenance_page.set_manager(maint_manager)
-
-    # Wire report worker → reports page
-    report_worker.report_saved.connect(window._reports_page.on_report_saved)
-    report_worker.error.connect(window._reports_page.on_worker_error)
-    window._reports_page.set_worker(report_worker)
-
-    # Wire SNMP trap worker → trap page + log hub
-    snmp_trap_worker.trap_received.connect(window._snmp_trap_page.on_trap_received)
-    snmp_trap_worker.trap_received.connect(window._log_hub_page.on_snmp_trap)
-    snmp_trap_worker.status.connect(window._snmp_trap_page.on_status)
-    snmp_trap_worker.error.connect(window._snmp_trap_page.on_error)
-
-    # Wire syslog worker → syslog page + log hub
-    syslog_worker.message_received.connect(window._syslog_page.on_message_received)
-    syslog_worker.message_received.connect(window._log_hub_page.on_syslog_message)
-    syslog_worker.status.connect(window._syslog_page.on_status)
-    syslog_worker.error.connect(window._syslog_page.on_error)
-
-    # Wire worker signal → history + inventory + uptime + home pages
-    avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
-    avail_worker.cycle_done.connect(window._inventory_page.on_cycle_done)
-    avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
-    avail_worker.cycle_done.connect(window._home_page.on_cycle_done)
-
-    # Wire cert worker → cert page; load persisted targets
-    cert_worker.check_done.connect(window._cert_page.on_check_done)
-    _cert_targets = window._cert_page._load_targets()
-    if _cert_targets:
-        from modules.cert_monitor import CertTarget as _CertTarget
-        cert_worker.set_targets([_CertTarget(host=t["host"], ports=t.get("ports", [443])) for t in _cert_targets])
-    window._cert_page.certs_changed.connect(cert_worker.set_targets)
-
-    # Wire service worker → service page + alert engine; load persisted targets
-    svc_worker.check_done.connect(window._service_page.on_check_done)
-    _svc_targets = window._service_page._load_targets()
-    if _svc_targets:
-        from modules.service_monitor import ServiceTarget as _SvcTarget
-        svc_worker.set_targets([_SvcTarget(t["host"], t["port"], t.get("label", "")) for t in _svc_targets])
-    window._service_page.services_changed.connect(svc_worker.set_targets)
-    window._service_page.check_now_requested.connect(svc_worker.check_now)
-
-    def _on_svc_check(results: list) -> None:
-        fired = alerts.evaluate_service_checks(results)
-        for a in fired:
-            window._show_alert_toast(a)
-            window._home_page.on_alert(a)
-        window._overview_page.on_svc_done(results)  # delegates to ServiceStatusTile.update_services
-
-    svc_worker.check_done.connect(_on_svc_check)
-
-    # Wire cert alerts
-    def _on_cert_check(results: list) -> None:
-        fired = alerts.evaluate_cert_checks(results)
-        for a in fired:
-            window._show_alert_toast(a)
-            window._home_page.on_alert(a)
-        window._overview_page.on_cert_done(results)
-
-    cert_worker.check_done.connect(_on_cert_check)
-
-    # Wire availability cycle → alert engine + overview page
-    def _on_cycle(result_dict: dict) -> None:
-        fired = alerts.evaluate_cycle(result_dict)
-        for a in fired:
-            window._show_alert_toast(a)
-            window._home_page.on_alert(a)
-            window._overview_page.on_alert(a)
-        window._overview_page.on_cycle_done(result_dict)  # delegates to DeviceCountTile + RttSummaryTile
-
-    avail_worker.cycle_done.connect(_on_cycle)
-
-    # Wire threat intel page → geo map threat overlay
-    window._threat_intel_page.entries_updated.connect(
-        window._geo_map_page.set_threat_entries
-    )
-
-    # Wire hardware plugin registration → home page getting-started card refresh
-    window._hardware_integration_page.plugin_page_added.connect(
-        window._home_page.on_hardware_added
-    )
-
-    # Wire log hub empty-state CTA → enable Network RTT source
-    window._log_hub_page.start_logger_requested.connect(
-        window._log_hub_page.show_network_log
-    )
-
-    # Wire home page freshness pill navigate_to → dashboard nav
-    window._home_page._freshness_strip.navigate_to.connect(
-        window._nav_rail_go_to
-    )
-
-    # Wire empty-state CTAs → full scan
-    window._network_doc_page.scan_requested.connect(window._start_full_scan)
-    window._history_page.scan_requested.connect(window._start_full_scan)
-    window._uptime_page.scan_requested.connect(window._start_full_scan)
-    window._inventory_page.scan_requested.connect(window._start_full_scan)
-    # E2: wire newly-added scan_requested signals
-    window._ha_page.scan_requested.connect(window._start_full_scan)
-    window._cert_page.scan_requested.connect(window._start_full_scan)
-    window._service_page.scan_requested.connect(window._start_full_scan)
-    window._speed_test_page.scan_requested.connect(window._start_full_scan)
-    window._lab_mode_page.scan_requested.connect(window._start_full_scan)
-
-    def _on_explore_protocol(proto_key: str) -> None:
-        window._nav_rail_go_to("Protocol Visualizer")
-        window._protocol_viz_page.select_protocol(proto_key)
-
-    window._lab_mode_page.explore_protocol.connect(_on_explore_protocol)
-    window._trigger_page.scan_requested.connect(window._start_full_scan)
-    window._diagnosis_page.scan_requested.connect(window._start_full_scan)
-    window._cve_page.scan_requested.connect(window._start_full_scan)
-    # H6: wire empty-state CTAs added in Sprint H6
-    window._geo_map_page.scan_requested.connect(window._start_full_scan)
-    window._timeline_page.scan_requested.connect(window._start_full_scan)
-    window._trend_page.scan_requested.connect(window._start_full_scan)
-    # S-H: self-contained pages — CTAs wire internally; no _start_full_scan needed
-    #   connections_page._refresh(), dns_zone_page._run_mdns(),
-    #   baseline_page._take_snapshot(), threat_intel_page._run_refresh(),
-    #   live_bandwidth_page._start_worker()
+    _wire_logging(window, passive_observer_worker, snmp_trap_worker, syslog_worker)
+    _wire_notifications(window, alerts, notif_router, maint_manager, report_worker)
+    _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts)
+    _wire_cross_page(window)
+    _wire_scan_ctas(window)
 
     # ── Show window / close splash ────────────────────────────────────────────
     if not _start_minimised:

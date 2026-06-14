@@ -347,7 +347,7 @@ class AppHeaderMixin:
                 and self._tray_manager.is_available()
                 and getattr(self, "_minimize_to_tray", False)):
             from PyQt6.QtCore import QTimer
-            QTimer.singleShot(0, self._tray_manager._hide_window)
+            _t = QTimer(self); _t.setSingleShot(True); _t.timeout.connect(self._tray_manager._hide_window); _t.start(0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

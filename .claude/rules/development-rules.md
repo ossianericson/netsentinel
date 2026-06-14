@@ -161,17 +161,20 @@ Status columns use coloured `●` labels. Never use text-only status.
 
 Use `self._nav_add_rail_item(label, widget)` (or with `admin_required`/`audit_item` kwargs) inside `_build_pro_nav()` after the correct `_nav_begin_section()` call. Do not call `_nav_add_page()` — that method is legacy dead code.
 
-### RULE 10: matplotlib charts follow the light theme
+### RULE 10: matplotlib charts use theme constants — no raw hex
+Charts must use style constants from `ui/styles.py`, not raw hex literals (RULE-AH3).
 ```python
-fig = Figure(facecolor="#FFFFFF")
+from ui.styles import CHART_BG, CHART_PLOT_BG, CHART_GRID, BORDER, TEXT_SECONDARY
+
+fig = Figure(facecolor=CHART_BG)
 ax = fig.add_subplot(111)
-ax.set_facecolor("#FAFBFC")
+ax.set_facecolor(CHART_PLOT_BG)
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
-ax.spines["bottom"].set_color("#D4D4D4")
-ax.spines["left"].set_color("#D4D4D4")
-ax.tick_params(colors="#5A6A7A", labelsize=9)
-ax.grid(True, color="#E8EDF2", linewidth=0.8, linestyle="-")
+ax.spines["bottom"].set_color(BORDER)
+ax.spines["left"].set_color(BORDER)
+ax.tick_params(colors=TEXT_SECONDARY, labelsize=9)
+ax.grid(True, color=CHART_GRID, linewidth=0.8, linestyle="-")
 ```
 
 ### RULE 11: Version bump checklist

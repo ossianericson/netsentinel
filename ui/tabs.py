@@ -258,6 +258,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         from ui.pages.geo_map_page import GeoMapPage
         self._geo_map_page = GeoMapPage(store=self._store, parent=None)
         self._geo_map_page.navigate_requested.connect(self._nav_rail_go_to)
+        self._wan_ip_ready.connect(self._geo_map_page.set_home_ip)
+        self._wan_ip_nav_req.connect(self._on_wan_ip_nav)
 
         from ui.pages.trigger_builder_page import TriggerBuilderPage
         self._trigger_page = TriggerBuilderPage(store=self._store, parent=None)

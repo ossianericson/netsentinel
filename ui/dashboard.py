@@ -103,6 +103,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                _NavBuilderMixin, _MonitorStateMixin, _PluginPageMixin, QMainWindow):
     _update_available         = pyqtSignal(str)
     global_time_range_changed = pyqtSignal(float)  # hours: float
+    _wan_ip_ready             = pyqtSignal(str)        # WAN IP fetched → geo map set_home_ip (thread-safe)
+    _wan_ip_nav_req           = pyqtSignal(str, str)   # WAN IP + label → set_home_ip + navigate_to_ip
 
     def __init__(self, store=None, alert_engine=None, notif_router=None, maint_manager=None):
         super().__init__()
@@ -191,7 +193,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._digest_timer.setInterval(3_600_000)  # 1 hour
         self._digest_timer.timeout.connect(self._check_weekly_digest)
         self._digest_timer.start()
-        QTimer.singleShot(5000, self._check_weekly_digest)
+        _t = QTimer(self); _t.setSingleShot(True); _t.timeout.connect(self._check_weekly_digest); _t.start(5000)
 
         # HEALTH-2: offline/no-LAN detection — 3 consecutive failures show amber banner
         self._lan_fail_count: int = 0
@@ -200,14 +202,14 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._lan_check_timer.setInterval(30_000)   # 30 s
         self._lan_check_timer.timeout.connect(self._check_lan_connectivity)
         self._lan_check_timer.start()
-        QTimer.singleShot(8000, self._check_lan_connectivity)
+        _t = QTimer(self); _t.setSingleShot(True); _t.timeout.connect(self._check_lan_connectivity); _t.start(8000)
 
         # SCHED-1: scheduled full scan — 60s polling timer checks if next_ts has passed
         self._sched_scan_timer = QTimer()
         self._sched_scan_timer.setInterval(60_000)  # check every minute
         self._sched_scan_timer.timeout.connect(self._check_scheduled_scan)
         self._sched_scan_timer.start()
-        QTimer.singleShot(10_000, self._check_scheduled_scan)
+        _t = QTimer(self); _t.setSingleShot(True); _t.timeout.connect(self._check_scheduled_scan); _t.start(10_000)
 
         # System tray guardian
         self._tray_quit = False   # set True when quitting via tray menu
@@ -1665,8 +1667,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 ip, _ = _get_wan_ip()
                 if ip:
                     self._wan_ip = ip
-                    from PyQt6.QtCore import QTimer
-                    QTimer.singleShot(0, lambda: self._geo_map_page.set_home_ip(ip))
+                    self._wan_ip_ready.emit(ip)  # thread-safe signal → main thread set_home_ip
             except Exception:
                 pass  # non-fatal
 
@@ -1707,13 +1708,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                         wan, _ = _get_wan_ip()
                         if wan:
                             self._wan_ip = wan
-                            from PyQt6.QtCore import QTimer
-                            QTimer.singleShot(0, lambda: (
-                                self._geo_map_page.set_home_ip(wan),
-                                self._geo_map_page.navigate_to_ip(
-                                    wan, label=f"Your Network  (local: {ip})"
-                                ),
-                            ))
+                            # thread-safe signal → main thread set_home_ip + navigate_to_ip
+                            self._wan_ip_nav_req.emit(wan, f"Your Network  (local: {ip})")
                     except Exception:
                         pass  # geolocation update is best-effort; WAN IP probe may fail
                 threading.Thread(target=_do_and_update, daemon=True).start()
@@ -1722,6 +1718,15 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 self._geo_map_page.navigate_to_ip(ip, label="Threat Intel")
             except Exception:
                 pass  # geo_map_page may not be initialised at this call site
+
+    @pyqtSlot(str, str)
+    def _on_wan_ip_nav(self, wan: str, label: str) -> None:
+        """Slot for _wan_ip_nav_req signal — called on main thread from background WAN IP fetch."""
+        try:
+            self._geo_map_page.set_home_ip(wan)
+            self._geo_map_page.navigate_to_ip(wan, label=label)
+        except Exception:
+            pass  # geo_map_page may not be initialised at this call site
 
 
     def _check_scheduled_scan(self) -> None:

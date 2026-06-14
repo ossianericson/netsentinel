@@ -103,7 +103,7 @@ def _load_password() -> str:
         if pw:
             return pw
     except Exception:
-        pass
+        pass  # keyring backend unavailable or OS error — caller's RuntimeError below explains the fix
     raise RuntimeError(
         f"No password saved for {_ip}. "
         "Enter and save the password in the Hardware Integration page."
