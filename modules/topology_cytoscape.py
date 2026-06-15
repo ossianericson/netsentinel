@@ -680,12 +680,3 @@ def _build_style() -> list:
         },
     ]
 
-
-# ── Re-exports from topology_cytoscape_html ───────────────────────────────────
-# HTML/JS page builder split to a separate module (RULE-AH1 LOC budget).
-# Callers that import build_cytoscape_html or build_elements_for_update from
-# this module continue to work without change.
-from modules.topology_cytoscape_html import (  # noqa: F401, E402
-    build_cytoscape_html,
-    build_elements_for_update,
-)

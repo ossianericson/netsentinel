@@ -10,7 +10,7 @@ import json
 
 def test_import():
     """Module imports without error."""
-    import modules.topology_cytoscape_html as m  # noqa: F401
+    from modules import topology_cytoscape_html as m  # noqa: F401
 
 
 def test_build_cytoscape_html_returns_html():

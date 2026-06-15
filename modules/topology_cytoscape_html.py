@@ -10,8 +10,6 @@ Exports:
 
 Architecture rules:
   • Pure Python — no PyQt imports.
-  • Imports build_cytoscape_elements lazily inside functions to avoid a
-    circular import (topology_cytoscape re-exports these names at module level).
 """
 from __future__ import annotations
 
@@ -19,6 +17,8 @@ import json
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from modules.topology_cytoscape import build_cytoscape_elements
 
 # Mirror of topology_cytoscape._CANVAS_W/_CANVAS_H — reference pixel dimensions
 # used in JS template placeholder substitution. Keep in sync if ever changed.
@@ -452,11 +452,6 @@ def build_cytoscape_html(
     The HTML embeds Cytoscape.js (from the local bundle when available),
     a QWebChannel bridge, and all interaction logic.
     """
-    # Lazy import avoids circular dependency:
-    # topology_cytoscape re-exports these names → importing at module level
-    # would create a circular import chain.
-    from modules.topology_cytoscape import build_cytoscape_elements  # noqa: PLC0415
-
     result = build_cytoscape_elements(
         devices=devices,
         edges=edges,
@@ -513,9 +508,6 @@ def build_elements_for_update(
     node positions (including user drag arrangements) are fully preserved.
     New nodes are positioned by the JS _smartPos() function at runtime.
     """
-    # Lazy import avoids circular dependency (see build_cytoscape_html above).
-    from modules.topology_cytoscape import build_cytoscape_elements  # noqa: PLC0415
-
     result = build_cytoscape_elements(
         devices=devices,
         edges=edges,

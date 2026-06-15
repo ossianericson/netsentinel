@@ -111,7 +111,7 @@ def test_cytoscape_elements_traffic_overlay():
 
 
 def test_cytoscape_html_accepts_bw_by_mac():
-    from modules.topology_cytoscape import build_cytoscape_html
+    from modules.topology_cytoscape_html import build_cytoscape_html
 
     devices = [{"ip": "10.0.0.1", "mac": "de:ad:be:ef:00:01",
                 "hostname": "host1", "risk_level": "LOW", "vendor": ""}]

@@ -171,13 +171,13 @@ class TestBuildCytoscapeElements:
 class TestBuildCytoscapeHtml:
 
     def test_returns_html_string(self):
-        from modules.topology_cytoscape import build_cytoscape_html
+        from modules.topology_cytoscape_html import build_cytoscape_html
         html = build_cytoscape_html(devices=[], gateway_ip="192.168.1.1")
         assert isinstance(html, str)
         assert "<!DOCTYPE html>" in html
 
     def test_elements_json_embedded(self):
-        from modules.topology_cytoscape import build_cytoscape_html
+        from modules.topology_cytoscape_html import build_cytoscape_html
         html = build_cytoscape_html(
             devices=[_make_device("192.168.1.10")],
             gateway_ip="192.168.1.1",
@@ -185,17 +185,17 @@ class TestBuildCytoscapeHtml:
         assert "192.168.1.1" in html
 
     def test_cytoscape_init_present(self):
-        from modules.topology_cytoscape import build_cytoscape_html
+        from modules.topology_cytoscape_html import build_cytoscape_html
         html = build_cytoscape_html(devices=[], gateway_ip="192.168.1.1")
         assert "cytoscape(" in html
 
     def test_qwebchannel_script_included(self):
-        from modules.topology_cytoscape import build_cytoscape_html
+        from modules.topology_cytoscape_html import build_cytoscape_html
         html = build_cytoscape_html(devices=[], gateway_ip="192.168.1.1")
         assert "qwebchannel" in html.lower()
 
     def test_position_preset_layout_when_positions_given(self):
-        from modules.topology_cytoscape import build_cytoscape_html
+        from modules.topology_cytoscape_html import build_cytoscape_html
         from modules.topology_layout import NodePosition
         pos = {"192.168.1.1": NodePosition("192.168.1.1", 0.5, 0.5)}
         html = build_cytoscape_html(
@@ -204,7 +204,7 @@ class TestBuildCytoscapeHtml:
         assert '"preset"' in html
 
     def test_no_positions_uses_default_layout(self):
-        from modules.topology_cytoscape import build_cytoscape_html
+        from modules.topology_cytoscape_html import build_cytoscape_html
         html = build_cytoscape_html(
             devices=[], gateway_ip="192.168.1.1",
             positions=None, initial_layout="concentric",
@@ -212,7 +212,7 @@ class TestBuildCytoscapeHtml:
         assert '"concentric"' in html
 
     def test_bridge_functions_present(self):
-        from modules.topology_cytoscape import build_cytoscape_html
+        from modules.topology_cytoscape_html import build_cytoscape_html
         html = build_cytoscape_html(devices=[], gateway_ip="192.168.1.1")
         for fn in ("nodeClicked", "savePosition", "setLayout", "fitView", "toggleFocus"):
             assert fn in html

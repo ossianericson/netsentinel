@@ -47,8 +47,8 @@ from ui.topology_widget import TopologyWidget
 from modules.topology_layout import (
     NodePosition, TopologyEdge, clear_layout, compute_scan_id, load_layout, save_layout,
 )
-from modules.topology_cytoscape import (
-    LAYOUT_NAMES,
+from modules.topology_cytoscape import LAYOUT_NAMES
+from modules.topology_cytoscape_html import (
     build_cytoscape_html,
     build_elements_for_update,
 )
