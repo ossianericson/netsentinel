@@ -1067,10 +1067,12 @@ class ScanResultMixin(ScanEnrichmentMixin):
         """Pre-populate Devices table and Network Map from last-known MetricStore data.
 
         Called once at startup before any live scan.  Risk levels are omitted
-        (shown as "—") because they are point-in-time and stale.  A status label
-        tells the user when the data was last refreshed.  A live scan always
-        replaces this view via the normal _on_m1_result() path.
+        (shown as "—") because they are point-in-time and stale.  Each device
+        carries a display_state key (pinned / cached / stale) so the Inventory
+        page can show appropriate freshness indicators without waiting for a scan.
+        A live scan always replaces this view via the normal _on_m1_result() path.
         """
+        import time as _time
         _store_ref = getattr(self, "_store", None)
         if _store_ref is None:
             return
@@ -1079,23 +1081,50 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except Exception:
             return  # non-fatal — store may not be initialised yet
 
-        devices = [
-            {
-                "ip":          kd.ip or "?",
-                "hostname":    kd.custom_name or kd.hostname or "",
-                "mac":         kd.mac or "?",
-                "vendor":      kd.vendor or "Unknown",
-                "risk_level":  "UNKNOWN",
-                "device_type": kd.device_type or "Unknown Device",
-                "verdict":     "",
-            }
-            for kd in known.values()
-            if kd.ip and kd.ip not in ("?", "0.0.0.0", "")
-        ]
-        if not devices:
+        now = int(_time.time())
+        _24h = 86_400
+        _7d  = 7 * _24h
+
+        # Determine display_state and sort priority for each known device.
+        # Include: pinned devices always; others if seen within 7 days.
+        raw_devices = []
+        for kd in known.values():
+            if not kd.ip or kd.ip in ("?", "0.0.0.0", ""):
+                continue
+            age_s = now - int(kd.last_seen or 0)
+            if kd.is_pinned:
+                state = "pinned"
+                priority = 0
+            elif age_s <= _24h:
+                state = "cached"
+                priority = 1
+            elif age_s <= _7d:
+                state = "stale"
+                priority = 2
+            else:
+                continue  # older than 7 days and not pinned — skip
+            raw_devices.append((priority, kd.ip, {
+                "ip":            kd.ip or "?",
+                "hostname":      kd.custom_name or kd.hostname or "",
+                "mac":           kd.mac or "?",
+                "vendor":        kd.vendor or "Unknown",
+                "risk_level":    "UNKNOWN",
+                "device_type":   kd.device_type or "Unknown Device",
+                "verdict":       "",
+                "display_state": state,
+                "last_seen_ts":  int(kd.last_seen or 0),
+                "inferred_role": kd.inferred_role,
+                "scan_count":    kd.scan_count,
+                "ip_stability":  kd.ip_stability,
+                "is_pinned":     kd.is_pinned,
+            }))
+
+        if not raw_devices:
             return  # first-ever launch — leave empty state in place
 
-        devices.sort(key=lambda d: d["ip"])
+        # Sort: pinned first, then cached, then stale; IP within each group
+        raw_devices.sort(key=lambda t: (t[0], t[1]))
+        devices = [t[2] for t in raw_devices]
 
         # Populate the Devices table (Risk column shows "—", not a stale level)
         self._m1_table.setRowCount(0)
@@ -1111,10 +1140,21 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if hasattr(self, "_m1_stack"):
             self._m1_stack.setCurrentIndex(1)
 
-        # Stale status label
+        # Status label shows both freshness and device count
         _age = self._cached_scan_age_str(_store_ref)
+        pinned_n = sum(1 for d in devices if d["display_state"] == "pinned")
+        cached_n = sum(1 for d in devices if d["display_state"] == "cached")
+        stale_n  = sum(1 for d in devices if d["display_state"] == "stale")
+        _parts = []
+        if pinned_n:
+            _parts.append(f"{pinned_n} pinned")
+        if cached_n:
+            _parts.append(f"{cached_n} recent")
+        if stale_n:
+            _parts.append(f"{stale_n} stale")
+        _summary = "  ·  ".join(_parts) if _parts else f"{len(devices)} devices"
         self._m1_status.setText(
-            f"Cached — last scanned {_age}  ·  Run Scan to refresh"
+            f"Cached — last scanned {_age}  ·  {_summary}  ·  Run Scan to refresh"
         )
         self._m1_status.setStyleSheet(
             f"color:{TEXT_MUTED};font-size:11px;padding:2px 0;"
@@ -1128,7 +1168,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             "high_risk_count": 0,
         }
 
-        # Feed Inventory page with cached device list
+        # Feed Inventory page with cached device list (display_state included)
         if hasattr(self, "_inventory_page"):
             try:
                 self._inventory_page.set_scan_devices(devices)

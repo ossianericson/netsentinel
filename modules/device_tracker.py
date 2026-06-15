@@ -19,6 +19,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from modules.device_stability import update_stability_for_device as _update_stability
 from modules.metric_store import MetricStore
 from modules.service_mapper import get_services as _get_services
 
@@ -135,6 +136,13 @@ class DeviceTracker:
                 services=services_json,
             )
 
+            # Record this IP observation in device_ip_history (feeds stability scoring)
+            if td.ip:
+                try:
+                    record_ip_observation(td.mac, td.ip, self._store)
+                except Exception:
+                    pass  # non-fatal — history table may not exist on first run
+
             if is_new:
                 self._store.record_device_event(
                     ip=td.ip or td.mac,
@@ -155,6 +163,33 @@ class DeviceTracker:
                 except Exception:
                     pass  # non-fatal — audit table may not exist on schema upgrade
                 result.new_devices.append(td)
+
+        # ── Stability scoring ─────────────────────────────────────────────────
+        # Recompute ip_stability, scan_count, and inferred_role for every device
+        # seen in this scan.  Done after the upsert loop so ip_history is up to date.
+        # Build mac→td map once to avoid O(n²) re-normalisation.
+        _seen_td: Dict[str, TrackedDevice] = {}
+        for raw in devices:
+            _td = _normalise(raw)
+            if _td is not None:
+                _seen_td[_td.mac] = _td
+
+        # One DB read for all custom_names (avoid N queries inside the loop)
+        _fresh_known = self._store.get_known_devices()
+
+        for mac, td_ref in _seen_td.items():
+            _kd = _fresh_known.get(mac)
+            _custom = _kd.custom_name if _kd else None
+            try:
+                _update_stability(
+                    mac=mac,
+                    ip=td_ref.ip or None,
+                    device_type=td_ref.device_type or None,
+                    custom_name=_custom,
+                    store=self._store,
+                )
+            except Exception:
+                pass  # non-fatal — stability columns may not exist on old schema
 
         # ── Gone detection ────────────────────────────────────────────────────
         if self._gone_threshold_s > 0:

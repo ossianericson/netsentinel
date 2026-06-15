@@ -155,7 +155,11 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             "SELECT mac, ip, hostname, vendor, device_type, "
             "first_seen, last_seen, is_authorized, "
             "custom_name, room, category, notes, is_pinned, tags, "
-            "services, mac_randomized, confidence FROM known_device",
+            "services, mac_randomized, confidence, "
+            "COALESCE(scan_count, 0) AS scan_count, "
+            "COALESCE(ip_stability, 0.0) AS ip_stability, "
+            "inferred_role "
+            "FROM known_device",
             (),
         )
         return {
@@ -171,6 +175,9 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
                 services=r["services"],
                 mac_randomized=bool(r["mac_randomized"]),
                 confidence=float(r["confidence"] or 0.0),
+                scan_count=int(r["scan_count"] or 0),
+                ip_stability=float(r["ip_stability"] or 0.0),
+                inferred_role=r["inferred_role"],
             )
             for r in rows
         }

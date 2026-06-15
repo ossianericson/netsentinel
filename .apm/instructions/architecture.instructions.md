@@ -50,6 +50,7 @@ netsentinel/
 │   ├── cve_lookup.py
 │   ├── deco_client.py          # TP-Link Deco XE75 mesh router API client
 │   ├── device_classifier.py    # OUI → device type + risk score
+│   ├── device_stability.py     # IP stability scoring + role inference engine (persistent device map)
 │   ├── device_tracker.py
 │   ├── dhcp_detector.py
 │   ├── dhcp_fingerprint.py     # DHCP option 60 (VCI) + option 12 fingerprinting — OS/device type from DHCP traffic (Sprint 3)

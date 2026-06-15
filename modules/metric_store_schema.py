@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 15
+_SCHEMA_VERSION = 16
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -73,7 +73,11 @@ CREATE TABLE IF NOT EXISTS known_device (
     room         TEXT,
     category     TEXT    NOT NULL DEFAULT 'unknown',
     notes        TEXT,
-    is_pinned    INTEGER NOT NULL DEFAULT 0
+    is_pinned    INTEGER NOT NULL DEFAULT 0,
+    -- Persistent device map fields (schema v16)
+    scan_count    INTEGER NOT NULL DEFAULT 0,
+    ip_stability  REAL    NOT NULL DEFAULT 0.0,
+    inferred_role TEXT
 );
 
 -- Home Automation detected protocol signatures (schema v6)
@@ -329,6 +333,10 @@ _MIGRATIONS = [
     "ALTER TABLE known_device ADD COLUMN confidence REAL NOT NULL DEFAULT 0.0",
     # schema v15 — ack comment for per-alert acknowledgement with owner+note
     "ALTER TABLE alert_fired ADD COLUMN acked_comment TEXT",
+    # schema v16 — persistent device map: stability scoring + role inference
+    "ALTER TABLE known_device ADD COLUMN scan_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE known_device ADD COLUMN ip_stability REAL NOT NULL DEFAULT 0.0",
+    "ALTER TABLE known_device ADD COLUMN inferred_role TEXT",
 ]
 
 
@@ -475,6 +483,9 @@ class KnownDevice:
     services: Optional[str] = None      # JSON array of service names
     mac_randomized: bool = False
     confidence: float = 0.0
+    scan_count: int = 0
+    ip_stability: float = 0.0
+    inferred_role: Optional[str] = None
 
 
 @dataclass

@@ -1831,10 +1831,36 @@ class InventoryPage(QWidget):
             row = self._snap_table.rowCount()
             self._snap_table.insertRow(row)
 
-            # Col 0: status dot
-            status_color = _RISK_COLOR.get(level, TEXT_MUTED)
-            dot_item = QTableWidgetItem("●")
-            dot_item.setForeground(QColor(status_color))
+            # Col 0: status dot — reflects live/cached/stale/pinned freshness
+            _display_state = (d.get("display_state", "") if isinstance(d, dict)
+                              else getattr(d, "display_state", "")) or ""
+            _last_seen_ts  = (d.get("last_seen_ts", 0) if isinstance(d, dict)
+                              else getattr(d, "last_seen_ts", 0)) or 0
+            if _display_state == "pinned":
+                dot_char  = "⬡"
+                dot_color = ACCENT
+                dot_tip   = "Pinned — always shown"
+            elif _display_state in ("cached", "stale"):
+                _ago = _time.time() - _last_seen_ts if _last_seen_ts else 0
+                if _display_state == "cached":
+                    dot_char  = "◌"
+                    dot_color = AMBER
+                    _h = int(_ago // 3600)
+                    _m = int((_ago % 3600) // 60)
+                    dot_tip = f"Cached — last seen {_h}h {_m}m ago"
+                else:
+                    dot_char  = "○"
+                    dot_color = TEXT_MUTED
+                    _days = int(_ago // 86400)
+                    dot_tip = f"Stale — last seen {_days}d ago"
+            else:
+                # Live scan result — use risk colour
+                dot_char  = "●"
+                dot_color = _RISK_COLOR.get(level, TEXT_MUTED)
+                dot_tip   = f"Online  ·  Risk: {level}"
+            dot_item = QTableWidgetItem(dot_char)
+            dot_item.setForeground(QColor(dot_color))
+            dot_item.setToolTip(dot_tip)
             dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             self._snap_table.setItem(row, 0, dot_item)
 

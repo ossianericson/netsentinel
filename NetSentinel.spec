@@ -105,6 +105,7 @@ hiddenimports: list = [
     "modules.cve_lookup",
     "modules.deco_client",
     "modules.device_classifier",
+    "modules.device_stability",
     "modules.device_tracker",
     "modules.dhcp_detector",
     "modules.dhcp_fingerprint",
