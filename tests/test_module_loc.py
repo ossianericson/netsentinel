@@ -27,7 +27,8 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # Grew by ~8 lines after adding cta_page/cta_filter fields to AlertFired dataclass
     # and _RULE_CTA / _cta_for_rule() helper for cross-page navigation from alerts.
     # Natural split: move AlertFired dataclass + _RULE_CTA to alert_suppressor.py (S20-4 split).
-    "alert_engine.py": 620,
+    # S1-4: plain-English message rewrites added ~2 lines per alert type (+22 total).
+    "alert_engine.py": 625,
 
     # Cytoscape.js element builder (686 lines after HTML/JS page builder split).
     # HTML/JS template + build_cytoscape_html + build_elements_for_update moved to
@@ -224,7 +225,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, pulse bar, overall verdict.
     # Also contains RiskBadge, VerdictPanel, _color_for_level, _bg_for_level.
     # Extracted from dashboard.py (Sprint 19).
-    "monitor_state.py": 720,  # collapsible VerdictPanel +23 lines (was 680)
+    "monitor_state.py": 722,  # S1-5: inline risk_to_label import in _update_verdict_badge (+2 lines)
 
     # _PluginPageMixin — plugin page lifecycle, HW auto-detect, integration banner, scan launch.
     # Extracted from dashboard.py (Sprint 19).

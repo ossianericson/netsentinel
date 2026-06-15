@@ -319,7 +319,7 @@ class DiagnosisPage(QWidget):
         root.addWidget(back_btn)
 
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("What's Wrong?"))
+        root.addWidget(PageHeaderBar("What's Wrong?", subtitle="Diagnose your network problem in plain English — pick a symptom to begin."))
 
         self._stack = QStackedWidget()
         self._stack.addWidget(self._build_idle())    # 0

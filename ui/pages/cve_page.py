@@ -254,7 +254,7 @@ class CvePage(QWidget):
 
         # Page title (always visible)
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("CVE Lifecycle Tracker"))
+        root.addWidget(PageHeaderBar("CVE Lifecycle Tracker", subtitle="Tracks known security vulnerabilities found on devices in your network."))
 
         # Content stack: page 0 = empty state, page 1 = full content
         self._content_stack = QStackedWidget()

@@ -114,7 +114,7 @@ class LiveBandwidthPage(QWidget):
 
         # Header
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Live Bandwidth"))
+        root.addWidget(PageHeaderBar("Live Bandwidth", subtitle="Shows data transfer speeds for each network interface in real time."))
 
         # KPI row
         kpi_row = QHBoxLayout()

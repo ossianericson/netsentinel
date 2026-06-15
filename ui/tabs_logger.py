@@ -98,6 +98,7 @@ class _LoggerTabMixin:
         ping_row.setSpacing(6)
         ping_lbl = QLabel("Ping RTT")
         ping_lbl.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px; font-weight:600;")
+        ping_lbl.setToolTip("RTT — Round-Trip Time: how long a packet takes to travel to a host and back, measured in milliseconds.")
         int_lbl = QLabel("Interval:")
         int_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:11px;")
         self._log_interval = _spin(5, 3600, _qs.value("logger/interval_s", 60, type=int), " s", 72)
@@ -363,6 +364,10 @@ class _LoggerTabMixin:
         self._log_live_table.setColumnWidth(4, 70)
         self._log_live_table.setColumnWidth(5, 50)
         self._log_live_table.setColumnWidth(6, 180)
+        _llt_hdr = self._log_live_table.horizontalHeader()
+        _llt_hdr.model().setHeaderData(2, Qt.Orientation.Horizontal, "Round-Trip Time — how long a ping takes (lower is better).", Qt.ItemDataRole.ToolTipRole)
+        _llt_hdr.model().setHeaderData(3, Qt.Orientation.Horizontal, "Jitter — variation in latency; high jitter causes choppy audio/video calls.", Qt.ItemDataRole.ToolTipRole)
+        _llt_hdr.model().setHeaderData(6, Qt.Orientation.Horizontal, "ARP Event — changes to the hardware-address table; a new entry may indicate an unknown device.", Qt.ItemDataRole.ToolTipRole)
         lay.addWidget(self._log_live_table, 1)
 
         return w

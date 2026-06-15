@@ -220,7 +220,8 @@ class ScanEnrichmentMixin:
                 "HIGH" if is_rogue else "CLEAN",
             )
 
-        self._m3_status.setText(f"✓  Storm level: {level} ({bps:.1f} bcast/s)")
+        from ui.tabs_helpers import risk_to_label as _r2l
+        self._m3_status.setText(f"✓  Storm level: {_r2l(level)} ({bps:.1f} bcast/s)")
         self._update_overall_verdict()
         if hasattr(self, "_monitor_overview_page"):
             self._monitor_overview_page.set_storm_status(level)

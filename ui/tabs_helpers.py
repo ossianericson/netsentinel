@@ -20,16 +20,16 @@ from ui.styles import (
 
 
 _RISK_LABELS: dict[str, str] = {
-    "HIGH":     "Critical",
-    "STORM":    "Critical",
-    "CRITICAL": "Critical",
-    "MEDIUM":   "High",
-    "WARNING":  "Warning",
-    "LOW":      "Info",
-    "CLEAN":    "Clear",
-    "NONE":     "Clear",
-    "INFO":     "Info",
-    "UNKNOWN":  "Unknown",
+    "HIGH":     "Action required",
+    "STORM":    "Critical — act now",
+    "CRITICAL": "Action required",
+    "MEDIUM":   "Needs attention",
+    "WARNING":  "Needs attention",
+    "LOW":      "Minor notice",
+    "CLEAN":    "All clear",
+    "NONE":     "All clear",
+    "INFO":     "Minor notice",
+    "UNKNOWN":  "Not assessed",
 }
 
 

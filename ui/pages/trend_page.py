@@ -183,7 +183,7 @@ class TrendPage(QWidget):
         outer.setSpacing(10)
 
         from ui.widgets.page_header import PageHeaderBar
-        outer.addWidget(PageHeaderBar("Predictive Trend Alerting"))
+        outer.addWidget(PageHeaderBar("Predictive Trend Alerting", subtitle="Forecasts when your network metrics will cross alert thresholds based on recent trends."))
 
         # KPI row
         kpi_row = QHBoxLayout()

@@ -69,8 +69,28 @@
       "definition": "The percentage of packets sent that never arrive at the destination; anything above 1% causes noticeable degradation in real-time applications like video calls."
     },
     {
+      "term": "AXFR",
+      "definition": "DNS Zone Transfer — a request that asks a DNS server to send its entire database of records for a domain. Misconfigured servers that allow public AXFR expose all internal hostnames."
+    },
+    {
+      "term": "CIDR",
+      "definition": "Classless Inter-Domain Routing — a compact way to describe a block of IP addresses, like 192.168.1.0/24 (which means all 256 addresses from .0 to .255). The /24 is the prefix length."
+    },
+    {
+      "term": "CVE",
+      "definition": "Common Vulnerabilities and Exposures — a numbered catalogue of publicly disclosed security flaws. CVE-2023-12345 is a unique ID for one specific vulnerability in one specific product."
+    },
+    {
       "term": "QoS",
       "definition": "Quality of Service — router settings that prioritise certain types of traffic (e.g. video calls over file downloads) to maintain performance during congestion."
+    },
+    {
+      "term": "RTT",
+      "definition": "Round-Trip Time — the time in milliseconds for a packet to travel from your device to a destination and back. Under 20 ms is excellent; over 200 ms is noticeable on video calls."
+    },
+    {
+      "term": "TTL",
+      "definition": "Time to Live — a counter on every network packet that decrements at each router hop. When it reaches zero the packet is dropped. Also used in DNS to control how long a record is cached."
     },
     {
       "term": "RFC 1918",

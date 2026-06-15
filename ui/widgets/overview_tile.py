@@ -624,6 +624,7 @@ class RttSummaryTile(_BaseTile):
         )
         rtt_sub = QLabel("Avg RTT")
         rtt_sub.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; border:none;")
+        rtt_sub.setToolTip("RTT — Round-Trip Time: how long a ping takes to travel to a host and back, in milliseconds. Under 20 ms is excellent.")
         rtt_col.addWidget(self._rtt_lbl)
         rtt_col.addWidget(rtt_sub)
 

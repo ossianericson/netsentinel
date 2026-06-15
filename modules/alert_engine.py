@@ -309,11 +309,12 @@ class AlertEngine:
             if rule.rule_type == "NEW_DEVICE":
                 for dev in getattr(tracker_result, "new_devices", []):
                     host = dev.ip or dev.mac
+                    label = dev.hostname or dev.vendor or "Unknown device"
                     alert = self._fire_if_cooled(
                         rule, host, now,
                         message=(
-                            f"New device on network: {dev.vendor or 'Unknown'} "
-                            f"{dev.hostname or ''} [{dev.mac}]"
+                            f"New device joined your network: {label} [{dev.mac}]"
+                            f"{' at ' + dev.ip if dev.ip else ''} — was this expected?"
                         ),
                         severity="WARNING",
                         value=None,
@@ -326,11 +327,12 @@ class AlertEngine:
             elif rule.rule_type == "DEVICE_GONE":
                 for dev in getattr(tracker_result, "gone_devices", []):
                     host = dev.ip or dev.mac
+                    label = dev.hostname or dev.vendor or "Unknown device"
                     alert = self._fire_if_cooled(
                         rule, host, now,
                         message=(
-                            f"Device disappeared: {dev.vendor or 'Unknown'} "
-                            f"{dev.hostname or ''} [{dev.mac}]"
+                            f"{label} [{dev.mac}] has left your network"
+                            f"{' (was at ' + dev.ip + ')' if dev.ip else ''}."
                         ),
                         severity="WARNING",
                         value=None,
@@ -370,7 +372,10 @@ class AlertEngine:
 
                 alert = self._fire_if_cooled(
                     rule, key, now,
-                    message=f"Service DOWN: {label} ({host}:{port})",
+                    message=(
+                        f"{label} is not responding on {host} (port {port}) — "
+                        f"the service may be offline or blocked by a firewall."
+                    ),
                     severity="CRITICAL",
                     value=None,
                 )
@@ -414,7 +419,10 @@ class AlertEngine:
                 if rule.rule_type == "CERT_EXPIRED" and is_expired:
                     alert = self._fire_if_cooled(
                         rule, target_key, now,
-                        message=f"TLS certificate EXPIRED on {host}:{port}",
+                        message=(
+                            f"Security certificate expired on {host}:{port} — "
+                            f"connections may show security warnings. Renew it now."
+                        ),
                         severity="CRITICAL",
                         value=float(days) if days is not None else None,
                     )
@@ -428,9 +436,9 @@ class AlertEngine:
                         alert = self._fire_if_cooled(
                             rule, target_key, now,
                             message=(
-                                f"TLS certificate expiring soon on {host}:{port}: "
-                                f"{days} day(s) remaining "
-                                f"(threshold {rule.threshold_days} days)"
+                                f"Security certificate on {host}:{port} expires in "
+                                f"{days} day{'s' if days != 1 else ''} — "
+                                f"renew before it expires to avoid connection warnings."
                             ),
                             severity="WARNING",
                             value=float(days),
@@ -460,7 +468,11 @@ class AlertEngine:
             if rtt >= 0 and rtt > rule.threshold_ms:
                 return self._fire_if_cooled(
                     rule, host, now,
-                    message=f"High RTT on {host}: {rtt:.0f} ms (threshold {rule.threshold_ms:.0f} ms)",
+                    message=(
+                        f"{host} is responding slowly ({rtt:.0f} ms, normally under "
+                        f"{rule.threshold_ms:.0f} ms) — this may affect video calls "
+                        f"and real-time applications."
+                    ),
                     severity="WARNING",
                     value=rtt,
                 )
@@ -471,7 +483,10 @@ class AlertEngine:
             if rtt < 0:
                 return self._fire_if_cooled(
                     rule, host, now,
-                    message=f"Packet loss on {host}: host unreachable",
+                    message=(
+                        f"{host} is not responding — packets are being lost. "
+                        f"Check cables and power to this device."
+                    ),
                     severity="CRITICAL",
                     value=100.0,
                 )
@@ -480,7 +495,7 @@ class AlertEngine:
                 if not self._is_dependency_suppressed(host, states):
                     return self._fire_if_cooled(
                         rule, host, now,
-                        message=f"Host DOWN: {host}",
+                        message=f"{host} has gone offline and is not responding to pings.",
                         severity="CRITICAL",
                         value=None,
                     )
@@ -488,7 +503,10 @@ class AlertEngine:
             if state == "DEGRADED":
                 return self._fire_if_cooled(
                     rule, host, now,
-                    message=f"Host DEGRADED: {host} — RTT {rtt:.0f} ms",
+                    message=(
+                        f"{host} is responding slowly ({rtt:.0f} ms) — "
+                        f"network performance may be degraded."
+                    ),
                     severity="WARNING",
                     value=rtt,
                 )
@@ -496,11 +514,14 @@ class AlertEngine:
             history = self._state_history.get(host, [])
             transitions = self._count_transitions(history, rule.flap_window_s, now)
             if transitions >= rule.flap_count:
+                mins = rule.flap_window_s // 60
                 return self._fire_if_cooled(
                     rule, host, now,
                     message=(
-                        f"Host FLAPPING: {host} — {transitions} state change"
-                        f"{'s' if transitions != 1 else ''} in {rule.flap_window_s}s"
+                        f"{host} keeps going online and offline "
+                        f"({transitions} time{'s' if transitions != 1 else ''} "
+                        f"in {mins} minute{'s' if mins != 1 else ''}) — "
+                        f"check the connection or cable."
                     ),
                     severity="WARNING",
                     value=float(transitions),

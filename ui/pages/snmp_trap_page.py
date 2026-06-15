@@ -137,7 +137,7 @@ class SnmpTrapPage(QWidget):
 
         # Page title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("SNMP Trap Receiver"))
+        root.addWidget(PageHeaderBar("SNMP Trap Receiver", subtitle="Listens for alert messages sent by network devices like routers and switches."))
 
         # Status bar
         self._status_lbl = QLabel("Not listening.")

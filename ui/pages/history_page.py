@@ -386,7 +386,7 @@ class HistoryPage(QWidget):
 
         # ── Page title row ────────────────────────────────────────────────────
         from ui.widgets.page_header import PageHeaderBar as _PHB
-        _title_hdr = _PHB("Availability History")
+        _title_hdr = _PHB("Availability History", subtitle="Shows the up/down history for each monitored device over the selected time range.")
         root.addWidget(_title_hdr)
         title_row = QHBoxLayout()
         title_row.addStretch()

@@ -494,6 +494,7 @@ class ServicePage(QWidget):
                     f"color: {status_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
                 )
                 dot.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                dot.setToolTip(f"● {r.label or r.host}:{r.port} responded successfully.")
                 self._table.setCellWidget(row_idx, 3, dot)
             else:
                 # DOWN row — status label + inline Diagnose button
@@ -507,6 +508,7 @@ class ServicePage(QWidget):
                     f"color: {status_color}; font-size: 11px; font-weight: bold;"
                     " background: transparent;"
                 )
+                _dot.setToolTip(f"{r.label or r.host}:{r.port} is not responding — the service may be offline or blocked by a firewall.")
                 _cell_h.addWidget(_dot)
                 _cell_h.addStretch()
                 _diag_btn = QPushButton("Diagnose →")

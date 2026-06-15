@@ -223,7 +223,7 @@ class ThreatIntelPage(QWidget):
 
         # Title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Threat Intelligence"))
+        root.addWidget(PageHeaderBar("Threat Intelligence", subtitle="Cross-references device IP addresses against known threat databases."))
 
         _ti_sub = QLabel(
             "Known-bad IPs and domains from community threat feeds — "

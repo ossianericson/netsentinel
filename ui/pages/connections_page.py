@@ -191,7 +191,7 @@ class ConnectionsPage(QWidget):
 
         # Header
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Active Connections"))
+        root.addWidget(PageHeaderBar("Active Connections", subtitle="Shows every process on this machine that has an open network connection."))
 
         # KPI row
         kpi_row = QHBoxLayout()

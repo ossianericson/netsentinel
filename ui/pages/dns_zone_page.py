@@ -182,7 +182,7 @@ class DnsZonePage(QWidget):
 
         # Title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("DNS Zone Mapping"))
+        root.addWidget(PageHeaderBar("DNS Zone Mapping", subtitle="Discovers all hostnames and records published by your domain's DNS server."))
 
         # KPI row
         kpi_row = QHBoxLayout()
@@ -234,6 +234,7 @@ class DnsZonePage(QWidget):
         tb.addWidget(self._domain_field)
 
         self._axfr_btn = _btn("AXFR Transfer")
+        self._axfr_btn.setToolTip("AXFR — asks the DNS server to send all its records at once. Misconfigured servers expose every hostname to anyone who asks.")
         self._axfr_btn.clicked.connect(self._run_axfr)
         tb.addWidget(self._axfr_btn)
 

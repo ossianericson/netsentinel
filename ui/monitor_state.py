@@ -712,7 +712,8 @@ class _MonitorStateMixin:
         combined = "\n\n".join(verdicts) if verdicts else "Scan in progress..."
         self._verdict.update(combined, level)
         # Show the compact status badge once real data is available
-        self._verdict_badge.setText(f"● {level}")
+        from ui.tabs_helpers import risk_to_label as _r2l
+        self._verdict_badge.setText(f"● {_r2l(level)}")
         self._verdict_badge.setStyleSheet(
             f"color:{_color_for_level(level)}; font-size:11px; font-weight:bold; padding:0 8px;"
             "background:transparent; border:none;"

@@ -121,7 +121,7 @@ class ReportsPage(QWidget):
 
         # Page title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Auto-Report Generation"))
+        root.addWidget(PageHeaderBar("Auto-Report Generation", subtitle="Automatically generates and emails network health reports on a schedule."))
 
         # KPI row
         kpi_row = QHBoxLayout()

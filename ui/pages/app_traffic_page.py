@@ -126,7 +126,7 @@ class AppTrafficPage(QWidget):
         root.setSpacing(8)
 
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("App Traffic"))
+        root.addWidget(PageHeaderBar("App Traffic", subtitle="Shows which applications and devices are using your bandwidth right now."))
 
         # Controls row
         ctrl = QHBoxLayout()

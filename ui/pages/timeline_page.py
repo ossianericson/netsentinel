@@ -137,7 +137,7 @@ class TimelinePage(QWidget):
 
         # Title
         from ui.widgets.page_header import PageHeaderBar
-        outer.addWidget(PageHeaderBar("Network Timeline"))
+        outer.addWidget(PageHeaderBar("Network Timeline", subtitle="A chronological log of all network events across all monitoring sources."))
 
         # ── TIMELINE-2: Today at a glance ─────────────────────────────────────
         self._glance = QFrame()

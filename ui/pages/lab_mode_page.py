@@ -272,7 +272,7 @@ class LabModePage(QWidget):
         outer.setSpacing(6)
 
         from ui.widgets.page_header import PageHeaderBar
-        outer.addWidget(PageHeaderBar("Lab Mode"))
+        outer.addWidget(PageHeaderBar("Lab Mode", subtitle="Guided exercises to learn real networking concepts using your live network."))
         outer.addSpacing(8)
 
         grid = QGridLayout()

@@ -873,7 +873,9 @@ class _SegmentEditorDialog(QDialog):
             self._desc_edit.setPlainText(segment.description)
 
         form.addRow(_lbl("Name"),        self._name_edit)
-        form.addRow(_lbl("CIDR"),        self._cidr_edit)
+        _cidr_lbl = _lbl("CIDR")
+        _cidr_lbl.setToolTip("CIDR — shorthand for a block of IP addresses. 192.168.1.0/24 covers all 256 addresses from .0 to .255.")
+        form.addRow(_cidr_lbl,           self._cidr_edit)
         form.addRow(_lbl("Colour"),      self._color_combo)
         form.addRow(_lbl("Description"), self._desc_edit)
         lay.addLayout(form)

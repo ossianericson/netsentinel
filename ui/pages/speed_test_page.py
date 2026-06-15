@@ -437,7 +437,7 @@ class SpeedTestPage(QWidget):
         root.setSpacing(8)
 
         from ui.widgets.page_header import PageHeaderBar
-        hdr = PageHeaderBar("Speed Test")
+        hdr = PageHeaderBar("Speed Test", subtitle="Measures your real internet download and upload speeds.")
         root.addWidget(hdr)
 
         # ── Ookla CLI install banner (hidden if CLI already present) ──────────

@@ -144,7 +144,7 @@ class TestFlapRuleFiring:
             fired_all.extend(engine.evaluate_cycle(cycle))
         flap_alerts = [a for a in fired_all if a.rule_type == "FLAP"]
         assert "192.168.1.1" in flap_alerts[0].message
-        assert "FLAP" in flap_alerts[0].message.upper()
+        assert "online and offline" in flap_alerts[0].message
 
     def test_flap_severity_is_warning(self):
         engine = AlertEngine(rules=[_flap_rule(flap_count=4)])

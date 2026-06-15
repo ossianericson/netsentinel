@@ -1,11 +1,13 @@
 """
-PageHeaderBar — slim 40px page-level header (POLISH-6).
+PageHeaderBar — slim page-level header (POLISH-6).
+
+40px without subtitle, 56px with subtitle.
 
 Usage::
 
     from ui.widgets.page_header import PageHeaderBar
 
-    hdr = PageHeaderBar("Live Bandwidth")
+    hdr = PageHeaderBar("Live Bandwidth", subtitle="Shows data transfer speeds for each network interface in real time.")
     hdr.add_chip("94 Mbps up")          # optional; call add_chip() for each live stat
     root.addWidget(hdr)
 
@@ -27,7 +29,10 @@ from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SE
 
 
 class PageHeaderBar(QWidget):
-    """40px title bar: bold page title left · live chips right · 1px separator."""
+    """Title bar: bold page title left · optional subtitle below · live chips right · 1px separator.
+
+    Height is 40px without subtitle, 56px with subtitle.
+    """
 
     _CHIP_STYLE = (
         f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
@@ -35,31 +40,52 @@ class PageHeaderBar(QWidget):
     )
     _SEP_STYLE = f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
 
-    def __init__(self, title: str, parent: QWidget | None = None) -> None:
+    def __init__(self, title: str, subtitle: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(40)
+        self._has_subtitle = bool(subtitle)
+        self.setFixedHeight(56 if self._has_subtitle else 40)
         self.setObjectName("PageHeaderBar")
         self.setStyleSheet(
             f"#PageHeaderBar {{ background: transparent; border-bottom: 1px solid {BORDER}; }}"
         )
 
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Left side: title (+ optional subtitle below it)
+        if self._has_subtitle:
+            left = QVBoxLayout()
+            left.setContentsMargins(0, 0, 0, 0)
+            left.setSpacing(1)
+        else:
+            left = None
 
         self._title_lbl = QLabel(title)
         self._title_lbl.setStyleSheet(
             f"color:{TEXT_PRIMARY}; font-size:14px; font-weight:600;"
             " background:transparent; border:none;"
         )
-        lay.addWidget(self._title_lbl)
-        lay.addStretch(1)
+
+        if left is not None:
+            left.addWidget(self._title_lbl)
+            self._subtitle_lbl = QLabel(subtitle)
+            self._subtitle_lbl.setStyleSheet(
+                f"color:{TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+            )
+            left.addWidget(self._subtitle_lbl)
+            outer.addLayout(left)
+        else:
+            self._subtitle_lbl = None
+            outer.addWidget(self._title_lbl)
+
+        outer.addStretch(1)
 
         # Chip area — chips and separators added dynamically
         self._chip_area = QHBoxLayout()
         self._chip_area.setContentsMargins(0, 0, 0, 0)
         self._chip_area.setSpacing(0)
-        lay.addLayout(self._chip_area)
+        outer.addLayout(self._chip_area)
 
         self._chips:     list[QLabel] = []
         self._chip_keys: dict[str, QLabel] = {}
@@ -68,6 +94,10 @@ class PageHeaderBar(QWidget):
 
     def set_title(self, title: str) -> None:
         self._title_lbl.setText(title)
+
+    def set_subtitle(self, subtitle: str) -> None:
+        if self._subtitle_lbl is not None:
+            self._subtitle_lbl.setText(subtitle)
 
     def add_chip(self, text: str, key: str = "") -> None:
         """Append a chip to the right side. Multiple chips are separated by ·."""
@@ -145,6 +175,10 @@ class PageHeaderBar(QWidget):
             f"color:{_s.TEXT_PRIMARY}; font-size:14px; font-weight:600;"
             " background:transparent; border:none;"
         )
+        if self._subtitle_lbl is not None:
+            self._subtitle_lbl.setStyleSheet(
+                f"color:{_s.TEXT_MUTED}; font-size:10px; background:transparent; border:none;"
+            )
         for chip in self._chips:
             chip.setStyleSheet(self._CHIP_STYLE)
         if hasattr(self, "_help_btn"):
