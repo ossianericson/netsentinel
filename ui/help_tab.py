@@ -360,10 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("SNMP interface error counters", "The SNMP Device Info page now shows per-interface error metrics (ifInErrors / ifOutErrors) alongside the existing traffic counters, making it easier to spot a degraded port or uplink without opening a CLI."),
-        ("Startup cache restore", "The Network Map and classic topology now render immediately from the last scan stored in the database — no need to rescan before the map is populated after restarting the app."),
-        ("Interactive map blank fix", "The Cytoscape.js interactive map no longer goes blank after a mesh-enriched scan. Master mesh nodes are now correctly routed to the gateway node rather than a non-existent Cytoscape element."),
-        ("Unified mesh satellite assignment", "The classic topology and interactive map now use the same satellite-assignment logic as the Devices table — devices are always drawn under the correct Deco mesh node."),
+        ("Tile staleness callout", "Overview tiles now show 'Data from X days ago — rescan?' in amber when data is more than 24 hours old, so you always know when figures are stale."),
+        ("Notifications tab layout", "The Notifications page is now split into a Configure tab (channel cards, alert rules, dependency tree) and an Alert History tab, making each function easier to find."),
+        ("Alert storm detection", "If five or more alerts arrive from the same subnet within 60 seconds, a banner appears in the alert history offering a direct link to the dependency tree card to suppress duplicates."),
+        ("Monitor auto-resume", "Monitors that were running when the app was last closed (ARP Watch, Live Bandwidth, Scheduled Scans) now restart automatically on the next launch with an amber opt-out banner."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

@@ -125,7 +125,7 @@ def test_features_page_refs_are_valid_nav_labels():
 #: non-obvious or was previously wrong).  Labels not in this dict are not checked.
 _EXPECTED_SECTIONS: dict[str, str] = {
     # Monitor section
-    "Active Monitors":    "Monitor",
+    "Monitor Status":     "Monitor",
     "Network Logger":     "Monitor",
     "Network Timeline":   "Monitor",
     "Live Bandwidth":     "Monitor",

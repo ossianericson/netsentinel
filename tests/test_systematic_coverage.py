@@ -35,7 +35,7 @@ def test_discover_pages_finds_known_pages():
     labels = _parse_builder_labels()
     assert len(labels) >= 40, f"Expected ≥40 pages, got {len(labels)}: {labels}"
     for expected in [
-        "Home", "Overview", "Speed Test", "Network Grade",
+        "Home", "Dashboard", "Speed Test", "Network Grade",
         "Security Overview", "Protocol Visualizer", "Hardware",
     ]:
         assert expected in labels, f"{expected!r} missing from discovered pages"

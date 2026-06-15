@@ -550,7 +550,7 @@ class _LoggerTabMixin:
                     "action_key": "high_risk_check",
                     "text": f"{high} high-risk device{s} found — review security findings",
                     "action_label": "View Overview →",
-                    "target": "Overview",
+                    "target": "Dashboard",
                     "priority": "high",
                 })
 
@@ -605,7 +605,7 @@ class _LoggerTabMixin:
                     "action_key": "fix_network_grade",
                     "text": f"Your network grade is {grade} — run a health check for recommendations",
                     "action_label": "View Overview →",
-                    "target": "Overview",
+                    "target": "Dashboard",
                     "priority": "medium",
                 })
 

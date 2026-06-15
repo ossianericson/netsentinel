@@ -13,11 +13,12 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QScrollArea,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from ui.styles import BG_DARK
+from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY
 from modules.alert_engine import rule_settings_key as _rule_key
 from ui.widgets.alert_drawer import AlertDrawer
 from ui.widgets.skeleton import insert_skeleton_rows
@@ -73,10 +74,29 @@ class NotificationsPage(
             "Route alerts to desktop notifications, webhooks, or email by severity",
         ))
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background:transparent;")
+        # ── Primary tabs: Configure / Alert History ───────────────────────────
+        _tab_qss = (
+            f"QTabWidget::pane {{ border:none; }}"
+            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_MUTED}; border:1px solid {BORDER};"
+            f" border-bottom:none; padding:5px 18px; font-size:11px; font-weight:600; }}"
+            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; border-bottom:2px solid {ACCENT}; }}"
+            f"QTabBar::tab:hover {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._notif_tabs = QTabWidget()
+        self._notif_tabs.setStyleSheet(_tab_qss)
+        self._notif_tabs.currentChanged.connect(self._on_notif_tab_changed)
+
+        # Tab 0 — Configure: all channel and rule cards
+        _cfg_widget = QWidget()
+        _cfg_widget.setStyleSheet(f"background:{BG_DARK};")
+        _cfg_layout = QVBoxLayout(_cfg_widget)
+        _cfg_layout.setContentsMargins(0, 0, 0, 0)
+        _cfg_layout.setSpacing(0)
+
+        self._notif_scroll = QScrollArea()
+        self._notif_scroll.setWidgetResizable(True)
+        self._notif_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._notif_scroll.setStyleSheet("background:transparent;")
 
         inner = QWidget()
         inner.setStyleSheet(f"background:{BG_DARK};")
@@ -94,10 +114,20 @@ class NotificationsPage(
         il.addWidget(self._build_escalation_card())
         il.addWidget(self._build_weekly_digest_card())
         il.addWidget(self._build_dep_card())
-        il.addWidget(self._build_log_card())
         il.addStretch()
 
-        scroll.setWidget(inner)
+        self._notif_scroll.setWidget(inner)
+        _cfg_layout.addWidget(self._notif_scroll, 1)
+        self._notif_tabs.addTab(_cfg_widget, "Configure")
+
+        # Tab 1 — Alert History: history table + delivery log
+        _hist_widget = QWidget()
+        _hist_widget.setStyleSheet(f"background:{BG_DARK};")
+        _hist_layout = QVBoxLayout(_hist_widget)
+        _hist_layout.setContentsMargins(16, 12, 16, 12)
+        _hist_layout.setSpacing(0)
+        _hist_layout.addWidget(self._build_log_card())
+        self._notif_tabs.addTab(_hist_widget, "Alert History")
 
         self._alert_drawer = AlertDrawer(self)
         self._alert_drawer.acknowledged.connect(self._on_drawer_acknowledged)
@@ -107,11 +137,22 @@ class NotificationsPage(
         body_row = QHBoxLayout()
         body_row.setContentsMargins(0, 0, 0, 0)
         body_row.setSpacing(0)
-        body_row.addWidget(scroll, 1)
+        body_row.addWidget(self._notif_tabs, 1)
         body_row.addWidget(self._alert_drawer)
         outer.addLayout(body_row, 1)
 
         self._restore()
+
+    # ── Tab management ────────────────────────────────────────────────────────
+
+    def _on_notif_tab_changed(self, idx: int) -> None:
+        if idx == 1:
+            self._refresh_alert_history()
+            self.refresh_log()
+
+    def switch_to_history_tab(self) -> None:
+        """Navigate directly to the Alert History tab (called by external signals)."""
+        self._notif_tabs.setCurrentIndex(1)
 
     # ── Persistence ───────────────────────────────────────────────────────────
 

@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.expanding_table import ExpandingTable
+from ui.tabs_helpers import risk_to_label
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
@@ -1796,7 +1797,8 @@ class InventoryPage(QWidget):
                 _new = classify_device(d)
                 if _new and _new != "Unknown Device":
                     dtype = _new
-            level    = (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")) or "UNKNOWN"
+            _raw_level = (d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")) or "UNKNOWN"
+            level    = risk_to_label(_raw_level)
             label    = _annotations.get(mac.lower(), {}).get("user_label", "")
             conf     = float((d.confidence if not isinstance(d, dict) else d.get("confidence", 0.0)) or 0.0)
             _is_gw   = bool((d.is_gateway if not isinstance(d, dict) else d.get("is_gateway", False)) or False)

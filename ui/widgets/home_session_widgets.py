@@ -8,8 +8,10 @@ Contains: FreshnessStrip, GettingStartedCard, _GradeBreakdownDialog,
 from __future__ import annotations
 
 import datetime
+import platform
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QUrl, pyqtSignal
+from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QVBoxLayout, QWidget,
@@ -295,11 +297,15 @@ class GettingStartedCard(QFrame):
         body_lay.setContentsMargins(0, 8, 0, 0)
         body_lay.setSpacing(0)
 
-        # Step order: scan first (gives data), then hardware (enriches data), then grade/arp/logger
+        # Step order: scan first (gives data), then Npcap (unlock real-time monitors),
+        # then hardware (enriches data), then grade/arp/logger
         _STEPS = [
             ("scan",     "Run your first scan",
              "Discover all devices on your network",
              None, "Devices"),
+            ("npcap",    "Install Npcap for real-time monitoring",
+             "Unlocks 11 features: ARP Spoof Watch, packet capture, 802.11 Monitor and more",
+             None, None),
             ("hw_setup", "Connect your hardware",
              "Add your router or modem to get device names, signal strength, and ISP accountability",
              None, "Hardware"),
@@ -377,7 +383,13 @@ class GettingStartedCard(QFrame):
                     f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
                 )
                 _t = nav_target
-                if key == "arp":
+                if key == "npcap":
+                    btn.clicked.connect(
+                        lambda _=False: QDesktopServices.openUrl(
+                            QUrl("https://npcap.com/#download")
+                        )
+                    )
+                elif key == "arp":
                     btn.clicked.connect(
                         lambda _=False, t=_t: (
                             self.start_arp_requested.emit(),
@@ -432,8 +444,12 @@ class GettingStartedCard(QFrame):
                 hw_done = bool(raw2 and _json.loads(raw2))
             except Exception:
                 pass  # non-fatal — malformed QSettings value; hw_done stays False
+        from modules.utils import is_npcap_available as _npcap
+        # Npcap step is N/A on non-Windows (libpcap is typically pre-installed)
+        npcap_done = platform.system() != "Windows" or _npcap()
         return {
             "scan":     device_count > 0,
+            "npcap":    npcap_done,
             "hw_setup": hw_done,
             "grade":    qs.value("grade/last_run", False, type=bool),
             "arp":      qs.value("home/setup/arp_started", False, type=bool),

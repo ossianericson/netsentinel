@@ -21,7 +21,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
     BG_CARD, BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
-from ui.tabs_helpers import _table, _empty_state_widget
+from ui.tabs_helpers import _table, _empty_state_widget, risk_to_label
 
 if TYPE_CHECKING:
     pass
@@ -1301,7 +1301,7 @@ class _ReconTabsMixin:
                 self._plugin_status.setText(f"'{res.plugin_name}' failed — error details available.")
                 self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
                 return
-            lines = [f"Plugin:  {res.plugin_name}", f"Risk:    {res.risk_level}", ""]
+            lines = [f"Plugin:  {res.plugin_name}", f"Risk:    {risk_to_label(res.risk_level)}", ""]
             if res.findings:
                 lines += [f"Findings ({len(res.findings)}):"]
                 lines += [f"  • {f}" for f in res.findings]
@@ -1312,7 +1312,7 @@ class _ReconTabsMixin:
                 AMBER if res.risk_level == "MEDIUM" else GREEN
             )
             self._plugin_status.setText(
-                f"'{res.plugin_name}' complete — {res.risk_level} "
+                f"'{res.plugin_name}' complete — {risk_to_label(res.risk_level)} "
                 f"({len(res.findings)} finding{'s' if len(res.findings) != 1 else ''})"
             )
             self._plugin_status.setStyleSheet(f"color:{color};font-size:11px;")

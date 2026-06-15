@@ -536,6 +536,8 @@ class ScanEnrichmentMixin:
 
     def _on_cred_result(self, res):
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.on_cred_result(res)
         flags = res.risk_flags
         color = RED if flags else GREEN
         self._cred_verdict.setText(res.plain_verdict + (f"\n⚠ {' | '.join(flags)}" if flags else ""))

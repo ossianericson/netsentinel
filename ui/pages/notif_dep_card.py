@@ -228,6 +228,7 @@ class _NotifDepMixin:
 
         cl.addWidget(body)
         self._dep_refresh_table()
+        self._dep_card_widget = card
         return card
 
     # ── Helpers ───────────────────────────────────────────────────────────────

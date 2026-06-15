@@ -211,7 +211,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         )
 
         from ui.pages.security_overview_page import SecurityOverviewPage
-        self._security_overview_page = SecurityOverviewPage(parent=None)
+        self._security_overview_page = SecurityOverviewPage(store=self._store, parent=None)
         self._security_overview_page.navigate_to.connect(self._nav_rail_go_to)
         self._security_overview_page.scan_requested.connect(self._start_full_scan)
         self._security_overview_page.security_scan_requested.connect(self._run_security_scans)

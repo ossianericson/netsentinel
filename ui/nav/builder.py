@@ -29,7 +29,7 @@ _AUTO_HELP_PAGES: frozenset[str] = frozenset({
     "Automation Hooks", "MQTT / Home Assistant", "TLS & Exposure",
     "Service Heartbeat", "IoT Behaviour", "Scheduled Scans",
     "Trend Forecasts", "Bandwidth Usage", "App Traffic",
-    "ARP Spoof Watch", "Active Monitors",
+    "ARP Spoof Watch", "Monitor Status",
 })
 
 
@@ -418,6 +418,9 @@ class _NavBuilderMixin:
             _sec = next((s for s in self._nav_sections if s["name"] == _open), None)
             if _sec and _sec["entries"]:
                 self._nav_rail_go_to(_sec["entries"][0].label)
+        _last_page = _qs.value("nav/last_page", "")
+        if _last_page and _last_page in self._nav_label_to_widget:
+            self._nav_rail_go_to(_last_page)
 
         from PyQt6.QtGui import QColor as _QColor
         for _arow in self._nav_audit_rows:
@@ -659,6 +662,8 @@ class _NavBuilderMixin:
         if hasattr(self, "_back_btn"):
             self._back_btn.setVisible(bool(self._nav_history))
         self._nav_current_page_label = label
+        _qs_lp = QSettings(str(self._settings_path()), QSettings.Format.IniFormat)
+        _qs_lp.setValue("nav/last_page", label)
         self._nav_crossfade_to(widget)
         self._nav_flyout.set_active(label)
         section = self._nav_page_to_section.get(label, "")
@@ -932,7 +937,7 @@ class _NavBuilderMixin:
         """Full nav — activity rail + flyout. No mode switcher; this is the only nav."""
         self._nav_begin_section("Getting Started", "grid")
         self._nav_add_rail_item("Home",               self._home_page)
-        self._nav_add_rail_item("Overview",            self._overview_page)
+        self._nav_add_rail_item("Dashboard",            self._overview_page)
         self._nav_add_rail_item("Speed Test",          self._speed_test_page)
         self._nav_add_rail_item("DNS & Stability",     self._m5_tab)
         self._nav_add_rail_item("What's Wrong?",       self._diagnosis_page)
@@ -947,20 +952,20 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Home Automation",     self._ha_page)
 
         self._nav_begin_section("Monitor", "monitor")
-        self._nav_add_rail_item("Active Monitors",     self._monitor_overview_page)
         self._nav_add_rail_item("Network Logger",      self._logging_container)
-        self._nav_add_rail_item("Network Timeline",    self._timeline_page)
         self._nav_add_rail_item("Live Bandwidth",      self._live_bandwidth_page)
         self._nav_add_rail_item("App Traffic",         self._app_traffic_page)
         self._nav_add_rail_item("Active Connections",  self._connections_page)
+        self._nav_add_rail_item("Syslog Viewer",       self._syslog_page)
+        self._nav_add_rail_item("SNMP Trap Receiver",  self._snmp_trap_page)
+        self._nav_add_rail_item("Monitor Status",      self._monitor_overview_page)
+        self._nav_add_rail_item("Network Timeline",    self._timeline_page)
         self._nav_add_rail_item("Availability History", self._history_page)
         self._nav_add_rail_item("Inventory Changes",   self._inventory_page)
         self._nav_add_rail_item("Bandwidth Usage",     self._bw_tab_widget)
         self._nav_add_rail_item("Service Heartbeat",   self._service_page)
         self._nav_add_rail_item("IPv6 Devices",        self._ipv6_tab_widget)
         self._nav_add_rail_item("Uptime & SLA",        self._uptime_page)
-        self._nav_add_rail_item("Syslog Viewer",       self._syslog_page)
-        self._nav_add_rail_item("SNMP Trap Receiver",  self._snmp_trap_page)
 
         self._nav_begin_section("Reports", "bar-chart")
         self._nav_add_rail_item("Network Grade",       self._benchmark_tab_widget)

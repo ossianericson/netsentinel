@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import QTableWidgetItem
 
 from ui.tabs import _add_row
+from ui.tabs_helpers import risk_to_label
 
 from ui.styles import (
     ACCENT_LITE, AMBER, AMBER_BG, BLUE, BORDER,
@@ -70,6 +71,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._ps_status.setText(data.plain_verdict)
         if hasattr(self, "_monitor_overview_page"):
             self._monitor_overview_page.set_open_port_count(len(data.open_ports))
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.on_port_scan_result(data)
         # ── Update NetworkDocPage with accumulated port data ──────────────────
         try:
             if data.open_ports:
@@ -131,7 +134,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         risk_color = {"NONE": GREEN, "INFO": AMBER, "HIGH": RED}.get(result.risk_level, TEXT_SECONDARY)
         risk_icon  = {"NONE": "✔", "INFO": "ℹ", "HIGH": "⚠"}.get(result.risk_level, "?")
         lines = [
-            f"<b style='color:{risk_color}'>{risk_icon} [{result.risk_level}]  {result.plain_verdict}</b>",
+            f"<b style='color:{risk_color}'>{risk_icon} [{risk_to_label(result.risk_level)}]  {result.plain_verdict}</b>",
         ]
         if result.provider:
             lines.append(f"<br><b>Provider:</b> {result.provider}")
@@ -275,6 +278,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 cve_item.setToolTip(f"Click to view {cve_n} CVE(s) for {p.service}")
             self._recon_syn_table.setItem(row, 4, cve_item)
         self._syn_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.on_port_scan_result(result)
         # ── Update NetworkDocPage with accumulated port data ──────────────────
         try:
             if result.open_ports:
@@ -931,7 +936,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 _QT.singleShot(600, self._start_post_scan_coach_marks)
             else:
                 if not getattr(self, "_onboarding_active", False):
-                    self._nav_rail_go_to("Overview")
+                    self._nav_rail_go_to("Dashboard")
 
         # Always apply enrichment — re-classifies device types and rebuilds dependent
         # views even on the first scan; also layers in cached mesh/plugin data when present.
@@ -1041,7 +1046,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._plugin_status.setText(f"'{res.plugin_name}' failed — see output below.")
             self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
             return
-        lines = [f"Plugin: {res.plugin_name}", f"Risk: {res.risk_level}"]
+        lines = [f"Plugin: {res.plugin_name}", f"Risk: {risk_to_label(res.risk_level)}"]
         if res.findings:
             lines.append(f"Findings ({len(res.findings)}):")
             for f in res.findings:
@@ -1051,7 +1056,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._plugin_result_text.setPlainText("\n".join(lines))
         color = RED if res.risk_level in ("HIGH", "CRITICAL") else (AMBER if res.risk_level == "MEDIUM" else GREEN)
         self._plugin_status.setText(
-            f"'{res.plugin_name}' complete — {res.risk_level} "
+            f"'{res.plugin_name}' complete — {risk_to_label(res.risk_level)} "
             f"({len(res.findings)} finding{'s' if len(res.findings) != 1 else ''})."
         )
         self._plugin_status.setStyleSheet(f"color:{color};font-size:11px;")

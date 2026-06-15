@@ -181,6 +181,10 @@ def restore_settings(window) -> None:
         from PyQt6.QtCore import QTimer as _QTimer
         _QTimer.singleShot(1500, window._toggle_logger)
 
+    # Auto-resume monitors that were running when the app was last closed
+    from PyQt6.QtCore import QTimer as _QT_MR
+    _QT_MR.singleShot(3000, window._restore_running_monitors)
+
     # Retention helpers — run after the event loop is warm
     from PyQt6.QtCore import QTimer as _QT2
     _QT2.singleShot(2000, window._compute_last_visit_summary)

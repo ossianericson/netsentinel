@@ -343,21 +343,28 @@ class _BaseTile(QFrame):
         import time as _t
         from ui.styles import AMBER, RED, TEXT_SECONDARY
         delta = int(_t.time() - self._scanned_at)
-        if delta < 60:
-            text = "Just now"
-        elif delta < 3600:
-            text = f"{delta // 60} min ago"
-        else:
-            text = f"{delta // 3600} h ago"
-        self._ts_lbl.setText(text)
-        if delta >= 7200:
-            color = RED
-        elif delta >= 1800:
+        if delta >= 86400:
+            days = delta // 86400
+            text = f"Data from {days} day{'s' if days != 1 else ''} ago — rescan?"
             color = AMBER
+            font_size = "10px"
         else:
-            color = TEXT_SECONDARY
+            if delta < 60:
+                text = "Just now"
+            elif delta < 3600:
+                text = f"{delta // 60} min ago"
+            else:
+                text = f"{delta // 3600} h ago"
+            if delta >= 7200:
+                color = RED
+            elif delta >= 1800:
+                color = AMBER
+            else:
+                color = TEXT_SECONDARY
+            font_size = "9px"
+        self._ts_lbl.setText(text)
         self._ts_lbl.setStyleSheet(
-            f"font-size:9px; color:{color}; border:none; background:transparent;"
+            f"font-size:{font_size}; color:{color}; border:none; background:transparent;"
         )
 
     def _set_health(self, color: str) -> None:

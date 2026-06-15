@@ -21,7 +21,7 @@ _PAGE_HELP: dict[str, dict] = {
             "Click the mini cards (Speed, Stability, Devices) to jump directly to those pages.",
         ],
     },
-    "Overview": {
+    "Dashboard": {
         "what": "Live summary of all scan results — device list, graded health, port scan summary, and bandwidth at a glance.",
         "hidden": [
             "The 'Share Card' button exports a 520×300 summary card as PNG, clipboard image, or standalone HTML — useful for ISP escalations.",
@@ -175,7 +175,7 @@ _PAGE_HELP: dict[str, dict] = {
             "Client-to-node assignment helps locate dead spots: devices that roam to a distant node despite a nearby node being available.",
         ],
     },
-    "Active Monitors": {
+    "Monitor Status": {
         "what": "Aggregated dashboard across all monitoring streams — one view of all live data sources.",
         "hidden": [
             "Cards refresh independently as each worker reports — a stale card shows the last known value with a timestamp.",

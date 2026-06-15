@@ -88,7 +88,7 @@ def test_checklist_states_all_keys():
     card = GettingStartedCard()
     _created_widgets.append(card)
     states = card._checklist_states(device_count=0)
-    expected = {"scan", "hw_setup", "grade", "arp", "logger"}
+    expected = {"scan", "hw_setup", "grade", "arp", "logger", "npcap"}
     assert set(states.keys()) == expected
 
 

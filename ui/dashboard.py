@@ -665,7 +665,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     def _build_monitor_resume_bar(self) -> "QWidget":
         from PyQt6.QtWidgets import QWidget as _W, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
-        from ui.styles import AMBER, BG_CARD, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
+        from ui.styles import AMBER, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
         container = _W()
         container.setObjectName("monitorResumeBar")
         container.setFixedHeight(28)

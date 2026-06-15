@@ -125,7 +125,7 @@ class OverviewPage(QWidget):
 
         # Header row
         hdr = QHBoxLayout()
-        title_lbl = QLabel("Overview")
+        title_lbl = QLabel("Dashboard")
         title_lbl.setStyleSheet(
             f"font-size:18px; font-weight:bold; color:{TEXT_PRIMARY};"
             f" background:transparent;"

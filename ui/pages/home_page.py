@@ -399,7 +399,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
             f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
         )
-        _sc_summary.clicked.connect(lambda: self.navigate_to.emit("Overview"))
+        _sc_summary.clicked.connect(lambda: self.navigate_to.emit("Dashboard"))
         _sc_btn_row.addWidget(_sc_explore)
         _sc_btn_row.addWidget(_sc_summary)
         _sc_btn_row.addStretch()
@@ -469,7 +469,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _fsb_btns = QHBoxLayout()
         _fsb_btns.setSpacing(8)
         for _flbl, _fpg in (
-            ("◎  Overview", "Overview"),
+            ("◎  Dashboard", "Dashboard"),
             ("◎  Devices", "Devices"),
             ("◎  What's Wrong?", "What's Wrong?"),
         ):
@@ -1390,7 +1390,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _conn_row, self._res_conn_lbl, self._res_conn_dot = \
             _result_row("�", "View Connection →", "DNS & Stability")
         _sec_row, self._res_security_lbl, self._res_security_dot = \
-            _result_row("�", "View Overview →", "Overview")
+            _result_row("�", "View Dashboard →", "Dashboard")
 
         _strip_lay.addWidget(_dev_row)
         _strip_lay.addWidget(_conn_row)

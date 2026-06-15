@@ -136,7 +136,7 @@ class TestSuggestionsWidgetFiltering:
 
     def test_set_suggestions_shows_non_suppressed(self, home_page):
         suggestions = [
-            {"action_key": "new_key", "text": "Do something", "action_label": "Go →", "target": "Overview", "priority": "low"},
+            {"action_key": "new_key", "text": "Do something", "action_label": "Go →", "target": "Dashboard", "priority": "low"},
         ]
         home_page.set_suggestions(suggestions)
         # Use isHidden() — isVisible() requires the full parent chain to be shown
@@ -148,7 +148,7 @@ class TestSuggestionsWidgetFiltering:
 
     def test_set_suggestions_without_action_key_always_shows(self, home_page):
         suggestions = [
-            {"text": "No key suggestion", "action_label": "Go →", "target": "Overview", "priority": "low"},
+            {"text": "No key suggestion", "action_label": "Go →", "target": "Dashboard", "priority": "low"},
         ]
         home_page.set_suggestions(suggestions)
         assert not home_page._suggestions_card.isHidden()

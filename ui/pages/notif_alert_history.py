@@ -247,6 +247,44 @@ class _NotifAlertHistoryMixin:
         filter_row.addStretch()
         hist_lay.addLayout(filter_row)
 
+        # Storm suggestion banner (hidden until a burst is detected)
+        self._storm_banner = QFrame()
+        self._storm_banner.setVisible(False)
+        self._storm_banner.setStyleSheet(
+            f"QFrame {{ background:{AMBER}22; border:1px solid {AMBER}; border-radius:4px; }}"
+        )
+        _sb_lay = QHBoxLayout(self._storm_banner)
+        _sb_lay.setContentsMargins(10, 6, 10, 6)
+        _sb_lay.setSpacing(8)
+        self._storm_banner_lbl = QLabel("")
+        self._storm_banner_lbl.setWordWrap(True)
+        self._storm_banner_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
+        )
+        _sb_lay.addWidget(self._storm_banner_lbl, 1)
+        _sb_setup_btn = QPushButton("Set up →")
+        _sb_setup_btn.setFixedHeight(24)
+        _sb_setup_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _sb_setup_btn.setStyleSheet(
+            f"QPushButton{{background:{AMBER};color:{WHITE};font-size:10px;font-weight:600;"
+            f"border:none;border-radius:3px;padding:0 10px;}}"
+            f"QPushButton:hover{{background:{AMBER}CC;}}"
+            f"QPushButton:pressed{{background:{AMBER}AA;color:{TEXT_PRIMARY};}}"
+        )
+        _sb_setup_btn.clicked.connect(self._storm_go_to_dep)
+        _sb_dismiss_btn = QPushButton("×")
+        _sb_dismiss_btn.setFixedSize(20, 20)
+        _sb_dismiss_btn.setStyleSheet(
+            f"QPushButton{{background:transparent;color:{TEXT_SECONDARY};border:none;"
+            f"font-size:13px;font-weight:bold;padding:0;}}"
+            f"QPushButton:hover{{color:{TEXT_PRIMARY};}}"
+            f"QPushButton:pressed{{background:{BG_HOVER};color:{TEXT_SECONDARY};}}"
+        )
+        _sb_dismiss_btn.clicked.connect(lambda: self._storm_banner.setVisible(False))
+        _sb_lay.addWidget(_sb_setup_btn)
+        _sb_lay.addWidget(_sb_dismiss_btn)
+        hist_lay.addWidget(self._storm_banner)
+
         self._alert_history_table = QTableWidget(0, 5)
         self._alert_history_table.setHorizontalHeaderLabels(
             ["Time", "Rule", "Host", "Severity", "Status"]
@@ -538,6 +576,43 @@ class _NotifAlertHistoryMixin:
         self._log_table.setRowCount(0)
         self._log_detail.setVisible(False)
 
+    def _storm_go_to_dep(self) -> None:
+        """Scroll the page to the dependency tree card when user clicks 'Set up →'."""
+        dep = getattr(self, "_dep_card_widget", None)
+        scr = getattr(self, "_notif_scroll", None)
+        if dep and scr:
+            scr.ensureWidgetVisible(dep)
+
+    def _check_alert_storm(self, alerts: list) -> None:
+        """Detect a burst of alerts for the same subnet and show the storm banner."""
+        import ipaddress as _ip
+        now = time.time()
+        subnet_counts: dict[str, int] = {}
+        for a in alerts:
+            ts = a.get("ts") or 0
+            if now - float(ts) > 60:
+                continue
+            host = a.get("host") or ""
+            try:
+                addr = _ip.ip_address(host)
+                if isinstance(addr, _ip.IPv4Address):
+                    subnet = ".".join(host.split(".")[:3]) + ".x"
+                else:
+                    subnet = host
+            except ValueError:
+                subnet = host
+            subnet_counts[subnet] = subnet_counts.get(subnet, 0) + 1
+        top = max(subnet_counts.items(), key=lambda x: x[1], default=(None, 0))
+        if top[1] >= 5:
+            self._storm_banner_lbl.setText(
+                f"⚠  {top[1]} alerts from subnet <b>{top[0]}</b> in the last 60 s — "
+                "this may be a parent-device outage. "
+                "Set up alert dependencies to suppress duplicate alerts:"
+            )
+            self._storm_banner.setVisible(True)
+        else:
+            self._storm_banner.setVisible(False)
+
     def _refresh_alert_history(self) -> None:
         if self._store is None or not self.isVisible():
             return
@@ -545,6 +620,7 @@ class _NotifAlertHistoryMixin:
             alerts = self._store.get_recent_alerts(hours=self._hist_hours, limit=500)
         except Exception:
             return
+        self._check_alert_storm(alerts)
         if self._hist_sev_filter != {"INFO", "WARNING", "CRITICAL"}:
             alerts = [a for a in alerts if a.get("severity", "INFO") in self._hist_sev_filter]
 

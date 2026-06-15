@@ -108,7 +108,7 @@ _FEATURES: list[dict] = [
     {
         "group": "Monitoring",
         "icon": "◈",
-        "name": "Overview",
+        "name": "Dashboard",
         "desc": (
             "Main cockpit: launch a Quick Network Assessment (M1–M5 bundle) from the "
             "full-width Scan Network bar, then watch tiles update live. Each result tile "
@@ -116,7 +116,7 @@ _FEATURES: list[dict] = [
             "below the tile grid is open by default — pick individual security tools and "
             "run them directly from here. Collapse it with the header toggle when not needed."
         ),
-        "page": "Overview",
+        "page": "Dashboard",
         "requires": None,
         "tags": ["dashboard", "tiles", "live", "status", "summary", "overview", "scan", "launch"],
     },
@@ -527,14 +527,14 @@ _FEATURES: list[dict] = [
     {
         "group": "Security",
         "icon": "◈",
-        "name": "Active Monitors",
+        "name": "Monitor Status",
         "desc": (
             "Single-glance security posture — one tile per detection monitor: "
             "ARP Spoof Watch, DHCP Rogue, Broadcast Storm, IoT anomalies, open ports, "
             "and CVE matches. All green means everything is either clear or running. "
             "Click any tile to go straight to that feature's detail page."
         ),
-        "page": "Active Monitors",
+        "page": "Monitor Status",
         "requires": None,
         "tags": ["overview", "status", "dashboard", "monitor", "arp", "dhcp", "storm", "iot", "cve", "ports", "security"],
         "badge": "updated", "badge_until": "2026-07-24",

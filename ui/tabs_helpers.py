@@ -19,6 +19,25 @@ from ui.styles import (
 )
 
 
+_RISK_LABELS: dict[str, str] = {
+    "HIGH":     "Critical",
+    "STORM":    "Critical",
+    "CRITICAL": "Critical",
+    "MEDIUM":   "High",
+    "WARNING":  "Warning",
+    "LOW":      "Info",
+    "CLEAN":    "Clear",
+    "NONE":     "Clear",
+    "INFO":     "Info",
+    "UNKNOWN":  "Unknown",
+}
+
+
+def risk_to_label(risk: str) -> str:
+    """Map an internal scan risk string to a user-facing severity label."""
+    return _RISK_LABELS.get((risk or "").upper(), risk or "Unknown")
+
+
 def _make_scroll_area(inner: QWidget) -> QScrollArea:
     sa = QScrollArea()
     sa.setWidgetResizable(True)

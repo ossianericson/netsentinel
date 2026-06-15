@@ -1,15 +1,16 @@
 """
-SecurityOverviewPage — Security Audit dashboard (first item in Security Audit section).
+SecurityOverviewPage — full-aggregation Security Audit dashboard.
 
 Layout
 ──────
-  Hero CTA card  (ACCENT border — primary scan actions + status)
-  KPI row        (Threat Indicators / Malicious IPs / Blocked Domains / Last Updated)
-  Quick nav row  (horizontal pills — Threat Intel / Geolocation Map / Port Scan / CVEs)
-  Recent high-risk findings table (top 15 by confidence)
-
-This page reads from the local ThreatIntelDB cache only — no network calls.
-All navigation is via the navigate_to signal wired in dashboard.py.
+  Subtitle
+  Hero CTA card     (scan button + status indicators)
+  Security Scan KPI row  (high-risk ports | CVE devices | TLS issues | login failures)
+  Threat Intel KPI row   (indicators | malicious IPs | blocked domains | last updated)
+  Quick-nav pills   (Port Scan → CVE Tracker → TLS & Exposure → Login Test → Threat Intel)
+  Findings tabs
+    ├─ Security Findings  (port scan HIGH-risk + open CVEs + TLS issues)
+    └─ Threat Intel       (top-15 by confidence from ThreatIntelDB)
 """
 
 from __future__ import annotations
@@ -21,15 +22,8 @@ from typing import List, Optional
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
+    QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
+    QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
@@ -44,18 +38,12 @@ try:
     from modules.threat_intel import load_from_cache
     _THREAT_OK = True
 except Exception:
-    _THREAT_OK = False
+    _THREAT_OK = False  # non-fatal — threat intel module may not be available
 
 from ui.widgets.context_menu import install_copy_menu
 
-try:
-    from ui.pages.overview_page import _SecurityScanPanel
-    _PANEL_OK = True
-except Exception:
-    _PANEL_OK = False
 
-
-# ── UI helpers ────────────────────────────────────────────────────────────────
+# ── UI helpers ─────────────────────────────────────────────────────────────────
 
 def _card(title: str = "") -> tuple[QWidget, QVBoxLayout]:
     frame = QFrame()
@@ -122,6 +110,15 @@ def _make_table(headers: list[str]) -> QTableWidget:
     return t
 
 
+def _severity_color(sev: str) -> str:
+    s = sev.lower()
+    if s == "critical":
+        return RED
+    if s in ("high", "warning"):
+        return AMBER
+    return TEXT_MUTED
+
+
 def _confidence_color(conf: int) -> str:
     if conf >= 80:
         return RED
@@ -130,19 +127,32 @@ def _confidence_color(conf: int) -> str:
     return TEXT_SECONDARY
 
 
-# ── Main page ─────────────────────────────────────────────────────────────────
+# ── Main page ──────────────────────────────────────────────────────────────────
 
 class SecurityOverviewPage(QWidget):
-    """Dashboard-style overview for the Security Audit section."""
+    """Full-aggregation dashboard for the Security Audit section."""
 
-    navigate_to             = pyqtSignal(str)   # emit label to navigate to a page
-    scan_requested          = pyqtSignal()       # trigger full network device scan
-    security_scan_requested = pyqtSignal(list)  # open security tool pages
+    navigate_to             = pyqtSignal(str)
+    scan_requested          = pyqtSignal()
+    security_scan_requested = pyqtSignal(list)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self._store = store
+
+        # Threat Intel data
         self._entries: List = []
         self._last_loaded: Optional[float] = None
+
+        # Accumulated scan data (per-host, replaced on each scan)
+        self._port_findings:  List[dict] = []
+        self._cred_flags:     List[str]  = []
+        self._port_scan_done: bool       = False
+        self._cred_scan_done: bool       = False
+
+        # MetricStore-derived data (refreshed by _load_metricstore_data)
+        self._cve_entries: List[dict] = []
+        self._tls_issues:  List       = []
 
         self._build_ui()
 
@@ -152,37 +162,49 @@ class SecurityOverviewPage(QWidget):
         self._refresh_timer.start()
         self._load_data()
 
-    # ── UI construction ───────────────────────────────────────────────────────
+    # ── UI construction ────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(10)
 
-        _subtitle = QLabel(
-            "Aggregate findings from all active security scans — "
-            "run a port scan, CVE check, or TLS audit to populate this page."
+        subtitle = QLabel(
+            "Aggregate findings from all active security scans — run Port Scan, "
+            "CVE Tracker, TLS audit, or Login Test to populate each section."
         )
-        _subtitle.setWordWrap(True)
-        _subtitle.setStyleSheet(
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet(
             f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
         )
-        root.addWidget(_subtitle)
+        root.addWidget(subtitle)
 
         root.addWidget(self._build_hero_card())
-        root.addLayout(self._build_kpi_row())
 
-        if _PANEL_OK:
-            self._sec_panel = _SecurityScanPanel(self)
-            self._sec_panel.run_clicked.connect(self.security_scan_requested.emit)
-            root.addWidget(self._sec_panel)
+        scan_hdr = QLabel("Security Scan Findings")
+        scan_hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        scan_hdr.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
+            f" background:transparent;"
+        )
+        root.addWidget(scan_hdr)
+        root.addLayout(self._build_scan_kpi_row())
 
-        root.addWidget(self._build_findings_card(), 1)
+        threat_hdr = QLabel("Threat Intelligence")
+        threat_hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        threat_hdr.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; text-transform:uppercase; letter-spacing:1px;"
+            f" background:transparent;"
+        )
+        root.addWidget(threat_hdr)
+        root.addLayout(self._build_threat_kpi_row())
 
-    # ── Hero CTA card ─────────────────────────────────────────────────────────
+        root.addLayout(self._build_nav_pills())
+        root.addWidget(self._build_findings_tabs(), 1)
+
+    # ── Hero CTA card ──────────────────────────────────────────────────────────
 
     def _build_hero_card(self) -> QWidget:
-        """Full-width card with ACCENT border — describes the network scan action."""
         hero = QFrame()
         hero.setObjectName("heroCard")
         hero.setStyleSheet(
@@ -193,7 +215,6 @@ class SecurityOverviewPage(QWidget):
         outer.setContentsMargins(18, 14, 14, 14)
         outer.setSpacing(20)
 
-        # ── Left: title + description + status dots ───────────────────────────
         left = QVBoxLayout()
         left.setSpacing(4)
 
@@ -202,8 +223,8 @@ class SecurityOverviewPage(QWidget):
         title.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none; background:transparent;")
 
         body = QLabel(
-            "Discovers every device on your network — IPs, MACs, hostnames, vendor, "
-            "and risk level. Results populate the threat findings below and the Devices table."
+            "Discovers every device — IPs, MACs, hostnames, vendor, and risk level. "
+            "Run Port Scan, CVE Tracker, TLS audit, and Login Test for a complete picture."
         )
         body.setWordWrap(True)
         body.setStyleSheet(
@@ -229,7 +250,6 @@ class SecurityOverviewPage(QWidget):
         status_row.addStretch()
         left.addLayout(status_row)
 
-        # ── Right: primary scan button ────────────────────────────────────────
         self._scan_btn = QPushButton("▶  Scan Network")
         self._scan_btn.setFixedHeight(44)
         self._scan_btn.setMinimumWidth(165)
@@ -237,9 +257,8 @@ class SecurityOverviewPage(QWidget):
         self._scan_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" font-size:13px; font-weight:bold; padding:0 22px; border-radius:5px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
         )
         self._scan_btn.clicked.connect(self.scan_requested.emit)
 
@@ -247,37 +266,120 @@ class SecurityOverviewPage(QWidget):
         outer.addWidget(self._scan_btn, 0, Qt.AlignmentFlag.AlignVCenter)
         return hero
 
-    # ── KPI row ───────────────────────────────────────────────────────────────
+    # ── Security Scan KPI row ──────────────────────────────────────────────────
 
-    def _build_kpi_row(self) -> QHBoxLayout:
-        kpi_row = QHBoxLayout()
-        kpi_row.setSpacing(8)
+    def _build_scan_kpi_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self._tile_ports = _kpi_tile("High-Risk Ports", "—", RED)
+        self._tile_cves  = _kpi_tile("Devices w/ CVEs", "—", AMBER)
+        self._tile_tls   = _kpi_tile("TLS Issues",      "—", AMBER)
+        self._tile_cred  = _kpi_tile("Login Failures",  "—", RED)
+        for tile in (self._tile_ports, self._tile_cves, self._tile_tls, self._tile_cred):
+            row.addWidget(tile, 1)
+        return row
+
+    # ── Threat Intel KPI row ───────────────────────────────────────────────────
+
+    def _build_threat_kpi_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(8)
         self._tile_total   = _kpi_tile("Threat Indicators", "—", ACCENT)
         self._tile_ips     = _kpi_tile("Malicious IPs",     "—", RED)
         self._tile_domains = _kpi_tile("Blocked Domains",   "—", AMBER)
         self._tile_updated = _kpi_tile("Last Updated",      "—", TEXT_SECONDARY)
         for tile in (self._tile_total, self._tile_ips, self._tile_domains, self._tile_updated):
-            kpi_row.addWidget(tile, 1)
-        return kpi_row
+            row.addWidget(tile, 1)
+        return row
 
-    # ── Findings card ─────────────────────────────────────────────────────────
+    # ── Quick-nav pills ────────────────────────────────────────────────────────
 
-    def _build_findings_card(self) -> QWidget:
-        findings_card, findings_lay = _card("Recent High-Risk Findings")
+    def _build_nav_pills(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        _pills = [
+            ("Port Scan →",      "Port Scan (TCP)"),
+            ("CVE Tracker →",    "CVE Lookup"),
+            ("TLS & Exposure →", "TLS & Exposure"),
+            ("Login Test →",     "Login Test"),
+            ("Threat Intel →",   "Threat Intel"),
+            ("Geo Map →",        "Geolocation Map"),
+        ]
+        for label, target in _pills:
+            btn = QPushButton(label)
+            btn.setFlat(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+                f" border:1px solid {BORDER}; border-radius:3px; padding:2px 8px; }}"
+                f"QPushButton:hover {{ background:{BG_ALT_ROW}; color:{ACCENT_LITE}; }}"
+                f"QPushButton:pressed {{ background:{BG_ALT_ROW}; color:{ACCENT_DARK}; }}"
+            )
+            btn.clicked.connect(lambda _c, t=target: self.navigate_to.emit(t))
+            row.addWidget(btn)
+        row.addStretch()
+        return row
+
+    # ── Findings tab widget ────────────────────────────────────────────────────
+
+    def _build_findings_tabs(self) -> QWidget:
+        self._findings_tabs = QTabWidget()
+        self._findings_tabs.setStyleSheet(
+            f"QTabWidget::pane {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            f"QTabBar::tab {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" padding:4px 14px; border:1px solid {BORDER}; border-bottom:none;"
+            f" font-size:10px; }}"
+            f"QTabBar::tab:selected {{ color:{TEXT_PRIMARY}; font-weight:600;"
+            f" border-top:2px solid {ACCENT}; }}"
+        )
+
+        # ── Tab 1: Security Findings ──────────────────────────────────────────
+        sec_tab = QWidget()
+        sec_lay = QVBoxLayout(sec_tab)
+        sec_lay.setContentsMargins(8, 8, 8, 8)
+        self._scan_table = _make_table(["Type", "Severity", "Host", "Finding"])
+
+        def _scan_copy():
+            r = self._scan_table.currentRow()
+            it = self._scan_table.item(r, 3)
+            if r >= 0 and it:
+                from PyQt6.QtWidgets import QApplication as _A
+                _A.clipboard().setText(it.text())
+
+        install_copy_menu(self._scan_table, [("separator", None), ("Copy finding", _scan_copy)])
+
+        self._scan_empty = QLabel(
+            "No security findings yet.\n\n"
+            "Run Port Scan (TCP) to detect high-risk open ports.\n"
+            "Run CVE Tracker to surface open vulnerabilities.\n"
+            "Run TLS & Exposure to check certificate health.\n"
+            "Run Login Test to detect credential weaknesses."
+        )
+        self._scan_empty.setWordWrap(True)
+        self._scan_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scan_empty.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:11px; padding:24px; background:transparent;"
+        )
+        sec_lay.addWidget(self._scan_table)
+        sec_lay.addWidget(self._scan_empty)
+        self._findings_tabs.addTab(sec_tab, "Security Findings")
+
+        # ── Tab 2: Threat Intel ───────────────────────────────────────────────
+        threat_tab = QWidget()
+        threat_lay = QVBoxLayout(threat_tab)
+        threat_lay.setContentsMargins(8, 8, 8, 8)
         self._findings_table = _make_table(
             ["Indicator", "Type", "Categories", "Confidence", "Source"]
         )
-        self._findings_table.setFixedHeight(260)
 
-        def _sec_copy_indicator():
+        def _copy_indicator():
             r = self._findings_table.currentRow()
-            if r >= 0:
-                it = self._findings_table.item(r, 0)
-                if it:
-                    from PyQt6.QtWidgets import QApplication as _QApp
-                    _QApp.clipboard().setText(it.text())
+            it = self._findings_table.item(r, 0)
+            if r >= 0 and it:
+                from PyQt6.QtWidgets import QApplication as _A2
+                _A2.clipboard().setText(it.text())
 
-        def _sec_how_to_fix():
+        def _how_to_fix():
             r = self._findings_table.currentRow()
             if r < 0:
                 return
@@ -288,87 +390,106 @@ class SecurityOverviewPage(QWidget):
             ind  = ind_it.text()  if ind_it  else "this indicator"
             typ  = type_it.text() if type_it else "unknown type"
             cats = cat_it.text()  if cat_it  else "unknown categories"
-            msg = (
+            QMessageBox.information(self, "How to Fix",
                 f"<b>{ind}</b> ({typ}) — {cats}<br><br>"
                 "<b>Recommended steps:</b><br>"
-                "1. Identify which device on your network contacted this indicator.<br>"
+                "1. Identify which device contacted this indicator.<br>"
                 "2. Block the indicator at your firewall or DNS level.<br>"
                 "3. Run a full port scan and CVE check on the affected device.<br>"
                 "4. If the device is a workstation, run an antimalware scan immediately.<br>"
-                "5. Check AbuseIPDB and VirusTotal for additional context on this indicator."
-            )
-            QMessageBox.information(self, "How to Fix", msg)
+                "5. Check AbuseIPDB and VirusTotal for additional context.")
 
         install_copy_menu(self._findings_table, [
-            ("separator",        None),
-            ("Copy indicator",   _sec_copy_indicator),
-            ("separator",        None),
-            ("How to Fix",       _sec_how_to_fix),
+            ("separator",      None),
+            ("Copy indicator", _copy_indicator),
+            ("separator",      None),
+            ("How to Fix",     _how_to_fix),
         ])
 
-        # Informative empty state for the findings section
-        self._empty_widget = QWidget()
-        ew_lay = QVBoxLayout(self._empty_widget)
-        ew_lay.setContentsMargins(20, 20, 20, 20)
-        ew_lay.setSpacing(6)
-        ew_lay.addStretch()
-        _show_hdr = QLabel("What this section shows")
-        _show_hdr.setStyleSheet(
-            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
-            f" text-transform:uppercase; letter-spacing:0.5px; background:transparent;"
+        self._empty_widget = QLabel(
+            "No threat intelligence data.\n\n"
+            "Navigate to Threat Intel and run an intelligence update."
         )
-        _show_body = QLabel(
-            "High-risk IP addresses and domains found on your network, cross-referenced against "
-            "threat intelligence feeds — malware, botnets, spam sources, and known attackers."
+        self._empty_widget.setWordWrap(True)
+        self._empty_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_widget.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:11px; padding:24px; background:transparent;"
         )
-        _show_body.setWordWrap(True)
-        _show_body.setStyleSheet(f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;")
-        _why_hdr = QLabel("Why it matters")
-        _why_hdr.setStyleSheet(
-            f"font-size:10px; font-weight:600; color:{TEXT_SECONDARY};"
-            f" text-transform:uppercase; letter-spacing:0.5px; background:transparent;"
-        )
-        _why_body = QLabel(
-            "Knowing which device contacted a known C2 server turns an abstract alert into an "
-            "immediate incident response action."
-        )
-        _why_body.setWordWrap(True)
-        _why_body.setStyleSheet(f"font-size:12px; color:{TEXT_PRIMARY}; background:transparent;")
-        _nav_btn = QPushButton("Go to Threat Intel →")
-        _nav_btn.setFlat(True)
-        _nav_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
-            f" border:none; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
-        )
-        _nav_btn.clicked.connect(lambda: self.navigate_to.emit("Threat Intel"))
-        for _w in (_show_hdr, _show_body, _why_hdr, _why_body, _nav_btn):
-            ew_lay.addWidget(_w)
-        ew_lay.addStretch()
+        threat_lay.addWidget(self._findings_table)
+        threat_lay.addWidget(self._empty_widget)
+        self._findings_tabs.addTab(threat_tab, "Threat Intel")
 
-        findings_lay.addWidget(self._findings_table)
-        findings_lay.addWidget(self._empty_widget)
-        return findings_card
+        return self._findings_tabs
 
-    # ── Data loading ──────────────────────────────────────────────────────────
+    # ── Data loading ───────────────────────────────────────────────────────────
 
     def _load_data(self) -> None:
-        if not _THREAT_OK:
-            self._show_empty("Threat intelligence module not available.")
-            return
-        try:
-            entries = load_from_cache()
-        except Exception:
-            entries = []
+        if _THREAT_OK:
+            try:
+                self._entries = load_from_cache()
+            except Exception:
+                self._entries = []
+            self._last_loaded = time.time()
 
-        self._entries = entries
-        self._last_loaded = time.time()
-        self._update_kpis()
-        self._update_table()
+        self._load_metricstore_data()
+        self._update_scan_kpis()
+        self._update_threat_kpis()
+        self._update_scan_table()
+        self._update_threat_table()
         self._update_status_lbl()
 
-    def _update_kpis(self) -> None:
+    def _load_metricstore_data(self) -> None:
+        if self._store is None:
+            return
+        try:
+            self._cve_entries = self._store.list_cve_lifecycles(state_filter="Open")
+        except Exception:
+            self._cve_entries = []
+        try:
+            certs = self._store.query_cert_status(hours=720)
+            self._tls_issues = [
+                c for c in certs
+                if c.is_expired or c.is_self_signed
+                or (c.days_remaining is not None and c.days_remaining < 30)
+            ]
+        except Exception:
+            self._tls_issues = []
+
+    def _update_scan_kpis(self) -> None:
+        port_n = len(self._port_findings)
+        cve_n  = len(set(e.get("host", "") for e in self._cve_entries if e.get("host")))
+        tls_n  = len(self._tls_issues)
+        cred_n = len(self._cred_flags)
+
+        def _val(done: bool, n: int) -> str:
+            return str(n) if done else "—"
+
+        def _col(done: bool, n: int, alarm: str) -> str:
+            if not done:
+                return TEXT_MUTED
+            return alarm if n > 0 else GREEN
+
+        self._tile_ports._val_lbl.setText(_val(self._port_scan_done, port_n))
+        self._tile_ports._val_lbl.setStyleSheet(
+            f"color:{_col(self._port_scan_done, port_n, RED)};"
+            f" font-size:24px; font-weight:bold;"
+        )
+        store_done = self._store is not None
+        self._tile_cves._val_lbl.setText(_val(store_done, cve_n))
+        self._tile_cves._val_lbl.setStyleSheet(
+            f"color:{_col(store_done, cve_n, AMBER)}; font-size:24px; font-weight:bold;"
+        )
+        self._tile_tls._val_lbl.setText(_val(store_done, tls_n))
+        self._tile_tls._val_lbl.setStyleSheet(
+            f"color:{_col(store_done, tls_n, AMBER)}; font-size:24px; font-weight:bold;"
+        )
+        self._tile_cred._val_lbl.setText(_val(self._cred_scan_done, cred_n))
+        self._tile_cred._val_lbl.setStyleSheet(
+            f"color:{_col(self._cred_scan_done, cred_n, RED)};"
+            f" font-size:24px; font-weight:bold;"
+        )
+
+    def _update_threat_kpis(self) -> None:
         entries = self._entries
         total   = len(entries)
         ips     = sum(1 for e in entries if getattr(e, "itype", "") == "ip")
@@ -380,15 +501,53 @@ class SecurityOverviewPage(QWidget):
 
         if total == 0:
             self._tile_updated._val_lbl.setText("—")
-            self._tile_updated._val_lbl.setStyleSheet(f"color:{TEXT_MUTED};")
         else:
             dates = [s for e in entries if (s := getattr(e, "last_seen", "") or "")]
             last = max(dates) if dates else ""
-            display = last[:10] if last else "cached"
-            self._tile_updated._val_lbl.setText(display)
-            self._tile_updated._val_lbl.setStyleSheet(f"color:{TEXT_SECONDARY};")
+            self._tile_updated._val_lbl.setText(last[:10] if last else "cached")
 
-    def _update_table(self) -> None:
+    def _update_scan_table(self) -> None:
+        t = self._scan_table
+        t.setRowCount(0)
+
+        def _row(type_: str, severity: str, host: str, finding: str) -> None:
+            r = t.rowCount()
+            t.insertRow(r)
+            color = _severity_color(severity)
+            for col, val in enumerate([type_, severity, host, finding]):
+                item = QTableWidgetItem(val)
+                item.setForeground(QColor(color if col == 1 else TEXT_PRIMARY))
+                item.setTextAlignment(
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+                )
+                t.setItem(r, col, item)
+
+        for pf in self._port_findings:
+            _row("Port", "High", pf.get("host", ""),
+                 f"Port {pf['port']} ({pf.get('service', '')})")
+
+        for cve in self._cve_entries:
+            sev  = cve.get("severity", "Warning") or "Warning"
+            cvss = cve.get("cvss_score", 0.0) or 0.0
+            _row("CVE", sev, cve.get("host", ""),
+                 f"{cve.get('cve_id', '')} — CVSS {cvss:.1f}")
+
+        for c in self._tls_issues:
+            if c.is_expired:
+                desc, sev = "Certificate expired", "Critical"
+            elif c.is_self_signed:
+                desc, sev = "Self-signed certificate", "High"
+            else:
+                rem = c.days_remaining or 0
+                desc = f"Expires in {rem} day{'s' if rem != 1 else ''}"
+                sev  = "High" if rem < 7 else "Warning"
+            _row("TLS", sev, f"{c.host}:{c.port}", desc)
+
+        has = t.rowCount() > 0
+        t.setVisible(has)
+        self._scan_empty.setVisible(not has)
+
+    def _update_threat_table(self) -> None:
         entries = self._entries
         if not entries:
             self._findings_table.setVisible(False)
@@ -397,11 +556,8 @@ class SecurityOverviewPage(QWidget):
 
         self._empty_widget.setVisible(False)
         self._findings_table.setVisible(True)
-
         sorted_entries = sorted(
-            entries,
-            key=lambda e: getattr(e, "confidence", 0),
-            reverse=True,
+            entries, key=lambda e: getattr(e, "confidence", 0), reverse=True,
         )[:15]
 
         self._findings_table.setRowCount(0)
@@ -412,7 +568,6 @@ class SecurityOverviewPage(QWidget):
             cats = getattr(entry, "categories", "") or ""
             if isinstance(cats, (list, tuple)):
                 cats = ", ".join(cats)
-
             items = [
                 QTableWidgetItem(getattr(entry, "indicator", "—")),
                 QTableWidgetItem(getattr(entry, "itype", "—")),
@@ -420,30 +575,25 @@ class SecurityOverviewPage(QWidget):
                 QTableWidgetItem(f"{conf}%"),
                 QTableWidgetItem(getattr(entry, "source", "—")),
             ]
-            color = _confidence_color(conf)
-            items[3].setForeground(QColor(color))
-
+            items[3].setForeground(QColor(_confidence_color(conf)))
             for col, item in enumerate(items):
-                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                item.setTextAlignment(
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+                )
                 self._findings_table.setItem(row, col, item)
 
     def _update_status_lbl(self) -> None:
         if self._last_loaded is None:
             self._last_scan_lbl.setText("● Threat cache: not loaded")
             return
-        dt = datetime.fromtimestamp(self._last_loaded)
-        has_data = bool(self._entries)
-        color = TEXT_SECONDARY if has_data else TEXT_MUTED
+        dt    = datetime.fromtimestamp(self._last_loaded)
+        color = TEXT_SECONDARY if self._entries else TEXT_MUTED
         self._last_scan_lbl.setText(f"● Threat cache: {dt.strftime('%H:%M:%S')}")
         self._last_scan_lbl.setStyleSheet(
             f"color:{color}; font-size:9px; border:none; background:transparent;"
         )
 
-    def _show_empty(self, msg: str) -> None:
-        self._findings_table.setVisible(False)
-        self._empty_widget.setVisible(True)
-
-    # ── Public API ────────────────────────────────────────────────────────────
+    # ── Public API ─────────────────────────────────────────────────────────────
 
     def refresh(self) -> None:
         """Called by dashboard when the page becomes visible."""
@@ -456,3 +606,33 @@ class SecurityOverviewPage(QWidget):
         self._last_net_scan_lbl.setStyleSheet(
             f"color:{GREEN}; font-size:9px; border:none; background:transparent;"
         )
+        self._load_metricstore_data()
+        self._update_scan_kpis()
+        self._update_scan_table()
+
+    def on_port_scan_result(self, result) -> None:
+        """Accumulates HIGH-risk open port findings from any port scan result."""
+        host = getattr(result, "host", "") or getattr(result, "ip", "") or "unknown"
+        # Replace prior findings for this host
+        self._port_findings = [pf for pf in self._port_findings if pf.get("host") != host]
+        try:
+            from modules.port_scanner import HIGH_RISK_PORTS as _HRP
+        except Exception:
+            _HRP = set()
+        for p in getattr(result, "open_ports", []):
+            # PortResult has .risk; SYNPortResult does not — fall back to port-number check
+            risk = getattr(p, "risk", None)
+            if risk is None:
+                risk = "HIGH" if p.port in _HRP else "LOW"
+            if risk == "HIGH":
+                svc = getattr(p, "name", getattr(p, "service", "")) or ""
+                self._port_findings.append({"host": host, "port": p.port, "service": svc})
+        self._port_scan_done = True
+        self._update_scan_kpis()
+        self._update_scan_table()
+
+    def on_cred_result(self, result) -> None:
+        """Records risk flags from a credentialed (login test) scan result."""
+        self._cred_flags    = list(getattr(result, "risk_flags", []) or [])
+        self._cred_scan_done = True
+        self._update_scan_kpis()
