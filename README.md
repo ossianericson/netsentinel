@@ -352,6 +352,12 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v2.1.9
+**Fixed**
+- `modules/topology_cytoscape.py`: removed re-export block that created a cyclic import with `topology_cytoscape_html` (CodeQL #1526, #1528)
+- `modules/topology_cytoscape_html.py`: promoted lazy `build_cytoscape_elements` imports to module-level now that the cycle is broken (CodeQL #1524, #1525)
+- `tests/test_topology_cytoscape_html.py`: unified import form to `from modules import topology_cytoscape_html` to resolve CodeQL `py/import-and-import-from` (#1527)
+
 ### v2.1.8
 **Changed**
 - Overview tiles: staleness callout shown when data is >24 h old ("Data from X days ago — rescan?" in amber); 30 min+ shown in amber, 2 h+ in red
