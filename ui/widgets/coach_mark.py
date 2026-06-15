@@ -147,12 +147,16 @@ class CoachMarkOverlay(QWidget):
         # Transparent stylesheet — background drawn via paintEvent so WA_Translucent works
         self.setStyleSheet("background: transparent; border: none;")
 
-        # Highlight rings around all target widgets (primary + any extras)
+        # Highlight rings around all target widgets (primary + any extras).
+        # Each ring is parented to the target's own parent widget so that
+        # mapTo() only traverses one level — avoiding incorrect offsets from
+        # intermediate scroll areas or translated widgets in the hierarchy.
         self._rings: list[_HighlightRing] = []
         all_targets = [w for w in ([target_widget] + list(extra_target_widgets or [])) if w is not None]
         for tw in all_targets:
             try:
-                self._rings.append(_HighlightRing(tw, parent))
+                ring_parent = tw.parentWidget() or parent
+                self._rings.append(_HighlightRing(tw, ring_parent))
             except Exception:
                 pass  # non-fatal
 
@@ -210,15 +214,39 @@ class CoachMarkOverlay(QWidget):
         self._fade_anim.setDuration(180)
         self._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
+        # Position-tracking timer — keeps ring and card in sync if the button
+        # moves after the mark is shown (e.g. a notification pushes it down).
+        self._track_timer = QTimer(self)
+        self._track_timer.setInterval(100)
+        self._track_timer.timeout.connect(self._sync_positions)
+
         self._position()
 
     def show_animated(self) -> None:
-        self._position()
-        # Show highlight rings around all targets
+        # Show rings immediately so they are visible as soon as possible.
+        # ring.show() may queue a LayoutRequest on the button container
+        # (since the ring is an unmanaged child of that container), which
+        # nudges the button's final position asynchronously.  We defer the
+        # geometry refresh and card placement to the next event-loop tick so
+        # that LayoutRequest fires first — guaranteeing ring and card both
+        # see the same settled button position (no ring/card mismatch).
+        for ring in self._rings:
+            ring.show()
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(self._finish_show)
+        _t.start(0)
+
+    def _sync_positions(self) -> None:
+        """Re-sync ring geometries and card position to the current button location."""
         for ring in self._rings:
             ring._update_geometry()
-            ring.show()
             ring.raise_()
+        self._position()
+
+    def _finish_show(self) -> None:
+        """Called on next event-loop tick after show_animated(); button is settled."""
+        self._sync_positions()
         self.show()
         self.raise_()
         self._fade_anim.stop()
@@ -227,8 +255,10 @@ class CoachMarkOverlay(QWidget):
         self._fade_anim.start()
         if self._auto_dismiss_ms > 0:
             self._auto_timer.start()
+        self._track_timer.start()
 
     def hide_animated(self, callback=None) -> None:
+        self._track_timer.stop()
         self._auto_timer.stop()
         # Remove all highlight rings immediately when the step is dismissed
         for ring in self._rings:
@@ -269,6 +299,18 @@ class CoachMarkOverlay(QWidget):
                         self.move(cx, cy)
                         return
 
+                    if self._prefer_side == "below":
+                        # Try below → right → left; never above (card must not overlap ring)
+                        for cx, cy in (below, right, left):
+                            if m <= cx and cx + self._W <= pw - m and m <= cy and cy + self._H <= ph - m:
+                                self.move(cx, cy)
+                                return
+                        # Fallback: clamp below (may be partially off-screen, but never above)
+                        cx = max(m, min(below[0], pw - self._W - m))
+                        cy = max(m, min(below[1], ph - self._H - m))
+                        self.move(cx, cy)
+                        return
+
                     # Default order: below → right → left → above; fallback = clamped below
                     candidates = [below, right, left, above]
                     for cx, cy in candidates:
@@ -285,10 +327,6 @@ class CoachMarkOverlay(QWidget):
 
         # Default: bottom-right corner
         self.move(pw - self._W - m, ph - self._H - m)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self._position()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

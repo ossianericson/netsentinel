@@ -782,15 +782,25 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
         # Store reference on self — prevents Python GC from collecting the chain
         # before the 400 ms delay fires and the signal connections are alive.
+        def _pick_home_scan_btn():
+            hp = getattr(self, "_home_page", None)
+            if hp is None:
+                return None
+            compact = getattr(hp, "_btn_rescan_compact", None)
+            if compact is not None and compact.isVisible():
+                return compact
+            return getattr(hp, "_btn_scan", None)
+
         self._onboarding_chain = CoachMarkChain(
             self,
             [{
                 "title":         "Step 1 of 9 — Scan your network",
-                "body":          "Both Scan buttons are highlighted — the one in the header bar (always visible) and the one on this page. Click either to start. Your 8-step guided tour follows automatically.",
+                "body":          "Click either scan button to start — the one here on this page or the one in the header bar (always visible). Your 8-step guided tour follows automatically.",
                 "delay_ms":      400,
                 "auto_dismiss_ms": 0,   # stays until user explicitly clicks action button
-                "target":        lambda: getattr(self, "_header_scan_btn", None),
-                "extra_targets": [lambda: getattr(getattr(self, "_home_page", None), "_btn_scan", None)],
+                "target":        _pick_home_scan_btn,
+                "extra_targets": [lambda: getattr(self, "_header_scan_btn", None)],
+                "prefer_side":   "below",
                 "action_text":   "Start Scan →",
             }],
             on_done=_step1_done,
