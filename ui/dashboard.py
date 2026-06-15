@@ -284,6 +284,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._update_available.connect(self._on_update_available)
         root.addWidget(self._update_bar)
 
+        # Monitor resume bar — hidden; shown when monitors are auto-resumed at startup
+        self._monitor_resume_bar = self._build_monitor_resume_bar()
+        self._monitor_resume_bar.setVisible(False)
+        root.addWidget(self._monitor_resume_bar)
+
         # Main area: sidebar+content fills window
         _main = self._build_tabs()
         self._verdict_area = self._build_verdict_area()  # kept alive for exports; not shown
@@ -332,9 +337,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._pulse_online_lbl.clicked.connect(
             lambda: self._nav_rail_go_to("What's Wrong?"))
         self._pulse_devices_lbl.clicked.connect(
-            lambda: self._nav_rail_go_to("Overview"))
+            lambda: self._nav_rail_go_to("Dashboard"))
         self._pulse_scan_lbl.clicked.connect(
-            lambda: self._nav_rail_go_to("Overview"))
+            lambda: self._nav_rail_go_to("Dashboard"))
         self._pulse_logger_lbl.clicked.connect(
             lambda: self._nav_rail_go_to("Network Logger"))
 
@@ -658,15 +663,84 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             saved.discard(key)
         qs.setValue("monitors/was_running", ",".join(sorted(saved)))
 
+    def _build_monitor_resume_bar(self) -> "QWidget":
+        from PyQt6.QtWidgets import QWidget as _W, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
+        from ui.styles import AMBER, BG_CARD, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
+        container = _W()
+        container.setObjectName("monitorResumeBar")
+        container.setFixedHeight(28)
+        container.setStyleSheet(
+            f"QWidget#monitorResumeBar {{ background:{AMBER}18;"
+            f" border-bottom: 1px solid {AMBER}55; }}"
+        )
+        row = _HL(container)
+        row.setContentsMargins(12, 0, 8, 0)
+        row.setSpacing(6)
+        icon = _L("▶")
+        icon.setStyleSheet(f"color:{AMBER}; font-size:11px; background:transparent; border:none;")
+        row.addWidget(icon)
+        self._monitor_resume_lbl = _L("")
+        self._monitor_resume_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
+        )
+        row.addWidget(self._monitor_resume_lbl, 1)
+        btn_stop = _B("Stop all")
+        btn_stop.setFixedHeight(20)
+        btn_stop.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
+            f" border-radius:3px; font-size:10px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{AMBER}22; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+        )
+        btn_stop.clicked.connect(self._stop_all_resumed_monitors)
+        row.addWidget(btn_stop)
+        btn_dismiss = _B("✕")
+        btn_dismiss.setFixedSize(20, 20)
+        btn_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:none;"
+            f" font-size:12px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+        )
+        btn_dismiss.clicked.connect(container.hide)
+        row.addWidget(btn_dismiss)
+        return container
+
+    def _show_monitor_resume_bar(self, resumed: list[str]) -> None:
+        count = len(resumed)
+        names = ", ".join(resumed)
+        self._monitor_resume_lbl.setText(
+            f"{count} monitor{'s' if count != 1 else ''} resumed from last session: {names}"
+        )
+        self._monitor_resume_bar.setVisible(True)
+
+    def _stop_all_resumed_monitors(self) -> None:
+        if self._arp_worker and self._arp_worker.isRunning():
+            self._arp_worker.stop()
+            self._save_monitor_state("arp", False)
+        if self._bw_worker and self._bw_worker.isRunning():
+            self._bw_worker.stop()
+            self._save_monitor_state("bandwidth", False)
+        if self._sched_worker and self._sched_worker.isRunning():
+            self._sched_worker.stop()
+            self._save_monitor_state("scheduler", False)
+        self._monitor_resume_bar.setVisible(False)
+
     def _restore_running_monitors(self) -> None:
         qs = QSettings("NetSentinel", "NetSentinel")
         keys = set(qs.value("monitors/was_running", "", type=str).split(",")) - {""}
+        resumed: list[str] = []
         if "arp" in keys and not (self._arp_worker and self._arp_worker.isRunning()):
             self._start_arp_monitor()
+            resumed.append("ARP Watch")
         if "bandwidth" in keys and not (self._bw_worker and self._bw_worker.isRunning()):
             self._start_bandwidth_monitor()
+            resumed.append("Live Bandwidth")
         if "scheduler" in keys and not (self._sched_worker and self._sched_worker.isRunning()):
             self._start_scheduler()
+            resumed.append("Scheduled Scans")
+        if resumed:
+            self._show_monitor_resume_bar(resumed)
 
     # ── First-run onboarding ──────────────────────────────────────────────────
 
@@ -743,7 +817,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._onboarding_active = False
             from PyQt6.QtCore import QSettings as _QS
             _QS("NetSentinel", "NetSentinel").setValue("tour/v1_done", True)
-            self._nav_rail_go_to("Overview")
+            self._nav_rail_go_to("Dashboard")
 
         def _tour_skipped() -> None:
             self._onboarding_active = False
