@@ -228,7 +228,7 @@ netsentinel/
 │   │   ├── wifi_heatmap_page.py    # Floor plan import + IDW interpolation + PNG export
 │   │   └── wifi_monitor_page.py    # 802.11 Monitor — passive frame capture (Npcap; admin required)
 │   ├── header.py               # AppHeaderMixin — header construction + frameless-window behaviour (S13-3 split)
-│   ├── scan_wiring.py          # ScanResultMixin — scan result handlers (extracted from dashboard.py)
+│   ├── scan_wiring.py          # ScanResultMixin — scan result handlers (extracted from dashboard.py); _merge_scan_with_persistent() appends pinned/static-candidate offline devices after each live scan
 │   ├── scan_enrichment.py      # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers (Sprint 13)
 │   ├── tabs.py                 # TabBuilderMixin — page factory and sidebar assembly; inherits all _*TabsMixin sub-mixins (Sprint 6)
 │   ├── tabs_helpers.py         # Shared UI utility functions for tab builders; re-exported via tabs.py (Sprint 8)

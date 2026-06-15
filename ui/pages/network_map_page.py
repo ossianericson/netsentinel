@@ -497,8 +497,13 @@ class NetworkMapPage(QWidget):
         if self._outer_stack.currentIndex() == 0:
             self._outer_stack.setCurrentIndex(1)
 
-        # A live scan supersedes any cached view — hide the stale indicator
+        # A live scan supersedes any cached view — hide the stale indicator.
+        # If we were showing cached data, also reset _topology_loaded so the
+        # first live scan builds fresh Cytoscape HTML with a clean layout instead
+        # of the incremental-update path which reuses cached node positions.
         if hasattr(self, "_stale_label"):
+            if self._stale_label.isVisible():
+                self._topology_loaded = False  # force full rebuild on cache→live transition
             self._stale_label.setVisible(False)
 
         # Show LLDP admin hint on Interactive tab when rights needed and no neighbors

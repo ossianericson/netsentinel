@@ -939,6 +939,7 @@ class InventoryPage(QWidget):
         self._current_segments: list = []   # NetworkSegment list from last scan
         self._active_seg_ids: Optional[set] = None  # None = show all
         self._seg_pills: dict = {}           # {segment_id_or_cidr: QPushButton}
+        self._hide_offline: bool = False     # when True, hide cached/stale rows
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
@@ -1081,8 +1082,23 @@ class InventoryPage(QWidget):
         self._snap_count_lbl.setStyleSheet(
             f"font-size:10px; color:{TH_TEXT}; background:transparent; border:none; opacity:0.7;"
         )
+        self._hide_offline_btn = QPushButton("Hide offline")
+        self._hide_offline_btn.setCheckable(True)
+        self._hide_offline_btn.setFixedHeight(20)
+        self._hide_offline_btn.setToolTip(
+            "Hide cached/stale devices — devices not seen in this scan"
+        )
+        self._hide_offline_btn.setStyleSheet(
+            f"QPushButton {{ font-size:10px; color:{TH_TEXT}; background:transparent;"
+            f" border:1px solid {TH_TEXT}44; border-radius:3px; padding:0 7px; }}"
+            f"QPushButton:hover {{ background:{TH_TEXT}22; }}"
+            f"QPushButton:checked {{ background:{TH_TEXT}33; border-color:{TH_TEXT}; }}"
+            f"QPushButton:pressed {{ background:{TH_TEXT}22; color:{TH_TEXT}; }}"
+        )
+        self._hide_offline_btn.toggled.connect(self._on_hide_offline_toggled)
         snap_hdr_lay.addWidget(snap_title)
         snap_hdr_lay.addStretch()
+        snap_hdr_lay.addWidget(self._hide_offline_btn)
         snap_hdr_lay.addWidget(self._snap_count_lbl)
         snap_card_lay.addWidget(snap_hdr)
 
@@ -1515,6 +1531,10 @@ class InventoryPage(QWidget):
             btn.setStyleSheet(self._zoom_style(active))
         self._refresh()
 
+    def _on_hide_offline_toggled(self, checked: bool) -> None:
+        self._hide_offline = checked
+        self._apply_segment_filter()
+
     def _toggle_type(self, event_type: str, checked: bool) -> None:
         if checked:
             self._active_types.add(event_type)
@@ -1862,6 +1882,8 @@ class InventoryPage(QWidget):
             dot_item.setForeground(QColor(dot_color))
             dot_item.setToolTip(dot_tip)
             dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            # Store display_state so _apply_segment_filter can hide offline rows
+            dot_item.setData(Qt.ItemDataRole.UserRole + 1, _display_state)
             self._snap_table.setItem(row, 0, dot_item)
 
             # Col 1: segment colour dot
@@ -2089,17 +2111,29 @@ class InventoryPage(QWidget):
         return None
 
     def _apply_segment_filter(self) -> None:
-        """Show/hide snap_table rows based on _active_seg_ids."""
-        if self._active_seg_ids is None:
-            # Show all
-            for row in range(self._snap_table.rowCount()):
-                self._snap_table.showRow(row)
-            return
+        """Show/hide snap_table rows based on _active_seg_ids and _hide_offline."""
+        _offline_states = {"cached", "stale"}
         for row in range(self._snap_table.rowCount()):
-            seg_item = self._snap_table.item(row, 1)
-            row_key = seg_item.data(Qt.ItemDataRole.UserRole) if seg_item else None
-            match = row_key in self._active_seg_ids
-            self._snap_table.setRowHidden(row, not match)
+            hidden = False
+
+            # Offline filter: hide rows whose display_state is cached or stale
+            if self._hide_offline:
+                dot_item = self._snap_table.item(row, 0)
+                _state = (
+                    dot_item.data(Qt.ItemDataRole.UserRole + 1)
+                    if dot_item else ""
+                ) or ""
+                if _state in _offline_states:
+                    hidden = True
+
+            # Segment filter: hide rows not in the active segment set
+            if not hidden and self._active_seg_ids is not None:
+                seg_item = self._snap_table.item(row, 1)
+                row_key = seg_item.data(Qt.ItemDataRole.UserRole) if seg_item else None
+                if row_key not in self._active_seg_ids:
+                    hidden = True
+
+            self._snap_table.setRowHidden(row, hidden)
 
     def _open_seg_context(self, seg) -> None:
         """Right-click context menu on a segment pill."""

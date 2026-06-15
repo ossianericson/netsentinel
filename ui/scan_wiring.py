@@ -470,6 +470,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
         if hasattr(self, "_inventory_page"):
             # Auto-detect segments before populating the snapshot table
+            _inv_store = getattr(self, "_store", None)
             try:
                 from modules.network_segments import (
                     auto_detect_segments, merge_segments,
@@ -479,17 +480,17 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 _gw = _net_info.get("gateway", "") or ""
                 _detected = auto_detect_segments(devices, _gw)
                 _stored: list = []
-                if _store_ref:
+                if _inv_store:
                     try:
-                        _stored = _store_ref.get_segments()
+                        _stored = _inv_store.get_segments()
                     except Exception:
                         pass  # non-fatal — table may not exist on first run
                 _merged = merge_segments(_detected, _stored)
                 # Upsert new auto-created entries only
                 for _seg in _merged:
-                    if _seg.id == 0 and _store_ref:
+                    if _seg.id == 0 and _inv_store:
                         try:
-                            _new_id = _store_ref.upsert_segment(_seg)
+                            _new_id = _inv_store.upsert_segment(_seg)
                             _seg.id = _new_id
                         except Exception:
                             pass  # non-fatal — proceed without DB id
@@ -497,7 +498,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 self._last_segments = _merged
             except Exception:
                 pass  # non-fatal — segment detection is best-effort
-            self._inventory_page.set_scan_devices(devices)
+            # Merge live devices with pinned/static-candidate offline devices
+            self._inventory_page.set_scan_devices(
+                self._merge_scan_with_persistent(devices)
+            )
         self._m1_table.setRowCount(0)
         _store_ref = getattr(self, "_store", None)
         # Snapshot known devices before the loop so we can detect IP/hostname changes
@@ -984,6 +988,76 @@ class ScanResultMixin(ScanEnrichmentMixin):
         self._start_lldp_discovery()
 
 
+    def _merge_scan_with_persistent(self, live_devices: list) -> list:
+        """Return live devices augmented with pinned/static-candidate offline devices.
+
+        Devices that appeared in the live scan are returned as-is; the inventory
+        page treats any device without an explicit display_state as "online".
+        Offline static candidates (pinned, infrastructure roles, or IP-stable
+        devices seen 3+ times) are appended as plain dicts with display_state set
+        to "pinned", "cached" (<24 h), or "stale" (<7 d).  Devices older than 7
+        days and not pinned are omitted — they are already excluded from the
+        startup cache restore and would just clutter the view.
+        """
+        import time as _mt
+        _store = getattr(self, "_store", None)
+        if _store is None:
+            return live_devices
+        try:
+            from modules.device_stability import is_static_candidate as _is_static
+
+            _now   = int(_mt.time())
+            _24h   = 86_400
+            _7d    = 7 * _24h
+
+            # Build MAC set for live devices so we don't double-list them
+            _live_macs: set[str] = set()
+            for _d in live_devices:
+                _mac = (_d.mac if not isinstance(_d, dict) else _d.get("mac", "")) or ""
+                if _mac and _mac not in ("?", "00:00:00:00:00:00"):
+                    _live_macs.add(_mac.lower())
+
+            _extras: list = []
+            for _kd in _store.get_known_devices().values():
+                if not _kd.ip or _kd.ip in ("?", "0.0.0.0", ""):
+                    continue
+                if (_kd.mac or "").lower() in _live_macs:
+                    continue
+                if not _is_static(
+                    ip_stability=float(_kd.ip_stability or 0.0),
+                    scan_count=int(_kd.scan_count or 0),
+                    inferred_role=_kd.inferred_role,
+                    is_pinned=bool(_kd.is_pinned),
+                ):
+                    continue
+                _age_s = _now - int(_kd.last_seen or 0)
+                if _kd.is_pinned:
+                    _state = "pinned"
+                elif _age_s <= _24h:
+                    _state = "cached"
+                elif _age_s <= _7d:
+                    _state = "stale"
+                else:
+                    continue  # older than 7 days and not pinned — skip
+                _extras.append({
+                    "ip":            _kd.ip,
+                    "hostname":      _kd.custom_name or _kd.hostname or "",
+                    "mac":           _kd.mac or "?",
+                    "vendor":        _kd.vendor or "Unknown",
+                    "risk_level":    "UNKNOWN",
+                    "device_type":   _kd.device_type or "Unknown Device",
+                    "verdict":       "",
+                    "display_state": _state,
+                    "last_seen_ts":  int(_kd.last_seen or 0),
+                    "inferred_role": _kd.inferred_role,
+                    "scan_count":    _kd.scan_count,
+                    "ip_stability":  _kd.ip_stability,
+                    "is_pinned":     _kd.is_pinned,
+                })
+            return list(live_devices) + _extras
+        except Exception:
+            return live_devices  # non-fatal — fall back to live-only list
+
     def _on_lldp_result(self, neighbors: list) -> None:
         """Handle LLDP neighbor results from LldpWorker."""
         self._lldp_result = neighbors
@@ -1175,12 +1249,70 @@ class ScanResultMixin(ScanEnrichmentMixin):
             except Exception:
                 pass  # non-fatal
 
-        # Feed Network Map from the last topology snapshot
+        # Feed Network Map — load mesh cache FIRST so the single initial render
+        # includes satellite grouping (avoiding a two-render sequence where the
+        # incremental Cytoscape update fires before the first setHtml() has loaded).
         if hasattr(self, "_network_map_page"):
+            # Step 1: attempt to restore mesh enrichment cache
+            _startup_mesh_units, _startup_mesh_enrich = None, None
             try:
-                self._network_map_page.render_from_cache(devices, _store_ref)
+                import json as _json
+                from modules.utils import get_app_data_dir as _gad
+                _cache_path = _gad() / "mesh_enrichment_cache.json"
+                if _cache_path.exists():
+                    _cached = _json.loads(_cache_path.read_text(encoding="utf-8"))
+                    if _cached.get("plugin_enrichments"):
+                        self._plugin_enrichments = _cached["plugin_enrichments"]
+                    if _cached.get("plugin_nodes"):
+                        self._plugin_nodes = _cached["plugin_nodes"]
+                    if _cached.get("plugin_hardware_name"):
+                        self._plugin_hardware_name = _cached["plugin_hardware_name"]
+                    _startup_mesh_units, _startup_mesh_enrich = (
+                        self._effective_mesh_render_params()
+                    )
+            except Exception:
+                pass  # non-fatal — render without mesh if cache unavailable
+
+            # Step 2: single combined render (topology snapshot + mesh data)
+            try:
+                _gw_ip: str | None = None
+                try:
+                    from modules.topology_snapshot import load_last_snapshot as _ls
+                    from collections import Counter as _Ctr
+                    _snap = _ls(_store_ref)
+                    if _snap and _snap.edges:
+                        _gw_ip = _Ctr(e[0] for e in _snap.edges).most_common(1)[0][0]
+                except Exception:
+                    pass  # non-fatal — render without gateway_ip
+                self._network_map_page.render(
+                    devices=devices,
+                    gateway_ip=_gw_ip,
+                    mesh_units=_startup_mesh_units,
+                    mesh_enrichment=_startup_mesh_enrich,
+                )
+                if hasattr(self._network_map_page, "_stale_label"):
+                    self._network_map_page._stale_label.setVisible(True)
             except Exception:
                 pass  # non-fatal
+
+    def _save_mesh_enrichment_cache(self) -> None:
+        """Persist plugin mesh enrichment so the Network Map shows node grouping at startup."""
+        try:
+            import json as _json
+            from modules.utils import get_app_data_dir as _gad
+            _data = {
+                "plugin_enrichments": {
+                    k: dict(v) for k, v in
+                    getattr(self, "_plugin_enrichments", {}).items()
+                },
+                "plugin_nodes":         dict(getattr(self, "_plugin_nodes", {})),
+                "plugin_hardware_name": getattr(self, "_plugin_hardware_name", ""),
+            }
+            (_gad() / "mesh_enrichment_cache.json").write_text(
+                _json.dumps(_data), encoding="utf-8"
+            )
+        except Exception:
+            pass  # non-fatal — best-effort cache write
 
     def _cached_scan_age_str(self, store) -> str:
         """Return a human-readable age string for the most recent topology snapshot."""

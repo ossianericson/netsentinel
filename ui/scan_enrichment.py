@@ -29,6 +29,9 @@ class ScanEnrichmentMixin:
     ScanResultMixin inherits from this mixin.
     """
 
+    def _save_mesh_enrichment_cache(self) -> None:
+        """No-op base — overridden by ScanResultMixin with the full file-write implementation."""
+
     def _on_mesh_result(self, data: dict) -> None:
         """Receive mesh scan result and enrich the Devices table."""
         clients  = data.get("clients", [])
@@ -156,6 +159,7 @@ class ScanEnrichmentMixin:
                       "ip": info.get("ip", ""), "mac": ""}]
         self._plugin_nodes[inst_id] = nodes
         self._apply_mesh_enrichment()  # handles topology + regrouping + synthesis
+        self._save_mesh_enrichment_cache()  # persist so Network Map loads correctly next startup
         from modules.network_infrastructure import hw_state
         path = data.get("_path", hw_name)
         hw_state.update_router(clients, nodes, source=path, hw_name=hw_name)
