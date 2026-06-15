@@ -200,13 +200,14 @@ def _svc_diag_page():
 
 @pytestmark_qt
 def test_diagnosis_page_has_four_symptom_tiles(_diagnosis_page):
-    """The idle state must have exactly 4 checkable symptom buttons."""
+    """The idle state must have the expected checkable symptom buttons."""
     page = _diagnosis_page
     group = page._symptom_group
     buttons = group.buttons()
     keys = [b.property("symptom_key") for b in buttons]
     assert "service_unreachable" in keys, f"service_unreachable not found in {keys}"
-    assert len(keys) == 4
+    assert "other" in keys, f"'other' symptom tile not found in {keys}"
+    assert len(keys) == 5
 
 
 @pytestmark_qt

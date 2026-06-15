@@ -19,7 +19,7 @@ import datetime as _dt
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFrame,
-    QHBoxLayout, QLabel, QProgressBar, QPushButton, QScrollArea,
+    QHBoxLayout, QLabel, QLineEdit, QProgressBar, QPushButton, QScrollArea,
     QStackedWidget, QVBoxLayout, QWidget,
 )
 
@@ -236,7 +236,7 @@ def _save_diag_history(result) -> None:
 
 class DiagnosisPage(QWidget):
 
-    navigate_to          = pyqtSignal(str)  # emits "Overview" when back link is clicked
+    navigate_to          = pyqtSignal(str)  # emits "Dashboard" when back link is clicked
     diagnosis_saved      = pyqtSignal()     # emitted after each completed run
     scan_requested       = pyqtSignal()     # emitted when user clicks Run Diagnosis
     service_diag_requested = pyqtSignal(str)  # emitted for service_unreachable; arg = service_id
@@ -315,7 +315,7 @@ class DiagnosisPage(QWidget):
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        back_btn.clicked.connect(lambda: self.navigate_to.emit("Overview"))
+        back_btn.clicked.connect(lambda: self.navigate_to.emit("Dashboard"))
         root.addWidget(back_btn)
 
         from ui.widgets.page_header import PageHeaderBar
@@ -346,6 +346,7 @@ class DiagnosisPage(QWidget):
             ("My connection keeps dropping", "dropping"),
             ("I can't connect at all",       "noconn"),
             ("A service is unreachable",     "service_unreachable"),
+            ("Something else…",         "other"),
         ]
 
         tiles_row = QHBoxLayout()
@@ -381,6 +382,7 @@ class DiagnosisPage(QWidget):
         def _on_symptom_clicked(btn):
             self._symptom = btn.property("symptom_key")
             self._service_pick_row.setVisible(self._symptom == "service_unreachable")
+            self._other_desc_row.setVisible(self._symptom == "other")
 
         self._symptom_group.buttonClicked.connect(_on_symptom_clicked)
 
@@ -416,6 +418,29 @@ class DiagnosisPage(QWidget):
         sp_lay.addStretch()
         lay.addWidget(self._service_pick_row)
         self._service_pick_row.setVisible(False)
+
+        # Free-text description — shown only when "Something else…" tile is selected
+        self._other_desc_row = QWidget()
+        self._other_desc_row.setStyleSheet("background:transparent;")
+        _od_lay = QHBoxLayout(self._other_desc_row)
+        _od_lay.setContentsMargins(0, 0, 0, 0)
+        _od_lay.setSpacing(8)
+        _od_label = QLabel("Describe the issue:")
+        _od_label.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+        )
+        self._other_desc_edit = QLineEdit()
+        self._other_desc_edit.setPlaceholderText("e.g. my printer can't be found, one device is much slower than others…")
+        self._other_desc_edit.setFixedHeight(28)
+        self._other_desc_edit.setStyleSheet(
+            f"QLineEdit {{ background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
+            f" border-radius:4px; padding:0 6px; font-size:11px; }}"
+            f"QLineEdit:focus {{ border-color:{ACCENT}; }}"
+        )
+        _od_lay.addWidget(_od_label)
+        _od_lay.addWidget(self._other_desc_edit, 1)
+        lay.addWidget(self._other_desc_row)
+        self._other_desc_row.setVisible(False)
 
         _tile_hint = QLabel("Select a symptom, then click Run Diagnosis — NetSentinel runs targeted checks and shows plain-English results in 15–30 seconds.")
         _tile_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -881,6 +906,8 @@ class DiagnosisPage(QWidget):
             service_id = self._symptom_service_combo.itemData(idx) if idx >= 0 else "netflix"
             self.service_diag_requested.emit(service_id)
             return
+        # "Something else…" runs a full general diagnosis
+        effective_symptom = "slow" if self._symptom == "other" else self._symptom
         self.scan_requested.emit()
         self._stack.setCurrentIndex(_RUNNING)
         self._progress_bar.setValue(0)
@@ -889,7 +916,7 @@ class DiagnosisPage(QWidget):
         self._worker = DiagnosisWorker(
             gateway_ip=self._gateway_ip,
             gateway_mac=self._gateway_mac,
-            symptom=self._symptom,
+            symptom=effective_symptom,
             parent=self,
         )
         self._worker.progress.connect(self._on_progress)

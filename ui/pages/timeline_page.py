@@ -30,11 +30,12 @@ from ui.styles import (
 )
 
 _SOURCE_PAGE_MAP = {
-    "Devices":        "Devices",
-    "Alerts":         "Notifications",
-    "CVEs":           "CVE Tracker",
-    "Speed Tests":    "Speed Test",
-    "Device Changes": "Devices",
+    "Devices":          "Devices",
+    "Alerts":           "Notifications",
+    "CVEs":             "CVE Tracker",
+    "Speed Tests":      "Speed Test",
+    "Device Changes":   "Devices",
+    "Network Logger":   "Network Logger",
 }
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ _SOURCE_ALERTS  = "Alerts"
 _SOURCE_CVE     = "CVEs"
 _SOURCE_SPEED   = "Speed Tests"
 _SOURCE_CHANGES = "Device Changes"
+_SOURCE_LOGGER  = "Network Logger"
 
 _SOURCE_COLORS = {
     _SOURCE_DEVICE:  ACCENT,
@@ -55,6 +57,7 @@ _SOURCE_COLORS = {
     _SOURCE_CVE:     RED,
     _SOURCE_SPEED:   GREEN,
     _SOURCE_CHANGES: TEXT_MUTED,
+    _SOURCE_LOGGER:  RED,
 }
 
 
@@ -106,7 +109,8 @@ class TimelinePage(QWidget):
         super().__init__(parent)
         self._store   = store
         self._active_sources: set[str] = {
-            _SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED, _SOURCE_CHANGES,
+            _SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED,
+            _SOURCE_CHANGES, _SOURCE_LOGGER,
         }
         self._events: list[_Ev] = []
         self._tl_search_timer = QTimer(self)
@@ -157,6 +161,7 @@ class TimelinePage(QWidget):
             ("cves",     "CVEs",            RED),
             ("speed",    "Speed Tests",     GREEN),
             ("changes",  "Device Changes",  TEXT_MUTED),
+            ("outages",  "Log Outages",     RED),
         ]:
             tile = QLabel(f"<b>—</b> {label}")
             tile.setStyleSheet(
@@ -176,7 +181,8 @@ class TimelinePage(QWidget):
         chip_row.addWidget(chip_lbl)
 
         self._chip_btns: dict[str, QPushButton] = {}
-        for src in (_SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED, _SOURCE_CHANGES):
+        for src in (_SOURCE_DEVICE, _SOURCE_ALERTS, _SOURCE_CVE, _SOURCE_SPEED,
+                    _SOURCE_CHANGES, _SOURCE_LOGGER):
             btn = QPushButton(src)
             btn.setCheckable(True)
             btn.setChecked(True)
@@ -364,6 +370,42 @@ class TimelinePage(QWidget):
             except Exception:
                 pass  # non-fatal
 
+        # Network Logger outages
+        if _SOURCE_LOGGER in self._active_sources:
+            try:
+                from modules.network_log_writer import list_log_files, load_log_file
+                _cutoff = datetime.datetime.now().timestamp() - 7 * 86400
+                for _lf in list_log_files()[:14]:  # at most ~2 weeks of files
+                    try:
+                        _summary = load_log_file(_lf)
+                        for _o in _summary.outages:
+                            try:
+                                _ts = datetime.datetime.strptime(
+                                    str(_o.start), "%Y-%m-%d %H:%M:%S"
+                                ).timestamp()
+                            except Exception:
+                                continue
+                            if _ts < _cutoff:
+                                continue
+                            _dur = int(_o.duration_s)
+                            _dur_str = (f"{_dur // 60}m {_dur % 60}s" if _dur >= 60
+                                        else f"{_dur}s")
+                            events.append(_Ev(
+                                ts       = _ts,
+                                source   = _SOURCE_LOGGER,
+                                title    = f"Outage: {_o.host} — {_dur_str}",
+                                detail   = (
+                                    f"{_o.consecutive_fails} consecutive failures"
+                                    + (f", peak {_o.peak_latency_ms:.0f} ms"
+                                       if _o.peak_latency_ms > 0 else "")
+                                ),
+                                severity = "critical",
+                            ))
+                    except Exception:
+                        pass  # skip unreadable log files
+            except Exception:
+                pass  # non-fatal — log dir may not exist yet
+
         events.sort(key=lambda e: e.ts, reverse=True)
         return events[:200]
 
@@ -489,12 +531,14 @@ class TimelinePage(QWidget):
         cves    = sum(1 for e in today if e.source == _SOURCE_CVE)
         speed   = sum(1 for e in today if e.source == _SOURCE_SPEED)
         changes = sum(1 for e in today if e.source == _SOURCE_CHANGES)
+        outages = sum(1 for e in today if e.source == _SOURCE_LOGGER)
 
         self._glance_labels["alerts"].setText(f"<b>{alerts}</b> Alerts")
         self._glance_labels["devices"].setText(f"<b>{devices}</b> Device Events")
         self._glance_labels["cves"].setText(f"<b>{cves}</b> CVEs")
         self._glance_labels["speed"].setText(f"<b>{speed}</b> Speed Tests")
         self._glance_labels["changes"].setText(f"<b>{changes}</b> Device Changes")
+        self._glance_labels["outages"].setText(f"<b>{outages}</b> Log Outages")
 
     # ── Chip interaction ──────────────────────────────────────────────────────
 

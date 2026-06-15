@@ -140,13 +140,13 @@ class CommandPalette(QDialog):
             self._list.setCurrentRow(first_selectable)
 
     def load_recent_data(self, store) -> None:
-        """Pre-load known devices + recent alerts from MetricStore."""
+        """Pre-load known devices, recent alerts, and active CVEs from MetricStore."""
         self._data_items = []
         if store is None:
             return
         try:
             import time as _t
-            devices = list(store.get_known_devices().values())[:10]
+            devices = list(store.get_known_devices().values())
             for d in devices:
                 ip = d.ip or ""
                 mac = d.mac or ""
@@ -154,10 +154,10 @@ class CommandPalette(QDialog):
                 name = d.custom_name or d.hostname or ""
                 label = f"Device — {ip}" + (f" · {name}" if name else "") + (f" · {vendor}" if vendor else "")
                 self._data_items.append({
-                    "icon": "💻", "label": label, "kind": "device",
+                    "icon": "◆", "label": label, "kind": "device",
                     "ip": ip, "mac": mac, "search": f"{ip} {mac} {vendor} {name}".lower(),
                 })
-            alerts = store.get_recent_alerts(hours=72)[:5]
+            alerts = store.get_recent_alerts(hours=168, limit=20)
             for a in alerts:
                 ts = a.get("ts", 0)
                 ago_s = _t.time() - ts
@@ -171,9 +171,25 @@ class CommandPalette(QDialog):
                 host = a.get("host", "")
                 label = f"Alert — {rule}" + (f" · {host}" if host else "") + f" · {ago}"
                 self._data_items.append({
-                    "icon": "⚠", "label": label, "kind": "alert",
+                    "icon": "▲", "label": label, "kind": "alert",
                     "alert": a, "search": f"{rule} {host}".lower(),
                 })
+            # CVEs — searchable by CVE ID, service, or host
+            try:
+                cves = store.list_cve_lifecycles() or []
+                for c in cves[:50]:
+                    cve_id = c.get("cve_id", "")
+                    svc    = c.get("service", "")
+                    host   = c.get("host", "")
+                    sev    = c.get("severity", "")
+                    label  = f"CVE — {cve_id}" + (f" · {svc}" if svc else "") + (f" · {host}" if host else "")
+                    self._data_items.append({
+                        "icon": "■", "label": label, "kind": "page",
+                        "real_label": "CVE Tracker",
+                        "search": f"{cve_id} {svc} {host} {sev}".lower(),
+                    })
+            except Exception:
+                pass  # non-fatal — CVE table may not exist on older DB schemas
         except Exception:
             pass  # non-fatal
 

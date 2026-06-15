@@ -35,6 +35,7 @@ from ui.styles import (
     WHITE,
 )
 from ui.nav.rail import _RailButton, _FlyoutPanel, _CanvasClickFilter, _make_nav_icon
+from ui.widgets.alert_drawer import AlertDrawer
 
 # ─── Re-export utility functions from tabs_helpers for backward compat ────────
 # dashboard.py uses: `from ui.tabs import _table, _make_card, _page_header …`
@@ -552,7 +553,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         # ── PINNED — top 7 most-used pages; always visible, no subgroups ──────────
         self._nav_add_section("Pinned", icon="📌")
-        self._nav_add_page("⬡", "Overview",             self._overview_page)
+        self._nav_add_page("⬡", "Dashboard",            self._overview_page)
         self._nav_add_page("◎", "DNS & Outages",        m5)
         self._nav_add_page("▲", "Live Bandwidth",       self._live_bandwidth_page)
         self._nav_add_page("⚡", "Speed Test",           self._speed_test_page)
@@ -951,6 +952,13 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         cw_lay.setSpacing(6)
         cw_lay.addWidget(self._stack)
         h.addWidget(content_wrapper, 1)
+        # Shared alert drawer — slides in at window right edge from any page
+        self._shared_alert_drawer = AlertDrawer(self)
+        self._shared_alert_drawer.set_store(self._store)
+        self._shared_alert_drawer.navigate_to.connect(self._nav_rail_go_to)
+        self._shared_alert_drawer.view_in_log_hub.connect(self._on_view_alert_in_log_hub)
+        self._shared_alert_drawer.acknowledged.connect(self._on_shared_drawer_acked)
+        h.addWidget(self._shared_alert_drawer)
         content_wrapper.installEventFilter(self._canvas_filter)
 
         # Copy-to-clipboard right-click menus

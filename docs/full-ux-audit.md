@@ -449,9 +449,31 @@ Dev effort: XS (documentation + 1 UI label) — add a short inline explanation n
 Sprint: C
 
 Sprint allocation summary
-Sprint	Items	Theme
-A	1, 2, 3, 8, 10, 16, 17, 20, 22	Zero-code-risk polish: order, colours, labels, visibility
-B	4, 5, 6, 7, 11, 13, 15, 23, 24	Navigation coherence and restart behaviour
-C	12, 14, 18, 19, 21, 25	Cross-page integration and data search
-D	9	Security Overview full aggregation (largest single item)
+Sprint	Items	Theme	Status
+A	1, 2, 3, 8, 10, 16, 17, 20, 22	Zero-code-risk polish: order, colours, labels, visibility	✅ Complete (v2.1.6–v2.1.7)
+B	4, 5, 6, 7, 11, 13, 15, 23, 24	Navigation coherence and restart behaviour	✅ Complete (v2.1.8, 2026-06-15)
+C	12, 14, 18, 19, 21, 25	Cross-page integration and data search	✅ Complete (2026-06-15)
+D	9	Security Overview full aggregation (largest single item)	Pending
 Sprint A items have no new pages, no new data pipelines, and no architectural changes. They are pure UX repair on existing code — the highest impact-per-hour work in the backlog.
+
+Sprint B completion notes (2026-06-15):
+✅ #4  — Renamed 'Overview' → 'Dashboard', 'Active Monitors' → 'Monitor Status'; routing cascade updated
+✅ #5  — Notifications page split into Configure / Alert History tabs
+✅ #6  — Alert storm detection in alert history; banner with dep-tree link when ≥5 alerts/subnet/60s
+✅ #7  — Auto-resume monitors on restart; amber opt-out banner
+✅ #11 — _nav_add_subgroup() calls removed (rail nav has no subgroup concept); Monitor section flat
+✅ #13 — _risk_to_label() helper standardises severity vocabulary across pages
+✅ #15 — Npcap step added to GettingStartedCard with one-click install
+✅ #23 — Last-viewed page label persisted to QSettings and restored on relaunch
+✅ #24 — Overview tiles show 'Data from X days ago — rescan?' callout when data >24 h old
+
+Sprint C completion notes (2026-06-15):
+✅ #12 — Network Logger outage events added as "Network Logger" source chip in Timeline; loads OutageSummary from CSV log files (last 7 days / 14 files); added "Log Outages" counter to Today at a Glance
+✅ #14 — Ctrl+K expanded: removed device cap, alerts now 168h/20 entries, CVE search added (50 entries, routes to "CVE Tracker"); icons fixed from emoji to geometric (RULE-I4)
+✅ #18 — Bandwidth overlay legend added to Network Map toolbar (●<0.5 / 0.5–5 / >5 Mbps coloured dots); legend shows/hides with traffic toggle button
+✅ #19 — AlertDrawer promoted to shared component in main window layout (tabs.py h-layout); dict alerts from Home page open drawer without navigating away; ack shows toast + pushes monitor pills
+✅ #21 — "Something else…" tile (key="other") added to What's Wrong?; shows free-text QLineEdit when selected; runs full general diagnosis (effective_symptom="slow")
+✅ #25 — Backup guide label added to Settings page: explains 3 things to back up (JSON export, .db file, OS keychain secrets)
+
+Sprint D queue (next session):
+- #9 — Security Overview: full aggregation dashboard (largest single item)

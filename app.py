@@ -321,6 +321,8 @@ def _wire_notifications(window, alerts, notif_router, maint_manager, report_work
     notif_router.set_toast_callback(window._show_alert_toast)
     window._notifications_page.set_router(notif_router)
     window._notifications_page.set_alert_engine(alerts)
+    if hasattr(window, "_shared_alert_drawer"):
+        window._shared_alert_drawer.set_router(notif_router)
     window._maintenance_page.set_manager(maint_manager)
     report_worker.report_saved.connect(window._reports_page.on_report_saved)
     report_worker.error.connect(window._reports_page.on_worker_error)

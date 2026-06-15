@@ -314,17 +314,20 @@ class _DiagExtraTabsMixin:
 
     # ── Alert routing handler ─────────────────────────────────────────────────
 
+    def _on_shared_drawer_acked(self, _alert_id: int) -> None:
+        """Handle ack from the shared alert drawer (any page, no navigation required)."""
+        from ui.widgets.toast import ToastManager
+        ToastManager.show("Alert acknowledged", "success")
+        if callable(getattr(self, "_push_monitor_pills", None)):
+            self._push_monitor_pills()
+
     @pyqtSlot(object)
     def _on_alert_view_requested(self, alert) -> None:
-        """Navigate to the most relevant page for the alert that was clicked."""
-        # Dict alerts come from the Home action-needed card rows — open the drawer directly
+        """Open the shared alert drawer for dict alerts; navigate for structured alert objects."""
+        # Dict alerts (from Home page action cards) — open shared drawer without navigating
         if isinstance(alert, dict):
-            self._nav_rail_go_to("Notifications")
-            try:
-                if hasattr(self, "_notifications_page"):
-                    self._notifications_page._alert_drawer.open(alert)
-            except Exception:
-                pass  # non-fatal
+            if hasattr(self, "_shared_alert_drawer"):
+                self._shared_alert_drawer.open(alert)
             return
         rule_type = getattr(alert, "rule_type", "") or ""
         host = getattr(alert, "host", "") or ""

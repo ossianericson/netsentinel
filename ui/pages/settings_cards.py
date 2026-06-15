@@ -1316,6 +1316,22 @@ class _SettingsCardsMixin:
         )
         bl.addWidget(settings_desc)
 
+        backup_guide = QLabel(
+            "<b>Moving to a new machine? Back up 3 things:</b><br>"
+            "① <b>Settings</b> — use Export settings (JSON) below<br>"
+            "② <b>Database</b> — copy <code>NetSentinel.db</code> from "
+            "<code>%LOCALAPPDATA%\\NetSentinel\\</code><br>"
+            "③ <b>Secrets</b> — passwords and API keys live in the OS keychain "
+            "and cannot be exported; re-enter them after reinstalling"
+        )
+        backup_guide.setWordWrap(True)
+        backup_guide.setTextFormat(Qt.TextFormat.RichText)
+        backup_guide.setStyleSheet(
+            f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;"
+            f"border-left:3px solid {ACCENT};padding:6px 10px;margin:4px 0;"
+        )
+        bl.addWidget(backup_guide)
+
         self._settings_io_status = QLabel("")
         self._settings_io_status.setStyleSheet(
             f"font-size:11px;color:{ACCENT};background:transparent;"

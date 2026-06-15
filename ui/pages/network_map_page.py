@@ -39,8 +39,8 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    TEAL, TEXT_MUTED,
+    AMBER, BG_CARD, BG_DARK, BG_HOVER, BORDER,
+    GREEN, RED, TEAL, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.topology_widget import TopologyWidget
@@ -350,6 +350,18 @@ class NetworkMapPage(QWidget):
         )
         self._btn_traffic.setStyleSheet(_TOOLBAR_BTN_SS)
 
+        # Bandwidth legend — visible only when Traffic Overlay is on
+        self._bw_legend = QLabel(
+            f"<span style='color:{GREEN}'>●</span> &lt;0.5 Mbps&nbsp;&nbsp;"
+            f"<span style='color:{AMBER}'>●</span> 0.5–5 Mbps&nbsp;&nbsp;"
+            f"<span style='color:{RED}'>●</span> &gt;5 Mbps"
+        )
+        self._bw_legend.setTextFormat(Qt.TextFormat.RichText)
+        self._bw_legend.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; padding:0 6px;"
+        )
+        self._bw_legend.setVisible(False)
+
         # Export button
         btn_export = _btn("Export PNG", "Export the interactive map as a PNG image", 90)
         btn_export.clicked.connect(self._on_export)
@@ -380,6 +392,7 @@ class NetworkMapPage(QWidget):
         toolbar.addWidget(self._diff_label)
         toolbar.addWidget(self._btn_lock)
         toolbar.addWidget(self._btn_traffic)
+        toolbar.addWidget(self._bw_legend)
         toolbar.addWidget(self._stale_label)
         toolbar.addStretch()
         toolbar.addWidget(btn_export)
@@ -786,6 +799,7 @@ class NetworkMapPage(QWidget):
     @pyqtSlot(bool)
     def _on_traffic_toggled(self, checked: bool) -> None:
         self._traffic_overlay = checked
+        self._bw_legend.setVisible(checked)
         if checked:
             if self._bw_worker is None or not self._bw_worker.isRunning():
                 self._bw_worker = BandwidthOverlayWorker(interval_s=5.0, parent=self)
@@ -826,6 +840,7 @@ class NetworkMapPage(QWidget):
         self._btn_traffic.setChecked(False)
         self._btn_traffic.blockSignals(False)
         self._traffic_overlay = False
+        self._bw_legend.setVisible(False)
         self._bw_worker = None
         # Surface the error briefly in the LLDP hint label (already present on the page)
         self._lldp_hint_label.setText(f"Traffic Overlay unavailable: {msg.splitlines()[0]}")
