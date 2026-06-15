@@ -515,6 +515,13 @@ class _NotifChannelsMixin:
                 lbl.setTextFormat(Qt.TextFormat.RichText)
                 lbl.setText(html)
                 lbl.setVisible(True)
+                if "✓" in html:
+                    try:
+                        from ui.widgets.toast import ToastManager
+                        label = key.replace("_", " ").title()
+                        ToastManager.show(f"{label} channel test passed", "success")
+                    except Exception:
+                        pass  # non-fatal — toast is cosmetic
             else:
                 lbl.setVisible(False)
 

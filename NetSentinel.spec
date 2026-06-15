@@ -132,6 +132,7 @@ hiddenimports: list = [
     "modules.topology_cytoscape",
     "modules.topology_cytoscape_html",
     "modules.topology_layout",
+    "modules.topology_layouts",
     "modules.topology_snapshot",
     "modules.nl_query",
     "modules.notification_channels",

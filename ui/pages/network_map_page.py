@@ -544,6 +544,62 @@ class NetworkMapPage(QWidget):
         if hasattr(self, "_stale_label"):
             self._stale_label.setVisible(True)
 
+    def _compute_geo_positions(self, mode: str) -> Dict[str, Any]:
+        """Compute deterministic pixel positions for a geometric layout mode.
+
+        Returns a NodePosition dict (normalised 0-1 coords) ready to pass as
+        the ``positions`` argument to build_cytoscape_html().
+        """
+        from modules.topology_cytoscape import build_cytoscape_elements  # noqa: PLC0415
+        from modules.topology_layouts import compute_geometric_positions  # noqa: PLC0415
+
+        kw = self._last_render_kwargs
+        result = build_cytoscape_elements(
+            devices=kw.get("devices", []),
+            gateway_ip=kw.get("gateway_ip"),
+            gateway_mac=kw.get("gateway_mac"),
+            mesh_units=kw.get("mesh_units"),
+            mesh_enrichment=kw.get("mesh_enrichment"),
+            modem_data=kw.get("modem_data"),
+        )
+        pixel_positions = compute_geometric_positions(mode, result["elements"])
+        # topology_cytoscape._scale_pos() maps NodePosition 0-1 → pixels.
+        # We reverse: pixels → 0-1 to produce NodePosition objects.
+        return {
+            nid: NodePosition(
+                node_id=nid,
+                x=pos["x"] / 1400.0,
+                y=pos["y"] / 900.0,
+                pinned=False,
+            )
+            for nid, pos in pixel_positions.items()
+        }
+
+    def _apply_geometric_layout(self, mode: str) -> None:
+        """Compute positions in Python and push them live to the Cytoscape view."""
+        if not self._last_render_kwargs:
+            return
+        try:
+            from modules.topology_cytoscape import build_cytoscape_elements  # noqa: PLC0415
+            from modules.topology_layouts import compute_geometric_positions  # noqa: PLC0415
+
+            kw     = self._last_render_kwargs
+            result = build_cytoscape_elements(
+                devices=kw.get("devices", []),
+                gateway_ip=kw.get("gateway_ip"),
+                gateway_mac=kw.get("gateway_mac"),
+                mesh_units=kw.get("mesh_units"),
+                mesh_enrichment=kw.get("mesh_enrichment"),
+                modem_data=kw.get("modem_data"),
+            )
+            pos_map = compute_geometric_positions(mode, result["elements"])
+            self._run_js(
+                f"window.setPresetPositions && "
+                f"window.setPresetPositions({json.dumps(pos_map)});"
+            )
+        except Exception:
+            log.debug("network_map_page: geometric layout apply failed", exc_info=True)
+
     def _refresh_web_view(self, diff: Optional[Any] = None) -> None:
         """Load or incrementally update the Cytoscape view.
 
@@ -556,6 +612,10 @@ class NetworkMapPage(QWidget):
 
         Reset Layout clears _topology_loaded so the next call forces a full
         reload with fresh positions.
+
+        For geometric layout modes (geo_hierarchy, geo_concentric, geo_grid),
+        positions are computed in Python and injected as preset coordinates so
+        Cytoscape's physics engine is bypassed entirely.
         """
         if not self._web_available or self._web_view is None:
             return
@@ -565,9 +625,26 @@ class NetworkMapPage(QWidget):
 
         if not self._topology_loaded:
             # ── Full initial render ───────────────────────────────────────────
-            scan_id = self._scan_id
-            saved   = load_layout(scan_id) if scan_id else {}
-            layout  = LAYOUT_NAMES.get(self._layout_combo.currentText(), "breadthfirst")
+            scan_id      = self._scan_id
+            saved        = load_layout(scan_id) if scan_id else {}
+            layout_label = self._layout_combo.currentText()
+            layout_mode  = LAYOUT_NAMES.get(layout_label, "breadthfirst")
+
+            if layout_mode.startswith("geo_"):
+                # Geometric mode: compute positions in Python; embed as preset.
+                # Ignore any previously saved positions — the algorithm is the
+                # authoritative source for node placement in these modes.
+                try:
+                    positions_arg = self._compute_geo_positions(layout_mode)
+                    layout_arg    = "preset"
+                except Exception:
+                    log.debug("network_map_page: geo position compute failed", exc_info=True)
+                    positions_arg = saved if saved else None
+                    layout_arg    = "breadthfirst"
+            else:
+                positions_arg = saved if saved else None
+                layout_arg    = layout_mode
+
             try:
                 html = build_cytoscape_html(
                     devices=kw.get("devices", []),
@@ -575,7 +652,7 @@ class NetworkMapPage(QWidget):
                     diff=diff,
                     lldp_neighbors=kw.get("lldp_neighbors"),
                     segments=kw.get("segments"),
-                    positions=saved if saved else None,
+                    positions=positions_arg,
                     gateway_ip=kw.get("gateway_ip"),
                     gateway_mac=kw.get("gateway_mac"),
                     mesh_units=kw.get("mesh_units"),
@@ -583,7 +660,7 @@ class NetworkMapPage(QWidget):
                     modem_data=kw.get("modem_data"),
                     down_ips=kw.get("down_ips"),
                     new_ips=kw.get("new_ips"),
-                    initial_layout=layout,
+                    initial_layout=layout_arg,
                     bw_by_mac=self._bw_by_mac if self._traffic_overlay else None,
                 )
                 self._web_view.setHtml(html)
@@ -651,10 +728,16 @@ class NetworkMapPage(QWidget):
 
     @pyqtSlot(str)
     def _on_layout_changed(self, label: str) -> None:
-        cyto_name = LAYOUT_NAMES.get(label, "breadthfirst")
+        mode = LAYOUT_NAMES.get(label, "breadthfirst")
         QSettings().setValue(_SETTINGS_KEY_LAYOUT, label)
-        if self._web_available and self._inner_tab.currentIndex() == 0:
-            self._run_js(f"window.setLayout && window.setLayout({json.dumps(cyto_name)});")
+        if not self._web_available or self._inner_tab.currentIndex() != 0:
+            return
+        if mode.startswith("geo_"):
+            # Geometric modes: compute deterministic positions in Python and
+            # push them to the live Cytoscape instance via setPresetPositions().
+            self._apply_geometric_layout(mode)
+        else:
+            self._run_js(f"window.setLayout && window.setLayout({json.dumps(mode)});")
 
     @pyqtSlot(bool)
     def _on_focus_toggled(self, checked: bool) -> None:

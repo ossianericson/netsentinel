@@ -268,7 +268,7 @@ class SpeedGaugeWidget(QWidget):
             phase_label = "↑  UPLOAD"
             phase_color = _COLOR_UPLOAD
         else:
-            phase_label = self._status or "READY"
+            phase_label = self._status or ("Run a test to begin" if self._value == 0.0 else "READY")
             phase_color = TEXT_MUTED
 
         ax.text(

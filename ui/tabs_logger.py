@@ -380,6 +380,8 @@ class _LoggerTabMixin:
             self._home_page.set_monitoring_status(False)
             if hasattr(self, "_monitor_overview_page"):
                 self._monitor_overview_page.set_logger_running(False)
+            from ui.widgets.toast import ToastManager
+            ToastManager.show("Network Logger stopped", "info")
         else:
             # Start
             import time as _time
@@ -416,10 +418,14 @@ class _LoggerTabMixin:
             # Mark logger as ever-started (used by Getting Started checklist and Diagnosis page)
             _qs2 = QSettings("NetSentinel", "NetSentinel")
             _qs2.setValue("logger_started_once", True)
+            from ui.widgets.toast import ToastManager
             if not _qs2.value("logger/first_start_prompted", False, type=bool):
                 _qs2.setValue("logger/first_start_prompted", True)
-                from ui.widgets.toast import ToastManager
-                ToastManager.show("Background logging started — data appears in Network Logger.")
+                ToastManager.show(
+                    "Network Logger started — data appears in Network Logger.", "success"
+                )
+            else:
+                ToastManager.show("Network Logger started", "success")
 
     @pyqtSlot(object)
     def _on_log_entry(self, entry):

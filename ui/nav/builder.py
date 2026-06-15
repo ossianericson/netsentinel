@@ -28,6 +28,8 @@ _AUTO_HELP_PAGES: frozenset[str] = frozenset({
     "Network Logger", "Lab Mode", "Protocol Visualizer",
     "Automation Hooks", "MQTT / Home Assistant", "TLS & Exposure",
     "Service Heartbeat", "IoT Behaviour", "Scheduled Scans",
+    "Trend Forecasts", "Bandwidth Usage", "App Traffic",
+    "ARP Spoof Watch", "Active Monitors",
 })
 
 

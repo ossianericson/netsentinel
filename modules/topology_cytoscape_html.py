@@ -407,6 +407,24 @@ window.toggleChanges = function(show) {
 window.exportPng = function() {
   var data = cy.png({ full: true, scale: 2, bg: '#F4F4F4' });
   if (qtBridge) qtBridge.exportPng(data);
+};
+
+// Apply Python-computed geometric positions without running a physics layout.
+// posMap: { "node_id": {"x": number, "y": number}, ... }
+// Nodes absent from posMap keep their current position.
+window.setPresetPositions = function(posMap) {
+  if (layoutLocked || _layoutRunning) return;
+  cy.nodes().unlock();
+  cy.batch(function() {
+    cy.nodes().forEach(function(n) {
+      var p = posMap[n.id()];
+      if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+        n.position({ x: p.x, y: p.y });
+      }
+    });
+  });
+  _pinInfrastructure();
+  cy.fit(undefined, 50);
 };"""
 
 

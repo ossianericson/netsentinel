@@ -47,7 +47,7 @@ _RULE_NAME_CTA: dict[str, str] = {
     "host degraded":    "Inventory Changes",
     "new device":       "Devices",
     "device gone":      "Inventory Changes",
-    "cert expir":       "TLS & Cert Monitor",
+    "cert expir":       "TLS & Exposure",
     "host flapping":    "Trend Forecasts",
     "flap":             "Trend Forecasts",
     "service down":     "Service Heartbeat",
@@ -624,6 +624,8 @@ class _NotifAlertHistoryMixin:
             self._alert_drawer.open(alert)
 
     def _on_drawer_acknowledged(self, alert_id: int) -> None:
+        from ui.widgets.toast import ToastManager
+        ToastManager.show("Alert acknowledged", "success")
         self._refresh_alert_history()
         self.alert_acknowledged.emit()
 
@@ -750,7 +752,8 @@ class _NotifAlertHistoryMixin:
         return alerts
 
     def _bulk_dismiss(self) -> None:
-        for alert in self._selected_alerts():
+        alerts = self._selected_alerts()
+        for alert in alerts:
             alert_id = alert.get("id") or alert.get("alert_id")
             if alert_id and self._store:
                 try:
@@ -760,6 +763,12 @@ class _NotifAlertHistoryMixin:
         self._alert_history_table.clearSelection()
         self._refresh_alert_history()
         self.alert_acknowledged.emit()
+        if alerts:
+            from ui.widgets.toast import ToastManager
+            n = len(alerts)
+            ToastManager.show(
+                f"{n} alert{'s' if n != 1 else ''} acknowledged", "success"
+            )
 
     def _bulk_snooze(self, seconds: int) -> None:
         until_ts = time.time() + seconds

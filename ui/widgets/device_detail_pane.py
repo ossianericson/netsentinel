@@ -118,6 +118,12 @@ class _DeviceLabelDialog(QDialog):
                         self._old_name, _new_name, "user", self._store)
             except Exception:
                 pass  # non-fatal — audit trail is best-effort
+        try:
+            from ui.widgets.toast import ToastManager
+            label_str = f'"{name}"' if name else "cleared"
+            ToastManager.show(f"Device label {label_str} saved", "success")
+        except Exception:
+            pass  # non-fatal — toast is cosmetic
         self.accept()
 
 

@@ -488,12 +488,44 @@ class ServicePage(QWidget):
             self._table.setItem(row_idx, 1, self._cell(r.host))
             self._table.setItem(row_idx, 2, self._cell(str(r.port)))
 
-            dot = QLabel(status_text)
-            dot.setStyleSheet(
-                f"color: {status_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
-            )
-            dot.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-            self._table.setCellWidget(row_idx, 3, dot)
+            if r.up:
+                dot = QLabel(status_text)
+                dot.setStyleSheet(
+                    f"color: {status_color}; font-size: 11px; font-weight: bold; padding-left: 4px;"
+                )
+                dot.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                self._table.setCellWidget(row_idx, 3, dot)
+            else:
+                # DOWN row — status label + inline Diagnose button
+                _cell_w = QWidget()
+                _cell_w.setStyleSheet("background: transparent;")
+                _cell_h = QHBoxLayout(_cell_w)
+                _cell_h.setContentsMargins(4, 0, 4, 0)
+                _cell_h.setSpacing(6)
+                _dot = QLabel(status_text)
+                _dot.setStyleSheet(
+                    f"color: {status_color}; font-size: 11px; font-weight: bold;"
+                    " background: transparent;"
+                )
+                _cell_h.addWidget(_dot)
+                _cell_h.addStretch()
+                _diag_btn = QPushButton("Diagnose →")
+                _diag_btn.setFixedHeight(18)
+                _diag_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                _diag_btn.setStyleSheet(
+                    f"QPushButton {{ background: transparent; color: {ACCENT};"
+                    f" font-size: 9px; border: 1px solid {ACCENT}; border-radius: 2px; padding: 0 4px; }}"
+                    f"QPushButton:hover {{ background: {BG_HOVER}; color: {ACCENT}; }}"
+                    f"QPushButton:pressed {{ background: {BORDER}; color: {TEXT_PRIMARY}; }}"
+                )
+                _host = r.host
+                _diag_btn.clicked.connect(
+                    lambda _=False, _h=_host: self.diagnose_service.emit(
+                        self._find_service_id(_h)
+                    )
+                )
+                _cell_h.addWidget(_diag_btn)
+                self._table.setCellWidget(row_idx, 3, _cell_w)
 
             rtt_item = QTableWidgetItem(rtt_str)
             rtt_item.setFlags(rtt_item.flags() & ~Qt.ItemFlag.ItemIsEditable)

@@ -248,7 +248,10 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
 
         def _on_dismiss(_bar=bar) -> None:
-            QSettings("NetSentinel", "NetSentinel").setValue(dismissed_key, True)
+            from datetime import datetime
+            QSettings("NetSentinel", "NetSentinel").setValue(
+                dismissed_key, datetime.now().isoformat()
+            )
             self._tip_card_dismissed = True
             _bar.setVisible(False)
 
@@ -1005,7 +1008,10 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         right.addLayout(btn_row)
         right.addLayout(isp_row)
         hero_lay.addLayout(right, 1)
-        lay.addWidget(hero)
+        # Insert hero at position 3 (after _dashboard_strip / _setup_card_top /
+        # _setup_complete_card) so the grade ring and CTA buttons are always
+        # visible near the top of the page before any contextual banners.
+        lay.insertWidget(3, hero)
 
         # ── Feature search bar ────────────────────────────────────────────────
         search_card = QFrame()
@@ -1218,7 +1224,16 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             _tip = _tips[_tip_idx % len(_tips)]
             _dismissed_key = f"home/tip_{_tip_idx}_dismissed"
             _qs.setValue("home/tip_session_index", (_tip_idx + 1) % len(_tips))
-            self._tip_card_dismissed = bool(_qs.value(_dismissed_key, False, type=bool))
+            _tip_ts = _qs.value(_dismissed_key, None)
+            if _tip_ts is None:
+                self._tip_card_dismissed = False
+            else:
+                try:
+                    from datetime import datetime
+                    _dismissed_at = datetime.fromisoformat(str(_tip_ts))
+                    self._tip_card_dismissed = (datetime.now() - _dismissed_at).days < 7
+                except Exception:
+                    self._tip_card_dismissed = True  # legacy bool True — treat as dismissed
             self._tip_card = self._build_tip_card(
                 _tip.get("icon", "⬡"),
                 _tip["name"],

@@ -35,12 +35,15 @@ _VENDOR_CLASS_MAP: Dict[str, str] = {
     "google":   "vendor-google",
 }
 
-# Cytoscape built-in layout names exposed in the toolbar dropdown
+# Layout modes exposed in the toolbar dropdown.
+# "geo_*" modes are computed in Python (topology_layouts.py) and injected as
+# preset positions — Cytoscape receives layout: "preset" for those.
+# "cose" is the only mode that delegates to Cytoscape's physics engine.
 LAYOUT_NAMES: Dict[str, str] = {
-    "Hierarchy":  "breadthfirst",
-    "Physics":    "cose",
-    "Concentric": "concentric",
-    "Grid":       "grid",
+    "Hierarchy":  "geo_hierarchy",
+    "Physics":    "geo_radial",
+    "Concentric": "geo_concentric",
+    "Grid":       "geo_grid",
 }
 
 
