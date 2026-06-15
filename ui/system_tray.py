@@ -27,7 +27,7 @@ from PyQt6.QtCore import QSettings, QTimer, Qt
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
-from ui.styles import ACCENT, RED
+from ui.styles import ACCENT, AMBER, GREEN, RED
 
 # ── Startup registry helpers (Windows only) ───────────────────────────────────
 
@@ -114,6 +114,39 @@ def _build_badge_icon(base_icon: QIcon, count: int) -> QIcon:
     return QIcon(px)
 
 
+_HEALTH_DOT_COLOUR = {
+    "green":  GREEN,
+    "amber":  AMBER,
+    "red":    RED,
+}
+
+
+def _overlay_health_dot(base_icon: QIcon, state: str) -> QIcon:
+    """
+    Overlay a small coloured dot in the bottom-left of the tray icon to
+    represent the ambient health state.  Returns base_icon unchanged when
+    state is 'unknown'.
+    """
+    colour_hex = _HEALTH_DOT_COLOUR.get(state)
+    if not colour_hex:
+        return base_icon
+
+    px = base_icon.pixmap(32, 32)
+    painter = QPainter(px)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    dot_size = 8
+    x = 0
+    y = px.height() - dot_size
+
+    painter.setBrush(QColor(colour_hex))
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.drawEllipse(x, y, dot_size, dot_size)
+    painter.end()
+
+    return QIcon(px)
+
+
 # ── SystemTrayManager ─────────────────────────────────────────────────────────
 
 class SystemTrayManager:
@@ -142,6 +175,8 @@ class SystemTrayManager:
         self._badge_count = 0
         self._base_icon: QIcon | None = None
         self._grade: str = "?"
+        self._health_state: str = "unknown"
+        self._health_headline: str = ""
         self._qs = QSettings("NetSentinel", "NetSentinel")
 
     # ── Setup ─────────────────────────────────────────────────────────────────
@@ -195,6 +230,12 @@ class SystemTrayManager:
             f"QMenu::separator {{ height:1px; background:{BORDER}; margin:3px 8px; }}"
         )
 
+        self._act_health = QAction("○  Gathering health data…", menu)
+        self._act_health.setEnabled(False)
+        menu.addAction(self._act_health)
+
+        menu.addSeparator()
+
         self._act_show = QAction("Show NetSentinel", menu)
         self._act_show.triggered.connect(self._show_window)
         menu.addAction(self._act_show)
@@ -242,6 +283,13 @@ class SystemTrayManager:
         self._act_hide.setEnabled(is_visible)
         if hasattr(self, "_act_startup"):
             self._act_startup.setChecked(get_run_on_startup())
+        # Refresh health line in menu
+        if hasattr(self, "_act_health"):
+            _icon = {"green": "✓", "amber": "⚠", "red": "✗"}.get(
+                self._health_state, "○"
+            )
+            text = self._health_headline or "Gathering health data…"
+            self._act_health.setText(f"{_icon}  {text[:60]}")
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -276,6 +324,12 @@ class SystemTrayManager:
     def set_grade(self, grade: str) -> None:
         """Update the network grade shown in the tray tooltip."""
         self._grade = grade[:1].upper() if grade else "?"
+        self._refresh_icon()
+
+    def set_health(self, state: str, headline: str) -> None:
+        """Update ambient health state from HealthWorker result."""
+        self._health_state   = state
+        self._health_headline = headline
         self._refresh_icon()
 
     def is_available(self) -> bool:
@@ -360,8 +414,11 @@ class SystemTrayManager:
         if self._tray is None or self._base_icon is None:
             return
         icon = _build_badge_icon(self._base_icon, self._badge_count)
+        icon = _overlay_health_dot(icon, self._health_state)
         self._tray.setIcon(icon)
         parts = [f"Grade: {self._grade}"]
         if self._badge_count:
             parts.append(f"{self._badge_count} alert{'s' if self._badge_count != 1 else ''}")
+        if self._health_state != "unknown" and self._health_headline:
+            parts.append(self._health_headline[:50])
         self._tray.setToolTip(f"NetSentinel — {' | '.join(parts)}")

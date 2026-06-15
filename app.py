@@ -176,6 +176,9 @@ def _smoke_test() -> None:
         "workers.passive_observer_worker",
         "modules.lldp_scanner",
         "workers.lldp_worker",
+        "modules.health_score",
+        "workers.health_worker",
+        "ui.widgets.health_status_card",
     ]
     for _mod in _checks:
         try:
@@ -633,6 +636,7 @@ def main():
     from workers.syslog_worker import SyslogWorker
     from workers.rest_api_worker import RestApiWorker
     from workers.passive_observer_worker import PassiveObserverWorker
+    from workers.health_worker import HealthWorker
 
     store  = MetricStore()           # uses default portable path
     alerts = AlertEngine(store=store)
@@ -687,6 +691,9 @@ def main():
     passive_observer_worker = PassiveObserverWorker()
     passive_observer_worker.start()
 
+    health_worker = HealthWorker(store=store)
+    health_worker.start()
+
     # REST API worker — only starts when user has enabled it in Settings
     _qs = QSettings("NetSentinel", "NetSentinel")
     rest_api_worker: RestApiWorker | None = None
@@ -713,6 +720,13 @@ def main():
     _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts)
     _wire_cross_page(window)
     _wire_scan_ctas(window)
+
+    # S2-5: wire ambient health worker → home page card + system tray
+    health_worker.result_ready.connect(window._home_page.on_health_update)
+    if window._tray is not None:
+        health_worker.result_ready.connect(
+            lambda snap: window._tray.set_health(snap.state, snap.headline)
+        )
 
     # Pre-populate Devices table and Network Map from the last MetricStore scan so
     # the app is never blank on startup — a live scan replaces this data normally.
@@ -851,6 +865,8 @@ def main():
     snmp_trap_worker.wait(5000)
     syslog_worker.stop()
     syslog_worker.wait(5000)
+    health_worker.stop()
+    health_worker.wait(3000)
     if rest_api_worker is not None:
         rest_api_worker.stop()
         rest_api_worker.wait(3000)

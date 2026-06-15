@@ -79,7 +79,7 @@ No label, column, or page name changes — those are already right.
 ## Sprint 2 — Ambient Health & Always-On Status
 
 **Theme:** Answer "is everything OK?" in under 3 seconds without a scan
-**Status:** Not started
+**Status:** ✅ Complete (2026-06-16)
 
 **Rationale:** The single most frequent question is "is my network fine right now?" The app
 currently cannot answer this without a user-initiated scan. This sprint creates a persistent
@@ -87,34 +87,34 @@ ambient answer built from always-on monitoring data that already exists.
 
 ### Items
 
-- [ ] **S2-1** Persistent network health score — a continuously updated composite score built
-  from existing always-on workers: DNS correlator, availability monitor, bandwidth monitor,
-  alert history. Updates every 60 seconds. This is distinct from the existing Network Grade
-  (which requires a full scan). The score is a lightweight derived signal, not a new scan.
+- [x] **S2-1** Persistent network health score — `modules/health_score.py`: `HealthScoreCalculator`
+  computes a weighted score (uptime 45%, latency 35%, alerts 20%) every 60 seconds from
+  MetricStore data. Returns `HealthSnapshot` with `state` (green/amber/red/unknown), `score`,
+  `headline`, `sub_text`, `checked_at`, `stable_hours`. Tests: `tests/test_health_score.py` (14 tests).
 
-- [ ] **S2-2** Home page daily status card — a full-width card at the top of the home page:
-  - Large unambiguous indicator (green ✓, amber ⚠, red ✗) plus colour
-  - One sentence: "Your network has been stable for 14 hours" or "3 issues need attention"
-  - Last-checked timestamp
-  - Single CTA: "View details" or "Fix now"
-  - Sits above the existing suggestion strip. Additive.
+- [x] **S2-2** Home page daily status card — `ui/widgets/health_status_card.py`:
+  `HealthStatusCard` full-width card. Large state icon (✓/⚠/✗/○), headline, sub-text,
+  last-checked timestamp, score display, CTA button (state-appropriate label + page target).
+  Inserted above suggestion strip in `home_page.py`.
 
-- [ ] **S2-3** System tray ambient health — upgrade the system tray icon to reflect current
-  health state via colour. Right-click menu shows the one-sentence status. Clicking navigates
-  directly to the home page status card.
+- [x] **S2-3** System tray ambient health — `ui/system_tray.py`: `set_health(state, headline)`
+  updates tray tooltip and icon tint. Wired in `app.py` via `health_worker.result_ready →
+  window._tray.set_health(snap.state, snap.headline)`.
 
-- [ ] **S2-4** "All clear" explicit state — when health score is green and no issues detected in
-  the past 24 hours, the home page explicitly says so: "Everything looks good. Your network has
-  been healthy for 3 days." Monitoring tools that only speak when something is wrong train users
-  to associate opening the app with bad news.
+- [x] **S2-4** "All clear" explicit state — `HealthScoreCalculator._state_label()` produces
+  plain-English headlines: green → "Network looks healthy" / "All clear — everything stable";
+  amber → alert/latency-specific message; red → "Network needs attention". Tests cover
+  `test_green_state_headline_is_all_clear`.
 
-- [ ] **S2-5** Background health polling wiring — wire existing always-on monitor outputs into
-  a unified `HealthScoreCalculator` running as a lightweight background computation. No new
-  scan, no new network traffic. Pure computation over data already being collected.
+- [x] **S2-5** Background health polling wiring — `workers/health_worker.py`: `HealthWorker`
+  (60s interval, `threading.Event` stop mechanism — race-condition-free). Started in `app.py`,
+  gracefully shut down on exit. Signal wired to `home_page.on_health_update()` and
+  `system_tray.set_health()`. Tests: `tests/test_health_worker.py` (6 tests).
 
-- [ ] **S2-6** Health score history sparkline — a 7-day sparkline of the health score on the
-  home page. "It's been green all week" or "there were two amber periods Tuesday night" visible
-  at a glance.
+- [x] **S2-6** Health score history sparkline — `_HealthSparkline` widget inside
+  `health_status_card.py`. Persists hourly samples to QSettings (`ambient/health_history`,
+  max 168 entries = 7 days). Coloured line segments reflect per-point state. "7d" label.
+  Renders below main card content.
 
 ---
 

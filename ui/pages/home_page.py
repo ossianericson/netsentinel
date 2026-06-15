@@ -52,6 +52,7 @@ from ui.widgets.home_session_widgets import (
     FreshnessStrip, GettingStartedCard,
     StandardWelcomePage, ProWelcomePage,  # noqa: F401 — re-exported for test imports
 )
+from ui.widgets.health_status_card import HealthStatusCard
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -78,6 +79,12 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     #: Emitted when user clicks "Add" on a hardware checklist step; carries plugin path.
     add_plugin_requested = pyqtSignal(str)
 
+    # ── Public slot for ambient health (S2-2) ─────────────────────────────────
+
+    def on_health_update(self, snapshot) -> None:
+        """Delegate HealthWorker results to the ambient health card."""
+        if hasattr(self, "_health_card"):
+            self._health_card.on_health_update(snapshot)
 
     # ── Constructor ───────────────────────────────────────────────────────────
 
@@ -291,6 +298,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lay = QVBoxLayout(inner)
         lay.setContentsMargins(14, 14, 14, 14)
         lay.setSpacing(10)
+
+        # ── S2-2: Ambient health status card (always visible, updates every 60s) ──
+        self._health_card = HealthStatusCard()
+        self._health_card.navigate_to.connect(self.navigate_to)
+        lay.addWidget(self._health_card)
 
         # ── Browser dashboard strip (visible when API enabled + not dismissed) ─
         self._dashboard_strip = QFrame()
