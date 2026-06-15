@@ -723,9 +723,9 @@ def main():
 
     # S2-5: wire ambient health worker → home page card + system tray
     health_worker.result_ready.connect(window._home_page.on_health_update)
-    if window._tray is not None:
+    if window._tray_manager.is_available():
         health_worker.result_ready.connect(
-            lambda snap: window._tray.set_health(snap.state, snap.headline)
+            lambda snap: window._tray_manager.set_health(snap.state, snap.headline)
         )
 
     # Pre-populate Devices table and Network Map from the last MetricStore scan so
