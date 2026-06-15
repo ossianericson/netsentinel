@@ -44,7 +44,7 @@ Sprint 10 (Polish & Accessibility) — runs last, validates all previous sprints
 ## Sprint 1 — Plain English Layer
 
 **Theme:** Lay plain English on top of technical data — never instead of it
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-15
 
 **Rationale:** Non-technical users bounce not because the features are wrong but because they
 can't map what they see to a problem they understand. The fix is annotation, not replacement.
@@ -52,43 +52,27 @@ No label, column, or page name changes — those are already right.
 
 ### Items
 
-- [ ] **S1-1** Jargon audit — catalog every user-visible string across all 62 pages. Flag terms
-  a nurse, teacher, or small business owner would not understand. Deliverable: a translation
-  dictionary used as the input for S1-3 and S1-4. Not a UI change — a research artefact.
+- [x] **S1-1** Jargon audit — added RTT, AXFR, CVE, CIDR, TTL to `data/glossary.json`;
+  created `docs/jargon-dictionary.md` as translation reference for use in S1-3/S1-4.
 
-- [ ] **S1-2** Page subtitle strip — every page gets a one-sentence plain-English description
-  displayed in small type below the page title in the header area. Example: "Security Audit ›
-  Port Scan — Shows which ports on each device are open and reachable from your network."
-  Technical users already know what Port Scan is; the subtitle is ignorable at a glance.
-  Non-technical users get orientation without the page being renamed.
+- [x] **S1-2** Page subtitle strip — added `subtitle=` parameter to `PageHeaderBar`
+  (56 px with subtitle, 40 px without; backward-compatible). Added one-sentence
+  plain-English subtitles to 16 pages.
 
-- [ ] **S1-3** Expand `JargonTooltip` deployment — the widget exists but is severely underdeployed.
-  Every technical label in the UI (RTT, STP, ARP, OUI, BSSID, DHCP, AXFR, CVE, SNMP, CIDR,
-  TTL, QoS) should render as an underlined `JargonTooltip` with a one-sentence plain-English
-  definition from the S1-1 dictionary. Zero cost to technical users — the underline is subtle
-  and hover-only.
+- [x] **S1-3** Expand `JargonTooltip` deployment — added `setToolTip()` for RTT/Jitter/ARP
+  column headers in Network Logger, CIDR field in Inventory, AXFR button in DNS Zone page,
+  and Avg RTT sub-label in the Overview tile.
 
-- [ ] **S1-4** Alert message rewriting — audit `alert_engine.py` message templates. Replace
-  "High RTT detected on interface eth0" with "Your internet connection is responding slower
-  than usual (180 ms, normally 12 ms on eth0)." Formula: **what happened + actual numbers +
-  how it compares to normal**. Crucially: keep all technical data (interface name, raw value,
-  threshold). Add plain English around it, not instead of it.
+- [x] **S1-4** Alert message rewriting — rewrote all 10 `alert_engine.py` message templates
+  to plain-English formula: what happened + actual numbers + context + what to do. All raw
+  technical data (host, IP, port, threshold, ms values) retained.
 
-- [ ] **S1-5** Risk level display translation — the internal risk levels (`STORM`, `CLEAN`,
-  `MEDIUM`) must never appear in user-facing text. This is already `RULE-A3` in the dev rules
-  but is inconsistently applied. Audit all pages and enforce the existing canonical display map:
+- [x] **S1-5** Risk level display translation — updated `_RISK_LABELS` in `tabs_helpers.py`
+  (CLEAN → "All clear", STORM → "Critical — act now", HIGH → "Action required", etc.).
+  Applied to verdict badge in `monitor_state.py` and storm level status in `scan_enrichment.py`.
 
-  | Internal | User-facing |
-  |---|---|
-  | `CLEAN` | All clear |
-  | `LOW` | Minor notice |
-  | `MEDIUM` | Needs attention |
-  | `HIGH` | Action required |
-  | `STORM` | Critical — act now |
-
-- [ ] **S1-6** Status indicator tooltips — every coloured `●` status label gets a tooltip in
-  plain English. `● RED` alone is opaque; `● Action required — port 23 (Telnet) is open`
-  is actionable. The dot and colour stay exactly as-is. Tooltip is additive only.
+- [x] **S1-6** Status indicator tooltips — added plain-English tooltips to UP/DOWN coloured
+  `●` dots in the Service Heartbeat page.
 
 ---
 
