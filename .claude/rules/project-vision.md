@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.9**
+Current version: **v2.1.10**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -49,6 +49,8 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Device identification improvements** — async OUI vendor lookup for Unknown devices; vendor/type enrichment populates on first scan without requiring a re-scan (`modules/device_classifier.py`, `ui/scan_enrichment.py`)
 - **Service mapper** — `modules/service_mapper.py`; maps device_type/vendor to a list of relevant `ServiceInfo` objects (hostname, display name, protocol, expected port); feeds Service Diagnostics and Service Heartbeat
 - **Network segment/zone grouping** — devices automatically grouped into colour-coded /24 subnets; pill filter bar above the Devices table with multi-select; user-editable segment names and colours via right-click editor; stored user-defined segments win over auto-detected ones on CIDR conflict (`modules/network_segments.py`, schema v11)
+- **Persistent device map** — after each live scan, pinned and static-candidate devices (infrastructure roles, IP-stable devices seen 3+ times) that were not in the scan are appended to the Inventory snapshot with freshness states: `pinned` (always shown), `cached` (<24 h), or `stale` (<7 d); implemented in `ScanResultMixin._merge_scan_with_persistent()` in `ui/scan_wiring.py`
+- **"Hide offline" Inventory filter** — toggle button in the Current Devices card header hides `cached`/`stale` rows without losing the persistent map; state is not persisted (resets on each navigation); implemented in `InventoryPage._on_hide_offline_toggled()` + `_apply_segment_filter()`
 
 ### Monitoring & Alerting
 - **Network Logger** — unified chronological monitor combining Network RTT, 5G Modem, Mesh, Syslog, and SNMP Traps; source toggle bar; per-source intervals; emits `live_challenge_detected` → Lab Mode
