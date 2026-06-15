@@ -48,6 +48,14 @@ _PAGE_HELP: dict[str, dict] = {
         "hidden": [
             "Pick a symptom tile (Slow / Dropping / Can't Connect) before running — this scopes the checks to the most relevant modules.",
             "The 'Do this first' priority card at the top is the single most actionable finding. Fix that before looking at the rest.",
+            "Use the 'Quick test: Is this my ISP or my router?' button to get a plain-English verdict in under 30 seconds.",
+        ],
+    },
+    "Troubleshoot": {
+        "what": "Symptom-first routing hub — describe your problem in everyday language and NetSentinel routes you to the right diagnostic tool with the right context pre-set.",
+        "hidden": [
+            "Tiles that say 'Diagnose this →' pre-select the matching symptom on What's Wrong? so you skip the tile selection step.",
+            "Click 'Run a full diagnosis' at the top if you're not sure which symptom applies — it runs all checks.",
         ],
     },
     # ── Discover ───────────────────────────────────────────────────────────────

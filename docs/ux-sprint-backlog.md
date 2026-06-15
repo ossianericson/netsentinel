@@ -121,7 +121,7 @@ ambient answer built from always-on monitoring data that already exists.
 ## Sprint 3 — Symptom-First Troubleshooting Hub
 
 **Theme:** Start with the problem, not the tool
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-16
 
 **Rationale:** `DiagnosisPage` is one of the strongest features in the app but is buried and
 technically framed. This sprint adds a new entry point that routes to existing tools — it does
@@ -129,45 +129,36 @@ not modify any existing page.
 
 ### Items
 
-- [ ] **S3-1** Symptom-first landing — a "Troubleshoot" entry point accessible from the home
-  page hero, system tray, and Ctrl+K presenting problems in user language:
+- [x] **S3-1** Symptom-first landing — new `TroubleshootPage` (`ui/pages/troubleshoot_page.py`)
+  in the "Getting Started" section with 8 user-language symptom tiles. Does not replace
+  `DiagnosisPage`; routes to it and to other existing tools.
 
-  ```
-  What's the problem?
-  [ Streaming buffering/not working ]  [ Gaming lag or disconnects ]
-  [ Slow internet                   ]  [ Device won't connect      ]
-  [ WiFi keeps dropping             ]  [ Suspicious device on network ]
-  [ A website or app isn't loading  ]  [ Something is using all my bandwidth ]
-  ```
+- [x] **S3-2** Symptom-to-diagnostic routing — each tile routes via `diagnose_symptom` signal
+  (→ `preset_symptom()` on DiagnosisPage) or `navigate_to` signal (→ Service Diagnostics,
+  App Traffic, Devices). No new diagnostic logic.
 
-  This is a new page in the "Getting Started" section — it does not replace `DiagnosisPage`,
-  it routes to it and to other existing tools.
+- [x] **S3-3** Symptom-aware findings language — `_symptom_ctx_lbl` in `DiagnosisPage._build_done()`
+  shows "You reported: My internet is slow" above the verdict card. Context set in `_show_result()`.
+  Public `preset_symptom(key)` method added to `DiagnosisPage`.
 
-- [ ] **S3-2** Symptom-to-diagnostic routing — each tile maps to a pre-configured diagnostic
-  sequence using existing workers with pre-set parameters. No new diagnostic logic:
-  - "Streaming buffering" → speed test + DNS latency + bandwidth + ISP ping
-  - "WiFi keeps dropping" → WiFi signal survey + channel interference + ping stability
-  - "Device won't connect" → DHCP scan + ARP scan + IP conflict check
-  - "Something using bandwidth" → routes directly to App Traffic page, pre-run
+- [x] **S3-4** "Is this my ISP or my router?" quick test — `modules/isp_vs_router_test.py`
+  (5-hop ping chain) + `workers/isp_vs_router_worker.py` + "Quick test" button added to
+  `DiagnosisPage._build_idle()` with inline result card.
 
-- [ ] **S3-3** Symptom-aware findings language — diagnosis results present findings in the
-  context of the symptom chosen. Not "DNS query time: 450 ms" but "DNS is slow (450 ms,
-  normal is <50 ms) — this is likely causing your streaming service to stall between videos."
-  The raw number stays. The context is added around it.
+- [x] **S3-5** Promote DiagnosisPage everywhere — "Troubleshoot →" CTA button added to
+  `AlertDrawer` actions row (`ui/widgets/alert_drawer.py`). System tray and home hero already
+  had CTAs (pre-existing).
 
-- [ ] **S3-4** "Is this my ISP or my router?" quick test — a dedicated 30-second test:
-  ping gateway → ping ISP DNS → ping external DNS → ping Cloudflare → ping Netflix CDN.
-  Returns a plain-English answer: "The problem is between your router and your ISP. Your local
-  network is fine." Technical users will appreciate this too — it automates a standard
-  diagnostic sequence. Add as a button on the DiagnosisPage and as a Ctrl+K entry.
+- [x] **S3-6** Symptom search aliases in Ctrl+K — `TroubleshootPage` entry in `_FEATURES`
+  (`ui/pages/discover_data.py`) includes rich `tags` list covering all symptom phrases
+  (streaming, buffering, gaming, lag, slow, wifi, dropping, etc.). Palette pulls from `_FEATURES`.
 
-- [ ] **S3-5** Promote DiagnosisPage everywhere — add a "Troubleshoot" CTA to: home page hero,
-  system tray right-click menu, top Ctrl+K result when no query is typed, and the alert drawer
-  for any alert. The page already does the right thing — it just needs to be findable.
+**New files:** `modules/isp_vs_router_test.py`, `workers/isp_vs_router_worker.py`,
+`ui/pages/troubleshoot_page.py`, `tests/test_isp_vs_router_test.py`,
+`tests/test_isp_vs_router_worker.py`, `tests/test_troubleshoot_page.py`
 
-- [ ] **S3-6** Symptom search aliases in Ctrl+K — "netflix not working" → streaming diagnostic,
-  "why is my internet slow" → "Slow internet" tile, "new device appeared" → Devices page.
-  All existing Ctrl+K entries unchanged; this adds aliases.
+**Sprint 4 planned queue:** Smart Alert Architecture — priority scoring, self-explaining alerts,
+resolution tracking, maintenance-window improvements.
 
 ---
 

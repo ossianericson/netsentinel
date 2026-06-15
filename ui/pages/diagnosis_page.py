@@ -245,6 +245,7 @@ class DiagnosisPage(QWidget):
         super().__init__(parent)
         self._store           = store
         self._worker          = None
+        self._isp_worker      = None
         self._gateway_ip      = None
         self._gateway_mac     = None
         self._symptom         = ""   # set by symptom tile before _start()
@@ -252,6 +253,19 @@ class DiagnosisPage(QWidget):
         self._last_findings: list = []
         self._verify_workers: list = []  # keeps refs alive until verify completes
         self._setup_ui()
+
+    # ── Public API (called by TroubleshootPage) ───────────────────────────────
+
+    def preset_symptom(self, key: str) -> None:
+        """Pre-select a symptom tile. Navigates to idle state and hides previous results."""
+        btn = self._symptom_btns.get(key)
+        if btn:
+            btn.setChecked(True)
+            self._symptom = key
+            self._service_pick_row.setVisible(key == "service_unreachable")
+            self._other_desc_row.setVisible(key == "other")
+        if self._stack.currentIndex() != _IDLE:
+            self._reset()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -296,6 +310,53 @@ class DiagnosisPage(QWidget):
     ) -> None:
         self._gateway_ip  = gateway_ip
         self._gateway_mac = gateway_mac
+
+    # ── ISP vs Router quick test (S3-4) ──────────────────────────────────────
+
+    def _launch_isp_test(self) -> None:
+        if self._isp_worker and self._isp_worker.isRunning():
+            return
+        self._isp_btn.setText("Testing… please wait")
+        self._isp_btn.setEnabled(False)
+        self._isp_result_card.hide()
+
+        from workers.isp_vs_router_worker import IspVsRouterWorker
+        self._isp_worker = IspVsRouterWorker(
+            gateway_ip=self._gateway_ip,
+            parent=self,
+        )
+        self._isp_worker.result_ready.connect(self._on_isp_result)
+        self._isp_worker.error.connect(self._on_isp_error)
+        self._isp_worker.start()
+
+    def _on_isp_result(self, result) -> None:
+        self._isp_btn.setText("Quick test: Is this my ISP or my router?")
+        self._isp_btn.setEnabled(True)
+        _CATEGORY_COLORS = {
+            "local":    RED,
+            "isp":      AMBER,
+            "external": AMBER,
+            "all_ok":   GREEN,
+            "unknown":  TEXT_SECONDARY,
+        }
+        color = _CATEGORY_COLORS.get(result.category, TEXT_SECONDARY)
+        self._isp_result_card.setStyleSheet(
+            f"QFrame#ispResultCard {{ background:{BG_CARD}; border:1px solid {color};"
+            f" border-left:3px solid {color}; border-radius:4px; }}"
+        )
+        self._isp_verdict_lbl.setText(result.verdict)
+        self._isp_verdict_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{color}; border:none; background:transparent;"
+        )
+        self._isp_detail_lbl.setText(result.plain_answer)
+        self._isp_result_card.show()
+
+    def _on_isp_error(self, msg: str) -> None:
+        self._isp_btn.setText("Quick test: Is this my ISP or my router?")
+        self._isp_btn.setEnabled(True)
+        self._isp_verdict_lbl.setText("Test failed")
+        self._isp_detail_lbl.setText(msg or "Could not run the quick test.")
+        self._isp_result_card.show()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -468,6 +529,49 @@ class DiagnosisPage(QWidget):
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
         )
         lay.addWidget(hint)
+
+        # ISP vs Router quick test (S3-4)
+        sep_line = QFrame()
+        sep_line.setFrameShape(QFrame.Shape.HLine)
+        sep_line.setStyleSheet(f"color:{BORDER}; background:{BORDER}; border:none; max-height:1px;")
+        lay.addWidget(sep_line)
+
+        self._isp_btn = QPushButton("Quick test: Is this my ISP or my router?")
+        self._isp_btn.setFixedHeight(32)
+        self._isp_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
+            f" font-size:11px; border-radius:4px; padding:0 12px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT_DARK}; }}"
+        )
+        self._isp_btn.clicked.connect(self._launch_isp_test)
+        lay.addWidget(self._isp_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # ISP test result card — hidden until a test completes
+        self._isp_result_card = QFrame()
+        self._isp_result_card.setObjectName("ispResultCard")
+        self._isp_result_card.setStyleSheet(
+            f"QFrame#ispResultCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:4px; }}"
+        )
+        _irc_lay = QVBoxLayout(self._isp_result_card)
+        _irc_lay.setContentsMargins(12, 8, 12, 8)
+        _irc_lay.setSpacing(4)
+        self._isp_verdict_lbl = QLabel("–")
+        self._isp_verdict_lbl.setWordWrap(True)
+        self._isp_verdict_lbl.setStyleSheet(
+            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY}; border:none; background:transparent;"
+        )
+        self._isp_detail_lbl = QLabel("")
+        self._isp_detail_lbl.setWordWrap(True)
+        self._isp_detail_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; border:none; background:transparent;"
+        )
+        _irc_lay.addWidget(self._isp_verdict_lbl)
+        _irc_lay.addWidget(self._isp_detail_lbl)
+        self._isp_result_card.hide()
+        lay.addWidget(self._isp_result_card)
+
         return w
 
     def _build_running(self) -> QWidget:
@@ -556,6 +660,14 @@ class DiagnosisPage(QWidget):
         from PyQt6.QtCore import QSettings as _QS2
         _logger_started = _QS2().value("logger_started_once", False, type=bool)
         self._logger_warn.setVisible(not _logger_started)
+
+        # Symptom context label — shows which symptom the user reported (S3-3)
+        self._symptom_ctx_lbl = QLabel("")
+        self._symptom_ctx_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none; padding:0 2px;"
+        )
+        self._symptom_ctx_lbl.hide()
+        outer.addWidget(self._symptom_ctx_lbl)
 
         # Verdict card
         self._verdict_card = QFrame()
@@ -1022,6 +1134,20 @@ class DiagnosisPage(QWidget):
         self._last_findings = list(findings)
         _save_diag_history(result)
         self.diagnosis_saved.emit()
+
+        # Symptom context (S3-3) — remind the user what they reported
+        _SYMPTOM_LABELS = {
+            "slow":     "You reported: My internet is slow",
+            "dropping": "You reported: My connection keeps dropping",
+            "noconn":   "You reported: I can't connect at all",
+            "other":    "You reported: Something else",
+        }
+        ctx = _SYMPTOM_LABELS.get(self._symptom, "")
+        if ctx:
+            self._symptom_ctx_lbl.setText(ctx)
+            self._symptom_ctx_lbl.show()
+        else:
+            self._symptom_ctx_lbl.hide()
 
         prev_headlines = self._prev_finding_headlines.copy()
 

@@ -155,6 +155,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         from ui.pages.diagnosis_page import DiagnosisPage
         self._diagnosis_page = DiagnosisPage(store=self._store, parent=None)
 
+        from ui.pages.troubleshoot_page import TroubleshootPage
+        self._troubleshoot_page = TroubleshootPage(parent=None)
+        self._troubleshoot_page.navigate_to.connect(self._nav_rail_go_to)
+        self._troubleshoot_page.diagnose_symptom.connect(self._on_diagnose_symptom)
+
         from ui.pages.settings_page import SettingsPage
         self._settings_page = SettingsPage(parent=None)
         self._settings_page.reload_oui_requested.connect(self._reload_oui_db)
@@ -1002,3 +1007,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         if service_id:
             self._service_diagnostics_page.set_service(service_id)
         self._nav_rail_go_to("Service Diagnostics")
+
+    def _on_diagnose_symptom(self, symptom_key: str) -> None:
+        """Pre-select a symptom on DiagnosisPage and navigate to it."""
+        self._diagnosis_page.preset_symptom(symptom_key)
+        self._nav_rail_go_to("What's Wrong?")

@@ -52,6 +52,24 @@ _FEATURES: list[dict] = [
     },
     {
         "group": "Start here",
+        "icon": "⬡",
+        "name": "Troubleshoot",
+        "desc": (
+            "Symptom-first routing hub — describe your problem in plain English and "
+            "NetSentinel sends you straight to the right tool with the right context. "
+            "Use this when you're not sure which page to start from."
+        ),
+        "page": "Troubleshoot",
+        "requires": None,
+        "tags": [
+            "troubleshoot", "symptom", "slow", "streaming", "buffering", "netflix",
+            "youtube", "gaming", "lag", "ping", "wifi", "dropping", "disconnect",
+            "no internet", "can't connect", "bandwidth", "suspicious", "unknown device",
+            "app not working", "website down", "isp", "router", "fix", "start",
+        ],
+    },
+    {
+        "group": "Start here",
         "icon": "⊛",
         "name": "ARP Spoof Watch",
         "desc": (

@@ -941,6 +941,7 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Speed Test",          self._speed_test_page)
         self._nav_add_rail_item("DNS & Stability",     self._m5_tab)
         self._nav_add_rail_item("What's Wrong?",       self._diagnosis_page)
+        self._nav_add_rail_item("Troubleshoot",        self._troubleshoot_page)
 
         self._nav_begin_section("Discover", "network")
         self._nav_add_rail_item("Devices",             self._m1_tab)

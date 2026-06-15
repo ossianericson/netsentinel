@@ -648,11 +648,27 @@ class AlertDrawer(QFrame):
         self._go_btn.clicked.connect(self._on_go)
         self._go_btn.setVisible(False)
 
+        self._troubleshoot_btn = QPushButton("Troubleshoot →")
+        self._troubleshoot_btn.setFixedHeight(26)
+        self._troubleshoot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._troubleshoot_btn.setToolTip("Open the Troubleshoot hub to find the right fix")
+        self._troubleshoot_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{ACCENT};"
+            f" border:1px solid {BORDER}; border-radius:3px;"
+            f" font-size:10px; padding:0 8px; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+        )
+        self._troubleshoot_btn.clicked.connect(
+            lambda: self.navigate_to.emit("Troubleshoot")
+        )
+
         alay.addWidget(self._ack_btn)
         alay.addWidget(self._snooze_btn)
         alay.addWidget(self._log_btn)
         alay.addWidget(self._fix_btn)
         alay.addWidget(self._go_btn)
+        alay.addWidget(self._troubleshoot_btn)
         root.addWidget(acts)
 
     # ── Content population ────────────────────────────────────────────────────
