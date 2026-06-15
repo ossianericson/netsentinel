@@ -848,30 +848,39 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._post_scan_chain = CoachMarkChain(
             self,
             [
-                # ── Pair 1: Monitor → Network Logger ─────────────────────────────
+                # ── Pair 1: Monitor section — rail button + flyout item ───────
                 {
+                    # Open the Monitor flyout; delay_ms waits for the 150 ms
+                    # slide animation to settle before the ring is positioned.
                     "on_show":      lambda: _open_section("Monitor"),
+                    "delay_ms":     300,
                     "target":       lambda: self._nav_rail_buttons.get("Monitor"),
                     "title":        "Step 2 of 9 — Monitor",
-                    "body":         "Click the Monitor icon to open live streams — bandwidth, connections, availability, and more.",
+                    "body":         "Click the Monitor icon to open the rail menu — it lists live streams like bandwidth, connections, availability, and more.",
                 },
                 {
-                    # Navigate to Network Logger, close flyout, select Log Sources tab (index 0).
+                    # Navigate to Network Logger and select Log Sources tab so the
+                    # user can see the page content while the flyout item is ringed.
+                    # Flyout stays open (nav_rail_go_to does not close it).
+                    "on_show":      lambda: (
+                        self._nav_rail_go_to("Network Logger"),
+                        self._logging_container.setCurrentIndex(0),
+                    ),
+                    "delay_ms":     200,
+                    "target":       lambda: self._nav_flyout._items.get("Network Logger"),
+                    "prefer_side":  "right",
+                    "title":        "Step 3 of 9 — Network Logger",
+                    "body":         "Click 'Network Logger' to open this page. The Log Sources tab lets you enable or disable each monitoring source.",
+                },
+                # ── Network Logger: Activity Log tab ─────────────────────────
+                {
+                    # Navigate to Network Logger, close flyout, select Activity Log tab.
                     # delay_ms lets the layout commit so the tab proxy is correctly positioned.
                     "on_show":      lambda: (
                         self._nav_rail_go_to("Network Logger"),
                         self._nav_flyout.close_panel(),
-                        self._logging_container.setCurrentIndex(0),
+                        self._logging_container.setCurrentIndex(1),
                     ),
-                    "delay_ms":     200,
-                    "target":       lambda: _tab_proxy(self._logging_container, 0),
-                    "title":        "Step 3 of 9 — Network Logger",
-                    "body":         "This is the Network Logger — a live timeline of RTT, jitter, modem signal, syslog, and more. Leave it running for daily insights.",
-                },
-                # ── Network Logger: Activity Log tab ─────────────────────────
-                {
-                    # Select Activity Log tab (index 1); ring on that tab only.
-                    "on_show":      lambda: self._logging_container.setCurrentIndex(1),
                     "delay_ms":     200,
                     "target":       lambda: _tab_proxy(self._logging_container, 1),
                     "prefer_side":  "right",

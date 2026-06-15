@@ -148,15 +148,15 @@ class CoachMarkOverlay(QWidget):
         self.setStyleSheet("background: transparent; border: none;")
 
         # Highlight rings around all target widgets (primary + any extras).
-        # Each ring is parented to the target's own parent widget so that
-        # mapTo() only traverses one level — avoiding incorrect offsets from
-        # intermediate scroll areas or translated widgets in the hierarchy.
+        # All rings are parented to the main window (parent) so they render
+        # above every intermediate panel and are never clipped by the flyout
+        # or any other sibling widget.  mapTo(main_window, …) traverses the
+        # full hierarchy and gives correct absolute coordinates.
         self._rings: list[_HighlightRing] = []
         all_targets = [w for w in ([target_widget] + list(extra_target_widgets or [])) if w is not None]
         for tw in all_targets:
             try:
-                ring_parent = tw.parentWidget() or parent
-                self._rings.append(_HighlightRing(tw, ring_parent))
+                self._rings.append(_HighlightRing(tw, parent))
             except Exception:
                 pass  # non-fatal
 
