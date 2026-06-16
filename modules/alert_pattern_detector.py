@@ -25,7 +25,6 @@ import datetime
 # ── Tuning constants ──────────────────────────────────────────────────────────
 _ANALYSIS_DAYS       = 21   # look back this many days
 _MIN_OCCURRENCES     = 3    # same rule+host at same hour across this many weeks
-_HOUR_TOLERANCE      = 1    # ±1 hour match window
 _WINDOW_BUFFER_MINS  = 30   # maintenance window extends ±this long beyond the alert hour
 
 
