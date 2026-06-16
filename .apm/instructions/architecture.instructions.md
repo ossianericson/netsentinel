@@ -255,6 +255,7 @@ netsentinel/
 │       ├── alert_drawer.py         # Slide-in alert detail drawer
 │       ├── animated_kpi.py         # Animated KPI counter with ease-out count-up
 │       ├── coach_mark.py           # Guided coach mark overlay for first-run hints
+│       ├── column_visibility_toggle.py # ColumnVisibilityToggle — Quick/Full column-visibility toggle for tables (Sprint 7, S7-2)
 │       ├── context_menu.py         # Reusable right-click context menu builder
 │       ├── density_toggle.py       # Compact/comfortable row density toggle widget
 │       ├── device_popover.py       # Hover popover showing quick device info

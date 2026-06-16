@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 
 from ui.expanding_table import ExpandingTable
 from ui.tabs_helpers import risk_to_label
+from ui.widgets.column_visibility_toggle import ColumnVisibilityToggle
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
@@ -1081,10 +1082,11 @@ class InventoryPage(QWidget):
         # ── Page 0: empty state ───────────────────────────────────────────────
         empty = EmptyStateCard(
             icon="◆",
-            title="Device Inventory",
+            title="No devices found yet",
             what_it_shows=(
                 "Every device currently connected to your network — phones, laptops, smart TVs, "
-                "routers — with their IP address, MAC address, and manufacturer."
+                "routers — with their IP address, MAC address, and manufacturer. "
+                "Run a scan to discover what's connected — takes about 30 seconds."
             ),
             why_it_matters="You can't secure a device you don't know exists.",
             btn_label="Run Scan",
@@ -1267,6 +1269,14 @@ class InventoryPage(QWidget):
         _sh.resizeSection(6, 140)  # Manufacturer
         _sh.resizeSection(7, 100)  # Type
         _sh.setStretchLastSection(True)
+
+        # Quick / Full column-visibility toggle (S7-2) — defaults to Full;
+        # technical data (IP, MAC, Manufacturer, Risk) is never hidden by default.
+        self._column_toggle = ColumnVisibilityToggle(
+            "inventory_snap", self._snap_table, quick_columns=[0, 3, 4, 7],
+        )
+        snap_hdr_lay.insertWidget(2, self._column_toggle)
+
         self._snap_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._snap_table.customContextMenuRequested.connect(
             self._snap_table_context_menu

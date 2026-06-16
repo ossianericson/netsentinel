@@ -2,7 +2,8 @@
   "terms": [
     {
       "term": "ARP",
-      "definition": "Address Resolution Protocol — how devices on a local network translate an IP address into the hardware (MAC) address needed to actually deliver a packet."
+      "definition": "Address Resolution Protocol — how devices on a local network translate an IP address into the hardware (MAC) address needed to actually deliver a packet.",
+      "detail": "What to look for: one IP address should map to one MAC address. If the same IP suddenly answers from two different MACs, a device may be impersonating your gateway to intercept traffic — that's what ARP Spoof Watch is built to catch."
     },
     {
       "term": "BPDU",
@@ -18,11 +19,13 @@
     },
     {
       "term": "CVSS",
-      "definition": "Common Vulnerability Scoring System — a 0–10 scale that rates how severe a software vulnerability is; 9+ is Critical, 7–8.9 is High, 4–6.9 is Medium."
+      "definition": "Common Vulnerability Scoring System — a 0–10 scale that rates how severe a software vulnerability is; 9+ is Critical, 7–8.9 is High, 4–6.9 is Medium.",
+      "detail": "What to look for: prioritise fixes by score, not by how alarming the CVE name sounds — a 9.8 on a device that's open to the internet matters far more than a 9.8 on a device that's only reachable from inside your LAN."
     },
     {
       "term": "DHCP",
-      "definition": "Dynamic Host Configuration Protocol — the service that automatically assigns IP addresses to devices when they join a network so you do not have to configure each one manually."
+      "definition": "Dynamic Host Configuration Protocol — the service that automatically assigns IP addresses to devices when they join a network so you do not have to configure each one manually.",
+      "detail": "What to look for: your router should be the only device handing out DHCP leases. A second device answering DHCP requests is a rogue DHCP server and can redirect your traffic — that's what DHCP Rogue Monitor flags."
     },
     {
       "term": "DNS",
@@ -78,7 +81,8 @@
     },
     {
       "term": "CVE",
-      "definition": "Common Vulnerabilities and Exposures — a numbered catalogue of publicly disclosed security flaws. CVE-2023-12345 is a unique ID for one specific vulnerability in one specific product."
+      "definition": "Common Vulnerabilities and Exposures — a numbered catalogue of publicly disclosed security flaws. CVE-2023-12345 is a unique ID for one specific vulnerability in one specific product.",
+      "detail": "What to look for: the CVSS score tells you how severe it is, but the fix is almost always a firmware or software update from the manufacturer — check their site for an advisory matching the CVE ID."
     },
     {
       "term": "QoS",
@@ -86,7 +90,8 @@
     },
     {
       "term": "RTT",
-      "definition": "Round-Trip Time — the time in milliseconds for a packet to travel from your device to a destination and back. Under 20 ms is excellent; over 200 ms is noticeable on video calls."
+      "definition": "Round-Trip Time — the time in milliseconds for a packet to travel from your device to a destination and back. Under 20 ms is excellent; over 200 ms is noticeable on video calls.",
+      "detail": "What to look for: a sudden, sustained jump in RTT for every device usually points to your router or ISP link, not one specific device. Check the Network Logger timeline to see when it started."
     },
     {
       "term": "TTL",
@@ -126,7 +131,8 @@
     },
     {
       "term": "TLS",
-      "definition": "Transport Layer Security — the encryption protocol behind HTTPS; it authenticates the server and encrypts data in transit to prevent eavesdropping."
+      "definition": "Transport Layer Security — the encryption protocol behind HTTPS; it authenticates the server and encrypts data in transit to prevent eavesdropping.",
+      "detail": "What to look for: an expiring or expired certificate doesn't mean you were breached — it means the cert needs renewing on the server or hosting provider before browsers start showing warnings to visitors."
     },
     {
       "term": "Traceroute",

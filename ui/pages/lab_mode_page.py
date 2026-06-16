@@ -272,7 +272,14 @@ class LabModePage(QWidget):
         outer.setSpacing(6)
 
         from ui.widgets.page_header import PageHeaderBar
-        outer.addWidget(PageHeaderBar("Lab Mode", subtitle="Guided exercises to learn real networking concepts using your live network."))
+        _hdr = PageHeaderBar("Lab Mode", subtitle="Guided exercises to learn real networking concepts using your live network.")
+        _hdr.show_first_visit_banner(
+            "lab_mode",
+            "Each exercise walks you through a real networking concept using your actual "
+            "devices, not a simulation. Hints are available if you get stuck, and you can "
+            "reveal the full solution at any point.",
+        )
+        outer.addWidget(_hdr)
         outer.addSpacing(8)
 
         grid = QGridLayout()

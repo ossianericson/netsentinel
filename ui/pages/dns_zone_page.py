@@ -182,7 +182,14 @@ class DnsZonePage(QWidget):
 
         # Title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("DNS Zone Mapping", subtitle="Discovers all hostnames and records published by your domain's DNS server."))
+        _hdr = PageHeaderBar("DNS Zone Mapping", subtitle="Discovers all hostnames and records published by your domain's DNS server.")
+        _hdr.show_first_visit_banner(
+            "dns_zone",
+            "Results come from a zone transfer (AXFR) if your DNS server allows it, plus "
+            "mDNS broadcasts from local devices. A server that allows AXFR from anyone is a "
+            "real exposure worth fixing.",
+        )
+        root.addWidget(_hdr)
 
         # KPI row
         kpi_row = QHBoxLayout()
@@ -201,10 +208,11 @@ class DnsZonePage(QWidget):
 
         empty_card = EmptyStateCard(
             icon="⬡",
-            title="DNS Zone Mapping",
+            title="No DNS records mapped yet",
             what_it_shows=(
                 "DNS records from zone transfers (AXFR) and mDNS services "
-                "advertising on your local network — printers, NAS, smart devices."
+                "advertising on your local network — printers, NAS, smart devices. "
+                "Enumeration takes a few seconds."
             ),
             why_it_matters=(
                 "Zone transfer misconfigurations expose your entire DNS structure. "

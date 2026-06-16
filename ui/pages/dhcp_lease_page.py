@@ -133,7 +133,14 @@ class DhcpLeasePage(QWidget):
 
         # Page title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("DHCP Lease Inventory", subtitle="Lists all IP addresses currently assigned to devices by your router."))
+        _hdr = PageHeaderBar("DHCP Lease Inventory", subtitle="Lists all IP addresses currently assigned to devices by your router.")
+        _hdr.show_first_visit_banner(
+            "dhcp_lease",
+            "Each row is a lease your router's DHCP server handed out. A device with a lease "
+            "about to expire will usually renew automatically — only worry if a device "
+            "disappears and never comes back.",
+        )
+        root.addWidget(_hdr)
 
         # KPI row
         kpi_row = QHBoxLayout()

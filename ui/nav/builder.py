@@ -8,11 +8,11 @@ pin management, command palette, and recent-action wiring.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSlot
-from PyQt6.QtWidgets import QLabel, QWidget
+from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSlot
+from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 from ui.help import _PAGE_HELP
-from ui.nav.rail import _NavEntry, _RailButton
+from ui.nav.rail import _NavEntry, _RailButton, _make_nav_icon
 from ui.styles import (
     AUDIT_RED,
     BORDER,
@@ -547,6 +547,29 @@ class _NavBuilderMixin:
         self._nav_rail_buttons.clear()
         self._nav_rail_pin_buttons: dict = {}
 
+        # "Recent" rail shortcut (S7-4) — last 3 pages visited, helps new users retrace
+        # their steps. Rebuilt here (not in tabs.py) so it is correctly recreated and
+        # positioned on every nav rebuild, exactly like quick-access pins and section
+        # buttons below it — anything added directly in tabs.py after the stretch/Settings
+        # would throw off the count()-2 insertion math used throughout this method.
+        self._recent_rail_btn = QPushButton()
+        self._recent_rail_btn.setFixedSize(56, 32)
+        self._recent_rail_btn.setToolTip("Recently visited pages")
+        self._recent_rail_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._recent_rail_btn.setCheckable(True)
+        self._recent_rail_btn.setIcon(_make_nav_icon("log", 18, TEXT_MUTED))
+        self._recent_rail_btn.setIconSize(QSize(18, 18))
+        self._recent_rail_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; border: none; outline: none; }}"
+            f"QPushButton:hover {{ background: rgba(255,255,255,0.07); }}"
+            f"QPushButton:checked {{ background: rgba(255,255,255,0.12); }}"
+            f"QPushButton:focus, QPushButton:focus-visible {{"
+            f" outline: none; border: none; }}"
+        )
+        self._recent_rail_btn.clicked.connect(self._toggle_recent_pages_flyout)
+        insert_at = self._nav_rail_lay.count() - 2
+        self._nav_rail_lay.insertWidget(insert_at, self._recent_rail_btn)
+
         direct_pins = getattr(self, "_nav_direct_pins", [])
         if direct_pins:
             qa_lbl = QLabel("QUICK\nACCESS")
@@ -614,6 +637,8 @@ class _NavBuilderMixin:
         self._nav_open_section = section_name
         for name, btn in self._nav_rail_buttons.items():
             btn.setChecked(name == section_name)
+        if hasattr(self, "_recent_rail_btn"):
+            self._recent_rail_btn.setChecked(False)
         sec = next((s for s in self._nav_sections if s["name"] == section_name), None)
         if sec is None:
             return
@@ -851,6 +876,64 @@ class _NavBuilderMixin:
                             "Tip: right-click any page in the menu to pin it ★ for faster access"
                         )
 
+        # "Recently visited" MRU list (S7-4) — most-recent-first, capped at 3, deduped
+        recent_raw = qs.value("nav/recent_pages", "[]")
+        try:
+            recent: list = _json.loads(recent_raw)
+        except Exception:
+            recent = []
+        if label in recent:
+            recent.remove(label)
+        recent.insert(0, label)
+        qs.setValue("nav/recent_pages", _json.dumps(recent[:3]))
+
+    def _get_recent_pages(self) -> list:
+        """Return up to the 3 most-recently-visited page labels, most-recent-first (S7-4)."""
+        import json as _json
+        qs = QSettings("NetSentinel", "NetSentinel")
+        raw = qs.value("nav/recent_pages", "[]")
+        try:
+            recent: list = _json.loads(raw)
+        except Exception:
+            recent = []
+        return [lbl for lbl in recent if lbl in self._nav_label_to_widget][:3]
+
+    def _toggle_recent_pages_flyout(self) -> None:
+        """Open/close a flyout listing the last 3 distinct pages visited (S7-4).
+
+        Helps new users retrace their steps without needing to have pinned anything.
+        Reuses the existing flyout panel — no new rail section, no change to the
+        9 documented sections.
+        """
+        if self._nav_open_section == "__recent__" and self._nav_flyout.maximumWidth() > 0:
+            if not self._nav_flyout.is_pinned:
+                self._nav_flyout.close_panel()
+                self._nav_open_section = ""
+                self._recent_rail_btn.setChecked(False)
+            return
+
+        recent = self._get_recent_pages()
+        if not recent:
+            self._recent_rail_btn.setChecked(False)
+            self._set_status("No recently visited pages yet")
+            return
+
+        self._nav_open_section = "__recent__"
+        for btn in self._nav_rail_buttons.values():
+            btn.setChecked(False)
+        self._recent_rail_btn.setChecked(True)
+
+        entries = [(label, label in self._nav_pinned_labels, False, "") for label in recent]
+        self._nav_flyout.load_section(
+            title="Recent",
+            entries=entries,
+            active_label=self._nav_current_page_label,
+            on_click=self._nav_rail_go_to,
+            on_pin_toggle=self._on_rail_pin_toggle,
+            on_pin_move=self._on_rail_pin_move,
+        )
+        self._nav_flyout.open()
+
     def _refresh_home_suggestions(self) -> None:
         if not hasattr(self, "_home_page"):
             return
@@ -932,6 +1015,8 @@ class _NavBuilderMixin:
                 self._nav_open_section = ""
                 for btn in self._nav_rail_buttons.values():
                     btn.setChecked(False)
+                if hasattr(self, "_recent_rail_btn"):
+                    self._recent_rail_btn.setChecked(False)
 
     def _build_pro_nav(self) -> None:
         """Full nav — activity rail + flyout. No mode switcher; this is the only nav."""

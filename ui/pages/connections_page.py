@@ -191,7 +191,14 @@ class ConnectionsPage(QWidget):
 
         # Header
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Active Connections", subtitle="Shows every process on this machine that has an open network connection."))
+        _hdr = PageHeaderBar("Active Connections", subtitle="Shows every process on this machine that has an open network connection.")
+        _hdr.show_first_visit_banner(
+            "active_connections",
+            "Each row pairs a running process with the remote address it's talking to. A "
+            "process you don't recognize talking to an unfamiliar country is worth a closer "
+            "look — right-click to block it.",
+        )
+        root.addWidget(_hdr)
 
         # KPI row
         kpi_row = QHBoxLayout()
@@ -361,10 +368,11 @@ class ConnectionsPage(QWidget):
 
         empty_card = EmptyStateCard(
             icon="◆",
-            title="Active Connections",
+            title="No connections captured yet",
             what_it_shows=(
                 "Every TCP/UDP connection on this machine — process name, remote IP, "
-                "country, and connection status — updated live."
+                "country, and connection status — updated live within a few seconds "
+                "of starting monitoring."
             ),
             why_it_matters=(
                 "Unexpected outbound connections can reveal malware, data exfiltration, "

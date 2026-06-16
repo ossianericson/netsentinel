@@ -112,12 +112,16 @@ class TroubleshootPage(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
 
-        root.addWidget(
-            PageHeaderBar(
-                "Troubleshoot",
-                subtitle="What's happening on your network? Pick the closest description — NetSentinel will route you straight to the right tool.",
-            )
+        _hdr = PageHeaderBar(
+            "Troubleshoot",
+            subtitle="What's happening on your network? Pick the closest description — NetSentinel will route you straight to the right tool.",
         )
+        _hdr.show_first_visit_banner(
+            "troubleshoot",
+            "There's no wrong answer — pick the closest match. If none fit, the \"Run a full "
+            "diagnosis\" link below runs every check and figures out the cause for you.",
+        )
+        root.addWidget(_hdr)
 
         # "Not sure?" helper strip
         unsure_row = QHBoxLayout()

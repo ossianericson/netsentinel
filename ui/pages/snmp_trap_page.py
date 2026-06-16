@@ -137,7 +137,14 @@ class SnmpTrapPage(QWidget):
 
         # Page title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("SNMP Trap Receiver", subtitle="Listens for alert messages sent by network devices like routers and switches."))
+        _hdr = PageHeaderBar("SNMP Trap Receiver", subtitle="Listens for alert messages sent by network devices like routers and switches.")
+        _hdr.show_first_visit_banner(
+            "snmp_trap",
+            "Most home routers don't send SNMP traps, but managed switches and enterprise "
+            "APs often do. If this page stays empty, your hardware likely isn't configured "
+            "to send traps here.",
+        )
+        root.addWidget(_hdr)
 
         # Status bar
         self._status_lbl = QLabel("Not listening.")

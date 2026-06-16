@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 try:
+    from PyQt6.QtCore import Qt
     from PyQt6.QtWidgets import QApplication
     _HAS_QT = True
 except ImportError:
@@ -100,6 +101,91 @@ def jt():
 def test_jargon_tooltip_known_term_has_tooltip(jt):
     assert jt.toolTip() != "", "Known term must have a tooltip"
     assert "DNS" in jt.toolTip()
+
+
+# ── get_detail() / find_known_term() (Sprint 7, S7-3) ──────────────────────────
+
+def test_get_detail_term_with_detail():
+    from ui.widgets.jargon_tooltip import get_detail
+    d = get_detail("ARP")
+    assert isinstance(d, str)
+    assert len(d) > 10
+
+
+def test_get_detail_term_without_detail():
+    from ui.widgets.jargon_tooltip import get_detail
+    # Most terms intentionally have no "detail" field yet — must degrade gracefully
+    assert get_detail("Gateway") == ""
+
+
+def test_get_detail_unknown_term():
+    from ui.widgets.jargon_tooltip import get_detail
+    assert get_detail("XYZZY_DOES_NOT_EXIST") == ""
+
+
+def test_find_known_term_matches_whole_word():
+    from ui.widgets.jargon_tooltip import find_known_term
+    assert find_known_term("ARP_THRESHOLD fired for host 1.2.3.4") == "ARP"
+
+
+def test_find_known_term_no_match():
+    from ui.widgets.jargon_tooltip import find_known_term
+    assert find_known_term("nothing technical here at all") == ""
+
+
+def test_find_known_term_does_not_match_substring():
+    from ui.widgets.jargon_tooltip import find_known_term
+    # "ARPeggio" must not match the whole-word term "ARP"
+    assert find_known_term("ARPeggio is not a network term") == ""
+
+
+def test_find_known_term_prefers_longer_multiword_term():
+    from ui.widgets.jargon_tooltip import find_known_term
+    assert find_known_term("This device has a Rogue Device flag") == "Rogue Device"
+
+
+# ── LearnMoreLink widget (Sprint 7, S7-3) ───────────────────────────────────────
+
+def test_learn_more_link_import():
+    from ui.widgets.jargon_tooltip import LearnMoreLink  # noqa: F401
+
+
+def test_learn_more_link_shows_term_in_text():
+    app = QApplication.instance()
+    from ui.widgets.jargon_tooltip import LearnMoreLink
+    w = LearnMoreLink("ARP")
+    assert "ARP" in w.text()
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass  # already destroyed — safe to skip
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+def test_learn_more_link_click_creates_popover():
+    app = QApplication.instance()
+    from ui.widgets.jargon_tooltip import LearnMoreLink
+    w = LearnMoreLink("ARP")
+    assert w._popover is None
+    w.show()
+    from PyQt6.QtCore import QEvent, QPointF
+    from PyQt6.QtGui import QMouseEvent
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonPress, QPointF(2, 2), Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+    )
+    w.mousePressEvent(event)
+    assert w._popover is not None
+    try:
+        w._popover.deleteLater()
+        w.deleteLater()
+    except RuntimeError:
+        pass  # already destroyed — safe to skip
+    if app:
+        for _ in range(3):
+            app.processEvents()
 
 
 def test_jargon_tooltip_unknown_term():

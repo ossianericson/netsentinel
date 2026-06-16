@@ -96,10 +96,11 @@ class UptimePage(QWidget):
         # ── Page 0: empty state ───────────────────────────────────────────────
         empty = EmptyStateCard(
             icon="▲",
-            title="Device Uptime Monitor",
+            title="No uptime history yet",
             what_it_shows=(
                 "Uptime percentage for every device on your network over the last 24 hours, "
-                "7 days, and 30 days — updated automatically by the background availability monitor."
+                "7 days, and 30 days — updated automatically by the background availability monitor. "
+                "History starts building as soon as monitoring is on."
             ),
             why_it_matters=(
                 "Chronic 99.9% uptime sounds good until you realise it means 8 hours of downtime "

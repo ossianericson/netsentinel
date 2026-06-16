@@ -125,7 +125,7 @@ class CertPage(QWidget):
 
         e0_card = EmptyStateCard(
             icon="◈",
-            title="TLS Certificate Monitor",
+            title="No certificates monitored yet",
             what_it_shows=(
                 "Days remaining until the TLS certificate expires for each site you monitor, "
                 "plus whether the certificate chain is valid and trusted."

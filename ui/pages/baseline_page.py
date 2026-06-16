@@ -327,11 +327,12 @@ class BaselinePage(QWidget):
 
         self._empty_lbl = EmptyStateCard(
             icon="◇",
-            title="Configuration Baseline",
+            title="No snapshots yet",
             what_it_shows=(
                 "Point-in-time snapshots of every device's IP, MAC, hostname, "
                 "and open ports — plus SNMP data — so you can compare any two "
-                "moments and see exactly what changed."
+                "moments and see exactly what changed. Taking the first snapshot "
+                "takes about 30 seconds."
             ),
             why_it_matters=(
                 "Configuration drift is silent. A new open port or a changed "

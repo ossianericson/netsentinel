@@ -39,6 +39,7 @@ from ui.styles import (
     BG_HOVER,
     WHITE,
 )
+from ui.widgets.jargon_tooltip import LearnMoreLink, find_known_term
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -417,6 +418,12 @@ class AlertDrawer(QFrame):
         )
         bl.addWidget(self._msg_lbl)
 
+        # Contextual "learn more" link (S7-3) — populated per-alert in _populate()
+        self._learn_more_row = QHBoxLayout()
+        self._learn_more_row.setContentsMargins(0, 0, 0, 0)
+        self._learn_more_link: "LearnMoreLink | None" = None
+        bl.addLayout(self._learn_more_row)
+
         fix_sep = QFrame()
         fix_sep.setFixedHeight(1)
         fix_sep.setStyleSheet(f"background:{BORDER}; border:none;")
@@ -700,6 +707,18 @@ class AlertDrawer(QFrame):
             self._sublabel_lbl.setVisible(False)
 
         self._msg_lbl.setText(msg or "—")
+
+        while self._learn_more_row.count():
+            item = self._learn_more_row.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+        self._learn_more_link = None
+        term = find_known_term(f"{rule} {msg}")
+        if term:
+            self._learn_more_link = LearnMoreLink(term)
+            self._learn_more_row.addWidget(self._learn_more_link)
+            self._learn_more_row.addStretch()
 
         already_acked = bool(alert.get("acked_ts"))
         self._ack_btn.setEnabled(not already_acked)

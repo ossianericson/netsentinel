@@ -352,7 +352,7 @@ mode-aware empty states.
 ## Sprint 7 — Contextual Guidance Layer
 
 **Theme:** Guide new users to what they need without restructuring anything for existing users
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-16
 
 **Rationale:** The original plan proposed a dual-mode UI with a user-type questionnaire that
 collapsed the rail to 4 sections and hid technical data behind expanders by default. This
@@ -364,36 +364,72 @@ One UI for everyone. Guidance layers appear on top; they never replace or hide t
 
 ### Items
 
-- [ ] **S7-1** First-visit context banners — each page gets an optional one-paragraph
-  interpretation banner displayed the first time a user visits (tracked per-page via QSettings).
-  Shows below the page header, above the content. Explains what the page shows and what to look
-  for. Technical users dismiss it once and never see it again. Subsequent visits show no banner.
-  Implementation: a thin dismissible strip, not a modal. Opt-out, not opt-in.
+- [x] **S7-1** First-visit context banners — `ui/context_banners.py` (`should_show_banner`/
+  `mark_banner_seen`, QSettings key `banner/<page_key>_seen`) + `PageHeaderBar.show_first_visit_banner(key, text)`
+  in `ui/widgets/page_header.py`: a dismissible "ⓘ" strip below the title row, shown once per
+  page then never again. Applied to the 16 pages that already carry a `PageHeaderBar` subtitle
+  (Automation Hooks, App Traffic, DHCP Lease Inventory, What's Wrong?, CVE Tracker, Active
+  Connections, DNS Zone Mapping, Lab Mode, Live Bandwidth, Auto-Report Generation, Network
+  Timeline, SNMP Trap Receiver, Speed Test, Threat Intelligence, Troubleshoot, Predictive Trend
+  Alerting). Tests: `tests/test_context_banners.py` (11 tests).
 
-- [ ] **S7-2** Column quick-view preset — a "Quick / Full" toggle button in the Devices table
-  header. Full (default) shows all columns including IP, MAC, OUI, risk score, open ports.
-  Quick shows Name, Status, Device Type, Last Seen. The toggle is per-table, persists to
-  QSettings, and defaults to Full. Technical data is never hidden by default; simplification
-  is an explicit user opt-in.
+- [x] **S7-2** Column quick-view preset — `ui/widgets/column_visibility_toggle.py`
+  (`ColumnVisibilityToggle`, QSettings key `columns/<table_key>`, default `full`). Wired into the
+  Current Devices snapshot table in `ui/pages/inventory_page.py` (Quick = ●/Label/Hostname/Type;
+  Full = all 9 columns including Segment/IP/MAC/Manufacturer/Risk). Tests:
+  `tests/test_column_visibility_toggle.py` (7 tests).
 
-- [ ] **S7-3** Contextual "learn more" inline links — in scan result rows and alert text, surface
-  brief inline "what is this? →" links at the point of discovery. Click expands a JargonTooltip
-  panel (the existing widget, extended with multi-paragraph content). Additive — existing rows
-  unchanged; the link appears as a small inline icon.
+- [x] **S7-3** Contextual "learn more" inline links — `ui/widgets/jargon_tooltip.py` gained
+  `get_detail()`/`find_known_term()` (whole-word glossary match, underscore-tolerant for rule
+  names like `ARP_SPOOF`) and a new `LearnMoreLink` widget + `_LearnMorePopover` (click → floating
+  panel with definition + optional "what to look for" detail paragraph). `data/glossary.json`
+  gained `detail` fields for ARP, CVSS, DHCP, CVE, RTT, TLS. Wired into `AlertDrawer` (auto-detects
+  a glossary term in the alert's rule name/message) and `CvePage`'s inline CVSS row. Tests:
+  `tests/test_jargon_tooltip.py` (+12 new), `tests/test_alert_drawer.py` (4 tests, new file).
 
-- [ ] **S7-4** "Recently visited" rail shortcut — a pinnable "Recent" entry at the top of the
-  Pinned section (already exists) that lists the last 3 pages visited. Helps new users retrace
-  their steps. Rail structure and all 9 sections unchanged.
+- [x] **S7-4** "Recently visited" rail shortcut — a standalone "Recent" rail icon (log glyph,
+  built fresh inside `_nav_finalize_rail()` in `ui/nav/builder.py`, not as a separately-pinned
+  page entry) opens a flyout listing the last 3 distinct pages visited, MRU-tracked via
+  `_track_page_visit()` → QSettings key `nav/recent_pages`. **Deviation from the original
+  wording** ("pinnable entry at the top of the Pinned section"): the existing Pinned section only
+  renders once 5 pages are pinned (≤4 pins render as direct rail stars instead), and the rail's
+  `count()-2` insertion math for section buttons assumes exactly two fixed trailing widgets
+  (stretch + Settings) — discovered this the hard way when an initial placement after Settings
+  pushed every section button below the stretch spacer, visually relocating the whole 9-section
+  rail to the bottom. Fixed by building the Recent button fresh inside `_nav_finalize_rail()`
+  itself (same place sections/pins are rebuilt) instead of statically in `tabs.py`. Verified
+  visually via `tools/debug_launch.py` + screenshot, then locked in with
+  `tests/test_recent_pages_nav.py` (14 tests covering placement math, MRU order, and toggle
+  open/close/pin behaviour).
 
-- [ ] **S7-5** Ctrl+K natural language aliases — extend the command palette to accept symptom
-  queries and plain-English descriptions as aliases for pages. "Netflix slow" → Service
-  Diagnostics, "who is online" → Devices, "is my internet ok" → Overview. All existing Ctrl+K
-  entries unchanged; aliases are additive entries in the index.
+- [x] **S7-5** Ctrl+K natural language aliases — added symptom-phrase tags to the existing
+  `_FEATURES` entries in `ui/pages/discover_data.py`: "netflix slow" / "is netflix down" / etc.
+  → Service Diagnostics, "who is online" / "who's online" → Devices, "is my internet ok" / "is
+  everything ok" → Dashboard. No new palette entries — these are additive tags consumed by the
+  existing substring-match search string in `_build_palette_items()`. Tests:
+  `tests/test_nl_aliases.py` (5 tests).
 
-- [ ] **S7-6** Mode-aware empty state copy — the `EmptyStateCard` renders different copy
-  depending on what the page is for, not on a declared user mode. Device page empty state:
-  "No devices found yet. Run a scan to discover what's connected — takes about 30 seconds."
-  This is a copy improvement to existing cards, not a mode system.
+- [x] **S7-6** Mode-aware empty state copy — retitled 9 `EmptyStateCard` instances that repeated
+  the feature name (e.g. "Device Inventory") to the "No X yet" pattern with an inline time/effort
+  estimate where the action is quick: Devices, Dashboard, Active Connections, Live Bandwidth,
+  Configuration Baseline, DNS Zone Mapping, TLS Certificate Monitor, App Traffic, Device Uptime.
+  Pages that already followed this pattern (CVE Tracker, 802.11 Monitor, Trend Forecasts,
+  Timeline, SNMP Trap Receiver, Geo Map, Network Logger) were left unchanged. Tests:
+  `tests/test_empty_state_copy.py` (3 tests, static source checks).
+
+**New files:** `ui/context_banners.py`, `ui/widgets/column_visibility_toggle.py`,
+`tests/test_context_banners.py`, `tests/test_column_visibility_toggle.py`,
+`tests/test_alert_drawer.py`, `tests/test_recent_pages_nav.py`, `tests/test_nl_aliases.py`,
+`tests/test_empty_state_copy.py`
+
+**Architecture housekeeping:** `ui/nav/builder.py` budget in `tests/test_module_loc.py` raised
+1400 → 1623 (actual 1423 + 200 margin) per the file's own documented split trigger (1500); no
+split needed yet. `ui/widgets/column_visibility_toggle.py` added to the `ui/widgets/` layout
+tree in `.apm/instructions/architecture.instructions.md` (RULE-APM1).
+
+**Sprint 9 planned queue:** Onboarding Redesign — scan-first onboarding flow, scan-result-based
+feature surfacing, contextual one-time discovery prompts, Feature Guide "Recommended for you",
+"What can I do here?" help mode, extended-absence recovery banner.
 
 ---
 

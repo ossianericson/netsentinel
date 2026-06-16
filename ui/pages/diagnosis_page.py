@@ -380,7 +380,14 @@ class DiagnosisPage(QWidget):
         root.addWidget(back_btn)
 
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("What's Wrong?", subtitle="Diagnose your network problem in plain English — pick a symptom to begin."))
+        _hdr = PageHeaderBar("What's Wrong?", subtitle="Diagnose your network problem in plain English — pick a symptom to begin.")
+        _hdr.show_first_visit_banner(
+            "whats_wrong",
+            "Pick the option that best matches what you're seeing, then NetSentinel runs a "
+            "short sequence of checks and gives you a plain-English verdict with a "
+            "prioritised list of fixes.",
+        )
+        root.addWidget(_hdr)
 
         self._stack = QStackedWidget()
         self._stack.addWidget(self._build_idle())    # 0

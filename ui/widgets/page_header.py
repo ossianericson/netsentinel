@@ -17,6 +17,14 @@ Usage::
     # Or use a pre-named chip so you can update it by key:
     hdr.add_chip("—", key="upload")
     hdr.set_chip_by_key("upload", "110 Mbps up")
+
+    # First-visit context banner (S7-1) — dismissible strip below the header,
+    # shown once per page_key then never again (tracked via ui/context_banners.py):
+    hdr.show_first_visit_banner(
+        "live_bandwidth",
+        "This chart updates every second. Look for sustained spikes — a short burst "
+        "during a video call is normal; an interface pegged at 100% for minutes is not.",
+    )
 """
 from __future__ import annotations
 
@@ -40,16 +48,26 @@ class PageHeaderBar(QWidget):
     )
     _SEP_STYLE = f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none;"
 
+    _BANNER_HEIGHT = 30
+
     def __init__(self, title: str, subtitle: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._has_subtitle = bool(subtitle)
-        self.setFixedHeight(56 if self._has_subtitle else 40)
+        self._base_height = 56 if self._has_subtitle else 40
+        self._banner_key = ""
+        self.setFixedHeight(self._base_height)
         self.setObjectName("PageHeaderBar")
         self.setStyleSheet(
             f"#PageHeaderBar {{ background: transparent; border-bottom: 1px solid {BORDER}; }}"
         )
 
-        outer = QHBoxLayout(self)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        top_row = QWidget()
+        top_row.setFixedHeight(self._base_height)
+        outer = QHBoxLayout(top_row)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
@@ -90,7 +108,61 @@ class PageHeaderBar(QWidget):
         self._chips:     list[QLabel] = []
         self._chip_keys: dict[str, QLabel] = {}
 
+        root.addWidget(top_row)
+
+        # First-visit context banner (S7-1) — hidden until show_first_visit_banner() is called
+        self._banner_row = QWidget()
+        self._banner_row.setFixedHeight(self._BANNER_HEIGHT)
+        self._banner_row.setVisible(False)
+        banner_lay = QHBoxLayout(self._banner_row)
+        banner_lay.setContentsMargins(0, 0, 0, 4)
+        banner_lay.setSpacing(8)
+
+        self._banner_lbl = QLabel("")
+        self._banner_lbl.setWordWrap(True)
+        self._banner_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        banner_lay.addWidget(self._banner_lbl, 1)
+
+        self._banner_dismiss_btn = QPushButton("×")
+        self._banner_dismiss_btn.setFixedSize(18, 18)
+        self._banner_dismiss_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._banner_dismiss_btn.setToolTip("Dismiss — won't show again")
+        self._banner_dismiss_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; font-size:13px;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
+        )
+        self._banner_dismiss_btn.clicked.connect(self._dismiss_banner)
+        banner_lay.addWidget(self._banner_dismiss_btn)
+
+        root.addWidget(self._banner_row)
+
     # ── Public API ────────────────────────────────────────────────────────────
+
+    def show_first_visit_banner(self, page_key: str, text: str) -> None:
+        """Show a dismissible one-paragraph banner below the header (S7-1).
+
+        No-op if the banner for ``page_key`` was already dismissed (or shown
+        and auto-marked seen) in a previous session. Call once per page
+        construction — the banner only ever appears on a user's first visit.
+        """
+        from ui.context_banners import should_show_banner
+        if not should_show_banner(page_key):
+            return
+        self._banner_key = page_key
+        self._banner_lbl.setText(f"ⓘ  {text}")
+        self._banner_row.setVisible(True)
+        self.setFixedHeight(self._base_height + self._BANNER_HEIGHT)
+
+    def _dismiss_banner(self) -> None:
+        from ui.context_banners import mark_banner_seen
+        if self._banner_key:
+            mark_banner_seen(self._banner_key)
+        self._banner_row.setVisible(False)
+        self.setFixedHeight(self._base_height)
 
     def set_title(self, title: str) -> None:
         self._title_lbl.setText(title)
@@ -189,6 +261,15 @@ class PageHeaderBar(QWidget):
                 f"QPushButton:checked {{ background:{_s.ACCENT}; color:{_s.WHITE}; border-color:{_s.ACCENT}; }}"
                 f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
             )
+        self._banner_lbl.setStyleSheet(
+            f"color:{_s.TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        self._banner_dismiss_btn.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED}; font-size:13px;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{_s.TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_MUTED}; }}"
+        )
 
 
 _GLOBAL_SHORTCUTS = [

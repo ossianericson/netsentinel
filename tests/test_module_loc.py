@@ -221,7 +221,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # _NavBuilderMixin — all nav structure building + runtime + command palette + pin management.
     # Extracted from dashboard.py (Sprint 19). If grows past 1,500, split: nav_palette.py.
-    "nav/builder.py": 1400,  # actual ~1,200 + 200 margin (Sprint 19 new file)
+    "nav/builder.py": 1623,  # actual 1,423 + 200 margin (Sprint 7: Recent rail shortcut, S7-4)
 
     # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, pulse bar, overall verdict.
     # Also contains RiskBadge, VerdictPanel, _color_for_level, _bg_for_level.

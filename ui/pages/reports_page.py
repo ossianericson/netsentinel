@@ -121,7 +121,13 @@ class ReportsPage(QWidget):
 
         # Page title
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Auto-Report Generation", subtitle="Automatically generates and emails network health reports on a schedule."))
+        _hdr = PageHeaderBar("Auto-Report Generation", subtitle="Automatically generates and emails network health reports on a schedule.")
+        _hdr.show_first_visit_banner(
+            "auto_report",
+            "Set a schedule once and a formatted health report — grade, devices, alerts — "
+            "is generated and optionally emailed without you needing to open the app.",
+        )
+        root.addWidget(_hdr)
 
         # KPI row
         kpi_row = QHBoxLayout()

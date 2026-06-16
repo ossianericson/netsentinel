@@ -143,7 +143,14 @@ class AppTrafficPage(QWidget):
         root.setSpacing(8)
 
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("App Traffic", subtitle="Shows which applications and devices are using your bandwidth right now."))
+        _hdr = PageHeaderBar("App Traffic", subtitle="Shows which applications and devices are using your bandwidth right now.")
+        _hdr.show_first_visit_banner(
+            "app_traffic",
+            "Traffic is grouped into categories like Streaming, Gaming, and Web so you can "
+            "see what's consuming bandwidth without recognizing port numbers. Click a "
+            "category bar to see which device is responsible.",
+        )
+        root.addWidget(_hdr)
 
         # Controls row
         ctrl = QHBoxLayout()
@@ -190,11 +197,12 @@ class AppTrafficPage(QWidget):
 
         empty = EmptyStateCard(
             icon="◆",
-            title="App Traffic Analyzer",
+            title="No traffic captured yet",
             what_it_shows=(
                 "Shows which protocols and applications each device is using — "
                 "Web, DNS, Streaming, Gaming, VPN, P2P, and more — broken down "
-                "by bytes per 10-second window."
+                "by bytes per 10-second window. Starts updating within a few seconds "
+                "of clicking below."
             ),
             why_it_matters=(
                 "Reveals unexpected traffic: a device secretly torrenting, "

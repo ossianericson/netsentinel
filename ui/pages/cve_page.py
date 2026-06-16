@@ -34,6 +34,7 @@ from ui.styles import (
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
+from ui.widgets.jargon_tooltip import LearnMoreLink
 
 # ── CVE state definitions ─────────────────────────────────────────────────────
 
@@ -254,7 +255,14 @@ class CvePage(QWidget):
 
         # Page title (always visible)
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("CVE Lifecycle Tracker", subtitle="Tracks known security vulnerabilities found on devices in your network."))
+        _hdr = PageHeaderBar("CVE Lifecycle Tracker", subtitle="Tracks known security vulnerabilities found on devices in your network.")
+        _hdr.show_first_visit_banner(
+            "cve_tracker",
+            "CVEs are publicly catalogued security flaws. This page tracks which ones apply "
+            "to services found during a port scan, and whether you've acknowledged or "
+            "patched them yet.",
+        )
+        root.addWidget(_hdr)
 
         # Content stack: page 0 = empty state, page 1 = full content
         self._content_stack = QStackedWidget()
@@ -742,7 +750,15 @@ class CvePage(QWidget):
         grid.setSpacing(3)
         grid.setHorizontalSpacing(12)
         grid.addRow(_hdr("CVE ID"),    _lbl(r["cve_id"]))
-        grid.addRow(_hdr("CVSS"),      _lbl(f"{r['cvss_score']:.1f}", score_color))
+
+        cvss_row = QWidget()
+        cvss_row.setStyleSheet("QWidget { background:transparent; border:none; }")
+        cvss_row_lay = QHBoxLayout(cvss_row)
+        cvss_row_lay.setContentsMargins(0, 0, 0, 0)
+        cvss_row_lay.setSpacing(6)
+        cvss_row_lay.addWidget(_lbl(f"{r['cvss_score']:.1f}", score_color))
+        cvss_row_lay.addWidget(LearnMoreLink("CVSS"))
+        grid.addRow(_hdr("CVSS"), cvss_row)
         grid.addRow(_hdr("Severity"),  _lbl(severity, border_color))
         grid.addRow(_hdr("Service"),   _lbl(r["service"] or "—"))
         grid.addRow(_hdr("Host"),      _lbl(r["host"] or "—"))

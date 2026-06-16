@@ -114,7 +114,13 @@ class LiveBandwidthPage(QWidget):
 
         # Header
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Live Bandwidth", subtitle="Shows data transfer speeds for each network interface in real time."))
+        _hdr = PageHeaderBar("Live Bandwidth", subtitle="Shows data transfer speeds for each network interface in real time.")
+        _hdr.show_first_visit_banner(
+            "live_bandwidth",
+            "This chart updates every second. Look for sustained spikes — a short burst "
+            "during a video call is normal; an interface pegged at 100% for minutes is not.",
+        )
+        root.addWidget(_hdr)
 
         # KPI row
         kpi_row = QHBoxLayout()
@@ -161,10 +167,11 @@ class LiveBandwidthPage(QWidget):
 
         empty_card = EmptyStateCard(
             icon="▲",
-            title="Live Bandwidth Monitor",
+            title="No bandwidth data yet",
             what_it_shows=(
                 "Real-time upload and download throughput for every network "
-                "interface — 60-second rolling chart plus per-interface session totals."
+                "interface — 60-second rolling chart plus per-interface session totals. "
+                "Starts updating within a second of clicking below."
             ),
             why_it_matters=(
                 "Unexpected bandwidth spikes can reveal malware calling home, "

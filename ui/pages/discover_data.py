@@ -22,7 +22,11 @@ _FEATURES: list[dict] = [
         ),
         "page": "Devices",
         "requires": None,
-        "tags": ["start", "devices", "network", "inventory", "scan"],
+        "tags": [
+            "start", "devices", "network", "inventory", "scan",
+            # Natural-language aliases (Sprint 7, S7-5)
+            "who is online", "who's online", "who is connected", "what's connected",
+        ],
     },
     {
         "group": "Start here",
@@ -136,7 +140,12 @@ _FEATURES: list[dict] = [
         ),
         "page": "Dashboard",
         "requires": None,
-        "tags": ["dashboard", "tiles", "live", "status", "summary", "overview", "scan", "launch"],
+        "tags": [
+            "dashboard", "tiles", "live", "status", "summary", "overview", "scan", "launch",
+            # Natural-language aliases (Sprint 7, S7-5)
+            "is my internet ok", "is my internet okay", "is my network ok",
+            "is everything ok", "network status",
+        ],
     },
     {
         "group": "Monitoring",
@@ -488,6 +497,9 @@ _FEATURES: list[dict] = [
         "tags": [
             "service", "streaming", "gaming", "netflix", "steam", "psn", "xbox",
             "diagnose", "reachable", "dns", "tcp", "latency", "isp", "outage",
+            # Natural-language aliases (Sprint 7, S7-5)
+            "netflix slow", "youtube slow", "is netflix down", "streaming buffering",
+            "slow streaming", "game lag", "gaming lag",
         ],
     },
     # ── Security ───────────────────────────────────────────────────────────────

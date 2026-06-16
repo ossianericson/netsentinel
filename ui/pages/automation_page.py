@@ -270,7 +270,13 @@ class AutomationPage(QWidget):
 
         # Page header
         from ui.widgets.page_header import PageHeaderBar
-        root.addWidget(PageHeaderBar("Automation Hooks", subtitle="Run custom commands automatically when network events occur."))
+        _hdr = PageHeaderBar("Automation Hooks", subtitle="Run custom commands automatically when network events occur.")
+        _hdr.show_first_visit_banner(
+            "automation_hooks",
+            "Each rule pairs a trigger — like a device going offline — with a shell command "
+            "to run automatically. Start with one simple rule before building out a full pipeline.",
+        )
+        root.addWidget(_hdr)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
 

@@ -316,10 +316,11 @@ class OverviewPage(QWidget):
         # Page 0 — empty state
         _empty_card = EmptyStateCard(
             icon="⬡",
-            title="Your network at a glance",
+            title="No scan results yet",
             what_it_shows=(
                 "Devices, network grade, active alerts, and stability metrics — "
-                "all updated live as scans run."
+                "all updated live as scans run. Run a scan to populate this dashboard — "
+                "takes about 30 seconds."
             ),
             why_it_matters=(
                 "A single dashboard to know whether your network is healthy right now "

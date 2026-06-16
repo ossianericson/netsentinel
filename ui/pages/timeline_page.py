@@ -137,7 +137,14 @@ class TimelinePage(QWidget):
 
         # Title
         from ui.widgets.page_header import PageHeaderBar
-        outer.addWidget(PageHeaderBar("Network Timeline", subtitle="A chronological log of all network events across all monitoring sources."))
+        _hdr = PageHeaderBar("Network Timeline", subtitle="A chronological log of all network events across all monitoring sources.")
+        _hdr.show_first_visit_banner(
+            "network_timeline",
+            "Every device join/leave, alert, and CVE discovery lands here in one "
+            "reverse-chronological feed — useful for reconstructing what happened around a "
+            "specific time.",
+        )
+        outer.addWidget(_hdr)
 
         # ── TIMELINE-2: Today at a glance ─────────────────────────────────────
         self._glance = QFrame()

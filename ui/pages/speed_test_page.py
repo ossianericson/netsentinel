@@ -438,6 +438,11 @@ class SpeedTestPage(QWidget):
 
         from ui.widgets.page_header import PageHeaderBar
         hdr = PageHeaderBar("Speed Test", subtitle="Measures your real internet download and upload speeds.")
+        hdr.show_first_visit_banner(
+            "speed_test",
+            "Run a test at different times of day to spot ISP throttling during peak hours. "
+            "Compare results against the plan speed your ISP advertises, not just yesterday's number.",
+        )
         root.addWidget(hdr)
 
         # ── Ookla CLI install banner (hidden if CLI already present) ──────────
