@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.npcap_banner import NpcapMissingBanner
+from ui.perf_audit import profile_page_init
 from ui.styles import (
     ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, CHART_BG, CHART_GRID,
     CHART_PLOT_BG, GREEN, MAIN_STYLE, NAV_DIVIDER,
@@ -312,7 +313,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         root.addWidget(self._monitor_resume_bar)
 
         # Main area: sidebar+content fills window
-        _main = self._build_tabs()
+        _main = profile_page_init(self._build_tabs)
         self._verdict_area = self._build_verdict_area()  # kept alive for exports; not shown
         root.addWidget(_main, 1)
 

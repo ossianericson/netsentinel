@@ -352,6 +352,18 @@ All other analysis — device discovery, ARP monitoring, STP detection, bandwidt
 
 ## Changelog
 
+### v2.1.12
+**Added**
+- `ui/perf_audit.py` — `warn_if_nav_slow()` nav timing warnings and `profile_page_init()` cProfile wrapper for page-init instrumentation (S10-1)
+- `ui/widgets/feedback_dialog.py` — local in-app feedback dialog; writes timestamped entries to `feedback.log` with no network calls; accessible via Ctrl+K "Give Feedback" (S10-7)
+- `STATUS_ICON_OK/WARN/CRIT/UNKNOWN` shape constants in `ui/styles.py`; applied in service heartbeat, uptime, and monitor verdict displays so status is not conveyed by colour alone (S10-2)
+- Focus rings (`QPushButton:focus` CSS) on activity-rail buttons and flyout items for keyboard navigation (S10-3)
+- `tests/test_status_icons.py`, `tests/test_keyboard_nav.py`, `tests/test_empty_state_audit.py`, `tests/test_loading_state_audit.py`, `tests/test_theme_consistency.py`, `tests/test_feedback_dialog.py`, `tests/test_perf_audit.py` — UX Sprint 10 audit test suite (S10-4 through S10-6)
+
+**Fixed**
+- Stripped UTF-8 BOM from `ui/nav/rail.py` that caused silent `SyntaxError` in `ast.parse`-based test checks
+- `test_no_duplicate_methods.py` now correctly exempts `@pyqtProperty` getter/setter pairs from the duplicate-method check
+
 ### v2.1.11
 **Added**
 - `modules/cdn_ranges.py` — static CDN/streaming-provider IP range classifier (Netflix/YouTube/Twitch/Disney+) for App Traffic device drill-downs
