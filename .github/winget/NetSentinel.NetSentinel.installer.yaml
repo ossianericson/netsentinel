@@ -4,7 +4,7 @@
 # Do not edit InstallerSha256 manually.
 
 PackageIdentifier: NetSentinel.NetSentinel
-PackageVersion: 2.1.10
+PackageVersion: 2.1.11
 Platform:
   - Windows.Desktop
 MinimumOSVersion: 10.0.17763.0
@@ -22,7 +22,7 @@ InstallerSwitches:
 
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/ossianericson/netsentinel/releases/download/v2.1.10/NetSentinel-Setup-2.1.10.exe
+    InstallerUrl: https://github.com/ossianericson/netsentinel/releases/download/v2.1.11/NetSentinel-Setup-2.1.11.exe
     InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
     InstallerProductCode: com.netsentinel.app_is1
 
