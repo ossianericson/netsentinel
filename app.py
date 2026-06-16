@@ -741,6 +741,62 @@ def main():
     except Exception:
         pass  # non-fatal — quiet notifier is cosmetic
 
+    # S8-1: morning briefing — opt-in daily 3-bullet summary, default off
+    try:
+        from PyQt6.QtCore import QSettings as _QSettings5, QTimer as _BriefingTimer
+        from modules.morning_briefing import check_and_build_briefing as _check_briefing
+
+        def _do_morning_briefing_check() -> None:
+            try:
+                _qs5 = _QSettings5("NetSentinel", "NetSentinel")
+                _briefing = _check_briefing(store, _qs5.value, _qs5.setValue)
+                if _briefing and window._tray_manager.is_available():
+                    window._tray_manager.show_notification(
+                        _briefing.headline, "\n".join(_briefing.bullets),
+                        severity="INFO",
+                        on_click=lambda: window._nav_rail_go_to("Home"),
+                    )
+            except Exception:
+                pass  # non-fatal — morning briefing is cosmetic
+
+        _do_morning_briefing_check()
+        # Recurring check — the gating hour may not have arrived yet at startup.
+        _briefing_timer = _BriefingTimer(window)
+        _briefing_timer.timeout.connect(_do_morning_briefing_check)
+        _briefing_timer.start(15 * 60 * 1000)  # check every 15 minutes
+    except Exception:
+        pass  # non-fatal — morning briefing is cosmetic
+
+    # S8-3: "Email me this report →" on the weekly report card
+    def _on_email_weekly_report() -> None:
+        from ui.widgets.toast import ToastManager
+        try:
+            from modules.notification_router import EmailChannel
+            from modules.notification_channels import send_plain_email
+            from modules.digest_builder import build_digest_html
+            channel = next(
+                (c for c in notif_router.get_channels()
+                 if isinstance(c, EmailChannel) and c.enabled and c.smtp_host),
+                None,
+            )
+            if channel is None:
+                ToastManager.show(
+                    "No email channel configured — set one up in Notifications.",
+                    "warning",
+                )
+                return
+            ok = send_plain_email(
+                channel, "NetSentinel Weekly Report", build_digest_html(store)
+            )
+            ToastManager.show(
+                "Weekly report emailed." if ok else "Could not send the email — check SMTP settings.",
+                "success" if ok else "error",
+            )
+        except Exception:
+            ToastManager.show("Could not send the weekly report email.", "error")
+
+    window._home_page.email_weekly_report_requested.connect(_on_email_weekly_report)
+
     # Pre-populate Devices table and Network Map from the last MetricStore scan so
     # the app is never blank on startup — a live scan replaces this data normally.
     _splash_msg("Restoring last scan…")

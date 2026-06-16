@@ -128,6 +128,8 @@ class _HomeDataMixin:
             self._dashboard_strip.setVisible(False)
         self.refresh_checklist()
         self.refresh_diag_summary()
+        if hasattr(self, "_weekly_report_card"):
+            self._weekly_report_card.refresh()
         self._check_recurring_mode()
         if self._recurring_mode:
             self._update_recurring_scan_time()

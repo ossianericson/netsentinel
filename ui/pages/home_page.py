@@ -55,6 +55,7 @@ from ui.widgets.home_session_widgets import (
 from ui.widgets.health_status_card import HealthStatusCard
 from ui.widgets.bandwidth_hog_card import BandwidthHogCard
 from ui.widgets.usage_insights_card import UsageInsightsCard
+from ui.widgets.weekly_report_card import WeeklyReportCard
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -80,6 +81,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     alert_view_requested = pyqtSignal(object)
     #: Emitted when user clicks "Add" on a hardware checklist step; carries plugin path.
     add_plugin_requested = pyqtSignal(str)
+    #: Emitted when the user clicks "Email me this report →" on the weekly report card (S8-3).
+    email_weekly_report_requested = pyqtSignal()
 
     # ── Public slot for ambient health (S2-2) ─────────────────────────────────
 
@@ -324,6 +327,12 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._usage_card = UsageInsightsCard(store=self._store)
         self._usage_card.navigate_to.connect(self.navigate_to)
         lay.addWidget(self._usage_card)
+
+        # ── S8-3: "Your Network Last Week" card — shown once per calendar week ─
+        self._weekly_report_card = WeeklyReportCard(store=self._store)
+        self._weekly_report_card.navigate_to.connect(self.navigate_to)
+        self._weekly_report_card.email_requested.connect(self.email_weekly_report_requested)
+        lay.addWidget(self._weekly_report_card)
 
         # ── Browser dashboard strip (visible when API enabled + not dismissed) ─
         self._dashboard_strip = QFrame()

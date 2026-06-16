@@ -68,6 +68,95 @@ _COLOR_DOWNLOAD = ACCENT             # brand blue
 _COLOR_UPLOAD   = GREEN              # green
 
 
+# ── S8-4: trend history helpers (pure — no Qt/matplotlib deps) ───────────────
+
+def _rolling_average_download(points: list, window_days: float) -> list:
+    """Trailing rolling average of download_mbps, aligned to `points` (ts ascending)."""
+    window_s = window_days * 86400.0
+    out = []
+    for p in points:
+        window_vals = [q.download_mbps for q in points if 0 <= p.ts - q.ts <= window_s]
+        out.append(sum(window_vals) / len(window_vals) if window_vals else None)
+    return out
+
+
+def _format_hour_12h(hour: int) -> str:
+    hour = hour % 24
+    if hour == 0:
+        return "12am"
+    if hour == 12:
+        return "12pm"
+    return f"{hour % 12}{'am' if hour < 12 else 'pm'}"
+
+
+def _time_of_day_insight(points: list) -> "str | None":
+    """Plain-English sentence on which hours are fastest/slowest, or None."""
+    if len(points) < 5:
+        return None
+    import datetime as _dt
+    from collections import defaultdict
+
+    buckets: dict = defaultdict(list)
+    for p in points:
+        hour = _dt.datetime.fromtimestamp(p.ts).hour
+        buckets[hour].append(p.download_mbps)
+    if len(buckets) < 3:
+        return None
+
+    averages = {h: sum(v) / len(v) for h, v in buckets.items()}
+    best_hour = max(averages, key=averages.get)
+    worst_hour = min(averages, key=averages.get)
+    if best_hour == worst_hour:
+        return None
+    return (
+        f"Speeds tend to be fastest around {_format_hour_12h(best_hour)} and "
+        f"slowest around {_format_hour_12h(worst_hour)}, based on your test history."
+    )
+
+
+# ── S8-5: comparative speed test context (pure — no Qt/DB deps) ─────────────
+
+def _ordinal(n: int) -> str:
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}{ {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }"
+
+
+def _compute_speed_comparison(
+    history_60d: list, now_ts: float, new_download_mbps: float,
+) -> "str | None":
+    """Build "this is your Xth fastest test…" context from 60 days of history.
+
+    `history_60d` must already include the just-recorded test (i.e. queried
+    after the record_speed_test() call) so the rank reflects all known tests.
+    """
+    cutoff_30 = now_ts - 30 * 86400.0
+    recent  = [p.download_mbps for p in history_60d if p.ts >= cutoff_30]
+    prior   = [p.download_mbps for p in history_60d if p.ts < cutoff_30]
+    if not recent:
+        return None
+
+    sorted_recent = sorted(recent, reverse=True)
+    try:
+        rank = sorted_recent.index(new_download_mbps) + 1
+    except ValueError:
+        rank = 1
+    monthly_avg = sum(recent) / len(recent)
+    text = (
+        f"This is your {_ordinal(rank)} fastest test in the last 30 days. "
+        f"Monthly average is {monthly_avg:.0f} Mbps"
+    )
+    if prior:
+        prior_avg = sum(prior) / len(prior)
+        if prior_avg > 0:
+            delta_pct = (monthly_avg - prior_avg) / prior_avg * 100.0
+            if abs(delta_pct) < 1:
+                return text + ", about the same as last month."
+            direction = "up" if delta_pct > 0 else "down"
+            return text + f", {direction} {abs(delta_pct):.0f}% from last month."
+    return text + "."
+
+
 def _rsrp_color(rsrp) -> str:
     if rsrp is None:
         return TEXT_MUTED
@@ -575,6 +664,15 @@ class SpeedTestPage(QWidget):
         action_row.addWidget(self._status_lbl, 1)
         root.addLayout(action_row)
 
+        # ── S8-5: comparative context — "this is your Xth fastest test…" ──────
+        self._comparison_lbl = QLabel("")
+        self._comparison_lbl.setWordWrap(True)
+        self._comparison_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
+        )
+        self._comparison_lbl.setVisible(False)
+        root.addWidget(self._comparison_lbl)
+
         # ── History table ─────────────────────────────────────────────────────
         hist_card, hist_body = _card("Test History")
 
@@ -666,6 +764,15 @@ class SpeedTestPage(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         hist_body.addWidget(self._hist_chart_canvas)
+
+        # ── S8-4: time-of-day pattern insight (hidden until there's enough data) ──
+        self._time_of_day_lbl = QLabel("")
+        self._time_of_day_lbl.setWordWrap(True)
+        self._time_of_day_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        self._time_of_day_lbl.setVisible(False)
+        hist_body.addWidget(self._time_of_day_lbl)
 
         self._hist_stack = QStackedWidget()
         self._hist_stack.addWidget(_hist_empty)   # index 0 — empty state
@@ -1159,6 +1266,20 @@ class SpeedTestPage(QWidget):
             f"↓ {result.download_mbps:.1f}  ↑ {result.upload_mbps:.1f}  Mbps"
         )
 
+        # S8-5: comparative context — "this is your Xth fastest test…"
+        comparison_text = None
+        if self._store:
+            try:
+                import time as _time
+                history_60d = self._store.query_speed_test_history(hours=1440.0, limit=400)
+                comparison_text = _compute_speed_comparison(
+                    history_60d, _time.time(), result.download_mbps
+                )
+            except Exception:
+                comparison_text = None
+        self._comparison_lbl.setText(comparison_text or "")
+        self._comparison_lbl.setVisible(bool(comparison_text))
+
         # Show modem signal snapshot panel if present
         if sig:
             self._update_signal_panel(sig)
@@ -1395,6 +1516,7 @@ class SpeedTestPage(QWidget):
         if not self._store:
             fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.22)
             self._hist_chart_canvas.draw_idle()
+            self._time_of_day_lbl.setVisible(False)
             return
 
         try:
@@ -1408,6 +1530,7 @@ class SpeedTestPage(QWidget):
                     color=TEXT_SECONDARY, fontsize=9)
             fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.22)
             self._hist_chart_canvas.draw_idle()
+            self._time_of_day_lbl.setVisible(False)
             return
 
         pts_sorted = sorted(points, key=lambda p: p.ts)
@@ -1420,9 +1543,24 @@ class SpeedTestPage(QWidget):
         ax.plot(dates, ul, color=_COLOR_UPLOAD, linewidth=1.5,
                 marker="o", markersize=3.5, label="↑ Upload", zorder=3)
 
+        # ── S8-4: 7/30-day rolling average overlay — only when there's enough span ──
+        span_days = (pts_sorted[-1].ts - pts_sorted[0].ts) / 86400.0
+        if span_days >= 7:
+            avg7 = _rolling_average_download(pts_sorted, 7.0)
+            ax.plot(dates, avg7, color=_COLOR_DOWNLOAD, linewidth=1.0,
+                    linestyle="--", alpha=0.5, label="7-day avg", zorder=2)
+        if span_days >= 30:
+            avg30 = _rolling_average_download(pts_sorted, 30.0)
+            ax.plot(dates, avg30, color=_COLOR_DOWNLOAD, linewidth=1.0,
+                    linestyle=":", alpha=0.5, label="30-day avg", zorder=2)
+
         ax.xaxis.set_major_formatter(_mdates.DateFormatter("%m/%d"))
         ax.xaxis.set_major_locator(_mdates.AutoDateLocator(maxticks=6))
         ax.legend(loc="upper left", fontsize=8, frameon=False)
+
+        insight = _time_of_day_insight(pts_sorted)
+        self._time_of_day_lbl.setText(insight or "")
+        self._time_of_day_lbl.setVisible(bool(insight))
 
         fig.subplots_adjust(left=0.07, right=0.99, top=0.90, bottom=0.25)
         self._hist_chart_canvas.draw_idle()

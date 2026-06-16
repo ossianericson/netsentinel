@@ -348,6 +348,54 @@ class _NotifExtraChannelsMixin:
             lbl.setVisible(True)
             QTimer.singleShot(3000, lambda: lbl.setVisible(False))
 
+    # ── Morning briefing card (S8-1) ──────────────────────────────────────────
+
+    def _build_morning_briefing_card(self) -> QWidget:
+        card, bl = _card("Morning Briefing")
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        self._chk_morning_briefing = QCheckBox("Send a daily briefing notification at")
+        self._chk_morning_briefing.setStyleSheet(
+            f"QCheckBox {{ color:{TEXT_PRIMARY}; font-size:11px; }}"
+            f"QCheckBox::indicator {{ width:12px; height:12px;"
+            f" border:1px solid {BORDER}; border-radius:2px; background:{BG_CARD}; }}"
+            f"QCheckBox::indicator:checked {{ background:{ACCENT}; border-color:{ACCENT}; }}"
+        )
+        self._chk_morning_briefing.toggled.connect(self._save_morning_briefing_settings)
+        self._spin_briefing_hour = QSpinBox()
+        self._spin_briefing_hour.setRange(0, 23)
+        self._spin_briefing_hour.setValue(8)
+        self._spin_briefing_hour.setSuffix(":00")
+        self._spin_briefing_hour.setFixedWidth(70)
+        self._spin_briefing_hour.setStyleSheet(
+            f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
+        )
+        self._spin_briefing_hour.valueChanged.connect(self._save_morning_briefing_settings)
+        row1.addWidget(self._chk_morning_briefing)
+        row1.addWidget(self._spin_briefing_hour)
+        row1.addStretch()
+        bl.addLayout(row1)
+
+        hint = QLabel(
+            "A 3-bullet tray notification: network status, what changed overnight, "
+            "and your last speed test result. Disabled by default."
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
+        bl.addWidget(hint)
+
+        qs = QSettings("NetSentinel", "NetSentinel")
+        self._chk_morning_briefing.setChecked(
+            qs.value("briefing/enabled", False, type=bool)
+        )
+        self._spin_briefing_hour.setValue(int(qs.value("briefing/hour", 8)))
+        return card
+
+    def _save_morning_briefing_settings(self) -> None:
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.setValue("briefing/enabled", self._chk_morning_briefing.isChecked())
+        qs.setValue("briefing/hour", self._spin_briefing_hour.value())
+
     def _generate_weekly_summary(self) -> str:
         import datetime as _dt2
         now = _dt2.datetime.now()

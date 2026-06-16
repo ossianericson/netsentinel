@@ -112,6 +112,7 @@ class NotificationsPage(
         il.addWidget(self._build_ntfy_card())
         il.addWidget(self._build_telegram_card())
         il.addWidget(self._build_escalation_card())
+        il.addWidget(self._build_morning_briefing_card())
         il.addWidget(self._build_weekly_digest_card())
         il.addWidget(self._build_dep_card())
         il.addStretch()

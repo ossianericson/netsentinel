@@ -313,9 +313,27 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         row.addWidget(self._plan_cap_spin)
         row.addStretch()
         bl.addLayout(row)
+
+        speed_row = QHBoxLayout()
+        speed_lbl = QLabel("Promised download speed:")
+        speed_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        self._plan_speed_spin = QDoubleSpinBox()
+        self._plan_speed_spin.setRange(0, 100_000)
+        self._plan_speed_spin.setDecimals(0)
+        self._plan_speed_spin.setSuffix(" Mbps")
+        self._plan_speed_spin.setValue(qs.value("traffic/plan_speed_mbps", 0.0, type=float))
+        self._plan_speed_spin.valueChanged.connect(self._on_plan_speed_changed)
+        speed_row.addWidget(speed_lbl)
+        speed_row.addWidget(self._plan_speed_spin)
+        speed_row.addStretch()
+        bl.addLayout(speed_row)
         return card
 
     def _on_monthly_cap_changed(self, value: float) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("traffic/monthly_cap_gb", value)
+        self._mark_dirty()
+
+    def _on_plan_speed_changed(self, value: float) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("traffic/plan_speed_mbps", value)
         self._mark_dirty()
 

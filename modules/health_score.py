@@ -174,21 +174,28 @@ class HealthScoreCalculator:
         stable: float,
     ) -> tuple[str, str]:
         if state == "green":
-            if stable >= 72:
-                days = int(stable / 24)
-                headline = (
-                    f"Everything looks good — your network has been healthy "
-                    f"for {days} day{'s' if days != 1 else ''}"
-                )
-            elif stable >= 2:
-                hrs = int(stable)
-                headline = (
-                    f"Your network has been stable for "
-                    f"{hrs} hour{'s' if hrs != 1 else ''}"
+            if self._nothing_to_report(store):
+                headline = "Your network is healthy. No action needed."
+                sub = (
+                    "All devices, services, and monitors are running normally"
+                    " — nothing requires your attention."
                 )
             else:
-                headline = "All clear — no issues detected right now"
-            sub = "All monitored devices and services are responding normally."
+                if stable >= 72:
+                    days = int(stable / 24)
+                    headline = (
+                        f"Everything looks good — your network has been healthy "
+                        f"for {days} day{'s' if days != 1 else ''}"
+                    )
+                elif stable >= 2:
+                    hrs = int(stable)
+                    headline = (
+                        f"Your network has been stable for "
+                        f"{hrs} hour{'s' if hrs != 1 else ''}"
+                    )
+                else:
+                    headline = "All clear — no issues detected right now"
+                sub = "All monitored devices and services are responding normally."
 
         elif state == "amber":
             try:
@@ -216,6 +223,26 @@ class HealthScoreCalculator:
                 sub = "Open the alerts panel to see what needs to be fixed."
 
         return headline, sub
+
+    def _nothing_to_report(self, store) -> bool:
+        """True when there is genuinely nothing for the user to act on (S8-6)."""
+        try:
+            if store.get_recent_alerts(hours=24.0, limit=5):
+                return False
+        except Exception:
+            return False
+        try:
+            if store.query_device_events(hours=24.0, event_types=["JOINED"]):
+                return False
+        except Exception:
+            pass  # non-fatal — device-join data is optional for this check
+        try:
+            services = store.query_service_status(hours=24.0)
+            if services and not all(s.up for s in services):
+                return False
+        except Exception:
+            pass  # non-fatal — service heartbeat data is optional for this check
+        return True
 
     def _unknown_snapshot(self) -> HealthSnapshot:
         return HealthSnapshot(

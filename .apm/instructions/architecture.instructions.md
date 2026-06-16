@@ -40,6 +40,8 @@ netsentinel/
 │   ├── alert_suppressor.py     # EscalationPolicy + _default_rules + rule_settings_key (S20-4 split)
 │   ├── arp_monitor.py          # Real-time ARP packet monitor
 │   ├── quiet_notifier.py       # check_and_maybe_notify() — "all quiet" opt-in daily tray notification (S4-5)
+│   ├── morning_briefing.py     # check_and_build_briefing() — opt-in daily 3-bullet tray briefing (S8-1)
+│   ├── weekly_report.py        # build_weekly_report_bullets() — "Your Network Last Week" narrative (S8-3)
 │   ├── automation_hooks.py     # Event-to-action pipeline and hook dispatcher
 │   ├── availability_monitor.py
 │   ├── bandwidth_monitor.py
@@ -272,6 +274,8 @@ netsentinel/
 │       ├── health_status_card.py   # HealthStatusCard — full-width ambient health card with sparkline for HomePage (Sprint 2)
 │       ├── bandwidth_hog_card.py   # BandwidthHogCard — "who's hogging bandwidth?" home page card (Sprint 5, S5-4)
 │       ├── usage_insights_card.py  # UsageInsightsCard — household traffic narrative + plan utilization + QoS suggestion (Sprint 6, S6-3/S6-4/S6-5)
+│       ├── weekly_report_card.py   # WeeklyReportCard — "Your Network Last Week" home page card, shown once per calendar week (Sprint 8, S8-3)
+│       ├── quick_check_window.py   # QuickCheckWindow — compact floating health-status window (Ctrl+Shift+H / tray) (Sprint 8, S8-2)
 │       ├── jargon_tooltip.py       # JargonTooltip — underlined QLabel with hover definition from glossary.json (Sprint A4)
 │       ├── kpi_bar.py              # _KpiBarMixin — four KPI tiles for the Devices page (Sprint 13 split)
 │       ├── objective_badge.py      # ObjectiveBadge — compact exam-objective pill badge (N+/CCNA/Sec+) for Lab Mode and Protocol Viz (Sprint B3)

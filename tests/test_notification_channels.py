@@ -40,6 +40,45 @@ def test_deliver_functions_callable():
         assert callable(getattr(nc, fn_name))
 
 
+# ── send_plain_email (S8-3) ────────────────────────────────────────────────
+
+def test_send_plain_email_false_when_no_smtp_host():
+    from modules.notification_channels import send_plain_email
+    channel = MagicMock(smtp_host="", to_addrs=["a@b.com"])
+    assert send_plain_email(channel, "Subject", "Body") is False
+
+
+def test_send_plain_email_false_when_no_recipients():
+    from modules.notification_channels import send_plain_email
+    channel = MagicMock(smtp_host="smtp.example.com", to_addrs=[])
+    assert send_plain_email(channel, "Subject", "Body") is False
+
+
+def test_send_plain_email_success_via_starttls():
+    from modules.notification_channels import send_plain_email
+    channel = MagicMock(
+        smtp_host="smtp.example.com", smtp_port=587, use_tls=True,
+        username="user", password="pass", from_addr="from@example.com",
+        to_addrs=["to@example.com"], timeout_s=10,
+    )
+    with patch("smtplib.SMTP") as mock_smtp:
+        mock_smtp.return_value.__enter__.return_value = MagicMock()
+        assert send_plain_email(channel, "Weekly Report", "body text") is True
+        mock_smtp.assert_called_once()
+
+
+def test_send_plain_email_failure_returns_false():
+    import smtplib
+    from modules.notification_channels import send_plain_email
+    channel = MagicMock(
+        smtp_host="smtp.example.com", smtp_port=587, use_tls=True,
+        username="user", password="pass", from_addr="from@example.com",
+        to_addrs=["to@example.com"], timeout_s=10,
+    )
+    with patch("smtplib.SMTP", side_effect=smtplib.SMTPException("boom")):
+        assert send_plain_email(channel, "Weekly Report", "body text") is False
+
+
 def _make_alert():
     from modules.alert_engine import AlertFired
     return AlertFired(

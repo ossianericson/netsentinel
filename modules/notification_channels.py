@@ -87,6 +87,42 @@ def _deliver_email(channel, alert: AlertFired) -> None:
         _log.debug("email delivery failed: %s", exc)
 
 
+def send_plain_email(channel, subject: str, body: str) -> bool:
+    """Send an arbitrary subject/body email via an already-configured EmailChannel.
+
+    Unlike ``_deliver_email``, this is not tied to an AlertFired — used by
+    on-demand "email me this" actions (e.g. the weekly report card, S8-3).
+    Returns True on a successful send, False otherwise.
+    """
+    from email.mime.text import MIMEText
+    if not channel.smtp_host or not channel.to_addrs:
+        return False
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"]    = channel.from_addr or channel.username
+    msg["To"]      = ", ".join(channel.to_addrs)
+    try:
+        ctx = ssl.create_default_context()
+        if channel.use_tls:
+            with smtplib.SMTP(channel.smtp_host, channel.smtp_port,
+                              timeout=channel.timeout_s) as smtp:
+                smtp.ehlo()
+                smtp.starttls(context=ctx)
+                if channel.username:
+                    smtp.login(channel.username, channel.password)
+                smtp.sendmail(msg["From"], channel.to_addrs, msg.as_string())
+        else:
+            with smtplib.SMTP_SSL(channel.smtp_host, channel.smtp_port,
+                                   context=ctx, timeout=channel.timeout_s) as smtp:
+                if channel.username:
+                    smtp.login(channel.username, channel.password)
+                smtp.sendmail(msg["From"], channel.to_addrs, msg.as_string())
+        return True
+    except (smtplib.SMTPException, OSError) as exc:
+        _log.debug("email delivery failed: %s", exc)
+        return False
+
+
 def _deliver_pushover(channel, alert: AlertFired) -> None:
     """POST to the Pushover API. Requires api_token + user_key."""
     if not channel.api_token or not channel.user_key:

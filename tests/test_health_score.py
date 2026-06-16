@@ -211,3 +211,55 @@ def test_snapshot_headline_non_empty():
     snap = calc.compute(None)
     assert isinstance(snap.headline, str)
     assert len(snap.headline) > 0
+
+
+# ── S8-6: "Nothing to report" state ───────────────────────────────────────────
+
+def test_green_nothing_to_report_headline():
+    """When truly nothing happened, headline is the exact 'no action needed' copy."""
+    calc = HealthScoreCalculator()
+    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    store = _make_store(uptime_rows=uptime_rows, rtt_hosts=["8.8.8.8"],
+                        rtt_points=[_rtt_point(5.0)])
+    store.query_device_events.return_value = []
+    store.query_service_status.return_value = []
+    snap = calc.compute(store)
+    assert snap.state == "green"
+    assert snap.headline == "Your network is healthy. No action needed."
+
+
+def test_green_with_new_device_join_skips_nothing_to_report():
+    """A new device join in the last 24h must not show the all-quiet exact phrase."""
+    calc = HealthScoreCalculator()
+    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    store = _make_store(uptime_rows=uptime_rows, rtt_hosts=["8.8.8.8"],
+                        rtt_points=[_rtt_point(5.0)])
+    store.query_device_events.return_value = [MagicMock()]
+    store.query_service_status.return_value = []
+    snap = calc.compute(store)
+    assert snap.state == "green"
+    assert snap.headline != "Your network is healthy. No action needed."
+
+
+def test_green_with_service_down_skips_nothing_to_report():
+    """A down service must not show the all-quiet exact phrase, even if state is green."""
+    calc = HealthScoreCalculator()
+    uptime_rows = [{"host": "8.8.8.8", "24h": 100.0}]
+    store = _make_store(uptime_rows=uptime_rows, rtt_hosts=["8.8.8.8"],
+                        rtt_points=[_rtt_point(5.0)])
+    store.query_device_events.return_value = []
+    down_service = MagicMock()
+    down_service.up = False
+    store.query_service_status.return_value = [down_service]
+    snap = calc.compute(store)
+    assert snap.headline != "Your network is healthy. No action needed."
+
+
+def test_nothing_to_report_handles_query_errors_gracefully():
+    """If device/service queries raise, treat them as unknown — not a hard failure."""
+    calc = HealthScoreCalculator()
+    store = MagicMock()
+    store.get_recent_alerts.return_value = []
+    store.query_device_events.side_effect = RuntimeError("db error")
+    store.query_service_status.side_effect = RuntimeError("db error")
+    assert calc._nothing_to_report(store) is True

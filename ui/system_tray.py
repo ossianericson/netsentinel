@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Callable, Optional
 
 from PyQt6.QtCore import QSettings, QTimer, Qt
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
@@ -177,6 +178,7 @@ class SystemTrayManager:
         self._grade: str = "?"
         self._health_state: str = "unknown"
         self._health_headline: str = ""
+        self._pending_click_callback: Optional[Callable[[], None]] = None
         self._qs = QSettings("NetSentinel", "NetSentinel")
 
     # ── Setup ─────────────────────────────────────────────────────────────────
@@ -194,7 +196,7 @@ class SystemTrayManager:
         menu.aboutToShow.connect(self._on_menu_about_to_show)
         self._tray.setContextMenu(menu)
         self._tray.activated.connect(self._on_activated)
-        self._tray.messageClicked.connect(self._show_window)
+        self._tray.messageClicked.connect(self._on_message_clicked)
         self._tray.show()
         return True
 
@@ -254,6 +256,10 @@ class SystemTrayManager:
         act_scan.triggered.connect(self._run_full_scan)
         menu.addAction(act_scan)
 
+        act_quickcheck = QAction("◷  Quick Check", menu)
+        act_quickcheck.triggered.connect(self._open_quick_check)
+        menu.addAction(act_quickcheck)
+
         menu.addSeparator()
 
         self._act_startup = QAction("Launch at Startup", menu)
@@ -294,8 +300,13 @@ class SystemTrayManager:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def show_notification(self, title: str, message: str,
-                          severity: str = "INFO") -> None:
-        """Show a native desktop notification balloon."""
+                          severity: str = "INFO",
+                          on_click: Optional[Callable[[], None]] = None) -> None:
+        """Show a native desktop notification balloon.
+
+        ``on_click`` is invoked once if the user clicks the notification
+        balloon itself (not the tray icon) before it dismisses.
+        """
         if self._tray is None:
             return
         icon_map = {
@@ -305,6 +316,7 @@ class SystemTrayManager:
             "MEDIUM":   QSystemTrayIcon.MessageIcon.Warning,
         }
         icon = icon_map.get(severity.upper(), QSystemTrayIcon.MessageIcon.Information)
+        self._pending_click_callback = on_click
         self._tray.showMessage(title, message, icon, 6000)
 
     def increment_badge(self) -> None:
@@ -353,6 +365,16 @@ class SystemTrayManager:
         ):
             self._show_window()
 
+    def _on_message_clicked(self) -> None:
+        self._show_window()
+        callback = self._pending_click_callback
+        self._pending_click_callback = None
+        if callback is not None:
+            try:
+                callback()
+            except Exception:
+                pass  # non-fatal — notification click callback failed
+
     def _show_window(self) -> None:
         if self._window.isMinimized():
             self._window.showNormal()
@@ -384,6 +406,12 @@ class SystemTrayManager:
         self._show_window()
         if hasattr(self._window, "_start_full_scan"):
             self._window._start_full_scan()
+
+    def _open_quick_check(self) -> None:
+        # Deliberately does not restore the main window — Quick Check exists
+        # precisely so the user can glance at health status without it (S8-2).
+        if hasattr(self._window, "_show_quick_check_window"):
+            self._window._show_quick_check_window()
 
     def _on_startup_toggled(self, checked: bool) -> None:
         set_run_on_startup(checked)

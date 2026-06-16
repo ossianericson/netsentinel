@@ -249,6 +249,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _loghub_sc = QShortcut(QKeySequence("Ctrl+L"), self)
         _loghub_sc.activated.connect(lambda: self._nav_rail_go_to("Network Logger"))
 
+        # Ctrl+Shift+H — Quick Check floating window (S8-2)
+        self._quick_check_window = None
+        _quickcheck_sc = QShortcut(QKeySequence("Ctrl+Shift+H"), self)
+        _quickcheck_sc.activated.connect(self._show_quick_check_window)
+
         # Pinned pages — persisted across sessions
         self._nav_pinned_labels: list = self._load_pinned_labels()
         self._nav_label_to_widget: dict = {}
@@ -265,6 +270,23 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._nav_current_page_label: str = ""
 
         self._build_ui()
+
+    # ── Quick Check floating window (S8-2) ────────────────────────────────────
+
+    def _show_quick_check_window(self) -> None:
+        """Toggle the compact Quick Check floating window (Ctrl+Shift+H)."""
+        win = getattr(self, "_quick_check_window", None)
+        if win is not None and win.isVisible():
+            win.close()
+            return
+        from ui.widgets.quick_check_window import QuickCheckWindow
+        win = QuickCheckWindow(store=self._store, parent=self)
+        screen = self.screen() or win.screen()
+        if screen is not None:
+            geo = screen.availableGeometry()
+            win.move(geo.right() - win.width() - 24, geo.bottom() - win.height() - 24)
+        win.show()
+        self._quick_check_window = win
 
     # ── UI Construction ──────────────────────────────────────────────────────
 

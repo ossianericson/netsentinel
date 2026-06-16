@@ -436,7 +436,7 @@ feature surfacing, contextual one-time discovery prompts, Feature Guide "Recomme
 ## Sprint 8 — Retention & Daily Ritual Features
 
 **Theme:** Give users a reason to open the app on a healthy day
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-16
 
 **Rationale:** Monitoring tools die when users only open them when things break. The goal is
 to surface genuine value daily. All features in this sprint are opt-in or additive.
@@ -446,42 +446,77 @@ data presented as a factual metric is fine and is covered by S2-4 and S8-6.
 
 ### Items
 
-- [ ] **S8-1** Morning briefing — opt-in tray notification (configurable time, default off;
-  suggested 8am) with a 3-bullet summary:
-  - Network status: all clear / X issues
-  - Anything new overnight: new devices, unusual activity
-  - Quick stat: bandwidth used yesterday, last speed test result
-  Clicking opens the home page daily status card.
+- [x] **S8-1** Morning briefing — `modules/morning_briefing.py`: `check_and_build_briefing()`
+  follows the `quiet_notifier.py` gating pattern (opt-in, default off, configurable hour,
+  once per calendar day) and returns a 3-bullet `BriefingResult` (network status via
+  `HealthScoreCalculator`, overnight new-devices/alerts, last speed test). Settings card added
+  to `notif_extra_channels.py` (`_build_morning_briefing_card`). `ui/system_tray.py` gained an
+  `on_click` callback parameter on `show_notification()` (`_pending_click_callback` +
+  `_on_message_clicked`) so clicking the balloon navigates to Home. Wired in `app.py` with a
+  15-minute recurring `QTimer` (the gating hour may not have arrived at startup). Tests:
+  `tests/test_morning_briefing.py` (11 tests), `tests/test_system_tray.py` (4 tests).
 
-- [ ] **S8-2** Quick-check floating window — keyboard shortcut (`Ctrl+Shift+H`) or system tray
-  action that opens a compact 300×200 px floating window showing current health status and
-  top finding, without navigating to the full app. Useful for users who want a glance without
-  context-switching.
+- [x] **S8-2** Quick-check floating window — `ui/widgets/quick_check_window.py`:
+  `QuickCheckWindow` (300×200, frameless, always-on-top) recomputes `HealthScoreCalculator`
+  status + top finding (most recent alert, else the health sub-text) on construction.
+  `Ctrl+Shift+H` shortcut and `Dashboard._show_quick_check_window()` added in `ui/dashboard.py`;
+  tray menu gained a "◷ Quick Check" action (`SystemTrayManager._open_quick_check`) that
+  deliberately skips restoring the main window. Tests: `tests/test_quick_check_window.py`
+  (5 tests).
 
-- [ ] **S8-3** Polished weekly network report — a narrative in-app card (and optionally emailed)
-  using the existing `digest_builder.py` and `report_scheduler.py` infrastructure:
-  ```
-  Your Network Last Week
-  ────────────────────────
-  ✓  6 days 23 hours uptime (99.6%)
-  ↓  Speed averaged 87 Mbps (plan: 100 Mbps)
-  ⚠  2 new devices joined
-  ●  Household used 203 GB — streaming was 68%
-  ```
+- [x] **S8-3** Weekly network report — `modules/weekly_report.py`:
+  `build_weekly_report_bullets()` composes the four narrative lines (uptime, speed vs. an
+  optional plan-speed setting, new devices, dominant traffic category — reusing
+  `query_uptime_table`, `query_speed_test_history`, `query_device_events`,
+  `query_app_traffic_category_totals`). `ui/widgets/weekly_report_card.py`:
+  `WeeklyReportCard` on the home page, shown once per calendar week (QSettings-gated,
+  dismissible) with an "Email me this report →" action. `modules/notification_channels.py`
+  gained `send_plain_email()` (generic subject/body SMTP send, reusing the configured
+  `EmailChannel`); wired in `app.py` to email `digest_builder.build_digest_html()` via
+  `notif_router.get_channels()`, with `ToastManager` success/failure feedback. Settings page
+  "Internet Plan" card gained a "Promised download speed" field (`traffic/plan_speed_mbps`)
+  feeding the plan-comparison bullet. Tests: `tests/test_weekly_report.py` (6 tests),
+  `tests/test_weekly_report_card.py` (6 tests), `tests/test_notification_channels.py`
+  (+4 tests).
 
-- [ ] **S8-4** Speed test trend history — a persistent multi-month trend line on the speed test
-  page showing historical performance: download/upload over time, time-of-day patterns,
-  30/60/90-day rolling averages. Technical users will appreciate the data density. Replaces the
-  original streak counter concept with actual measurement data.
+- [x] **S8-4** Speed test trend history — `ui/pages/speed_test_page.py._refresh_history_chart()`
+  overlays 7-day and 30-day trailing rolling-average download lines (dashed/dotted) once the
+  visible history spans enough time, computed by the pure `_rolling_average_download()` helper
+  (no new MetricStore query — the existing `query_speed_test_history(hours=...)` already
+  returns up to 200 points, comfortably multi-month at typical test cadence). A new
+  `_time_of_day_insight()` helper buckets download speed by hour-of-day and surfaces a
+  one-line "fastest around Xam, slowest around Ypm" sentence below the chart when there's
+  enough spread. Tests: `tests/test_speed_test_page_trends.py` (9 tests for this item).
 
-- [ ] **S8-5** Comparative speed test context — after every speed test, show: "This is your
-  X fastest test in the last 30 days. Your monthly average is Y Mbps, down Z% from last month."
-  Context makes isolated data points meaningful.
+- [x] **S8-5** Comparative speed test context — `_compute_speed_comparison()` in
+  `speed_test_page.py` ranks the just-recorded test against the trailing 30 days (queried
+  after the `record_speed_test()` write, so the new test is already included), reports the
+  monthly average, and compares it against the prior 30-day average ("up/down N% from last
+  month"). Displayed in a new `self._comparison_lbl` below the Run Test action row in
+  `_on_result_ready()`. Tests: `tests/test_speed_test_page_trends.py` (7 tests for this item).
 
-- [ ] **S8-6** "Nothing to report" home page state — when health score is green, no new devices,
-  no anomalies, all services up: the home page explicitly says "Your network is healthy. No
-  action needed." Clean, unambiguous, uncluttered. Monitoring tools should acknowledge when
-  there is nothing to monitor.
+- [x] **S8-6** "Nothing to report" home page state — `HealthScoreCalculator._nothing_to_report()`
+  in `modules/health_score.py` checks (no alerts in 24h, no `JOINED` device events in 24h, no
+  down services) and short-circuits the green-state copy to the exact phrase "Your network is
+  healthy. No action needed." when all three hold; otherwise falls back to the existing
+  stable-hours copy unchanged. No new home-page wiring needed — `HealthStatusCard` already
+  renders whatever headline/sub-text `HealthSnapshot` carries. Tests: `tests/test_health_score.py`
+  (+4 tests).
+
+**New files:** `modules/morning_briefing.py`, `modules/weekly_report.py`,
+`ui/widgets/quick_check_window.py`, `ui/widgets/weekly_report_card.py`,
+`tests/test_morning_briefing.py`, `tests/test_weekly_report.py`,
+`tests/test_weekly_report_card.py`, `tests/test_quick_check_window.py`,
+`tests/test_system_tray.py`, `tests/test_speed_test_page_trends.py`
+
+**Commit gate:** `ruff check . --select=F401,F811,F841`, `python -m mypy modules/`,
+`pip-audit -r requirements.txt --desc`, and `python -m pytest tests/ -q` (4034 passed,
+10 skipped) all green; `tools/debug_launch.py` confirmed `Dashboard() instantiated OK` and
+`window.show() called OK` with no unhandled exceptions.
+
+**Sprint 9 planned queue:** Onboarding Redesign — scan-first onboarding flow, scan-result-based
+feature surfacing, contextual one-time discovery prompts, Feature Guide "Recommended for you",
+"What can I do here?" help mode, extended-absence recovery banner.
 
 ---
 
