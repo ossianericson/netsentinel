@@ -34,6 +34,7 @@ pytest.importorskip("PyQt6", reason="PyQt6 not installed")
 
 from PyQt6.QtTest import QTest
 
+from modules.topology_layout import compute_scan_id, load_layout
 from ui.pages.network_map_page import NetworkMapPage
 
 
@@ -206,3 +207,136 @@ def test_cycle_geometric_layout_applies_other_mode_then_original(page, monkeypat
 
     _wait_for_cycle()
     assert apply_calls == ["geo_radial", "geo_hierarchy"]
+
+
+# ── Layout persistence across an app restart ─────────────────────────────────
+#
+# Bug: the Network Map looked different every time the app was restarted, even
+# with no network change. Two compounding causes:
+#
+# 1. self._scan_id was recomputed AFTER _refresh_web_view() already used it to
+#    load/save positions, so the very first render of an app session (the
+#    startup cache render) always loaded/saved under the leftover "default"
+#    placeholder from __init__ instead of the real subnet-derived key — it
+#    could never find the previous session's saved layout.
+# 2. All 4 geo_* layout modes unconditionally ignored any saved positions and
+#    recomputed from scratch on every full render, discarding manual drags
+#    and producing a different-looking (but individually deterministic)
+#    layout if the startup render's inputs (gateway inference, mesh/modem
+#    cache restoration) differed even slightly from the live session.
+#
+# Fix: positions are now persisted after every full geometric layout compute
+# (not just manual drags) and reused verbatim on the next full render unless a
+# node id is genuinely new — a node merely absent this render (offline
+# device, not-yet-reported modem) keeps its saved position instead of being
+# treated as removed.
+
+@pytest.fixture
+def tmp_layout_path(tmp_path, monkeypatch):
+    """Redirect the on-disk layout file to a temp directory for these tests."""
+    layout_file = tmp_path / "topology_layout.json"
+    monkeypatch.setattr("modules.topology_layout._layout_path", lambda: layout_file)
+    return layout_file
+
+
+def test_restart_with_unchanged_devices_reuses_saved_positions(qt_app, tmp_layout_path, monkeypatch):
+    """Simulates an app restart: a brand-new NetworkMapPage instance, rendered
+    with the exact same devices, must reuse the previous instance's saved
+    positions rather than recomputing — this is the user-visible "looks
+    different every time I reopen the app" bug."""
+    page1 = NetworkMapPage()
+    page1._web_available = True
+    page1._web_view = MagicMock()
+    page1._layout_combo.setCurrentText("Hierarchy")
+    page1.render(devices=_devices(), gateway_ip="192.168.68.1")
+    assert page1._topology_loaded is True
+
+    page2 = NetworkMapPage()
+    page2._web_available = True
+    page2._web_view = MagicMock()
+    page2._layout_combo.setCurrentText("Hierarchy")
+    recompute = MagicMock(wraps=page2._compute_geo_positions)
+    monkeypatch.setattr(page2, "_compute_geo_positions", recompute)
+
+    page2.render(devices=_devices(), gateway_ip="192.168.68.1")
+
+    assert page2._topology_loaded is True
+    recompute.assert_not_called()
+
+    for p in (page1, page2):
+        p.deleteLater()
+    for _ in range(3):
+        qt_app.processEvents()
+
+
+def test_restart_with_new_device_recomputes_and_keeps_offline_ones(qt_app, tmp_layout_path):
+    """When a scan discovers a device id never seen before, recompute is
+    expected (and correct) — but devices that simply aren't in this render
+    (e.g. temporarily offline) must keep their saved position rather than
+    being dropped from the saved file."""
+    page1 = NetworkMapPage()
+    page1._web_available = True
+    page1._web_view = MagicMock()
+    page1._layout_combo.setCurrentText("Hierarchy")
+    devices = _devices()
+    page1.render(devices=devices, gateway_ip="192.168.68.1")
+
+    key = page1._layout_storage_key("geo_hierarchy")
+    saved_before = load_layout(key)
+    offline_id = devices[1]["mac"]
+    assert offline_id in saved_before
+
+    # Next "scan": device[1] is offline (absent), a brand-new device appears.
+    new_device = {"ip": "192.168.68.99", "mac": "aa:bb:cc:dd:ee:99",
+                  "hostname": "NewGadget", "risk_level": "CLEAN"}
+    page1._topology_loaded = False
+    page1.render(devices=[devices[0], new_device], gateway_ip="192.168.68.1")
+
+    saved_after = load_layout(key)
+    assert new_device["mac"] in saved_after          # newly discovered device is positioned
+    assert offline_id in saved_after                  # offline device's position preserved
+
+    page1.deleteLater()
+    for _ in range(3):
+        qt_app.processEvents()
+
+
+def test_layout_modes_do_not_share_saved_positions(qt_app, tmp_layout_path):
+    """Hierarchy and Grid compute different coordinates for the same devices —
+    switching modes and restarting must not apply one mode's saved (x, y)
+    values under the other mode's key."""
+    page = NetworkMapPage()
+    page._web_available = True
+    page._web_view = MagicMock()
+    page._layout_combo.setCurrentText("Hierarchy")
+    page.render(devices=_devices(), gateway_ip="192.168.68.1")
+
+    hierarchy_key = page._layout_storage_key("geo_hierarchy")
+    grid_key = page._layout_storage_key("geo_grid")
+    assert hierarchy_key != grid_key
+    assert load_layout(grid_key) == {}  # nothing saved under Grid yet
+
+    page.deleteLater()
+    for _ in range(3):
+        qt_app.processEvents()
+
+
+def test_first_render_of_session_uses_real_scan_id_not_default(qt_app, tmp_layout_path):
+    """Regression for the ordering bug: self._scan_id must be computed BEFORE
+    _refresh_web_view() reads it, even on the very first render() call of a
+    fresh page instance (self._scan_id otherwise starts as "default")."""
+    page = NetworkMapPage()
+    page._web_available = True
+    page._web_view = MagicMock()
+    page._layout_combo.setCurrentText("Hierarchy")
+    page.render(devices=_devices(), gateway_ip="192.168.68.1")
+
+    real_id = compute_scan_id(_devices())
+    assert real_id != "default"
+    assert page._scan_id == real_id
+    assert load_layout(f"{real_id}::geo_hierarchy")  # saved under the real key
+    assert load_layout("default::geo_hierarchy") == {}  # not under the stale placeholder
+
+    page.deleteLater()
+    for _ in range(3):
+        qt_app.processEvents()

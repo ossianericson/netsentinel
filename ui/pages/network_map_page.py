@@ -540,14 +540,20 @@ class NetworkMapPage(QWidget):
         except Exception:
             log.debug("network_map_page: classic render failed", exc_info=True)
 
+        # Compute scan_id for position saving — must happen BEFORE
+        # _refresh_web_view() below, which reads self._scan_id to load/save
+        # positions. Computing it afterwards meant the very first render of
+        # each app session (the startup cache render) loaded/saved under the
+        # leftover "default" placeholder from __init__ instead of the real
+        # subnet-derived key, so it could never find the previous session's
+        # saved layout.
+        self._scan_id = compute_scan_id(devices)
+        if self._bridge is not None:
+            self._bridge.set_scan_id(self._layout_storage_key())
+
         # Interactive view
         if self._web_available and self._web_view is not None:
             self._refresh_web_view(diff=diff if self._diff_mode else None)
-
-        # Compute scan_id for position saving
-        self._scan_id = compute_scan_id(devices)
-        if self._bridge is not None:
-            self._bridge.set_scan_id(self._scan_id)
 
     def render_from_cache(self, devices: List[Any], store=None) -> None:
         """Render the last-known topology at startup without a live scan.
@@ -631,6 +637,18 @@ class NetworkMapPage(QWidget):
         except Exception:
             log.debug("network_map_page: geometric layout apply failed", exc_info=True)
 
+    def _layout_storage_key(self, layout_mode: Optional[str] = None) -> str:
+        """Composite key namespacing saved positions by layout mode.
+
+        The 4 toolbar layouts (Hierarchy/Physics/Concentric/Grid) compute
+        entirely different coordinates for the same devices, so they must not
+        share one saved-positions bucket under the same scan_id — otherwise
+        switching modes and restarting would apply the wrong mode's (x, y)
+        values to the currently selected one.
+        """
+        mode = layout_mode or LAYOUT_NAMES.get(self._layout_combo.currentText(), "breadthfirst")
+        return f"{self._scan_id}::{mode}"
+
     def _refresh_web_view(self, diff: Optional[Any] = None) -> None:
         """Load or incrementally update the Cytoscape view.
 
@@ -644,9 +662,16 @@ class NetworkMapPage(QWidget):
         Reset Layout clears _topology_loaded so the next call forces a full
         reload with fresh positions.
 
-        For geometric layout modes (geo_hierarchy, geo_concentric, geo_grid),
-        positions are computed in Python and injected as preset coordinates so
-        Cytoscape's physics engine is bypassed entirely.
+        For geometric layout modes (geo_hierarchy, geo_concentric, geo_grid,
+        geo_radial), positions are computed in Python and injected as preset
+        coordinates so Cytoscape's physics engine is bypassed entirely. The
+        computed positions are persisted via topology_layout.py and reused
+        verbatim on the next full render (including across an app restart)
+        as long as no node id is newly discovered — so the map looks the
+        same as when the app was last closed unless a scan finds a new
+        device. A node that is merely absent this render (offline device,
+        not-yet-reported modem) keeps its saved position rather than being
+        dropped.
         """
         if not self._web_available or self._web_view is None:
             return
@@ -664,22 +689,66 @@ class NetworkMapPage(QWidget):
 
         if not self._topology_loaded:
             # ── Full initial render ───────────────────────────────────────────
-            scan_id      = self._scan_id
-            saved        = load_layout(scan_id) if scan_id else {}
             layout_label = self._layout_combo.currentText()
             layout_mode  = LAYOUT_NAMES.get(layout_label, "breadthfirst")
+            scan_id      = self._layout_storage_key(layout_mode)
+            saved        = load_layout(scan_id) if scan_id else {}
+
+            # Determine the node ids in *this* render up front. Only a node id
+            # that was never seen before counts as "newly discovered" — a node
+            # that is simply absent this time (e.g. a modem whose polling
+            # worker hasn't reported yet, or a device that is temporarily
+            # offline) keeps its last-known position rather than being treated
+            # as removed. This is what makes the map look identical across an
+            # app restart: at startup nothing has been "discovered", so the
+            # saved layout is reused verbatim instead of recomputed.
+            try:
+                id_probe = build_cytoscape_elements(
+                    devices=kw.get("devices", []),
+                    edges=kw.get("edges"),
+                    diff=diff,
+                    lldp_neighbors=kw.get("lldp_neighbors"),
+                    segments=kw.get("segments"),
+                    gateway_ip=kw.get("gateway_ip"),
+                    gateway_mac=kw.get("gateway_mac"),
+                    mesh_units=kw.get("mesh_units"),
+                    mesh_enrichment=kw.get("mesh_enrichment"),
+                    modem_data=kw.get("modem_data"),
+                    down_ips=kw.get("down_ips"),
+                    new_ips=kw.get("new_ips"),
+                )
+                current_ids = _node_ids(id_probe["elements"])
+            except Exception:
+                current_ids = set()
+            new_ids = current_ids - set(saved.keys())
 
             if layout_mode.startswith("geo_"):
-                # Geometric mode: compute positions in Python; embed as preset.
-                # Ignore any previously saved positions — the algorithm is the
-                # authoritative source for node placement in these modes.
-                try:
-                    positions_arg = self._compute_geo_positions(layout_mode)
+                if saved and current_ids and not new_ids:
+                    # Nothing new since the layout was last saved — reuse it
+                    # verbatim instead of recomputing. current_ids must be
+                    # non-empty here: if the id_probe build above failed,
+                    # new_ids would also be empty (set() - X is always
+                    # empty), which must NOT be mistaken for "no new
+                    # devices" — that would silently produce an empty
+                    # positions dict instead of falling back to a recompute.
+                    positions_arg = {nid: saved[nid] for nid in current_ids if nid in saved}
                     layout_arg    = "preset"
-                except Exception:
-                    log.debug("network_map_page: geo position compute failed", exc_info=True)
-                    positions_arg = saved if saved else None
-                    layout_arg    = "breadthfirst"
+                else:
+                    # New node id(s) discovered (or no saved layout yet):
+                    # recompute in Python and merge into the saved baseline,
+                    # keeping positions for any node not present in this
+                    # render so they aren't lost if they reappear later.
+                    try:
+                        positions_arg = self._compute_geo_positions(layout_mode)
+                        layout_arg    = "preset"
+                        if positions_arg:
+                            merged = dict(saved)
+                            merged.update(positions_arg)
+                            save_layout(scan_id, merged)
+                    except Exception:
+                        log.debug("network_map_page: geo position compute failed", exc_info=True)
+                        positions_arg = saved if saved else None
+                        layout_arg    = "breadthfirst"
             else:
                 positions_arg = saved if saved else None
                 layout_arg    = layout_mode
@@ -704,24 +773,7 @@ class NetworkMapPage(QWidget):
                 )
                 self._web_view.setHtml(html)
                 self._topology_loaded = True
-                try:
-                    full_result = build_cytoscape_elements(
-                        devices=kw.get("devices", []),
-                        edges=kw.get("edges"),
-                        diff=diff,
-                        lldp_neighbors=kw.get("lldp_neighbors"),
-                        segments=kw.get("segments"),
-                        gateway_ip=kw.get("gateway_ip"),
-                        gateway_mac=kw.get("gateway_mac"),
-                        mesh_units=kw.get("mesh_units"),
-                        mesh_enrichment=kw.get("mesh_enrichment"),
-                        modem_data=kw.get("modem_data"),
-                        down_ips=kw.get("down_ips"),
-                        new_ips=kw.get("new_ips"),
-                    )
-                    self._known_node_ids = _node_ids(full_result["elements"])
-                except Exception:
-                    self._known_node_ids = set()
+                self._known_node_ids = current_ids
             except Exception:
                 log.debug("network_map_page: Cytoscape HTML build failed", exc_info=True)
         else:
@@ -813,7 +865,7 @@ class NetworkMapPage(QWidget):
         self._classic_widget.zoom_out()
 
     def reset_layout(self) -> None:
-        clear_layout(self._scan_id)
+        clear_layout(self._layout_storage_key())
         # Force a full setHtml() on the next render so the layout algorithm
         # runs fresh from scratch, discarding all previous node positions.
         self._topology_loaded = False
@@ -825,6 +877,8 @@ class NetworkMapPage(QWidget):
     def _on_layout_changed(self, label: str) -> None:
         mode = LAYOUT_NAMES.get(label, "breadthfirst")
         QSettings().setValue(_SETTINGS_KEY_LAYOUT, label)
+        if self._bridge is not None:
+            self._bridge.set_scan_id(self._layout_storage_key(mode))
         if not self._web_available or self._inner_tab.currentIndex() != 0:
             return
         if mode.startswith("geo_"):
