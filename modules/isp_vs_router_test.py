@@ -23,7 +23,7 @@ from typing import Optional
 
 # ── Public hop targets ────────────────────────────────────────────────────────
 
-_EXTERNAL_HOPS: list[tuple[str, str]] = [
+_EXTERNAL_HOPS: list[tuple[str, str, str]] = [
     ("google_dns",    "8.8.8.8",         "Google DNS (8.8.8.8)"),
     ("cloudflare",    "1.1.1.1",         "Cloudflare (1.1.1.1)"),
     ("opendns",       "208.67.222.222",   "OpenDNS CDN (208.67.222.222)"),

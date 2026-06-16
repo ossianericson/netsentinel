@@ -118,8 +118,10 @@ def _truthy(val: object) -> bool:
 
 
 def _int_val(val: object, default: int) -> int:
+    if not isinstance(val, (int, float, str)):
+        return default
     try:
-        return int(val)  # type: ignore[arg-type]
+        return int(val)
     except (TypeError, ValueError):
         return default
 
