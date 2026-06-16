@@ -213,11 +213,12 @@ class TestHostDownSuppression:
         fired_all = []
         for cycle in _multi_cycle("10.0.0.1", states):
             fired_all.extend(engine.evaluate_cycle(cycle))
-        down_alerts = [a for a in fired_all if a.rule_type == "HOST_DOWN"]
+        # Exclude resolution (HEALTHY) alerts — those are correct new behavior
+        down_alerts = [a for a in fired_all if a.rule_type == "HOST_DOWN" and not a.is_resolution]
         flap_alerts = [a for a in fired_all if a.rule_type == "FLAP"]
         # Flap fires
         assert len(flap_alerts) >= 1
-        # HOST_DOWN should not fire once flapping is detected
+        # HOST_DOWN failure alerts should not fire once flapping is detected
         # (it may fire early before the flap threshold is reached, then stop)
         # Find the ts of the first FLAP alert
         first_flap_ts = flap_alerts[0].ts

@@ -24,11 +24,11 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # Natural split: move segment write methods to metric_store_schema.py when convenient.
     "metric_store.py": 700,
 
-    # Grew by ~8 lines after adding cta_page/cta_filter fields to AlertFired dataclass
-    # and _RULE_CTA / _cta_for_rule() helper for cross-page navigation from alerts.
-    # Natural split: move AlertFired dataclass + _RULE_CTA to alert_suppressor.py (S20-4 split).
-    # S1-4: plain-English message rewrites added ~2 lines per alert type (+22 total).
-    "alert_engine.py": 625,
+    # S4-1: resolution tracking (_host_down_since, _service_down_since) + HEALTHY alerts
+    # S4-3: consolidation logic added to evaluate_cycle.
+    # S4-4: _ACTION_STEPS dict + _append_action() helper + inline message updates (~50 lines).
+    # Natural split: move evaluate_cert_checks + evaluate_service_checks → alert_engine_checks.py.
+    "alert_engine.py": 800,
 
     # Cytoscape.js element builder (686 lines after HTML/JS page builder split).
     # HTML/JS template + build_cytoscape_html + build_elements_for_update moved to

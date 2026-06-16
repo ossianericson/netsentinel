@@ -89,8 +89,11 @@ hiddenimports: list = [
     "click",
     "itsdangerous",
     # ── modules/ — every backend module listed explicitly ─────────────────────
+    "modules.alert_baseline",
     "modules.alert_engine",
+    "modules.alert_pattern_detector",
     "modules.alert_suppressor",
+    "modules.quiet_notifier",
     "modules.app_traffic_classifier",
     "modules.health_score",
     "modules.isp_vs_router_test",

@@ -105,11 +105,13 @@ class AlertFired:
     rule_type:   str
     host:        str
     message:     str
-    severity:    str           # "INFO" | "WARNING" | "CRITICAL"
+    severity:    str           # "INFO" | "WARNING" | "CRITICAL" | "HEALTHY"
     ts:          int
     value:       Optional[float] = None   # the triggering metric value
     cta_page:    Optional[str]  = None   # nav label of the page that can resolve this alert
     cta_filter:  Optional[str]  = None   # opaque filter string passed to that page (e.g. IP)
+    is_resolution: bool         = False  # True when this alert clears a previous one
+    downtime_s:  Optional[int]  = None   # seconds the host/service was down (resolutions only)
 
 
 # ── CTA routing — maps rule_type → (nav_label, filter_string) ────────────────
@@ -178,6 +180,14 @@ class AlertEngine:
         self._escalation_policies: List[EscalationPolicy] = []
         # boot-time warmup — suppress all alerts until this timestamp
         self._suppress_until: float = 0.0
+        # ── S4-1: resolution tracking ──────────────────────────────────────────
+        # host → ts_when_went_down (for HOST_DOWN resolution, downtime calc)
+        self._host_down_since: Dict[str, int] = {}
+        # service_key → ts_when_went_down (for SERVICE_DOWN resolution)
+        self._service_down_since: Dict[str, int] = {}
+        # ── S4-3: consolidation ────────────────────────────────────────────────
+        # minimum simultaneous HOST_DOWN alerts to consolidate into one
+        self._consolidation_threshold: int = 5
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -237,6 +247,10 @@ class AlertEngine:
         """Return a copy of the current escalation policies."""
         return list(getattr(self, "_escalation_policies", []))
 
+    def set_consolidation_threshold(self, n: int) -> None:
+        """Set how many simultaneous HOST_DOWN alerts trigger consolidation (default 5)."""
+        self._consolidation_threshold = max(2, int(n))
+
     def check_escalations(self, store) -> List[dict]:
         """
         Return fired alerts that are unacknowledged and past their escalation threshold.
@@ -262,6 +276,28 @@ class AlertEngine:
                     due.append({"alert_row": row, "policy": policy})
         return due
 
+    # ── S4-4: action steps appended to every alert message ───────────────────
+
+    _ACTION_STEPS: Dict[str, str] = {
+        "RTT_THRESHOLD":  "→ Run a speed test  → Check if other devices are also slow",
+        "LOSS_THRESHOLD": "→ Restart your router  → Check all cable connections",
+        "HOST_DOWN":      "→ Check the device is powered on  → Check network cable or Wi-Fi",
+        "HOST_DEGRADED":  "→ Check for congestion  → Run a speed test to confirm",
+        "NEW_DEVICE":     "→ Open Devices to identify it  → Block in your router if unexpected",
+        "DEVICE_GONE":    "→ Check if the device was intentionally disconnected",
+        "CERT_EXPIRY":    "→ Renew the certificate  → Check auto-renewal is enabled",
+        "CERT_EXPIRED":   "→ Renew the certificate now  → Visitors will see security warnings",
+        "FLAP":           "→ Check the cable or Wi-Fi signal  → Look for interference",
+        "SERVICE_DOWN":   "→ Restart the service  → Check firewall rules for this port",
+    }
+
+    @staticmethod
+    def _append_action(message: str, rule_type: str) -> str:
+        step = AlertEngine._ACTION_STEPS.get(rule_type, "")
+        if step and step not in message:
+            return f"{message}  {step}"
+        return message
+
     def evaluate_cycle(self, cycle_result: dict) -> List[AlertFired]:
         """
         Evaluate rules against a CycleResult-style dict:
@@ -278,6 +314,9 @@ class AlertEngine:
         self._update_state_history(states, now)
         self._rebuild_flapping_hosts(now)
 
+        # ── S4-1: resolution — hosts that were down but are now UP ───────────
+        down_alerts: List[AlertFired] = []
+
         for rule in self._rules:
             if not rule.enabled:
                 continue
@@ -289,9 +328,81 @@ class AlertEngine:
             for host in hosts_to_check:
                 alert = self._eval_rule_for_host(rule, host, states, rtts, now)
                 if alert:
-                    fired.append(alert)
-                    if self._on_alert:
-                        self._on_alert(alert)
+                    if alert.rule_type == "HOST_DOWN":
+                        down_alerts.append(alert)
+                        # Track when this host went down for downtime calc
+                        self._host_down_since.setdefault(host, now)
+                    else:
+                        fired.append(alert)
+                        if self._on_alert:
+                            self._on_alert(alert)
+
+        # ── S4-3: consolidation — group simultaneous HOST_DOWN alerts ─────────
+        if len(down_alerts) >= self._consolidation_threshold:
+            hosts_str = ", ".join(a.host for a in down_alerts[:8])
+            extra = len(down_alerts) - 8
+            suffix = f" (+{extra} more)" if extra > 0 else ""
+            consolidated = AlertFired(
+                rule_name=down_alerts[0].rule_name,
+                rule_type="HOST_DOWN",
+                host="(network)",
+                message=(
+                    f"{len(down_alerts)} devices lost connectivity simultaneously — "
+                    f"your internet connection may be down.  "
+                    f"Affected: {hosts_str}{suffix}.  "
+                    f"→ Check your router and modem  → Check your ISP status page"
+                ),
+                severity="CRITICAL",
+                ts=now,
+                cta_page="DNS & Stability",
+                cta_filter=None,
+            )
+            fired.append(consolidated)
+            if self._on_alert:
+                self._on_alert(consolidated)
+        else:
+            for alert in down_alerts:
+                fired.append(alert)
+                if self._on_alert:
+                    self._on_alert(alert)
+
+        # ── S4-1: resolution — check hosts that recovered ─────────────────────
+        recovered = [
+            h for h in list(self._host_down_since)
+            if states.get(h) == "UP"
+        ]
+        for host in recovered:
+            down_ts = self._host_down_since.pop(host)
+            downtime = now - down_ts
+            mins, secs = divmod(downtime, 60)
+            if mins >= 60:
+                duration = f"{mins // 60}h {mins % 60}m"
+            elif mins > 0:
+                duration = f"{mins}m {secs}s"
+            else:
+                duration = f"{secs}s"
+            resolution = AlertFired(
+                rule_name="Host Down",
+                rule_type="HOST_DOWN",
+                host=host,
+                message=(
+                    f"{host} is back online — was unreachable for {duration}."
+                ),
+                severity="HEALTHY",
+                ts=now,
+                is_resolution=True,
+                downtime_s=downtime,
+                cta_page="Inventory",
+                cta_filter=host,
+            )
+            fired.append(resolution)
+            if self._on_alert:
+                self._on_alert(resolution)
+
+        # Track hosts newly going down (not consolidated)
+        for alert in down_alerts:
+            if len(down_alerts) < self._consolidation_threshold:
+                self._host_down_since.setdefault(alert.host, now)
 
         return fired
 
@@ -312,9 +423,10 @@ class AlertEngine:
                     label = dev.hostname or dev.vendor or "Unknown device"
                     alert = self._fire_if_cooled(
                         rule, host, now,
-                        message=(
+                        message=self._append_action(
                             f"New device joined your network: {label} [{dev.mac}]"
-                            f"{' at ' + dev.ip if dev.ip else ''} — was this expected?"
+                            f"{' at ' + dev.ip if dev.ip else ''} — was this expected?",
+                            "NEW_DEVICE",
                         ),
                         severity="WARNING",
                         value=None,
@@ -330,9 +442,10 @@ class AlertEngine:
                     label = dev.hostname or dev.vendor or "Unknown device"
                     alert = self._fire_if_cooled(
                         rule, host, now,
-                        message=(
+                        message=self._append_action(
                             f"{label} [{dev.mac}] has left your network"
-                            f"{' (was at ' + dev.ip + ')' if dev.ip else ''}."
+                            f"{' (was at ' + dev.ip + ')' if dev.ip else ''}.",
+                            "DEVICE_GONE",
                         ),
                         severity="WARNING",
                         value=None,
@@ -367,19 +480,50 @@ class AlertEngine:
 
                 if rule.host and rule.host not in (host, key, label):
                     continue
+
                 if up:
-                    continue   # service is up — nothing to do
+                    # ── S4-1: service came back — fire resolution if it was down ──
+                    if key in self._service_down_since:
+                        down_ts = self._service_down_since.pop(key)
+                        downtime = now - down_ts
+                        mins, secs = divmod(downtime, 60)
+                        if mins >= 60:
+                            duration = f"{mins // 60}h {mins % 60}m"
+                        elif mins > 0:
+                            duration = f"{mins}m {secs}s"
+                        else:
+                            duration = f"{secs}s"
+                        resolution = AlertFired(
+                            rule_name=rule.name,
+                            rule_type="SERVICE_DOWN",
+                            host=key,
+                            message=(
+                                f"{label} is back — was unreachable for {duration}."
+                            ),
+                            severity="HEALTHY",
+                            ts=now,
+                            is_resolution=True,
+                            downtime_s=downtime,
+                            cta_page="Service Heartbeat",
+                            cta_filter=key,
+                        )
+                        fired.append(resolution)
+                        if self._on_alert:
+                            self._on_alert(resolution)
+                    continue
 
                 alert = self._fire_if_cooled(
                     rule, key, now,
                     message=(
                         f"{label} is not responding on {host} (port {port}) — "
-                        f"the service may be offline or blocked by a firewall."
+                        f"the service may be offline or blocked by a firewall.  "
+                        f"→ Restart the service  → Check firewall rules for port {port}"
                     ),
                     severity="CRITICAL",
                     value=None,
                 )
                 if alert:
+                    self._service_down_since.setdefault(key, now)
                     fired.append(alert)
                     if self._on_alert:
                         self._on_alert(alert)
@@ -419,9 +563,10 @@ class AlertEngine:
                 if rule.rule_type == "CERT_EXPIRED" and is_expired:
                     alert = self._fire_if_cooled(
                         rule, target_key, now,
-                        message=(
+                        message=self._append_action(
                             f"Security certificate expired on {host}:{port} — "
-                            f"connections may show security warnings. Renew it now."
+                            f"connections may show security warnings. Renew it now.",
+                            "CERT_EXPIRED",
                         ),
                         severity="CRITICAL",
                         value=float(days) if days is not None else None,
@@ -435,10 +580,11 @@ class AlertEngine:
                     if days is not None and not is_expired and days < rule.threshold_days:
                         alert = self._fire_if_cooled(
                             rule, target_key, now,
-                            message=(
+                            message=self._append_action(
                                 f"Security certificate on {host}:{port} expires in "
                                 f"{days} day{'s' if days != 1 else ''} — "
-                                f"renew before it expires to avoid connection warnings."
+                                f"renew before it expires to avoid connection warnings.",
+                                "CERT_EXPIRY",
                             ),
                             severity="WARNING",
                             value=float(days),
@@ -468,10 +614,11 @@ class AlertEngine:
             if rtt >= 0 and rtt > rule.threshold_ms:
                 return self._fire_if_cooled(
                     rule, host, now,
-                    message=(
+                    message=self._append_action(
                         f"{host} is responding slowly ({rtt:.0f} ms, normally under "
                         f"{rule.threshold_ms:.0f} ms) — this may affect video calls "
-                        f"and real-time applications."
+                        f"and real-time applications.",
+                        rt,
                     ),
                     severity="WARNING",
                     value=rtt,
@@ -483,9 +630,10 @@ class AlertEngine:
             if rtt < 0:
                 return self._fire_if_cooled(
                     rule, host, now,
-                    message=(
+                    message=self._append_action(
                         f"{host} is not responding — packets are being lost. "
-                        f"Check cables and power to this device."
+                        f"Check cables and power to this device.",
+                        rt,
                     ),
                     severity="CRITICAL",
                     value=100.0,
@@ -495,7 +643,10 @@ class AlertEngine:
                 if not self._is_dependency_suppressed(host, states):
                     return self._fire_if_cooled(
                         rule, host, now,
-                        message=f"{host} has gone offline and is not responding to pings.",
+                        message=self._append_action(
+                            f"{host} has gone offline and is not responding to pings.",
+                            rt,
+                        ),
                         severity="CRITICAL",
                         value=None,
                     )
@@ -503,9 +654,10 @@ class AlertEngine:
             if state == "DEGRADED":
                 return self._fire_if_cooled(
                     rule, host, now,
-                    message=(
+                    message=self._append_action(
                         f"{host} is responding slowly ({rtt:.0f} ms) — "
-                        f"network performance may be degraded."
+                        f"network performance may be degraded.",
+                        rt,
                     ),
                     severity="WARNING",
                     value=rtt,
@@ -517,11 +669,12 @@ class AlertEngine:
                 mins = rule.flap_window_s // 60
                 return self._fire_if_cooled(
                     rule, host, now,
-                    message=(
+                    message=self._append_action(
                         f"{host} keeps going online and offline "
                         f"({transitions} time{'s' if transitions != 1 else ''} "
                         f"in {mins} minute{'s' if mins != 1 else ''}) — "
-                        f"check the connection or cable."
+                        f"check the connection or cable.",
+                        rt,
                     ),
                     severity="WARNING",
                     value=float(transitions),

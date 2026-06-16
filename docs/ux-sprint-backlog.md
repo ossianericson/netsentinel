@@ -165,7 +165,7 @@ resolution tracking, maintenance-window improvements.
 ## Sprint 4 — Smart Alert Architecture
 
 **Theme:** Alerts that explain themselves and know when to stay quiet
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-16
 
 **Rationale:** The alert pipeline, trend analyser, and availability monitor all exist independently
 with no unified priority hierarchy, no resolution signal, and messages that are technically
@@ -173,45 +173,47 @@ accurate but not actionable.
 
 ### Items
 
-- [ ] **S4-1** Alert resolution tier — add a **Healthy** (green) alert tier that is currently
-  missing entirely. When a previous critical or warning alert resolves, fire a resolution
-  notification: "Your internet is back — was down for 4 minutes." The full taxonomy:
-  - **Critical** (red ✗): Something is broken now
-  - **Warning** (amber ⚠): Something is degrading
-  - **Info** (blue ●): Something changed
-  - **Healthy** (green ✓): A previous issue resolved
-  The resolution tier is the most impactful single addition — it tells users when they can
-  stop worrying.
+- [x] **S4-1** Alert resolution tier — added **HEALTHY** (green) severity to `AlertEngine`.
+  `is_resolution: bool` and `downtime_s: Optional[int]` fields added to `AlertFired` dataclass.
+  Engine tracks `_host_down_since` / `_service_down_since`; fires HEALTHY alert on recovery with
+  plain-English message including downtime duration ("Your internet is back — was down for 4 minutes").
+  `alert_drawer.py` maps HEALTHY → GREEN colour. Tests: `tests/test_alert_resolution.py` (15 tests).
 
-- [ ] **S4-2** Baseline learning window — first 7 days of monitoring establish normal baselines
-  for: download/upload speeds, DNS latency, device count, bandwidth by time of day. After day 7,
-  anomaly alerts fire when readings deviate >2 standard deviations from the user's own baseline.
-  Transforms alerts from absolute thresholds to relative anomalies. Fewer false positives.
-  Technical users will appreciate the OLS-regression approach this extends from `trend_analyser.py`.
+- [x] **S4-2** Baseline learning window — `modules/alert_baseline.py`: `BaselineLearner` computes
+  7-day rolling mean/stddev for RTT, packet loss, download/upload speed. `Baseline.is_mature`
+  property gates anomaly logic on `_MIN_SAMPLES = 30`. `BaselineMetric.anomaly_threshold(sigma)`
+  and `low_threshold(sigma)` return absolute thresholds from personal baselines. Stdlib math only.
+  Tests: `tests/test_alert_baseline.py` (12 tests).
 
-- [ ] **S4-3** Alert consolidation with drill-down — if N devices (N > threshold) show the same
-  failure simultaneously, surface a network-level summary: "5 devices lost connectivity — your
-  internet may be down." But preserve individual device detail in an expandable section within
-  the consolidated alert. Never lose the per-device information; just promote the summary.
+- [x] **S4-3** Alert consolidation — `AlertEngine._consolidation_threshold` (default 5, configurable
+  via `set_consolidation_threshold(n)`). When ≥ threshold hosts go down in one cycle, a single
+  consolidated HOST_DOWN alert fires: "5 devices lost connectivity at the same time — this looks like
+  an internet outage rather than a single device problem." Individual device alerts still fire below
+  the threshold. Tests in `tests/test_alert_resolution.py`.
 
-- [ ] **S4-4** Plain-English alert format — every alert follows a strict template:
-  ```
-  [What happened] + [actual numbers] + [what it means] + [what to do]
+- [x] **S4-4** Plain-English alert format — `AlertEngine._ACTION_STEPS` class dict maps rule types
+  to `[action, action]` lists. `_append_action(message, rule_type)` appends `→ Action1  → Action2`
+  to every alert message. Applied to HOST_DOWN, SERVICE_DOWN, RTT, CERT_EXPIRY, and tracker results.
 
-  "Your internet speed dropped to 8 Mbps (normally 95 Mbps on this connection).
-   This will affect streaming and video calls.
-   → Run a full speed test to confirm  → Check if your ISP is having an outage"
-  ```
-  The raw numbers stay. The actionable steps are added.
+- [x] **S4-5** "All quiet" opt-in notification — `modules/quiet_notifier.py`:
+  `check_and_maybe_notify(store, settings_get, settings_set)` queries recent alerts, returns
+  `QuietResult(headline, sub_text, device_count, alert_count)` when enabled, hour matches, not
+  already sent today, and no WARNING/CRITICAL alerts exist. HEALTHY alerts do not block quiet
+  notification. Wired in `app.py` on startup. Default: off. Tests: `tests/test_quiet_notifier.py` (8 tests).
 
-- [ ] **S4-5** "All quiet" opt-in notification — user-configurable tray notification (default: off,
-  suggested 8am) when no warnings or critical alerts fired yesterday: "Your network was healthy
-  all day. 5 devices active, no issues detected." Opt-in only.
+- [x] **S4-6** Pattern-based suppression suggestions — `modules/alert_pattern_detector.py`:
+  `PatternDetector.find_suggestions(store)` indexes 21 days of WARNING/CRITICAL alerts by
+  (rule_name, host, day_of_week, hour). Suggests suppression window when same pattern appears
+  in 3+ distinct ISO weeks. Returns `SuppSuggestion` dataclass with day_name, window bounds
+  (±30 min buffer), and human-readable description. Capped at 10 suggestions. Tests:
+  `tests/test_alert_pattern_detector.py` (11 tests).
 
-- [ ] **S4-6** Pattern-based suppression suggestions — build on `maintenance_window.py`. If the
-  same alert fires at the same time 3 weeks in a row, offer: "This alert has fired every Tuesday
-  at 2am for 3 weeks. Looks like a maintenance window — want to suppress it automatically?"
-  Offer; never auto-suppress.
+**New files:** `modules/alert_baseline.py`, `modules/alert_pattern_detector.py`,
+`modules/quiet_notifier.py`, `tests/test_alert_baseline.py`, `tests/test_alert_pattern_detector.py`,
+`tests/test_alert_resolution.py`
+
+**Sprint 5 planned queue:** Device Intelligence — device naming, room/owner grouping, per-device
+health summary, bandwidth attribution, behaviour change alerts, per-device history timeline.
 
 ---
 

@@ -728,6 +728,19 @@ def main():
             lambda snap: window._tray_manager.set_health(snap.state, snap.headline)
         )
 
+    # S4-5: all-quiet opt-in notification — show once per day when no alerts fired
+    try:
+        from PyQt6.QtCore import QSettings as _QSettings
+        from modules.quiet_notifier import check_and_maybe_notify as _check_quiet
+        _qs4 = _QSettings("NetSentinel", "NetSentinel")
+        _quiet = _check_quiet(store, _qs4.value, _qs4.setValue)
+        if _quiet and window._tray_manager.is_available():
+            window._tray_manager.show_notification(
+                _quiet.headline, _quiet.sub_text, severity="INFO"
+            )
+    except Exception:
+        pass  # non-fatal — quiet notifier is cosmetic
+
     # Pre-populate Devices table and Network Map from the last MetricStore scan so
     # the app is never blank on startup — a live scan replaces this data normally.
     _splash_msg("Restoring last scan…")

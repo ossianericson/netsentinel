@@ -42,7 +42,7 @@ from ui.styles import (
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED}
+_SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED, "HEALTHY": GREEN}
 
 _RULE_PAGE: dict[str, str] = {
     "PORT_SCAN":   "Port Scan (TCP)",
