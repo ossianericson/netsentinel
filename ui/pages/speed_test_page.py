@@ -157,6 +157,15 @@ def _compute_speed_comparison(
     return text + "."
 
 
+def _is_slow_speed_result(download_mbps: float) -> bool:
+    """S9-3: threshold for the one-time speed-history contextual prompt.
+
+    Mirrors the GREEN/AMBER/RED threshold already used for the home page
+    speed mini-card (>25 Mbps is the "good" cutoff).
+    """
+    return download_mbps < 25
+
+
 def _rsrp_color(rsrp) -> str:
     if rsrp is None:
         return TEXT_MUTED
@@ -533,6 +542,7 @@ class SpeedTestPage(QWidget):
             "Compare results against the plan speed your ISP advertises, not just yesterday's number.",
         )
         root.addWidget(hdr)
+        self._page_header_bar = hdr
 
         # ── Ookla CLI install banner (hidden if CLI already present) ──────────
         self._ookla_banner = OoklaCliBanner(parent=self)
@@ -1286,6 +1296,16 @@ class SpeedTestPage(QWidget):
 
         # Add to history
         self._add_history_row(result)
+
+        # S9-3: one-time contextual prompt after a slow result, pointing at the
+        # trend history this page already builds up automatically (S8-4).
+        if _is_slow_speed_result(result.download_mbps) and hasattr(self, "_page_header_bar"):
+            self._page_header_bar.show_first_visit_banner(
+                "speedtest_slow_result_tip",
+                "That's a slow result. NetSentinel tracks every speed test automatically — "
+                "scroll down to see your 7-day and 30-day trend, or set up Scheduled Scans "
+                "to test automatically and catch ISP throttling patterns.",
+            )
 
     def _start_tile_count_up(self, download_mbps: float, upload_mbps: float) -> None:
         """ANIM-5: Tween the download/upload stat tiles from 0 → final value (600 ms, OutExpo)."""

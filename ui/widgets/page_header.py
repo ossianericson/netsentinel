@@ -199,7 +199,7 @@ class PageHeaderBar(QWidget):
         if hasattr(self, "_help_btn"):
             return  # already set
 
-        self._help_popover = _HelpPopover(title, body, tips=tips)
+        self._help_popover = _HelpPopover(title, body, tips=tips, on_help_mode=self._start_help_mode)
 
         self._help_btn = QPushButton("?")
         self._help_btn.setFixedSize(22, 22)
@@ -230,6 +230,15 @@ class PageHeaderBar(QWidget):
         self._help_popover.hide()
         if hasattr(self, "_help_btn"):
             self._help_btn.setChecked(False)
+
+    def _start_help_mode(self) -> None:
+        """Activate the 'What can I do here?' overlay on the current page (S9-5)."""
+        self._close_help()
+        page = self.parentWidget()
+        if page is None:
+            return
+        from ui.widgets.help_mode_overlay import HelpModeOverlay
+        HelpModeOverlay(page)
 
     def refresh_theme(self) -> None:
         from ui import styles as _s
@@ -288,6 +297,7 @@ class _HelpPopover(QFrame):
         body: str,
         tips: list | None = None,
         parent: QWidget | None = None,
+        on_help_mode=None,
     ) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setFixedWidth(300)
@@ -306,6 +316,24 @@ class _HelpPopover(QFrame):
             f" background:transparent; border:none;"
         )
         lay.addWidget(title_lbl)
+
+        if on_help_mode is not None:
+            help_mode_btn = QPushButton("◉  What can I do here?")
+            help_mode_btn.setFlat(True)
+            help_mode_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            help_mode_btn.setToolTip(
+                "Label every button and field on this page with a one-sentence "
+                "description. Press Esc or click anywhere to dismiss."
+            )
+            help_mode_btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+                f" border:1px solid {ACCENT}; border-radius:4px; padding:4px 8px;"
+                f" text-align:left; }}"
+                f"QPushButton:hover {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                f"QPushButton:pressed {{ background:{BORDER}; color:{TEXT_PRIMARY}; }}"
+            )
+            help_mode_btn.clicked.connect(on_help_mode)
+            lay.addWidget(help_mode_btn)
 
         def _section_label(text: str) -> QLabel:
             lbl = QLabel(text)

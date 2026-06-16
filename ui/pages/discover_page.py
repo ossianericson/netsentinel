@@ -8,8 +8,9 @@ filterable by name, description, group, page label, or synonym tag.
 from __future__ import annotations
 
 import datetime
+import json
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QSettings, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
@@ -22,7 +23,7 @@ from ui.styles import (
     TEXT_SECONDARY, WHITE,
 )
 
-from ui.pages.discover_data import _FEATURES
+from ui.pages.discover_data import _FEATURES, _RECOMMENDED_PAGES
 
 
 
@@ -42,7 +43,31 @@ class FeatureGuidePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._visited_pages: set[str] = set()
         self._build_ui()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._load_visited_pages()
+        if not self._search.text().strip():
+            self._render_features(_FEATURES)
+
+    def _load_visited_pages(self) -> None:
+        """Refresh the set of page labels the user has actually visited (S9-4)."""
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            self._visited_pages = set(json.loads(qs.value("discover/visited_pages", "[]")))
+        except Exception:
+            self._visited_pages = set()
+
+    def _recommended_features(self) -> list[dict]:
+        """Behavioural recommendations — unvisited pages from a fixed priority
+        list (S9-4). No persona, no scan dependency: purely "haven't tried this yet"."""
+        by_page = {f["page"]: f for f in _FEATURES if f.get("page")}
+        return [
+            by_page[label] for label in _RECOMMENDED_PAGES
+            if label in by_page and label not in self._visited_pages
+        ][:3]
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -92,13 +117,26 @@ class FeatureGuidePage(QWidget):
         scroll.setWidget(self._body)
         root.addWidget(scroll, 1)
 
+        self._load_visited_pages()
         self._render_features(_FEATURES)
 
-    def _render_features(self, features: list[dict]) -> None:
+    def _render_features(self, features: list[dict], show_recommended: bool = True) -> None:
         while self._body_lay.count():
             item = self._body_lay.takeAt(0)
             if item and item.widget():
                 item.widget().deleteLater()
+
+        if show_recommended:
+            recommended = self._recommended_features()
+            if recommended:
+                rec_lbl = QLabel("RECOMMENDED FOR YOU")
+                rec_lbl.setStyleSheet(
+                    f"font-size:10px; font-weight:bold; color:{ACCENT};"
+                    f" background:transparent; letter-spacing:1px;"
+                )
+                self._body_lay.addWidget(rec_lbl)
+                for feat in recommended:
+                    self._body_lay.addWidget(self._make_card(feat))
 
         current_group = None
         for feat in features:
@@ -181,6 +219,15 @@ class FeatureGuidePage(QWidget):
                 )
                 name_row.addWidget(badge_lbl)
 
+        if feat.get("page") and feat["page"] in self._visited_pages:
+            used_lbl = QLabel("✓ Used")
+            used_lbl.setStyleSheet(
+                f"font-size:9px; font-weight:bold; color:{TEXT_MUTED};"
+                f" background:transparent; border:1px solid {BORDER};"
+                f" border-radius:3px; padding:0 5px;"
+            )
+            name_row.addWidget(used_lbl)
+
         name_row.addStretch()
         text_col.addLayout(name_row)
 
@@ -226,4 +273,4 @@ class FeatureGuidePage(QWidget):
             or q in (f.get("page") or "").lower()
             or any(q in t.lower() for t in f.get("tags", []))
         ]
-        self._render_features(filtered)
+        self._render_features(filtered, show_recommended=False)

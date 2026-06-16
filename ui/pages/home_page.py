@@ -34,7 +34,6 @@ from ui.styles import (
     BORDER,
     CARD_RADIUS,
     GREEN,
-    PRO_WARN_BG,
     RED,
     TEXT_MUTED,
     TEXT_PRIMARY,
@@ -442,8 +441,23 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
         )
         _sc_summary.clicked.connect(lambda: self.navigate_to.emit("Dashboard"))
+        _sc_advanced = QPushButton("Advanced settings →")
+        _sc_advanced.setFlat(True)
+        _sc_advanced.setCursor(Qt.CursorShape.PointingHandCursor)
+        _sc_advanced.setToolTip(
+            "SMTP, SNMP, API keys and other technical configuration live here — "
+            "optional, and never required to use NetSentinel."
+        )
+        _sc_advanced.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:11px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; background:transparent; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; background:transparent; }}"
+        )
+        _sc_advanced.clicked.connect(lambda: self.navigate_to.emit("Settings"))
         _sc_btn_row.addWidget(_sc_explore)
         _sc_btn_row.addWidget(_sc_summary)
+        _sc_btn_row.addWidget(_sc_advanced)
         _sc_btn_row.addStretch()
         _sc_lay.addWidget(_sc_title)
         _sc_lay.addWidget(_sc_sub)
@@ -451,28 +465,29 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         lay.addWidget(self._setup_complete_card)
 
         # ── Since you were last here (hidden until data loaded) ───────────────
+        # S9-6: reused for both the routine "since last visit" note and the
+        # more prominent 7+ day "welcome back" recovery card — style/icon/title
+        # are swapped at runtime by _apply_last_visit_style() rather than
+        # building a second widget.
         self._last_visit_card = QFrame()
         self._last_visit_card.setObjectName("lastVisitCard")
-        self._last_visit_card.setStyleSheet(
-            f"QFrame#lastVisitCard {{ background:{PRO_WARN_BG}; border:1px solid {UPDATE_BAR_BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
-        )
         self._last_visit_card.setVisible(False)
         lv_lay = QHBoxLayout(self._last_visit_card)
         lv_lay.setContentsMargins(12, 8, 12, 8)
         lv_lay.setSpacing(10)
-        _lv_icon = QLabel("◷")
-        _lv_icon.setFixedWidth(18)
-        _lv_icon.setStyleSheet(
-            f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
-        )
+        self._lv_icon = QLabel("◷")
+        self._lv_icon.setFixedWidth(20)
+        lv_text_col = QVBoxLayout()
+        lv_text_col.setSpacing(1)
+        self._lv_title = QLabel("")
+        self._lv_title.setVisible(False)
         self._lv_text = QLabel("")
         self._lv_text.setWordWrap(True)
-        self._lv_text.setStyleSheet(
-            f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
-        )
-        lv_lay.addWidget(_lv_icon)
-        lv_lay.addWidget(self._lv_text, 1)
+        lv_text_col.addWidget(self._lv_title)
+        lv_text_col.addWidget(self._lv_text)
+        lv_lay.addWidget(self._lv_icon)
+        lv_lay.addLayout(lv_text_col, 1)
+        self._apply_last_visit_style(prominent=False)
         lay.addWidget(self._last_visit_card)
 
         # ── First-scan guidance (one-time, after very first scan) ─────────────

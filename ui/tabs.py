@@ -236,6 +236,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
             lambda ip: (self._cve_page.focus_on_host(ip),
                         self._nav_rail_go_to("CVE Tracker"))
         )
+        self._inventory_page.navigate_to.connect(self._nav_rail_go_to)
 
         # ── DEVICE-1: device quick-profile popover ────────────────────────────
         from ui.widgets.device_popover import DevicePopover

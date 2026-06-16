@@ -98,6 +98,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
             )
         except Exception:
             pass  # non-fatal
+        if hasattr(self, "_compute_suggestions"):
+            self._compute_suggestions()
 
     def _on_ipv6_result(self, devices: list):
         from PyQt6.QtGui import QColor

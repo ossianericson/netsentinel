@@ -995,6 +995,7 @@ class InventoryPage(QWidget):
     show_connections_for    = pyqtSignal(str)   # IP → navigate to Connections + filter
     check_cves_for          = pyqtSignal(str)   # IP → navigate to CVE Tracker + filter
     show_on_map             = pyqtSignal(str)   # IP → navigate to Geo Map
+    navigate_to             = pyqtSignal(str)   # generic page-label navigation (S9-3)
 
     REFRESH_MS = 15_000   # refresh every 15 s
 
@@ -1231,6 +1232,46 @@ class InventoryPage(QWidget):
             f" border:none; border-bottom:1px solid {BORDER}; padding:4px 10px;"
         )
         snap_card_lay.addWidget(self._health_summary_lbl)
+
+        # ── Unknown-device alert prompt (S9-3, one-time, dismissible) ─────────
+        self._unknown_device_prompt = QFrame()
+        self._unknown_device_prompt.setVisible(False)
+        self._unknown_device_prompt.setStyleSheet(
+            f"QFrame {{ background:{BG_HOVER}; border:none;"
+            f" border-bottom:1px solid {BORDER}; }}"
+        )
+        _udp_lay = QHBoxLayout(self._unknown_device_prompt)
+        _udp_lay.setContentsMargins(10, 4, 8, 4)
+        _udp_lay.setSpacing(8)
+        self._unknown_device_lbl = QLabel("")
+        self._unknown_device_lbl.setWordWrap(True)
+        self._unknown_device_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        )
+        _udp_lay.addWidget(self._unknown_device_lbl, 1)
+        _udp_btn = QPushButton("Set up alerts →")
+        _udp_btn.setFlat(True)
+        _udp_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        _udp_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+            f" border:none; padding:0; }}"
+            f"QPushButton:hover {{ color:{ACCENT_DARK}; }}"
+            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+        )
+        _udp_btn.clicked.connect(self._on_unknown_device_alert_clicked)
+        _udp_lay.addWidget(_udp_btn)
+        _udp_dismiss = QPushButton("×")
+        _udp_dismiss.setFixedSize(18, 18)
+        _udp_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        _udp_dismiss.setStyleSheet(
+            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
+            f" font-size:12px; padding:0; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_MUTED}; }}"
+        )
+        _udp_dismiss.clicked.connect(self._dismiss_unknown_device_prompt)
+        _udp_lay.addWidget(_udp_dismiss)
+        snap_card_lay.addWidget(self._unknown_device_prompt)
 
         cols_snap = ["●", "Segment", "IP Address", "Label", "Hostname", "MAC Address", "Manufacturer", "Type", "Risk"]
         self._snap_table = QTableWidget(0, len(cols_snap))
@@ -1674,6 +1715,31 @@ class InventoryPage(QWidget):
         self._hide_offline = checked
         self._apply_segment_filter()
 
+    # ── Unknown-device alert prompt (S9-3) ────────────────────────────────────
+
+    def _maybe_show_unknown_device_prompt(self, unknown_count: int) -> None:
+        from ui.context_banners import should_show_banner
+        if unknown_count <= 0 or not should_show_banner("inventory_unknown_device_alert"):
+            self._unknown_device_prompt.setVisible(False)
+            return
+        s = "s" if unknown_count != 1 else ""
+        self._unknown_device_lbl.setText(
+            f"ⓘ  {unknown_count} unidentified device{s} on your network — "
+            "set up an alert to get notified the moment a new one joins."
+        )
+        self._unknown_device_prompt.setVisible(True)
+
+    def _on_unknown_device_alert_clicked(self) -> None:
+        from ui.context_banners import mark_banner_seen
+        mark_banner_seen("inventory_unknown_device_alert")
+        self._unknown_device_prompt.setVisible(False)
+        self.navigate_to.emit("Custom Triggers")
+
+    def _dismiss_unknown_device_prompt(self) -> None:
+        from ui.context_banners import mark_banner_seen
+        mark_banner_seen("inventory_unknown_device_alert")
+        self._unknown_device_prompt.setVisible(False)
+
     def _toggle_type(self, event_type: str, checked: bool) -> None:
         if checked:
             self._active_types.add(event_type)
@@ -1919,6 +1985,7 @@ class InventoryPage(QWidget):
             self._seg_bar_frame.setVisible(False)
             self._group_bar_frame.setVisible(False)
             self._health_summary_lbl.setVisible(False)
+            self._unknown_device_prompt.setVisible(False)
             return
 
         from modules.device_classifier import classify_device
@@ -2088,6 +2155,14 @@ class InventoryPage(QWidget):
             self._health_summary_lbl.setVisible(True)
         except Exception:
             self._health_summary_lbl.setVisible(False)  # non-fatal
+
+        # ── Unknown-device alert prompt (S9-3) ─────────────────────────────────
+        _unknown_count = 0
+        for d in devices:
+            _dt = (d.device_type if not isinstance(d, dict) else d.get("device_type", "")) or ""
+            if _dt.strip().lower() in ("", "unknown", "unknown device"):
+                _unknown_count += 1
+        self._maybe_show_unknown_device_prompt(_unknown_count)
 
         # Switch to content view if still on empty state
         if self._content_stack.currentIndex() == 0:

@@ -208,3 +208,164 @@ class TestFallbackSuggestion:
         assert len(suggestions) >= 1, "Fallback suggestion must appear when all conditions are green"
         keys = [s.get("action_key") for s in suggestions]
         assert "start_logger_fallback" in keys or "start_logger" in keys
+
+
+class TestScanResultBasedSuggestions:
+    """S9-2: behavioural-discovery suggestions derived from actual scan results."""
+
+    def _stub(self, monkeypatch):
+        from unittest.mock import MagicMock
+        monkeypatch.setattr(
+            "ui.tabs_logger.QSettings",
+            lambda *a, **kw: _FakeQSettings(),
+            raising=False,
+        )
+        from ui.tabs_logger import _LoggerTabMixin
+
+        class _Stub(_LoggerTabMixin):
+            _home_page = MagicMock()
+            _m1_result = None
+            _last_benchmark_result = None
+            _last_portscan_result = None
+            _store = None
+            _logger_worker = None
+
+        return _Stub()
+
+    def _suggestions(self, stub):
+        stub._compute_suggestions()
+        calls = stub._home_page.set_suggestions.call_args_list
+        return calls[-1][0][0]
+
+    def test_unknown_devices_found_suggestion(self, monkeypatch):
+        stub = self._stub(monkeypatch)
+        stub._m1_result = {
+            "devices": [
+                {"device_type": "Unknown Device", "risk_level": "UNKNOWN"},
+                {"device_type": "Apple iPhone", "risk_level": "LOW"},
+            ]
+        }
+        suggestions = self._suggestions(stub)
+        keys = [s.get("action_key") for s in suggestions]
+        assert "unknown_devices_found" in keys
+        match = next(s for s in suggestions if s["action_key"] == "unknown_devices_found")
+        assert match["target"] == "Devices"
+
+    def test_no_unknown_devices_no_suggestion(self, monkeypatch):
+        stub = self._stub(monkeypatch)
+        stub._m1_result = {"devices": [{"device_type": "Apple iPhone", "risk_level": "LOW"}]}
+        suggestions = self._suggestions(stub)
+        keys = [s.get("action_key") for s in suggestions]
+        assert "unknown_devices_found" not in keys
+
+    def test_open_ports_found_suggestion(self, monkeypatch):
+        from unittest.mock import MagicMock
+        stub = self._stub(monkeypatch)
+        port = MagicMock()
+        result = MagicMock()
+        result.open_ports = [port, port]
+        stub._last_portscan_result = result
+        suggestions = self._suggestions(stub)
+        keys = [s.get("action_key") for s in suggestions]
+        assert "open_ports_found" in keys
+        match = next(s for s in suggestions if s["action_key"] == "open_ports_found")
+        assert match["target"] == "CVE Tracker"
+        assert "2" in match["text"]
+
+    def test_slow_dns_response_suggestion(self, monkeypatch):
+        from unittest.mock import MagicMock
+        stub = self._stub(monkeypatch)
+        dim = MagicMock()
+        dim.name = "DNS Response Speed"
+        dim.grade = "F"
+        dim.value_label = "210 ms"
+        bm = MagicMock()
+        bm.overall_grade = "B"
+        bm.dimensions = [dim]
+        stub._last_benchmark_result = bm
+        suggestions = self._suggestions(stub)
+        keys = [s.get("action_key") for s in suggestions]
+        assert "slow_dns_response" in keys
+        match = next(s for s in suggestions if s["action_key"] == "slow_dns_response")
+        assert match["target"] == "DNS & Stability"
+
+    def test_fast_dns_no_suggestion(self, monkeypatch):
+        from unittest.mock import MagicMock
+        stub = self._stub(monkeypatch)
+        dim = MagicMock()
+        dim.name = "DNS Response Speed"
+        dim.grade = "A"
+        bm = MagicMock()
+        bm.overall_grade = "A"
+        bm.dimensions = [dim]
+        stub._last_benchmark_result = bm
+        suggestions = self._suggestions(stub)
+        keys = [s.get("action_key") for s in suggestions]
+        assert "slow_dns_response" not in keys
+
+
+class TestExtendedAbsenceRecovery:
+    """S9-6: prominent 'welcome back' treatment for 7+ day absences."""
+
+    def test_routine_visit_uses_plain_style(self, home_page):
+        home_page.set_last_visit_summary(2, 0, "2 hours ago")
+        assert not home_page._last_visit_card.isHidden()
+        assert home_page._lv_title.isHidden()
+        assert "2 new device" in home_page._lv_text.text()
+
+    def test_routine_visit_with_nothing_changed_hides_card(self, home_page):
+        home_page.set_last_visit_summary(0, 0, "2 hours ago")
+        assert home_page._last_visit_card.isHidden()
+
+    def test_extended_absence_uses_prominent_style(self, home_page):
+        home_page.set_last_visit_summary(
+            3, 1, "9 days ago", alert_count=2, prominent=True,
+        )
+        assert not home_page._last_visit_card.isHidden()
+        assert not home_page._lv_title.isHidden()
+        assert home_page._lv_title.text() == "Welcome back!"
+        assert "2 alert" in home_page._lv_text.text()
+
+    def test_extended_absence_with_nothing_changed_still_shows_card(self, home_page):
+        home_page.set_last_visit_summary(0, 0, "9 days ago", prominent=True)
+        assert not home_page._last_visit_card.isHidden()
+        assert "nothing changed" in home_page._lv_text.text().lower()
+
+
+class TestComputeLastVisitSummaryProminence:
+    """S9-6: _compute_last_visit_summary in tabs_logger.py sets prominent=True at >=7 days."""
+
+    def _stub(self, monkeypatch, hours_ago: float, n_alerts: int = 0):
+        from unittest.mock import MagicMock
+        import time as _time
+
+        from ui.tabs_logger import _LoggerTabMixin
+
+        class _Stub(_LoggerTabMixin):
+            _home_page = MagicMock()
+            _store = MagicMock()
+
+        stub = _Stub()
+        stub._store.query_all_rtt_hosts.return_value = []
+        stub._store.query_device_events.return_value = []
+        stub._store.get_recent_alerts.return_value = [object()] * n_alerts
+        qs = _FakeQSettings()
+        qs.setValue("app/last_visit_ts", str(int(_time.time() - hours_ago * 3600)))
+        # _compute_last_visit_summary does a local `from PyQt6.QtCore import
+        # QSettings as _QS` at call time, so the patch target must be the real
+        # PyQt6.QtCore module attribute, not the ui.tabs_logger module alias.
+        monkeypatch.setattr("PyQt6.QtCore.QSettings", lambda *a, **kw: qs)
+        return stub
+
+    def test_under_7_days_not_prominent(self, monkeypatch):
+        stub = self._stub(monkeypatch, hours_ago=20)
+        stub._compute_last_visit_summary()
+        _, kwargs = stub._home_page.set_last_visit_summary.call_args
+        assert kwargs.get("prominent") is False
+
+    def test_7_days_or_more_is_prominent(self, monkeypatch):
+        stub = self._stub(monkeypatch, hours_ago=200, n_alerts=3)
+        stub._compute_last_visit_summary()
+        _, kwargs = stub._home_page.set_last_visit_summary.call_args
+        assert kwargs.get("prominent") is True
+        assert kwargs.get("alert_count") == 3

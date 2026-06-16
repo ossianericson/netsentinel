@@ -142,7 +142,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # Speed test page shell — modem signal panel extracted to ui/widgets/modem_signal_panel.py
     # in Sprint 13. If still large, extract history table → speed_test_history.py.
-    "pages/speed_test_page.py": 1723,  # actual 1,523 + 200 margin
+    "pages/speed_test_page.py": 1938,  # Sprint 9: +S9-3 slow-result prompt; actual 1,738 + 200 margin
 
     # Feature guide shell — card widget + data list still in page.
     # Sprint 13 extracted pure _FEATURES data to discover_data.py.
@@ -156,11 +156,11 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Landing page — layout only; all data handlers extracted to home_data_mixin.py (Sprint 15).
     # Sprint 15: _MiniCard, _AlertRow → home_widgets.py; all handlers → home_data_mixin.py;
     #   home_page.py 2,238 → 1,128 lines. Target ≤1,200 achieved.
-    "pages/home_page.py": 1530,  # Sprint H8: +106 lines; v1.9.98: +tip card + pills hint + first-scan banner; Sprint A: hero move + 7-day snooze; Sprint 2: health card; Sprint 5: S5-4 bandwidth hog card; Sprint 6: S6-3 usage insights card
+    "pages/home_page.py": 1735,  # Sprint H8: +106 lines; v1.9.98: +tip card + pills hint + first-scan banner; Sprint A: hero move + 7-day snooze; Sprint 2: health card; Sprint 5: S5-4 bandwidth hog card; Sprint 6: S6-3 usage insights card; Sprint 9: S9-1 advanced settings link + S9-6 prominent last-visit card; actual 1,535 + 200 margin
 
     # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15).
     # Natural split if needed: split update vs. scan result methods.
-    "pages/home_data_mixin.py": 1130,  # actual 1115 after Sprint 6 S6-3 usage insights refresh call
+    "pages/home_data_mixin.py": 1367,  # Sprint 9: +S9-6 _apply_last_visit_style(); actual 1,167 + 200 margin
 
     # home_widgets.py — core animated widgets + grade helpers + _MiniCard/_AlertRow.
     # Sprint 17: FreshnessStrip/GettingStartedCard/_GradeBreakdownDialog/Welcome pages

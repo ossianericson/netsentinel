@@ -283,6 +283,7 @@ netsentinel/
 │       ├── overview_tile.py        # Core tile classes (_BaseTile subclasses), _TILE_CLASSES/_DEFAULT_ORDER
 │       ├── overview_tile_monitor.py # Monitoring-domain tiles: LiveBandwidth, DnsStability, ModemSignal, TopTalkers, RecentEvents, TrendStatus (Sprint 13)
 │       ├── page_header.py          # Standard page header with title, help button, actions bar
+│       ├── help_mode_overlay.py    # HelpModeOverlay — ephemeral 'What can I do here?' tooltip-labelling overlay (Sprint 9, S9-5)
 │       ├── protocol_canvas.py      # QPainter animation engine for protocol diagrams
 │       ├── pulsing_dot.py          # Animated status indicator dot (live/offline)
 │       ├── scan_summary_sheet.py   # Bottom sheet showing scan summary stats

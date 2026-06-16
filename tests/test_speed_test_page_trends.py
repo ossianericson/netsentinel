@@ -11,6 +11,7 @@ except ImportError:
 from ui.pages.speed_test_page import (
     _compute_speed_comparison,
     _format_hour_12h,
+    _is_slow_speed_result,
     _ordinal,
     _rolling_average_download,
     _time_of_day_insight,
@@ -160,3 +161,17 @@ def test_comparison_no_prior_period_omits_trend_clause():
     text = _compute_speed_comparison(history, now, 90.0)
     assert text is not None
     assert "last month" not in text
+
+
+# ── _is_slow_speed_result (S9-3) ────────────────────────────────────────────
+
+def test_is_slow_speed_result_below_threshold():
+    assert _is_slow_speed_result(10.0) is True
+
+
+def test_is_slow_speed_result_above_threshold():
+    assert _is_slow_speed_result(100.0) is False
+
+
+def test_is_slow_speed_result_at_boundary():
+    assert _is_slow_speed_result(25.0) is False

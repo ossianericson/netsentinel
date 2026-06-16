@@ -523,7 +523,7 @@ feature surfacing, contextual one-time discovery prompts, Feature Guide "Recomme
 ## Sprint 9 — Onboarding Redesign
 
 **Theme:** Get users to their first useful result in under 5 minutes
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-16
 
 **Rationale:** The existing onboarding addresses technical setup but doesn't show value first.
 The revision: lead with the first scan result (tangible, immediate), then offer monitoring
@@ -532,41 +532,83 @@ setup, then leave technical configuration in Settings where it belongs.
 Critically: no user-type questionnaire. Self-declared personas are unreliable and create
 mode-confusion. Discover user type from behaviour instead.
 
+**Scoping note:** Sprints 2/3/5/7/8 had already built most of the scan-first onboarding
+surface (`WelcomeOverlay` → "Scan my network", `GettingStartedCard` checklist, the home page's
+post-scan results strip / summary sheet, and a basic "Since you were last here" banner). Sprint 9
+closes the specific gaps the backlog called out rather than rebuilding what already existed.
+
 ### Items
 
-- [ ] **S9-1** Scan-first onboarding — replace the technical setup wizard opening with:
-  - Step 1: One button — "Scan my network" — run first discovery, show device count immediately
-  - Step 2: Show health score for the first time with a one-sentence explanation
-  - Step 3: "Set up your watchdog" — opt into morning briefing, name 1–2 found devices
-  Technical configuration (SMTP, SNMP, API keys) is not part of this flow. It lives in
-  Settings > Advanced and is prominently linked from the onboarding completion screen.
-  Experienced users can skip the flow entirely and go directly to Settings.
+- [x] **S9-1** Scan-first onboarding — audited the existing flow (`WelcomeOverlay`,
+  `GettingStartedCard`, post-scan `_results_strip`/`_post_scan_sheet`) and confirmed steps 1–3
+  were already in place. Closed the one real gap: the setup-complete celebration card
+  (`HomePage._setup_complete_card` in `ui/pages/home_page.py`) had no link to technical
+  configuration. Added an "Advanced settings →" button alongside "Explore features →" / "View
+  this week's summary →", routing to the existing `Settings` nav page.
 
-- [ ] **S9-2** Scan-result-based feature surfacing — after the first scan, surface relevant
-  features based on what was actually found rather than what the user declared about themselves:
-  - Open ports found → link to Port Scan / CVE tracking
-  - Unknown devices found → link to device naming and rogue device alerts
-  - Slow DNS response → link to DNS monitoring and speed test
-  This is behavioural discovery, not persona-declaration.
+- [x] **S9-2** Scan-result-based feature surfacing — extended `_compute_suggestions()` in
+  `ui/tabs_logger.py` (the existing "What to do next" engine) with three new behavioural-discovery
+  entries: unidentified devices found → Devices, open ports found (after a Port Scan) → CVE
+  Tracker, slow DNS response (`DNS Response Speed` benchmark dimension grade D/F) → DNS &
+  Stability. `_on_port_scan_result()` in `ui/scan_wiring.py` now calls `_compute_suggestions()`
+  so the open-ports suggestion appears immediately after a scan, not just on the next full
+  discovery. Tests: `tests/test_home_suggestions.py::TestScanResultBasedSuggestions`.
 
-- [ ] **S9-3** Contextual one-time discovery prompts — surface relevant features when context
-  calls for them, one time only per prompt, dismissible:
-  - After slow speed test: "NetSentinel can track your speed over time. Enable speed history →"
-  - After new unknown device: "Set alerts for unknown devices →"
-  After dismissal or acceptance, prompt never appears again (QSettings key).
+- [x] **S9-3** Contextual one-time discovery prompts — two new prompts, both QSettings-gated via
+  the existing `ui/context_banners.py` (`should_show_banner`/`mark_banner_seen`) so each fires
+  once and never again:
+  - Speed Test page: a slow result (`<25 Mbps`, the same threshold as the home speed mini-card)
+    triggers a one-time banner pointing at the automatic 7-/30-day trend history (S8-4) and
+    Scheduled Scans, via `PageHeaderBar.show_first_visit_banner()` called ad-hoc instead of at
+    construction. Threshold extracted to the pure `_is_slow_speed_result()` helper.
+  - Inventory page: a new dismissible `_unknown_device_prompt` row on the Current Devices card
+    appears the first time unidentified devices are present, with a "Set up alerts →" action that
+    navigates to Custom Triggers (new `InventoryPage.navigate_to` signal, wired in `ui/tabs.py`).
+  Tests: `tests/test_speed_test_page_trends.py` (+3), `tests/test_inventory_page.py` (+4).
 
-- [ ] **S9-4** Feature Guide prioritisation — the existing `FeatureGuidePage` (83 entries) shows
-  a "Recommended for you" section at the top derived from scan history: features relevant to
-  what was found. Already-used features are marked. No persona required — usage data drives this.
+- [x] **S9-4** Feature Guide prioritisation — `FeatureGuidePage` (`ui/pages/discover_page.py`)
+  gained a "Recommended for you" section (top 3 unvisited pages from a new `_RECOMMENDED_PAGES`
+  priority list in `discover_data.py`) and a "✓ Used" badge on any card whose page is in the
+  existing `discover/visited_pages` QSettings set (already populated by `_track_page_visit()` in
+  `ui/nav/builder.py` — no new tracking needed). Recommendations are hidden while searching.
+  Tests: `tests/test_discover_page.py` (new file, 9 tests).
 
-- [ ] **S9-5** "What can I do here?" help mode — a toggle (accessible from the ? button on any
-  page) that overlays brief one-sentence descriptions on each interactive element of the current
-  page. Click to activate, Esc to deactivate. Opt-in, ephemeral. Does not change the default
-  view of any page.
+- [x] **S9-5** "What can I do here?" help mode — new `ui/widgets/help_mode_overlay.py`
+  (`HelpModeOverlay`): a transient full-page overlay that labels every visible widget's existing
+  tooltip text in place; click anywhere or press Esc to dismiss. Wired generically into
+  `PageHeaderBar.set_help()` — every page that already calls `set_help()` gets a "◉ What can I do
+  here?" entry at the top of its `?` popover for free, no per-page work required. Tests:
+  `tests/test_help_mode_overlay.py` (new file, 5 tests).
 
-- [ ] **S9-6** Extended absence recovery — if the app hasn't been opened in 7+ days, show a
-  prominent "welcome back" card: what changed, any new devices, any alerts that fired. Extends
-  the existing "Since you were last here" banner for longer absences.
+- [x] **S9-6** Extended absence recovery — the existing "Since you were last here" card
+  (`_last_visit_card` in `ui/pages/home_page.py`) now swaps to a prominent "Welcome back!" style
+  (accent border, larger icon, title row) via `_apply_last_visit_style()` in `home_data_mixin.py`
+  whenever the gap is 7+ days, and includes an alert count fired during the absence. Under 7 days
+  keeps the original quiet treatment, including hiding the card entirely when nothing changed;
+  7+ days always shows the card, with a "nothing changed" fallback line when there's truly
+  nothing to report. `tabs_logger._compute_last_visit_summary()` computes the `prominent` flag
+  and alert count. Tests: `tests/test_home_suggestions.py::TestExtendedAbsenceRecovery` +
+  `TestComputeLastVisitSummaryProminence` (6 tests).
+
+**New files:** `ui/widgets/help_mode_overlay.py`, `tests/test_discover_page.py`,
+`tests/test_help_mode_overlay.py`
+
+**Commit gate:** `ruff check . --select=F401,F811,F841`, `python -m mypy modules/`,
+`pip-audit -r requirements.txt --desc`, and `python -m pytest tests/ -q` (4066 passed,
+10 skipped) all green; `tools/debug_launch.py` confirmed `Dashboard() instantiated OK` and
+`window.show() called OK` with no unhandled exceptions. Bumped three pre-existing LOC budgets
+in `tests/test_module_loc.py` (`speed_test_page.py`, `home_page.py`, `home_data_mixin.py`) per
+the documented "actual + 200 margin" convention — none crossed a split threshold.
+
+**Not done — live UI walkthrough:** RULE-T6 requires an actual click-through of onboarding/
+first-run flows, not just passing tests. This session verified all six items via unit/widget
+tests plus a clean `debug_launch.py` start; a manual walkthrough (delete `ui/first_run_done` and
+`tour/v1_done`, run a real scan, trigger a slow speed test, etc.) was not performed and should be
+done before relying on this sprint for a Microsoft Store submission claim.
+
+**Sprint 10 planned queue:** Performance, Accessibility & Polish — navigation performance audit,
+colour-blind status indicators, keyboard navigation audit, empty/loading state consistency audits,
+theme consistency audit, in-app feedback entry point.
 
 ---
 

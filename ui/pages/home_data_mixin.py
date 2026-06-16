@@ -17,7 +17,8 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_HOVER, BORDER,
-    GREEN, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    CARD_RADIUS, GREEN, PRO_WARN_BG, RED, TEXT_MUTED, TEXT_PRIMARY,
+    TEXT_SECONDARY, UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
 )
 from ui.widgets.home_widgets import (
     _load_grade_history, _GRADE_HISTORY_KEY, _AlertRow,
@@ -972,8 +973,14 @@ class _HomeDataMixin:
         outage_count: int,
         last_visit_str: str,
         logger_summary: str = "",
+        alert_count: int = 0,
+        prominent: bool = False,
     ) -> None:
-        """Show or hide the 'Since you were last here' banner."""
+        """Show or hide the 'Since you were last here' banner.
+
+        ``prominent`` (S9-6) swaps in a more visible "welcome back" treatment
+        for extended absences (7+ days) — used by tabs_logger._compute_last_visit_summary.
+        """
         parts = []
         if joined_count > 0:
             s = "s" if joined_count != 1 else ""
@@ -981,13 +988,56 @@ class _HomeDataMixin:
         if outage_count > 0:
             s = "s" if outage_count != 1 else ""
             parts.append(f"{outage_count} outage{s} recorded")
+        if alert_count > 0:
+            s = "s" if alert_count != 1 else ""
+            parts.append(f"{alert_count} alert{s} fired")
         if logger_summary:
             parts.append(logger_summary)
-        if not parts:
+
+        if not parts and not prominent:
             self._last_visit_card.setVisible(False)
             return
-        self._lv_text.setText(f"Since {last_visit_str}: {'  ·  '.join(parts)}.")
+
+        self._apply_last_visit_style(prominent)
+        if parts:
+            self._lv_text.setText(f"Since {last_visit_str}: {'  ·  '.join(parts)}.")
+        else:
+            self._lv_text.setText(
+                f"Since {last_visit_str}: nothing changed — your network has been healthy."
+            )
         self._last_visit_card.setVisible(True)
+
+    def _apply_last_visit_style(self, prominent: bool) -> None:
+        """Swap the 'since last visit' card between routine and prominent styles (S9-6)."""
+        if prominent:
+            self._last_visit_card.setStyleSheet(
+                f"QFrame#lastVisitCard {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
+                f" border-left:3px solid {ACCENT}; border-radius:{CARD_RADIUS}; }}"
+            )
+            self._lv_icon.setStyleSheet(
+                f"font-size:18px; color:{ACCENT}; background:transparent; border:none;"
+            )
+            self._lv_title.setText("Welcome back!")
+            self._lv_title.setStyleSheet(
+                f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+                " background:transparent; border:none;"
+            )
+            self._lv_title.setVisible(True)
+            self._lv_text.setStyleSheet(
+                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            )
+        else:
+            self._last_visit_card.setStyleSheet(
+                f"QFrame#lastVisitCard {{ background:{PRO_WARN_BG}; border:1px solid {UPDATE_BAR_BORDER};"
+                f" border-radius:{CARD_RADIUS}; }}"
+            )
+            self._lv_icon.setStyleSheet(
+                f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+            )
+            self._lv_title.setVisible(False)
+            self._lv_text.setStyleSheet(
+                f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+            )
 
     # ── Grade display ─────────────────────────────────────────────────────────
 

@@ -1203,3 +1203,17 @@ _FEATURES: list[dict] = [
     },
 ]
 
+# ── Recommendation priority (S9-4) ──────────────────────────────────────────
+# Page labels considered for the Feature Guide's "Recommended for you" section,
+# in priority order. Purely QSettings-driven (discover/visited_pages) — no
+# store/scan dependency, mirroring the existing home-page suggestion strip in
+# ui/nav/builder.py._DISCOVERY_PAGES.
+_RECOMMENDED_PAGES: list[str] = [
+    "Network Logger",
+    "What's Wrong?",
+    "Network Grade",
+    "Protocol Visualizer",
+    "Lab Mode",
+    "Network Health Report",
+]
+

@@ -145,3 +145,61 @@ def test_drawer_timeline_includes_join_event(store):
         if w:
             texts.append(w.text())
     assert any("JOINED" in t for t in texts)
+
+
+# ── S9-3: unknown-device alert prompt ───────────────────────────────────────
+
+def _unknown_dev(mac, ip):
+    return {
+        "mac": mac, "ip": ip, "hostname": "", "vendor": "",
+        "device_type": "Unknown Device", "risk_level": "UNKNOWN",
+        "confidence": 0.0, "is_gateway": False, "display_state": "",
+        "last_seen_ts": 0,
+    }
+
+
+def test_unknown_device_prompt_shown_when_unknown_present(store, monkeypatch):
+    monkeypatch.setattr(
+        "ui.context_banners.should_show_banner", lambda key: True,
+    )
+    page = _make_page(store)
+    page.set_scan_devices([
+        _dev("aa:bb:cc:00:00:01", "192.168.1.10"),
+        _unknown_dev("aa:bb:cc:00:00:02", "192.168.1.11"),
+    ])
+    assert not page._unknown_device_prompt.isHidden()
+    assert "1" in page._unknown_device_lbl.text()
+
+
+def test_unknown_device_prompt_hidden_when_no_unknown(store, monkeypatch):
+    monkeypatch.setattr(
+        "ui.context_banners.should_show_banner", lambda key: True,
+    )
+    page = _make_page(store)
+    page.set_scan_devices([_dev("aa:bb:cc:00:00:01", "192.168.1.10")])
+    assert page._unknown_device_prompt.isHidden()
+
+
+def test_unknown_device_prompt_respects_dismissal(store, monkeypatch):
+    monkeypatch.setattr(
+        "ui.context_banners.should_show_banner", lambda key: False,
+    )
+    page = _make_page(store)
+    page.set_scan_devices([_unknown_dev("aa:bb:cc:00:00:02", "192.168.1.11")])
+    assert page._unknown_device_prompt.isHidden()
+
+
+def test_unknown_device_alert_click_emits_navigate_to(store, monkeypatch):
+    monkeypatch.setattr(
+        "ui.context_banners.should_show_banner", lambda key: True,
+    )
+    monkeypatch.setattr(
+        "ui.context_banners.mark_banner_seen", lambda key: None,
+    )
+    page = _make_page(store)
+    page.set_scan_devices([_unknown_dev("aa:bb:cc:00:00:02", "192.168.1.11")])
+    received = []
+    page.navigate_to.connect(received.append)
+    page._on_unknown_device_alert_clicked()
+    assert received == ["Custom Triggers"]
+    assert page._unknown_device_prompt.isHidden()

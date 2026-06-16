@@ -559,6 +559,51 @@ class _LoggerTabMixin:
                     "priority": "high",
                 })
 
+        # Unknown devices found (S9-2) — behavioural discovery, not persona-declared
+        if getattr(self, "_m1_result", None):
+            devices = self._m1_result.get("devices", [])
+            unknown = 0
+            for d in devices:
+                dtype = d.device_type if not isinstance(d, dict) else d.get("device_type", "")
+                if (dtype or "").strip().lower() in ("", "unknown", "unknown device"):
+                    unknown += 1
+            if unknown > 0:
+                s = "s" if unknown != 1 else ""
+                suggestions.append({
+                    "action_key": "unknown_devices_found",
+                    "text": f"{unknown} unidentified device{s} on your network — name them or flag as rogue",
+                    "action_label": "View Devices →",
+                    "target": "Devices",
+                    "priority": "medium",
+                })
+
+        # Open ports found (S9-2) — surfaced after a Port Scan, links to CVE review
+        pr = getattr(self, "_last_portscan_result", None)
+        if pr is not None and getattr(pr, "open_ports", None):
+            n = len(pr.open_ports)
+            s = "s" if n != 1 else ""
+            suggestions.append({
+                "action_key": "open_ports_found",
+                "text": f"{n} open port{s} found on your network — check for known vulnerabilities",
+                "action_label": "View CVEs →",
+                "target": "CVE Tracker",
+                "priority": "medium",
+            })
+
+        # Slow DNS response (S9-2) — from the DNS dimension of the last benchmark
+        _bm_dns = getattr(self, "_last_benchmark_result", None)
+        if _bm_dns is not None:
+            for dim in getattr(_bm_dns, "dimensions", []) or []:
+                if getattr(dim, "name", "") == "DNS Response Speed" and getattr(dim, "grade", "") in ("D", "F"):
+                    suggestions.append({
+                        "action_key": "slow_dns_response",
+                        "text": f"DNS response is slow ({dim.value_label}) — every site visit is delayed",
+                        "action_label": "View DNS & Stability →",
+                        "target": "DNS & Stability",
+                        "priority": "medium",
+                    })
+                    break
+
         # Stability logger not running
         if not (self._logger_worker and self._logger_worker.isRunning()):
             suggestions.append({
@@ -673,8 +718,19 @@ class _LoggerTabMixin:
             # Enrich with logger RTT data if available
             logger_summary = self._build_logger_summary(hours_since)
 
+            # S9-6: extended absence (7+ days) gets the prominent "welcome back"
+            # treatment plus an alert count, instead of the routine quiet note.
+            prominent = hours_since >= 168
+            alert_count = 0
+            if prominent:
+                try:
+                    alert_count = len(self._store.get_recent_alerts(hours=hours_since, limit=500))
+                except Exception:
+                    alert_count = 0
+
             self._home_page.set_last_visit_summary(
-                joined_count, outage_count, last_str, logger_summary
+                joined_count, outage_count, last_str, logger_summary,
+                alert_count=alert_count, prominent=prominent,
             )
         except Exception:
             pass  # non-fatal — home page may not be ready
