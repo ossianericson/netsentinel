@@ -325,7 +325,7 @@ _PAGE_HELP: dict[str, dict] = {
         ],
     },
     "IoT Behaviour": {
-        "what": "Learns normal traffic per IoT device and alerts on port scans, new destinations, and traffic rate spikes.",
+        "what": "Learns normal traffic per device — IoT or otherwise — and alerts on port scans, new destinations, and traffic rate spikes.",
         "hidden": [
             "Run the baseline for at least 24 hours before expecting accurate alerts — the model needs time to learn normal behaviour.",
             "Alerts fire when a device contacts a destination it has never used before — common after firmware updates.",

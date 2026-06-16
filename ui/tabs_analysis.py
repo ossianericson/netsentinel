@@ -335,15 +335,16 @@ class _AnalysisTabsMixin:
         lay.setContentsMargins(8, 8, 8, 8)
         lay.addWidget(_page_header(
             "IoT Behaviour",
-            "Compares current IoT device traffic against their normal patterns"
-            " — deviations often indicate compromise or malfunction.",
+            "Compares current traffic for any device against its normal pattern"
+            " — deviations often indicate compromise, malfunction, or unusual activity.",
         ))
         lay.addWidget(NpcapMissingBanner(parent=w))
 
         info = QLabel(
-            "NetSentinel learns what traffic is normal for each IoT device on your network "
-            "(smart speakers, cameras, TVs, etc.) and alerts you if one behaves differently — "
-            "e.g. suddenly port-scanning, contacting an unusual server, or flooding traffic. "
+            "NetSentinel learns what traffic is normal for every device on your network "
+            "— IoT gadgets, laptops, phones, anything with an IP — and alerts you if one "
+            "behaves differently, e.g. suddenly port-scanning, contacting an unusual server, "
+            "flooding traffic, or a normally-quiet device becoming active. "
             "Run a Devices scan first, then click Learn to capture a baseline."
         )
         info.setWordWrap(True)

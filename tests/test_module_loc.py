@@ -97,7 +97,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
     # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1375,  # actual ~1359 after single-render mesh cache startup fix
+    "scan_wiring.py": 1420,  # Sprint 5: S5-1 device naming suggestion toast (+25 lines)
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.
@@ -155,7 +155,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Landing page — layout only; all data handlers extracted to home_data_mixin.py (Sprint 15).
     # Sprint 15: _MiniCard, _AlertRow → home_widgets.py; all handlers → home_data_mixin.py;
     #   home_page.py 2,238 → 1,128 lines. Target ≤1,200 achieved.
-    "pages/home_page.py": 1500,  # Sprint H8: +106 lines; v1.9.98: +tip card + pills hint + first-scan banner; Sprint A: hero move + 7-day snooze; Sprint 2: health card
+    "pages/home_page.py": 1530,  # Sprint H8: +106 lines; v1.9.98: +tip card + pills hint + first-scan banner; Sprint A: hero move + 7-day snooze; Sprint 2: health card; Sprint 5: S5-4 bandwidth hog card
 
     # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15).
     # Natural split if needed: split update vs. scan result methods.

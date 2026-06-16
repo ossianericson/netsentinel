@@ -220,7 +220,7 @@ health summary, bandwidth attribution, behaviour change alerts, per-device histo
 ## Sprint 5 — Device Intelligence & People-Centric Inventory
 
 **Theme:** Devices are people's things, not MAC addresses
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-16 (S5-4/S5-5 partially scoped, see notes)
 
 **Rationale:** The persistent device map is the foundation. This sprint builds the human layer
 on top of it. All technical data remains visible — names and groups are added as an additional
@@ -228,34 +228,64 @@ layer, not a replacement for IP/MAC/OUI.
 
 ### Items
 
-- [ ] **S5-1** Device naming with smart suggestions — when a new device appears, suggest a name
-  based on: mDNS hostname, DHCP hostname, OUI vendor, device type. Suggestion appears as a
-  toast: "New device: Apple iPhone (AC:DE:48) — tap to name it." Accepted names appear
-  alongside (not instead of) the technical identifiers in the Devices table.
+- [x] **S5-1** Device naming with smart suggestions — `modules/device_naming.py`:
+  `suggest_device_name(hostname, vendor, device_type)` priority cascade (real hostname >
+  "vendor type" > vendor > type > generic fallback). Wired in `ui/scan_wiring.py`: the first
+  new device per scan cycle gets an action toast — "New device: Apple iPhone (AC:DE:48) —
+  name it?" — that opens the device drawer with the suggestion pre-filled in the existing
+  User Label field (`_DeviceDrawer.load(mac, store, suggested_label=...)`); accepted names
+  save via the existing `device_annotations.user_label` column and appear alongside (not
+  instead of) MAC/IP in the Devices table. Tests: `tests/test_device_naming.py` (8 tests).
 
-- [ ] **S5-2** Room/owner grouping — allow users to assign devices to user-defined groups:
-  "Living Room", "John's devices", "IoT". The Devices page can filter by these groups via the
-  existing pill filter bar. This is a human taxonomy on top of the existing subnet grouping —
-  both coexist; neither replaces the other.
+- [x] **S5-2** Room/owner grouping — new pill filter bar in `ui/pages/inventory_page.py`
+  below the Segment bar, reusing the existing `device_annotations.location`/`.owner` fields
+  (already editable in the device drawer). A "Room/Owner" combo box switches which dimension
+  the pills group by; pills follow the same multi-select toggle pattern as the Segment bar
+  and combine with it and the "Hide offline" filter. Hidden until at least one device has an
+  assigned group. Tests: `tests/test_inventory_page.py`.
 
-- [ ] **S5-3** Per-device health summary — each named device gets a status: Online / Offline /
-  Slow / Unusual. The Devices page header shows "3 of your 12 devices are showing unusual
-  behaviour" as a top-line summary. Technical details (which ports, what RTT) remain
-  in the table rows exactly as-is.
+- [x] **S5-3** Per-device health summary — `modules/device_health_summary.py`:
+  `classify_device()` derives Online/Offline/Slow/Unusual from data already on each scanned
+  device (display_state freshness + internal risk_level) plus `get_recent_alerts()`, no new
+  persisted columns. Top-line summary label ("3 of your 12 devices need attention" / "All 12
+  devices look healthy") added to the Current Devices card header. Tests:
+  `tests/test_device_health_summary.py` (14 tests).
 
-- [ ] **S5-4** "Who is hogging bandwidth?" instant answer — a card on the home page and a
-  prominent widget on the Live Bandwidth page: "Right now: John's MacBook is using 87% of your
-  bandwidth at 94 Mbps." Requires per-device attribution from `app_traffic_worker.py` surfaced
-  as a human-readable answer. The App Traffic page raw data is unchanged.
+- [x] **S5-4** "Who is hogging bandwidth?" instant answer — `ui/widgets/bandwidth_hog_card.py`
+  (`BandwidthHogCard`) added to the Home page below the ambient health card; `AppTrafficPage`
+  gained a `top_host_changed` signal emitting the top consumer's label/bytes/share each
+  snapshot, wired in `ui/tabs.py`. Shows an empty-state CTA ("Open App Traffic →") until
+  monitoring has been started at least once — deliberately does **not** auto-start packet
+  capture (RULE 4 / least-privilege). **Deferred to a future sprint:** the equivalent
+  prominent widget on the Live Bandwidth page itself (the home card covers the "instant
+  answer" need; the Live Bandwidth integration is additional surface, not blocking).
+  Tests: `tests/test_bandwidth_hog_card.py`, `tests/test_app_traffic_page.py`.
 
-- [ ] **S5-5** Device behaviour change alerts — extend `iot_baseline.py` to all device types.
-  Alert when a normally-inactive device starts making unusual connections: "John's old laptop
-  (usually offline) just connected and is downloading 2 GB. Was this you?" Routes to the
-  App Traffic page pre-filtered to that device.
+- [x] **S5-5** Device behaviour change alerts — `modules/iot_baseline.py`: extracted
+  `_devices_to_monitor()` and dropped the `IOT_DEVICE_TYPES` filter so baselining and
+  anomaly monitoring (NEW_DEST/NEW_PORT/METADATA_PROBE/SYN_SCAN/RATE_SPIKE) now cover any
+  device with an IP+MAC, not only IoT types. IoT Behaviour tab copy updated to reflect the
+  broader scope. **Deferred to a future sprint:** routing a behaviour-change alert straight
+  to the App Traffic page pre-filtered to that device — the existing
+  `_IOT_INVESTIGATE_TARGET` "Investigate →" routing still applies per alert type, just not
+  device-filtered yet. Tests: `tests/test_iot_baseline.py` (new `TestDevicesToMonitor` class).
 
-- [ ] **S5-6** Per-device history timeline — for each named device, a timeline showing: when
-  online, bandwidth used, any security findings. Accessible from right-click context menu on
-  any device row. Additive — does not change the existing row layout.
+- [x] **S5-6** Per-device history timeline — `_DeviceDrawer` gained a Timeline section
+  (`_rebuild_timeline()`) merging `device_event` state changes (JOINED/LEFT/UP/DOWN/...)
+  with the `device_events` annotation-change audit log into one chronological list.
+  Accessible via single-click on any Current Devices row, or right-click → "Edit Device /
+  View Timeline →" — both call the new public `InventoryPage.open_device_drawer()`.
+  Additive — existing row layout and right-click actions unchanged. Tests:
+  `tests/test_inventory_page.py`.
+
+**New files:** `modules/device_naming.py`, `modules/device_health_summary.py`,
+`ui/widgets/bandwidth_hog_card.py`, `tests/test_device_naming.py`,
+`tests/test_device_health_summary.py`, `tests/test_bandwidth_hog_card.py`,
+`tests/test_app_traffic_page.py`, `tests/test_inventory_page.py`
+
+**Sprint 6 planned queue:** Traffic Context & Application-Layer Visibility — picks up the
+deferred Live Bandwidth widget (S5-4) and device-filtered App Traffic routing (S5-5) as part
+of its existing scope (S6-1 traffic category dashboard, S6-2 per-device drill-down).
 
 ---
 

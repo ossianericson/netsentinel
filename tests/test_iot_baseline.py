@@ -23,6 +23,7 @@ from modules.iot_baseline import (
     IoTAlert,
     IoTMonitor,
     IOT_DEVICE_TYPES,
+    _devices_to_monitor,
     _load_baselines,
     _save_baselines,
     inject_into_assessment,
@@ -267,3 +268,43 @@ class TestIotDeviceTypes:
         expected = {"Smart TV", "Smart Speaker", "IP Camera", "IoT Device", "Streaming Stick"}
         for t in expected:
             assert t in IOT_DEVICE_TYPES, f"{t!r} not in IOT_DEVICE_TYPES"
+
+
+# ── _devices_to_monitor (S5-5: extend baselining to all device types) ────────
+
+class TestDevicesToMonitor:
+    def test_includes_non_iot_device_types(self):
+        devices = [
+            {"ip": "192.168.1.20", "mac": "aa:bb:cc:00:00:20",
+             "device_type": "Windows/Mac/Linux PC", "vendor": "Dell"},
+        ]
+        ip_to_mac, ip_to_dtype, _, _ = _devices_to_monitor(devices)
+        assert ip_to_mac == {"192.168.1.20": "aa:bb:cc:00:00:20"}
+        assert ip_to_dtype["192.168.1.20"] == "Windows/Mac/Linux PC"
+
+    def test_includes_classic_iot_types_too(self):
+        devices = [
+            {"ip": "192.168.1.21", "mac": "aa:bb:cc:00:00:21",
+             "device_type": "Smart TV", "vendor": "Sony"},
+        ]
+        ip_to_mac, _, _, _ = _devices_to_monitor(devices)
+        assert "192.168.1.21" in ip_to_mac
+
+    def test_excludes_devices_missing_ip_or_mac(self):
+        devices = [
+            {"ip": "", "mac": "aa:bb:cc:00:00:22", "device_type": "Smart TV"},
+            {"ip": "192.168.1.23", "mac": "", "device_type": "Smart TV"},
+        ]
+        ip_to_mac, _, _, _ = _devices_to_monitor(devices)
+        assert ip_to_mac == {}
+
+    def test_works_with_object_attributes(self):
+        dev = types.SimpleNamespace(
+            ip="192.168.1.24", mac="aa:bb:cc:00:00:24",
+            device_type="Android/iOS Mobile", vendor="Google", model="Pixel",
+        )
+        ip_to_mac, ip_to_dtype, ip_to_vendor, ip_to_model = _devices_to_monitor([dev])
+        assert ip_to_mac["192.168.1.24"] == "aa:bb:cc:00:00:24"
+        assert ip_to_dtype["192.168.1.24"] == "Android/iOS Mobile"
+        assert ip_to_vendor["192.168.1.24"] == "Google"
+        assert ip_to_model["192.168.1.24"] == "Pixel"

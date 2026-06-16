@@ -489,6 +489,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
             self._home_page.add_plugin_requested.connect(
                 lambda p: self._hardware_integration_page._import_bundled(p)
             )
+            self._app_traffic_page.top_host_changed.connect(self._home_page.on_bandwidth_update)
             self._home_page._signals_connected = True
         self._overview_page.navigate_to.connect(self._on_overview_navigate)
         self._overview_page.scan_requested.connect(self._start_full_scan)

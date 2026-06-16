@@ -683,6 +683,31 @@ class ScanResultMixin(ScanEnrichmentMixin):
                             "WARNING",
                         )
                         self._tray_manager.increment_badge()
+                    # ── Naming suggestion toast (S5-1) — only the first new device,
+                    # to avoid spamming a toast per device on a busy scan.
+                    try:
+                        from modules.device_naming import suggest_device_name
+                        first = tr.new_devices[0]
+                        suggested = suggest_device_name(
+                            first.hostname, first.vendor, first.device_type
+                        )
+                        if suggested != "Unnamed Device":
+                            from ui.widgets.toast import ToastManager
+                            _mac = first.mac
+
+                            def _name_it(_checked=False, _mac=_mac, _name=suggested):
+                                self._nav_rail_go_to("Inventory Changes")
+                                if hasattr(self, "_inventory_page"):
+                                    self._inventory_page.open_device_drawer(_mac, _name)
+
+                            ToastManager.show(
+                                f"New device: {suggested} ({first.ip or first.mac}) — name it?",
+                                "action",
+                                action_label="Name it",
+                                action_callback=_name_it,
+                            )
+                    except Exception:
+                        pass  # non-fatal — naming suggestion must never break the scan handler
                 if tr.gone_devices:
                     gone_msgs = [f"{d.ip or d.mac}" for d in tr.gone_devices[:2]]
                     self._set_status(

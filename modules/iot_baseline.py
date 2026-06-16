@@ -1,6 +1,8 @@
 """
-IoT Behavioral Baseline — learns normal traffic patterns for IoT devices
-and raises "Compromised IoT" alerts when behavior deviates.
+Device Behavioral Baseline — learns normal traffic patterns for any device
+on the network (not just IoT) and raises alerts when behavior deviates
+(S5-5: "John's old laptop, usually offline, just connected and is
+downloading 2 GB" is just as relevant a finding as a compromised camera).
 
 How it works
 ────────────
@@ -133,6 +135,36 @@ def _save_baselines(baselines: Dict[str, DeviceBaseline], path: Path) -> None:
 
 # ── Learning phase ─────────────────────────────────────────────────────────────
 
+def _devices_to_monitor(
+    devices: list,
+    device_type_key: str = "device_type",
+) -> "tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str]]":
+    """Build ip→mac/dtype/vendor/model lookup tables for baseline learning.
+
+    S5-5: monitors every device with an ip+mac, not only IOT_DEVICE_TYPES —
+    behaviour-change alerts ("device usually offline suddenly active") are
+    just as relevant to a laptop or desktop as to an IoT appliance.
+    """
+    def _get(obj, key):
+        return obj.get(key, "") if isinstance(obj, dict) else getattr(obj, key, "")
+
+    ip_to_mac:    Dict[str, str] = {}
+    ip_to_dtype:  Dict[str, str] = {}
+    ip_to_vendor: Dict[str, str] = {}
+    ip_to_model:  Dict[str, str] = {}
+
+    for d in devices:
+        ip  = _get(d, "ip");  mac = _get(d, "mac")
+        dtype = _get(d, device_type_key) or _get(d, "device_type")
+        if ip and mac:
+            ip_to_mac[ip]    = mac
+            ip_to_dtype[ip]  = dtype
+            ip_to_vendor[ip] = _get(d, "vendor")
+            ip_to_model[ip]  = _get(d, "model")
+
+    return ip_to_mac, ip_to_dtype, ip_to_vendor, ip_to_model
+
+
 def learn(
     devices: list,
     duration_s: int = 60,
@@ -142,7 +174,7 @@ def learn(
 ) -> Dict[str, DeviceBaseline]:
     """
     Sniff traffic for ``duration_s`` seconds and build/update baselines for
-    every device whose device_type is in IOT_DEVICE_TYPES.
+    every device with an IP and MAC — not just IOT_DEVICE_TYPES (S5-5).
 
     Parameters
     ----------
@@ -163,29 +195,15 @@ def learn(
         _cb("Scapy unavailable — IoT baseline learning requires Scapy + admin/root.")
         return _load_baselines(path)
 
-    def _get(obj, key):
-        return obj.get(key, "") if isinstance(obj, dict) else getattr(obj, key, "")
-
-    # Build lookup tables
-    ip_to_mac:   Dict[str, str] = {}
-    ip_to_dtype: Dict[str, str] = {}
-    ip_to_vendor: Dict[str, str] = {}
-    ip_to_model: Dict[str, str] = {}
-
-    for d in devices:
-        ip  = _get(d, "ip");  mac = _get(d, "mac")
-        dtype = _get(d, device_type_key) or _get(d, "device_type")
-        if ip and mac and dtype in IOT_DEVICE_TYPES:
-            ip_to_mac[ip]   = mac
-            ip_to_dtype[ip] = dtype
-            ip_to_vendor[ip] = _get(d, "vendor")
-            ip_to_model[ip]  = _get(d, "model")
+    ip_to_mac, ip_to_dtype, ip_to_vendor, ip_to_model = _devices_to_monitor(
+        devices, device_type_key
+    )
 
     if not ip_to_mac:
-        _cb("No IoT devices in device list — nothing to learn.")
+        _cb("No devices with both IP and MAC in device list — nothing to learn.")
         return _load_baselines(path)
 
-    _cb(f"Learning baselines for {len(ip_to_mac)} IoT device(s) over {duration_s} s…")
+    _cb(f"Learning baselines for {len(ip_to_mac)} device(s) over {duration_s} s…")
 
     # Accumulate per-IP traffic
     dest_ips:   Dict[str, Set[str]] = defaultdict(set)
@@ -512,8 +530,9 @@ def load_or_create(
     progress_cb: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, DeviceBaseline]:
     """
-    Load existing baselines from disk; for any IoT device not yet baselined,
-    run a short learning pass automatically.
+    Load existing baselines from disk; for any device not yet baselined,
+    run a short learning pass automatically (S5-5: all device types, not
+    just IOT_DEVICE_TYPES).
 
     Returns the full baselines dict.
     """
@@ -525,13 +544,12 @@ def load_or_create(
 
     unlearned = [
         d for d in devices
-        if _get(d, "device_type") in IOT_DEVICE_TYPES
-        and _get(d, "mac") not in baselines
+        if _get(d, "ip") and _get(d, "mac") and _get(d, "mac") not in baselines
     ]
 
     if unlearned:
         _cb = progress_cb or (lambda m: None)
-        _cb(f"{len(unlearned)} IoT device(s) have no baseline — starting {learn_duration_s}s learning pass…")
+        _cb(f"{len(unlearned)} device(s) have no baseline — starting {learn_duration_s}s learning pass…")
         baselines = learn(
             devices=unlearned,
             duration_s=learn_duration_s,

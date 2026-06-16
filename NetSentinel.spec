@@ -110,6 +110,8 @@ hiddenimports: list = [
     "modules.cve_lookup",
     "modules.deco_client",
     "modules.device_classifier",
+    "modules.device_health_summary",
+    "modules.device_naming",
     "modules.device_stability",
     "modules.device_tracker",
     "modules.dhcp_detector",
@@ -317,6 +319,7 @@ hiddenimports: list = [
     "ui.widgets.scan_summary_sheet",
     "ui.widgets.skeleton",
     "ui.widgets.toast",
+    "ui.widgets.bandwidth_hog_card",
     # ── Scapy 802.11 layer (M9 — wifi_monitor_worker) ─────────────────────────
     "scapy.layers.dot11",
     # ── waitress WSGI server (REST API production backend) ────────────────────

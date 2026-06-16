@@ -53,6 +53,8 @@ netsentinel/
 │   ├── cve_lookup.py
 │   ├── deco_client.py          # TP-Link Deco XE75 mesh router API client
 │   ├── device_classifier.py    # OUI → device type + risk score
+│   ├── device_health_summary.py # Per-device Online/Offline/Slow/Unusual classification (Sprint 5, S5-3)
+│   ├── device_naming.py        # Smart device name suggestions from hostname/vendor/type (Sprint 5, S5-1)
 │   ├── device_stability.py     # IP stability scoring + role inference engine (persistent device map)
 │   ├── device_tracker.py
 │   ├── dhcp_detector.py
@@ -263,6 +265,7 @@ netsentinel/
 │       ├── hub_card.py             # HubCard, PipInstallDialog and all plugin helpers
 │       ├── hub_helpers.py          # Pure data-persistence and utility helpers extracted from hub_card.py (no widget logic)
 │       ├── health_status_card.py   # HealthStatusCard — full-width ambient health card with sparkline for HomePage (Sprint 2)
+│       ├── bandwidth_hog_card.py   # BandwidthHogCard — "who's hogging bandwidth?" home page card (Sprint 5, S5-4)
 │       ├── jargon_tooltip.py       # JargonTooltip — underlined QLabel with hover definition from glossary.json (Sprint A4)
 │       ├── kpi_bar.py              # _KpiBarMixin — four KPI tiles for the Devices page (Sprint 13 split)
 │       ├── objective_badge.py      # ObjectiveBadge — compact exam-objective pill badge (N+/CCNA/Sec+) for Lab Mode and Protocol Viz (Sprint B3)

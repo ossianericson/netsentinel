@@ -601,8 +601,9 @@ _FEATURES: list[dict] = [
         "icon": "◑",
         "name": "IoT Behaviour Baseline",
         "desc": (
-            "Learns normal traffic patterns for IoT devices and alerts when behaviour "
-            "changes — new destination IPs, new ports, or unusual traffic spikes."
+            "Learns normal traffic patterns for any device and alerts when behaviour "
+            "changes — new destination IPs, new ports, unusual traffic spikes, or a "
+            "normally-quiet device suddenly becoming active."
         ),
         "page": "IoT Behaviour",
         "requires": "Npcap",

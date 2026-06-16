@@ -53,6 +53,7 @@ from ui.widgets.home_session_widgets import (
     StandardWelcomePage, ProWelcomePage,  # noqa: F401 — re-exported for test imports
 )
 from ui.widgets.health_status_card import HealthStatusCard
+from ui.widgets.bandwidth_hog_card import BandwidthHogCard
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -85,6 +86,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         """Delegate HealthWorker results to the ambient health card."""
         if hasattr(self, "_health_card"):
             self._health_card.on_health_update(snapshot)
+
+    # ── Public slot for bandwidth hog card (S5-4) ─────────────────────────────
+
+    def on_bandwidth_update(self, payload: dict) -> None:
+        """Delegate AppTrafficPage.top_host_changed results to the bandwidth card."""
+        if hasattr(self, "_bandwidth_card"):
+            self._bandwidth_card.on_bandwidth_update(payload)
 
     # ── Constructor ───────────────────────────────────────────────────────────
 
@@ -303,6 +311,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._health_card = HealthStatusCard()
         self._health_card.navigate_to.connect(self.navigate_to)
         lay.addWidget(self._health_card)
+
+        # ── S5-4: "Who's hogging bandwidth?" card ──────────────────────────────
+        self._bandwidth_card = BandwidthHogCard()
+        self._bandwidth_card.navigate_to.connect(self.navigate_to)
+        lay.addWidget(self._bandwidth_card)
 
         # ── Browser dashboard strip (visible when API enabled + not dismissed) ─
         self._dashboard_strip = QFrame()

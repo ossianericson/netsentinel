@@ -467,13 +467,20 @@ class _DeviceDrawer(QFrame):
         self._ip_history_body.setSpacing(2)
         lay.addLayout(self._ip_history_body)
 
+        # ── Timeline section (S5-6) ───────────────────────────────────────────
+        _sep()
+        _section_hdr("Timeline")
+        self._timeline_body = QVBoxLayout()
+        self._timeline_body.setSpacing(2)
+        lay.addLayout(self._timeline_body)
+
         lay.addStretch()
 
         self._anim = QPropertyAnimation(self, b"geometry", self)
         self._anim.setDuration(180)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-    def load(self, mac: str, store: "Optional[MetricStore]") -> None:
+    def load(self, mac: str, store: "Optional[MetricStore]", suggested_label: str = "") -> None:
         self._current_mac   = mac
         self._current_store = store
         self._title_lbl.setText("Device")
@@ -562,7 +569,8 @@ class _DeviceDrawer(QFrame):
         try:
             from modules.device_tracker import get_annotations as _get_ann
             ann = _get_ann(mac, store)
-            self._ann_label.setText(ann.get("user_label", ""))
+            existing_label = ann.get("user_label", "")
+            self._ann_label.setText(existing_label or suggested_label)
             self._ann_location.setText(ann.get("location", ""))
             self._ann_owner.setText(ann.get("owner", ""))
             self._ann_tag.setText(ann.get("asset_tag", ""))
@@ -572,6 +580,9 @@ class _DeviceDrawer(QFrame):
 
         # ── IP History ────────────────────────────────────────────────────────
         self._rebuild_ip_history(mac, store)
+
+        # ── Timeline (S5-6) ───────────────────────────────────────────────────
+        self._rebuild_timeline(mac, store)
 
     def _clear_type_override(self) -> None:
         if not self._current_store or not self._current_mac:
@@ -607,6 +618,64 @@ class _DeviceDrawer(QFrame):
             )
             row_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
             self._ip_history_body.addWidget(row_lbl)
+
+    def _rebuild_timeline(self, mac: str, store: "Optional[MetricStore]") -> None:
+        """Clear and repopulate the combined device timeline (S5-6).
+
+        Merges device_event state changes (JOINED/LEFT/UP/DOWN/...) with the
+        device_events annotation-change audit log into one chronological list.
+        """
+        while self._timeline_body.count():
+            item = self._timeline_body.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+        if store is None:
+            return
+
+        entries: list = []  # (epoch, display text)
+
+        try:
+            for e in store.query_device_events(hours=720, event_types=None):
+                if (e.mac or "").lower() != mac.lower():
+                    continue
+                ts_str = datetime.datetime.fromtimestamp(e.ts).strftime("%Y-%m-%d %H:%M")
+                entries.append((float(e.ts), f"{ts_str}  ·  {e.event_type}"))
+        except Exception:
+            pass  # non-fatal — event history unavailable
+
+        try:
+            import calendar as _cal
+            from modules.device_tracker import get_device_events as _get_events
+            for ev in _get_events(mac, store, limit=20):
+                try:
+                    dt = datetime.datetime.strptime(ev["ts"], "%Y-%m-%d %H:%M:%S")
+                    epoch = float(_cal.timegm(dt.timetuple()))
+                except (ValueError, TypeError):
+                    epoch = 0.0
+                label = ev["event_type"].replace("_", " ").title()
+                change = (
+                    f"{ev['old_value']} → {ev['new_value']}"
+                    if ev["old_value"] or ev["new_value"] else ""
+                )
+                text = f"{ev['ts'][:16]}  ·  {label}"
+                if change:
+                    text += f"  ({change})"
+                entries.append((epoch, text))
+        except Exception:
+            pass  # non-fatal — audit table may not exist on schema upgrade
+
+        if not entries:
+            empty = QLabel("No timeline events recorded yet")
+            empty.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; padding:2px 0;")
+            self._timeline_body.addWidget(empty)
+            return
+
+        entries.sort(key=lambda t: t[0], reverse=True)
+        for _, text in entries[:15]:
+            row_lbl = QLabel(text)
+            row_lbl.setWordWrap(True)
+            row_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY};")
+            self._timeline_body.addWidget(row_lbl)
 
     def _save_annotations(self) -> None:
         if not self._current_mac or not self._current_store:
@@ -942,6 +1011,10 @@ class InventoryPage(QWidget):
         self._active_seg_ids: Optional[set] = None  # None = show all
         self._seg_pills: dict = {}           # {segment_id_or_cidr: QPushButton}
         self._hide_offline: bool = False     # when True, hide cached/stale rows
+        self._group_dim: str = "location"    # "location" (Room) or "owner" (S5-2)
+        self._active_group_keys: Optional[set] = None  # None = show all
+        self._group_pills: dict = {}         # {group_key: QPushButton}
+        self._current_annotations: dict = {}  # {mac: {user_label, location, owner, ...}}
         self._auto_timer = QTimer(self)
         self._auto_timer.setInterval(self.REFRESH_MS)
         self._auto_timer.timeout.connect(self._refresh)
@@ -1058,6 +1131,50 @@ class InventoryPage(QWidget):
         seg_bar_outer.addWidget(self._seg_scroll, 1)
         cl.addWidget(self._seg_bar_frame)
 
+        # ── Room/Owner group filter bar (S5-2, hidden until annotations exist) ─
+        self._group_bar_frame = QFrame()
+        self._group_bar_frame.setVisible(False)
+        self._group_bar_frame.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:{CARD_RADIUS}; padding:4px 8px; }}"
+        )
+        group_bar_outer = QHBoxLayout(self._group_bar_frame)
+        group_bar_outer.setContentsMargins(8, 4, 8, 4)
+        group_bar_outer.setSpacing(6)
+        _group_lbl = QLabel("Group:")
+        _group_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            f" background:transparent; border:none; padding-right:6px;"
+        )
+        group_bar_outer.addWidget(_group_lbl)
+        self._group_dim_combo = QComboBox()
+        self._group_dim_combo.addItem("Room", "location")
+        self._group_dim_combo.addItem("Owner", "owner")
+        self._group_dim_combo.setFixedHeight(24)
+        self._group_dim_combo.setStyleSheet(
+            f"QComboBox {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; padding:0 6px;"
+            f" font-size:11px; }}"
+        )
+        self._group_dim_combo.currentIndexChanged.connect(self._on_group_dim_changed)
+        group_bar_outer.addWidget(self._group_dim_combo)
+        self._group_scroll = QScrollArea()
+        self._group_scroll.setWidgetResizable(True)
+        self._group_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._group_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._group_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._group_scroll.setFixedHeight(36)
+        self._group_scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+        _group_inner = QWidget()
+        _group_inner.setStyleSheet("background:transparent;")
+        self._group_pill_row = QHBoxLayout(_group_inner)
+        self._group_pill_row.setContentsMargins(0, 2, 0, 2)
+        self._group_pill_row.setSpacing(6)
+        self._group_pill_row.addStretch()
+        self._group_scroll.setWidget(_group_inner)
+        group_bar_outer.addWidget(self._group_scroll, 1)
+        cl.addWidget(self._group_bar_frame)
+
         # ── Current Devices snapshot card ──────────────────────────────────────
         snap_card = QFrame()
         snap_card.setObjectName("snapCard")
@@ -1104,6 +1221,15 @@ class InventoryPage(QWidget):
         snap_hdr_lay.addWidget(self._snap_count_lbl)
         snap_card_lay.addWidget(snap_hdr)
 
+        # ── Health summary top-line (S5-3) ─────────────────────────────────────
+        self._health_summary_lbl = QLabel("")
+        self._health_summary_lbl.setVisible(False)
+        self._health_summary_lbl.setStyleSheet(
+            f"font-size:10px; color:{TEXT_SECONDARY}; background:{BG_ALT_ROW};"
+            f" border:none; border-bottom:1px solid {BORDER}; padding:4px 10px;"
+        )
+        snap_card_lay.addWidget(self._health_summary_lbl)
+
         cols_snap = ["●", "Segment", "IP Address", "Label", "Hostname", "MAC Address", "Manufacturer", "Type", "Risk"]
         self._snap_table = QTableWidget(0, len(cols_snap))
         self._snap_table.setHorizontalHeaderLabels(cols_snap)
@@ -1145,6 +1271,7 @@ class InventoryPage(QWidget):
         self._snap_table.customContextMenuRequested.connect(
             self._snap_table_context_menu
         )
+        self._snap_table.itemClicked.connect(self._on_snap_row_clicked)
         self._snap_table.setMaximumHeight(200)
         snap_card_lay.addWidget(self._snap_table)
 
@@ -1780,6 +1907,8 @@ class InventoryPage(QWidget):
             self._snap_empty_lbl.setVisible(True)
             self._snap_count_lbl.setText("Run a scan to see all devices")
             self._seg_bar_frame.setVisible(False)
+            self._group_bar_frame.setVisible(False)
+            self._health_summary_lbl.setVisible(False)
             return
 
         from modules.device_classifier import classify_device
@@ -1795,6 +1924,7 @@ class InventoryPage(QWidget):
                 _annotations = _get_all_ann(self._store)
             except Exception:
                 pass  # non-fatal — table may not exist on first run
+        self._current_annotations = _annotations
 
         # Load all overrides once for the confidence indicator
         _overrides: dict = {}
@@ -1886,6 +2016,12 @@ class InventoryPage(QWidget):
             dot_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             # Store display_state so _apply_segment_filter can hide offline rows
             dot_item.setData(Qt.ItemDataRole.UserRole + 1, _display_state)
+            # Store (location, owner) so the group pill bar can filter by either (S5-2)
+            _ann = _annotations.get(mac.lower(), {})
+            dot_item.setData(
+                Qt.ItemDataRole.UserRole + 2,
+                (_ann.get("location", ""), _ann.get("owner", "")),
+            )
             self._snap_table.setItem(row, 0, dot_item)
 
             # Col 1: segment colour dot
@@ -1918,6 +2054,9 @@ class InventoryPage(QWidget):
 
         self._snap_table.setSortingEnabled(True)
 
+        # Rebuild Room/Owner group pills from the freshly stored annotations (S5-2)
+        self._rebuild_group_pills()
+
         # Apply current segment filter (hide rows not in active segments)
         self._apply_segment_filter()
 
@@ -1930,9 +2069,28 @@ class InventoryPage(QWidget):
         self._snap_table.setVisible(True)
         self._snap_empty_lbl.setVisible(False)
 
+        # ── Health summary top-line (S5-3) ─────────────────────────────────────
+        try:
+            from modules.device_health_summary import summarize_devices, summary_line
+            recent_alerts = self._store.get_recent_alerts(hours=24.0) if self._store else []
+            health_results = summarize_devices(devices, recent_alerts)
+            self._health_summary_lbl.setText(summary_line(health_results))
+            self._health_summary_lbl.setVisible(True)
+        except Exception:
+            self._health_summary_lbl.setVisible(False)  # non-fatal
+
         # Switch to content view if still on empty state
         if self._content_stack.currentIndex() == 0:
             self._content_stack.setCurrentIndex(1)
+
+    def _on_snap_row_clicked(self, item: QTableWidgetItem) -> None:
+        """Single-click a Current Devices row to open its drawer (S5-6)."""
+        if not self._store or item is None:
+            return
+        mac_item = self._snap_table.item(item.row(), 5)  # col 5 = MAC Address
+        mac = mac_item.text().strip() if mac_item else ""
+        if mac and mac != "—":
+            self.open_device_drawer(mac)
 
     def _snap_table_context_menu(self, pos) -> None:
         """Right-click context menu for the Current Devices snapshot table."""
@@ -1960,12 +2118,16 @@ class InventoryPage(QWidget):
                 pass  # non-fatal
 
         menu = QMenu(self)
+        act_drawer   = menu.addAction("Edit Device / View Timeline →")
+        menu.addSeparator()
         act_override = menu.addAction("Override Device Type…")
         act_clear    = menu.addAction("Clear Type Override")
         act_clear.setEnabled(bool(current_override))
 
         action = menu.exec(self._snap_table.viewport().mapToGlobal(pos))
-        if action == act_override and self._store:
+        if action == act_drawer and self._store:
+            self.open_device_drawer(mac)
+        elif action == act_override and self._store:
             dlg = _TypeOverrideDialog(mac, raw_dtype, current_override, self._store, self)
             if dlg.exec() == QDialog.DialogCode.Accepted:
                 self.set_scan_devices(self._scan_devices)
@@ -2135,6 +2297,17 @@ class InventoryPage(QWidget):
                 if row_key not in self._active_seg_ids:
                     hidden = True
 
+            # Room/Owner group filter (S5-2): hide rows not in the active group set
+            if not hidden and self._active_group_keys is not None:
+                dot_item = self._snap_table.item(row, 0)
+                _loc_owner = (
+                    dot_item.data(Qt.ItemDataRole.UserRole + 2) if dot_item else None
+                ) or ("", "")
+                _idx = 0 if self._group_dim == "location" else 1
+                row_group = (_loc_owner[_idx] or "").strip() or "Unassigned"
+                if row_group not in self._active_group_keys:
+                    hidden = True
+
             self._snap_table.setRowHidden(row, hidden)
 
     def _open_seg_context(self, seg) -> None:
@@ -2160,6 +2333,88 @@ class InventoryPage(QWidget):
                     pass  # non-fatal — DB write failure should not crash the UI
                 self._rebuild_segment_pills(self._current_segments)
                 self.set_scan_devices(self._scan_devices)
+
+    # ── Room/Owner group pills (S5-2) ───────────────────────────────────────────
+
+    def _on_group_dim_changed(self, _idx: int) -> None:
+        self._group_dim = self._group_dim_combo.currentData()
+        self._active_group_keys = None
+        self._rebuild_group_pills()
+        self._apply_segment_filter()
+
+    def _group_value(self, mac: str) -> str:
+        ann = self._current_annotations.get(mac.lower(), {})
+        return (ann.get(self._group_dim, "") or "").strip()
+
+    def _rebuild_group_pills(self) -> None:
+        """Rebuild the Room/Owner pill bar from devices in the current scan."""
+        while self._group_pill_row.count() > 1:  # keep trailing stretch
+            item = self._group_pill_row.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+        self._group_pills.clear()
+
+        counts: dict = {}
+        for d in self._scan_devices:
+            mac = (d.mac if not isinstance(d, dict) else d.get("mac", "")) or ""
+            key = self._group_value(mac) or "Unassigned"
+            counts[key] = counts.get(key, 0) + 1
+
+        # Only show the bar once at least one device has a group assigned
+        if not counts or set(counts) == {"Unassigned"}:
+            self._group_bar_frame.setVisible(False)
+            return
+
+        all_count = len(self._scan_devices)
+        all_pill = self._make_seg_pill(
+            f"All ({all_count})", None, active=self._active_group_keys is None
+        )
+        all_pill.clicked.connect(lambda: self._toggle_group(None))
+        self._group_pill_row.insertWidget(0, all_pill)
+        self._group_pills["__all__"] = all_pill
+
+        for idx, key in enumerate(sorted(counts)):
+            pill = self._make_seg_pill(
+                f"{key} ({counts[key]})",
+                None,
+                active=(self._active_group_keys is not None and key in self._active_group_keys),
+            )
+            pill.clicked.connect(lambda _c=False, k=key: self._toggle_group(k))
+            self._group_pill_row.insertWidget(idx + 1, pill)
+            self._group_pills[key] = pill
+
+        self._group_bar_frame.setVisible(True)
+
+    def _toggle_group(self, group_key: Optional[str]) -> None:
+        """Toggle a group pill; None = select all (clear filter)."""
+        if group_key is None:
+            self._active_group_keys = None
+            for key, btn in self._group_pills.items():
+                active = key == "__all__"
+                btn.setChecked(active)
+                self._apply_pill_style(btn, None, active)
+        else:
+            if self._active_group_keys is None:
+                self._active_group_keys = {group_key}
+            elif group_key in self._active_group_keys:
+                self._active_group_keys.discard(group_key)
+                if not self._active_group_keys:
+                    self._active_group_keys = None
+            else:
+                self._active_group_keys.add(group_key)
+
+            all_active = self._active_group_keys is None
+            if "__all__" in self._group_pills:
+                self._group_pills["__all__"].setChecked(all_active)
+                self._apply_pill_style(self._group_pills["__all__"], None, all_active)
+            for key, btn in self._group_pills.items():
+                if key == "__all__":
+                    continue
+                active = (self._active_group_keys is not None and key in self._active_group_keys)
+                btn.setChecked(active)
+                self._apply_pill_style(btn, None, active)
+
+        self._apply_segment_filter()
 
     # ── Detail panel ──────────────────────────────────────────────────────────
 
@@ -2278,6 +2533,14 @@ class InventoryPage(QWidget):
     def focus_on_host(self, ip: str, mac: str = "") -> None:
         """Navigate to and highlight the device matching ip or mac (cross-page API)."""
         self.select_device(ip or mac)
+
+    def open_device_drawer(self, mac: str, suggested_label: str = "") -> None:
+        """Open the device drawer for *mac* (cross-page API — S5-1 naming toast)."""
+        if not mac:
+            return
+        self._device_drawer.load(mac, self._store, suggested_label=suggested_label)
+        if not self._device_drawer.isVisible():
+            self._device_drawer.open_drawer()
 
     def select_device(self, ip_or_mac: str) -> None:
         """DEVICE-1: Navigate to and select the row matching ip_or_mac (IP or MAC address)."""

@@ -105,6 +105,9 @@ class AppTrafficPage(QWidget):
     """Per-host application-layer traffic breakdown."""
 
     scan_requested = pyqtSignal()   # RULE-UX5 compatibility (not used here)
+    #: Emitted on every snapshot with the top bandwidth consumer (S5-4).
+    #: Payload: {"label": str, "bytes_total": int, "share_pct": float, "window_s": float}
+    top_host_changed = pyqtSignal(object)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -331,6 +334,22 @@ class AppTrafficPage(QWidget):
             f"Monitoring  •  {_INTERVAL_S:.0f} s window  •  "
             f"{len(self._snapshots)} host(s) active"
         )
+        self._emit_top_host()
+
+    def _emit_top_host(self) -> None:
+        """Emit the current top bandwidth consumer for the home page card (S5-4)."""
+        if not self._snapshots:
+            return
+        total = sum(h.total_bytes for h in self._snapshots.values())
+        if total <= 0:
+            return
+        top = max(self._snapshots.values(), key=lambda h: h.total_bytes)
+        self.top_host_changed.emit({
+            "label": top.label or top.mac,
+            "bytes_total": top.total_bytes,
+            "share_pct": (top.total_bytes / total * 100) if total else 0.0,
+            "window_s": top.window_s,
+        })
 
     def _on_error(self, msg: str) -> None:
         self._ax.clear()
