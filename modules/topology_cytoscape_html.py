@@ -108,6 +108,9 @@ var focusMode      = false;
 var changesVisible = false;
 var layoutLocked   = false;   // true when user presses "Lock Layout"
 var _layoutRunning = false;   // true while a layout animation is active
+var _activeLayout  = null;    // handle to the in-flight layout, if any — lets
+                               // setPresetPositions() forcibly stop it instead
+                               // of being silently dropped by _layoutRunning
 
 // Data injected by Python at HTML-build time
 var elements   = __ELEMENTS__;
@@ -190,10 +193,12 @@ if (layoutName !== 'preset') {
   var _initOpts = _makeLayoutOpts(layoutName, false);
   _initOpts.stop = function() {
     _layoutRunning = false;
+    _activeLayout  = null;
     _pinInfrastructure();
     cy.fit(undefined, 50);
   };
-  cy.layout(_initOpts).run();
+  _activeLayout = cy.layout(_initOpts);
+  _activeLayout.run();
 } else {
   _pinInfrastructure();
   cy.fit(undefined, 50);
@@ -329,15 +334,17 @@ function _runIncrementalLayout(newIds) {
   if (!newNodes.length) return;
   _layoutRunning = true;
   cy.nodes().not(newNodes).lock();
-  newNodes.layout({
+  _activeLayout = newNodes.layout({
     name: 'cose', animate: false, randomize: false,
     gravity: 80, nodeRepulsion: 5000, numIter: 250, coolingFactor: 0.97,
     stop: function() {
       cy.nodes().unlock();
       _pinInfrastructure();
       _layoutRunning = false;
+      _activeLayout  = null;
     }
-  }).run();
+  });
+  _activeLayout.run();
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -412,8 +419,25 @@ window.exportPng = function() {
 // Apply Python-computed geometric positions without running a physics layout.
 // posMap: { "node_id": {"x": number, "y": number}, ... }
 // Nodes absent from posMap keep their current position.
+//
+// These positions are always authoritative (the caller already decided the
+// graph needs a clean reflow), so — unlike setLayout()/resetLayout() — this
+// does NOT defer to _layoutRunning. It forcibly stops whatever physics pass
+// is in flight instead. This matters because _runIncrementalLayout() kicks
+// off an unanimated cose pass for any batch of 6+ new nodes (e.g. mesh nodes
+// or devices appearing right after a scan), and Cytoscape's cose layout
+// ticks across animation frames internally even with animate:false — so it
+// is often still running moments later when network_map_page.py calls this
+// right after window.updateTopology(). Deferring to _layoutRunning here
+// would silently drop that automatic resync, leaving devices spiraled in
+// around the gateway until the user manually re-picks a layout.
 window.setPresetPositions = function(posMap) {
-  if (layoutLocked || _layoutRunning) return;
+  if (layoutLocked) return;
+  if (_activeLayout) {
+    try { _activeLayout.stop(); } catch (e) { /* already finished */ }
+    _activeLayout = null;
+  }
+  _layoutRunning = false;
   cy.nodes().unlock();
   cy.batch(function() {
     cy.nodes().forEach(function(n) {

@@ -95,6 +95,56 @@ def test_cytoscape_html_contains_update_topology_function():
     assert "window.updateTopology" in html
 
 
+def test_set_preset_positions_does_not_defer_to_layout_running():
+    """Regression: window.setPresetPositions() must not be gated by _layoutRunning.
+
+    _runIncrementalLayout() kicks off an unanimated cose pass for any batch of
+    6+ new nodes (e.g. mesh nodes or devices appearing right after a scan).
+    Cytoscape's cose layout ticks across animation frames internally even with
+    animate:false, so it is often still "running" the moment
+    network_map_page.py calls setPresetPositions() right after
+    window.updateTopology() to push a corrected geometric layout. If
+    setPresetPositions deferred to _layoutRunning like setLayout()/
+    resetLayout() do, that automatic resync would silently no-op, leaving
+    devices spiraled in around the gateway until the user manually re-picked
+    a layout from the toolbar.
+    """
+    from modules.topology_cytoscape_html import build_cytoscape_html
+
+    html = build_cytoscape_html([])
+    start = html.index("window.setPresetPositions = function")
+    end   = html.index("};", start)
+    fn_body = html[start:end]
+
+    assert "if (layoutLocked || _layoutRunning)" not in fn_body, (
+        "setPresetPositions must not gate on _layoutRunning — it must always "
+        "be able to override an in-flight incremental physics pass"
+    )
+    # It may still reset _layoutRunning = false as part of forcibly clearing
+    # the in-flight layout, but must never branch on its truthiness.
+    import re
+    assert not re.search(r"_layoutRunning\s*\)", fn_body), (
+        "setPresetPositions must not branch on _layoutRunning"
+    )
+    assert "layoutLocked" in fn_body, (
+        "setPresetPositions must still respect the user's explicit Lock Layout toggle"
+    )
+
+
+def test_active_layout_is_tracked_and_stoppable():
+    """Regression: any layout that can race with setPresetPositions must be
+    tracked in _activeLayout so it can be forcibly stopped, not just flagged."""
+    from modules.topology_cytoscape_html import build_cytoscape_html
+
+    html = build_cytoscape_html([])
+    assert "var _activeLayout" in html
+    assert "_activeLayout = newNodes.layout(" in html, (
+        "_runIncrementalLayout's constrained cose pass must be tracked in "
+        "_activeLayout so setPresetPositions can stop it"
+    )
+    assert "_activeLayout.stop()" in html
+
+
 def test_cytoscape_html_gravity_setting():
     """The cose layout opts include gravity:120 to prevent rightward drift."""
     from modules.topology_cytoscape_html import build_cytoscape_html

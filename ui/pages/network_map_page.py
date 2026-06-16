@@ -24,7 +24,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import QObject, QSettings, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, QSettings, Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -153,6 +153,18 @@ class NetworkMapPage(QWidget):
         # window.updateTopology() to preserve node positions instead of
         # reloading the entire page (which resets layout and causes drift).
         self._topology_loaded = False
+        # Node ids present in the live Cytoscape graph as of the last full
+        # build or incremental update. Scan results, mesh enrichment, and LLDP
+        # data each arrive via separate render() calls in no guaranteed order.
+        # Whichever lands first does the full geometric layout (geo_hierarchy
+        # etc); whichever lands later is an incremental update that only
+        # spirals the *new* node ids in via JS around the gateway — it never
+        # re-runs the Python hierarchy algorithm, so the late-arriving group
+        # ends up flat and mis-parented instead of nested under its real
+        # parent. Tracked so that any update introducing node ids not yet in
+        # this set can force one full geometric recompute, instead of leaving
+        # the graph half-reflowed until the user manually re-picks a layout.
+        self._known_node_ids: set = set()
 
         self._build_ui()
 
@@ -504,6 +516,7 @@ class NetworkMapPage(QWidget):
         if hasattr(self, "_stale_label"):
             if self._stale_label.isVisible():
                 self._topology_loaded = False  # force full rebuild on cache→live transition
+                self._known_node_ids = set()
             self._stale_label.setVisible(False)
 
         # Show LLDP admin hint on Interactive tab when rights needed and no neighbors
@@ -641,6 +654,14 @@ class NetworkMapPage(QWidget):
         if not kw:
             return
 
+        from modules.topology_cytoscape import build_cytoscape_elements  # noqa: PLC0415
+
+        def _node_ids(elements: list) -> set:
+            return {
+                el["data"]["id"] for el in elements
+                if el.get("group") == "nodes" and "id" in el.get("data", {})
+            }
+
         if not self._topology_loaded:
             # ── Full initial render ───────────────────────────────────────────
             scan_id      = self._scan_id
@@ -683,6 +704,24 @@ class NetworkMapPage(QWidget):
                 )
                 self._web_view.setHtml(html)
                 self._topology_loaded = True
+                try:
+                    full_result = build_cytoscape_elements(
+                        devices=kw.get("devices", []),
+                        edges=kw.get("edges"),
+                        diff=diff,
+                        lldp_neighbors=kw.get("lldp_neighbors"),
+                        segments=kw.get("segments"),
+                        gateway_ip=kw.get("gateway_ip"),
+                        gateway_mac=kw.get("gateway_mac"),
+                        mesh_units=kw.get("mesh_units"),
+                        mesh_enrichment=kw.get("mesh_enrichment"),
+                        modem_data=kw.get("modem_data"),
+                        down_ips=kw.get("down_ips"),
+                        new_ips=kw.get("new_ips"),
+                    )
+                    self._known_node_ids = _node_ids(full_result["elements"])
+                except Exception:
+                    self._known_node_ids = set()
             except Exception:
                 log.debug("network_map_page: Cytoscape HTML build failed", exc_info=True)
         else:
@@ -708,6 +747,43 @@ class NetworkMapPage(QWidget):
                 )
             except Exception:
                 log.debug("network_map_page: incremental update failed", exc_info=True)
+                return
+
+            # Scan results, mesh enrichment, and LLDP neighbors each arrive via
+            # separate render() calls in no guaranteed order. Whichever group
+            # of nodes lands first gets the full geometric layout; whichever
+            # lands later only has its node ids spiraled in around the gateway
+            # by JS — never re-parented under their real structural parent
+            # (mesh node, segment, etc). Detect that growth and force one
+            # geometric recompute, matching what manually re-picking a layout
+            # from the toolbar already does.
+            new_ids = _node_ids(elements)
+            grew    = bool(new_ids - self._known_node_ids)
+            self._known_node_ids |= new_ids
+            if grew:
+                layout_label = self._layout_combo.currentText()
+                mode = LAYOUT_NAMES.get(layout_label, "geo_hierarchy")
+                if mode.startswith("geo_"):
+                    self._cycle_geometric_layout(mode)
+
+    def _cycle_geometric_layout(self, mode: str) -> None:
+        """Apply ``mode``, but only after first applying a different geo_
+        mode — i.e. automate exactly the manual "switch the Layout dropdown
+        away, then back" action that reliably fixes Interactive view
+        positions after a scan. A single direct reapplication of the same
+        mode right after an incremental update was not enough in practice;
+        only the away-then-back sequence the user performs by hand
+        consistently produced a correct layout, so that is what this
+        reproduces rather than a one-shot resync."""
+        other_mode = next(
+            (m for m in LAYOUT_NAMES.values() if m != mode and m.startswith("geo_")),
+            mode,
+        )
+        self._apply_geometric_layout(other_mode)
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._apply_geometric_layout(mode))
+        _t.start(250)
 
     def update_lldp_neighbors(
         self,
@@ -741,6 +817,7 @@ class NetworkMapPage(QWidget):
         # Force a full setHtml() on the next render so the layout algorithm
         # runs fresh from scratch, discarding all previous node positions.
         self._topology_loaded = False
+        self._known_node_ids = set()
         if self._last_render_kwargs:
             self.render(**self._last_render_kwargs)
 
