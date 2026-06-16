@@ -136,6 +136,7 @@ hiddenimports: list = [
     "modules.network_diagnostics",
     "modules.network_log_writer",
     "modules.network_logger",
+    "modules.network_map_cache",
     "modules.network_segments",
     "modules.topology_cytoscape",
     "modules.topology_cytoscape_html",

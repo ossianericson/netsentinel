@@ -1225,6 +1225,16 @@ class ScanResultMixin(ScanEnrichmentMixin):
         raw_devices.sort(key=lambda t: (t[0], t[1]))
         devices = [t[2] for t in raw_devices]
 
+        # Loaded once — feeds both the Network Map below and self._m1_result.
+        # _on_modem_signal/mesh-enrichment re-renders read devices from
+        # self._m1_result, not from locals here, so it must carry the real
+        # classification too or those re-renders undo this fix moments later.
+        try:
+            from modules.network_map_cache import load_render_cache
+            _map_cache = load_render_cache()
+        except Exception:
+            _map_cache = None
+
         # Populate the Devices table (Risk column shows "—", not a stale level)
         self._m1_table.setRowCount(0)
         for d in devices:
@@ -1259,9 +1269,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
             f"color:{TEXT_MUTED};font-size:11px;padding:2px 0;"
         )
 
-        # Set _m1_result so downstream pages have a device list to work with
+        # Downstream pages read devices from here — prefer the cached
+        # live-render data over the UNKNOWN-risk reconstruction.
         self._m1_result = {
-            "devices":         devices,
+            "devices":         _map_cache["devices"] if _map_cache else devices,
             "from_cache":      True,
             "total_count":     len(devices),
             "high_risk_count": 0,
@@ -1309,12 +1320,26 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         _gw_ip = _Ctr(e[0] for e in _snap.edges).most_common(1)[0][0]
                 except Exception:
                     pass  # non-fatal — render without gateway_ip
-                self._network_map_page.render(
-                    devices=devices,
-                    gateway_ip=_gw_ip,
-                    mesh_units=_startup_mesh_units,
-                    mesh_enrichment=_startup_mesh_enrich,
-                )
+
+                if _map_cache is not None:
+                    self._network_map_page.render(
+                        devices=_map_cache["devices"],
+                        gateway_ip=_map_cache["gateway_ip"] or _gw_ip,
+                        gateway_mac=_map_cache["gateway_mac"],
+                        mesh_units=_startup_mesh_units,
+                        mesh_enrichment=_startup_mesh_enrich,
+                        modem_data=_map_cache["modem_data"],
+                        edges=_map_cache["edges"],
+                        persist_cache=False,
+                    )
+                else:
+                    self._network_map_page.render(
+                        devices=devices,
+                        gateway_ip=_gw_ip,
+                        mesh_units=_startup_mesh_units,
+                        mesh_enrichment=_startup_mesh_enrich,
+                        persist_cache=False,
+                    )
                 if hasattr(self._network_map_page, "_stale_label"):
                     self._network_map_page._stale_label.setVisible(True)
             except Exception:

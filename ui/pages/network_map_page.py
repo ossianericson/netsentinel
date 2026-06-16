@@ -487,8 +487,17 @@ class NetworkMapPage(QWidget):
         diff: Optional[Any] = None,
         lldp_neighbors: Optional[List[Any]] = None,
         lldp_admin_needed: bool = False,
+        persist_cache: bool = True,
     ) -> None:
-        """Update both the Interactive and Classic views with new scan data."""
+        """Update both the Interactive and Classic views with new scan data.
+
+        persist_cache=True (the default, used by every live caller — scan
+        results, mesh/hostname enrichment, modem signal updates) saves these
+        exact inputs so the next app startup can replay this render verbatim
+        instead of a lossy reconstruction. The startup cache-restore path
+        itself passes persist_cache=False so it never overwrites a good
+        cache with derived/incomplete data.
+        """
         self._last_render_kwargs = dict(
             devices=devices,
             gateway_ip=gateway_ip,
@@ -555,6 +564,16 @@ class NetworkMapPage(QWidget):
         if self._web_available and self._web_view is not None:
             self._refresh_web_view(diff=diff if self._diff_mode else None)
 
+        if persist_cache:
+            try:
+                from modules.network_map_cache import save_render_cache
+                save_render_cache(
+                    devices=devices, gateway_ip=gateway_ip, gateway_mac=gateway_mac,
+                    modem_data=modem_data, edges=edges,
+                )
+            except Exception:
+                log.debug("network_map_page: render cache save failed", exc_info=True)
+
     def render_from_cache(self, devices: List[Any], store=None) -> None:
         """Render the last-known topology at startup without a live scan.
 
@@ -575,7 +594,7 @@ class NetworkMapPage(QWidget):
             except Exception:
                 pass  # non-fatal — render without gateway
 
-        self.render(devices=devices, gateway_ip=gateway_ip)
+        self.render(devices=devices, gateway_ip=gateway_ip, persist_cache=False)
 
         # Mark the map as stale (live scan will clear this via render())
         if hasattr(self, "_stale_label"):

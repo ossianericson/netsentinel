@@ -38,6 +38,14 @@ from modules.topology_layout import compute_scan_id, load_layout
 from ui.pages.network_map_page import NetworkMapPage
 
 
+@pytest.fixture(autouse=True)
+def _isolate_render_cache(tmp_path, monkeypatch):
+    """render() persists its inputs via modules.network_map_cache by default
+    — redirect that to a temp dir so the test suite never overwrites a real
+    user's network_map_render_cache.json under %LOCALAPPDATA%\\NetSentinel."""
+    monkeypatch.setattr("modules.network_map_cache.get_app_data_dir", lambda: tmp_path)
+
+
 @pytest.fixture
 def page(qt_app):
     p = NetworkMapPage()
