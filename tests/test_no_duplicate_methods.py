@@ -18,8 +18,25 @@ def _iter_py_files():
             yield path
 
 
+def _is_property_accessor(fn_node) -> bool:
+    """Return True if the function is a property setter/deleter/getter decorator."""
+    for deco in fn_node.decorator_list:
+        # `@name.setter`, `@name.deleter`, `@name.getter`
+        if isinstance(deco, ast.Attribute) and deco.attr in ("setter", "deleter", "getter"):
+            return True
+        # `@property` (bare name — marks the original getter; setter may follow with same name)
+        if isinstance(deco, ast.Name) and deco.id == "property":
+            return True
+    return False
+
+
 def test_no_duplicate_method_names_in_class():
-    """No class body may define the same method name more than once."""
+    """No class body may define the same method name more than once.
+
+    Property getter/setter/deleter patterns are exempt — they intentionally
+    define the same name twice (getter first, then setter/deleter with *.setter
+    decorator).
+    """
     offenders = []
     for path in _iter_py_files():
         try:
@@ -36,7 +53,7 @@ def test_no_duplicate_method_names_in_class():
                 dups: set[str] = set()
                 for item in node.body:
                     if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                        if item.name in seen:
+                        if item.name in seen and not _is_property_accessor(item):
                             dups.add(item.name)
                         seen.add(item.name)
                 if dups:

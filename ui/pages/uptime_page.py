@@ -35,7 +35,8 @@ from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    GREEN, RED, STATUS_ICON_CRIT, STATUS_ICON_OK, STATUS_ICON_UNKNOWN,
+    STATUS_ICON_WARN, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )
@@ -341,16 +342,16 @@ class UptimePage(QWidget):
 
             # Status dot
             if worst_window is None:
-                status_text  = "  NO DATA"
+                status_text  = f"{STATUS_ICON_UNKNOWN}  NO DATA"
                 status_color = TEXT_SECONDARY
             elif worst_window < _CRIT:
-                status_text  = "  DEGRADED"
+                status_text  = f"{STATUS_ICON_CRIT}  DEGRADED"
                 status_color = RED
             elif worst_window < _WARN:
-                status_text  = "  WARNING"
+                status_text  = f"{STATUS_ICON_WARN}  WARNING"
                 status_color = AMBER
             else:
-                status_text  = "  HEALTHY"
+                status_text  = f"{STATUS_ICON_OK}  HEALTHY"
                 status_color = GREEN
 
             dot = QLabel(status_text)
@@ -387,16 +388,16 @@ class UptimePage(QWidget):
         worst   = min(known) if known else None
 
         if worst is None:
-            status_text  = "NO DATA"
+            status_text  = f"{STATUS_ICON_UNKNOWN} NO DATA"
             status_color = TEXT_SECONDARY
         elif worst < _CRIT:
-            status_text  = "DEGRADED"
+            status_text  = f"{STATUS_ICON_CRIT} DEGRADED"
             status_color = RED
         elif worst < _WARN:
-            status_text  = "WARNING"
+            status_text  = f"{STATUS_ICON_WARN} WARNING"
             status_color = AMBER
         else:
-            status_text  = "HEALTHY"
+            status_text  = f"{STATUS_ICON_OK} HEALTHY"
             status_color = GREEN
 
         outer = QWidget()

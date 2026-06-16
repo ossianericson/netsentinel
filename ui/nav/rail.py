@@ -1,4 +1,4 @@
-﻿"""
+"""
 ui.nav.rail -- Activity-rail navigation widgets extracted from ui.dashboard.
 
 Provides: _LUCIDE, _make_nav_icon, _NavEntry, _RailButton, _FlyoutItem,
@@ -297,8 +297,8 @@ class _RailButton(QPushButton):
         self.setStyleSheet(
             "QPushButton {"
             "  background: transparent;"
-            "  border: none;"
-            "  border-radius: 0px;"
+            "  border: 1px solid transparent;"
+            "  border-radius: 4px;"
             "}"
             "QPushButton:hover {"
             "  background: rgba(255,255,255,0.07);"
@@ -306,6 +306,10 @@ class _RailButton(QPushButton):
             f"QPushButton:checked {{"
             f"  background: rgba(255,255,255,0.10);"
             f"}}"
+            "QPushButton:focus {"
+            "  border: 1px solid rgba(255,255,255,0.40);"
+            "  outline: none;"
+            "}"
         )
 
     @pyqtProperty(float)
@@ -500,11 +504,12 @@ class _FlyoutItem(QPushButton):
             f"QPushButton {{"
             f"  text-align: left; padding: 0 14px;"
             f"  background: transparent; color: {_fg};"
-            f"  border: none; font-size: 11px;"
+            f"  border: 1px solid transparent; font-size: 11px;"
             f"}}"
             f"QPushButton:hover {{ background: {_s.SIDEBAR_HOVER}; color: {_s.WHITE}; }}"
             f"QPushButton:checked {{ background: {_s.SIDEBAR_SEL_BG}; color: {_s.WHITE}; }}"
             f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_fg}; }}"
+            f"QPushButton:focus {{ border: 1px solid rgba(255,255,255,0.35); outline: none; }}"
         )
 
     def refresh_theme(self) -> None:

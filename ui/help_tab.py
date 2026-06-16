@@ -360,10 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Last 24 Hours by Category", "App Traffic now persists its history — a new chart shows bandwidth by category over the last 24 hours, and clicking a bar reveals which devices and streaming providers (Netflix/YouTube/Twitch) used the most data."),
-        ("Usage insights card", "The home page now narrates your household's weekly traffic — dominant category, peak hours, and week-over-week change — plus an optional ISP data-cap utilization line and a QoS overlap suggestion."),
-        ("Internet Plan settings", "Set a monthly data cap in Settings → Internet Plan to see plan utilization on the Usage Insights card."),
-        ("Service Diagnostics bandwidth context", "When a service checks out healthy but other devices are actively using bandwidth, Service Diagnostics now notes it — e.g. 'Buffering is caused by bandwidth being shared with 3 other active devices.'"),
+        ("In-app Feedback", "Press Ctrl+K and type 'Give Feedback' to submit comments — entries are saved locally to feedback.log with no network calls."),
+        ("Status Shape Icons", "Service Heartbeat, Uptime, and Monitor verdict displays now use accessible shape-coded icons (●/▲/■/?) in addition to colour — distinguishable without colour vision."),
+        ("Focus Rings", "Activity-rail buttons and flyout items now show a visible focus ring when keyboard-navigated (Tab / arrow keys)."),
+        ("Nav Timing Warnings", "Navigation to slow-loading pages now logs a warning in the debug console when init takes over 300 ms."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

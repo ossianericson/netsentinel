@@ -27,6 +27,9 @@ from ui.styles import (
     RED,
     RISK_BG,
     RISK_COLORS,
+    STATUS_ICON_CRIT,
+    STATUS_ICON_OK,
+    STATUS_ICON_WARN,
     TEXT_MUTED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
@@ -37,6 +40,18 @@ from ui.styles import (
 
 def _color_for_level(level: str) -> str:
     return RISK_COLORS.get(level.upper(), TEXT_SECONDARY)
+
+
+def _icon_for_level(level: str) -> str:
+    """Return a shape icon for the risk level so colour is not the sole indicator."""
+    lvl = level.upper()
+    if lvl in ("CLEAN", "LOW"):
+        return STATUS_ICON_OK
+    if lvl in ("WARNING", "MEDIUM"):
+        return STATUS_ICON_WARN
+    if lvl in ("HIGH", "STORM"):
+        return STATUS_ICON_CRIT
+    return "○"
 
 
 def _bg_for_level(level: str) -> str:
@@ -360,13 +375,13 @@ class _MonitorStateMixin:
         # Online / Offline
         status = self._last_log_status
         if status == "OK":
-            self._pulse_online_lbl.setText("●  Online")
+            self._pulse_online_lbl.setText(f"{STATUS_ICON_OK}  Online")
             self._pulse_online_lbl.setStyleSheet(_green)
         elif status == "SLOW":
-            self._pulse_online_lbl.setText("●  Slow")
+            self._pulse_online_lbl.setText(f"{STATUS_ICON_WARN}  Slow")
             self._pulse_online_lbl.setStyleSheet(_amber)
         elif status == "FAIL":
-            self._pulse_online_lbl.setText("●  Offline")
+            self._pulse_online_lbl.setText(f"{STATUS_ICON_CRIT}  Offline")
             self._pulse_online_lbl.setStyleSheet(_red)
         else:
             self._pulse_online_lbl.setText("○  —")
@@ -713,7 +728,7 @@ class _MonitorStateMixin:
         self._verdict.update(combined, level)
         # Show the compact status badge once real data is available
         from ui.tabs_helpers import risk_to_label as _r2l
-        self._verdict_badge.setText(f"● {_r2l(level)}")
+        self._verdict_badge.setText(f"{_icon_for_level(level)} {_r2l(level)}")
         self._verdict_badge.setStyleSheet(
             f"color:{_color_for_level(level)}; font-size:11px; font-weight:bold; padding:0 8px;"
             "background:transparent; border:none;"

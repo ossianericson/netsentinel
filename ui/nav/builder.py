@@ -8,11 +8,14 @@ pin management, command palette, and recent-action wiring.
 """
 from __future__ import annotations
 
+import time
+
 from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSlot
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 from ui.help import _PAGE_HELP
 from ui.nav.rail import _NavEntry, _RailButton, _make_nav_icon
+from ui.perf_audit import warn_if_nav_slow
 from ui.styles import (
     AUDIT_RED,
     BORDER,
@@ -668,6 +671,7 @@ class _NavBuilderMixin:
 
     def _nav_rail_go_to(self, label: str, _push_history: bool = False) -> None:
         """Navigate to a page by label in rail mode. Flyout stays open."""
+        _nav_go_to_t0 = time.perf_counter()
         widget = self._nav_label_to_widget.get(label)
         if widget is None:
             return
@@ -708,6 +712,7 @@ class _NavBuilderMixin:
             if label not in _visited2:
                 self._tip_bar.setChecked(True)
         self._track_page_visit(label)
+        warn_if_nav_slow(label, (time.perf_counter() - _nav_go_to_t0) * 1000)
 
     def _nav_deep_link_go_to(self, label: str) -> None:
         """Navigate via a deep link — pushes the current page onto the back stack."""
@@ -1277,6 +1282,7 @@ class _NavBuilderMixin:
             {"icon": "⚙", "label": "Open Settings",    "kind": "action"},
             {"icon": "◄", "label": "Toggle Sidebar",   "kind": "action"},
             {"icon": "◈", "label": "Diagnose Network", "kind": "action"},
+            {"icon": "◎", "label": "Give Feedback",    "kind": "action"},
         ]
         return recent_items + pages_section + feat_section + actions
 
@@ -1383,6 +1389,9 @@ class _NavBuilderMixin:
             self._toggle_sidebar()
         elif action == "Diagnose Network":
             self._open_diagnosis()
+        elif action == "Give Feedback":
+            from ui.widgets.feedback_dialog import show_feedback_dialog
+            show_feedback_dialog(self)
         elif action == "Start ARP Spoof Watch":
             self._nav_rail_go_to("ARP Spoof Watch")
             self._start_arp_monitor()

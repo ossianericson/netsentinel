@@ -38,7 +38,7 @@ from modules.service_monitor import ServiceTarget
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
-    GREEN, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    GREEN, RED, STATUS_ICON_CRIT, STATUS_ICON_OK, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT,
 )
@@ -472,13 +472,13 @@ class ServicePage(QWidget):
             self._table.insertRow(row_idx)
 
             if r.up:
-                status_text  = "  UP"
+                status_text  = f"{STATUS_ICON_OK}  UP"
                 status_color = GREEN
                 up_count += 1
                 if r.rtt_ms is not None:
                     rtts.append(r.rtt_ms)
             else:
-                status_text  = "  DOWN"
+                status_text  = f"{STATUS_ICON_CRIT}  DOWN"
                 status_color = RED
                 down_count += 1
 

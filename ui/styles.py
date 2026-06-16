@@ -557,6 +557,14 @@ CANVAS_AMBER       = "#E3B341"   # canvas amber — DNS / warning packets
 CANVAS_GRAY        = "#8B949E"   # canvas gray — server / switch nodes
 CANVAS_DIM         = "#484F58"   # canvas dim — broadcast / inactive border
 
+# ── Colour-blind accessible status icons (S10-2) ──────────────────────────────
+# Used alongside colour in status cells so the state is conveyed by shape too.
+# Import these instead of hardcoding the Unicode characters in individual pages.
+STATUS_ICON_OK      = "✓"   # healthy / up / passing
+STATUS_ICON_WARN    = "⚠"   # warning / slow / degraded
+STATUS_ICON_CRIT    = "✗"   # critical / down / failing
+STATUS_ICON_UNKNOWN = "○"   # no data / unknown
+
 # ── Layout / typography tokens ────────────────────────────────────────────────
 # Theme-independent. Import these instead of hardcoding values in page files.
 CARD_RADIUS = "8px"   # border-radius for all content cards and panels

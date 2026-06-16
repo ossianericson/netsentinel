@@ -161,6 +161,7 @@ netsentinel/
 │   ├── guided_tour.py          # GuidedTour — non-modal guided first-run tour bar (step sequence, coach marks, nav integration)
 │   ├── monitor_state.py        # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, VerdictPanel, RiskBadge (Sprint 19)
 │   ├── onboarding.py           # QSettings helpers for first-run coach mark flow (first_run_done, tour/v1_done state)
+│   ├── perf_audit.py           # warn_if_nav_slow() + profile_page_init() — pure-stdlib nav/page-init timing instrumentation (Sprint 10, S10-1)
 │   ├── plugin_page_mixin.py    # _PluginPageMixin — plugin page lifecycle, HW auto-detect, scan launch (Sprint 19)
 │   ├── nav/                    # Activity-rail navigation widget package
 │   │   ├── __init__.py         # Re-exports from rail.py + builder.py
@@ -267,6 +268,7 @@ netsentinel/
 │       ├── home_widgets.py         # _GradeRing, _MiniSparkline, _GradeSparkline, _EventsTicker, grade history helpers, _MiniCard, _AlertRow
 │       ├── home_session_widgets.py # FreshnessStrip, GettingStartedCard, _GradeBreakdownDialog, StandardWelcomePage, ProWelcomePage (Sprint 17)
 │       ├── credential_dialog.py    # show_credential_dialog() + show_unsigned_warning() — standalone plugin credential dialogs (S14-2 split)
+│       ├── feedback_dialog.py      # FeedbackDialog + show_feedback_dialog() — local feedback log, no telemetry (Sprint 10, S10-7)
 │       ├── device_detail_pane.py   # _DeviceLabelDialog, _DeviceDrawer, _ScanCompareDialog — InventoryPage helper dialogs (Sprint 13)
 │       ├── device_detail_panels.py # _ModemDetailPanel, _RouterDetailPanel — hardware detail panels (Sprint 13 split)
 │       ├── hub_card.py             # HubCard, PipInstallDialog and all plugin helpers

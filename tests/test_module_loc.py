@@ -226,7 +226,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, pulse bar, overall verdict.
     # Also contains RiskBadge, VerdictPanel, _color_for_level, _bg_for_level.
     # Extracted from dashboard.py (Sprint 19).
-    "monitor_state.py": 722,  # S1-5: inline risk_to_label import in _update_verdict_badge (+2 lines)
+    "monitor_state.py": 750,  # S10-2: +14 lines for colour-blind status icons (_icon_for_level + verdict/pulse labels)
 
     # _PluginPageMixin — plugin page lifecycle, HW auto-detect, integration banner, scan launch.
     # Extracted from dashboard.py (Sprint 19).
