@@ -54,6 +54,7 @@ from ui.widgets.home_session_widgets import (
 )
 from ui.widgets.health_status_card import HealthStatusCard
 from ui.widgets.bandwidth_hog_card import BandwidthHogCard
+from ui.widgets.usage_insights_card import UsageInsightsCard
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -125,6 +126,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._refresh_hw_nudge()
+        if hasattr(self, "_usage_card"):
+            self._usage_card.refresh()
 
     # ── Hardware nudge ────────────────────────────────────────────────────────
 
@@ -316,6 +319,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._bandwidth_card = BandwidthHogCard()
         self._bandwidth_card.navigate_to.connect(self.navigate_to)
         lay.addWidget(self._bandwidth_card)
+
+        # ── S6-3: "Usage insights" card — household traffic narrative ─────────
+        self._usage_card = UsageInsightsCard(store=self._store)
+        self._usage_card.navigate_to.connect(self.navigate_to)
+        lay.addWidget(self._usage_card)
 
         # ── Browser dashboard strip (visible when API enabled + not dismissed) ─
         self._dashboard_strip = QFrame()

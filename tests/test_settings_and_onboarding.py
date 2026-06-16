@@ -134,6 +134,19 @@ class TestSettingsPage:
         card = self.page._build_shortcuts_card()
         assert isinstance(card, QFrame)
 
+    def test_internet_plan_card_builds(self):
+        from PyQt6.QtWidgets import QFrame
+        card = self.page._build_internet_plan_card()
+        assert isinstance(card, QFrame)
+        assert self.page._plan_cap_spin is not None
+
+    def test_monthly_cap_persists(self):
+        with patch("ui.pages.settings_page.QSettings") as mock_qs_cls:
+            mock_qs = MagicMock()
+            mock_qs_cls.return_value = mock_qs
+            self.page._on_monthly_cap_changed(500.0)
+        mock_qs.setValue.assert_called_once_with("traffic/monthly_cap_gb", 500.0)
+
 
 # ===========================================================================
 # should_show_first_run / mark_first_run_done

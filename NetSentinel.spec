@@ -95,6 +95,9 @@ hiddenimports: list = [
     "modules.alert_suppressor",
     "modules.quiet_notifier",
     "modules.app_traffic_classifier",
+    "modules.cdn_ranges",
+    "modules.traffic_insights",
+    "modules.service_bandwidth_overlay",
     "modules.health_score",
     "modules.isp_vs_router_test",
     "modules.arp_monitor",
@@ -321,6 +324,7 @@ hiddenimports: list = [
     "ui.widgets.skeleton",
     "ui.widgets.toast",
     "ui.widgets.bandwidth_hog_card",
+    "ui.widgets.usage_insights_card",
     # ── Scapy 802.11 layer (M9 — wifi_monitor_worker) ─────────────────────────
     "scapy.layers.dot11",
     # ── waitress WSGI server (REST API production backend) ────────────────────

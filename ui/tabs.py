@@ -193,7 +193,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._live_bandwidth_page = LiveBandwidthPage(parent=None)
 
         from ui.pages.app_traffic_page import AppTrafficPage
-        self._app_traffic_page = AppTrafficPage(parent=None)
+        self._app_traffic_page = AppTrafficPage(store=self._store, parent=None)
+        self._app_traffic_page.traffic_sample_ready.connect(self._on_app_traffic_sample)
 
         from ui.pages.dhcp_lease_page import DhcpLeasePage
         self._dhcp_lease_page = DhcpLeasePage(parent=None)
@@ -1013,3 +1014,22 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         """Pre-select a symptom on DiagnosisPage and navigate to it."""
         self._diagnosis_page.preset_symptom(symptom_key)
         self._nav_rail_go_to("What's Wrong?")
+
+    def _on_app_traffic_sample(self, samples: list) -> None:
+        """Persist App Traffic per-flow samples to MetricStore (S6-1, RULE-DW1).
+
+        AppTrafficPage never writes to the store directly (ARCH RULE 1) — it
+        emits traffic_sample_ready and this dashboard-layer handler performs
+        the actual write.
+        """
+        if not self._store:
+            return
+        for s in samples:
+            try:
+                self._store.record_app_traffic_sample(
+                    mac=s["mac"], label=s["label"], category=s["category"],
+                    app=s["app"], bytes_total=s["bytes_total"],
+                    window_s=s["window_s"], cdn=s.get("cdn"),
+                )
+            except Exception:
+                pass  # non-fatal — a single malformed sample shouldn't drop the rest

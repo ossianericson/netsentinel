@@ -360,10 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Tile staleness callout", "Overview tiles now show 'Data from X days ago — rescan?' in amber when data is more than 24 hours old, so you always know when figures are stale."),
-        ("Notifications tab layout", "The Notifications page is now split into a Configure tab (channel cards, alert rules, dependency tree) and an Alert History tab, making each function easier to find."),
-        ("Alert storm detection", "If five or more alerts arrive from the same subnet within 60 seconds, a banner appears in the alert history offering a direct link to the dependency tree card to suppress duplicates."),
-        ("Monitor auto-resume", "Monitors that were running when the app was last closed (ARP Watch, Live Bandwidth, Scheduled Scans) now restart automatically on the next launch with an amber opt-out banner."),
+        ("Last 24 Hours by Category", "App Traffic now persists its history — a new chart shows bandwidth by category over the last 24 hours, and clicking a bar reveals which devices and streaming providers (Netflix/YouTube/Twitch) used the most data."),
+        ("Usage insights card", "The home page now narrates your household's weekly traffic — dominant category, peak hours, and week-over-week change — plus an optional ISP data-cap utilization line and a QoS overlap suggestion."),
+        ("Internet Plan settings", "Set a monthly data cap in Settings → Internet Plan to see plan utilization on the Usage Insights card."),
+        ("Service Diagnostics bandwidth context", "When a service checks out healthy but other devices are actively using bandwidth, Service Diagnostics now notes it — e.g. 'Buffering is caused by bandwidth being shared with 3 other active devices.'"),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

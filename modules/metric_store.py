@@ -35,9 +35,9 @@ from typing import Optional
 from modules.metric_store_schema import (
     _SCHEMA_VERSION, _DDL,  # noqa: F401
     apply_sqlite_schema, apply_sqlalchemy_schema,
-    CertCheckPoint, DeviceEvent, DeviceStatePoint, HaDetectedPoint,  # noqa: F401
-    KnownDevice, MeshSignalPoint, ModemSignalPoint, RttPoint,  # noqa: F401
-    ServiceCheckPoint, SpeedTestPoint,  # noqa: F401
+    AppTrafficSamplePoint, CertCheckPoint, DeviceEvent, DeviceStatePoint,  # noqa: F401
+    HaDetectedPoint, KnownDevice, MeshSignalPoint, ModemSignalPoint,  # noqa: F401
+    RttPoint, ServiceCheckPoint, SpeedTestPoint,  # noqa: F401
 )
 
 # Explicit re-export list so CodeQL recognises these as intentional re-exports.
@@ -45,9 +45,9 @@ __all__ = [
     "MetricStore",
     "_SCHEMA_VERSION", "_DDL",
     "apply_sqlite_schema", "apply_sqlalchemy_schema",
-    "CertCheckPoint", "DeviceEvent", "DeviceStatePoint", "HaDetectedPoint",
-    "KnownDevice", "MeshSignalPoint", "ModemSignalPoint", "RttPoint",
-    "ServiceCheckPoint", "SpeedTestPoint",
+    "AppTrafficSamplePoint", "CertCheckPoint", "DeviceEvent", "DeviceStatePoint",
+    "HaDetectedPoint", "KnownDevice", "MeshSignalPoint", "ModemSignalPoint",
+    "RttPoint", "ServiceCheckPoint", "SpeedTestPoint",
 ]
 from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
 
@@ -601,6 +601,33 @@ class MetricStore(MetricStoreQueryMixin):
         self._execute_write(
             "INSERT INTO plugin_log (ts, plugin_name, data) VALUES (?, ?, ?)",
             (int(time.time()), plugin_name, json.dumps(data, default=str)),
+        )
+
+    # ── Write: app traffic samples (Sprint 6) ─────────────────────────────────
+
+    def record_app_traffic_sample(
+        self,
+        mac: str,
+        label: str,
+        category: str,
+        app: str,
+        bytes_total: int,
+        window_s: float,
+        cdn: Optional[str] = None,
+        ts: Optional[int] = None,
+    ) -> None:
+        now = ts or int(time.time())
+        self._execute_write(
+            "INSERT INTO app_traffic_sample "
+            "(ts, mac, label, category, app, cdn, bytes_total, window_s) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            (now, mac, label, category, app, cdn, bytes_total, window_s),
+        )
+
+    def prune_app_traffic_samples(self, retain_days: int = 35) -> None:
+        cutoff = int(time.time()) - retain_days * 86400
+        self._execute_write(
+            "DELETE FROM app_traffic_sample WHERE ts < ?", (cutoff,)
         )
 
     # ── Write: config snapshot CRUD ───────────────────────────────────────────

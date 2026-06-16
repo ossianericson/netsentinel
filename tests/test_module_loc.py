@@ -21,8 +21,9 @@ DEFAULT_BUDGET = 600
 # Budgets are set to current actuals + a small margin; tighten as splits land.
 KNOWN_LARGE_MODULES: dict[str, int] = {
     # Grew after adding upsert_segment() + delete_segment() (Sprint 4 network segments).
-    # Natural split: move segment write methods to metric_store_schema.py when convenient.
-    "metric_store.py": 700,
+    # Sprint 6: added record_app_traffic_sample()/prune_app_traffic_samples().
+    # Natural split: move segment + traffic-sample write methods to metric_store_schema.py.
+    "metric_store.py": 730,
 
     # S4-1: resolution tracking (_host_down_since, _service_down_since) + HEALTHY alerts
     # S4-3: consolidation logic added to evaluate_cycle.
@@ -155,11 +156,11 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Landing page — layout only; all data handlers extracted to home_data_mixin.py (Sprint 15).
     # Sprint 15: _MiniCard, _AlertRow → home_widgets.py; all handlers → home_data_mixin.py;
     #   home_page.py 2,238 → 1,128 lines. Target ≤1,200 achieved.
-    "pages/home_page.py": 1530,  # Sprint H8: +106 lines; v1.9.98: +tip card + pills hint + first-scan banner; Sprint A: hero move + 7-day snooze; Sprint 2: health card; Sprint 5: S5-4 bandwidth hog card
+    "pages/home_page.py": 1530,  # Sprint H8: +106 lines; v1.9.98: +tip card + pills hint + first-scan banner; Sprint A: hero move + 7-day snooze; Sprint 2: health card; Sprint 5: S5-4 bandwidth hog card; Sprint 6: S6-3 usage insights card
 
     # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15).
     # Natural split if needed: split update vs. scan result methods.
-    "pages/home_data_mixin.py": 1115,  # actual 1111 after polish items 11-18 (Sprint 15 new file)
+    "pages/home_data_mixin.py": 1130,  # actual 1115 after Sprint 6 S6-3 usage insights refresh call
 
     # home_widgets.py — core animated widgets + grade helpers + _MiniCard/_AlertRow.
     # Sprint 17: FreshnessStrip/GettingStartedCard/_GradeBreakdownDialog/Welcome pages

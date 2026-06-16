@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.metric_store import MetricStore
+from modules.service_bandwidth_overlay import build_overlay_note
 from modules.service_diagnostics import SERVICE_CATALOG, ServiceDiagnosticResult
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE,
@@ -259,6 +260,16 @@ class ServiceDiagnosticsPage(QWidget):
         )
         lay.addWidget(self._sum_text)
 
+        # Bandwidth context overlay (S6-6) — only shown when diagnostics pass
+        # but other devices are actively using bandwidth right now
+        self._bandwidth_overlay_lbl = QLabel("")
+        self._bandwidth_overlay_lbl.setWordWrap(True)
+        self._bandwidth_overlay_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:11px; font-style:italic; border:none;"
+        )
+        self._bandwidth_overlay_lbl.setVisible(False)
+        lay.addWidget(self._bandwidth_overlay_lbl)
+
         return card
 
     def _build_layers_card(self) -> QFrame:
@@ -424,6 +435,7 @@ class ServiceDiagnosticsPage(QWidget):
         )
         self._sum_conf_lbl.setText(f"  Confidence: {result.confidence}%")
         self._sum_text.setText(result.summary or "No summary available.")
+        self._update_bandwidth_overlay(result)
 
         # Diagnostic layers table
         def _row(row_idx: int, name: str, passed: bool, detail: str) -> None:
@@ -467,3 +479,19 @@ class ServiceDiagnosticsPage(QWidget):
         else:
             self._trace_hdr.hide()
             self._trace_table.hide()
+
+    def _update_bandwidth_overlay(self, result: ServiceDiagnosticResult) -> None:
+        """Add a bandwidth-sharing note when diagnostics pass but the network is busy (S6-6)."""
+        if not self._store:
+            self._bandwidth_overlay_lbl.setVisible(False)
+            return
+        try:
+            active = self._store.query_app_traffic_active_device_count(seconds=120.0)
+        except Exception:
+            active = 0
+        note = build_overlay_note(result.service_name, result.failure_layer, active)
+        if note:
+            self._bandwidth_overlay_lbl.setText(note)
+            self._bandwidth_overlay_lbl.setVisible(True)
+        else:
+            self._bandwidth_overlay_lbl.setVisible(False)

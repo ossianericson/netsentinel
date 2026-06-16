@@ -6,7 +6,7 @@ Covers RTT, speed test, CVE, alerts, modem, mesh, and plugin logs.
 Included in MetricStoreQueryMixin via multiple inheritance.
 """
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from modules.metric_store_schema import (
     MeshSignalPoint, ModemSignalPoint, RttPoint, SpeedTestPoint,
@@ -214,3 +214,117 @@ class _MetricsQueriesMixin:
                 "data": data_dict,
             })
         return result
+
+    # ── App traffic history (Sprint 6) ────────────────────────────────────────
+
+    def query_app_traffic_category_totals(self, hours: float = 24.0) -> Dict[str, int]:
+        """Return {category: total_bytes} across all hosts for the last `hours`."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT category, SUM(bytes_total) AS total FROM app_traffic_sample "
+            "WHERE ts >= ? GROUP BY category ORDER BY total DESC",
+            (since,),
+        )
+        return {r["category"]: int(r["total"] or 0) for r in rows}
+
+    def query_app_traffic_device_breakdown(
+        self, category: str, hours: float = 24.0,
+    ) -> List[dict]:
+        """Return [{label, mac, bytes_total}] for one category, busiest first."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT mac, label, SUM(bytes_total) AS total FROM app_traffic_sample "
+            "WHERE ts >= ? AND category = ? GROUP BY mac, label ORDER BY total DESC",
+            (since, category),
+        )
+        return [
+            {"mac": r["mac"], "label": r["label"], "bytes_total": int(r["total"] or 0)}
+            for r in rows
+        ]
+
+    def query_app_traffic_cdn_breakdown(
+        self, category: str, hours: float = 24.0,
+    ) -> List[dict]:
+        """Return [{cdn, bytes_total}] for one category, busiest first (S6-2)."""
+        since = int(time.time()) - int(hours * 3600)
+        rows = self._execute_read(
+            "SELECT COALESCE(cdn, 'Other') AS cdn_name, SUM(bytes_total) AS total "
+            "FROM app_traffic_sample WHERE ts >= ? AND category = ? "
+            "GROUP BY cdn_name ORDER BY total DESC",
+            (since, category),
+        )
+        return [
+            {"cdn": r["cdn_name"], "bytes_total": int(r["total"] or 0)}
+            for r in rows
+        ]
+
+    def query_app_traffic_hourly_distribution(
+        self, category: Optional[str] = None, hours: float = 168.0,
+    ) -> Dict[int, int]:
+        """Return {hour_of_day(0-23): total_bytes} for the last `hours` (S6-5)."""
+        since = int(time.time()) - int(hours * 3600)
+        if category:
+            rows = self._execute_read(
+                "SELECT ts, bytes_total FROM app_traffic_sample "
+                "WHERE ts >= ? AND category = ?",
+                (since, category),
+            )
+        else:
+            rows = self._execute_read(
+                "SELECT ts, bytes_total FROM app_traffic_sample WHERE ts >= ?",
+                (since,),
+            )
+        out: Dict[int, int] = {}
+        for r in rows:
+            hr = time.localtime(r["ts"]).tm_hour
+            out[hr] = out.get(hr, 0) + int(r["bytes_total"] or 0)
+        return out
+
+    def query_app_traffic_category_totals_range(
+        self, hours_ago_start: float, hours_ago_end: float,
+    ) -> Dict[str, int]:
+        """Return {category: bytes} for the window (now-hours_ago_end, now-hours_ago_start].
+
+        Used to compare arbitrary same-length windows (e.g. this week vs last
+        week) per category — see ui/widgets/usage_insights_card.py (S6-3).
+        """
+        now = int(time.time())
+        until_ts = now - int(hours_ago_start * 3600)
+        since_ts = now - int(hours_ago_end * 3600)
+        rows = self._execute_read(
+            "SELECT category, SUM(bytes_total) AS total FROM app_traffic_sample "
+            "WHERE ts >= ? AND ts <= ? GROUP BY category ORDER BY total DESC",
+            (since_ts, until_ts),
+        )
+        return {r["category"]: int(r["total"] or 0) for r in rows}
+
+    def query_app_traffic_weekly_totals(self) -> Dict[str, int]:
+        """Return {"this_week": bytes, "last_week": bytes} (S6-3/S6-5)."""
+        now = int(time.time())
+        this_week_start = now - 7 * 86400
+        last_week_start = now - 14 * 86400
+        rows = self._execute_read(
+            "SELECT ts, bytes_total FROM app_traffic_sample WHERE ts >= ?",
+            (last_week_start,),
+        )
+        this_week = sum(int(r["bytes_total"] or 0) for r in rows if r["ts"] >= this_week_start)
+        last_week = sum(int(r["bytes_total"] or 0) for r in rows if r["ts"] < this_week_start)
+        return {"this_week": this_week, "last_week": last_week}
+
+    def query_app_traffic_active_device_count(
+        self, category: Optional[str] = None, seconds: float = 60.0,
+    ) -> int:
+        """Return the count of distinct MACs seen in the last `seconds` (S6-6)."""
+        since = int(time.time()) - int(seconds)
+        if category:
+            rows = self._execute_read(
+                "SELECT COUNT(DISTINCT mac) AS n FROM app_traffic_sample "
+                "WHERE ts >= ? AND category = ?",
+                (since, category),
+            )
+        else:
+            rows = self._execute_read(
+                "SELECT COUNT(DISTINCT mac) AS n FROM app_traffic_sample WHERE ts >= ?",
+                (since,),
+            )
+        return int(rows[0]["n"] or 0) if rows else 0

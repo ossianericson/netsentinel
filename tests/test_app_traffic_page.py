@@ -15,7 +15,8 @@ try:
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
-from modules.app_traffic_classifier import AppHostSnapshot
+from modules.app_traffic_classifier import AppFlowEntry, AppHostSnapshot, AppTrafficSnapshot
+from modules.metric_store import MetricStore
 from ui.pages.app_traffic_page import AppTrafficPage
 
 _created_pages: list = []
@@ -41,8 +42,8 @@ def _cleanup_pages():
     _created_pages.clear()
 
 
-def _make_page() -> AppTrafficPage:
-    page = AppTrafficPage()
+def _make_page(store=None) -> AppTrafficPage:
+    page = AppTrafficPage(store=store)
     _created_pages.append(page)
     return page
 
@@ -74,3 +75,66 @@ def test_emit_top_host_reports_highest_consumer():
     assert payload["label"] == "John's MacBook"
     assert payload["bytes_total"] == 90_000
     assert payload["share_pct"] == pytest.approx(90.0)
+
+
+# ── Sprint 6: traffic_sample_ready persistence signal (S6-1) ──────────────
+
+def test_emit_traffic_samples_noop_when_empty_snapshot():
+    page = _make_page()
+    received = []
+    page.traffic_sample_ready.connect(received.append)
+    page._emit_traffic_samples(AppTrafficSnapshot(hosts=[]))
+    assert received == []
+
+
+def test_emit_traffic_samples_builds_persistable_payload():
+    page = _make_page()
+    received = []
+    page.traffic_sample_ready.connect(received.append)
+    host = AppHostSnapshot(
+        mac="aa:bb:cc:dd:ee:ff", label="TV", total_bytes=5000, window_s=10.0,
+        flows=[AppFlowEntry(mac="aa:bb:cc:dd:ee:ff", category="Streaming",
+                             app="HTTPS", bytes_total=5000, label="TV", cdn="Netflix")],
+    )
+    page._emit_traffic_samples(AppTrafficSnapshot(hosts=[host]))
+    assert len(received) == 1
+    sample = received[0][0]
+    assert sample["mac"] == "aa:bb:cc:dd:ee:ff"
+    assert sample["category"] == "Streaming"
+    assert sample["cdn"] == "Netflix"
+    assert sample["bytes_total"] == 5000
+
+
+# ── Sprint 6: 24h history chart + drill-down (S6-1 / S6-2) ────────────────
+
+def test_refresh_hist_chart_with_no_store_shows_empty_state():
+    page = _make_page(store=None)
+    page._refresh_hist_chart()
+    assert page._hist_categories == []
+
+
+def test_refresh_hist_chart_populates_categories_from_store(tmp_path):
+    store = MetricStore(db_path=tmp_path / "test.db")
+    try:
+        store.record_app_traffic_sample("aa:bb", "TV", "Streaming", "HTTPS", 80_000, 10.0, cdn="Netflix")
+        store.record_app_traffic_sample("cc:dd", "Laptop", "Web", "HTTPS", 20_000, 10.0)
+        page = _make_page(store=store)
+        page._refresh_hist_chart()
+        assert page._hist_categories[0] == "Streaming"
+        assert "Web" in page._hist_categories
+    finally:
+        store.close()
+
+
+def test_show_hist_breakdown_populates_labels(tmp_path):
+    store = MetricStore(db_path=tmp_path / "test.db")
+    try:
+        store.record_app_traffic_sample("aa:bb", "TV", "Streaming", "HTTPS", 80_000, 10.0, cdn="Netflix")
+        store.record_app_traffic_sample("cc:dd", "Laptop", "Streaming", "HTTPS", 20_000, 10.0, cdn="YouTube")
+        page = _make_page(store=store)
+        page._show_hist_breakdown("Streaming")
+        assert "TV" in page._hist_breakdown_lbl.text()
+        assert "Netflix" in page._hist_cdn_lbl.text()
+        assert "YouTube" in page._hist_cdn_lbl.text()
+    finally:
+        store.close()

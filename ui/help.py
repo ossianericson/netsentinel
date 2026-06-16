@@ -127,6 +127,7 @@ _PAGE_HELP: dict[str, dict] = {
             "Traffic is classified by destination TCP/UDP port — devices using non-standard ports appear as 'Other'.",
             "Leave monitoring running for a few minutes to distinguish constant background traffic from bursty sessions.",
             "Unexpected 'P2P' or 'VPN' traffic from a device you don't control is worth investigating.",
+            "The 'Last 24 Hours by Category' chart persists across restarts — click any bar to see which devices and streaming providers (Netflix/YouTube/Twitch) used the most data.",
         ],
     },
     "Bandwidth Usage": {

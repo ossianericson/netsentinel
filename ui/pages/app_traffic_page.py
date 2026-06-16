@@ -9,6 +9,8 @@ Layout
   Page header
   Controls row: [Host selector] [status] [Start/Stop button]
   Card: Horizontal stacked bar chart — hosts on Y, categories as coloured segments
+  Card: Category legend
+  Card: Last 24 hours by category — click a bar for device + CDN breakdown (S6-1/S6-2)
   Card: Detail table — per-protocol breakdown for the selected host
 """
 
@@ -40,8 +42,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from modules.cdn_ranges import cdn_breakdown_label
 from modules.colours import APP_CATEGORY_COLORS
 from modules.app_traffic_classifier import CATEGORY_ORDER as _CAT_ORDER
+from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE,
     BG_ALT_ROW, BG_CARD, BORDER,
@@ -108,18 +112,28 @@ class AppTrafficPage(QWidget):
     #: Emitted on every snapshot with the top bandwidth consumer (S5-4).
     #: Payload: {"label": str, "bytes_total": int, "share_pct": float, "window_s": float}
     top_host_changed = pyqtSignal(object)
+    #: Emitted on every snapshot with raw per-flow samples for MetricStore
+    #: persistence (S6-1). The page never writes to the store directly
+    #: (ARCH RULE 1) — the dashboard layer connects this to
+    #: store.record_app_traffic_sample() for each dict in the list.
+    #: Payload: list[{"mac", "label", "category", "app", "cdn", "bytes_total", "window_s"}]
+    traffic_sample_ready = pyqtSignal(list)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, store: Optional[MetricStore] = None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
 
+        self._store = store
         self._worker = None
         self._running = False
 
         # {label/mac -> AppHostSnapshot} — last received data per host
         self._snapshots: Dict[str, object] = {}
         self._selected_host = "All Hosts"
+        self._hist_categories: List[str] = []   # category order matching the last drawn 24h chart
+        self._selected_hist_category: Optional[str] = None
 
         self._setup_ui()
+        self._refresh_hist_chart()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -222,6 +236,37 @@ class AppTrafficPage(QWidget):
         self._legend_items: List[QLabel] = []
         self._build_legend()
         cl.addWidget(legend_card)
+
+        # Last 24 hours by category (S6-1) — historical, persists across restarts
+        hist_card, hist_body = _make_card(
+            "LAST 24 HOURS BY CATEGORY  —  CLICK A BAR FOR DEVICE & PROVIDER BREAKDOWN"
+        )
+        self._fig_hist = Figure(figsize=(10, 2.6), facecolor=CHART_BG)
+        self._fig_hist.subplots_adjust(left=0.25, right=0.98, top=0.92, bottom=0.18)
+        self._ax_hist = self._fig_hist.add_subplot(111)
+        self._canvas_hist = FigureCanvas(self._fig_hist)
+        self._canvas_hist.setStyleSheet(f"background:{CHART_BG}; border:none;")
+        self._canvas_hist.setMinimumHeight(100)
+        self._canvas_hist.mpl_connect("button_press_event", self._on_hist_bar_click)
+        hist_body.addWidget(self._canvas_hist)
+
+        self._hist_breakdown_lbl = QLabel(
+            "Click a category bar above to see which devices used the most data."
+        )
+        self._hist_breakdown_lbl.setWordWrap(True)
+        self._hist_breakdown_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+        )
+        hist_body.addWidget(self._hist_breakdown_lbl)
+
+        self._hist_cdn_lbl = QLabel("")
+        self._hist_cdn_lbl.setWordWrap(True)
+        self._hist_cdn_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+        )
+        hist_body.addWidget(self._hist_cdn_lbl)
+
+        cl.addWidget(hist_card, 2)
 
         # Detail table
         tbl_card, tbl_body = _make_card(
@@ -335,6 +380,29 @@ class AppTrafficPage(QWidget):
             f"{len(self._snapshots)} host(s) active"
         )
         self._emit_top_host()
+        self._emit_traffic_samples(snap)
+        self._refresh_hist_chart()
+
+    def _emit_traffic_samples(self, snap) -> None:
+        """Emit raw per-flow samples for MetricStore persistence (S6-1).
+
+        The page never writes to the store directly (ARCH RULE 1) — the
+        dashboard layer connects traffic_sample_ready to the actual write.
+        """
+        payload = []
+        for host in snap.hosts:
+            for flow in host.flows:
+                payload.append({
+                    "mac": flow.mac,
+                    "label": host.label or host.mac,
+                    "category": flow.category,
+                    "app": flow.app,
+                    "cdn": flow.cdn,
+                    "bytes_total": flow.bytes_total,
+                    "window_s": host.window_s,
+                })
+        if payload:
+            self.traffic_sample_ready.emit(payload)
 
     def _emit_top_host(self) -> None:
         """Emit the current top bandwidth consumer for the home page card (S5-4)."""
@@ -469,6 +537,84 @@ class AppTrafficPage(QWidget):
             self._legend_lay.addWidget(dot)
             self._legend_items.append(dot)
         self._legend_lay.addStretch()
+
+    # ── Last 24 hours by category (S6-1 / S6-2) ────────────────────────────────
+
+    def _refresh_hist_chart(self) -> None:
+        ax = self._ax_hist
+        ax.clear()
+        ax.set_facecolor(CHART_PLOT_BG)
+        self._fig_hist.patch.set_facecolor(CHART_BG)
+        ax.tick_params(colors=CHART_AXIS, labelsize=8)
+        for sp in ax.spines.values():
+            sp.set_edgecolor(BORDER)
+
+        totals: Dict[str, int] = {}
+        if self._store:
+            try:
+                totals = self._store.query_app_traffic_category_totals(hours=24.0)
+            except Exception:
+                totals = {}  # non-fatal — chart shows empty state below
+
+        if not totals:
+            ax.text(
+                0.5, 0.5,
+                "No traffic history yet — start monitoring to build 24-hour data",
+                ha="center", va="center", fontsize=9,
+                color=TEXT_MUTED, transform=ax.transAxes,
+            )
+            self._hist_categories = []
+            self._canvas_hist.draw_idle()
+            return
+
+        ordered = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
+        self._hist_categories = [cat for cat, _ in ordered]
+        y_pos = list(range(len(ordered)))
+        values_mb = [b / 1_000_000 for _, b in ordered]
+        colors = [_cat_color(cat) for cat, _ in ordered]
+
+        ax.barh(y_pos, values_mb, color=colors, alpha=0.85, height=0.6)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(
+            [f"{cat} ({_fmt_bytes(b)})" for cat, b in ordered], fontsize=8
+        )
+        ax.invert_yaxis()
+        ax.set_xlabel("MB (last 24 hours)", fontsize=8, color=CHART_AXIS)
+        ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=CHART_GRID)
+        self._canvas_hist.draw_idle()
+
+        if self._selected_hist_category in self._hist_categories:
+            self._show_hist_breakdown(self._selected_hist_category)
+
+    def _on_hist_bar_click(self, event) -> None:
+        if event.ydata is None or not self._hist_categories:
+            return
+        idx = round(event.ydata)
+        if 0 <= idx < len(self._hist_categories) and abs(event.ydata - idx) <= 0.4:
+            self._show_hist_breakdown(self._hist_categories[idx])
+
+    def _show_hist_breakdown(self, category: str) -> None:
+        self._selected_hist_category = category
+        if not self._store:
+            return
+        try:
+            devices = self._store.query_app_traffic_device_breakdown(category, hours=24.0)
+            cdn_rows = self._store.query_app_traffic_cdn_breakdown(category, hours=24.0)
+        except Exception:
+            return  # non-fatal — store unavailable or query failed
+
+        top = devices[:5]
+        if top:
+            device_text = ", ".join(f"{d['label']} ({_fmt_bytes(d['bytes_total'])})" for d in top)
+            self._hist_breakdown_lbl.setText(f"{category} — top devices: {device_text}")
+        else:
+            self._hist_breakdown_lbl.setText(f"{category} — no device data available.")
+
+        cdn_totals = {r["cdn"]: r["bytes_total"] for r in cdn_rows if r["cdn"] and r["cdn"] != "Other"}
+        if cdn_totals:
+            self._hist_cdn_lbl.setText(f"By provider: {cdn_breakdown_label(cdn_totals)}")
+        else:
+            self._hist_cdn_lbl.setText("")
 
     # ── Detail table ──────────────────────────────────────────────────────────
 

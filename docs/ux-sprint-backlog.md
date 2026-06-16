@@ -292,7 +292,7 @@ of its existing scope (S6-1 traffic category dashboard, S6-2 per-device drill-do
 ## Sprint 6 — Traffic Context & Application-Layer Visibility
 
 **Theme:** Show what the network is being used for, not just how much
-**Status:** Not started
+**Status:** ✅ Complete — 2026-06-16
 
 **Rationale:** Raw bandwidth numbers (94 Mbps) are meaningless without context. The existing
 `app_traffic_classifier.py` and `AppTrafficPage` provide the raw data — this sprint turns
@@ -300,32 +300,52 @@ it into narrative that sits alongside the raw view.
 
 ### Items
 
-- [ ] **S6-1** Traffic category dashboard — a chart on the App Traffic page showing bandwidth
-  by application category (Streaming, Gaming, Video Calls, Social Media, Downloads, IoT) for
-  the last 24 hours. Answers "where did all my bandwidth go?" Categories use plain names and
-  icons; raw protocol/port data remains accessible in the existing table below.
+- [x] **S6-1** Traffic category dashboard — `app_traffic_sample` table added to MetricStore
+  (schema v17); `AppTrafficPage` persists every snapshot via the new `traffic_sample_ready`
+  signal (page never writes to the store directly — wired in `ui/tabs.py._on_app_traffic_sample`,
+  ARCH RULE 1). New "LAST 24 HOURS BY CATEGORY" card queries
+  `query_app_traffic_category_totals()` and renders a persistent horizontal bar chart; raw
+  protocol/port table remains unchanged below it.
 
-- [ ] **S6-2** Per-device per-category breakdown — drill down from the category view: click
-  "Streaming (48 GB this week)" to see which devices were streaming and which CDN ranges
-  (Netflix vs YouTube vs Twitch based on destination IP ranges). No deep packet inspection —
-  CDN IP ranges are sufficient.
+- [x] **S6-2** Per-device per-category breakdown — clicking a category bar calls
+  `query_app_traffic_device_breakdown()` and `query_app_traffic_cdn_breakdown()` to show top
+  devices and CDN share. `modules/cdn_ranges.py` classifies destination IPs into
+  Netflix/YouTube/Twitch/Disney+ via static published IP prefix blocks (no DPI). CDN tag flows
+  through `AppFlowEntry.cdn` from `AppTrafficSniffer._handle()`.
 
-- [ ] **S6-3** "Usage insights" card on home page — "Your household used 187 GB this week.
-  Most was streaming (68%), mainly between 7pm and 11pm. Gaming traffic increased 40% vs last
-  week." Data-driven, no interpretation beyond the numbers.
+- [x] **S6-3** "Usage insights" card — `ui/widgets/usage_insights_card.py` (`UsageInsightsCard`)
+  added to the home page below the bandwidth-hog card. `modules/traffic_insights.py`
+  (`build_usage_insights`/`format_insight_summary`) composes the household narrative
+  ("Your household used X this week. Most was streaming (Y%), mainly between A and B. Gaming
+  traffic increased Z% vs last week.") from `query_app_traffic_category_totals_range()`.
+  Empty-state CTA until App Traffic monitoring has collected data (RULE 4 — never auto-starts
+  capture).
 
-- [ ] **S6-4** ISP plan comparison — if the user has set their plan speed in Settings, traffic
-  context includes plan utilization: "You used 12% of your monthly data cap." Optional — only
-  shown if plan speed is configured.
+- [x] **S6-4** ISP plan comparison — new "Internet Plan" settings card
+  (`SettingsPage._build_internet_plan_card`) with a monthly data-cap field
+  (`traffic/monthly_cap_gb` QSettings key, 0 = disabled). `compute_plan_utilization()` appends
+  "You used X% of your monthly data cap." to the Usage Insights card only when a cap is set.
 
-- [ ] **S6-5** QoS recommendations — based on traffic patterns, surface: "Video calls and gaming
-  overlap every weekday 9am–5pm. Consider QoS prioritisation for those devices. Here's how →"
-  Generated deterministically from pattern analysis; shown once per pattern detected.
+- [x] **S6-5** QoS recommendations — `build_qos_recommendation()` detects overlapping busy hours
+  between Gaming and VoIP traffic over the last 7 days (`find_category_overlap_window()`) and
+  surfaces a dismissible suggestion row on the Usage Insights card; dismissal is keyed by an
+  MD5 hash of the suggestion text in QSettings, so a materially different pattern reappears.
 
-- [ ] **S6-6** Service status overlay — show known service status alongside local diagnostics:
-  "Netflix reports no outages. Your local connection to Netflix is fine. Buffering is caused by
-  bandwidth being shared with 3 other active devices." Uses service health data from
-  `service_diagnostics.py`.
+- [x] **S6-6** Service status overlay — `modules/service_bandwidth_overlay.py`
+  (`build_overlay_note`) combines `ServiceDiagnosticResult.failure_layer == "none"` with
+  `query_app_traffic_active_device_count()` to add "Netflix reports no outages... bandwidth
+  being shared with N other active devices" to the Service Diagnostics summary card, only when
+  diagnostics pass and other devices are actively generating traffic.
+
+**New files:** `modules/cdn_ranges.py`, `modules/traffic_insights.py`,
+`modules/service_bandwidth_overlay.py`, `ui/widgets/usage_insights_card.py`,
+`tests/test_cdn_ranges.py`, `tests/test_traffic_insights.py`,
+`tests/test_service_bandwidth_overlay.py`, `tests/test_metric_store_app_traffic.py`,
+`tests/test_usage_insights_card.py`, `tests/test_service_diagnostics_page.py`
+
+**Sprint 7 planned queue:** Contextual Guidance Layer — first-visit context banners, Quick/Full
+column toggle, inline "learn more" links, Recent rail shortcut, Ctrl+K natural-language aliases,
+mode-aware empty states.
 
 ---
 

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 16
+_SCHEMA_VERSION = 17
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -298,6 +298,22 @@ CREATE TABLE IF NOT EXISTS topology_snapshots (
     data_json TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_topo_snap_ts ON topology_snapshots(ts DESC);
+
+-- App Traffic per-host/category bandwidth samples (schema v17)
+CREATE TABLE IF NOT EXISTS app_traffic_sample (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          INTEGER NOT NULL,
+    mac         TEXT    NOT NULL,
+    label       TEXT    NOT NULL DEFAULT '',
+    category    TEXT    NOT NULL,
+    app         TEXT    NOT NULL DEFAULT '',
+    cdn         TEXT,
+    bytes_total INTEGER NOT NULL DEFAULT 0,
+    window_s    REAL    NOT NULL DEFAULT 10.0
+);
+CREATE INDEX IF NOT EXISTS idx_ats_ts       ON app_traffic_sample(ts);
+CREATE INDEX IF NOT EXISTS idx_ats_category ON app_traffic_sample(category, ts);
+CREATE INDEX IF NOT EXISTS idx_ats_mac      ON app_traffic_sample(mac, ts);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────
@@ -530,3 +546,15 @@ class MeshSignalPoint:
     online_count: int
     worst_unit:   Optional[str]
     worst_rssi:   Optional[float]
+
+
+@dataclass
+class AppTrafficSamplePoint:
+    ts:          int
+    mac:         str
+    label:       str
+    category:    str
+    app:         str
+    cdn:         Optional[str]
+    bytes_total: int
+    window_s:    float

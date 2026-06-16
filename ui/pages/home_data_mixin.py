@@ -636,6 +636,10 @@ class _HomeDataMixin:
             self._set_first_run_mode(True)
         else:
             self._check_recurring_mode()
+        try:
+            self._usage_card.refresh()
+        except Exception:
+            pass  # non-fatal
 
     # ── Public slots: scan results ────────────────────────────────────────────
 

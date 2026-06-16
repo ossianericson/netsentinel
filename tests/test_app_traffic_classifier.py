@@ -132,9 +132,9 @@ def test_sniffer_snapshot_synthetic():
     mac = "aa:bb:cc:dd:ee:01"
     # Simulate what _handle() would populate
     sniffer._flows[mac] = {
-        ("Web",  "HTTPS"): 10_000,
-        ("DNS",  "DNS"):   2_000,
-        ("Other", "Port 12345"): 500,
+        ("Web",  "HTTPS", None): 10_000,
+        ("DNS",  "DNS", None):   2_000,
+        ("Other", "Port 12345", None): 500,
     }
 
     snap = sniffer.snapshot(window_s=10.0, label_map={mac: "test-device"})
@@ -154,7 +154,7 @@ def test_sniffer_snapshot_synthetic():
 def test_sniffer_snapshot_label_fallback():
     sniffer = AppTrafficSniffer()
     mac = "bb:bb:bb:bb:bb:bb"
-    sniffer._flows[mac] = {("Web", "HTTP"): 1000}
+    sniffer._flows[mac] = {("Web", "HTTP", None): 1000}
     snap = sniffer.snapshot(window_s=5.0, label_map={})
     assert snap.hosts[0].label == mac   # no label → MAC used as fallback
 
@@ -162,18 +162,64 @@ def test_sniffer_snapshot_label_fallback():
 def test_sniffer_snapshot_zero_bytes_excluded():
     sniffer = AppTrafficSniffer()
     mac = "cc:cc:cc:cc:cc:cc"
-    sniffer._flows[mac] = {("Web", "HTTP"): 0}   # zero bytes → host excluded
+    sniffer._flows[mac] = {("Web", "HTTP", None): 0}   # zero bytes → host excluded
     snap = sniffer.snapshot(window_s=10.0, label_map={})
     assert snap.hosts == []
 
 
 def test_sniffer_snapshot_sorted_by_bytes():
     sniffer = AppTrafficSniffer()
-    sniffer._flows["aa:aa:aa:aa:aa:01"] = {("Web", "HTTP"): 500}
-    sniffer._flows["aa:aa:aa:aa:aa:02"] = {("DNS", "DNS"): 5000}
+    sniffer._flows["aa:aa:aa:aa:aa:01"] = {("Web", "HTTP", None): 500}
+    sniffer._flows["aa:aa:aa:aa:aa:02"] = {("DNS", "DNS", None): 5000}
     snap = sniffer.snapshot(window_s=10.0, label_map={})
     assert snap.hosts[0].total_bytes == 5000
     assert snap.hosts[1].total_bytes == 500
+
+
+def test_sniffer_snapshot_carries_cdn_label():
+    """Synthetic flow with a CDN tag must surface on the resulting AppFlowEntry (S6-2)."""
+    sniffer = AppTrafficSniffer()
+    mac = "dd:dd:dd:dd:dd:dd"
+    sniffer._flows[mac] = {("Streaming", "HTTPS", "Netflix"): 50_000}
+    snap = sniffer.snapshot(window_s=10.0, label_map={})
+    flow = snap.hosts[0].flows[0]
+    assert flow.cdn == "Netflix"
+
+
+def test_handle_classifies_cdn_from_dest_ip(monkeypatch):
+    """_handle() should look up the destination IP and tag the flow with its CDN."""
+    from modules.app_traffic_classifier import SCAPY_AVAILABLE
+    if not SCAPY_AVAILABLE:
+        pytest.skip("scapy not installed — Ether/IP/TCP layer classes unavailable")
+    sniffer = AppTrafficSniffer()
+
+    class _FakeLayer:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    class _FakePkt:
+        def __init__(self, layers):
+            self._layers = layers
+
+        def haslayer(self, layer_cls):
+            return layer_cls in self._layers
+
+        def __getitem__(self, layer_cls):
+            return self._layers[layer_cls]
+
+        def __len__(self):
+            return 1200
+
+    from modules import app_traffic_classifier as mod
+
+    ether = _FakeLayer(src="EE:EE:EE:EE:EE:EE")
+    ip = _FakeLayer(dst="23.246.0.5")   # within the Netflix test prefix
+    tcp = _FakeLayer(dport=443)
+    pkt = _FakePkt({mod.Ether: ether, mod.IP: ip, mod.TCP: tcp})
+
+    sniffer._handle(pkt)
+    flows = sniffer._flows["ee:ee:ee:ee:ee:ee"]
+    assert ("Web", "HTTPS", "Netflix") in flows
 
 
 # ── Scaling guard ─────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal
 from PyQt6.QtWidgets import (
+    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -33,6 +34,7 @@ from ui.styles import (
 )
 
 from ui.pages.settings_cards import (
+    _card,
     _SettingsCardsMixin,
     _NotifTestWorker,
 )
@@ -135,6 +137,8 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
              "compact rows density tooltips table font size"),
             (self._build_scanning_card,            "Network Scanning",
              "subnet range timeout arp interval ping sweep"),
+            (self._build_internet_plan_card,       "Internet Plan",
+             "isp data cap monthly usage quota gb plan utilization"),
             (self._build_sched_scan_card,          "Scheduled Full Scan",
              "schedule automatic cron interval repeat timer"),
             (self._build_tray_card,                "Notifications & Tray",
@@ -280,5 +284,38 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
 
     def _on_tooltip_toggled(self, checked: bool) -> None:
         QSettings("NetSentinel", "NetSentinel").setValue("display/tooltips_enabled", checked)
+        self._mark_dirty()
+
+    # ── Internet Plan (S6-4) ──────────────────────────────────────────────────
+
+    def _build_internet_plan_card(self) -> QFrame:
+        """Optional monthly data cap — feeds the home page Usage Insights card (S6-4)."""
+        card, bl = _card("Internet Plan")
+        desc = QLabel(
+            "Set your ISP's monthly data cap to see plan utilization on the home "
+            "page Usage Insights card. Leave at 0 GB to hide this comparison."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED}; background:transparent;")
+        bl.addWidget(desc)
+
+        row = QHBoxLayout()
+        lbl = QLabel("Monthly data cap:")
+        lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        self._plan_cap_spin = QDoubleSpinBox()
+        self._plan_cap_spin.setRange(0, 100_000)
+        self._plan_cap_spin.setDecimals(0)
+        self._plan_cap_spin.setSuffix(" GB")
+        qs = QSettings("NetSentinel", "NetSentinel")
+        self._plan_cap_spin.setValue(qs.value("traffic/monthly_cap_gb", 0.0, type=float))
+        self._plan_cap_spin.valueChanged.connect(self._on_monthly_cap_changed)
+        row.addWidget(lbl)
+        row.addWidget(self._plan_cap_spin)
+        row.addStretch()
+        bl.addLayout(row)
+        return card
+
+    def _on_monthly_cap_changed(self, value: float) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue("traffic/monthly_cap_gb", value)
         self._mark_dirty()
 

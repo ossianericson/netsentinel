@@ -19,6 +19,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from modules.cdn_ranges import classify_cdn_ip
+
 SCAPY_AVAILABLE = False
 try:
     from scapy.all import AsyncSniffer, Ether, IP, TCP, UDP  # type: ignore
@@ -150,6 +152,7 @@ class AppFlowEntry:
     app: str
     bytes_total: int = 0
     label: str = ""   # display label (hostname or IP)
+    cdn: Optional[str] = None   # known CDN/streaming provider, if recognised (S6-2)
 
 
 @dataclass
@@ -189,8 +192,8 @@ class AppTrafficSniffer:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        # {mac: {(category, app): bytes}}
-        self._flows: Dict[str, Dict[Tuple[str, str], int]] = {}
+        # {mac: {(category, app, cdn): bytes}}
+        self._flows: Dict[str, Dict[Tuple[str, str, Optional[str]], int]] = {}
         self._sniffer: Optional[Any] = None
 
     def _handle(self, pkt) -> None:
@@ -199,6 +202,7 @@ class AppTrafficSniffer:
                 return
             src_mac = pkt[Ether].src.lower()
             size = len(pkt)
+            dest_ip = pkt[IP].dst
 
             if pkt.haslayer(TCP):
                 cat, app = classify_port("tcp", pkt[TCP].dport)
@@ -207,10 +211,12 @@ class AppTrafficSniffer:
             else:
                 cat, app = "Other", "Other"
 
+            cdn = classify_cdn_ip(dest_ip)
+
             with self._lock:
                 if src_mac not in self._flows:
                     self._flows[src_mac] = {}
-                key = (cat, app)
+                key = (cat, app, cdn)
                 self._flows[src_mac][key] = self._flows[src_mac].get(key, 0) + size
         except Exception:
             pass  # non-fatal — malformed or truncated packet
@@ -254,8 +260,9 @@ class AppTrafficSniffer:
                     app=app,
                     bytes_total=b,
                     label=label_map.get(mac, mac),
+                    cdn=cdn,
                 )
-                for (cat, app), b in sorted(flow_dict.items(), key=lambda x: -x[1])
+                for (cat, app, cdn), b in sorted(flow_dict.items(), key=lambda x: -x[1])
             ]
             hosts.append(AppHostSnapshot(
                 mac=mac,
