@@ -76,6 +76,11 @@ class TopologyWidget(QWidget):
         self._pos_map: dict = {}       # node_key → (x, y) data coords
         self._ip_map: dict = {}        # node_key → device IP string
         self._tooltip_map: dict = {}   # node_key → tooltip text (hostname/IP/risk)
+        self._parent_pos: dict = {}    # node_key → (x, y) of the node's immediate
+                                        # parent in the drawn tree (gateway for flat
+                                        # layout / direct devices, satellite for mesh
+                                        # clients) — health overlay edges must follow
+                                        # this same parent, not always the gateway
         self._hover_ann = None
 
         # Sprint 2 — layout persistence
@@ -148,6 +153,7 @@ class TopologyWidget(QWidget):
         self._pos_map = {}
         self._ip_map = {}
         self._tooltip_map = {}
+        self._parent_pos = {}
         self._hover_ann = None
         ax = self._ax
         ax.cla()
@@ -363,6 +369,7 @@ class TopologyWidget(QWidget):
                 self._pos_map[nk] = positions[nk]
                 self._ip_map[nk] = ip
                 self._tooltip_map[nk] = f"{host[:20]}\n{ip}\nRisk: {risk}"
+                self._parent_pos[nk] = positions["gateway"]
 
         gx, gy = positions["gateway"]
         ix, iy = positions["internet"]
@@ -523,6 +530,9 @@ class TopologyWidget(QWidget):
                     self._pos_map[did] = pos[did]
                     self._ip_map[did] = ip
                     self._tooltip_map[did] = f"{host[:20]}\n{ip}\nRisk: {risk}"
+                    # Client's drawn parent is its satellite, not the gateway —
+                    # health overlay edges must originate there (see _draw_health_overlays).
+                    self._parent_pos[did] = pos[unit.mac]
         for d in unassigned:
             did = _dev_id(d)
             ip  = _attr(d, "ip", "") or ""
@@ -532,6 +542,7 @@ class TopologyWidget(QWidget):
                 self._pos_map[did] = pos[did]
                 self._ip_map[did] = ip
                 self._tooltip_map[did] = f"{host[:20]}\n{ip}\nRisk: {risk}"
+                self._parent_pos[did] = pos["__gateway__"]
 
         # ── Draw all edges first (zorder=1) so nodes paint over them ─────────
         gx, gy = pos["__gateway__"]
@@ -633,9 +644,14 @@ class TopologyWidget(QWidget):
         gw_pos = self._gw_pos
 
         # ── Edge health lines ──────────────────────────────────────────────
+        # Each overlay line must follow the same parent the base grey tree line
+        # uses (gateway for flat/unassigned devices, satellite for mesh clients).
+        # Edges are always recorded gateway→device by the scan pipeline, but in
+        # mesh mode most devices are visually parented to a satellite — drawing
+        # every overlay line from the gateway produced spurious criss-crossing
+        # lines straight through the satellite nodes.
         if edges and gw_pos:
             edge_by_dst = {e.dst_ip: e for e in edges}
-            gx, gy = gw_pos
             for nk, (nx, ny) in self._pos_map.items():
                 ip = self._ip_map.get(nk, "")
                 if not ip or ip not in edge_by_dst:
@@ -643,11 +659,12 @@ class TopologyWidget(QWidget):
                 edge = edge_by_dst[ip]
                 if edge.status == "unknown":
                     continue  # grey base line already conveys unknown state
+                px, py = self._parent_pos.get(nk, gw_pos)
                 color, lw = self._edge_health_style(edge)
-                ax.plot([gx, nx], [gy, ny], color=color, linewidth=lw,
+                ax.plot([px, nx], [py, ny], color=color, linewidth=lw,
                         zorder=2, alpha=0.85, solid_capstyle="round")
                 if edge.latency_ms is not None:
-                    mx, my = (gx + nx) / 2, (gy + ny) / 2
+                    mx, my = (px + nx) / 2, (py + ny) / 2
                     ax.annotate(
                         f"{edge.latency_ms:.0f} ms",
                         xy=(mx, my), fontsize=7, ha="center", va="center",

@@ -157,6 +157,44 @@ def test_pos_map_empty_before_render(topology):
     assert topology._hover_ann is None
 
 
+def test_health_overlay_uses_satellite_parent_not_gateway(topology):
+    """Edge health overlay lines for mesh clients must originate at their
+    satellite parent, not the gateway (regression: after an app restart plus
+    rescan, the Classic view drew colour-coded latency lines straight from the
+    gateway to every mesh client, criss-crossing through the satellite nodes
+    instead of following the same branch as the grey base tree)."""
+    from modules.topology_layout import TopologyEdge
+
+    master = SimpleNamespace(role="master", name="Main", mac="aa:bb:cc:dd:ee:01")
+    sat1   = SimpleNamespace(role="satellite", name="Sat-1", mac="aa:bb:cc:dd:ee:02")
+
+    devices = [
+        {"ip": "192.168.1.60", "mac": "22:33:44:55:66:77",
+         "hostname": "TabletOnSat", "risk_level": "CLEAN", "mesh_unit": "Sat-1"},
+    ]
+    edges = [TopologyEdge(
+        src_ip="192.168.1.1", dst_ip="192.168.1.60",
+        latency_ms=12.0, packet_loss=0.0, bandwidth_mbps=None, status="up",
+    )]
+
+    topology.render(
+        devices=devices,
+        gateway_ip="192.168.1.1",
+        mesh_units=[master, sat1],
+        edges=edges,
+    )
+
+    node_key = "22:33:44:55:66:77"
+    assert node_key in topology._parent_pos, "Client missing from _parent_pos map"
+    # Single satellite → deterministic position per _render_mesh's layout constants.
+    assert topology._parent_pos[node_key] == (0.5, 0.42), (
+        "Mesh client's overlay parent must be its satellite position"
+    )
+    assert topology._parent_pos[node_key] != topology._gw_pos, (
+        "Mesh client's overlay parent must NOT be the gateway position"
+    )
+
+
 def test_satellite_client_still_groups_under_satellite(topology):
     """Mesh-only client on a satellite must still appear under that satellite."""
     master = SimpleNamespace(role="master", name="Main", mac="aa:bb:cc:dd:ee:01")

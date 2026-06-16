@@ -165,6 +165,14 @@ class NetworkMapPage(QWidget):
         # this set can force one full geometric recompute, instead of leaving
         # the graph half-reflowed until the user manually re-picks a layout.
         self._known_node_ids: set = set()
+        # Fires once per app session — auto-fits the view the first time any
+        # render() call actually has devices to show, so a brand-new scan
+        # always lands fully inside the visible window without the user
+        # having to press "Fit" themselves. Forced explicitly (rather than
+        # relying on Cytoscape's own post-layout cy.fit()) because that call
+        # can run against a zero-size container if the Interactive tab isn't
+        # the active one yet, and an incremental updateTopology() never fits.
+        self._auto_fit_done = False
 
         self._build_ui()
 
@@ -564,6 +572,17 @@ class NetworkMapPage(QWidget):
         if self._web_available and self._web_view is not None:
             self._refresh_web_view(diff=diff if self._diff_mode else None)
 
+        # Auto-fit once the map actually has devices to show — see flag comment
+        # in __init__. A short delay lets the just-issued render/layout settle
+        # (geometric-layout recompute uses a 250 ms timer of its own) before we
+        # snap the viewport to the final node extents.
+        if not self._auto_fit_done and devices:
+            self._auto_fit_done = True
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self._auto_fit_both_views)
+            _t.start(400)
+
         if persist_cache:
             try:
                 from modules.network_map_cache import save_render_cache
@@ -876,6 +895,17 @@ class NetworkMapPage(QWidget):
             self._run_js("window.fitView && window.fitView();")
         else:
             self._classic_widget.fit_view()
+
+    def _auto_fit_both_views(self) -> None:
+        """Fit both views regardless of which tab is active.
+
+        Used only for the one-time post-first-scan auto-fit: the Interactive
+        view's own post-layout cy.fit() can run against a zero-size container
+        if that tab isn't visible yet, so this fits it explicitly here too
+        rather than depending on the active-tab check in fit_view().
+        """
+        self._run_js("window.fitView && window.fitView();")
+        self._classic_widget.fit_view()
 
     def zoom_in(self) -> None:
         self._classic_widget.zoom_in()
