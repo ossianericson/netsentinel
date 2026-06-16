@@ -3,9 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-try:
-    import PyQt6  # noqa: F401
-except ImportError:
+import importlib.util
+if importlib.util.find_spec("PyQt6") is None:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
 from ui.pages.speed_test_page import (
