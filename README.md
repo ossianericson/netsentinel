@@ -3,7 +3,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](#install)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-3900%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-4100%2B-brightgreen?style=flat-square)](tests/)
 
 # NetSentinel
 
@@ -274,7 +274,7 @@ If you use NetSentinel in a course or lab and need curriculum-specific features,
 
 ## Quality
 
-The project ships with **3 921+ automated tests** across 209 test files, covering detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. Run the full suite with:
+The project ships with **4 113+ automated tests** across 230 test files, covering detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. Run the full suite with:
 
 ```bash
 python -m pytest tests/ -v --tb=short

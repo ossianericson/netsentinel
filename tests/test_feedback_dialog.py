@@ -25,7 +25,7 @@ def test_max_chars_constant():
 
 def test_feedback_is_written_to_log(tmp_path):
     """Submitting feedback writes a timestamped entry to the log file."""
-    import ui.widgets.feedback_dialog as _mod
+    from ui.widgets import feedback_dialog as _mod
 
     _fake_dir = tmp_path
 

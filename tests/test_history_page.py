@@ -121,6 +121,10 @@ def test_history_refresh_worker_run_lifecycle(qt_app):
     _guard.start(4000)
     loop.exec()
 
+    # Allow run() to fully return — signal is emitted before run() exits, so
+    # isRunning() can still be True on Linux at the moment loop.quit() fires.
+    w.wait(2000)
+
     assert not w.isRunning(), "Worker still running after result_ready"
     assert len(received) == 1, "result_ready must be emitted exactly once"
     assert isinstance(received[0], dict)

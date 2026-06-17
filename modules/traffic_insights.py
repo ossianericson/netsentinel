@@ -174,15 +174,14 @@ def find_category_overlap_window(
         return None
 
     # Return the widest contiguous run of overlapping hours.
-    best_start = best_end = run_start = run_end = busy_hours[0]
+    best_start = best_end = run_start = busy_hours[0]
     for prev, cur in zip(busy_hours, busy_hours[1:]):
         if cur == prev + 1:
             run_end = cur
+            if run_end - run_start > best_end - best_start:
+                best_start, best_end = run_start, run_end
         else:
             run_start = cur
-            continue
-        if run_end - run_start > best_end - best_start:
-            best_start, best_end = run_start, run_end
     return (best_start, best_end + 1)
 
 
