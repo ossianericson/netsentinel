@@ -1,5 +1,5 @@
 """
-Capture 10 Windows Store screenshots from the running NetSentinel app.
+Capture Windows Store screenshots from the running NetSentinel app.
 
 Usage:
     python tools/store_screenshots.py              # all pages
@@ -9,6 +9,29 @@ Usage:
 Requirements:
     pip install pywinauto pillow pywin32
     The app must already be running: python app.py
+
+Resolution: TARGET_W x TARGET_H (default 2048×1152).
+  2048×1152 is the closest clean 16:9 resolution under the 2300×1300 cap.
+  The Microsoft Store accepts up to 3840×2160; higher pixel counts stay sharper
+  when the Store scales images to the thumbnail grid.
+  Drop to 1920×1080 if your monitor cannot fit a 2048-wide window.
+
+Store limit: the Store allows up to 10 screenshots per device family.
+  This script captures 12 so you can pick the best 10 for submission.
+
+Screenshot selection rationale (updated for v2.1.12 / UX Sprints 1–10):
+  01_home              — landing page: health score ring, session strip, suggestions
+  02_troubleshoot      — Sprint 3: 8 symptom tiles → correct tool (zero prior knowledge)
+  03_devices           — Sprint 5: segment-grouped inventory, health indicators, naming
+  04_app_traffic       — Sprint 6: per-host traffic breakdown (Web/Streaming/Gaming/VPN)
+  05_network_map       — Sprint 6: Cytoscape.js interactive topology
+  06_service_diag      — v2.0: streaming/gaming service probes + failure-layer verdict
+  07_security_overview — aggregate security findings dashboard with letter grade
+  08_threat_intel      — threat intelligence: AbuseIPDB lookup + CVE context
+  09_speed_test        — speed history + modem signal panel side-by-side
+  10_protocol_viz      — animated ARP/DNS/TCP/DHCP/STP diagrams (education angle)
+  11_lab_mode          — guided CompTIA N+/CCNA exercises (unique differentiator)
+  12_geo_map           — offline MaxMind geolocation map — no API key required
 """
 import argparse
 import ctypes
@@ -26,7 +49,9 @@ except ImportError as e:
     sys.exit(f"Missing dependency: {e}\nRun: pip install pywinauto pillow pywin32")
 
 # ── constants ──────────────────────────────────────────────────────────────────
-TARGET_W, TARGET_H = 1920, 1080
+# 2048×1152 — closest clean 16:9 resolution under the 2300×1300 Store cap.
+# Drop to 1920×1080 if your monitor cannot fit a 2048-wide window.
+TARGET_W, TARGET_H = 2048, 1152
 
 _ES_CONTINUOUS       = 0x80000000
 _ES_SYSTEM_REQUIRED  = 0x00000001
@@ -35,18 +60,19 @@ _ES_DISPLAY_REQUIRED = 0x00000002
 # (page_label_for_ctrl_k, filename_slug, extra_wait_secs_after_nav)
 # Labels must be long enough to uniquely resolve in the fuzzy palette.
 # TIP: run a full scan before capturing so every page has real data to display.
-# Note: "What's Wrong" omits the trailing ? — special chars can confuse type_keys.
 PAGES = [
-    ("Overview",            "01_overview",         3.0),  # grade ring + KPI tiles — best thumbnail
-    ("Devices",             "02_devices",           3.5),  # OUI / risk-classified device inventory
-    ("What's Wrong",        "03_diagnosis",         3.5),  # plain-English one-click diagnosis
-    ("Network Map",         "04_network_map",       3.5),  # topology graph
-    ("Speed Test",          "05_speed_test",        2.5),  # speed + modem signal panel
-    ("Network Logger",      "06_network_logger",    2.5),  # continuous RTT / modem / mesh log
-    ("Security Overview",   "07_security_overview", 3.5),  # aggregate security findings
-    ("Protocol Visualizer", "08_protocol_viz",      3.0),  # animated ARP/DNS/TCP/DHCP/STP
-    ("Lab Mode",            "09_lab_mode",          2.5),  # guided CompTIA / CCNA exercises
-    ("Geolocation Map",     "10_geo_map",           3.5),  # offline MaxMind IP geolocation map
+    ("Home",                "01_home",              4.0),  # health ring + session strip + suggestions
+    ("Troubleshoot",        "02_troubleshoot",      2.5),  # Sprint 3: 8 symptom tiles → correct tool
+    ("Devices",             "03_devices",           3.5),  # Sprint 5: segments + health + device naming
+    ("App Traffic",         "04_app_traffic",       3.5),  # Sprint 6: per-host traffic breakdown
+    ("Network Map",         "05_network_map",       4.5),  # Sprint 6: Cytoscape.js interactive topology
+    ("Service Diagnostics", "06_service_diag",      3.5),  # v2.0: streaming/gaming service probes
+    ("Security Overview",   "07_security_overview", 3.5),  # aggregate security findings + grade
+    ("Threat Intel",        "08_threat_intel",      3.5),  # AbuseIPDB lookup + risk context
+    ("Speed Test",          "09_speed_test",        2.5),  # speed history + modem signal panel
+    ("Protocol Visualizer", "10_protocol_viz",      3.0),  # animated ARP/DNS/TCP/DHCP/STP diagrams
+    ("Lab Mode",            "11_lab_mode",          2.5),  # CompTIA N+ / CCNA guided exercises
+    ("Geolocation Map",     "12_geo_map",           3.5),  # offline MaxMind map — no API key needed
 ]
 
 
