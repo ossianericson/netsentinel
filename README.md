@@ -1,6 +1,7 @@
 [![Version](https://img.shields.io/github/v/release/ossianericson/netsentinel?include_prereleases&style=flat-square)](https://github.com/ossianericson/netsentinel/releases/latest)
 [![License](https://img.shields.io/github/license/ossianericson/netsentinel?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey?style=flat-square)](#install)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
 [![Tests](https://img.shields.io/badge/tests-4100%2B-brightgreen?style=flat-square)](tests/)
@@ -17,7 +18,11 @@ The free, open-source network monitor that works with **any** router, modem, or 
 
 ## Install
 
-**Windows** — prefer winget (keeps the app updated automatically):
+**Windows** — three options:
+
+[<img src="https://get.microsoft.com/images/en-us%20dark.svg" alt="Get it from Microsoft" height="52"/>](https://apps.microsoft.com/detail/9NZ124C7HJWS)
+
+Or via winget (keeps the app updated automatically):
 
 ```powershell
 winget install NetSentinel.NetSentinel
