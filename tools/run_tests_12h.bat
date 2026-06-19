@@ -32,7 +32,7 @@ echo.
 :: ─── Step 1/5 ─────────────────────────────────────────────────────────────────
 echo [1/5] Systematic pre-run...
 set STEP_START=%time%
-python "%~dp0systematic_test.py" --source --pause 0.4 --output-dir "%OUT%\sys_pre"
+python "%~dp0systematic_test.py" --source --pause 0.4 --output-dir "%OUT%\sys_pre" --focus-interval 1.5
 if errorlevel 1 (
     echo WARNING: systematic pre-run reported errors  [started %STEP_START%  ended %time%]
 ) else (
@@ -43,7 +43,8 @@ if errorlevel 1 (
 echo.
 echo [2/5] Monkey mild  (1500 iter)...
 set STEP_START=%time%
-python "%~dp0monkey_test.py" --source -n 1500 --chaos mild --seed 1 --mem-limit 1000 --output-dir "%OUT%\monkey_mild"
+python "%~dp0monkey_test.py" --source -n 1500 --chaos mild --seed 1 --mem-limit 1000 ^
+    --focus-interval 1.5 --output-dir "%OUT%\monkey_mild"
 if errorlevel 1 (
     echo WARNING: mild run reported errors            [started %STEP_START%  ended %time%]
 ) else (
@@ -54,7 +55,8 @@ if errorlevel 1 (
 echo.
 echo [3/5] Monkey moderate  (4500 iter)...
 set STEP_START=%time%
-python "%~dp0monkey_test.py" --source -n 4500 --chaos moderate --seed 42 --mem-limit 1200 --output-dir "%OUT%\monkey_moderate"
+python "%~dp0monkey_test.py" --source -n 4500 --chaos moderate --seed 42 --mem-limit 1200 ^
+    --focus-interval 1.5 --output-dir "%OUT%\monkey_moderate"
 if errorlevel 1 (
     echo WARNING: moderate run reported errors        [started %STEP_START%  ended %time%]
 ) else (
@@ -65,7 +67,8 @@ if errorlevel 1 (
 echo.
 echo [4/5] Monkey wild  (9000 iter)...
 set STEP_START=%time%
-python "%~dp0monkey_test.py" --source -n 9000 --chaos wild --seed 99 --mem-limit 1500 --output-dir "%OUT%\monkey_wild"
+python "%~dp0monkey_test.py" --source -n 9000 --chaos wild --seed 99 --mem-limit 1500 ^
+    --focus-interval 1.5 --output-dir "%OUT%\monkey_wild"
 if errorlevel 1 (
     echo WARNING: wild run reported errors            [started %STEP_START%  ended %time%]
 ) else (
@@ -76,7 +79,7 @@ if errorlevel 1 (
 echo.
 echo [5/5] Systematic post-run...
 set STEP_START=%time%
-python "%~dp0systematic_test.py" --source --pause 0.4 --output-dir "%OUT%\sys_post"
+python "%~dp0systematic_test.py" --source --pause 0.4 --output-dir "%OUT%\sys_post" --focus-interval 1.5
 if errorlevel 1 (
     echo WARNING: systematic post-run reported errors [started %STEP_START%  ended %time%]
 ) else (

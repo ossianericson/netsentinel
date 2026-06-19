@@ -75,7 +75,7 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.2.0"
+_VERSION = "1.3.0"
 _WINDOW_RE = ".*NetSentinel.*"
 _CONNECT_TIMEOUT = 60       # seconds to wait for the window after launch
 _CONNECT_POLL = 2.0         # seconds between connection attempts
@@ -170,14 +170,41 @@ _BLACKLIST: List[str] = [
     # --- Dangerous config actions ---
     "factory reset",
     "restore defaults",
+    # --- Active network probes added in v2.0+ ---
+    "run probe",        # Service Diagnostics — fires DNS/TCP/HTTPS/ICMP/traceroute
+    "diagnose",         # Service Heartbeat "Diagnose →" button → fires probes
+    "run health check", # health check probe
+    "check connection", # connectivity probe
+    "re-run",           # re-triggers any prior scan/probe
+    "run again",        # re-triggers any prior scan/probe
+    # --- Packet capture / active monitors (Scapy / Npcap) ---
+    "start capture",    # App Traffic — starts Scapy packet capture
+    "start sniff",      # 802.11 monitor — passive frame capture
+    "start detection",  # DHCP Rogue — passive ARP/DHCP sniff
+    # --- Network segment editor (opens blocking inline dialog) ---
+    "add segment",      # opens segment name/colour editor dialog
+    # --- Scheduled task triggers ---
+    "run now",          # fires scheduled report delivery immediately
+    "schedule now",     # fires a maintenance window or scheduled task
 ]
 
 # Safe pages to navigate to via the Ctrl+K command palette.
 # Only read-only / lightweight pages are listed.
 _SAFE_PAGES: List[str] = [
-    "Overview", "Home", "Help & Reference", "Feature Guide",
-    "Trend Forecasts", "IP Calculator", "Network Doc",
-    "Network Logger", "Geolocation Map", "Protocol Visualizer", "Lab Mode",
+    # Getting Started — always-safe read-only entry points
+    "Overview", "Home",
+    # Monitor — read-only aggregated views (no scan buttons)
+    "Active Monitors", "Network Timeline", "Availability History",
+    "Inventory Changes", "Uptime & SLA",
+    # Reports / Analysis — read-only
+    "Network Grade", "Trend Forecasts", "IP Calculator", "Network Doc",
+    "Root Cause Correlator",
+    # Always-on passive logger — read-only display
+    "Network Logger",
+    # Geolocation / viz — no network calls
+    "Geolocation Map", "Protocol Visualizer",
+    # Education — fully read-only
+    "Lab Mode", "Feature Guide", "Help & Reference",
 ]
 
 # Keyboard shortcuts that are safe to inject at any time.
@@ -204,7 +231,7 @@ class Config:
     cpu_wait_max: float = 12.0       # max seconds to wait for CPU to settle
     nav_prob: float = 0.15           # probability of a navigation action per iteration
     history_size: int = 15
-    focus_interval: float = 5.0     # seconds between focus-heartbeat pulses
+    focus_interval: float = 1.5     # seconds between focus-heartbeat pulses
     prevent_sleep: bool = True       # suppress Windows sleep/screensaver
     tracemalloc: bool = False        # enable in-process tracemalloc snapshots in app
 
@@ -225,6 +252,7 @@ class Stats:
     crashes: int = 0
     blacklisted: int = 0
     peak_rss_mb: float = 0.0
+    focus_stolen: int = 0   # how many times another window grabbed foreground
     by_type: Dict[str, int] = dataclasses.field(default_factory=dict)
     by_action: Dict[str, int] = dataclasses.field(default_factory=dict)
 
@@ -246,6 +274,7 @@ class Stats:
             "crashes": self.crashes,
             "blacklisted_skipped": self.blacklisted,
             "peak_rss_mb": round(self.peak_rss_mb, 1),
+            "focus_stolen_count": self.focus_stolen,
             "by_control_type": self.by_type,
             "by_action": self.by_action,
         }
@@ -394,6 +423,14 @@ def _wait_cpu(proc: psutil.Process, threshold: float, timeout: float) -> bool:
         except psutil.NoSuchProcess:
             return False
     return True   # proceed even if CPU is still high
+
+
+def _get_foreground_hwnd() -> int:
+    """Return the HWND of the current foreground window, or 0 on error."""
+    try:
+        return ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        return 0
 
 
 def _force_foreground(hwnd: int) -> None:
@@ -618,6 +655,56 @@ class MonkeyTester:
                         self._win.set_focus()
             except Exception:
                 pass  # non-fatal — health monitor handles real window loss
+
+    def _assert_focus(self) -> bool:
+        """Verify NetSentinel is the foreground window and reclaim it if not.
+
+        Called before every single click.  If another window (VSCode, Explorer,
+        a browser) stole focus since the last interaction, we reclaim it before
+        touching any control.  If reclaim fails, the iteration is skipped — we
+        never click into an unknown foreground window.
+
+        Returns True when the app is (or has been restored to) the foreground.
+        Returns False only when the hwnd is known and reclaim definitively failed.
+        """
+        try:
+            hwnd = getattr(self._win, "handle", 0) or 0
+            if not hwnd:
+                # No hwnd available — best-effort fallback
+                try:
+                    self._win.set_focus()
+                except Exception:
+                    pass  # non-fatal — window ok check in health monitor
+                return True
+            fg = _get_foreground_hwnd()
+            if fg == hwnd:
+                return True  # fast path — already foreground
+            # Focus drifted to another window
+            self.stats.focus_stolen += 1
+            # Screenshot what stole focus (first 5 times to avoid flood)
+            if self.cfg.screenshots and self.stats.focus_stolen <= 5:
+                _screenshot(
+                    f"focus_stolen_{self.stats.focus_stolen:02d}",
+                    self.log,
+                    self.cfg.output_dir,
+                )
+            self.log.debug(
+                "[focus] stolen by hwnd=0x%x (stolen_count=%d) — reclaiming",
+                fg, self.stats.focus_stolen,
+            )
+            _force_foreground(hwnd)
+            time.sleep(0.25)
+            fg2 = _get_foreground_hwnd()
+            if fg2 != hwnd:
+                self.log.warning(
+                    "[focus] reclaim failed: fg=0x%x still not our hwnd=0x%x "
+                    "(stolen_count=%d) — skipping iteration",
+                    fg2, hwnd, self.stats.focus_stolen,
+                )
+                return False
+            return True
+        except Exception:
+            return True  # non-fatal; proceed without blocking
 
     def _kill_stale_netsentinel(self) -> None:
         """Terminate any pre-existing NetSentinel processes before launching a new one.
@@ -1034,17 +1121,16 @@ class MonkeyTester:
         # Dismiss any unexpected modal that appeared since last iteration
         self._dismiss_blocking_dialogs()
 
-        # Ensure the app window has focus before every interaction.
-        # Use AttachThreadInput trick; fall back to set_focus() if hwnd unavailable.
-        try:
-            hwnd = getattr(self._win, "handle", 0) or 0
-            if hwnd:
-                _force_foreground(hwnd)
-            else:
-                self._win.set_focus()
-            time.sleep(0.1)
-        except Exception:
-            self.log.debug("set_focus() failed; continuing")
+        # Verify NetSentinel is the foreground window before touching any control.
+        # _assert_focus() reclaims focus when stolen and skips the iteration if
+        # reclaim fails — this prevents clicking controls in another app window.
+        if not self._assert_focus():
+            self.log.warning("[focus] skipping iteration %d (could not reclaim foreground)", n)
+            self.stats.skipped += 1
+            self.stats.completed += 1
+            self._last_iter_time = time.time()
+            return True
+        time.sleep(0.08)
 
         # Choose: navigation action or random control
         if random.random() < self.cfg.nav_prob:
@@ -1233,8 +1319,8 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Log file path (default: <output-dir>/monkey.log)")
     p.add_argument("--output-dir", default="test_output",
                    help="Directory for all generated output files (default: test_output)")
-    p.add_argument("--focus-interval", type=float, default=5.0, metavar="SECS",
-                   help="Seconds between focus-heartbeat pulses (default 5)")
+    p.add_argument("--focus-interval", type=float, default=1.5, metavar="SECS",
+                   help="Seconds between focus-heartbeat pulses (default 1.5)")
     p.add_argument("--no-prevent-sleep", action="store_true",
                    help="Do not suppress Windows sleep/screensaver")
     p.add_argument("--tracemalloc", action="store_true",
