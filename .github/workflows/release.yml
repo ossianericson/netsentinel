@@ -1,4 +1,4 @@
-﻿name: Build & Release
+name: Build & Release
 
 on:
   push:
@@ -61,7 +61,7 @@ jobs:
         run: python -m pytest tests/ -v --tb=short --cov=. --cov-report=html:htmlcov
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-windows
           path: htmlcov/
@@ -127,21 +127,21 @@ jobs:
           Write-Host "MSIX built: dist\NetSentinel-$ver.msix"
 
       - name: Upload MSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-msix
           path: dist/NetSentinel-*.msix
           overwrite: true
 
       - name: Upload Windows installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: dist/NetSentinel-Setup-*.exe
           overwrite: true
 
       - name: Upload Windows service artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-svc
           path: dist/NetSentinel-svc.exe
@@ -169,7 +169,7 @@ jobs:
         run: python -m pytest tests/ -v --tb=short --cov=. --cov-report=html:htmlcov
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-macos
           path: htmlcov/
@@ -194,14 +194,14 @@ jobs:
             zip NetSentinel-macOS.zip NetSentinel
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-app
           path: dist/NetSentinel-macOS.zip
           overwrite: true
 
       - name: Upload macOS CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-cli
           path: dist/NetSentinel-cli-macOS
@@ -238,7 +238,7 @@ jobs:
         run: python -m pytest tests/ -v --tb=short --cov=. --cov-report=html:htmlcov
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-linux
           path: htmlcov/
@@ -259,14 +259,14 @@ jobs:
         run: dist/NetSentinel --smoke
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-binary
           path: dist/NetSentinel
           overwrite: true
 
       - name: Upload Linux CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-cli
           path: dist/NetSentinel-cli-linux
