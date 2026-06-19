@@ -65,6 +65,7 @@ netsentinel_stderr.log
 
 # Generated output
 repomix-output.txt
+repomix.config.json
 release_body.md
 
 # One-shot migration/patch scripts (run once during development, not for contributors)

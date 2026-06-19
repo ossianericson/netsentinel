@@ -8,13 +8,13 @@ updates:
     labels:
       - "dependencies"
       - "pip"
-    
+
     # Better grouping to reduce PR spam
     groups:
       security-updates:
         applies-to: security-updates
         dependency-type: "production"
-      
+
       minor-patch-updates:
         dependency-type: "production"
         update-types:
@@ -32,3 +32,13 @@ updates:
       - dependency-name: "pytest"           # Major version jumps break test suite assumptions
       - dependency-name: "keyring"          # OS keychain behaviour varies; test before bumping
       - dependency-name: "cryptography"     # Scapy compatibility; 44→48 spans 4 major versions
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(actions)"

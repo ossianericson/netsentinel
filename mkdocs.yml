@@ -31,10 +31,11 @@ theme:
 
 nav:
   - Home: index.md
+  - Architecture: architecture.md
   - Contributing: contributing.md
   - Networking Guide: networking-guide.md
+  - Jargon Dictionary: jargon-dictionary.md
   - Privacy Policy: privacy-policy.md
-  - Store Submission: store-submission.md
 
 markdown_extensions:
   - admonition
