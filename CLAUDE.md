@@ -1055,7 +1055,7 @@ substitute "tests pass" or "screenshots show" for an actual walk-through of user
 When the user says "version bump", "bump version", "bump to X.Y.Z", or any variation:
 
 1. Determine the target version — use the version the user specifies, or increment the patch digit (X.Y.Z+1) if none given.
-2. Add a `### vX.Y.Z` entry at the top of `## Changelog` in `README.md` listing changes from this session (RULE-R1b).
+2. Add a `### vX.Y.Z` entry at the **top** of `CHANGELOG.md` with full detail (one bullet per logical change). Update the short `### vX.Y.Z (current)` block under `## Changelog` in `README.md` with a 3–5 bullet plain-English summary of the most important changes (RULE-R1b).
 3. Update "What's New" in `ui/dashboard.py` (`_section(f"What's New in v{app_ver}", [...])`) to match the changelog entry.
 4. Run `python bump_version.py X.Y.Z` — this updates all tracked version files, runs the consistency tests, **and automatically stages + commits the version files**. **Never edit version strings by hand across files.**
 5. If `bump_version.py` exits non-zero, fix the reported failures before continuing.
@@ -1071,8 +1071,10 @@ git push origin vX.Y.Z
 
 Do NOT manually edit `app.py`, `cli.py`, `apm.yml`, `installer.iss`, winget manifests, etc. — `bump_version.py` handles all of them.
 
-### RULE-R1b (blocking): Every version bump needs a README changelog entry
-Add a `### vX.Y.Z` entry at the top of `## Changelog` in README.md *before* running `bump_version.py`. The script promotes the topmost header.
+### RULE-R1b (blocking): Every version bump needs a CHANGELOG.md entry and a README.md summary update
+Before running `bump_version.py`:
+1. Add a `### vX.Y.Z` entry at the **top** of `CHANGELOG.md` — full detail, one bullet per logical change, following the format already in that file. `bump_version.py` promotes this topmost header to the new version number.
+2. Update the short `### vX.Y.Z (current)` block under `## Changelog` in `README.md` to a 3–5 bullet plain-English summary of the most important changes. The full history lives in CHANGELOG.md; README.md shows only the current release highlights. `bump_version.py` also promotes this topmost header.
 
 ### RULE-R2 (blocking): Winget locale manifest must be full — never minimal
 Every winget submission must include all locale fields: Description, Tags, Moniker, PublisherUrl, PublisherSupportUrl, PackageUrl, LicenseUrl, ReleaseNotesUrl.

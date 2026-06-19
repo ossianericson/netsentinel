@@ -116,6 +116,12 @@ def bump(ver: str) -> None:
          rf'\g<1>{ver}',
          count=1)
 
+    # CHANGELOG.md  ── promote the topmost header to the new version
+    _sub(ROOT / "CHANGELOG.md",
+         rf'(###\s+v){_VER}',
+         rf'\g<1>{ver}',
+         count=1)
+
     # CLAUDE.md  ── "Current version" marker and version history chain
     _sub(ROOT / "CLAUDE.md",
          rf'(Current version:\s*\*\*v){_VER}(\*\*)',
@@ -163,7 +169,7 @@ def bump(ver: str) -> None:
         ".github/winget/NetSentinel.NetSentinel.yaml",
         ".github/winget/NetSentinel.NetSentinel.installer.yaml",
         ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml",
-        "README.md", "CLAUDE.md", "AGENTS.md", "ui/dashboard.py",
+        "README.md", "CHANGELOG.md", "CLAUDE.md", "AGENTS.md", "ui/dashboard.py",
         ".apm/instructions/project-vision.instructions.md",
         ".claude/rules/project-vision.md",
         ".github/instructions/project-vision.instructions.md",
