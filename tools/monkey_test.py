@@ -1,0 +1,1718 @@
+#!/usr/bin/env python3
+"""
+tools/monkey_test.py - Chaos / monkey harness for NetSentinel
+==============================================================
+Launches the app, then hammers the live UIA control tree for N iterations,
+logging every interaction and detecting crashes, hangs, and memory leaks.
+
+Usage (exe):
+    python tools/monkey_test.py "dist\\NetSentinel.exe"
+
+Usage (source - skips build step, faster iteration):
+    python tools/monkey_test.py --source
+
+Usage (attach to already-running app):
+    python tools/monkey_test.py --connect
+
+Options:
+    --source              Launch via "python app.py" instead of an exe
+    --connect             Attach to an already-running NetSentinel window
+    -n / --iterations N   Iterations (default: 200)
+    --chaos LEVEL         mild | moderate | wild (default: moderate)
+    --seed N              RNG seed for reproducibility
+    --no-screenshots      Skip PIL screenshots on crash
+    --mem-limit MB        RSS limit before leak warning (default: 800)
+    --log FILE            Log file path (default: netsentinel_monkey.log)
+
+Requirements:
+    pip install pywinauto psutil Pillow
+
+Exit codes:
+    0  All iterations completed, no crash
+    1  App crashed or became unresponsive during testing
+    2  Could not launch or connect to app
+"""
+
+import argparse
+import collections
+import ctypes
+import dataclasses
+import json
+import logging
+import random
+import string
+import subprocess
+import sys
+import time
+import threading
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
+
+# ── Dependency checks ──────────────────────────────────────────────────────────
+
+try:
+    import psutil
+except ImportError:
+    if __name__ == "__main__":
+        sys.exit("ERROR: psutil required.  pip install psutil")
+    raise ImportError("psutil required — pip install psutil")
+
+try:
+    from pywinauto import Application, Desktop
+    from pywinauto.base_wrapper import ElementNotEnabled, ElementNotVisible
+    from pywinauto.findwindows import ElementNotFoundError
+except ImportError:
+    if __name__ == "__main__":
+        sys.exit("ERROR: pywinauto required.  pip install pywinauto")
+    raise ImportError("pywinauto required — pip install pywinauto")
+
+try:
+    from PIL import ImageGrab
+    _HAS_PIL = True
+except ImportError:
+    _HAS_PIL = False
+
+# ── Constants ──────────────────────────────────────────────────────────────────
+
+_VERSION = "1.6.4"
+# Title STARTS with "NetSentinel" — never matches VS Code's
+# "monkey_test.py — NetSentinel — Visual Studio Code" title.
+_WINDOW_RE = r"^NetSentinel"
+_CONNECT_TIMEOUT = 60       # seconds to wait for the window after launch
+_CONNECT_POLL = 2.0         # seconds between connection attempts
+_HEALTH_INTERVAL = 2.0      # seconds between background health checks
+_UNRESPONSIVE_SECS = 45     # seconds without a completed iteration before hang alarm
+                            # (raised from 20 — "Update Feeds" on Threat Intel takes ~26 s)
+
+# ── Windows power management ───────────────────────────────────────────────────
+_ES_CONTINUOUS       = 0x80000000
+_ES_SYSTEM_REQUIRED  = 0x00000001
+_ES_DISPLAY_REQUIRED = 0x00000002
+
+# UIA control types the dispatcher knows how to handle.
+# Hyperlink is intentionally excluded — clicking UIA Hyperlink controls
+# activates their default action (follows the link), which opens Chrome,
+# IE, Spotify, or any registered URI-scheme handler outside the app.
+_SUPPORTED_TYPES = frozenset({
+    "Button", "Edit", "ComboBox", "CheckBox", "RadioButton",
+    "ListItem", "TabItem", "Slider", "TreeItem",
+    "MenuItem", "SplitButton",
+})
+
+# ── NetSentinel-specific blacklist ─────────────────────────────────────────────
+#
+# Matched case-insensitively against (control_name + " " + automation_id).
+# Add patterns here whenever a new page introduces a dangerous button.
+#
+_BLACKLIST: List[str] = [
+    # --- External side effects (notifications, webhooks, email) ---
+    "send test",        # "Send Test Email", "Test Send"
+    "test email",
+    "test webhook",
+    "test push",        # Pushover test
+    "test ntfy",
+    "test telegram",
+    "send email",
+    "publish",          # MQTT "Publish" button
+    # --- Active network scans (long-running, may affect real network) ---
+    "run login test",   # credentialed_scan — can lock accounts
+    "start scan",
+    "launch scan",
+    "full discovery",
+    "syn scan",
+    "port scan",
+    "run diagnostics",  # triggers several network probes
+    # --- Destructive data operations ---
+    "delete",
+    "remove device",
+    "clear all",
+    "wipe",
+    "purge",
+    "reset to default",
+    # --- External installer triggers (hangs UI waiting for winget) ---
+    "install speedtest",
+    "install ookla",
+    "install npcap",
+    # --- Window chrome (frameless titlebar close/min/max buttons) ---
+    # These are Segoe MDL2 glyphs used in NetSentinel's custom header.
+    # The actual text is a private-use Unicode code point, not a word.
+    "",   # Cancel / Close  (AppHeaderMixin close button)
+    "",   # Close (alternate)
+    "",   # Cancel (alternate)
+    "",   # Maximize
+    "",   # Restore Down
+    "",   # Minimize  -- safe to skip clicks here too
+    # Catch-all for any _ChromeButton by auto_id (close/min/max that
+    # slipped past the 38px spatial filter — confirmed crash cause from seed=99).
+    "_chromebutton",   # matches auto_id: QApplication.Dashboard.QWidget.appBar._ChromeButton
+    # --- System power / OS lifecycle (initiates Windows restart or shutdown) ---
+    # These are the primary source of the "Windows restart dialog" bug — any button
+    # containing these words must never be clicked during automated testing.
+    "restart",       # "Restart", "Restart Service", "Restart Now", "Restart App"
+    "reboot",        # "Reboot Router", "Reboot Device", "Reboot System"
+    "shutdown",      # "Shutdown", "Shut Down System"
+    "power off",     # "Power Off Device"
+    # --- App lifecycle ---
+    "quit",
+    "exit application",
+    # --- File open/save dialogs (Windows native) — must never be opened ---
+    # A Windows file picker steals focus from the app and stalls the harness.
+    "browse",           # any "Browse…" button for file/folder selection
+    "floor plan",       # WiFi Heatmap — floor plan image import
+    "choose file",      # generic file picker label
+    "select file",      # generic file picker label
+    "load plugin",      # plugin file loader
+    "import plugin",    # plugin file loader
+    "save as",          # Save As… dialog
+    "generate report",  # triggers a file-save dialog
+    # --- Export / file creation (clutters disk, may open save dialogs) ---
+    "export pdf",
+    "export csv",
+    "export json",
+    "export report",
+    "export png",       # Network Map / WiFi Heatmap — opens native OS file save dialog
+    "save pdf",
+    "save report",
+    # --- Log-hub file loaders (opens native OS file open dialog) ---
+    "load  analyse",    # Log Hub "⊕  Load  Analyse" (double-space as in UIA name)
+    "load analyse",     # variant — single-space normalised form
+    # --- Credential / auth dialogs that block automation ---
+    "sign in",
+    "authenticate",
+    # --- Dangerous config actions ---
+    "factory reset",
+    "restore defaults",
+    # --- Active network probes added in v2.0+ ---
+    "run probe",        # Service Diagnostics — fires DNS/TCP/HTTPS/ICMP/traceroute
+    "diagnose",         # Service Heartbeat "Diagnose →" button → fires probes
+    "run health check", # health check probe
+    "check connection", # connectivity probe
+    "re-run",           # re-triggers any prior scan/probe
+    "run again",        # re-triggers any prior scan/probe
+    # --- Packet capture / active monitors (Scapy / Npcap) ---
+    # "start capture" only matched "App Traffic" button but NOT "Start STP Capture"
+    # or "Start Broadcast Capture" (word between "start" and "capture").
+    # Replace with bare "capture" to catch ALL capture-starting buttons regardless
+    # of what appears between the words.
+    "capture",          # catches: "Start STP Capture", "Start Broadcast Capture",
+                        #          "Start App Traffic Capture", etc.
+    "start sniff",      # 802.11 monitor — passive frame capture
+    "start detection",  # DHCP Rogue — passive ARP/DHCP sniff
+    # --- Npcap install/download buttons (open external browser or installer) ---
+    # NpcapMissingBanner shows these buttons on all Npcap-required pages.
+    # Clicking them opens a browser (focus steal) or a Windows installer dialog.
+    "download npcap",   # NpcapMissingBanner "Download Npcap →" (Windows)
+    "get npcap",        # NpcapMissingBanner "Get Npcap at npcap.com →" (Store)
+    "view download",    # NpcapMissingBanner "View download →" (macOS/Linux)
+    # --- Network segment editor (opens blocking inline dialog) ---
+    "add segment",      # opens segment name/colour editor dialog
+    # --- Scheduled task triggers ---
+    "run now",          # fires scheduled report delivery immediately
+    "schedule now",     # fires a maintenance window or scheduled task
+    # --- Extend / Hardware Hub (file dialogs + blocking modals) ---
+    # These buttons open QFileDialog or modal wizard dialogs.  Even with
+    # DontUseNativeDialog, the dialog briefly takes foreground; if
+    # _post_click_dialog_guard() fires while GetForegroundWindow() transiently
+    # returns the Windows Desktop HWND, _dismiss_native_window() sends
+    # WM_CLOSE to the Desktop, triggering the Shut Down Windows dialog.
+    "add integration",  # HardwareIntegrationPage "＋ Add Integration" → QFileDialog.getOpenFileName
+    "import .nspkg",    # HardwareIntegrationPage "⬡ Import .nspkg" → QFileDialog.getOpenFileName
+    "nspkg",            # catch any variant of the .nspkg import button
+    "save template",    # PluginGuide "💾 Save template as .py…" → QFileDialog.getSaveFileName
+    "new plugin",       # HardwareIntegrationPage "⬡ New Plugin" → blocking modal wizard dialog
+    # --- HubCard per-plugin action buttons (open file dialogs or credential dialogs) ---
+    "re-import",        # HubCard "⤵ Re-import" → QFileDialog.getOpenFileName via _on_browse()
+    "re-enter",         # HubCard "🔑 Re-enter Password" → show_credential_dialog() modal
+    "install dep",      # HubCard "⬇ Install dependency" → PipInstallDialog modal
+]
+
+# Safe pages to navigate to via the Ctrl+K command palette.
+# Only read-only / lightweight pages are listed.
+_SAFE_PAGES: List[str] = [
+    # Getting Started — always-safe read-only entry points
+    "Overview", "Home",
+    # Monitor — read-only aggregated views (no scan buttons)
+    "Active Monitors", "Network Timeline", "Availability History",
+    "Inventory Changes", "Uptime & SLA",
+    # Reports / Analysis — read-only
+    "Network Grade", "Trend Forecasts", "IP Calculator", "Network Doc",
+    "Root Cause Correlator",
+    # Always-on passive logger — read-only display
+    "Network Logger",
+    # Geolocation / viz — no network calls
+    "Geolocation Map", "Protocol Visualizer",
+    # Education — fully read-only
+    "Lab Mode", "Feature Guide", "Help & Reference",
+]
+
+# Keyboard shortcuts that are safe to inject at any time.
+_SAFE_SHORTCUTS: List[str] = [
+    "^f",       # Ctrl+F — sidebar search
+    "{ESC}",    # Esc    — close flyout / dismiss overlay
+]
+
+# ── Configuration ──────────────────────────────────────────────────────────────
+
+@dataclasses.dataclass
+class Config:
+    exe_path: Optional[str] = None   # None when using --source or --connect
+    use_source: bool = False
+    connect_only: bool = False       # attach to already-running app, do not launch
+    iterations: int = 200
+    chaos: str = "moderate"          # mild | moderate | wild
+    seed: Optional[int] = None
+    screenshots: bool = True
+    mem_limit_mb: int = 1500
+    output_dir: str = "test_output"  # all generated files written here
+    log_file: str = ""               # empty = auto-derive from output_dir
+    cpu_threshold: float = 35.0      # % CPU — wait below this before acting
+    cpu_wait_max: float = 12.0       # max seconds to wait for CPU to settle
+    nav_prob: float = 0.15           # probability of a navigation action per iteration
+    history_size: int = 15
+    focus_interval: float = 1.5     # seconds between focus-heartbeat pulses
+    prevent_sleep: bool = True       # suppress Windows sleep/screensaver
+    tracemalloc: bool = False        # enable in-process tracemalloc snapshots in app
+
+    def resolved_log_file(self) -> str:
+        if self.log_file:
+            return self.log_file
+        return str(Path(self.output_dir) / "monkey.log")
+
+
+# ── Statistics ─────────────────────────────────────────────────────────────────
+
+@dataclasses.dataclass
+class Stats:
+    t0: float = dataclasses.field(default_factory=time.time)
+    completed: int = 0
+    skipped: int = 0
+    exceptions: int = 0
+    crashes: int = 0
+    blacklisted: int = 0
+    peak_rss_mb: float = 0.0
+    focus_stolen: int = 0   # how many times another window grabbed foreground
+    by_type: Dict[str, int] = dataclasses.field(default_factory=dict)
+    by_action: Dict[str, int] = dataclasses.field(default_factory=dict)
+
+    def record(self, ctype: str, action: str) -> None:
+        self.by_type[ctype] = self.by_type.get(ctype, 0) + 1
+        key = action.split(":")[0]
+        self.by_action[key] = self.by_action.get(key, 0) + 1
+
+    @property
+    def elapsed(self) -> float:
+        return time.time() - self.t0
+
+    def to_dict(self) -> Dict:
+        return {
+            "elapsed_s": round(self.elapsed, 1),
+            "iterations_completed": self.completed,
+            "iterations_skipped": self.skipped,
+            "exceptions_caught": self.exceptions,
+            "crashes": self.crashes,
+            "blacklisted_skipped": self.blacklisted,
+            "peak_rss_mb": round(self.peak_rss_mb, 1),
+            "focus_stolen_count": self.focus_stolen,
+            "by_control_type": self.by_type,
+            "by_action": self.by_action,
+        }
+
+
+# ── Action history ─────────────────────────────────────────────────────────────
+
+@dataclasses.dataclass
+class Action:
+    n: int
+    ts: str
+    ctype: str
+    name: str
+    auto_id: str
+    action: str
+    result: str
+
+
+class History:
+    def __init__(self, maxsize: int):
+        self._q: collections.deque = collections.deque(maxlen=maxsize)
+
+    def add(self, a: Action) -> None:
+        self._q.append(a)
+
+    def dump(self) -> List[Dict]:
+        return [dataclasses.asdict(a) for a in self._q]
+
+    def fmt(self) -> str:
+        lines = ["Last actions (oldest -> newest):"]
+        for a in self._q:
+            lines.append(
+                f"  [{a.ts}] #{a.n:4d}  {a.ctype:<14} {a.action:<24}  "
+                f"name={a.name!r}  -> {a.result}"
+            )
+        return "\n".join(lines)
+
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+
+def _setup_log(log_file: str) -> logging.Logger:
+    log = logging.getLogger("monkey")
+    log.setLevel(logging.DEBUG)
+    fmt = logging.Formatter("%(asctime)s [%(levelname)-5s] %(message)s", "%H:%M:%S.%f"[:-3])
+    # Use errors='replace' so non-cp1252 characters in window titles / control
+    # names produce a '?' rather than crashing the entire test run.
+    import io as _io
+    ch = logging.StreamHandler(_io.TextIOWrapper(
+        sys.stdout.buffer, encoding=sys.stdout.encoding or "utf-8", errors="replace"
+    ))
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(fmt)
+    log.addHandler(ch)
+    fh = logging.FileHandler(log_file, encoding="utf-8")
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(fmt)
+    log.addHandler(fh)
+    return log
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _safe_name(ctrl) -> str:
+    try:
+        return (ctrl.window_text() or "").strip()[:80]
+    except Exception:
+        return ""
+
+
+def _safe_id(ctrl) -> str:
+    try:
+        return (ctrl.element_info.automation_id or "").strip()[:80]
+    except Exception:
+        return ""
+
+
+def _safe_type(ctrl) -> str:
+    try:
+        return ctrl.element_info.control_type or "Unknown"
+    except Exception:
+        return "Unknown"
+
+
+def _is_main_window(win) -> bool:
+    """True when *win* looks like the main app window and not a toast / popup.
+
+    NetSentinel's own toast notifications and Windows system-tray popups are
+    small (< 600 × 400 px).  The main app window is always larger.
+    """
+    try:
+        r = win.rectangle()
+        return (r.right - r.left) >= 600 and (r.bottom - r.top) >= 400
+    except Exception:
+        return False
+
+
+# Process names that are never NetSentinel — prevents connecting to VS Code
+# when its window title contains "NetSentinel" (workspace folder name).
+_EXCLUDED_PROCESS_NAMES = frozenset({
+    "code.exe",       # VS Code
+    "code - insiders.exe",
+    "devenv.exe",     # Visual Studio
+    "msedge.exe",     # Edge
+    "chrome.exe",
+    "firefox.exe",
+    "explorer.exe",   # Windows Explorer
+    "notepad.exe",
+    "notepad++.exe",
+})
+
+
+def _is_netsentinel_window(win, expected_pid: Optional[int] = None) -> bool:
+    """True when *win* is the NetSentinel main window, not an IDE or browser.
+
+    Checks in order: size (fast), process PID match (when we launched the app),
+    process name exclusion (blocks VS Code, browsers, etc.).
+    """
+    if not _is_main_window(win):
+        return False
+    try:
+        win_pid = win.element_info.process_id
+        # If we know which PID we launched, the window must belong to it.
+        if expected_pid is not None and win_pid != expected_pid:
+            return False
+        # Reject windows owned by known IDEs / browsers by process name.
+        proc_name = psutil.Process(win_pid).name().lower()
+        if proc_name in _EXCLUDED_PROCESS_NAMES:
+            return False
+    except Exception:
+        pass  # non-fatal — fall back to size-only check
+    return True
+
+
+def _window_title_ok(win) -> bool:
+    """True when the window title matches _WINDOW_RE (used only in --connect fallback)."""
+    try:
+        import re as _re
+        return bool(_re.search(_WINDOW_RE, win.window_text() or ""))
+    except Exception:
+        return False
+
+
+def _is_blacklisted(name: str, auto_id: str) -> bool:
+    combined = (name + " " + auto_id).lower()
+    return any(pat in combined for pat in _BLACKLIST)
+
+
+def _realistic_text(chaos: str) -> str:
+    """Return context-aware input text rather than pure random garbage."""
+    ips = ["192.168.1.1", "192.168.0.1", "10.0.0.1", "172.16.0.1",
+           "192.168.1.100", "10.0.0.254", "0.0.0.0"]
+    hosts = ["gateway", "router", "nas", "desktop-1", "laptop", "raspberrypi", "localhost"]
+    ports = ["80", "443", "22", "8080", "3000", "8443", "53"]
+    emails = ["test@example.com", "admin@local.net"]
+
+    if chaos == "mild":
+        return random.choice(ips + hosts)
+    if chaos == "moderate":
+        pool = ips + hosts + ports + emails + ["", "255.255.255.0", "subnet"]
+        return random.choice(pool)
+    # wild — include some genuinely junk inputs
+    junk = "".join(random.choices(string.printable[:80], k=random.randint(1, 40)))
+    pool = ips + hosts + ports + [junk, "", " " * 8, "'; DROP TABLE devices; --"]
+    return random.choice(pool)
+
+
+def _screenshot(label: str, log: logging.Logger, output_dir: str = ".") -> Optional[str]:
+    if not _HAS_PIL:
+        return None
+    try:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = str(Path(output_dir) / f"monkey_{label}_{ts}.png")
+        ImageGrab.grab().save(path)
+        log.info("Screenshot: %s", path)
+        return path
+    except Exception as exc:
+        log.debug("Screenshot failed: %s", exc)
+        return None
+
+
+def _wait_cpu(proc: psutil.Process, threshold: float, timeout: float) -> bool:
+    """Return when CPU% < threshold, or after timeout. Always returns True (best-effort)."""
+    deadline = time.time() + timeout
+    try:
+        proc.cpu_percent(interval=None)   # prime the counter
+    except psutil.NoSuchProcess:
+        return False
+    while time.time() < deadline:
+        try:
+            if proc.cpu_percent(interval=0.4) < threshold:
+                return True
+        except psutil.NoSuchProcess:
+            return False
+    return True   # proceed even if CPU is still high
+
+
+def _get_foreground_hwnd() -> int:
+    """Return the HWND of the current foreground window, or 0 on error."""
+    try:
+        return ctypes.windll.user32.GetForegroundWindow()
+    except Exception:
+        return 0
+
+
+def _is_system_hwnd(hwnd: int) -> bool:
+    """Return True when *hwnd* belongs to a Windows shell or system window.
+
+    Sending WM_CLOSE (or WM_COMMAND/IDCANCEL) to the Desktop/Shell window
+    triggers the "Shut Down Windows" dialog — the same mechanism as the
+    Alt+F4-to-Desktop bug fixed in fac15b5.  This guard must be checked
+    before every call to _dismiss_native_window() so we never accidentally
+    close-message a system window regardless of which button was last clicked.
+
+    Covered cases:
+      HWND 0 / NULL         — GetForegroundWindow() returned NULL (no focused window)
+      GetDesktopWindow()    — the desktop root window (class "Progman")
+      GetShellWindow()      — the Windows shell host
+      class "Progman"       — desktop icon host (same as Desktop on most systems)
+      class "WorkerW"       — behind-the-desktop wallpaper worker
+      class "DV2ControlHost"— Windows taskbar / Start menu host
+      class "Shell_TrayWnd" — primary taskbar window
+      class "Shell_SecondaryTrayWnd" — secondary monitor taskbar
+    """
+    if not hwnd:
+        return True
+    try:
+        user32 = ctypes.windll.user32
+        if hwnd == user32.GetDesktopWindow():
+            return True
+        if hwnd == user32.GetShellWindow():
+            return True
+        buf = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, buf, 256)
+        if buf.value in (
+            "Progman", "WorkerW", "DV2ControlHost",
+            "Shell_TrayWnd", "Shell_SecondaryTrayWnd",
+        ):
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _force_foreground(hwnd: int) -> None:
+    """Force a window to the foreground using the AttachThreadInput trick.
+
+    Plain SetForegroundWindow silently fails from background processes after
+    Windows engages focus-theft protection.  Attaching to the target thread's
+    input queue grants the required permission.
+    """
+    try:
+        user32   = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        cur_tid  = kernel32.GetCurrentThreadId()
+        tgt_tid  = user32.GetWindowThreadProcessId(hwnd, None)
+        attached = (tgt_tid and cur_tid != tgt_tid and
+                    bool(user32.AttachThreadInput(cur_tid, tgt_tid, True)))
+        try:
+            user32.ShowWindow(hwnd, 9)        # SW_RESTORE (un-minimise if needed)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            if attached:
+                user32.AttachThreadInput(cur_tid, tgt_tid, False)
+    except Exception:
+        pass  # non-fatal — best-effort; health monitor catches real window loss
+
+
+def _prevent_sleep_begin(log: logging.Logger) -> None:
+    """Prevent Windows sleep and screensaver while this process runs."""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(
+            _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
+        )
+        log.info("[power] Sleep and screensaver suppressed")
+    except Exception as exc:
+        log.warning("[power] Could not suppress sleep: %s", exc)
+
+
+def _prevent_sleep_end(log: logging.Logger) -> None:
+    """Restore default Windows sleep/screensaver behaviour."""
+    try:
+        ctypes.windll.kernel32.SetThreadExecutionState(_ES_CONTINUOUS)
+        log.info("[power] Sleep and screensaver restored")
+    except Exception:
+        pass  # non-fatal
+
+
+# ── Control interaction dispatcher ────────────────────────────────────────────
+
+def _act_button(ctrl, chaos: str) -> str:
+    ctrl.click_input()
+    return "click"
+
+
+def _act_edit(ctrl, chaos: str) -> str:
+    text = _realistic_text(chaos)
+    # Strip chars that pywinauto type_keys() treats as key-sequence tokens;
+    # leaving them in raises KeySequenceError on controls like port-number fields.
+    _PYWINAUTO_SPECIAL = str.maketrans("", "", "+^%~(){}")
+    safe_text = text.translate(_PYWINAUTO_SPECIAL)
+    try:
+        ctrl.set_focus()
+        # select-all then overwrite, rather than appending
+        ctrl.type_keys("^a", pause=0.05)
+    except Exception:
+        logging.debug("select-all failed; continuing")
+    ctrl.type_keys(safe_text, with_spaces=True, pause=0.02)
+    return f"type:{safe_text!r}"
+
+
+def _act_combobox(ctrl, chaos: str) -> str:
+    try:
+        count = ctrl.item_count()
+        if count and count > 0:
+            idx = random.randint(0, min(count - 1, 6))
+            ctrl.select(idx)
+            return f"select:{idx}"
+    except Exception:
+        logging.debug("item_count or select failed")
+    ctrl.click_input()
+    time.sleep(0.15)  # let popup render
+    try:
+        # Immediately close the dropdown we just opened. Without this, the popup
+        # holds focus for the rest of the run and _assert_focus() skips every
+        # subsequent iteration (accounts for ~80 % skip rate in mild/wild chaos).
+        ctrl.type_keys("{ESCAPE}")
+    except Exception:
+        pass  # non-fatal — popup may have already closed
+    return "click_open"
+
+
+def _act_checkbox(ctrl, chaos: str) -> str:
+    ctrl.toggle()
+    return "toggle"
+
+
+def _act_radio(ctrl, chaos: str) -> str:
+    ctrl.click_input()
+    return "click"
+
+
+def _act_listitem(ctrl, chaos: str) -> str:
+    ctrl.click_input()
+    return "click"
+
+
+def _act_tabitem(ctrl, chaos: str) -> str:
+    ctrl.click_input()
+    return "click_tab"
+
+
+def _act_slider(ctrl, chaos: str) -> str:
+    try:
+        r = ctrl.rectangle()
+        w = r.right - r.left
+        x = int(w * random.uniform(0.1, 0.9))
+        y = (r.bottom - r.top) // 2
+        ctrl.click_input(coords=(x, y))
+        return "slide"
+    except Exception:
+        ctrl.click_input()
+        return "click_fallback"
+
+
+def _act_treeitem(ctrl, chaos: str) -> str:
+    ctrl.click_input()
+    return "click"
+
+
+def _act_fallback(ctrl, chaos: str) -> str:
+    ctrl.click_input()
+    return "click_fallback"
+
+
+_DISPATCHER: Dict[str, Callable] = {
+    "Button":       _act_button,
+    "Edit":         _act_edit,
+    "ComboBox":     _act_combobox,
+    "CheckBox":     _act_checkbox,
+    "RadioButton":  _act_radio,
+    "ListItem":     _act_listitem,
+    "TabItem":      _act_tabitem,
+    "Slider":       _act_slider,
+    "TreeItem":     _act_treeitem,
+    "MenuItem":     _act_button,
+    "SplitButton":  _act_button,
+}
+
+
+# ── Navigation actions ─────────────────────────────────────────────────────────
+
+def _nav_shortcut(win, chaos: str) -> str:
+    sc = random.choice(_SAFE_SHORTCUTS)
+    win.type_keys(sc)
+    time.sleep(0.25)
+    return f"shortcut:{sc}"
+
+
+def _nav_command_palette(win, chaos: str) -> str:
+    """Open Ctrl+K, type a partial page name, confirm, then close if needed."""
+    page = random.choice(_SAFE_PAGES)
+    try:
+        win.type_keys("^k")
+        time.sleep(0.45)
+        # Type only first 6 chars for fuzzy match
+        win.type_keys(page[:6], with_spaces=True, pause=0.04)
+        time.sleep(0.30)
+        win.type_keys("{ENTER}")
+        time.sleep(0.50)
+        return f"palette:{page}"
+    except Exception as exc:
+        try:
+            win.type_keys("{ESC}")
+        except Exception:
+            logging.debug("ESC after palette error failed")
+        return f"palette_err:{exc.__class__.__name__}"
+
+
+def _nav_escape(win, chaos: str) -> str:
+    """Dismiss any overlay / flyout that may have opened."""
+    win.type_keys("{ESC}")
+    time.sleep(0.2)
+    return "esc"
+
+
+_NAV_MILD = [_nav_shortcut, _nav_escape]
+_NAV_MODERATE = [_nav_shortcut, _nav_command_palette, _nav_escape]
+_NAV_WILD = [_nav_shortcut, _nav_command_palette, _nav_escape, _nav_escape, _nav_command_palette]
+
+
+def _nav_pool(chaos: str) -> List[Callable]:
+    return {"mild": _NAV_MILD, "wild": _NAV_WILD}.get(chaos, _NAV_MODERATE)
+
+
+# ── Main tester ────────────────────────────────────────────────────────────────
+
+class MonkeyTester:
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
+        self.log = _setup_log(cfg.resolved_log_file())
+        random.seed(cfg.seed)
+
+        self.stats = Stats()
+        self.hist = History(cfg.history_size)
+
+        self._proc: Optional[psutil.Process] = None
+        self._app: Optional[Application] = None
+        self._win = None
+        self._last_iter_time = time.time()
+        self._stop = threading.Event()
+
+    # ── Focus heartbeat & power management ───────────────────────────────
+
+    def _focus_heartbeat(self) -> None:
+        """Background thread: re-asserts window focus every focus_interval seconds.
+
+        Windows blocks SetForegroundWindow from background processes after a while.
+        The AttachThreadInput trick in _force_foreground bypasses this restriction
+        so the tested app stays in the foreground between chaos iterations.
+        """
+        while not self._stop.is_set():
+            self._stop.wait(self.cfg.focus_interval)
+            try:
+                if self._win is not None and self._win.exists():
+                    hwnd = getattr(self._win, "handle", 0) or 0
+                    if hwnd:
+                        _force_foreground(hwnd)
+                    else:
+                        self._win.set_focus()
+            except Exception:
+                pass  # non-fatal — health monitor handles real window loss
+
+    def _assert_focus(self) -> bool:
+        """Verify NetSentinel is the foreground window and reclaim it if not.
+
+        Called before every single click.  If another window (VSCode, Explorer,
+        a browser) stole focus since the last interaction, we reclaim it before
+        touching any control.  If reclaim fails, the iteration is skipped — we
+        never click into an unknown foreground window.
+
+        Returns True when the app is (or has been restored to) the foreground.
+        Returns False only when the hwnd is known and reclaim definitively failed.
+        """
+        try:
+            hwnd = getattr(self._win, "handle", 0) or 0
+            if not hwnd:
+                # No hwnd available — best-effort fallback
+                try:
+                    self._win.set_focus()
+                except Exception:
+                    pass  # non-fatal — window ok check in health monitor
+                return True
+            fg = _get_foreground_hwnd()
+            if fg == hwnd:
+                return True  # fast path — already foreground
+            # Focus drifted to another window
+            self.stats.focus_stolen += 1
+            # Screenshot what stole focus (first 5 times to avoid flood)
+            if self.cfg.screenshots and self.stats.focus_stolen <= 5:
+                _screenshot(
+                    f"focus_stolen_{self.stats.focus_stolen:02d}",
+                    self.log,
+                    self.cfg.output_dir,
+                )
+            self.log.debug(
+                "[focus] stolen by hwnd=0x%x (stolen_count=%d) — reclaiming",
+                fg, self.stats.focus_stolen,
+            )
+            _force_foreground(hwnd)
+            time.sleep(0.25)
+            fg2 = _get_foreground_hwnd()
+            if fg2 != hwnd:
+                # Direct reclaim failed — try to dismiss the foreign window before giving up.
+                # This recovers from dialogs that the post-click guard and blacklist both
+                # missed (e.g. a newly added page that opens a file picker).
+                self.log.debug(
+                    "[focus] reclaim failed (fg=0x%x) — attempting to dismiss foreign window",
+                    fg2,
+                )
+                # Root guard: same protection as _post_click_dialog_guard — never
+                # send WM_CLOSE to the Desktop/Shell (triggers Shut Down Windows dialog).
+                if _is_system_hwnd(fg2):
+                    self.log.warning(
+                        "[focus] fg=0x%x is a system/desktop window — skipping dismiss "
+                        "(WM_CLOSE to Desktop triggers Shut Down dialog)", fg2,
+                    )
+                    return False
+                dismissed = self._dismiss_native_window(fg2)
+                if dismissed:
+                    _force_foreground(hwnd)
+                    time.sleep(0.2)
+                    fg3 = _get_foreground_hwnd()
+                    if fg3 == hwnd:
+                        self.log.info(
+                            "[focus] recovered after dismissing foreign window 0x%x "
+                            "(stolen_count=%d)",
+                            fg2, self.stats.focus_stolen,
+                        )
+                        return True
+                self.log.warning(
+                    "[focus] reclaim failed: fg=0x%x still not our hwnd=0x%x "
+                    "(stolen_count=%d) — skipping iteration",
+                    fg2, hwnd, self.stats.focus_stolen,
+                )
+                return False
+            return True
+        except Exception:
+            return True  # non-fatal; proceed without blocking
+
+    def _kill_stale_netsentinel(self) -> None:
+        """Terminate any pre-existing NetSentinel processes before launching a new one.
+
+        Prevents the new run from accidentally connecting to a stale instance that
+        may be in a degraded state from a previous test run.
+        """
+        killed = 0
+        for proc in psutil.process_iter(["name", "cmdline", "pid"]):
+            try:
+                name    = (proc.info["name"] or "").lower()
+                cmdline = " ".join(proc.info["cmdline"] or []).lower()
+                if "netsentinel" in name or ("app.py" in cmdline and "netsentinel" in cmdline):
+                    proc.terminate()
+                    killed += 1
+                    self.log.info("[setup] Killed stale process: %s (PID %d)",
+                                  proc.info["name"], proc.info["pid"])
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass  # non-fatal — process may have already exited
+        if killed:
+            time.sleep(1.5)   # let OS reclaim ports/handles before we relaunch
+
+    # ── Launch & connect ──────────────────────────────────────────────────
+
+    def _launch_exe(self) -> bool:
+        self._kill_stale_netsentinel()
+        path = self.cfg.exe_path
+        self.log.info("Launching exe: %s", path)
+        try:
+            raw = subprocess.Popen([path])
+            self._proc = psutil.Process(raw.pid)
+            self.log.info("PID: %d", raw.pid)
+            return True
+        except (OSError, FileNotFoundError) as exc:
+            self.log.error("Launch failed: %s", exc)
+            return False
+
+    def _launch_source(self) -> bool:
+        self._kill_stale_netsentinel()
+        repo = Path(__file__).parent.parent
+        entry = repo / "app.py"
+        self.log.info("Launching source: python %s", entry)
+        try:
+            env = None
+            if self.cfg.tracemalloc:
+                import os as _os
+                env = _os.environ.copy()
+                env["NETSENTINEL_TRACEMALLOC"] = "1"
+                self.log.info("tracemalloc enabled — snapshots every 60s in app log")
+            raw = subprocess.Popen([sys.executable, str(entry)], cwd=str(repo), env=env)
+            self._proc = psutil.Process(raw.pid)
+            self.log.info("PID: %d", raw.pid)
+            return True
+        except Exception as exc:
+            self.log.error("Source launch failed: %s", exc)
+            return False
+
+    def _connect(self) -> bool:
+        """
+        Poll until the main NetSentinel window appears.
+        Uses Desktop.windows() (non-blocking) rather than Application.connect()
+        to guarantee the outer deadline is respected regardless of pywinauto version.
+
+        When we launched the process (_proc is set), we match by PID so we never
+        accidentally connect to VS Code whose title may contain "NetSentinel".
+        Falls back to title-regex + process-exclusion filtering for --connect mode.
+        """
+        self.log.info("Waiting for window (up to %ds)...", _CONNECT_TIMEOUT)
+        deadline = time.time() + _CONNECT_TIMEOUT
+        target_pid: Optional[int] = self._proc.pid if self._proc else None
+
+        while time.time() < deadline:
+            try:
+                all_wins = Desktop(backend="uia").windows()
+
+                # Primary: PID-based match — unambiguous when we launched the process.
+                if target_pid is not None:
+                    pid_wins = [w for w in all_wins
+                                if _is_netsentinel_window(w, target_pid)]
+                    if pid_wins:
+                        main = pid_wins[0]
+                        self._win = main
+                        title = ""
+                        try:
+                            title = main.window_text()
+                        except Exception:
+                            self.log.debug("window_text() unavailable")
+                        self.log.info("Connected via PID %d: %r", target_pid, title)
+                        return True
+
+                # Fallback (--connect mode): title regex + process-name exclusion.
+                title_wins = [w for w in all_wins
+                              if _window_title_ok(w) and _is_netsentinel_window(w)]
+                if title_wins:
+                    main = title_wins[0]
+                    try:
+                        pid = main.element_info.process_id
+                        self._proc = psutil.Process(pid)
+                        self.log.info("PID: %d", pid)
+                    except Exception as exc:
+                        self.log.warning("Could not get PID from window: %s", exc)
+                    self._win = main
+                    title = ""
+                    try:
+                        title = main.window_text()
+                    except Exception:
+                        self.log.debug("window_text() unavailable")
+                    self.log.info("Connected: %r", title)
+                    return True
+            except Exception:
+                self.log.debug("UIA scan error; retrying")
+            time.sleep(_CONNECT_POLL)
+
+        self.log.error("Timed out waiting for window")
+        return False
+
+    def _attach(self) -> bool:
+        """
+        Connect to an already-running NetSentinel window without launching.
+        Used with --connect flag when the developer has the app open.
+        """
+        self.log.info("Attaching to running NetSentinel window...")
+        try:
+            all_wins = Desktop(backend="uia").windows()
+            # Title match + process-exclusion (blocks VS Code and other IDEs)
+            wins = [w for w in all_wins
+                    if _window_title_ok(w) and _is_netsentinel_window(w)]
+            main = wins[0] if wins else None
+            if not main:
+                self.log.error("No NetSentinel main window found on desktop")
+                return False
+            try:
+                pid = main.element_info.process_id
+                self._proc = psutil.Process(pid)
+                self.log.info("Attached to PID %d", pid)
+            except Exception as exc:
+                self.log.warning("Could not get PID from window: %s", exc)
+            self._win = main
+            title = ""
+            try:
+                title = main.window_text()
+            except Exception:
+                self.log.debug("window_text() unavailable")
+            self.log.info("Attached: %r", title)
+            return True
+        except Exception as exc:
+            self.log.error("Attach failed: %s", exc)
+            return False
+
+    def _dismiss_startup_overlays(self) -> None:
+        """
+        NetSentinel shows an onboarding overlay and/or first-run dialog.
+        Try to dismiss them so the main UI is reachable.
+        """
+        self.log.info("Checking for startup overlays…")
+        time.sleep(2.0)   # let splash and first-run animate in
+
+        # Button labels that close overlays / first-run dialogs
+        dismiss_labels = [
+            "Get Started", "Close", "Skip", "No Thanks", "Later",
+            "Continue", "OK",
+        ]
+        for label in dismiss_labels:
+            try:
+                btn = self._win.child_window(title=label, control_type="Button")
+                if btn.exists(timeout=0.5):
+                    btn.click_input()
+                    time.sleep(0.4)
+                    self.log.info("Dismissed overlay via %r", label)
+                    break
+            except Exception:
+                continue
+
+        # Also handle any blocking modal from Desktop level
+        self._dismiss_blocking_dialogs()
+
+    def _dismiss_blocking_dialogs(self) -> None:
+        """Close modal error/confirmation windows and Windows system file dialogs."""
+        # Cancel-button labels for Windows file pickers (English + Swedish locale)
+        _FILE_DLG_CANCEL = ["Cancel", "Avbryt", "Annullera", "Close"]
+        app_hwnd = 0
+        try:
+            app_hwnd = getattr(self._win, "handle", 0) or 0
+        except Exception:
+            pass  # non-fatal — fall back to title-based skip below
+        try:
+            for win in Desktop(backend="uia").windows():
+                try:
+                    title = (win.window_text() or "").lower()
+                    cls   = (win.element_info.class_name or "")
+                except Exception:
+                    continue
+                # Skip the main NetSentinel application window by hwnd (precise match).
+                # The old check `"netsentinel" in title` also skipped file dialogs whose
+                # title the app set to include its own name — those must NOT be skipped.
+                try:
+                    if app_hwnd and win.handle == app_hwnd:
+                        continue
+                except Exception:
+                    pass  # non-fatal — proceed with content-based check
+                # Skip windows with no identifying information at all
+                if not title and not cls:
+                    continue
+                # Skip large windows that look like the main app (≥600×400 px)
+                try:
+                    if _is_main_window(win):
+                        continue
+                except Exception:
+                    pass  # non-fatal
+
+                # Windows common file dialog (Open/Save As) — class #32770.
+                # The monkey gets trapped inside these when Browse… buttons open them;
+                # dismiss immediately so stale control references don't accumulate.
+                is_file_dialog = cls == "#32770"
+
+                # Windows shutdown/restart dialog — initiated by a blacklisted
+                # button that slipped through.  Abort the pending shutdown first,
+                # then dismiss the dialog so the test can continue.
+                is_shutdown = any(kw in title for kw in [
+                    "shut down", "shutting down", "restart", "restarting", "reboot",
+                ])
+                if is_shutdown:
+                    self.log.error(
+                        "[shutdown-abort] Windows restart/shutdown dialog detected: %r — "
+                        "aborting shutdown via 'shutdown /a'", title
+                    )
+                    try:
+                        subprocess.run(
+                            ["shutdown", "/a"],
+                            capture_output=True, timeout=5,
+                        )
+                        self.log.warning("[shutdown-abort] 'shutdown /a' succeeded")
+                    except Exception as exc:
+                        self.log.warning("[shutdown-abort] 'shutdown /a' failed: %s", exc)
+
+                is_blocking = is_shutdown or any(kw in title for kw in [
+                    "error", "exception", "unhandled", "crash",
+                    "warning", "confirm", "are you sure",
+                ])
+
+                if not (is_file_dialog or is_blocking):
+                    continue
+
+                kind = ("shutdown dialog" if is_shutdown
+                        else "file dialog" if is_file_dialog
+                        else "blocking dialog")
+                self.log.warning("Dismissing %s: %r (class=%r)", kind, title, cls)
+                btn_names = (_FILE_DLG_CANCEL if is_file_dialog
+                             else ["Cancel", "No", "Close", "OK", "Dismiss"])
+                for btn_name in btn_names:
+                    try:
+                        win.child_window(title=btn_name, control_type="Button").click()
+                        return
+                    except Exception:
+                        continue
+                try:
+                    dlg_hwnd = getattr(win, "handle", 0) or 0
+                    if dlg_hwnd:
+                        self._dismiss_native_window(dlg_hwnd)
+                    else:
+                        self.log.debug("no hwnd for %s — skipping WM_CLOSE", kind)
+                except Exception:
+                    self.log.debug("WM_CLOSE fallback failed for %s", kind)  # non-fatal — dialog may already be closed
+        except Exception as exc:
+            self.log.debug("Dialog scan: %s", exc)
+
+    def _dismiss_native_window(self, dlg_hwnd: int) -> bool:
+        """Try to close a foreign window (file dialog, modal) without needing it focused.
+
+        Tries four escalating Win32 approaches in order:
+        1. PostMessage WM_COMMAND/IDCANCEL  — cancels any standard Win32 dialog directly
+        2. PostMessage BM_CLICK on IDCANCEL — clicks the Cancel child button by dialog ID 2
+        3. PostMessage WM_KEYDOWN VK_ESCAPE — queues an Escape keystroke
+        4. PostMessage WM_CLOSE             — asks the window to close itself
+
+        All calls use PostMessage so this method never blocks waiting for a modal loop.
+        Returns True if IsWindow() returns False after the attempt (window is gone).
+        """
+        user32 = ctypes.windll.user32
+        try:
+            # 1. WM_COMMAND IDCANCEL (0x0111, wParam=2) — closes most Win32 dialogs
+            user32.PostMessageW(dlg_hwnd, 0x0111, 2, 0)
+            time.sleep(0.25)
+            if not user32.IsWindow(dlg_hwnd):
+                self.log.debug("[dismiss] WM_COMMAND/IDCANCEL closed hwnd=0x%x", dlg_hwnd)
+                return True
+            # 2. BM_CLICK on the Cancel button child (IDCANCEL dialog-item ID = 2)
+            cancel_hwnd = user32.GetDlgItem(dlg_hwnd, 2)
+            if cancel_hwnd:
+                user32.PostMessageW(cancel_hwnd, 0x00F5, 0, 0)  # BM_CLICK
+                time.sleep(0.2)
+                if not user32.IsWindow(dlg_hwnd):
+                    self.log.debug("[dismiss] BM_CLICK/Cancel closed hwnd=0x%x", dlg_hwnd)
+                    return True
+            # 3. VK_ESCAPE via PostMessage (0x0100 WM_KEYDOWN, 0x1B VK_ESCAPE)
+            user32.PostMessageW(dlg_hwnd, 0x0100, 0x1B, 0x00010001)
+            user32.PostMessageW(dlg_hwnd, 0x0101, 0x1B, 0xC0010001)
+            time.sleep(0.25)
+            if not user32.IsWindow(dlg_hwnd):
+                self.log.debug("[dismiss] VK_ESCAPE closed hwnd=0x%x", dlg_hwnd)
+                return True
+            # 4. WM_CLOSE (0x0010) — last resort
+            user32.PostMessageW(dlg_hwnd, 0x0010, 0, 0)
+            time.sleep(0.25)
+            closed = not user32.IsWindow(dlg_hwnd)
+            if closed:
+                self.log.debug("[dismiss] WM_CLOSE closed hwnd=0x%x", dlg_hwnd)
+            else:
+                self.log.warning("[dismiss] all methods failed for hwnd=0x%x", dlg_hwnd)
+            return closed
+        except Exception as exc:
+            self.log.debug("[dismiss] error on hwnd=0x%x: %s", dlg_hwnd, exc)
+            return False  # non-fatal — caller decides how to proceed
+
+    def _post_click_dialog_guard(self) -> None:
+        """Called immediately after every Button click to catch native dialogs before they strand the run.
+
+        Native file open/save dialogs steal foreground the instant they open.  Detecting
+        them here — within 150 ms of the triggering click — lets us dismiss them via
+        _dismiss_native_window() before the next iteration's _assert_focus() check runs,
+        keeping the skip count at zero rather than losing the entire remainder of the run.
+        """
+        time.sleep(0.15)   # let the dialog open and claim foreground
+        try:
+            hwnd = getattr(self._win, "handle", 0) or 0
+            if not hwnd:
+                return
+            fg = _get_foreground_hwnd()
+            if fg == hwnd:
+                return  # no dialog appeared — common case, fast path
+            # Root guard: never call _dismiss_native_window() on the Windows Desktop,
+            # Shell, or Taskbar.  GetForegroundWindow() can transiently return the
+            # Desktop HWND during a dialog-open transition (even with DontUseNativeDialog).
+            # Sending WM_CLOSE to the Desktop shell triggers the Shut Down Windows dialog.
+            if _is_system_hwnd(fg):
+                self.log.warning(
+                    "[dialog-guard] fg=0x%x is a system/desktop window — skipping dismiss "
+                    "(WM_CLOSE to Desktop triggers Shut Down dialog)", fg,
+                )
+                return
+            self.log.info(
+                "[dialog-guard] post-click focus stolen by 0x%x — attempting dismiss", fg
+            )
+            self.stats.focus_stolen += 1
+            dismissed = self._dismiss_native_window(fg)
+            if dismissed:
+                _force_foreground(hwnd)
+                time.sleep(0.2)
+                if _get_foreground_hwnd() == hwnd:
+                    self.log.info("[dialog-guard] focus recovered after dialog dismiss")
+            else:
+                self.log.warning(
+                    "[dialog-guard] could not dismiss 0x%x — next _assert_focus() will retry",
+                    fg,
+                )
+        except Exception:
+            pass  # non-fatal — _assert_focus() is the safety net
+
+    # ── Health monitoring (background thread) ─────────────────────────────
+
+    def _health_monitor(self) -> None:
+        """
+        Background thread: checks process liveness, memory, and hang detection.
+        Sets self._stop on any serious problem.
+        """
+        while not self._stop.is_set():
+            time.sleep(_HEALTH_INTERVAL)
+
+            # Process alive?
+            if not self._alive():
+                self.log.error("[health] Process died")
+                self._stop.set()
+                return
+
+            # Memory leak guard
+            try:
+                rss = self._proc.memory_info().rss / (1024 * 1024)
+                if rss > self.stats.peak_rss_mb:
+                    self.stats.peak_rss_mb = rss
+                if rss > self.cfg.mem_limit_mb:
+                    self.log.warning("[health] RSS %.0f MB exceeds limit %d MB",
+                                     rss, self.cfg.mem_limit_mb)
+            except psutil.NoSuchProcess:
+                self._stop.set()
+                return
+
+            # Hang detection — main loop must complete an iteration every N seconds
+            idle = time.time() - self._last_iter_time
+            if idle > _UNRESPONSIVE_SECS:
+                self.log.error("[health] No iteration for %.0fs — app may be hung", idle)
+                self._stop.set()
+                return
+
+    def _alive(self) -> bool:
+        # When attached without a process handle, fall back to window check only
+        if self._proc is None:
+            return self._window_ok()
+        try:
+            return self._proc.is_running() and self._proc.status() != psutil.STATUS_ZOMBIE
+        except psutil.NoSuchProcess:
+            return False
+
+    def _window_ok(self, retries: int = 6) -> bool:
+        """
+        Returns True if the main NetSentinel window is accessible on the desktop.
+
+        PyQt6 windows can briefly disappear from the UIA tree during overlay
+        animations or startup sequences without the process dying.  After each
+        failed check we do a fresh Desktop scan to pick up a new/re-created
+        window handle before giving up.
+
+        Uses PID-based matching when available so that a transient window loss
+        never causes self._win to be reassigned to VS Code or another window
+        whose title happens to contain "NetSentinel".
+        """
+        target_pid: Optional[int] = self._proc.pid if self._proc else None
+        for i in range(retries):
+            # Fast path: cached reference — verify it's still OUR main window
+            try:
+                if (self._win is not None and self._win.exists()
+                        and _is_netsentinel_window(self._win, target_pid)):
+                    return True
+            except Exception:
+                self.log.debug("cached window reference stale")
+            # Slow path: re-scan Desktop using PID when available
+            try:
+                all_wins = Desktop(backend="uia").windows()
+                if target_pid is not None:
+                    main = next(
+                        (w for w in all_wins if _is_netsentinel_window(w, target_pid)),
+                        None,
+                    )
+                else:
+                    main = next(
+                        (w for w in all_wins
+                         if _window_title_ok(w) and _is_netsentinel_window(w)),
+                        None,
+                    )
+                if main:
+                    self._win = main
+                    return True
+            except Exception:
+                self.log.debug("UIA desktop scan failed")
+            if i < retries - 1:
+                time.sleep(0.5)
+        return False
+
+    # ── Iteration ─────────────────────────────────────────────────────────
+
+    def _get_controls(self) -> List:
+        """Return enabled, visible descendants that are not blacklisted.
+
+        pywinauto's UIA backend does NOT accept enabled_only/visible_only
+        kwargs to descendants() — they raise TypeError. Filter manually.
+        """
+        try:
+            all_ctrl = self._win.descendants()
+        except Exception as exc:
+            self.log.debug("descendants() failed: %s", exc)
+            return []
+
+        # Get window rectangle for spatial filters
+        try:
+            win_rect = self._win.rectangle()
+            win_top = win_rect.top
+        except Exception:
+            win_rect = None
+            win_top = None
+
+        result = []
+        for ctrl in all_ctrl:
+            try:
+                ctype = _safe_type(ctrl)
+
+                if ctype not in _SUPPORTED_TYPES:
+                    continue
+                # Manual enabled / visible check (UIA backend ignores kwargs)
+                try:
+                    if not ctrl.is_enabled():
+                        continue
+                except Exception:
+                    self.log.debug("is_enabled() failed")
+                try:
+                    if not ctrl.is_visible():
+                        continue
+                except Exception:
+                    self.log.debug("is_visible() failed")
+                name = _safe_name(ctrl)
+                auto_id = _safe_id(ctrl)
+                if _is_blacklisted(name, auto_id):
+                    self.stats.blacklisted += 1
+                    continue
+                # Bounds guard: control must be inside (or very close to) the
+                # main window rect.  This prevents clicking on NetSentinel toast
+                # notifications or any window that accidentally became self._win.
+                if win_rect is not None:
+                    try:
+                        cr = ctrl.rectangle()
+                        margin = 50  # allow slight overhang for drop-downs
+                        if (cr.right  < win_rect.left   - margin or
+                                cr.left   > win_rect.right  + margin or
+                                cr.bottom < win_rect.top    - margin or
+                                cr.top    > win_rect.bottom + margin):
+                            self.stats.blacklisted += 1
+                            continue
+                    except Exception:
+                        self.log.debug("rectangle() failed; skipping bounds check")
+                # Spatial filter: skip controls inside the title-bar strip
+                # (~top 38px of the frameless window = close/min/max buttons)
+                if win_top is not None and ctype in ("Button", "SplitButton"):
+                    try:
+                        ctrl_top = ctrl.rectangle().top
+                        if ctrl_top - win_top < 38:
+                            self.stats.blacklisted += 1
+                            continue
+                    except Exception:
+                        self.log.debug("title-bar check failed")
+                # mild chaos: skip Edit boxes to avoid corrupting settings
+                if self.cfg.chaos == "mild" and ctype == "Edit":
+                    continue
+                result.append(ctrl)
+            except Exception:
+                continue
+        return result
+
+    def _do_nav(self, n: int) -> Action:
+        pool = _nav_pool(self.cfg.chaos)
+        fn = random.choice(pool)
+        ts = datetime.now().strftime("%H:%M:%S")
+        try:
+            action_str = fn(self._win, self.cfg.chaos)
+            result = "ok"
+        except Exception as exc:
+            action_str = fn.__name__
+            result = f"err:{exc.__class__.__name__}"
+            self.stats.exceptions += 1
+        return Action(n=n, ts=ts, ctype="Navigation", name="<win>",
+                      auto_id="", action=action_str, result=result)
+
+    def _do_control(self, n: int, ctrl) -> Action:
+        ts = datetime.now().strftime("%H:%M:%S")
+        name = _safe_name(ctrl)
+        auto_id = _safe_id(ctrl)
+        ctype = _safe_type(ctrl)
+        fn = _DISPATCHER.get(ctype, _act_fallback)
+
+        try:
+            action_str = fn(ctrl, self.cfg.chaos)
+            result = "ok"
+            self.stats.record(ctype, action_str)
+            # Immediately after any button click, check whether a native file dialog
+            # opened and took focus.  Catching it here prevents cascading skip storms.
+            if ctype in ("Button", "SplitButton"):
+                self._post_click_dialog_guard()
+        except (ElementNotEnabled, ElementNotVisible) as exc:
+            action_str = "skip_state"
+            result = f"skipped:{exc.__class__.__name__}"
+            self.stats.skipped += 1
+        except ElementNotFoundError:
+            action_str = "skip_gone"
+            result = "skipped:ElementNotFound"
+            self.stats.skipped += 1
+        except Exception as exc:
+            action_str = "exception"
+            result = f"err:{exc.__class__.__name__}:{str(exc)[:60]}"
+            self.stats.exceptions += 1
+            self.log.debug("Ctrl error  %r (%s): %s", name, ctype, exc)
+
+        return Action(n=n, ts=ts, ctype=ctype, name=name,
+                      auto_id=auto_id, action=action_str, result=result)
+
+    def _run_one(self, n: int) -> bool:
+        """
+        Execute a single monkey iteration.
+        Returns False if a hard failure is detected (crash / window gone).
+        """
+        # CPU cooldown before interacting
+        if self._proc:
+            _wait_cpu(self._proc, self.cfg.cpu_threshold, self.cfg.cpu_wait_max)
+
+        # Jitter sleep — wild mode is faster / more abusive
+        sleep = random.uniform(
+            *{"mild": (0.6, 2.0), "wild": (0.05, 0.6)}.get(self.cfg.chaos, (0.3, 1.5))
+        )
+        time.sleep(sleep)
+
+        # Liveness checks
+        if not self._alive():
+            self.log.error("Process died before iteration %d", n)
+            return False
+        if not self._window_ok():
+            self.log.error("Window gone before iteration %d", n)
+            return False
+
+        # Dismiss any unexpected modal that appeared since last iteration
+        self._dismiss_blocking_dialogs()
+
+        # Verify NetSentinel is the foreground window before touching any control.
+        # _assert_focus() reclaims focus when stolen and skips the iteration if
+        # reclaim fails — this prevents clicking controls in another app window.
+        if not self._assert_focus():
+            self.log.warning("[focus] skipping iteration %d (could not reclaim foreground)", n)
+            self.stats.skipped += 1
+            self.stats.completed += 1
+            self._last_iter_time = time.time()
+            return True
+        time.sleep(0.08)
+
+        # Choose: navigation action or random control
+        if random.random() < self.cfg.nav_prob:
+            rec = self._do_nav(n)
+        else:
+            controls = self._get_controls()
+            if not controls:
+                self.log.debug("No safe controls on iteration %d — skipping", n)
+                self.stats.skipped += 1
+                self.stats.completed += 1
+                self._last_iter_time = time.time()
+                return True
+            rec = self._do_control(n, random.choice(controls))
+
+        self.hist.add(rec)
+        self.log.debug(
+            "[%4d] %-14s  %-24s  name=%-30r  %s",
+            n, rec.ctype, rec.action, rec.name, rec.result,
+        )
+        self.stats.completed += 1
+        self._last_iter_time = time.time()
+        return True
+
+    # ── Crash reporting ───────────────────────────────────────────────────
+
+    def _crash_report(self, reason: str) -> None:
+        self.stats.crashes += 1
+        sep = "=" * 70
+        self.log.error(sep)
+        self.log.error("MONKEY TEST FAILURE")
+        self.log.error("Reason   : %s", reason)
+        self.log.error("Iteration: %d / %d", self.stats.completed, self.cfg.iterations)
+        self.log.error("Elapsed  : %.0fs", self.stats.elapsed)
+        self.log.error(self.hist.fmt())
+        self.log.error(sep)
+
+        if self.cfg.screenshots:
+            _screenshot("crash", self.log, self.cfg.output_dir)
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report = {
+            "reason": reason,
+            "iteration": self.stats.completed,
+            "stats": self.stats.to_dict(),
+            "last_actions": self.hist.dump(),
+        }
+        rpath = str(Path(self.cfg.output_dir) / f"monkey_crash_{ts}.json")
+        try:
+            with open(rpath, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, default=str)
+            self.log.info("Crash report: %s", rpath)
+        except Exception:
+            self.log.debug("could not write crash report")
+
+    # ── Main run ──────────────────────────────────────────────────────────
+
+    def run(self) -> int:
+        self.log.info("NetSentinel Monkey Tester v%s", _VERSION)
+        self.log.info("chaos=%s  iterations=%d  seed=%s  mem_limit=%dMB",
+                      self.cfg.chaos, self.cfg.iterations, self.cfg.seed,
+                      self.cfg.mem_limit_mb)
+
+        # Launch or attach
+        if self.cfg.connect_only:
+            if not self._attach():
+                return 2
+        else:
+            ok = self._launch_source() if self.cfg.use_source else self._launch_exe()
+            if not ok:
+                return 2
+            if not self._connect():
+                return 2
+
+        # Dismiss any startup overlays / onboarding dialogs.
+        # Safe to call in --connect mode too: it checks for overlay buttons
+        # and silently moves on if none are present.
+        self._dismiss_startup_overlays()
+        time.sleep(2.0)   # let animations settle before first interaction
+
+        # Claim foreground explicitly before starting chaos — without this,
+        # the terminal that launched us (e.g. VS Code) retains focus and the
+        # first iteration's _assert_focus() immediately triggers a reclaim cycle.
+        try:
+            hwnd = self._win.handle
+            _force_foreground(hwnd)
+            self.log.info("[startup] Foreground claimed (hwnd=0x%x)", hwnd)
+        except Exception as exc:
+            self.log.warning("[startup] Could not claim foreground: %s", exc)
+
+        # Suppress sleep and start background threads
+        if self.cfg.prevent_sleep:
+            _prevent_sleep_begin(self.log)
+        hthread = threading.Thread(target=self._health_monitor, daemon=True, name="health")
+        hthread.start()
+        fthread = threading.Thread(target=self._focus_heartbeat, daemon=True, name="focus")
+        fthread.start()
+
+        self.log.info("Starting %d iterations…", self.cfg.iterations)
+        crashed = False
+        self._last_iter_time = time.time()
+
+        for i in range(1, self.cfg.iterations + 1):
+            # Health monitor signalled a problem
+            if self._stop.is_set():
+                self._crash_report("health monitor triggered")
+                crashed = True
+                break
+
+            # Progress update every 25 iterations
+            if i % 25 == 0:
+                rss = 0.0
+                try:
+                    rss = self._proc.memory_info().rss / (1024 * 1024)
+                except Exception:
+                    self.log.debug("memory_info() unavailable")
+                self.log.info(
+                    "Progress %d/%d  controls=%d  exceptions=%d  rss=%.0fMB  elapsed=%.0fs",
+                    i, self.cfg.iterations,
+                    sum(self.stats.by_type.values()),
+                    self.stats.exceptions,
+                    rss,
+                    self.stats.elapsed,
+                )
+
+            try:
+                ok = self._run_one(i)
+            except KeyboardInterrupt:
+                self.log.info("Interrupted at iteration %d", i)
+                break
+            except Exception as exc:
+                self.log.warning("Unexpected top-level error at iteration %d: %s", i, exc)
+                self.stats.exceptions += 1
+                ok = self._alive() and self._window_ok()
+
+            if not ok:
+                self._crash_report(f"iteration {i}")
+                crashed = True
+                break
+
+        self._stop.set()
+        if self.cfg.prevent_sleep:
+            _prevent_sleep_end(self.log)
+
+        # Final summary
+        self.log.info("=" * 70)
+        self.log.info("MONKEY TEST %s", "FAILED" if crashed else "PASSED")
+        for k, v in self.stats.to_dict().items():
+            self.log.info("  %-30s %s", k, v)
+        self.log.info("=" * 70)
+
+        summary_path = str(Path(self.cfg.output_dir) / "monkey_summary.json")
+        try:
+            with open(summary_path, "w", encoding="utf-8") as f:
+                json.dump(self.stats.to_dict(), f, indent=2)
+            self.log.info("Summary JSON: %s", summary_path)
+        except Exception:
+            self.log.debug("could not write summary JSON")
+
+        # Graceful shutdown — skip when in --connect mode (we didn't own the app)
+        if not self.cfg.connect_only and self._alive():
+            self.log.info("Closing app...")
+            try:
+                self._win.close()
+                time.sleep(2.5)
+            except Exception:
+                self.log.debug("window close failed")
+            if self._alive():
+                try:
+                    self._proc.terminate()
+                except Exception:
+                    self.log.debug("process terminate failed")
+
+        return 1 if crashed else 0
+
+
+# ── CLI ────────────────────────────────────────────────────────────────────────
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Monkey / chaos tester for NetSentinel",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    p.add_argument("exe_path", nargs="?",
+                   help="Path to NetSentinel.exe (omit when using --source or --connect)")
+    p.add_argument("--source", action="store_true",
+                   help="Launch via 'python app.py' from repo root")
+    p.add_argument("--connect", action="store_true",
+                   help="Attach to an already-running NetSentinel window (do not launch)")
+    p.add_argument("-n", "--iterations", type=int, default=200)
+    p.add_argument("--chaos", choices=["mild", "moderate", "wild"], default="moderate")
+    p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--no-screenshots", action="store_true")
+    p.add_argument("--mem-limit", type=int, default=800, metavar="MB")
+    p.add_argument("--log", default="",
+                   help="Log file path (default: <output-dir>/monkey.log)")
+    p.add_argument("--output-dir", default="test_output",
+                   help="Directory for all generated output files (default: test_output)")
+    p.add_argument("--focus-interval", type=float, default=1.5, metavar="SECS",
+                   help="Seconds between focus-heartbeat pulses (default 1.5)")
+    p.add_argument("--no-prevent-sleep", action="store_true",
+                   help="Do not suppress Windows sleep/screensaver")
+    p.add_argument("--tracemalloc", action="store_true",
+                   help="Enable tracemalloc profiling inside the app (sets NETSENTINEL_TRACEMALLOC=1; "
+                        "requires --source; writes top-20 allocation snapshots to the app's debug log "
+                        "every 60 s so you can identify the retained object type)")
+    return p
+
+
+def main() -> None:
+    args = _build_parser().parse_args()
+
+    if not args.source and not args.connect and not args.exe_path:
+        print("ERROR: provide an exe path, --source, or --connect", file=sys.stderr)
+        sys.exit(2)
+
+    if args.exe_path and not Path(args.exe_path).exists():
+        print(f"ERROR: exe not found: {args.exe_path}", file=sys.stderr)
+        sys.exit(2)
+
+    if args.tracemalloc and not args.source:
+        print("WARNING: --tracemalloc only works with --source (ignored for exe/connect mode)",
+              file=sys.stderr)
+
+    cfg = Config(
+        exe_path=args.exe_path,
+        use_source=args.source,
+        connect_only=args.connect,
+        iterations=args.iterations,
+        chaos=args.chaos,
+        seed=args.seed,
+        screenshots=not args.no_screenshots,
+        mem_limit_mb=args.mem_limit,
+        output_dir=args.output_dir,
+        log_file=args.log,
+        focus_interval=args.focus_interval,
+        prevent_sleep=not args.no_prevent_sleep,
+        tracemalloc=args.tracemalloc and args.source,
+    )
+
+    sys.exit(MonkeyTester(cfg).run())
+
+
+if __name__ == "__main__":
+    main()

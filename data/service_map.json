@@ -1,0 +1,156 @@
+{
+  "version": 1,
+  "services": [
+    {
+      "id": "psn",
+      "name": "PlayStation Network",
+      "category": "gaming",
+      "icon": "◆",
+      "match": {
+        "device_types": ["Games Console"],
+        "vendor_patterns": ["sony", "playstation", "scei", "sce"]
+      }
+    },
+    {
+      "id": "xbox_live",
+      "name": "Xbox Live",
+      "category": "gaming",
+      "icon": "◆",
+      "match": {
+        "device_types": ["Games Console"],
+        "vendor_patterns": ["microsoft", "xbox"]
+      }
+    },
+    {
+      "id": "nintendo_online",
+      "name": "Nintendo Online",
+      "category": "gaming",
+      "icon": "◆",
+      "match": {
+        "device_types": ["Games Console"],
+        "vendor_patterns": ["nintendo"]
+      }
+    },
+    {
+      "id": "netflix",
+      "name": "Netflix",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": ["Smart TV", "Streaming Device", "Games Console"],
+        "vendor_patterns": []
+      }
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": ["Smart TV", "Streaming Device", "Android Device", "Games Console"],
+        "vendor_patterns": []
+      }
+    },
+    {
+      "id": "disney_plus",
+      "name": "Disney+",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": ["Smart TV", "Streaming Device", "Games Console"],
+        "vendor_patterns": []
+      }
+    },
+    {
+      "id": "prime_video",
+      "name": "Amazon Prime Video",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": ["Smart TV", "Streaming Device", "Games Console"],
+        "vendor_patterns": []
+      }
+    },
+    {
+      "id": "prime_video_amazon",
+      "name": "Amazon Prime Video",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": [],
+        "vendor_patterns": ["amazon", "amazon tech"]
+      }
+    },
+    {
+      "id": "spotify",
+      "name": "Spotify",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": ["Smart TV", "Games Console", "Android Device", "Streaming Device"],
+        "vendor_patterns": []
+      }
+    },
+    {
+      "id": "apple_tv_plus",
+      "name": "Apple TV+",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": ["Smart TV", "Streaming Device"],
+        "vendor_patterns": ["apple"]
+      }
+    },
+    {
+      "id": "icloud",
+      "name": "iCloud",
+      "category": "platform",
+      "icon": "○",
+      "match": {
+        "device_types": ["Mobile Phone", "Tablet", "Laptop", "Desktop PC"],
+        "vendor_patterns": ["apple"]
+      }
+    },
+    {
+      "id": "google_services",
+      "name": "Google services",
+      "category": "platform",
+      "icon": "○",
+      "match": {
+        "device_types": ["Android Device"],
+        "vendor_patterns": []
+      }
+    },
+    {
+      "id": "plex",
+      "name": "Plex Media Server",
+      "category": "streaming",
+      "icon": "▶",
+      "match": {
+        "device_types": ["NAS / File Server"],
+        "vendor_patterns": []
+      }
+    },
+    {
+      "id": "home_assistant",
+      "name": "Home Assistant",
+      "category": "smart-home",
+      "icon": "○",
+      "match": {
+        "device_types": ["Single Board Computer"],
+        "vendor_patterns": [],
+        "hostname_patterns": ["hassio", "homeassistant", "home-assistant", "ha-", "hass"]
+      }
+    },
+    {
+      "id": "samba",
+      "name": "Samba / SMB shares",
+      "category": "productivity",
+      "icon": "■",
+      "match": {
+        "device_types": ["NAS / File Server"],
+        "vendor_patterns": ["synology", "qnap", "netgear", "western digital", "wd"]
+      }
+    }
+  ]
+}

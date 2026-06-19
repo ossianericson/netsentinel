@@ -1,0 +1,30 @@
+# EditorConfig — https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.py]
+indent_size = 4
+max_line_length = 120
+
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.{json,jsonc}]
+indent_size = 2
+
+[*.{md,rst}]
+indent_size = 2
+trim_trailing_whitespace = false
+
+[*.{toml,cfg,ini}]
+indent_size = 4
+
+[Makefile]
+indent_style = tab

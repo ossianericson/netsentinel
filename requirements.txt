@@ -1,0 +1,26 @@
+# ~= pins to the same major.minor, allowing only patch updates.
+# This prevents silent breaking changes from upstream releases while
+# still receiving bug fixes. Update these intentionally, not accidentally.
+PyQt6~=6.11
+PyQt6-WebEngine~=6.11     # Interactive topology map (QWebEngineView + Cytoscape.js); must match PyQt6 version
+scapy~=2.7
+matplotlib~=3.10
+pyinstaller~=6.20
+pytest~=9.0
+pytest-cov~=7.1         # coverage reporting; HTML report uploaded as CI artifact
+speedtest-cli~=2.1
+psutil~=7.2
+keyring~=25.0          # OS credential store (RULE 22-A); Windows Credential Manager / macOS Keychain / libsecret
+requests~=2.34         # HTTP client used by deco_client and other outbound modules
+flask~=3.1             # Local REST API server (disabled by default, binds 127.0.0.1)
+waitress~=3.0          # Production WSGI server for the REST API (replaces Flask dev server)
+cryptography~=48.0.1   # Required by scapy (krack module); >=48.0.1 fixes GHSA-537c-gmf6-5ccf (bundled OpenSSL CVE)
+maxminddb~=3.1         # Pure-Python MaxMind .mmdb reader for GeoLite2 IP geolocation (geo_locator)
+tplinkrouterc6u~=5.23  # TP-Link Deco mesh API client (DecoMeshClient in modules/deco_client.py)
+pycryptodome~=3.23     # Required by tplinkrouterc6u for AES/RSA crypto
+
+# Optional — Windows service only (svc.py).
+# Not needed for the GUI or CLI. Install separately as Administrator:
+#   pip install pywin32
+#   python -m pywin32_postinstall -install
+# pywin32~=308

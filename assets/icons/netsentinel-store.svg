@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" width="50" height="50">
+  <!-- Tile background with 8 px corner radius per MS Store tile spec -->
+  <rect width="50" height="50" rx="8" fill="white"/>
+
+  <!-- Blue hexagon — fills the tile, pointy-top orientation -->
+  <polygon points="25,4 43.2,14.5 43.2,35.5 25,46 6.8,35.5 6.8,14.5"
+           fill="#0078D4"/>
+
+  <!-- White shield outline — simplified for small sizes, no ripple rings -->
+  <path d="M 19 15 L 31 15 Q 33 15 33 17 L 33 29 L 25 37 L 17 29 L 17 17 Q 17 15 19 15 Z"
+        fill="none" stroke="white" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

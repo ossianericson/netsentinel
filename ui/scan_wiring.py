@@ -1,0 +1,1411 @@
+"""
+scan_wiring.py — ScanResultMixin for Dashboard scan result handlers.
+
+Extracted from ui/dashboard.py (Sprint 4, S1-2).
+Dashboard inherits ScanResultMixin to receive these methods.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
+from PyQt6.QtWidgets import QTableWidgetItem
+
+from ui.tabs import _add_row
+from ui.tabs_helpers import risk_to_label
+
+from ui.styles import (
+    ACCENT_LITE, AMBER, AMBER_BG, BLUE, BORDER,
+    CHART_GRID, CHART_PLOT_BG,
+    GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
+)
+from ui.scan_enrichment import ScanEnrichmentMixin
+
+if TYPE_CHECKING:
+    pass
+
+
+class _VendorBatchWorker(QThread):
+    """Background OUI vendor lookup for devices showing 'Unknown' vendor.
+
+    Processes MACs one at a time so the macvendors.com rate limit (≈1 req/s)
+    is respected. Emits vendor_resolved(mac, vendor) for each hit so the table
+    cell can be updated immediately rather than waiting for all lookups.
+    """
+
+    vendor_resolved = pyqtSignal(str, str)  # (normalised_mac, vendor_name)
+
+    def __init__(self, macs: list[str], parent=None) -> None:
+        super().__init__(parent)
+        self._macs = macs
+
+    def run(self) -> None:
+        try:
+            from modules.mac_lookup import lookup_vendor
+            for mac in self._macs:
+                if not mac:
+                    continue
+                vendor = lookup_vendor(mac)
+                if vendor:
+                    self.vendor_resolved.emit(mac.lower(), vendor)
+        except Exception:
+            pass  # non-fatal — table shows 'Unknown' if lookup fails
+
+
+class ScanResultMixin(ScanEnrichmentMixin):
+    """Mixin providing all _on_*_result scan wiring methods for Dashboard."""
+
+    def _on_port_scan_result(self, data):
+        from PyQt6.QtGui import QColor
+        self._last_portscan_result = data   # cache for Nmap XML export
+        self._ps_table.setRowCount(0)
+        for p in data.open_ports:
+            row = self._ps_table.rowCount()
+            self._ps_table.insertRow(row)
+            risk_color = RED if p.risk == "HIGH" else TEXT_PRIMARY
+            for col, val in enumerate([str(p.port), p.name, p.service_version or "", p.banner or "", p.risk]):
+                item = QTableWidgetItem(val)
+                item.setForeground(QColor(risk_color if col in (1, 4) else TEXT_PRIMARY))
+                self._ps_table.setItem(row, col, item)
+        if hasattr(self, "_ps_status"):
+            self._ps_status.setText(data.plain_verdict)
+        if hasattr(self, "_monitor_overview_page"):
+            self._monitor_overview_page.set_open_port_count(len(data.open_ports))
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.on_port_scan_result(data)
+        # ── Update NetworkDocPage with accumulated port data ──────────────────
+        try:
+            if data.open_ports:
+                _host_key = getattr(data, "host", "") or getattr(data, "ip", "")
+                if _host_key:
+                    self._port_data_cache[_host_key] = [
+                        {"port": str(p.port), "protocol": "tcp",
+                         "service": p.name or "", "state": "open",
+                         "banner": p.banner or p.service_version or ""}
+                        for p in data.open_ports
+                    ]
+            _nd_cert: list = []
+            if self._store is not None:
+                for _c in self._store.query_cert_status():
+                    _nd_cert.append({"host": _c.host, "cn": _c.subject or "",
+                                     "issuer": _c.issuer or "", "not_after": _c.not_after or "",
+                                     "days_remaining": _c.days_remaining})
+            self._network_doc_page.set_scan_data(
+                devices=self._last_scan_devices,
+                port_data=self._port_data_cache,
+                cert_data=_nd_cert,
+                topo_widget=getattr(self, "_topology_widget", None),
+            )
+        except Exception:
+            pass  # non-fatal
+        if hasattr(self, "_compute_suggestions"):
+            self._compute_suggestions()
+
+    def _on_ipv6_result(self, devices: list):
+        from PyQt6.QtGui import QColor
+        self._ipv6_table.setRowCount(0)
+        for d in devices:
+            row = self._ipv6_table.rowCount()
+            self._ipv6_table.insertRow(row)
+            source_color = ACCENT_LITE if d.get("source") == "active" else TEXT_SECONDARY
+            state_color  = GREEN if d.get("state", "").upper() == "REACHABLE" else TEXT_SECONDARY
+            for col, val in enumerate([
+                d.get("ip6", ""), d.get("mac", ""),
+                d.get("state", ""), d.get("source", ""),
+            ]):
+                item = QTableWidgetItem(str(val))
+                if col == 2:
+                    item.setForeground(QColor(state_color))
+                elif col == 3:
+                    item.setForeground(QColor(source_color))
+                else:
+                    item.setForeground(QColor(TEXT_PRIMARY))
+                self._ipv6_table.setItem(row, col, item)
+        if not devices:
+            self._ipv6_status.setText(
+                "No IPv6 devices found — this is normal for most home networks"
+            )
+        else:
+            self._ipv6_status.setText(
+                f"{len(devices)} IPv6 device(s) found  "
+                f"({sum(1 for d in devices if d.get('source')=='active')} via active sweep, "
+                f"{sum(1 for d in devices if d.get('source')=='cache')} from cache)"
+            )
+
+    def _on_cloud_local_result(self, result):
+        risk_color = {"NONE": GREEN, "INFO": AMBER, "HIGH": RED}.get(result.risk_level, TEXT_SECONDARY)
+        risk_icon  = {"NONE": "✔", "INFO": "ℹ", "HIGH": "⚠"}.get(result.risk_level, "?")
+        lines = [
+            f"<b style='color:{risk_color}'>{risk_icon} [{risk_to_label(result.risk_level)}]  {result.plain_verdict}</b>",
+        ]
+        if result.provider:
+            lines.append(f"<br><b>Provider:</b> {result.provider}")
+            if result.instance_id:
+                lines.append(f"<b>Instance:</b> {result.instance_id}")
+            if result.region:
+                lines.append(f"<b>Region:</b> {result.region}")
+            if result.account_id:
+                lines.append(f"<b>Account:</b> {result.account_id}")
+            if result.public_ip:
+                lines.append(f"<b>Public IP:</b> {result.public_ip}")
+            if result.ami_id:
+                lines.append(f"<b>AMI:</b> {result.ami_id}")
+            if result.project_id:
+                lines.append(f"<b>Project:</b> {result.project_id}")
+            if result.imdsv2_enforced is not None:
+                v2_color = GREEN if result.imdsv2_enforced else RED
+                v2_txt   = "enforced (secure)" if result.imdsv2_enforced else "NOT enforced — HIGH RISK"
+                lines.append(f"<b>IMDSv2:</b> <span style='color:{v2_color}'>{v2_txt}</span>")
+        for finding in result.findings:
+            lines.append(f"<br><span style='color:{AMBER}'>⚠ {finding}</span>")
+        self._cloud_local_box.setHtml("<br>".join(lines))
+
+    def _on_cloud_network_result(self, results: list):
+        from PyQt6.QtGui import QColor
+        self._cloud_network_table.setRowCount(0)
+        for r in results:
+            row = self._cloud_network_table.rowCount()
+            self._cloud_network_table.insertRow(row)
+            exposed_color = RED if r.exposed else GREEN
+            row_color = RED if r.exposed else TEXT_SECONDARY
+            finding_str = r.findings[0][:100] if r.findings else "—"
+            for col, val in enumerate([
+                r.device_ip, r.device_mac, r.hostname,
+                "YES" if r.exposed else "no",
+                r.risk_level, finding_str,
+            ]):
+                item = QTableWidgetItem(str(val))
+                if col == 3:
+                    item.setForeground(QColor(exposed_color))
+                elif col in (4, 5):
+                    item.setForeground(QColor(row_color))
+                else:
+                    item.setForeground(QColor(TEXT_SECONDARY if not r.exposed else RED))
+                self._cloud_network_table.setItem(row, col, item)
+
+    def _on_snmp_result(self, result):
+        if not result.reachable:
+            return
+        row = self._snmp_table.rowCount()
+        self._snmp_table.insertRow(row)
+        for col, val in enumerate([
+            result.host, result.sys_name, result.sys_descr[:80],
+            result.sys_uptime, result.if_count, result.sys_contact,
+        ]):
+            self._snmp_table.setItem(row, col, QTableWidgetItem(str(val)))
+
+    def _on_snmp_if_result(self, entries: list) -> None:
+        """Populate interface error table and bar chart (V4 — Cat2)."""
+        from PyQt6.QtGui import QColor
+        self._snmp_if_table.setRowCount(0)
+        for entry in entries:
+            row = self._snmp_if_table.rowCount()
+            self._snmp_if_table.insertRow(row)
+            cells = [
+                entry.if_descr,
+                str(entry.in_errors),
+                str(entry.out_errors),
+                str(entry.in_discards),
+                str(entry.out_discards),
+            ]
+            for col, val in enumerate(cells):
+                item = QTableWidgetItem(val)
+                if col > 0 and int(val) > 0:
+                    item.setForeground(QColor(RED if int(val) > 10 else AMBER))
+                self._snmp_if_table.setItem(row, col, item)
+
+        # Update chart
+        ax = getattr(self, "_snmp_if_ax", None)
+        canvas = getattr(self, "_snmp_if_canvas", None)
+        if ax is None or canvas is None or not entries:
+            return
+        ax.clear()
+        ax.set_facecolor(CHART_PLOT_BG)
+        ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
+        ax.grid(True, color=CHART_GRID, linewidth=0.8, axis="y")
+        for sp in ("top", "right"):
+            ax.spines[sp].set_visible(False)
+        for sp in ("bottom", "left"):
+            ax.spines[sp].set_color(BORDER)
+
+        labels  = [e.if_descr[:12] for e in entries]
+        in_err  = [e.in_errors   for e in entries]
+        out_err = [e.out_errors  for e in entries]
+        in_dis  = [e.in_discards for e in entries]
+        out_dis = [e.out_discards for e in entries]
+        xs = list(range(len(labels)))
+        w  = 0.2
+        ax.bar([x - 1.5 * w for x in xs], in_err,  w, label="In Errors",    color=RED)
+        ax.bar([x - 0.5 * w for x in xs], out_err, w, label="Out Errors",   color=AMBER)
+        ax.bar([x + 0.5 * w for x in xs], in_dis,  w, label="In Discards",  color=BLUE)
+        ax.bar([x + 1.5 * w for x in xs], out_dis, w, label="Out Discards", color=GREEN)
+        ax.set_xticks(xs)
+        ax.set_xticklabels(labels, rotation=25, ha="right")
+        ax.legend(fontsize=7, framealpha=0.7)
+        ax.set_title("Error distribution per interface", fontsize=9, color=TEXT_PRIMARY, pad=4)
+        try:
+            canvas.draw()
+        except Exception:
+            pass  # non-fatal if canvas is detached
+
+    def _on_syn_result(self, result):
+        from PyQt6.QtGui import QColor
+        self._syn_stack.setCurrentIndex(1)   # switch from empty state to table
+        self._recon_syn_table.setRowCount(0)
+        # Build quick CVE-count lookup by service keyword from MetricStore
+        _cve_counts: dict[str, int] = {}
+        try:
+            if self._store is not None:
+                _all_cves = self._store.list_cve_lifecycles() or []
+                for _cve in _all_cves:
+                    _svc = (_cve.get("service") or "").split()[0].lower()
+                    if _svc:
+                        _cve_counts[_svc] = _cve_counts.get(_svc, 0) + 1
+        except Exception:
+            pass  # non-fatal
+        for p in result.open_ports:
+            row = self._recon_syn_table.rowCount()
+            self._recon_syn_table.insertRow(row)
+            color = RED if p.state == "open" else AMBER
+            for col, val in enumerate([str(p.port), p.state, p.proto, p.service]):
+                item = QTableWidgetItem(val)
+                item.setForeground(QColor(color))
+                self._recon_syn_table.setItem(row, col, item)
+            # CVE count badge (col 4)
+            svc_key = (p.service or "").split()[0].lower()
+            cve_n = _cve_counts.get(svc_key, 0)
+            cve_item = QTableWidgetItem(f"{cve_n} CVEs" if cve_n else "—")
+            cve_item.setForeground(QColor(AMBER if cve_n else TEXT_MUTED))
+            if cve_n:
+                cve_item.setToolTip(f"Click to view {cve_n} CVE(s) for {p.service}")
+            self._recon_syn_table.setItem(row, 4, cve_item)
+        self._syn_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.on_port_scan_result(result)
+        # ── Update NetworkDocPage with accumulated port data ──────────────────
+        try:
+            if result.open_ports:
+                _host_key = getattr(result, "host", "") or getattr(result, "ip", "")
+                if _host_key:
+                    self._port_data_cache[_host_key] = [
+                        {"port": str(p.port), "protocol": p.proto or "tcp",
+                         "service": p.service or "", "state": p.state or "open",
+                         "banner": ""}
+                        for p in result.open_ports
+                    ]
+            _nd_cert: list = []
+            if self._store is not None:
+                for _c in self._store.query_cert_status():
+                    _nd_cert.append({"host": _c.host, "cn": _c.subject or "",
+                                     "issuer": _c.issuer or "", "not_after": _c.not_after or "",
+                                     "days_remaining": _c.days_remaining})
+            self._network_doc_page.set_scan_data(
+                devices=self._last_scan_devices,
+                port_data=self._port_data_cache,
+                cert_data=_nd_cert,
+                topo_widget=getattr(self, "_topology_widget", None),
+            )
+        except Exception:
+            pass  # non-fatal
+
+    def _on_udp_result(self, result):
+        from PyQt6.QtGui import QColor
+        self._udp_stack.setCurrentIndex(1)
+        self._recon_udp_table.setRowCount(0)
+        for p in result.open_ports:
+            row = self._recon_udp_table.rowCount()
+            self._recon_udp_table.insertRow(row)
+            color = AMBER if p.state == "open|filtered" else GREEN
+            for col, val in enumerate([str(p.port), p.state, p.service]):
+                item = QTableWidgetItem(val)
+                item.setForeground(QColor(color))
+                self._recon_udp_table.setItem(row, col, item)
+        self._udp_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
+
+    def _on_os_result(self, data: dict):
+        self._os_stack.setCurrentIndex(1)
+        for guess in data.get("guesses", []):
+            row = self._recon_os_table.rowCount()
+            self._recon_os_table.insertRow(row)
+            for col, val in enumerate([
+                getattr(guess, "ip", ""),
+                str(getattr(guess, "ttl", "")),
+                getattr(guess, "os_family", ""),
+                getattr(guess, "confidence", ""),
+                getattr(guess, "tcp_window", ""),
+                getattr(guess, "banner_hint", ""),
+            ]):
+                self._recon_os_table.setItem(row, col, QTableWidgetItem(str(val)))
+        self._os_status.setText(f"Fingerprinted {len(data.get('guesses', []))} host(s).")
+
+    def _on_cve_result(self, service_version: str, result):
+        from PyQt6.QtGui import QColor
+        self._cve_stack.setCurrentIndex(1)
+        for cve in result.cves:
+            row = self._recon_cve_table.rowCount()
+            self._recon_cve_table.insertRow(row)
+            sev = (cve.severity or "NONE").upper()
+            color = (RED if sev in ("CRITICAL", "HIGH") else
+                     AMBER if sev == "MEDIUM" else
+                     BLUE if sev == "LOW" else TEXT_SECONDARY)
+            for col, val in enumerate([
+                cve.cve_id, service_version,
+                f"{cve.cvss_score:.1f}", sev,
+                cve.published, cve.description,
+            ]):
+                item = QTableWidgetItem(str(val))
+                item.setForeground(QColor(color if col in (2, 3) else TEXT_PRIMARY))
+                self._recon_cve_table.setItem(row, col, item)
+        if hasattr(self, "_monitor_overview_page"):
+            self._monitor_overview_page.set_cve_count(self._recon_cve_table.rowCount())
+
+    def _on_exposure_result(self, result):
+        from PyQt6.QtGui import QColor
+        risk_color = RED if result.risk == "HIGH" else AMBER if result.risk == "MEDIUM" else GREEN
+        self._exposure_verdict.setText(result.plain_verdict)
+        self._exposure_verdict.setStyleSheet(
+            f"color:{risk_color};font-size:12px;font-weight:bold;padding:6px;"
+            f"background:{RED_BG};border-radius:4px;" if result.risk == "HIGH" else
+            f"color:{risk_color};font-size:12px;font-weight:bold;padding:6px;"
+            f"background:{AMBER_BG};border-radius:4px;"
+        )
+        self._exposure_verdict.show()
+        self._recon_exposure_table.setRowCount(0)
+        for m in result.upnp_mappings:
+            row = self._recon_exposure_table.rowCount()
+            self._recon_exposure_table.insertRow(row)
+            row_color = RED if m.enabled else TEXT_SECONDARY
+            for col, val in enumerate([
+                m.internal_ip, str(m.external_port), str(m.internal_port),
+                m.protocol, m.description, "Yes" if m.enabled else "No",
+            ]):
+                item = QTableWidgetItem(str(val))
+                item.setForeground(QColor(row_color))
+                self._recon_exposure_table.setItem(row, col, item)
+        self._exposure_status.setText(
+            f"WAN IP: {result.wan_ip or 'unknown'} | "
+            f"CGNAT: {'Yes' if result.cgnat else 'No'} | "
+            f"UPnP mappings: {len(result.upnp_mappings)}"
+        )
+
+    def _start_vendor_lookups(self, devices: list) -> None:
+        """Kick off background OUI vendor lookup for devices still showing Unknown vendor.
+
+        Results arrive via _on_vendor_resolved() and update the table and DeviceInfo
+        in-place, so vendor data fills in asynchronously on the first scan instead of
+        requiring a second scan for the lookup cache to warm up.
+        """
+        from modules.device_classifier import is_randomized_mac
+        pending = []
+        for d in devices:
+            mac    = (d.mac    if not isinstance(d, dict) else d.get("mac",    "")) or ""
+            vendor = (d.vendor if not isinstance(d, dict) else d.get("vendor", "")) or ""
+            if vendor not in ("Unknown", "") or not mac:
+                continue
+            if is_randomized_mac(mac):
+                continue  # privacy MAC — OUI lookup meaningless by design
+            pending.append(mac)
+
+        if not pending:
+            return
+
+        # Cancel any still-running lookup from a previous scan
+        existing = getattr(self, "_vendor_batch_worker", None)
+        if existing and existing.isRunning():
+            existing.vendor_resolved.disconnect()
+            existing.terminate()
+            existing.wait(200)
+
+        worker = _VendorBatchWorker(pending, self)
+        worker.vendor_resolved.connect(self._on_vendor_resolved)
+        self._vendor_batch_worker = worker
+        worker.start()
+
+    def _on_vendor_resolved(self, mac: str, vendor: str) -> None:
+        """Update table cell and DeviceInfo when an async OUI lookup returns a result."""
+        if not self._m1_result or not vendor:
+            return
+        norm = mac.lower().replace("-", "").replace(":", "")
+
+        def _norm(m: str) -> str:
+            return m.lower().replace("-", "").replace(":", "")
+
+        # Update DeviceInfo objects
+        for d in self._m1_result.get("devices", []):
+            d_mac = (d.mac if not isinstance(d, dict) else d.get("mac", "")) or ""
+            if _norm(d_mac) == norm:
+                if isinstance(d, dict):
+                    d["vendor"] = vendor
+                else:
+                    d.vendor = vendor
+
+        # Update the vendor cell (col 3) in _m1_table
+        try:
+            from PyQt6.QtGui import QColor as _QC
+            for row in range(self._m1_table.rowCount()):
+                mac_item = self._m1_table.item(row, 2)
+                if not mac_item:
+                    continue
+                if _norm(mac_item.text()) == norm:
+                    v_item = self._m1_table.item(row, 3)
+                    if v_item and v_item.text() in ("Unknown", ""):
+                        v_item.setText(vendor)
+                        v_item.setForeground(_QC(TEXT_PRIMARY))
+                        v_item.setToolTip(f"Vendor resolved from OUI database\n({mac_item.text()[:8].upper()})")
+                    break
+        except Exception:
+            pass  # non-fatal — table update is best-effort
+
+    def _on_m1_result(self, data: dict):
+        import time as _t
+        self._last_scan_time = _t.time()
+        self._m1_result = data
+        devices = data.get("devices", [])
+        if hasattr(self, "_overview_page") and devices:
+            self._overview_page.set_has_results(True)
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.notify_scan_complete()
+        if hasattr(self, "_monitor_overview_page"):
+            import datetime as _dt
+            self._monitor_overview_page.set_last_scan_time(_dt.datetime.now())
+        if hasattr(self, "_home_page") and devices:
+            self._home_page._device_count = max(self._home_page._device_count, len(devices))
+        if hasattr(self, "_inventory_page"):
+            # Auto-detect segments before populating the snapshot table
+            _inv_store = getattr(self, "_store", None)
+            try:
+                from modules.network_segments import (
+                    auto_detect_segments, merge_segments,
+                )
+                _gw = ""
+                _net_info = getattr(self, "_last_net_info", {}) or {}
+                _gw = _net_info.get("gateway", "") or ""
+                _detected = auto_detect_segments(devices, _gw)
+                _stored: list = []
+                if _inv_store:
+                    try:
+                        _stored = _inv_store.get_segments()
+                    except Exception:
+                        pass  # non-fatal — table may not exist on first run
+                _merged = merge_segments(_detected, _stored)
+                # Upsert new auto-created entries only
+                for _seg in _merged:
+                    if _seg.id == 0 and _inv_store:
+                        try:
+                            _new_id = _inv_store.upsert_segment(_seg)
+                            _seg.id = _new_id
+                        except Exception:
+                            pass  # non-fatal — proceed without DB id
+                self._inventory_page.set_segments(_merged)
+                self._last_segments = _merged
+            except Exception:
+                pass  # non-fatal — segment detection is best-effort
+            # Merge live devices with pinned/static-candidate offline devices
+            self._inventory_page.set_scan_devices(
+                self._merge_scan_with_persistent(devices)
+            )
+        self._m1_table.setRowCount(0)
+        _store_ref = getattr(self, "_store", None)
+        # Snapshot known devices before the loop so we can detect IP/hostname changes
+        _known_before: dict = _store_ref.get_known_devices() if _store_ref else {}
+        for d in devices:
+            level   = d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")
+            ip      = d.ip       if not isinstance(d, dict) else d.get("ip", "?")
+            host    = d.hostname if not isinstance(d, dict) else d.get("hostname", "")
+            mac     = d.mac      if not isinstance(d, dict) else d.get("mac", "?")
+            if _store_ref and mac and mac not in ("?", "00:00:00:00:00:00") and ip and ip != "?":
+                try:
+                    from modules.device_tracker import record_ip_observation as _rec_ip
+                    _rec_ip(mac, ip, _store_ref)
+                except Exception:
+                    pass  # non-fatal — table may not exist on schema upgrade
+                # ── Device change audit events ────────────────────────────────
+                _old_kd = _known_before.get(mac.lower())
+                if _old_kd:
+                    try:
+                        from modules.device_tracker import record_event as _rec_ev
+                        if _old_kd.ip and ip and ip != _old_kd.ip:
+                            _rec_ev(mac, "ip_changed", _old_kd.ip, ip, "scan", _store_ref)
+                        _old_hn = _old_kd.hostname or ""
+                        _new_hn = host or ""
+                        if _old_hn and _new_hn and _new_hn != _old_hn:
+                            _rec_ev(mac, "hostname_changed", _old_hn, _new_hn, "scan", _store_ref)
+                    except Exception:
+                        pass  # non-fatal — audit trail is best-effort
+            vendor  = d.vendor   if not isinstance(d, dict) else d.get("vendor", "Unknown")
+            dtype   = d.device_type if not isinstance(d, dict) else d.get("device_type", "")
+            # Fall back to connection_type when device_type is blank
+            if not dtype:
+                dtype = d.connection_type if not isinstance(d, dict) else d.get("connection_type", "Unknown Device")
+            verdict = d.verdict  if not isinstance(d, dict) else d.get("verdict", "")
+            _add_row(self._m1_table, [ip, host or "—", mac, vendor, level, dtype, "", "", verdict], level)
+            # Vendor tooltip — explain why vendor may be unknown
+            _row_idx = self._m1_table.rowCount() - 1
+            _v_item = self._m1_table.item(_row_idx, 3)
+            if _v_item:
+                try:
+                    _mac_str = mac or ""
+                    _first_octet = int(_mac_str.replace(":", "").replace("-", "")[:2], 16) if len(_mac_str) >= 2 else 0
+                    _is_rand = bool(_first_octet & 0x02)
+                except (ValueError, IndexError):
+                    _is_rand = False
+                if _is_rand:
+                    _v_item.setToolTip(
+                        "MAC address uses privacy randomization\n"
+                        "(iOS/Android feature) — vendor lookup not\n"
+                        "possible by design. This is normal."
+                    )
+                elif vendor in ("Unknown", ""):
+                    _v_item.setToolTip(
+                        "OUI prefix not found in device database.\n"
+                        "The device may be uncommon or use a\n"
+                        "recently issued MAC range."
+                    )
+                else:
+                    _v_item.setToolTip(f"Identified from OUI/device database\n({mac[:8].upper()})")
+            # Device type tooltip when inferred from hostname/ports
+            _dt_item = self._m1_table.item(_row_idx, 5)
+            if _dt_item and dtype == "Unknown Device":
+                _dt_item.setToolTip(
+                    "Device type could not be determined.\n"
+                    "Run a full port scan (Security Audit →\n"
+                    "Port Scan) to improve classification."
+                )
+
+        # Re-apply search/chip filter and restore persisted sort (FILTER-1 / FILTER-2)
+        self._m1_apply_filter()
+        _qs = QSettings("NetSentinel", "NetSentinel")
+        _sc = _qs.value("home/m1_sort_col", -1, type=int)
+        _so = _qs.value("home/m1_sort_order", 0, type=int)
+        if _sc >= 0:
+            self._m1_table.sortByColumn(_sc, Qt.SortOrder(_so))
+
+        self._m1_scan_summary = (
+            f"✓  {data.get('total_count', 0)} devices scanned — "
+            f"{data.get('high_risk_count', 0)} HIGH RISK"
+        )
+        self._m1_status.setText(self._m1_scan_summary)
+        # Mirror into Network Info tab
+        self._net_devices_table.setRowCount(0)
+        for d in data.get("devices", []):
+            level   = d.risk_level if not isinstance(d, dict) else d.get("risk_level", "UNKNOWN")
+            ip      = d.ip       if not isinstance(d, dict) else d.get("ip", "?")
+            host    = d.hostname if not isinstance(d, dict) else d.get("hostname", "")
+            mac     = d.mac      if not isinstance(d, dict) else d.get("mac", "?")
+            vendor  = d.vendor   if not isinstance(d, dict) else d.get("vendor", "Unknown")
+            _add_row(self._net_devices_table, [ip, host or "—", mac, vendor, level], level)
+
+        # ── Baseline diff ────────────────────────────────────────────────────
+        try:
+            from modules.utils import load_device_baseline, save_device_baseline, diff_devices_against_baseline
+            # Convert device objects to plain dicts for the util function
+            dev_dicts = []
+            for d in data.get("devices", []):
+                dev_dicts.append({
+                    "mac":      (d.mac      if not isinstance(d, dict) else d.get("mac", "")),
+                    "ip":       (d.ip       if not isinstance(d, dict) else d.get("ip", "")),
+                    "hostname": (d.hostname if not isinstance(d, dict) else d.get("hostname", "")),
+                    "vendor":   (d.vendor   if not isinstance(d, dict) else d.get("vendor", "")),
+                })
+            baseline = load_device_baseline()
+            new_devs = diff_devices_against_baseline(dev_dicts, baseline)
+            save_device_baseline(baseline)
+            self._bl_table.setRowCount(0)
+            if new_devs:
+                self._bl_new_lbl.setText(f"⚠  {len(new_devs)} new device(s) detected since last scan!")
+                self._bl_new_lbl.setStyleSheet(f"color:{AMBER}; font-size:11px;")
+                for nd in new_devs:
+                    first = baseline.get((nd.get("mac") or "").lower(), {}).get("first_seen", "—")
+                    _add_row(self._bl_table,
+                             [nd.get("ip","?"), nd.get("hostname","") or "—",
+                              nd.get("mac","?"), nd.get("vendor","Unknown"), first],
+                             "MEDIUM")
+            else:
+                self._bl_new_lbl.setText("✓  No new devices since last scan.")
+                self._bl_new_lbl.setStyleSheet(f"color:{GREEN}; font-size:11px;")
+        except Exception as _exc:
+            self._bl_new_lbl.setText(f"Baseline check failed: {_exc}")
+
+        # ── Feed Network Doc page ─────────────────────────────────────────────
+        self._last_scan_devices = data.get("devices", [])
+        _cert_data: list = []
+        if self._store is not None:
+            try:
+                for _c in self._store.query_cert_status():
+                    _cert_data.append({
+                        "host": _c.host,
+                        "cn":   _c.subject or "",
+                        "issuer":        _c.issuer or "",
+                        "not_after":     _c.not_after or "",
+                        "days_remaining": _c.days_remaining,
+                    })
+            except Exception:
+                pass  # non-fatal
+        self._network_doc_page.set_scan_data(
+            devices=self._last_scan_devices,
+            port_data=self._port_data_cache,
+            cert_data=_cert_data,
+            topo_widget=getattr(self, "_topology_widget", None),
+        )
+
+        # ── Persistent device tracking (MetricStore) ──────────────────────────
+        if self._store is not None:
+            try:
+                from modules.device_tracker import DeviceTracker
+                if not hasattr(self, "_device_tracker"):
+                    self._device_tracker = DeviceTracker(self._store)
+                tr = self._device_tracker.process_scan(data.get("devices", []))
+                self._last_scan_new  = len(tr.new_devices)
+                self._last_scan_gone = len(tr.gone_devices)
+                self._last_new_ips: set = {d.ip for d in tr.new_devices if d.ip}
+                if tr.new_devices:
+                    if hasattr(self, "_live_bandwidth_page"):
+                        self._live_bandwidth_page.annotate_event("Device joined", GREEN)
+                    msgs = [f"{d.ip or d.mac} ({d.vendor or 'Unknown'})"
+                            for d in tr.new_devices[:3]]
+                    extra = f" +{len(tr.new_devices)-3} more" if len(tr.new_devices) > 3 else ""
+                    status_msg = f"🆕 {len(tr.new_devices)} new device(s): {', '.join(msgs)}{extra}"
+                    self._set_status(status_msg)
+                    # Tray notification — only if user opted in
+                    from PyQt6.QtCore import QSettings as _QS
+                    if (
+                        self._tray_manager.is_available()
+                        and _QS("NetSentinel", "NetSentinel").value(
+                            "tray/notify_new_device", False, type=bool
+                        )
+                    ):
+                        summary = ", ".join(
+                            f"{d.ip or d.mac}" for d in tr.new_devices[:2]
+                        )
+                        if len(tr.new_devices) > 2:
+                            summary += f" +{len(tr.new_devices)-2} more"
+                        self._tray_manager.show_notification(
+                            "New Device Joined",
+                            summary,
+                            "WARNING",
+                        )
+                        self._tray_manager.increment_badge()
+                    # ── Naming suggestion toast (S5-1) — only the first new device,
+                    # to avoid spamming a toast per device on a busy scan.
+                    try:
+                        from modules.device_naming import suggest_device_name
+                        first = tr.new_devices[0]
+                        suggested = suggest_device_name(
+                            first.hostname, first.vendor, first.device_type
+                        )
+                        if suggested != "Unnamed Device":
+                            from ui.widgets.toast import ToastManager
+                            _mac = first.mac
+
+                            def _name_it(_checked=False, _mac=_mac, _name=suggested):
+                                self._nav_rail_go_to("Inventory Changes")
+                                if hasattr(self, "_inventory_page"):
+                                    self._inventory_page.open_device_drawer(_mac, _name)
+
+                            ToastManager.show(
+                                f"New device: {suggested} ({first.ip or first.mac}) — name it?",
+                                "action",
+                                action_label="Name it",
+                                action_callback=_name_it,
+                            )
+                    except Exception:
+                        pass  # non-fatal — naming suggestion must never break the scan handler
+                if tr.gone_devices:
+                    gone_msgs = [f"{d.ip or d.mac}" for d in tr.gone_devices[:2]]
+                    self._set_status(
+                        f"⚠  {len(tr.gone_devices)} device(s) gone: {', '.join(gone_msgs)}"
+                    )
+                # Feed tracker result into alert engine + MQTT
+                if self._alert_engine is not None:
+                    for a in self._alert_engine.evaluate_tracker_result(tr):
+                        self._show_alert_toast(a)
+                        self._home_page.on_alert(a)
+                        self._mqtt_page.on_alert(a.severity, a.message, a.host)
+                # Forward device events to MQTT publisher
+                for _d in tr.new_devices:
+                    self._mqtt_page.on_device_event("joined", {
+                        "mac": _d.mac or "", "ip": _d.ip or "",
+                        "hostname": _d.hostname or "", "vendor": _d.vendor or "",
+                    })
+                for _d in tr.gone_devices:
+                    self._mqtt_page.on_device_event("left", {
+                        "mac": _d.mac or "", "ip": _d.ip or "",
+                        "hostname": _d.hostname or "", "vendor": _d.vendor or "",
+                    })
+            except Exception:
+                pass   # tracker errors must never break the scan result handler
+
+        # ── Feed Geolocation Map with discovered device IPs (public ones auto-filtered) ─
+        try:
+            _ips = [
+                (d.ip if not isinstance(d, dict) else d.get("ip", ""))
+                for d in data.get("devices", [])
+            ]
+            self._geo_map_page.add_ips([ip for ip in _ips if ip])
+        except Exception:
+            pass  # non-fatal
+
+        # ── Start / refresh AvailabilityWorker after each scan ────────────────
+        try:
+            if self._store is not None and data.get("devices"):
+                from workers.availability_worker import AvailabilityWorker
+                from modules.availability_monitor import TargetConfig
+                _targets = []
+                for _d in data.get("devices", []):
+                    _ip  = _d.ip       if not isinstance(_d, dict) else _d.get("ip", "")
+                    _mac = _d.mac      if not isinstance(_d, dict) else _d.get("mac", "")
+                    _hn  = _d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")
+                    if _ip:
+                        _targets.append(TargetConfig(
+                            host=_ip, mac=_mac or None,
+                            hostname=_hn or None, label=_hn or _ip,
+                        ))
+                if _targets:
+                    if hasattr(self, "_avail_worker") and self._avail_worker.isRunning():
+                        self._avail_worker.set_targets(_targets)
+                    else:
+                        self._avail_worker = AvailabilityWorker(
+                            store=self._store, targets=_targets, interval_s=60,
+                        )
+                        self._avail_worker.cycle_done.connect(self._on_avail_cycle_done)
+                        self._avail_worker.start()
+        except Exception:
+            pass  # non-fatal
+
+        self._update_overall_verdict()
+        self._update_kpi_tiles(data)
+        # Show the table (hide the empty-state placeholder)
+        self._m1_stack.setCurrentIndex(1)
+        # Show benchmark content pane (user can now grade without being sent elsewhere)
+        if hasattr(self, "_bm_stack"):
+            self._bm_stack.setCurrentIndex(1)
+        # Refresh topology widget with new device list + segment colours + health
+        try:
+            gw_ip  = self._net_info.get("gateway") if self._net_info else None
+            gw_mac = self._net_info.get("gateway_mac") if self._net_info else None
+            _topo_segs = getattr(self, "_last_segments", None)
+
+            # Sprint 3 — build edge health overlays from MetricStore
+            _topo_edges: list = []
+            _topo_down_ips: set = set()
+            _topo_new_ips: set = getattr(self, "_last_new_ips", set())
+            try:
+                if self._store is not None and gw_ip:
+                    from modules.topology_layout import TopologyEdge as _TE
+                    for _d in data.get("devices", []):
+                        _ip = _d.ip if not isinstance(_d, dict) else _d.get("ip", "")
+                        if not _ip or _ip == gw_ip or _ip in ("?", "0.0.0.0"):
+                            continue
+                        _state_hist = self._store.query_device_state_history(_ip, hours=2.0)
+                        _latest = _state_hist[-1] if _state_hist else None
+                        _status = "unknown"
+                        _latency: float | None = None
+                        _loss: float | None = None
+                        if _latest:
+                            _s = _latest.state
+                            _status = (
+                                "down"     if _s == "DOWN"     else
+                                "degraded" if _s == "DEGRADED" else
+                                "up"
+                            )
+                            _latency = _latest.rtt_ms
+                            if _status == "down":
+                                _topo_down_ips.add(_ip)
+                        if _latency is None:
+                            _rtt_hist = self._store.query_rtt_history(_ip, hours=2.0)
+                            if _rtt_hist:
+                                _last_rtt = _rtt_hist[-1]
+                                _latency = _last_rtt.rtt_ms
+                                _loss = _last_rtt.loss_pct / 100.0
+                                if _status == "unknown":
+                                    _status = (
+                                        "degraded" if (_latency > 100 or _loss > 0.2)
+                                        else "up"
+                                    )
+                        _topo_edges.append(_TE(
+                            src_ip=gw_ip,
+                            dst_ip=_ip,
+                            latency_ms=_latency,
+                            packet_loss=_loss,
+                            bandwidth_mbps=None,
+                            status=_status,
+                        ))
+            except Exception:
+                pass  # non-fatal — health overlays degrade gracefully
+
+            # Sprint 4 — topology change detection: load previous snapshot,
+            # compute diff before render, save current snapshot after.
+            _topo_diff = None
+            _topo_curr_snap = None
+            try:
+                if self._store is not None:
+                    from modules.topology_snapshot import (
+                        build_snapshot as _build_topo_snap,
+                        diff_snapshots as _diff_topo,
+                        load_last_snapshot as _load_topo_snap,
+                        save_snapshot as _save_topo_snap,
+                    )
+                    _topo_curr_snap = _build_topo_snap(
+                        data.get("devices", []), gw_ip
+                    )
+                    _topo_prev_snap = _load_topo_snap(self._store)
+                    if _topo_prev_snap is not None:
+                        _computed = _diff_topo(_topo_curr_snap, _topo_prev_snap)
+                        self._topo_diff = _computed
+                        if getattr(self, "_topo_diff_mode", False):
+                            _topo_diff = _computed
+                    else:
+                        self._topo_diff = None
+            except Exception:
+                pass  # non-fatal — diff overlay is best-effort
+
+            self._network_map_page.render(
+                data.get("devices", []), gw_ip, gw_mac,
+                mesh_units=getattr(self, "_mesh_units", None),
+                mesh_enrichment=getattr(self, "_mesh_enrichment", None),
+                modem_data=getattr(self, "_last_modem_data", None),
+                segments=_topo_segs,
+                edges=_topo_edges or None,
+                down_ips=_topo_down_ips or None,
+                new_ips=_topo_new_ips or None,
+                diff=_topo_diff,
+            )
+
+            # Persist current snapshot (after render so DB write doesn't block)
+            try:
+                if _topo_curr_snap is not None and self._store is not None:
+                    _save_topo_snap(_topo_curr_snap, self._store)
+            except Exception:
+                pass  # non-fatal
+
+            # Update the "N new · M gone" badge label
+            try:
+                _diff_lbl = getattr(self, "_topo_diff_lbl", None)
+                if _diff_lbl is not None:
+                    _diff_text = (
+                        self._topo_diff.summary
+                        if self._topo_diff and not self._topo_diff.is_empty
+                        else ""
+                    )
+                    _diff_lbl.setText(_diff_text)
+                    _diff_lbl.setVisible(bool(_diff_text))
+            except Exception:
+                pass  # non-fatal
+
+        except AttributeError:
+            pass  # network_map_page not yet initialised
+        except Exception as _topo_exc:
+            self._set_status(f"Topology render error: {_topo_exc}")
+        # Re-apply any active NL search now that new data is loaded
+        if hasattr(self, "_m1_search") and self._m1_search.text().strip():
+            self._filter_m1_by_nl(self._m1_search.text())
+
+        self._compute_suggestions()
+
+        # DEVICE-5: auto-snapshot when setting is on
+        try:
+            _qs_d5 = QSettings("NetSentinel", "NetSentinel")
+            if _qs_d5.value("baseline/auto_snapshot", False, type=bool) and self._store is not None:
+                from modules.config_baseline import (
+                    build_snapshot_from_scan,
+                    diff_snapshots,
+                    list_snapshots as _ls,
+                    store_snapshot as _ss,
+                    delete_snapshot as _ds,
+                )
+                import datetime as _dt_d5
+                _label = f"Auto · {_dt_d5.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                _dev_dicts = []
+                for _d in data.get("devices", []):
+                    _dev_dicts.append({
+                        "mac":      (_d.mac      if not isinstance(_d, dict) else _d.get("mac", "")),
+                        "ip":       (_d.ip       if not isinstance(_d, dict) else _d.get("ip", "")),
+                        "hostname": (_d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")),
+                        "vendor":   (_d.vendor   if not isinstance(_d, dict) else _d.get("vendor", "")),
+                        "open_ports": (list(getattr(_d, "open_ports", [])) if not isinstance(_d, dict) else _d.get("open_ports", [])),
+                    })
+                _new_snap = build_snapshot_from_scan(_dev_dicts, label=_label)
+
+                # Load previous auto-snapshots for drift check
+                _all_snaps = _ls(self._store, limit=200)
+                _auto_snaps = [s for s in _all_snaps if (s.label or "").startswith("Auto ·")]
+
+                _prev = _auto_snaps[0] if _auto_snaps else None
+                if _prev:
+                    _diff = diff_snapshots(_prev, _new_snap)
+                    if _diff.has_drift:
+                        self._baseline_has_drift = True
+                        self._refresh_section_badges()
+                        from ui.widgets.toast import ToastManager
+                        ToastManager.show(
+                            f"Baseline drift: {_diff.summary()} — Config Snapshots",
+                            "info",
+                        )
+
+                _ss(self._store, _new_snap)
+
+                # Keep only last 10 auto-snapshots; never touch manually-labelled ones
+                _all_snaps2 = _ls(self._store, limit=200)
+                _auto_only = [s for s in _all_snaps2 if (s.label or "").startswith("Auto ·")]
+                for _old in _auto_only[10:]:
+                    try:
+                        _ds(self._store, _old.id)
+                    except Exception:
+                        pass  # non-fatal
+        except Exception:
+            pass  # auto-snapshot errors must never break the scan result handler
+
+
+        # After scan from home: show post-scan coach marks on first scan, else go to Overview.
+        if getattr(self, "_scan_from_home", False) and len(devices) > 0:
+            self._scan_from_home = False
+            from PyQt6.QtCore import QSettings as _QS
+            _qs = _QS("NetSentinel", "NetSentinel")
+            if not _qs.value("tour/post_scan_done", False, type=bool):
+                _qs.setValue("tour/post_scan_done", True)
+                from PyQt6.QtCore import QTimer as _QT
+                _QT.singleShot(600, self._start_post_scan_coach_marks)
+            else:
+                if not getattr(self, "_onboarding_active", False):
+                    self._nav_rail_go_to("Dashboard")
+
+        # Always apply enrichment — re-classifies device types and rebuilds dependent
+        # views even on the first scan; also layers in cached mesh/plugin data when present.
+        self._apply_mesh_enrichment()
+
+        # Apply any passive SSDP/mDNS observations buffered before the scan finished.
+        self._apply_passive_observations()
+
+        # Async OUI vendor lookup for devices still showing Unknown vendor.
+        # Updates table cells and DeviceInfo objects as results arrive.
+        self._start_vendor_lookups(devices)
+
+        # Wake any router/AP plugin workers so fresh client data arrives quickly
+        # rather than waiting up to 60 s for the next scheduled poll cycle.
+        try:
+            _hw_page = getattr(self, "_hardware_integration_page", None)
+            if _hw_page:
+                for _pw in _hw_page._poll_workers.values():
+                    if getattr(_pw, "_hw_type", "modem") != "modem" and _pw.isRunning():
+                        _pw.trigger_now()
+        except Exception:
+            pass  # defensive guard — _hardware_integration_page may not be initialised yet
+
+        # Safety-net: re-apply enrichment 15 s after scan so hostnames appear even
+        # when the first plugin poll completes after _on_m1_result() returns.
+        if not hasattr(self, "_post_scan_enrich_timer"):
+            from PyQt6.QtCore import QTimer as _QTE
+            self._post_scan_enrich_timer = _QTE(self)
+            self._post_scan_enrich_timer.setSingleShot(True)
+            self._post_scan_enrich_timer.timeout.connect(self._apply_mesh_enrichment)
+        self._post_scan_enrich_timer.start(15_000)
+
+        self._check_hw_autodetect()
+
+        # Fetch WAN IP in background so geo map can resolve LAN devices later
+        if not self._wan_ip:
+            self._fetch_wan_ip()
+
+        # Integration discovery banner — show when scanned devices match a
+        # bundled plugin gateway that isn't already imported
+        self._check_integration_banner(devices)
+
+        # Sprint 5 — LLDP multi-hop discovery: start background sniff on the
+        # active interface to discover managed switches invisible to ARP scanning.
+        self._start_lldp_discovery()
+
+
+    def _merge_scan_with_persistent(self, live_devices: list) -> list:
+        """Return live devices augmented with pinned/static-candidate offline devices.
+
+        Devices that appeared in the live scan are returned as-is; the inventory
+        page treats any device without an explicit display_state as "online".
+        Offline static candidates (pinned, infrastructure roles, or IP-stable
+        devices seen 3+ times) are appended as plain dicts with display_state set
+        to "pinned", "cached" (<24 h), or "stale" (<7 d).  Devices older than 7
+        days and not pinned are omitted — they are already excluded from the
+        startup cache restore and would just clutter the view.
+        """
+        import time as _mt
+        _store = getattr(self, "_store", None)
+        if _store is None:
+            return live_devices
+        try:
+            from modules.device_stability import is_static_candidate as _is_static
+
+            _now   = int(_mt.time())
+            _24h   = 86_400
+            _7d    = 7 * _24h
+
+            # Build MAC set for live devices so we don't double-list them
+            _live_macs: set[str] = set()
+            for _d in live_devices:
+                _mac = (_d.mac if not isinstance(_d, dict) else _d.get("mac", "")) or ""
+                if _mac and _mac not in ("?", "00:00:00:00:00:00"):
+                    _live_macs.add(_mac.lower())
+
+            _extras: list = []
+            for _kd in _store.get_known_devices().values():
+                if not _kd.ip or _kd.ip in ("?", "0.0.0.0", ""):
+                    continue
+                if (_kd.mac or "").lower() in _live_macs:
+                    continue
+                if not _is_static(
+                    ip_stability=float(_kd.ip_stability or 0.0),
+                    scan_count=int(_kd.scan_count or 0),
+                    inferred_role=_kd.inferred_role,
+                    is_pinned=bool(_kd.is_pinned),
+                ):
+                    continue
+                _age_s = _now - int(_kd.last_seen or 0)
+                if _kd.is_pinned:
+                    _state = "pinned"
+                elif _age_s <= _24h:
+                    _state = "cached"
+                elif _age_s <= _7d:
+                    _state = "stale"
+                else:
+                    continue  # older than 7 days and not pinned — skip
+                _extras.append({
+                    "ip":            _kd.ip,
+                    "hostname":      _kd.custom_name or _kd.hostname or "",
+                    "mac":           _kd.mac or "?",
+                    "vendor":        _kd.vendor or "Unknown",
+                    "risk_level":    "UNKNOWN",
+                    "device_type":   _kd.device_type or "Unknown Device",
+                    "verdict":       "",
+                    "display_state": _state,
+                    "last_seen_ts":  int(_kd.last_seen or 0),
+                    "inferred_role": _kd.inferred_role,
+                    "scan_count":    _kd.scan_count,
+                    "ip_stability":  _kd.ip_stability,
+                    "is_pinned":     _kd.is_pinned,
+                })
+            return list(live_devices) + _extras
+        except Exception:
+            return live_devices  # non-fatal — fall back to live-only list
+
+    def _on_lldp_result(self, neighbors: list) -> None:
+        """Handle LLDP neighbor results from LldpWorker."""
+        self._lldp_result = neighbors
+        try:
+            admin_needed = not neighbors and not getattr(self, "_lldp_admin_ok", True)
+            self._network_map_page.update_lldp_neighbors(
+                neighbors, admin_needed=admin_needed
+            )
+        except AttributeError:
+            pass  # non-fatal — network_map_page may not be initialised
+
+    def _start_lldp_discovery(self) -> None:
+        """Launch LldpWorker on the active interface after a scan completes."""
+        try:
+            from workers.lldp_worker import LldpWorker
+            from modules.utils import is_admin
+
+            self._lldp_admin_ok = is_admin()
+
+            iface = ""
+            net_info = getattr(self, "_net_info", None) or {}
+            iface = net_info.get("interface", "") or ""
+
+            if not iface:
+                return  # cannot sniff without a known interface
+
+            # Cancel any previous still-running worker
+            prev = getattr(self, "_lldp_worker", None)
+            if prev and prev.isRunning():
+                try:
+                    prev.result_ready.disconnect()
+                except Exception:
+                    pass  # non-fatal — signal may already be disconnected
+                prev.terminate()
+                prev.wait(300)
+
+            worker = LldpWorker(iface=iface, passive=True, parent=self)
+            worker.result_ready.connect(self._on_lldp_result)
+            self._lldp_worker = worker
+            worker.start()
+        except Exception:
+            pass  # non-fatal — LLDP discovery is best-effort
+
+    def _on_plugin_result(self, res):
+        if res.error:
+            tb_lines = res.error.strip().splitlines()
+            if len(tb_lines) > 10:
+                tb_lines = ["(… truncated …)"] + tb_lines[-10:]
+            lines = [
+                f"Plugin: {res.plugin_name}",
+                "",
+                "The plugin encountered an error while running.",
+                "Likely cause: a coding error in the plugin or missing expected device data.",
+                "What to try:  right-click the plugin row and choose 'Show validation',",
+                "              or open the plugins folder to edit the file.",
+                "",
+                "— Error details —",
+            ] + tb_lines
+            self._plugin_result_text.setPlainText("\n".join(lines))
+            self._plugin_status.setText(f"'{res.plugin_name}' failed — see output below.")
+            self._plugin_status.setStyleSheet(f"color:{RED};font-size:11px;")
+            return
+        lines = [f"Plugin: {res.plugin_name}", f"Risk: {risk_to_label(res.risk_level)}"]
+        if res.findings:
+            lines.append(f"Findings ({len(res.findings)}):")
+            for f in res.findings:
+                lines.append(f"  • {f}")
+        else:
+            lines.append("No findings.")
+        self._plugin_result_text.setPlainText("\n".join(lines))
+        color = RED if res.risk_level in ("HIGH", "CRITICAL") else (AMBER if res.risk_level == "MEDIUM" else GREEN)
+        self._plugin_status.setText(
+            f"'{res.plugin_name}' complete — {risk_to_label(res.risk_level)} "
+            f"({len(res.findings)} finding{'s' if len(res.findings) != 1 else ''})."
+        )
+        self._plugin_status.setStyleSheet(f"color:{color};font-size:11px;")
+
+    # ── Startup cache restore ─────────────────────────────────────────────────
+
+    def _restore_cached_scan(self) -> None:
+        """Pre-populate Devices table and Network Map from last-known MetricStore data.
+
+        Called once at startup before any live scan.  Risk levels are omitted
+        (shown as "—") because they are point-in-time and stale.  Each device
+        carries a display_state key (pinned / cached / stale) so the Inventory
+        page can show appropriate freshness indicators without waiting for a scan.
+        A live scan always replaces this view via the normal _on_m1_result() path.
+        """
+        import time as _time
+        _store_ref = getattr(self, "_store", None)
+        if _store_ref is None:
+            return
+        try:
+            known = _store_ref.get_known_devices()
+        except Exception:
+            return  # non-fatal — store may not be initialised yet
+
+        now = int(_time.time())
+        _24h = 86_400
+        _7d  = 7 * _24h
+
+        # Determine display_state and sort priority for each known device.
+        # Include: pinned devices always; others if seen within 7 days.
+        raw_devices = []
+        for kd in known.values():
+            if not kd.ip or kd.ip in ("?", "0.0.0.0", ""):
+                continue
+            age_s = now - int(kd.last_seen or 0)
+            if kd.is_pinned:
+                state = "pinned"
+                priority = 0
+            elif age_s <= _24h:
+                state = "cached"
+                priority = 1
+            elif age_s <= _7d:
+                state = "stale"
+                priority = 2
+            else:
+                continue  # older than 7 days and not pinned — skip
+            raw_devices.append((priority, kd.ip, {
+                "ip":            kd.ip or "?",
+                "hostname":      kd.custom_name or kd.hostname or "",
+                "mac":           kd.mac or "?",
+                "vendor":        kd.vendor or "Unknown",
+                "risk_level":    "UNKNOWN",
+                "device_type":   kd.device_type or "Unknown Device",
+                "verdict":       "",
+                "display_state": state,
+                "last_seen_ts":  int(kd.last_seen or 0),
+                "inferred_role": kd.inferred_role,
+                "scan_count":    kd.scan_count,
+                "ip_stability":  kd.ip_stability,
+                "is_pinned":     kd.is_pinned,
+            }))
+
+        if not raw_devices:
+            return  # first-ever launch — leave empty state in place
+
+        # Sort: pinned first, then cached, then stale; IP within each group
+        raw_devices.sort(key=lambda t: (t[0], t[1]))
+        devices = [t[2] for t in raw_devices]
+
+        # Loaded once — feeds both the Network Map below and self._m1_result.
+        # _on_modem_signal/mesh-enrichment re-renders read devices from
+        # self._m1_result, not from locals here, so it must carry the real
+        # classification too or those re-renders undo this fix moments later.
+        try:
+            from modules.network_map_cache import load_render_cache
+            _map_cache = load_render_cache()
+        except Exception:
+            _map_cache = None
+
+        # Populate the Devices table (Risk column shows "—", not a stale level)
+        self._m1_table.setRowCount(0)
+        for d in devices:
+            _add_row(
+                self._m1_table,
+                [d["ip"], d["hostname"] or "—", d["mac"], d["vendor"],
+                 "—", d["device_type"], "", "", ""],
+                "UNKNOWN",
+            )
+
+        # Switch from empty-state placeholder to table view
+        if hasattr(self, "_m1_stack"):
+            self._m1_stack.setCurrentIndex(1)
+
+        # Status label shows both freshness and device count
+        _age = self._cached_scan_age_str(_store_ref)
+        pinned_n = sum(1 for d in devices if d["display_state"] == "pinned")
+        cached_n = sum(1 for d in devices if d["display_state"] == "cached")
+        stale_n  = sum(1 for d in devices if d["display_state"] == "stale")
+        _parts = []
+        if pinned_n:
+            _parts.append(f"{pinned_n} pinned")
+        if cached_n:
+            _parts.append(f"{cached_n} recent")
+        if stale_n:
+            _parts.append(f"{stale_n} stale")
+        _summary = "  ·  ".join(_parts) if _parts else f"{len(devices)} devices"
+        self._m1_status.setText(
+            f"Cached — last scanned {_age}  ·  {_summary}  ·  Run Scan to refresh"
+        )
+        self._m1_status.setStyleSheet(
+            f"color:{TEXT_MUTED};font-size:11px;padding:2px 0;"
+        )
+
+        # Downstream pages read devices from here — prefer the cached
+        # live-render data over the UNKNOWN-risk reconstruction.
+        self._m1_result = {
+            "devices":         _map_cache["devices"] if _map_cache else devices,
+            "from_cache":      True,
+            "total_count":     len(devices),
+            "high_risk_count": 0,
+        }
+
+        # Feed Inventory page with cached device list (display_state included)
+        if hasattr(self, "_inventory_page"):
+            try:
+                self._inventory_page.set_scan_devices(devices)
+            except Exception:
+                pass  # non-fatal
+
+        # Feed Network Map — load mesh cache FIRST so the single initial render
+        # includes satellite grouping (avoiding a two-render sequence where the
+        # incremental Cytoscape update fires before the first setHtml() has loaded).
+        if hasattr(self, "_network_map_page"):
+            # Step 1: attempt to restore mesh enrichment cache
+            _startup_mesh_units, _startup_mesh_enrich = None, None
+            try:
+                import json as _json
+                from modules.utils import get_app_data_dir as _gad
+                _cache_path = _gad() / "mesh_enrichment_cache.json"
+                if _cache_path.exists():
+                    _cached = _json.loads(_cache_path.read_text(encoding="utf-8"))
+                    if _cached.get("plugin_enrichments"):
+                        self._plugin_enrichments = _cached["plugin_enrichments"]
+                    if _cached.get("plugin_nodes"):
+                        self._plugin_nodes = _cached["plugin_nodes"]
+                    if _cached.get("plugin_hardware_name"):
+                        self._plugin_hardware_name = _cached["plugin_hardware_name"]
+                    _startup_mesh_units, _startup_mesh_enrich = (
+                        self._effective_mesh_render_params()
+                    )
+            except Exception:
+                pass  # non-fatal — render without mesh if cache unavailable
+
+            # Step 2: single combined render (topology snapshot + mesh data)
+            try:
+                _gw_ip: str | None = None
+                try:
+                    from modules.topology_snapshot import load_last_snapshot as _ls
+                    from collections import Counter as _Ctr
+                    _snap = _ls(_store_ref)
+                    if _snap and _snap.edges:
+                        _gw_ip = _Ctr(e[0] for e in _snap.edges).most_common(1)[0][0]
+                except Exception:
+                    pass  # non-fatal — render without gateway_ip
+
+                if _map_cache is not None:
+                    self._network_map_page.render(
+                        devices=_map_cache["devices"],
+                        gateway_ip=_map_cache["gateway_ip"] or _gw_ip,
+                        gateway_mac=_map_cache["gateway_mac"],
+                        mesh_units=_startup_mesh_units,
+                        mesh_enrichment=_startup_mesh_enrich,
+                        modem_data=_map_cache["modem_data"],
+                        edges=_map_cache["edges"],
+                        persist_cache=False,
+                    )
+                else:
+                    self._network_map_page.render(
+                        devices=devices,
+                        gateway_ip=_gw_ip,
+                        mesh_units=_startup_mesh_units,
+                        mesh_enrichment=_startup_mesh_enrich,
+                        persist_cache=False,
+                    )
+                if hasattr(self._network_map_page, "_stale_label"):
+                    self._network_map_page._stale_label.setVisible(True)
+            except Exception:
+                pass  # non-fatal
+
+    def _save_mesh_enrichment_cache(self) -> None:
+        """Persist plugin mesh enrichment so the Network Map shows node grouping at startup."""
+        try:
+            import json as _json
+            from modules.utils import get_app_data_dir as _gad
+            _data = {
+                "plugin_enrichments": {
+                    k: dict(v) for k, v in
+                    getattr(self, "_plugin_enrichments", {}).items()
+                },
+                "plugin_nodes":         dict(getattr(self, "_plugin_nodes", {})),
+                "plugin_hardware_name": getattr(self, "_plugin_hardware_name", ""),
+            }
+            (_gad() / "mesh_enrichment_cache.json").write_text(
+                _json.dumps(_data), encoding="utf-8"
+            )
+        except Exception:
+            pass  # non-fatal — best-effort cache write
+
+    def _cached_scan_age_str(self, store) -> str:
+        """Return a human-readable age string for the most recent topology snapshot."""
+        try:
+            from modules.topology_snapshot import load_last_snapshot as _load_snap
+            snap = _load_snap(store)
+            if snap is None:
+                return "unknown time ago"
+            import datetime as _dt
+            delta = _dt.datetime.now() - snap.timestamp
+            total_s = int(delta.total_seconds())
+            hours, remainder = divmod(total_s, 3600)
+            minutes = remainder // 60
+            if hours >= 48:
+                return f"{hours // 24}d ago"
+            if hours >= 1:
+                return f"{hours}h ago"
+            return f"{minutes}m ago"
+        except Exception:
+            return "unknown time ago"
+
+    def _on_pe_result(self, res):
+        from PyQt6.QtGui import QColor
+        row = self._pe_table.rowCount()
+        self._pe_table.insertRow(row)
+
+        status_color = GREEN if res.status == "PASS" else (AMBER if res.status == "WARN" else RED)
+        ips_str  = ", ".join(res.resolved_ips[:3]) + ("…" if len(res.resolved_ips) > 3 else "")
+        priv_str = "✔ Yes" if res.is_private else ("⚠ LEAK" if res.dns_leak else "—")
+        tcp_str  = "✔" if res.tcp_open else "✘"
+        tls_str  = str(res.cert.days_left) if (res.cert and not res.cert.error and res.cert.days_left >= 0) else "—"
+        findings = " | ".join(res.findings) if res.findings else "All checks passed"
+        if res.dns_server:
+            findings += f"  [resolver: {res.dns_server}]"
+
+        vals = [res.status, res.spec.label, res.cloud or "—", ips_str,
+                priv_str, tcp_str, tls_str, findings]
+        for col, val in enumerate(vals):
+            item = QTableWidgetItem(str(val))
+            c = status_color if col == 0 else (
+                (GREEN if "✔" in str(val) else (RED if "✘" in str(val) or "LEAK" in str(val) else TEXT_PRIMARY))
+            )
+            item.setForeground(QColor(c))
+            self._pe_table.setItem(row, col, item)

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Monochrome — #0078D4 shapes on transparent background.
+       Legible against both light and dark taskbars. Reads clearly at 16x16. -->
+
+  <!-- Hexagon outline only — no fill so the OS taskbar colour shows through -->
+  <polygon points="16,3 27.3,9.5 27.3,22.5 16,29 4.7,22.5 4.7,9.5"
+           fill="none" stroke="#0078D4" stroke-width="2" stroke-linejoin="round"/>
+
+  <!-- Centre dot — represents the network node / origin point -->
+  <circle cx="16" cy="16" r="2.5" fill="#0078D4"/>
+</svg>

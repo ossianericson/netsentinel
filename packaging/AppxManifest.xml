@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for NetSentinel (Desktop Bridge / Win32 package).
+  
+  Version: MUST be 4-part format (X.Y.Z.W). Release workflow patches this
+  automatically with the format: ${VERSION}.0 (e.g., 1.5.8 → 1.5.8.0).
+  Never use 5-part versions (e.g., 1.5.8.0.0) — makeappx.exe will reject them.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
+  IgnorableNamespaces="uap mp uap3 uap5 rescap desktop desktop2">
+
+  <Identity
+    Name="OssianEricson.NetSentinel"
+    Publisher="CN=4D6C5786-0D89-4E01-B2AA-FFB9E72FF4CA"
+    Version="2.1.13.0"
+    ProcessorArchitecture="x64" />
+
+  <mp:PhoneIdentity
+    PhoneProductId="00000000-0000-0000-0000-000000000000"
+    PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+
+  <Properties>
+    <DisplayName>NetSentinel</DisplayName>
+    <PublisherDisplayName>Ossian Ericson</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <uap:SupportedUsers>single</uap:SupportedUsers>
+  </Properties>
+
+  <Dependencies>
+    <!-- Windows 10 1809 (build 17763) minimum — required for Desktop Bridge full trust -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application
+      Id="NetSentinel"
+      Executable="NetSentinel\NetSentinel.exe"
+      EntryPoint="Windows.FullTrustApplication">
+
+      <uap:VisualElements
+        DisplayName="NetSentinel"
+        Description="Network security scanner — rogue device detector, STP monitor, and connectivity analyser"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- Allows the packaged Win32 exe to run with full trust (admin elevation) -->
+        <desktop:Extension Category="windows.fullTrustProcess"
+          Executable="NetSentinel\NetSentinel.exe" />
+        <!--
+          Optional startup task — background connectivity logger.
+          Enabled="false" means it is DISABLED by default; users must opt in via
+          Settings > Apps > Startup or Task Manager > Startup Apps.
+          When enabled, launches in headless logger mode (no GUI window).
+        -->
+        <uap5:Extension Category="windows.startupTask"
+          Executable="NetSentinel\NetSentinel.exe"
+          EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask
+            TaskId="NetSentinelLogger"
+            Enabled="false"
+            DisplayName="NetSentinel Background Logger" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- Standard network capabilities -->
+    <Capability Name="internetClient" />
+    <Capability Name="internetClientServer" />
+    <Capability Name="privateNetworkClientServer" />
+    <!--
+      runFullTrust — required for raw socket access, Npcap integration, and
+      administrator-level network operations (ARP, BPDU capture, port scanning).
+      Microsoft reviews this capability manually; allow 1–3 weeks extra.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+  <!--
+    Declare outbound firewall rules applied at package install time.
+    Covers the Python speed-test backends that run inside NetSentinel.exe.
+    Ports: 443 (HTTPS), 8080 (Ookla streams), 5060 (Ookla latency probes).
+    Requires runFullTrust capability (already declared above).
+    desktop2 namespace (windows.firewallRules is a desktop/2 extension, not desktop/6).
+    Listed in IgnorableNamespaces so the package still installs on older builds
+    (rules just won't be created).
+  -->
+  <Extensions>
+    <desktop2:Extension Category="windows.firewallRules">
+      <desktop2:FirewallRules Executable="NetSentinel\NetSentinel.exe">
+        <desktop2:Rule Direction="out" IPProtocol="TCP"
+          RemotePortMin="443" RemotePortMax="443" Profile="all" />
+        <desktop2:Rule Direction="out" IPProtocol="TCP"
+          RemotePortMin="8080" RemotePortMax="8080" Profile="all" />
+        <desktop2:Rule Direction="out" IPProtocol="UDP"
+          RemotePortMin="8080" RemotePortMax="8080" Profile="all" />
+        <desktop2:Rule Direction="out" IPProtocol="TCP"
+          RemotePortMin="5060" RemotePortMax="5060" Profile="all" />
+        <desktop2:Rule Direction="out" IPProtocol="UDP"
+          RemotePortMin="5060" RemotePortMax="5060" Profile="all" />
+      </desktop2:FirewallRules>
+    </desktop2:Extension>
+  </Extensions>
+
+</Package>
+

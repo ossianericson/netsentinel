@@ -1,0 +1,64 @@
+name: Promote Release
+
+# Staged rollout — Step 2 of 3.
+#
+# After a tag push, releases are created as prerelease: true.
+# Run this workflow after 48h of issue monitoring to mark the release stable.
+# Then run the "WinGet Submit" workflow (winget-submit.yml) for Step 3.
+#
+# Inputs:
+#   tag  — the full tag to promote, e.g. "v1.9.91"
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to promote to stable (e.g. v1.9.91)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Promote ${{ inputs.tag }} to stable
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Verify release exists and is a prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          STATE=$(gh release view "$TAG" \
+            --repo "${{ github.repository }}" \
+            --json isPrerelease \
+            --jq '.isPrerelease')
+          echo "Current prerelease state: $STATE"
+          if [ "$STATE" != "true" ]; then
+            echo "::warning::Release $TAG is not a prerelease — nothing to promote."
+            exit 0
+          fi
+
+      - name: Mark release as stable
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          gh release edit "$TAG" \
+            --prerelease=false \
+            --latest \
+            --repo "${{ github.repository }}"
+          echo "Release $TAG promoted to stable."
+
+      - name: Print next step
+        run: |
+          TAG="${{ inputs.tag }}"
+          VER="${TAG#v}"
+          echo "### Release promoted" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**$TAG** is now a stable release." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Next step:** Run the [WinGet Submit]" \
+            "(https://github.com/${{ github.repository }}/actions/workflows/winget-submit.yml)" \
+            "workflow with version \`$VER\`." >> "$GITHUB_STEP_SUMMARY"

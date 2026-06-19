@@ -1,0 +1,17 @@
+{
+  "output": {
+    "filePath": "repomix-output.txt",
+    "style": "plain"
+  },
+  "ignore": {
+    "customPatterns": [
+      "apm_modules/**",
+      "__pycache__/**",
+      "*.pyc",
+      "build/**",
+      "dist/**",
+      "*.spec",
+      "repomix-output.txt"
+    ]
+  }
+}

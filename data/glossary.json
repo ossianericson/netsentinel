@@ -1,0 +1,150 @@
+{
+  "terms": [
+    {
+      "term": "ARP",
+      "definition": "Address Resolution Protocol — how devices on a local network translate an IP address into the hardware (MAC) address needed to actually deliver a packet.",
+      "detail": "What to look for: one IP address should map to one MAC address. If the same IP suddenly answers from two different MACs, a device may be impersonating your gateway to intercept traffic — that's what ARP Spoof Watch is built to catch."
+    },
+    {
+      "term": "BPDU",
+      "definition": "Bridge Protocol Data Unit — control frames sent between network switches to run the Spanning Tree Protocol and elect a root bridge."
+    },
+    {
+      "term": "BSSID",
+      "definition": "Basic Service Set Identifier — the unique MAC address that identifies a specific wireless access point radio, distinct from the SSID network name."
+    },
+    {
+      "term": "Broadcast Storm",
+      "definition": "When a network loop causes the same frame to be forwarded repeatedly and infinitely, flooding bandwidth and making the network unusable within seconds."
+    },
+    {
+      "term": "CVSS",
+      "definition": "Common Vulnerability Scoring System — a 0–10 scale that rates how severe a software vulnerability is; 9+ is Critical, 7–8.9 is High, 4–6.9 is Medium.",
+      "detail": "What to look for: prioritise fixes by score, not by how alarming the CVE name sounds — a 9.8 on a device that's open to the internet matters far more than a 9.8 on a device that's only reachable from inside your LAN."
+    },
+    {
+      "term": "DHCP",
+      "definition": "Dynamic Host Configuration Protocol — the service that automatically assigns IP addresses to devices when they join a network so you do not have to configure each one manually.",
+      "detail": "What to look for: your router should be the only device handing out DHCP leases. A second device answering DHCP requests is a rogue DHCP server and can redirect your traffic — that's what DHCP Rogue Monitor flags."
+    },
+    {
+      "term": "DNS",
+      "definition": "Domain Name System — translates human-readable names like 'google.com' into the IP addresses that computers actually use to route traffic."
+    },
+    {
+      "term": "DNS Leak",
+      "definition": "When DNS queries are sent to your ISP's servers instead of a private resolver (e.g. a VPN's DNS), revealing your browsing activity to your ISP."
+    },
+    {
+      "term": "DORA",
+      "definition": "Discover-Offer-Request-Acknowledge — the four-message sequence a device uses to request and receive an IP address from a DHCP server."
+    },
+    {
+      "term": "Gateway",
+      "definition": "The router or device that connects your local network to the internet; all traffic destined for external IP addresses is sent here first."
+    },
+    {
+      "term": "Jitter",
+      "definition": "The variation in latency between successive packets — high jitter causes choppy audio/video calls even when average latency looks fine."
+    },
+    {
+      "term": "Latency",
+      "definition": "The time it takes for a packet to travel from your device to a destination and back (round-trip time), measured in milliseconds."
+    },
+    {
+      "term": "MAC Address",
+      "definition": "Media Access Control address — a unique 12-character hardware identifier burned into every network interface; the first 6 characters (OUI) identify the manufacturer."
+    },
+    {
+      "term": "mDNS",
+      "definition": "Multicast DNS — a zero-configuration protocol that lets devices find each other by name (e.g. 'printer.local') on a local network without a central DNS server."
+    },
+    {
+      "term": "MTR",
+      "definition": "My TraceRoute — a network diagnostic tool that combines ping and traceroute to show every router hop between you and a destination, with latency at each hop."
+    },
+    {
+      "term": "OUI",
+      "definition": "Organizationally Unique Identifier — the first 3 bytes of a MAC address assigned to a specific hardware manufacturer; used to identify what type of device is on your network."
+    },
+    {
+      "term": "Packet Loss",
+      "definition": "The percentage of packets sent that never arrive at the destination; anything above 1% causes noticeable degradation in real-time applications like video calls."
+    },
+    {
+      "term": "AXFR",
+      "definition": "DNS Zone Transfer — a request that asks a DNS server to send its entire database of records for a domain. Misconfigured servers that allow public AXFR expose all internal hostnames."
+    },
+    {
+      "term": "CIDR",
+      "definition": "Classless Inter-Domain Routing — a compact way to describe a block of IP addresses, like 192.168.1.0/24 (which means all 256 addresses from .0 to .255). The /24 is the prefix length."
+    },
+    {
+      "term": "CVE",
+      "definition": "Common Vulnerabilities and Exposures — a numbered catalogue of publicly disclosed security flaws. CVE-2023-12345 is a unique ID for one specific vulnerability in one specific product.",
+      "detail": "What to look for: the CVSS score tells you how severe it is, but the fix is almost always a firmware or software update from the manufacturer — check their site for an advisory matching the CVE ID."
+    },
+    {
+      "term": "QoS",
+      "definition": "Quality of Service — router settings that prioritise certain types of traffic (e.g. video calls over file downloads) to maintain performance during congestion."
+    },
+    {
+      "term": "RTT",
+      "definition": "Round-Trip Time — the time in milliseconds for a packet to travel from your device to a destination and back. Under 20 ms is excellent; over 200 ms is noticeable on video calls.",
+      "detail": "What to look for: a sudden, sustained jump in RTT for every device usually points to your router or ISP link, not one specific device. Check the Network Logger timeline to see when it started."
+    },
+    {
+      "term": "TTL",
+      "definition": "Time to Live — a counter on every network packet that decrements at each router hop. When it reaches zero the packet is dropped. Also used in DNS to control how long a record is cached."
+    },
+    {
+      "term": "RFC 1918",
+      "definition": "The standard that defines the three private IP address ranges (10.x.x.x, 172.16–31.x.x, 192.168.x.x) used inside home and office networks, not routable on the internet."
+    },
+    {
+      "term": "Rogue Device",
+      "definition": "An unknown device on your network — could be an intruder, a misconfigured IoT device, or a guest device that was never removed."
+    },
+    {
+      "term": "SINR",
+      "definition": "Signal-to-Interference-plus-Noise Ratio — a measure of 5G/LTE signal quality; above 20 dB is excellent, below 0 dB means interference dominates the signal."
+    },
+    {
+      "term": "SNMP",
+      "definition": "Simple Network Management Protocol — used by routers, switches, and servers to report status metrics and receive management commands from monitoring tools."
+    },
+    {
+      "term": "SSID",
+      "definition": "Service Set Identifier — the name of a Wi-Fi network as broadcast by an access point; multiple access points can share the same SSID to form one seamless network."
+    },
+    {
+      "term": "STP",
+      "definition": "Spanning Tree Protocol — automatically detects and blocks network loops by disabling redundant switch ports, preventing broadcast storms."
+    },
+    {
+      "term": "Subnet",
+      "definition": "A logical subdivision of a network; devices on the same /24 subnet share the first three octets of their IP address (e.g. 192.168.1.x) and can communicate directly."
+    },
+    {
+      "term": "TCP Handshake",
+      "definition": "The three-message sequence (SYN → SYN-ACK → ACK) that establishes a reliable connection between two devices before any data is exchanged."
+    },
+    {
+      "term": "TLS",
+      "definition": "Transport Layer Security — the encryption protocol behind HTTPS; it authenticates the server and encrypts data in transit to prevent eavesdropping.",
+      "detail": "What to look for: an expiring or expired certificate doesn't mean you were breached — it means the cert needs renewing on the server or hosting provider before browsers start showing warnings to visitors."
+    },
+    {
+      "term": "Traceroute",
+      "definition": "A diagnostic tool that reveals every router hop between your device and a destination, with the latency at each hop — useful for pinpointing where delays occur."
+    },
+    {
+      "term": "Uptime",
+      "definition": "The percentage of time a device or service was reachable over a given period; 99.9% uptime still means about 8.7 hours of downtime per year."
+    },
+    {
+      "term": "VLAN",
+      "definition": "Virtual Local Area Network — a logical network partition that isolates groups of devices (e.g. IoT devices from work laptops) even when they share the same physical switches."
+    }
+  ]
+}

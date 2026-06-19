@@ -1,0 +1,1268 @@
+name: netsentinel
+version: 2.1.13
+description: >
+  NetSentinel — Enterprise network security scanner, rogue device detector,
+  and connectivity monitor. Professional enterprise UI built with PyQt6.
+
+targets:
+  - claude
+  - copilot
+  - gemini
+
+dependencies:
+  apm: []
+
+rules:
+
+  # ── Testing Enforcement ────────────────────────────────────────────────────
+  - id: RULE-T1
+    title: "Every new module must have a test file"
+    severity: blocking
+    description: >
+      Every new file added under modules/ must have a corresponding
+      tests/test_<name>.py created in the same PR. The test file must contain
+      at minimum one import test and one behavioural test covering the primary
+      function or class.
+
+  - id: RULE-T2
+    title: "Every new worker must have a start/stop lifecycle test"
+    severity: blocking
+    description: >
+      Every new file added under workers/ must have at minimum a test that:
+      (1) imports the worker class, (2) instantiates it, (3) calls start(),
+      waits briefly, calls stop(), and asserts isRunning() is False.
+      This catches hidden import errors in PyInstaller bundles.
+
+  - id: RULE-T3
+    title: "Every bug fix must include a regression test"
+    severity: blocking
+    description: >
+      Every bug fix PR must include a new test that reproduces the original
+      failure and verifies the fix. The test must fail on the code before the
+      fix and pass after. No exceptions.
+
+  - id: RULE-T4
+    title: "Smoke test list must stay current"
+    severity: blocking
+    description: >
+      app.py _smoke_test() must be updated whenever a new module or worker is
+      added. The smoke test must import the module and verify it does not crash
+      on import. A PR adding a module without updating _smoke_test() is incomplete.
+
+  # ── Release Integrity ─────────────────────────────────────────────────────
+  - id: RULE-R1
+    title: "Use bump_version.py for all version bumps — never edit files manually"
+    severity: blocking
+    description: >
+      To bump the version, run ONE command from the repo root:
+        python bump_version.py X.Y.Z
+      This updates all 13 tracked locations atomically and self-verifies by
+      running tests/test_version_consistency.py. Never edit version strings
+      manually across files — use the script every time without exception.
+      The What's New section in ui/dashboard.py reads QApplication.applicationVersion()
+      dynamically and requires no manual update.
+    how_to_bump:
+      - "python bump_version.py 1.60"
+      - "git add -p  (review changes)"
+      - "git commit -m \"chore: bump version to 1.60\""
+      - "git tag v1.60 && git push && git push --tags"
+    files_managed_by_script:
+      - "app.py → app.setApplicationVersion(\"X.Y.Z\")"
+      - "cli.py → _VERSION = \"X.Y.Z\""
+      - "apm.yml → top-level version: X.Y.Z"
+      - "installer.iss → #define MyAppVersion \"X.Y.Z\""
+      - "build.bat → echo version string"
+      - "build.sh → echo version string"
+      - "README.md → badge/link + What's New header"
+      - "tools/debug_launch.py → app.setApplicationVersion(\"X.Y.Z\")"
+      - "modules/rest_api.py → \"version\" in /health endpoint"
+      - ".github/winget/NetSentinel.NetSentinel.yaml → PackageVersion: X.Y.Z"
+      - ".github/winget/NetSentinel.NetSentinel.installer.yaml → PackageVersion + installer URL"
+      - ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml → PackageVersion: X.Y.Z"
+
+  - id: RULE-R1b
+    title: "Every version bump must include a README changelog entry for that version"
+    severity: blocking
+    description: >
+      When bumping the version with bump_version.py, the README.md changelog section
+      must already contain a ### vX.Y.Z header for the new version with at least one
+      bullet describing what changed. bump_version.py updates the first changelog
+      header it finds (count=1) — so the new version's entry must be the topmost one
+      before running the bump.
+
+      Correct workflow:
+        1. Add a new ### vX.Y.Z section at the top of ## Changelog in README.md
+           with bullets describing what changed.
+        2. Run: python bump_version.py X.Y.Z
+        3. The script promotes the header; all 7 consistency tests pass.
+
+      What belongs in a changelog entry (small is not a reason to omit):
+        - Any UI change a user would notice (icon, layout, new button, new page)
+        - Any new file a contributor would use (scripts, generators, new modules)
+        - Any bug fix that affected observable behaviour
+        - Any tooling or build change that affects the release pipeline
+      What to omit:
+        - Pure internal refactors with no observable effect
+        - The version bump commit itself (no self-referential bullet needed)
+
+      The README changelog keeps only the last 3 versions. When adding a new entry,
+      drop the oldest — move its content to BACKLOG.md Completed if worth archiving.
+
+  - id: RULE-R2
+    title: "Winget locale manifest must be full — never minimal"
+    severity: blocking
+    description: >
+      Every winget submission (both static .github/winget/ and CI-generated)
+      must include the complete locale fields: Description, Tags, Moniker,
+      PublisherUrl, PublisherSupportUrl, PackageUrl, LicenseUrl, and
+      ReleaseNotesUrl. The minimal 9-field skeleton loses community repo
+      metadata on every release. The CI generate step must use the full template.
+
+  - id: RULE-R4
+    title: "MSIX Version format must be exactly 4 parts (X.Y.Z.0)"
+    severity: blocking
+    description: >
+      The AppxManifest.xml Version attribute must be in 4-part format only: X.Y.Z.0
+      (e.g., 1.5.8.0). The makeappx.exe packaging tool rejects 5-part versions (X.Y.Z.0.0).
+      bump_version.py automatically generates the correct format: it appends .0 to the
+      semantic version. Never edit AppxManifest.xml manually or use 5-part versions.
+      The release.yml workflow also enforces this via the Patch version strings step.
+      test_version_consistency.py::test_appxmanifest_msix_version_format() validates this.
+
+  - id: RULE-R5
+    title: "MSIX staging must copy the onefile exe — never glob a directory"
+    severity: blocking
+    description: >
+      NetSentinel is built as a PyInstaller onefile executable on all platforms.
+      The Windows artifact is dist\NetSentinel.exe — a single file, NOT a directory.
+      The MSIX staging step must use:
+        Copy-Item "dist\NetSentinel.exe" "$stage\NetSentinel\NetSentinel.exe"
+      Never use:
+        Copy-Item -Recurse "dist\NetSentinel\*" "$stage\NetSentinel\"
+      The latter path (dist\NetSentinel\) does not exist and the CI step will fail
+      silently or throw. AppxManifest.xml expects Executable="NetSentinel\NetSentinel.exe"
+      so the single exe must land at that path inside the staging layout.
+
+  - id: RULE-R3
+    title: "Ookla.Speedtest.CLI must be ExternalDependencies, not PackageDependencies"
+    severity: blocking
+    description: >
+      Ookla.Speedtest.CLI must be declared as ExternalDependencies in all
+      winget manifests. PackageDependencies causes winget to block the install
+      if the package is not in the official winget index — a broken install
+      is the highest-severity user-facing bug possible.
+
+  # ── UX Baseline ───────────────────────────────────────────────────────────
+  - id: RULE-UX1
+    title: "New pages must show content within 200 ms"
+    severity: required
+    description: >
+      Every new UI page must display meaningful content (cached data, last-known
+      state, or a skeleton placeholder) within 200 ms of navigation. No blank
+      panels while a worker starts. Use the MetricStore cache as the initial
+      render source, then refresh via worker signal.
+
+  - id: RULE-UX2
+    title: "Destructive and slow actions must have a visible loading state"
+    severity: required
+    description: >
+      Any action that takes more than 500 ms (network scan, speed test, file
+      export, service restart) must show a visible in-progress indicator —
+      spinner, progress bar, or disabled button with "Running…" label — before
+      the operation starts. Never leave the UI in a silent waiting state.
+
+  - id: RULE-UX3
+    title: "Every scan result row must have a right-click context menu"
+    severity: required
+    description: >
+      Every QTableWidget showing scan results must have a context menu
+      (right-click) with at minimum: "Copy" (copies selected row as text)
+      and "How to Fix" (opens a plain-English remediation panel or dialog).
+      Use customContextMenuRequested signal — never override mousePressEvent.
+
+  - id: RULE-UX4
+    title: "Ctrl+F must always focus the sidebar search"
+    severity: required
+    description: >
+      The global Ctrl+F shortcut must focus the sidebar search box from any
+      page in the application. This is implemented via Dashboard._focus_nav_search()
+      bound to QShortcut. New pages must not intercept or consume Ctrl+F.
+
+  # ── Home User / Professional Dual Audience ────────────────────────────────
+  - id: RULE-A1
+    title: "Every feature must have a plain-English summary and a technical detail view"
+    severity: required
+    description: >
+      Scan results must be presented at two levels: a plain-English summary
+      (what it means, what to do) visible by default, and full technical detail
+      (raw values, MACs, exact RTTs, OIDs) accessible via a collapsible section
+      or "Details" button. Never hide data entirely — the professional user
+      must be able to reach it without a separate tool.
+
+  - id: RULE-A2
+    title: "Error messages must be translated — no raw exceptions shown to users"
+    severity: required
+    description: >
+      No raw Python exception (traceback, AttributeError, etc.) may ever appear
+      in the UI. All worker error signals must be caught and translated to an
+      actionable message: what failed, why it likely failed, and what the user
+      should try next. Use a helper like _friendly_error(exc) → str in each page.
+
+  - id: RULE-A3
+    title: "Severity labels must use the canonical set only"
+    severity: required
+    description: >
+      All severity / risk labels visible in the UI must be one of exactly:
+      Info, Warning, High, Critical. No other strings. The existing RISK_COLORS
+      / RISK_BG maps in ui/styles.py define the visual treatment. Do not invent
+      new severity strings (e.g. "SEVERE", "NOTICE", "ALERT") — map them to
+      the canonical four.
+
+  # ── Long-term Architecture Health ─────────────────────────────────────────
+  - id: RULE-AH1
+    title: "Module files must not exceed 600 lines"
+    severity: required
+    description: >
+      No single file under modules/ may grow beyond 600 lines. At that point
+      the file must be split: extract cohesive sub-concerns into new sibling
+      modules. Large files are a maintenance hazard and indicate mixed concerns.
+      Measure with: wc -l modules/<name>.py or equivalent.
+
+  - id: RULE-AH2
+    title: "Workers must not block their thread for more than 5 seconds without a progress signal"
+    severity: required
+    description: >
+      Any QThread worker that performs an operation expected to take more than
+      5 seconds must emit a progress signal (progress(str) or status(str)) at
+      least once every 5 seconds. This prevents the UI from appearing frozen
+      and allows the user to cancel. Long polling loops must yield via msleep()
+      and check a _running flag on each iteration.
+
+  - id: RULE-AH3
+    title: "No raw hex colour strings outside ui/styles.py and modules/colours.py"
+    severity: blocking
+    description: >
+      Grep for raw hex strings (#[0-9a-fA-F]{6}) in any Python file outside
+      ui/styles.py and modules/colours.py must return zero matches. This is a
+      CI failure condition. All colours used in UI files must be imported from
+      ui/styles.py. All colours used in module-layer exports (charts, HTML
+      reports) must be imported from modules/colours.py. Add the colour to the
+      appropriate file first if it does not exist.
+
+  - id: RULE-AH4
+    title: "Optional dependencies must be lazy-imported and have a graceful fallback"
+    severity: required
+    description: >
+      Any dependency that is not universally available (nmap, scapy, speedtest,
+      npcap-dependent libs) must not be imported at module level. Use lazy
+      imports inside the function that needs them, wrapped in try/except
+      ImportError. The fallback must degrade gracefully (return empty results,
+      emit an error signal, or show a banner) — never crash on import.
+      Example: speedtest-cli inside _run_speedtest_cli(), nmap inside port_scanner.
+
+  - id: RULE-AH5
+    title: "User-visible names in code must match the names used in docs and UI"
+    severity: blocking
+    description: >
+      Any string that a user sees — theme names, page labels, feature names —
+      must be identical in the code registry, the docstring, and every doc
+      reference (README, BACKLOG, apm.yml). Drift between internal identifiers
+      and documented names causes support confusion and silent QSettings fallbacks
+      (e.g. a saved theme name no longer in the registry silently resets to default).
+
+      Canonical locations to keep in sync:
+        Theme names  → ui/styles.py THEMES dict keys
+                     → ui/styles.py module docstring
+                     → README.md (features table and changelog)
+                     → BACKLOG.md (completed entries)
+        Page labels  → Dashboard._nav_add_page() call label argument
+                     → README.md features table
+        Feature names→ README.md, BACKLOG.md, and any RULE description that names them
+
+      When renaming a theme or page label:
+        1. Update the registry key (THEMES dict, nav label string).
+        2. Grep for the old name across *.py, *.md, *.yml — fix every occurrence.
+        3. Note in the commit: QSettings values that stored the old name will fall
+           back to the default; document this as expected behaviour.
+
+      This rule does NOT require internal variable names (e.g. _SLATE, _DARK_PRO)
+      to match the public name — only the user-facing registry key must match.
+
+  # ── Winget Submission ─────────────────────────────────────────────────────
+  - id: RULE-W1
+    title: "Silent installs must never run nested winget calls"
+    severity: blocking
+    description: >
+      The installer MUST NOT spawn `winget install` (or any long-running network
+      process) during silent/automated installs. Winget validation sandboxes run
+      the installer with /VERYSILENT; a nested winget call hangs and causes the
+      outer installer to return E_ABORT (0x80004004 / -2147467260), failing
+      submission every time.
+      Three-layer defence:
+      1. installer.iss [Run] Ookla entry: `Check: ShouldInstallOokla;`
+         where ShouldInstallOokla() returns `not WizardSilent()`.
+      2. installer.iss [Setup]: `PrivilegesRequiredOverridesAllowed = dialog commandline`
+         so headless commandline installs can run without UAC elevation (which
+         also returns E_ABORT in headless environments).
+      3. All winget manifests (static .github/winget/ AND CI-generated): Silent
+         and SilentWithProgress switches must include `/TASKS="!installookla"`
+         to explicitly opt out of the Ookla task.
+      Never remove any of these three defences independently.
+
+  - id: RULE-W2
+    title: "PrivilegesRequiredOverridesAllowed must include commandline"
+    severity: blocking
+    description: >
+      installer.iss [Setup] must have:
+        PrivilegesRequiredOverridesAllowed = dialog commandline
+      Without `commandline`, Inno Setup attempts UAC elevation via ShellExecuteEx
+      "runas" during silent commandline installs. In headless environments (winget
+      validation, CI) that elevation fails and the installer exits with E_ABORT.
+      The `commandline` keyword allows a non-elevated silent install to proceed
+      as the current user when /VERYSILENT is passed from the command line.
+
+  # ── PyInstaller Bundle ────────────────────────────────────────────────────
+  - id: RULE-B1
+    title: "Every new ui/pages/, workers/, and modules/ file must be added to NetSentinel.spec hiddenimports"
+    severity: blocking
+    description: >
+      NetSentinel is a PyInstaller onefile build. PyInstaller cannot auto-discover
+      modules that are imported dynamically at runtime (e.g. page classes loaded by
+      dashboard._build_tabs, workers started on demand). Every new Python file added
+      under ui/pages/, workers/, or modules/ MUST be registered in the hiddenimports
+      list in NetSentinel.spec in the same commit/PR that introduces the file.
+
+      Pattern:
+        ui/pages/foo_page.py   → add "ui.pages.foo_page"   to hiddenimports
+        workers/foo_worker.py  → add "workers.foo_worker"   to hiddenimports
+        modules/foo.py         → add "modules.foo"          to hiddenimports
+
+      Omitting an entry produces a build that passes CI but crashes at runtime
+      with ModuleNotFoundError — only reproducible from the installed/winget package,
+      not from source. This is the hardest category of bug to diagnose post-release.
+
+      Checklist before merging any PR that adds a new file in these directories:
+        1. grep hiddenimports NetSentinel.spec for the module dotted path
+        2. If missing, add it under the relevant section comment in the spec
+        3. Run a local PyInstaller build and launch dist/NetSentinel.exe to confirm
+           the new page/worker loads without ModuleNotFoundError
+
+  # ── Icon and Brand Assets ─────────────────────────────────────────────────
+  - id: RULE-I1
+    title: "Never hand-edit PNG or ICO icon files — regenerate via generate_icons.py"
+    severity: blocking
+    description: >
+      All raster icon assets (PNG tiles, ICO) are generated programmatically from
+      the embedded design in generate_icons.py. Never edit PNG/ICO files manually
+      in an image editor — the changes will be overwritten on the next build and
+      create inconsistency across sizes.
+
+      To update any icon, edit generate_icons.py (the render_icon / render_wide /
+      render_splash functions), then run:
+        python generate_icons.py
+      This regenerates all assets in assets/icons/ atomically.
+
+      Output files managed by the script:
+        assets/icons/NetSentinel.ico            — Windows app icon (16/24/32/48/64/128/256 px)
+        assets/icons/netsentinel.png            — macOS / Linux app icon (512x512)
+        assets/icons/StoreLogo.png              — MS Store / winget tile (50x50)
+        assets/icons/Square44x44Logo.png        — Windows taskbar (44x44)
+        assets/icons/Square71x71Logo.png        — Start menu small (71x71)
+        assets/icons/Square150x150Logo.png      — Start menu medium (150x150)
+        assets/icons/Square310x310Logo.png      — Start menu large (310x310)
+        assets/icons/Wide310x150Logo.png        — Start menu wide (310x150)
+        assets/icons/SplashScreen.png           — Inno Setup installer splash (620x300)
+
+      The SVG files in assets/icons/ are reference artwork only (for designers /
+      documentation); the build pipeline uses the PNG/ICO files directly.
+
+  - id: RULE-I2
+    title: "Icon design language must stay consistent — hexagon, shield, blue/cyan palette"
+    severity: required
+    description: >
+      All NetSentinel icon assets must follow this design language. Deviating
+      without updating this rule first is a review failure.
+
+      Core elements (all required):
+        Shape:     Pointy-top regular hexagon — the primary container
+        Interior:  White shield outline centred inside the hexagon
+        Palette:   Primary fill  #0078D4 (Windows blue)
+                   Border        #005A9E (dark blue, hex outline only)
+                   Accent rings  #00B4D8 (cyan, for ripple rings at ≥48 px)
+                   Shield stroke white
+        Ripple:    Three concentric cyan circles at ratios 0.722 / 0.537 / 0.333
+                   of the hex vertex radius, at opacity 0.15 / 0.35 / 0.60
+                   Only rendered at final sizes ≥ 48 px (visual noise below that)
+        Background: Transparent for all square tiles and the tray icon
+                    White (#FFFFFF) for the splash screen and wide tile
+        Stroke:    2 px visual weight at any size; rounded joins and linecaps
+
+      What must NOT change without a deliberate design decision:
+        - No gradients on the hexagon fill (flat #0078D4 only)
+        - No drop shadows or bevels
+        - No emoji or bitmap textures inside any icon
+        - The shield must remain centred and proportional (half-width = 0.370 × r,
+          proportions defined in generate_icons.py render_icon())
+        - Sidebar nav icons remain geometric Unicode only (RULE-25 / RULE-I4)
+
+  - id: RULE-I3
+    title: "Top-bar brand icon must use the netsentinel.png asset — never a letter fallback in production"
+    severity: required
+    description: >
+      The 24×24 brand icon in the top-left of the application header
+      (ui/dashboard.py _build_header) must render assets/icons/netsentinel.png
+      scaled with Qt.TransformationMode.SmoothTransformation.
+
+      The "N" letter fallback only exists for the edge case where the PNG file
+      is missing (e.g. a partial checkout). It must never become the default.
+      If the icon is missing in a build, fix the build — do not promote the
+      fallback to the primary path.
+
+      Path resolution must use the PyInstaller-aware pattern already established
+      in _build_header:
+        _base = Path(sys._MEIPASS) if getattr(sys, "frozen", False)
+                else Path(__file__).parent.parent
+        _pix  = QPixmap(str(_base / "assets" / "icons" / "netsentinel.png"))
+      Never hardcode an absolute path or use a relative path without this guard.
+
+  - id: RULE-I4
+    title: "Sidebar nav icons must be geometric Unicode — never emoji"
+    severity: blocking
+    description: >
+      All sidebar navigation item icons (the prefix character in _nav_add_page()
+      and related helpers in ui/dashboard.py) must use geometric Unicode symbols
+      only: ■ □ ▲ △ ● ○ ◆ ◇ ▶ ▷ ⬡ ⬢ ≡ ⌕ ⊕ etc.
+
+      Emoji (🏠 🔍 🔔 🌐 etc.) must never be used as sidebar icons. Emoji render
+      inconsistently across Windows versions, scale poorly in the 48 px collapsed
+      sidebar, and break the visual consistency of the geometric icon strip.
+
+      This rule applies to: ui/dashboard.py _nav_add_page() calls, section header
+      strings, and any other sidebar label that includes a leading icon character.
+      It does NOT apply to README.md, help text, or dialogs.
+
+  # ── Navigation Wiring ─────────────────────────────────────────────────────
+  - id: RULE-NAV1
+    title: "Every registered page must be reachable from _build_pro_nav()"
+    severity: blocking
+    description: >
+      There is one nav builder: _build_pro_nav(). _build_home_nav() and
+      _build_standard_nav() have been removed — do not recreate them.
+
+      Pages are registered in _build_tabs() via _nav_add_page() (adds them to the
+      QStackedWidget). For a page to be reachable in the sidebar it must also have a
+      _nav_add_rail_item() call in _build_pro_nav().
+
+      The automated test tests/test_nav_completeness.py enforces this. It fails at CI
+      time if a page is registered but not wired into _build_pro_nav().
+
+      What to do when adding a new page:
+        1. Instantiate the page widget in _init_pages() / the pages block of __init__.
+        2. Add _nav_add_rail_item("Label", self._new_page) in _build_pro_nav()
+           under the appropriate section header. That is the only registration needed —
+           _nav_add_rail_item adds the widget to the stack and to _nav_label_to_widget.
+        3. Run: python -m pytest tests/test_nav_completeness.py -v
+           Both nav tests must pass before merging.
+
+      Do NOT add _nav_add_page() calls for new pages — _build_tabs() / _nav_add_page()
+      is legacy dead code for the old flat nav. _nav_add_rail_item() handles everything.
+
+      _build_pro_nav() section guide:
+        Getting Started  — daily-use core tools
+        Discover         — network inventory and topology
+        Monitor          — live data and history streams
+        Reports          — grading, ISP reports, docs, notifications
+        Analysis         — deep packet / protocol tools, advanced diagnostics
+        Automation       — scheduled scans, hooks, MQTT, REST API, integrations
+        Security Audit   — RED-labelled; elevated-privilege scan tools
+        Education        — learning tools (Protocol Visualizer, Lab Mode, Feature Guide)
+
+  - id: RULE-NAV2
+    title: "There is one nav mode — do not add new nav builders"
+    severity: blocking
+    description: >
+      The app has a single nav mode backed by _build_pro_nav(). Do not create
+      _build_home_nav(), _build_standard_nav(), or any other mode-specific nav
+      builder. All pages go into _build_pro_nav() only.
+
+  - id: RULE-NAV3
+    title: "Page-emitted navigate_to signals must route via _nav_rail_go_to, not _nav_goto_label"
+    severity: blocking
+    description: >
+      _nav_goto_label() is mode-aware: when _nav_mode == "home" (the default) it
+      searches _nav_item_labels, which is empty because _build_pro_nav() does NOT
+      populate it — only _nav_label_to_widget is populated. This means any
+      navigate_to emit from a page silently fails when the user has never changed
+      nav mode.
+
+      Root cause: _on_overview_navigate() used to delegate to _nav_goto_label().
+      Fixed in v1.9.24 by changing it to always call _nav_rail_go_to() directly.
+
+      Rule: whenever you wire a page's navigate_to signal to a dashboard handler,
+      the handler must call self._nav_rail_go_to(label), never
+      self._nav_goto_label(label). _nav_rail_go_to looks up _nav_label_to_widget
+      directly and works regardless of _nav_mode.
+
+      Do NOT add new callsites for _nav_goto_label — it exists only for legacy
+      reasons and should be considered deprecated.
+
+  # ── Discoverability ───────────────────────────────────────────────────────
+  - id: RULE-D1
+    title: "Every new page must have a _PAGE_HELP entry in dashboard.py"
+    severity: required
+    description: >
+      The module-level _PAGE_HELP dict in ui/dashboard.py maps page nav labels
+      to contextual help text shown when the user clicks the ? button in the
+      breadcrumb row. Every new page added via _nav_add_page() must have a
+      corresponding entry in this dict.
+
+      Format:
+        _PAGE_HELP["My Page Label"] = (
+            "Short title (≤ 60 chars)",
+            "One or two sentences explaining what the page does and how to start."
+        )
+
+      The ? button is hidden automatically when no entry exists for the current
+      page, so a missing entry silently removes help for that page. Add the entry
+      in the same commit that creates the page — do not defer it.
+
+  - id: RULE-D2
+    title: "Every new page must have a _FEATURES entry in discover_page.py"
+    severity: required
+    description: >
+      The _FEATURES list in ui/pages/discover_page.py is the Feature Guide shown
+      to users from the home screen and Education nav section. Every new page or
+      significant capability added to NetSentinel must appear as a feature dict
+      in this list so users can discover it.
+
+      Required fields (all six are mandatory — missing any one crashes on startup):
+        group:    str  — one of: "Monitoring", "Diagnostics", "Security",
+                         "Learning", "Hidden Features", "Advanced"
+        icon:     str  — single unicode glyph shown in the feature card (e.g. "⬡", "◎")
+        name:     str  — short display name (≤ 40 chars)
+        desc:     str  — one or two sentences describing what the feature does
+        page:     str  — nav label string to navigate to (or None for hidden features)
+        requires: str|None — one of: "Npcap", "Admin", "Speedtest CLI", or None
+
+      Omitting "group" or "icon" raises KeyError in _render_features() and
+      prevents the app from starting.
+
+      For features that require user configuration before they produce data
+      (e.g. target lists, API keys, enable toggles): the desc must explicitly
+      state what configuration step is needed AND the configuration UI must be
+      present on the page itself — not hidden in Settings or a separate dialog.
+      A Feature Guide entry that says "monitors X" for a feature that silently
+      produces nothing until the user finds a buried setting is a discoverability
+      failure equivalent to not listing the feature at all.
+
+      Add the entry in the same commit that creates the page — the Feature Guide
+      is the primary discoverability surface for new capabilities.
+
+  # ── Dashboard Data Feed Wiring ────────────────────────────────────────────
+  - id: RULE-DW1
+    title: "Every page data-feed method must be explicitly wired from the correct result handler"
+    severity: blocking
+    description: >
+      Pages in ui/pages/ expose data-feed methods (e.g. set_scan_data(),
+      on_device_event(), on_alert(), on_availability_update(), add_ips()) that
+      are only useful if called from the corresponding result handler. There are
+      two canonical wiring locations depending on the worker type:
+
+        dashboard.py _on_*_result handlers — for scan workers started by the user
+        app.py closures after window = Dashboard(...) — for always-on background workers
+
+      When adding a new page or a new feed method to an existing page:
+        1. Identify which result handler or worker produces the data.
+        2. Call the method from that handler, wrapped in try/except so errors
+           never propagate to break the scan result chain.
+        3. Add a comment "── Feed <PageName>" above the call block.
+
+      Known feed points after the full audit (May 2026):
+
+      dashboard.py result handlers (user-triggered scans):
+        _on_m1_result        → NetworkDocPage.set_scan_data (devices, cert, topo)
+                             → MqttPage.on_alert + on_device_event
+                             → GeoMapPage.add_ips
+                             → AvailabilityWorker start/update (targets from devices)
+        _on_port_scan_result → NetworkDocPage.set_scan_data (port_data accumulated)
+        _on_syn_result       → NetworkDocPage.set_scan_data (port_data accumulated)
+        _on_avail_cycle_done → HistoryPage.on_cycle_done
+                             → HomeAutomationPage.on_availability_update
+                             → MqttPage.on_uptime_state
+
+      app.py closures (always-on background workers, after window = Dashboard(...)):
+        avail_worker.cycle_done  → HistoryPage / InventoryPage / UptimePage / HomePage .on_cycle_done
+                                 → OverviewPage.on_cycle_done
+                                   (on_cycle_done internally delegates to DeviceCountTile.update_cycle
+                                    and RttSummaryTile.update_cycle — do NOT call tile methods directly)
+                                   (via _on_cycle closure that also fires alert engine)
+        cert_worker.check_done   → CertPage.on_check_done
+                                 → OverviewPage.on_cert_done
+                                   (via _on_cert_check closure that also fires cert alerts)
+        svc_worker.check_done    → ServicePage.on_check_done
+                                 → OverviewPage.on_svc_done
+                                   (on_svc_done internally delegates to ServiceStatusTile.update_services
+                                    — do NOT call tile methods directly on OverviewPage)
+                                   (via _on_svc_check closure that also fires service alerts)
+        snmp_trap_worker         → SnmpTrapPage.on_trap_received / on_status / on_error
+        syslog_worker            → SyslogPage.on_message_received / on_status / on_error
+        mesh_worker              → MeshRouterPage (polls Deco XE75 signal/topology)
+        zte_worker               → ModemPage (polls ZTE MC889 5G modem stats)
+        hw_detect_worker         → HardwareIntegrationPage (scans for USB/serial/GPIO devices)
+        wifi_monitor_worker      → WifiMonitorPage (passive 802.11 capture — admin + Npcap required)
+        threat_intel_page.entries_updated → GeoMapPage.set_threat_entries
+
+      Symptoms of a broken wire: the page shows stale data or "—" tiles
+      even after a successful scan, because the page never received a data push.
+
+  - id: RULE-DW2
+    title: "Always-on worker signals must be wired in app.py, not inside Dashboard"
+    severity: blocking
+    description: >
+      Workers that run continuously and independently of user scans
+      (AvailabilityWorker, CertWorker, SvcWorker, SnmpTrapWorker, SyslogWorker,
+      ReportSchedulerWorker) are started in app.py before Dashboard is created.
+      Their signals must be connected to page slots in app.py, in the block
+      immediately after `window = Dashboard(...)`, using window._page_name.slot.
+
+      Why app.py, not dashboard.py:
+        The workers exist before Dashboard is instantiated. Connecting inside
+        Dashboard.__init__ would require injecting them as constructor arguments
+        or accessing app-level state from a widget — both architecture violations.
+        All wiring in one canonical location makes auditing trivial:
+        grep for window._ in app.py to see every page that receives live data.
+
+      Pattern for new always-on workers:
+        1. Start the worker in app.py before window = Dashboard(...).
+        2. After window = Dashboard(...), connect signals:
+             worker.signal_name.connect(window._page_name.slot_name)
+           For signals that also need alert evaluation, use a closure that calls
+           the alert engine and then the page slot (see _on_cycle, _on_cert_check,
+           _on_svc_check in app.py as reference implementations).
+        3. Document the new wire in RULE-DW1 Known feed points.
+
+  - id: RULE-DW3
+    title: "Never call internal tile or subwidget methods directly on a page object — use the page's public proxy methods"
+    severity: blocking
+    description: >
+      Some page classes (most notably OverviewPage) use an internal tile registry
+      (self._tiles: Dict[str, _BaseTile]) where each tile is a private subclass
+      holding its own update method (e.g. ServiceStatusTile.update_services,
+      DeviceCountTile.update_cycle, HaDevicesTile.update_ha_states). These tile
+      classes and their methods are NOT part of the page's public API.
+
+      The page always exposes named proxy methods (e.g. on_svc_done, on_cycle_done,
+      on_cert_done, on_alert, on_grade) that delegate internally to the correct tile.
+      External callers — result handlers in dashboard.py and closures in app.py —
+      MUST call the proxy methods, not the tile methods directly.
+
+      Forbidden pattern (AttributeError at runtime):
+        window._overview_page.update_services(results)    # tile method, not on page
+        window._overview_page.update_cycle(states)        # tile method, not on page
+        window._overview_page.update_ha_states(states)    # tile method, not on page
+
+      Correct pattern (proxy methods, always valid):
+        window._overview_page.on_svc_done(results)        # delegates to ServiceStatusTile
+        window._overview_page.on_cycle_done(result_dict)  # delegates to DeviceCountTile + RttSummaryTile
+        window._overview_page.on_cert_done(results)       # delegates to CertCountTile
+
+      How to verify before wiring a new call:
+        1. Open the page's .py file and grep for `def ` at the class level.
+        2. Only call methods that appear there — never call methods on classes
+           nested inside the page (tiles, sub-panels, inner widgets).
+        3. If the data you need to deliver has no proxy method yet, add one to
+           the page class first — do not reach through the page to call a tile.
+
+      This rule applies to all page classes in ui/pages/ and ui/dashboard.py,
+      not only OverviewPage. Any class that composes sub-widgets should be
+      treated as having an opaque interior from the caller's perspective.
+
+  # ── Empty-State UX ────────────────────────────────────────────────────────
+  - id: RULE-UX5
+    title: "Pages requiring scan data must show an empty state with an inline CTA — never dead-end text"
+    severity: blocking
+    description: >
+      Any page that requires a scan or background worker to have produced data
+      before it can show meaningful content MUST use the QStackedWidget
+      empty-state pattern. Static text like "Run a scan first" with no action
+      button is a blocking UX violation — it sends the user away from the page
+      they navigated to on purpose.
+
+      Required pattern:
+        1. Add `scan_requested = pyqtSignal()` to the page class.
+        2. Build a QStackedWidget (self._content_stack or similar):
+             page 0 — centered empty state:
+                       short description (≤ 2 sentences, muted TEXT_SECONDARY)
+                       one primary QPushButton (objectName="btnScan") that emits
+                       scan_requested. No secondary actions in the empty state.
+             page 1 — the normal content (KPI tiles, tables, charts).
+        3. Default to page 0 (setCurrentIndex(0) is the QStackedWidget default).
+        4. In the data-arrival method (set_scan_data, on_cycle_done, _refresh, etc.),
+           switch to page 1 when data is present:
+               if data:
+                   self._content_stack.setCurrentIndex(1)
+        5. Wire the signal in app.py after window = Dashboard(...):
+               window._my_page.scan_requested.connect(window._start_full_scan)
+
+      Button label conventions (use the most specific label that applies):
+        "Scan & Grade"      — pages needing device scan + benchmark result
+        "Scan & Document"   — Network Doc page
+        "Start Monitoring"  — Availability History page
+        "Run Diagnostics"   — pages needing DiagnosticsWorker data
+        "Run Scan"          — generic fallback
+
+      DO NOT auto-trigger scans on navigation. Scans take 30+ seconds, consume
+      CPU and network bandwidth, and may require admin rights. The user must
+      always initiate explicitly — but from wherever they are, not by navigating
+      back to Home.
+
+      Pages that implement this pattern (May 2026):
+        NetworkDocPage  (_content_stack, scan_requested → _start_full_scan)
+        HistoryPage     (_content_stack, scan_requested → _start_full_scan)
+        Benchmark tab   (_bm_stack, _scan_and_grade inline method)
+        Devices tab     (_m1_stack, pre-existing pattern)
+
+  # ── Feature Wiring ────────────────────────────────────────────────────────
+  - id: RULE-FW1
+    title: "Workers with set_targets() require inline target management UI, QSettings persistence, and app.py wiring"
+    severity: blocking
+    description: >
+      Any worker class that exposes a set_targets() method is permanently
+      non-functional until that method is called with at least one target. A
+      worker with an empty target list silently produces no data — this is
+      indistinguishable from a broken feature from the user's perspective.
+
+      When a page owns a worker that has set_targets():
+        1. The page must include an inline target management UI (add/remove form)
+           using the RULE-UX5 QStackedWidget pattern:
+             page 0 — empty state with an add form as the primary CTA
+             page 1 — content, with an add form in the card title bar
+        2. Targets must be persisted via QSettings using the key
+           "<feature>/targets" as a JSON array.
+        3. The page must expose a targets_changed = pyqtSignal(list) signal
+           that emits the updated target list whenever it changes.
+        4. In app.py, immediately after window = Dashboard(...):
+             a. Load saved targets and call worker.set_targets() on startup.
+             b. Connect window._page.targets_changed to worker.set_targets.
+
+      Never launch a feature where the only path to configuring targets is a
+      settings page, a config file, or code — the user must be able to configure
+      it directly on the feature page.
+
+      Workers known to require this treatment (May 2026):
+        CertWorker   → CertPage.certs_changed → cert_worker.set_targets()
+        SvcWorker    → ServicePage.services_changed → svc_worker.set_targets()
+
+  - id: RULE-UX6
+    title: "Every item:selected and QMenu::item:selected QSS rule must set both background AND color using theme tokens"
+    severity: blocking
+    description: >
+      Every QSS rule that sets a selected-state background MUST also explicitly
+      set color — and both values MUST use theme tokens, never hardcoded hex.
+
+      Forbidden pattern (causes white-on-white text on dark themes):
+        QTableWidget::item:selected { background: #CCE4F7; }
+        QMenu::item:selected { background: #EEF4FF; }
+
+      Required pattern:
+        QTableWidget::item:selected { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
+        QListWidget::item:selected  { background: {TABLE_SEL}; color: {TEXT_PRIMARY}; }
+        QMenu::item:selected        { background: {BG_HOVER};  color: {TEXT_PRIMARY}; }
+
+      The root cause: Arctic Clean uses TABLE_SEL=#CCE4F7 (light blue) and dark
+      TEXT_PRIMARY — fine on light. Midnight Pro and Obsidian Neon have light
+      TEXT_PRIMARY. When a page hardcodes #CCE4F7 as the selection background,
+      dark-theme users get light text on a light background (unreadable).
+
+      This rule also applies to hover backgrounds: QPushButton:hover and
+      QTableWidget::item:hover must use {BG_HOVER}, not #EEF4FF.
+
+      Apply to: any new page, any widget stylesheet set via setStyleSheet().
+      Do NOT audit unchanged files as a standalone task.
+
+  - id: RULE-AX1
+    title: "Inline QPushButton stylesheets with a base color: must declare explicit :pressed (and :hover) rules with color:"
+    severity: blocking
+    description: >
+      In Qt, a widget's own setStyleSheet() overrides the application-level QSS
+      entirely — including the global QPushButton:pressed fallback in ui/styles.py.
+      If an inline stylesheet declares a base QPushButton { color: ... } rule but
+      omits :pressed, Qt uses the local base rule for the pressed state, keeping
+      the same foreground colour regardless of background changes.
+
+      Critical trap — Arctic Clean theme: WHITE == BG_CARD == #FFFFFF.
+      Any button that sets color:{WHITE} in its base rule but omits an explicit
+      :pressed { color: ... } will render white text on a white/transparent
+      background when pressed — completely invisible.
+
+      Required pattern for every setStyleSheet() call that sets color: in a
+      QPushButton base rule:
+
+        btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; ... }}"
+            f"QPushButton:hover    {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QPushButton:pressed  {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+
+      Rules:
+        1. Every inline QPushButton stylesheet that sets color: in the base rule
+           MUST also set color: in an explicit QPushButton:pressed rule.
+        2. Every inline QPushButton stylesheet that sets color: in the base rule
+           SHOULD also set color: in an explicit QPushButton:hover rule.
+        3. All colour values must use tokens imported from ui/styles.py — never
+           hardcoded hex strings (also enforced by RULE-AH3).
+
+      Automated enforcement:
+        tests/test_interactive_states.py performs static AST analysis across all
+        ui/**/*.py files. It fails for any setStyleSheet() call whose QPushButton
+        base rule contains color: but lacks a QPushButton:pressed rule with color:.
+        Run: python -m pytest tests/test_interactive_states.py -v
+
+      Fix: add QPushButton:pressed {{ background-color: {ACCENT_DARK}; color: {WHITE}; }}
+      (or the appropriate tokens) to the inline stylesheet. Use ui/styles.py token
+      imports — never hardcode hex.
+
+  - id: RULE-FW2
+    title: "Every REST API route must appear in rest_api_page endpoint reference in the same session"
+    severity: blocking
+    description: >
+      The REST API runs on localhost and is invisible to users unless they know
+      to look for it. The _ENDPOINTS list in
+      rest_api_page.RestApiPage._update_endpoint_ref() is the canonical user-visible
+      reference for all available routes.
+
+      When adding a new route to modules/rest_api.py:
+        1. Add the route path and a plain-English description to _ENDPOINTS in
+           rest_api_page.RestApiPage._update_endpoint_ref() in the same session.
+        2. The endpoint reference is shown as clickable HTML links when the REST
+           API is enabled — the new route must appear there and be clickable for
+           non-parameterised paths.
+        3. Update the Feature Guide (RULE-D2) desc for the REST API feature if
+           the new endpoint is user-facing.
+
+      A route that exists in rest_api.py but not in the endpoint reference is
+      effectively invisible — users and other developers have no way to know it
+      exists without reading source code.
+
+      Current endpoints (May 2026): /health, /dashboard, /devices, /alerts,
+      /uptime/<ip>, /speed-history, /grade.
+
+  - id: RULE-DW4
+    title: "Post-scan enrichment must sync DeviceInfo objects and refresh all dependent views"
+    severity: blocking
+    description: >
+      The M1 table (Devices page) is the single authoritative display source for device
+      names after scan. When any post-scan enrichment step — mesh names from Deco API,
+      mDNS, DHCP, NetBIOS — updates a hostname cell in the M1 table, it MUST also push
+      that hostname back onto the DeviceInfo object in _m1_result["devices"] AND refresh
+      every view that independently consumes device data.
+
+      Root cause of the original bug (v1.9.3): _apply_mesh_enrichment wrote mc.name
+      into M1 table col 1 but left DeviceInfo.hostname unchanged. Topology widget,
+      Network Info tab, and AvailabilityWorker targets all read DeviceInfo objects
+      directly — so they showed the pre-enrichment (rDNS) name while Devices showed
+      the Deco-assigned name.
+
+      Required pattern — all four steps must be present in _apply_mesh_enrichment:
+        1. Build _mac_to_host by reading cols 1 (Hostname) and 2 (MAC) from the M1 table
+           after all table updates are complete.
+        2. Update DeviceInfo.hostname (or dict["hostname"]) in-place for every device in
+           _m1_result["devices"] whose MAC appears in _mac_to_host.
+        3. Rebuild _net_devices_table from the updated _m1_result["devices"] list.
+        4. Call _avail_worker.set_targets() with fresh TargetConfig objects (label=hostname)
+           if the worker exists, so Uptime page labels reflect enriched names.
+        5. Re-render topology widget last — it reads the now-correct DeviceInfo objects.
+
+      Why in-place on DeviceInfo objects:
+        _m1_result["devices"] and _last_scan_devices are the same Python list reference.
+        Updating .hostname in-place propagates automatically to all subsequent reads from
+        both references — exports, reports, NetworkDocPage, protocol viz — with no extra refresh.
+
+      What is intentionally NOT covered (fire-and-forget at scan time, not fixable):
+        _bl_table (baseline diff): built from plain dicts at scan time; resets on next scan.
+        MQTT device join/leave events: point-in-time signals, cannot be retroactively enriched.
+
+      Checklist when adding a new view that shows device hostnames:
+        □ Does it read from _m1_result["devices"] or _last_scan_devices?
+          → In-place hostname sync covers it automatically after _apply_mesh_enrichment runs.
+        □ Does it snapshot hostnames at a fixed point in time (e.g. label in a long-running worker)?
+          → Add a refresh call inside _apply_mesh_enrichment under step 4 pattern.
+        □ Does it display hostnames before enrichment could possibly have run?
+          → Acceptable; document as "pre-enrichment display, refreshes after mesh scan".
+
+  - id: RULE-UI1
+    title: "Verify PyQt6 API signatures before use — run debug_launch.py after every UI change"
+    severity: blocking
+    description: >
+      PyQt6 method signatures differ subtly from PyQt5 and online documentation
+      examples. Many incorrect calls pass syntax and import checks but raise
+      TypeError at runtime — only detectable by actually launching the app.
+
+      Known footguns:
+        QVBoxLayout.addLayout(layout)          → valid
+        QVBoxLayout.addLayout(layout, stretch) → valid
+        QVBoxLayout.addLayout(layout, alignment=...) → INVALID — TypeError at runtime
+        QVBoxLayout.addWidget(widget, stretch, alignment) → valid (alignment is the 3rd positional)
+
+        Centering a layout inside a QVBoxLayout requires a wrapper QHBoxLayout:
+          center = QHBoxLayout()
+          center.addStretch()
+          center.addLayout(inner_form)
+          center.addStretch()
+          evl.addLayout(center)
+
+      Before using any new layout or widget method with keyword arguments:
+        1. Check the PyQt6 (not PyQt5) docs or the C++ Qt docs for the exact
+           overload signatures.
+        2. After every UI change — including small layout tweaks — run:
+             python tools/debug_launch.py
+           and confirm `Dashboard() instantiated OK` and `window.show() called OK`
+           appear in netsentinel_debug.log before declaring UI work complete.
+
+      COMMIT GATE Step 2 exists precisely to catch these errors. Skipping it
+      means a TypeError that only manifests at startup will reach the user.
+
+  # ── Debugging & Troubleshooting ───────────────────────────────────────────
+  - id: RULE-DBG1
+    title: "Git Diff First — read the diff before writing any diagnostic plan"
+    severity: blocking
+    description: >
+      When any crash or error occurs, the absolute first step is:
+        git diff HEAD
+        git status
+      Read and understand every changed file before forming a hypothesis.
+      A crash log entry that references code present in the diff is almost
+      certainly caused by that change — start the diagnosis there, not with
+      pre-existing code.
+
+      This rule exists because stale crash logs can make a session-introduced
+      bug look pre-existing. If the faulthandler stack trace names a line that
+      was modified or added in the current diff, the change is the prime suspect
+      until proven otherwise. Trust the diff over the narrative.
+
+      Do not skip this step even when "it was working before". If it was working
+      before and it is broken now, the diff is where the answer is.
+
+  - id: RULE-DBG2
+    title: "Plan Before Fix — state the hypothesis before changing any code"
+    severity: blocking
+    description: >
+      Every fix attempt must be preceded by a written hypothesis that links
+      a specific recent change to the observed symptom. The hypothesis must
+      answer: what changed, why it could cause this crash, and what the fix
+      is expected to do. Fix attempts without a stated hypothesis are blocked.
+
+      Format before each attempt:
+        Hypothesis: [specific change] causes [symptom] because [mechanism].
+        Fix: [what we will change].
+        Expected outcome: [crash gone / different crash / test passes].
+
+      This rule prevents the "try something and see" loop that wastes session
+      time and obscures which fix actually worked. If the expected outcome does
+      not match the actual outcome, the hypothesis was wrong — write a new one
+      before the next attempt, do not continue patching.
+
+  - id: RULE-DBG3
+    title: "Two-Attempt Isolation Rule — stop patching after two failed fixes"
+    severity: blocking
+    description: >
+      If the same crash pattern persists after two distinct fix attempts,
+      stop changing code immediately. Shift to binary isolation:
+
+        1. Revert all session changes to a clean baseline (git stash or
+           git checkout the changed files).
+        2. Re-confirm the baseline is crash-free.
+        3. Re-apply changes one file at a time, testing after each, until the
+           crash reappears. The last applied file contains the culprit.
+        4. Within that file, binary-search the changes until the exact block
+           is identified.
+
+      Only after the culprit is isolated to a specific block of code may
+      targeted fix attempts resume. This rule exists because two failed
+      patch attempts mean the hypothesis model is wrong — continuing to patch
+      without isolation makes the problem worse and erases information.
+
+  - id: RULE-DBG4
+    title: "Anti-Loop Memory — log every attempt and never repeat a failed fix"
+    severity: blocking
+    description: >
+      Before each fix attempt, review all previous attempts in the current
+      debugging session. If the proposed fix is materially the same as one
+      already tried (same mechanism, same code path, same approach), it is
+      blocked — do not try it again.
+
+      Log format after each failed attempt (inline in the session, not in a
+      file):
+        Attempt N: [what was changed] → [outcome] → [why it did not work].
+
+      This rule prevents the anti-pattern of cycling through the same
+      three approaches repeatedly. If every distinct hypothesis has been
+      exhausted, escalate to RULE-DBG3 isolation rather than recycling.
+
+      Applies to: subprocess timeout removal, capture_output substitution,
+      temp-file PIPE workarounds — any approach tried once and confirmed
+      failed must not be tried again in the same session.
+
+  - id: RULE-DBG5
+    title: "FOUC / ghost window diagnosis — inject a global Show event filter before guessing layout causes"
+    severity: blocking
+    description: >
+      When a FOUC (Flash of Unstyled Content), 0x0 phantom window, or premature
+      render is reported at startup, do NOT start modifying layout constraints,
+      margins, or parent assignments until the culprit widget is identified.
+
+      Immediately after `app = QApplication(sys.argv)` in app.py, inject a
+      temporary global event filter that logs every Show event:
+
+        from PyQt6.QtCore import QObject, QEvent
+        class _ShowTracker(QObject):
+            def eventFilter(self, obj, event):
+                if event.type() == QEvent.Type.Show:
+                    print(f"SHOW: {obj.metaObject().className()} name={obj.objectName()}")
+                return False
+        _tracker = _ShowTracker()
+        app.installEventFilter(_tracker)
+
+      Run the app and read the terminal. The widget that prints before the main
+      window is fully wired is the culprit. Use its objectName() to locate it
+      in the codebase. Common root causes:
+        - setVisible(True) or show() called in __init__ of a child widget
+        - Parent set to None on a widget added to a layout (causes a top-level window)
+        - restoreGeometry() called before show() triggering a ShowWindow internally
+
+      Remove the filter once the culprit is found — it must never ship in production.
+
+      This technique was the only reliable method to locate a 0x0 ghost window that
+      caused hours of failed layout-constraint attempts (May 2026). The confirmed
+      culprit was ExplainerPanel.__init__ calling self.setVisible(bool(content)),
+      which forced an early render whenever the page_id had content.
+
+  # ── Windows Platform Rules ─────────────────────────────────────────────────
+  - id: RULE-WIN1
+    title: "No subprocess with PIPE on Windows startup paths — use psutil/winreg/ctypes"
+    severity: blocking
+    description: >
+      subprocess.check_output(), subprocess.run(capture_output=True), and any
+      other subprocess call that uses PIPE for stdout or stderr must NEVER appear
+      in code paths that execute at app startup while Qt is initializing and
+      multiple QThread workers are starting.
+
+      Root cause (Python 3.11, Windows): subprocess internally spawns a
+      _readerthread to drain PIPE handles. When multiple subprocess calls run
+      concurrently across threads in a Qt + multi-worker process, a race
+      condition in _readerthread/_wait corrupts a Win32 HANDLE, causing a
+      fatal access violation (STATUS_ACCESS_VIOLATION, 0xC0000005) in the
+      main thread. The crash appears in faulthandler as:
+        subprocess.py _wait / _readerthread
+        modules/utils.py  get_network_info / get_dhcp_info / get_interface_details
+
+      Workaround approaches that DO NOT fix the problem (already confirmed):
+        - Removing timeout= from check_output
+        - Switching to subprocess.run(capture_output=True)
+        - Using a temp-file redirect instead of PIPE (still calls _wait internally)
+
+      Required alternatives for Windows network info gathering:
+        Local IPs / masks / speed → psutil.net_if_addrs() + psutil.net_if_stats()
+        Gateway / DNS / DHCP      → winreg HKLM\SYSTEM\CurrentControlSet\
+                                    Services\Tcpip\Parameters\Interfaces\{GUID}
+        Gateway MAC               → ctypes.windll.iphlpapi.SendARP()
+        Adapter type / MAC        → psutil.AF_LINK address family in net_if_addrs()
+
+      The fix is already implemented in modules/utils.py (May 2026).
+      Never reintroduce subprocess calls in get_network_info(), get_dhcp_info(),
+      or get_interface_details() for the Windows branch.
+
+  - id: RULE-WIN2
+    title: "nativeEvent HTMAXBUTTON requires full NC message interception on frameless windows"
+    severity: blocking
+    description: >
+      Returning HTMAXBUTTON (9) from nativeEvent(WM_NCHITTEST) on a Qt
+      frameless window (Qt.WindowType.FramelessWindowHint) causes Windows to
+      immediately send WM_NCMOUSEMOVE, WM_NCLBUTTONDOWN, and WM_NCLBUTTONUP
+      all tagged with wParam=HTMAXBUTTON. Qt's frameless window handler does
+      not expect these non-client messages and crashes with an access violation
+      trying to access DWM maximize-button resources that do not exist on a
+      frameless window.
+
+      The crash appears as: STATUS_ACCESS_VIOLATION in the main thread at
+      window.show() with no Python frame for nativeEvent (the crash occurs
+      in Qt's C++ message handler after nativeEvent returns, not inside it).
+
+      Symptom pattern that confirms this bug:
+        - App crashes reliably at or shortly after window.show()
+        - Removing the nativeEvent override stops the crash immediately
+        - No subprocess or network code in the faulthandler stack for the
+          main thread — only app.py main / window.show()
+
+      Required implementation if snap layouts are needed on a frameless window:
+        1. Intercept WM_NCHITTEST and return HTMAXBUTTON only when
+           self.isVisible() is True (not during window.show() initialization).
+        2. Also intercept WM_NCMOUSEMOVE, WM_NCLBUTTONDOWN, WM_NCLBUTTONUP:
+           if wParam == HTMAXBUTTON: return True, 0  (consume the message).
+           Without step 2, Qt still crashes on the follow-up NC messages.
+        3. For WM_SYSCOMMAND SC_MAXIMIZE/SC_RESTORE: call _toggle_maximize()
+           and return True, 0.
+
+      Current status (May 2026): nativeEvent removed entirely from Dashboard
+      pending a correct implementation that handles all three NC message types.
+      Do not re-add a partial implementation that only covers WM_NCHITTEST.
+
+  # ── QSettings State Hygiene ───────────────────────────────────────────────
+  - id: RULE-QS1
+    title: "Never gate data access on QSettings-persisted mode — use always-populated sources"
+    severity: blocking
+    description: >
+      QSettings values (themes, nav mode, sidebar state, etc.) are absent on a
+      fresh install and restored from disk on subsequent runs. Code that branches
+      on a QSettings-restored value to decide WHICH data source to read will behave
+      differently on a fresh install versus an established local dev environment —
+      silently, with no error, because both paths are syntactically valid.
+
+      Anti-pattern that caused the command-palette search regression (May 2026):
+        _build_palette_items() branched on _nav_mode (restored from QSettings):
+          if _nav_mode != "home":  → reads _nav_sections (state-dependent, may be empty)
+          else:                   → reads _nav_item_labels (always populated)
+        Fresh winget install: no QSettings → default is "home" → correct branch → works.
+        Local dev: QSettings restores "standard" mode → wrong branch → empty pages list.
+
+      Rule: whenever two data sources represent the same logical data, prefer the
+      one that is populated unconditionally at startup — not the one whose population
+      depends on mode, lazy init, or user action. Specifically in NetSentinel:
+        _nav_item_labels  — populated by every _nav_add_page() call, always present
+        _nav_sections     — populated by _nav_finalize_rail(), mode-dependent
+        Use _nav_item_labels as the authoritative source for nav-label enumeration.
+
+      How to detect violations during code review:
+        Any method that reads from a data structure AND first branches on a
+        QSettings-restored field (mode, theme, tab, state) should be treated as
+        suspect. Ask: "what happens on first launch with no QSettings?"
+
+  - id: RULE-QS2
+    title: "Works in winget release but fails locally = QSettings state divergence — clear settings to reproduce"
+    severity: required
+    description: >
+      When a feature works in the winget-installed release but fails when running
+      from a local build, the almost certain cause is QSettings state divergence:
+        - The winget release is a fresh install with no prior QSettings → uses defaults.
+        - The local build has accumulated QSettings from prior sessions → restores saved state.
+        - The bug only manifests when a non-default saved state is present.
+
+      Standard diagnostic steps:
+        1. Identify which QSettings key controls the differing behaviour
+           (theme, nav mode, pinned pages, column widths, window geometry, etc.).
+        2. Clear NetSentinel QSettings to reproduce the clean-install state locally:
+             PowerShell: Remove-Item "HKCU:\Software\NetSentinel" -Recurse -Force
+             Or run with a fresh Windows user profile / portable test.
+        3. If the bug disappears after clearing QSettings, a QSettings-gated
+           code path is the culprit — apply RULE-QS1 to fix it.
+        4. If the bug persists after clearing QSettings, the cause is elsewhere
+           (environment, PATH, missing dependency) — continue investigation.
+
+      Never conclude "works in release, broken locally = local environment issue"
+      without first ruling out QSettings divergence. It is the most common cause
+      of this symptom in NetSentinel and requires only a registry clear to confirm.
+
+  # ── Startup / DWM Compositing ─────────────────────────────────────────────
+  - id: RULE-STARTUP1
+    title: "Startup show sequence — off-screen move (non-maximized) then geometry restore"
+    severity: blocking
+    description: >
+      The correct startup sequence in app.py is:
+
+        _splash_msg("Ready.", process_events=False)
+        if getattr(window, '_pending_show_maximized', False):
+            window.showMaximized()
+            _splash.close()
+        else:
+            _saved_rect = window.geometry()
+            window.move(-_saved_rect.width() - 200, -_saved_rect.height() - 200)
+            window.show()
+            _splash.close()
+            window.setGeometry(_saved_rect)
+
+      WHY THE NON-MAXIMIZED CASE NEEDS OFF-SCREEN MOVE:
+        _restore_settings() applies the saved window geometry during __init__.
+        On first launch there is no saved geometry so Qt centers the window — under
+        the splash, no flash. On second launch the saved geometry is off-center
+        (user's last position). window.show() then makes the HWND visible at that
+        off-center position, sticking out from behind the 480x280 splash — a flash.
+
+        Root cause confirmed 2026-05-25: first launch OK, second launch flashes.
+        Fix: move HWND off-screen before show() so it is never on-screen during the
+        splash phase. After _splash.close(), restore the saved geometry immediately.
+
+      WHY THE MAXIMIZED CASE DOES NOT NEED THIS:
+        showMaximized() fills the entire screen. The splash is always smaller.
+        One DWM frame with both visible: splash (WindowStaysOnTopHint) covers the gap.
+
+      _pending_show_maximized pattern (required):
+        In Dashboard._restore_settings(), when the saved state is maximized, set:
+          self._pending_show_maximized = True
+        Do NOT call self.showMaximized() inside _restore_settings(). Construction
+        spans multiple DWM frames; calling showMaximized() there causes the window to
+        be composited behind the splash before splash.close() is reached.
+
+      WHAT DOES NOT WORK — do not revert to any of these:
+        - window.show() at saved off-center position then _splash.close() — window
+          appears at saved position for one DWM frame before splash closes (the flash)
+        - _splash.finish(window) — calls window.show() internally at unpredictable time
+        - _splash.close() THEN processEvents() THEN window.show() — processEvents()
+          is not VSync-gated; unreliable across runs
+        - window.setWindowOpacity(0.0) — WS_EX_LAYERED not atomic on WS_POPUP windows
+        - int(window.winId()) before show — partially effective, top still flashes
+        - showMaximized() inside _restore_settings() during __init__ — multiple DWM frames
+
+      This rule was established after many sessions of investigation.
+      Root cause confirmed 2026-05-25: QSettings saved geometry causes flash on 2nd+ launch.
+
+  # ── APM Rules Maintenance ─────────────────────────────────────────────────
+  - id: RULE-APM1
+    title: "Keep APM rules current — update .apm/instructions/ whenever the codebase structure changes"
+    severity: blocking
+    description: >
+      The APM instruction files are the source of truth for all AI agents and
+      IDE copilots. They drift when files are added, renamed, or deleted without
+      a matching update. RULE-APM1 defines exactly when each file must change
+      and how to deploy afterwards.
+
+      TRIGGER CONDITIONS — update the named file whenever:
+
+        architecture.instructions.md:
+          • Any .py file is added, renamed, or deleted under modules/, workers/,
+            ui/pages/, or ui/widgets/ — add/update the layout tree entry with a
+            one-line description.
+          • A new nav section is added to _build_pro_nav() — add it to the
+            "Nav section placement guide" in the Dashboard navigation model section.
+          • A new architectural pattern or invariant is established.
+
+        project-vision.instructions.md:
+          • A version bump occurs — update "Current version: **vX.Y.Z**".
+          • A feature ships — add a bullet to the matching "Implemented Features"
+            subsection.
+          • A roadmap item is completed — remove it from the Roadmap section.
+
+        development-rules.instructions.md:
+          • A new coding rule is established (add a new RULE-XX block).
+          • An existing rule references dead code or a renamed method — fix it.
+          • A new nav section exists — add it to the RULE-9 section placement list.
+
+      DEPLOY COMMAND — mandatory after every edit to any .apm/instructions/ file:
+        apm install --target all
+        apm compile --all
+
+      The PostToolUse hook in .claude/settings.json runs these automatically when
+      Claude edits .apm/instructions/ or apm.yml. For manual edits, run them
+      explicitly from the project root.
+
+      AUTOMATED ENFORCEMENT:
+        tests/test_apm_rules_coverage.py — parametrized test that fails for every
+        .py file in modules/, workers/, ui/pages/, ui/widgets/ that is absent from
+        architecture.instructions.md. Runs as part of the standard pytest suite.
+
+      ANTI-DRIFT CHECKLIST (run before closing any session that added files):
+        □ Every new .py file appears in the architecture.instructions.md layout tree
+        □ project-vision.instructions.md version and Implemented Features are current
+        □ apm install --target all && apm compile --all completed without errors
+        □ python -m pytest tests/test_apm_rules_coverage.py passes
+
+
