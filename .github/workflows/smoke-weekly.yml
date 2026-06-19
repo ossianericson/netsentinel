@@ -1,4 +1,4 @@
-﻿name: Weekly Smoke Test
+name: Weekly Smoke Test
 
 # GAP-7: Synthetic post-release probe.
 # Runs the app's --smoke path every Monday on a clean environment to catch
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
