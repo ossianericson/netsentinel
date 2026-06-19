@@ -275,7 +275,7 @@ If you use NetSentinel in a course or lab and need curriculum-specific features,
 
 ## Quality
 
-The project ships with **4 113+ automated tests** across 230 test files, covering detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. Run the full suite with:
+The project ships with **4,100+ automated tests** across 230 test files, covering detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. Run the full suite with:
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -286,8 +286,6 @@ All tests are offline — no real network traffic, no live devices required.
 ---
 
 ## Architecture
-
-See [docs/architecture.md](docs/architecture.md) for module layout, data flow, and design decisions.
 
 The short version: [app.py](app.py) is the GUI entry point; [cli.py](cli.py) is the headless CLI; all detection logic is in [modules/](modules/); UI pages are in [ui/pages/](ui/pages/); background threads are in [workers/](workers/). All colour and style values live in [ui/styles.py](ui/styles.py) — no hex values appear elsewhere in the UI code.
 

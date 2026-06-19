@@ -67,6 +67,13 @@ netsentinel_stderr.log
 repomix-output.txt
 release_body.md
 
+# One-shot migration/patch scripts (run once during development, not for contributors)
+tools/_*.py
+tools/extract_*.py
+tools/find_orphan_decorators.py
+tools/remove_orphan_decorators.py
+tools/fix_ax1.py
+
 # Test/chaos tester output — screenshots, crash reports, logs
 test_output/
 

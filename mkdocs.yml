@@ -31,7 +31,6 @@ theme:
 
 nav:
   - Home: index.md
-  - Architecture: architecture.md
   - Contributing: contributing.md
   - Networking Guide: networking-guide.md
   - Privacy Policy: privacy-policy.md
