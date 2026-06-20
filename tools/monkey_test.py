@@ -553,7 +553,7 @@ def _is_system_hwnd(hwnd: int) -> bool:
         ):
             return True
     except Exception:
-        pass
+        pass  # non-fatal — ctypes call failed; treat hwnd as non-desktop
     return False
 
 

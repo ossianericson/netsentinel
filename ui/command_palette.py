@@ -293,3 +293,6 @@ class CommandPalette(QDialog):
     def hideEvent(self, event):
         QApplication.instance().removeEventFilter(self)
         super().hideEvent(event)
+        # Return focus to the main window so it doesn't fall through to the Desktop.
+        if self.parent():
+            self.parent().activateWindow()

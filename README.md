@@ -183,12 +183,12 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.13 (current)
+### v2.1.14 (current)
 
 **Fixed**
-- Monitor resume bar dismiss button (✕) now visible across all themes — uses amber accent instead of muted `TEXT_SECONDARY`
-- Focus rings on activity-rail buttons and flyout items for keyboard navigation
-- Stripped UTF-8 BOM from `ui/nav/rail.py` that caused silent `SyntaxError` in `ast.parse`-based test checks
+- Command palette dismiss now returns focus to the main window (prevents focus falling to the Windows Desktop)
+- Hardware integration browse and register are re-entry guarded against rapid repeated clicks
+- `monkey_test.py` RULE-LINT2 compliance: bare `pass` in `except` block now has an explanatory comment
 - `test_no_duplicate_methods.py` now correctly exempts `@pyqtProperty` getter/setter pairs
 
 ---

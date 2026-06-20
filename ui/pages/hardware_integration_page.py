@@ -297,75 +297,62 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         7. Start poll worker
         8. Emit plugin_page_added → nav updates
         """
-        ok, msg, meta = _validate_script(path)
-        if not ok:
-            self._set_status(f"Validation failed: {msg}", error=True)
+        if getattr(self, '_register_active', False):
             return
-
-        pypi_pkg = meta.get("pypi_package", "")
-        if pypi_pkg:
-            import importlib.util
-            module_name = pypi_pkg.replace("-", "_")
-            if importlib.util.find_spec(module_name) is None:
-                dlg = PipInstallDialog(pypi_pkg, parent=self)
-                if dlg.exec() != QDialog.DialogCode.Accepted:
-                    self._set_status("Dependency install cancelled.", error=True)
-                    return
-                import importlib
-                importlib.invalidate_caches()
-                if importlib.util.find_spec(module_name) is None:
-                    self._set_status(
-                        f"'{pypi_pkg}' still not importable — check pip output.",
-                        error=True,
-                    )
-                    return
-
-        import shutil as _shutil
-        from modules.utils import get_app_data_dir as _gad
+        self._register_active = True
         try:
-            _dest_dir = _gad() / "plugins"
-            _dest_dir.mkdir(parents=True, exist_ok=True)
-            _dest = _dest_dir / Path(path).name
-            if Path(path).resolve() != _dest.resolve():
-                _shutil.copy2(path, _dest)
-            path = str(_dest)
-        except Exception as _exc:
-            self._set_status(f"Failed to install plugin: {_exc}", error=True)
-            return
+            ok, msg, meta = _validate_script(path)
+            if not ok:
+                self._set_status(f"Validation failed: {msg}", error=True)
+                return
 
-        cred_label = meta.get("credential_label", "")
-        hw_ip      = meta.get("ip", "")
+            pypi_pkg = meta.get("pypi_package", "")
+            if pypi_pkg:
+                import importlib.util
+                module_name = pypi_pkg.replace("-", "_")
+                if importlib.util.find_spec(module_name) is None:
+                    dlg = PipInstallDialog(pypi_pkg, parent=self)
+                    if dlg.exec() != QDialog.DialogCode.Accepted:
+                        self._set_status("Dependency install cancelled.", error=True)
+                        return
+                    import importlib
+                    importlib.invalidate_caches()
+                    if importlib.util.find_spec(module_name) is None:
+                        self._set_status(
+                            f"'{pypi_pkg}' still not importable — check pip output.",
+                            error=True,
+                        )
+                        return
 
-        # Check whether this is a truly new registration so we know whether to
-        # force the credential dialog (always shown for new instances regardless
-        # of any existing keyring entry — e.g. after a settings reset the
-        # keyring is not cleared, so silently skipping the dialog would leave
-        # the user with no feedback that credentials are being used).
-        instances_pre = _load_instances()
-        inst_id_pre   = _instance_id(path, hw_ip or path)
-        is_new_pre    = not any(i["id"] == inst_id_pre for i in instances_pre)
+            import shutil as _shutil
+            from modules.utils import get_app_data_dir as _gad
+            try:
+                _dest_dir = _gad() / "plugins"
+                _dest_dir.mkdir(parents=True, exist_ok=True)
+                _dest = _dest_dir / Path(path).name
+                if Path(path).resolve() != _dest.resolve():
+                    _shutil.copy2(path, _dest)
+                path = str(_dest)
+            except Exception as _exc:
+                self._set_status(f"Failed to install plugin: {_exc}", error=True)
+                return
 
-        if cred_label and hw_ip:
-            if is_new_pre:
-                # New registration — always show the dialog even if keyring has
-                # a leftover credential from a previous install or settings reset.
-                accepted, confirmed_ip = show_credential_dialog(
-                    self, meta.get("name", Path(path).stem), hw_ip, cred_label,
-                    plugin_path=path,
-                )
-                if not accepted:
-                    self._set_status("Setup cancelled.", error=True)
-                    return
-                hw_ip = confirmed_ip or hw_ip
-            else:
-                # Re-registering an existing instance — only prompt if keyring
-                # has no password (user deleted it manually).
-                try:
-                    import keyring as _kr
-                    existing_pw = _kr.get_password("NetSentinel/hardware", hw_ip)
-                except Exception:
-                    existing_pw = None
-                if not existing_pw:
+            cred_label = meta.get("credential_label", "")
+            hw_ip      = meta.get("ip", "")
+
+            # Check whether this is a truly new registration so we know whether to
+            # force the credential dialog (always shown for new instances regardless
+            # of any existing keyring entry — e.g. after a settings reset the
+            # keyring is not cleared, so silently skipping the dialog would leave
+            # the user with no feedback that credentials are being used).
+            instances_pre = _load_instances()
+            inst_id_pre   = _instance_id(path, hw_ip or path)
+            is_new_pre    = not any(i["id"] == inst_id_pre for i in instances_pre)
+
+            if cred_label and hw_ip:
+                if is_new_pre:
+                    # New registration — always show the dialog even if keyring has
+                    # a leftover credential from a previous install or settings reset.
                     accepted, confirmed_ip = show_credential_dialog(
                         self, meta.get("name", Path(path).stem), hw_ip, cred_label,
                         plugin_path=path,
@@ -374,21 +361,40 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
                         self._set_status("Setup cancelled.", error=True)
                         return
                     hw_ip = confirmed_ip or hw_ip
+                else:
+                    # Re-registering an existing instance — only prompt if keyring
+                    # has no password (user deleted it manually).
+                    try:
+                        import keyring as _kr
+                        existing_pw = _kr.get_password("NetSentinel/hardware", hw_ip)
+                    except Exception:
+                        existing_pw = None  # non-fatal — treat as no credential
+                    if not existing_pw:
+                        accepted, confirmed_ip = show_credential_dialog(
+                            self, meta.get("name", Path(path).stem), hw_ip, cred_label,
+                            plugin_path=path,
+                        )
+                        if not accepted:
+                            self._set_status("Setup cancelled.", error=True)
+                            return
+                        hw_ip = confirmed_ip or hw_ip
 
-        label   = meta.get("name", Path(path).stem)
-        inst_ip = hw_ip
-        instances = _load_instances()
-        inst_id = _instance_id(path, inst_ip or path)
-        is_new  = not any(i["id"] == inst_id for i in instances)
-        if is_new:
-            instances.append({"id": inst_id, "path": path, "ip": inst_ip, "name": label})
-            _save_instances(instances)
+            label   = meta.get("name", Path(path).stem)
+            inst_ip = hw_ip
+            instances = _load_instances()
+            inst_id = _instance_id(path, inst_ip or path)
+            is_new  = not any(i["id"] == inst_id for i in instances)
+            if is_new:
+                instances.append({"id": inst_id, "path": path, "ip": inst_ip, "name": label})
+                _save_instances(instances)
 
-        self._set_status(f"Imported '{label}' — running first check…", error=False)
-        self._rebuild_hub()
-        self._start_poll_worker_inst(inst_id)
-        if is_new:
-            self.plugin_page_added.emit(path, label)
+            self._set_status(f"Imported '{label}' — running first check…", error=False)
+            self._rebuild_hub()
+            self._start_poll_worker_inst(inst_id)
+            if is_new:
+                self.plugin_page_added.emit(path, label)
+        finally:
+            self._register_active = False
 
     def _import_bundled(self, path: str) -> None:
         self._register_plugin(path, source="bundled")
@@ -742,11 +748,17 @@ class HardwareIntegrationPage(QWidget, _HardwareBrowseMixin, _PluginWizardMixin)
         self._import_bundled(str(plugin_path))
 
     def _on_browse(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Select hardware integration script", "",
-            "Python files (*.py)",
-            options=QFileDialog.Option.DontUseNativeDialog,
-        )
+        if getattr(self, '_browse_active', False):
+            return
+        self._browse_active = True
+        try:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Select hardware integration script", "",
+                "Python files (*.py)",
+                options=QFileDialog.Option.DontUseNativeDialog,
+            )
+        finally:
+            self._browse_active = False
         if not path:
             return
 
