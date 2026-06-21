@@ -55,6 +55,7 @@ from ui.widgets.health_status_card import HealthStatusCard
 from ui.widgets.bandwidth_hog_card import BandwidthHogCard
 from ui.widgets.usage_insights_card import UsageInsightsCard
 from ui.widgets.weekly_report_card import WeeklyReportCard
+from ui.widgets.scan_radar_widget import ScanRadarWidget
 
 __all__ = ["HomePage", "StandardWelcomePage", "ProWelcomePage"]
 from ui.pages.home_suggestions import _HomeSuggestionsMixin
@@ -1040,8 +1041,24 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"QPushButton:hover {{ background: {ACCENT_DARK}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
+        # Inline radar + progress label — shown only while scanning
+        self._radar = ScanRadarWidget()
+        self._radar.setFixedSize(54, 54)
+        self._radar.setVisible(False)
+
+        self._scan_progress_lbl = QLabel("")
+        self._scan_progress_lbl.setStyleSheet(
+            f"font-size:11px; color:{TEXT_SECONDARY};"
+            " background:transparent; border:none;"
+        )
+        self._scan_progress_lbl.setVisible(False)
+
         btn_row.addWidget(self._btn_scan)
         btn_row.addWidget(self._btn_diagnose)
+        btn_row.addSpacing(8)
+        btn_row.addWidget(self._radar)
+        btn_row.addSpacing(4)
+        btn_row.addWidget(self._scan_progress_lbl)
         btn_row.addStretch()
 
         # Tertiary follow-up action \u2014 visually separated, link-style
@@ -1065,7 +1082,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         right.addLayout(btn_row)
         right.addLayout(isp_row)
         hero_lay.addLayout(right, 1)
-        # Insert hero at position 3 (after _dashboard_strip / _setup_card_top /
+
+        # Insert hero card at position 3 (after _dashboard_strip / _setup_card_top /
         # _setup_complete_card) so the grade ring and CTA buttons are always
         # visible near the top of the page before any contextual banners.
         lay.insertWidget(3, hero)

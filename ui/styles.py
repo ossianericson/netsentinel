@@ -106,6 +106,11 @@ _ARCTIC_CLEAN = {
     "CHART_TITLE":        "#1A3A5C",
     # Critical severity (CVE, risk — darker than RED for emphasis)
     "CVE_CRITICAL_FG":    "#8B0000",
+    # Scan radar animation
+    "RADAR_BG":           "#050F05",
+    "RADAR_GRID":         "#0D2E0D",
+    "RADAR_GREEN":        "#00FF41",
+    "RADAR_TRAIL":        "#00CC33",
 }
 
 _DARK_PRO = {
@@ -197,6 +202,11 @@ _DARK_PRO = {
     "CHART_TITLE":        "#58A6FF",
     # Critical severity
     "CVE_CRITICAL_FG":    "#FF6E6E",
+    # Scan radar animation
+    "RADAR_BG":           "#050F05",
+    "RADAR_GRID":         "#0D2E0D",
+    "RADAR_GREEN":        "#00FF41",
+    "RADAR_TRAIL":        "#00CC33",
 }
 
 _OBSIDIAN_NEON = {
@@ -288,6 +298,11 @@ _OBSIDIAN_NEON = {
     "CHART_TITLE":        "#9D5CF6",
     # Critical severity
     "CVE_CRITICAL_FG":    "#FF8080",
+    # Scan radar animation
+    "RADAR_BG":           "#050F05",
+    "RADAR_GRID":         "#0D2E0D",
+    "RADAR_GREEN":        "#00FF41",
+    "RADAR_TRAIL":        "#00CC33",
 }
 
 _ABYSS = {
@@ -379,6 +394,11 @@ _ABYSS = {
     "CHART_TITLE":        "#22D4FF",
     # Critical severity
     "CVE_CRITICAL_FG":    "#FF8080",
+    # Scan radar animation
+    "RADAR_BG":           "#050F05",
+    "RADAR_GRID":         "#0D2E0D",
+    "RADAR_GREEN":        "#00FF41",
+    "RADAR_TRAIL":        "#00CC33",
 }
 
 # ── Theme registry ────────────────────────────────────────────────────────────

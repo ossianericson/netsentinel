@@ -282,6 +282,8 @@ class ReportsPage(QWidget):
     @pyqtSlot(str)
     def on_report_saved(self, path: str) -> None:
         """Called when the worker emits report_saved(path)."""
+        self._btn_now.setEnabled(True)
+        self._btn_now.setText("Generate Now")
         item = QListWidgetItem(path)
         item.setData(Qt.ItemDataRole.UserRole, path)
         item.setForeground(Qt.GlobalColor.darkGreen if Path(path).exists() else Qt.GlobalColor.gray)
@@ -392,6 +394,8 @@ class ReportsPage(QWidget):
         self._worker.set_config(config)
 
     def _generate_now(self) -> None:
+        self._btn_now.setEnabled(False)
+        self._btn_now.setText("Generating…")
         if not self._worker:
             # No worker yet — generate inline (e.g., during smoke test)
             try:
@@ -406,6 +410,8 @@ class ReportsPage(QWidget):
                 sched.generate_now()
             except Exception:
                 pass  # non-fatal
+            self._btn_now.setEnabled(True)
+            self._btn_now.setText("Generate Now")
             return
         self._worker.trigger_now()
 

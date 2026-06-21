@@ -346,7 +346,31 @@ class SecurityOverviewPage(QWidget):
                 from PyQt6.QtWidgets import QApplication as _A
                 _A.clipboard().setText(it.text())
 
-        install_copy_menu(self._scan_table, [("separator", None), ("Copy finding", _scan_copy)])
+        def _scan_view_details():
+            r = self._scan_table.currentRow()
+            if r < 0:
+                return
+            from PyQt6.QtWidgets import QMessageBox
+            type_it  = self._scan_table.item(r, 0)
+            sev_it   = self._scan_table.item(r, 1)
+            host_it  = self._scan_table.item(r, 2)
+            find_it  = self._scan_table.item(r, 3)
+            typ     = type_it.text()  if type_it  else ""
+            sev     = sev_it.text()   if sev_it   else ""
+            host    = host_it.text()  if host_it  else ""
+            finding = find_it.text()  if find_it  else ""
+            QMessageBox.information(self, "Finding Details",
+                f"<b>Type:</b> {typ}<br>"
+                f"<b>Severity:</b> {sev}<br>"
+                f"<b>Host:</b> {host}<br><br>"
+                f"<b>Finding:</b><br>{finding}")
+
+        install_copy_menu(self._scan_table, [
+            ("separator",    None),
+            ("Copy finding", _scan_copy),
+            ("separator",    None),
+            ("View details", _scan_view_details),
+        ])
 
         self._scan_empty = QLabel(
             "No security findings yet.\n\n"

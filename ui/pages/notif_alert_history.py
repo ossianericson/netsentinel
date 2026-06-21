@@ -323,6 +323,13 @@ class _NotifAlertHistoryMixin:
         )
         hist_lay.addWidget(self._alert_history_table)
 
+        self._hist_empty_lbl = QLabel("No alerts recorded yet — alerts appear here after the first detection event.")
+        self._hist_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._hist_empty_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;"
+        )
+        hist_lay.addWidget(self._hist_empty_lbl)
+
         # Bulk action bar
         self._bulk_bar = QFrame()
         self._bulk_bar.setVisible(False)
@@ -422,6 +429,13 @@ class _NotifAlertHistoryMixin:
         self._jk_filter_log = _JKNavFilter(self._log_table, self)
         self._log_table.viewport().installEventFilter(self._jk_filter_log)
         log_lay.addWidget(self._log_table)
+
+        self._log_empty_lbl = QLabel("No delivery attempts recorded yet — entries appear here after the first alert is sent.")
+        self._log_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._log_empty_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;"
+        )
+        log_lay.addWidget(self._log_empty_lbl)
 
         self._log_detail = QFrame()
         self._log_detail.setVisible(False)
@@ -539,6 +553,9 @@ class _NotifAlertHistoryMixin:
                         item.setToolTip(err)
                 self._log_table.setItem(row, col, item)
             self._log_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, entry)
+
+        has_log_rows = self._log_table.rowCount() > 0
+        self._log_empty_lbl.setVisible(not has_log_rows)
 
     def _on_log_row_clicked(self, item: QTableWidgetItem) -> None:
         first = self._log_table.item(item.row(), 0)
@@ -690,6 +707,9 @@ class _NotifAlertHistoryMixin:
             self._alert_history_table.setCellWidget(row, 1, _cw)
             if sub_label:
                 self._alert_history_table.setRowHeight(row, 36)
+
+        has_rows = self._alert_history_table.rowCount() > 0
+        self._hist_empty_lbl.setVisible(not has_rows)
 
     def _on_alert_row_single_click(self, item: QTableWidgetItem) -> None:
         first = self._alert_history_table.item(item.row(), 0)

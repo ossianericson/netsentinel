@@ -212,6 +212,16 @@ class _NotifDepMixin:
         self._dep_table.customContextMenuRequested.connect(self._dep_context_menu)
         bl.addWidget(self._dep_table)
 
+        self._dep_empty_lbl = QLabel(
+            "No dependencies defined yet — add one to suppress child alerts when a parent device goes offline."
+        )
+        self._dep_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._dep_empty_lbl.setWordWrap(True)
+        self._dep_empty_lbl.setStyleSheet(
+            f"color:{TEXT_MUTED}; font-size:11px; background:transparent; border:none; padding:8px 0;"
+        )
+        bl.addWidget(self._dep_empty_lbl)
+
         btn_row = QHBoxLayout()
         _remove_btn = QPushButton("Remove selected")
         _remove_btn.setFixedHeight(24)
@@ -236,6 +246,7 @@ class _NotifDepMixin:
     def _dep_refresh_table(self) -> None:
         deps = _load_deps()
         self._dep_table.setRowCount(0)
+        self._dep_empty_lbl.setVisible(len(deps) == 0)
         for entry in deps:
             row = self._dep_table.rowCount()
             self._dep_table.insertRow(row)

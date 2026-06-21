@@ -337,13 +337,13 @@ class CvePage(QWidget):
         self._search_box.textChanged.connect(self._search_timer.start)
         self._search_timer.timeout.connect(lambda: self._apply_filter(self._search_box.text()))
 
-        btn_import = QPushButton("Import from Scan")
-        btn_import.setFixedHeight(34)
-        btn_import.setStyleSheet(
+        self._btn_import = QPushButton("Import from Scan")
+        self._btn_import.setFixedHeight(34)
+        self._btn_import.setStyleSheet(
             f"font-size:12px; font-weight:bold; color:{WHITE}; background:{ACCENT};"
             f" border:none; padding:0 14px; border-radius:4px;"
         )
-        btn_import.clicked.connect(self._import_dialog)
+        self._btn_import.clicked.connect(self._import_dialog)
 
         btn_refresh = QPushButton("Refresh")
         btn_refresh.setFixedHeight(34)
@@ -371,7 +371,7 @@ class CvePage(QWidget):
         toolbar.addWidget(self._status_lbl)
         toolbar.addWidget(btn_export)
         toolbar.addWidget(btn_refresh)
-        toolbar.addWidget(btn_import)
+        toolbar.addWidget(self._btn_import)
         _p1_lay.addLayout(toolbar)
 
         # Table card
@@ -865,6 +865,8 @@ class CvePage(QWidget):
         if not services:
             return
 
+        self._btn_import.setEnabled(False)
+        self._btn_import.setText("Importing…")
         self._status_lbl.setText("Looking up CVEs…")
         self._status_lbl.repaint()
 
@@ -872,6 +874,8 @@ class CvePage(QWidget):
             from modules.cve_lookup import lookup as lookup_cve
         except ImportError:
             self._status_lbl.setText("cve_lookup module unavailable.")
+            self._btn_import.setEnabled(True)
+            self._btn_import.setText("Import from Scan")
             return
 
         imported = 0
@@ -893,6 +897,8 @@ class CvePage(QWidget):
 
         self._refresh()
         self._status_lbl.setText(f"Imported {imported} CVE(s) from {len(services)} service(s).")
+        self._btn_import.setEnabled(True)
+        self._btn_import.setText("Import from Scan")
 
     # ── Public navigation slot ────────────────────────────────────────────────
 

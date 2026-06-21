@@ -27,11 +27,12 @@ from PyQt6.QtWidgets import (
     QFrame, QTextEdit,
 )
 from ui.widgets.context_menu import install_copy_menu
+from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, INPUT_PLACEHOLDER, RED,
+    CARD_RADIUS, GREEN, RED,
     TABLE_SEL, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT, WHITE,
 )
@@ -297,22 +298,44 @@ class SyslogPage(QWidget):
                     from PyQt6.QtWidgets import QApplication as _QApp
                     _QApp.clipboard().setText(it.text())
 
+        def _sys_filter_host():
+            r = self._table.currentRow()
+            if r >= 0:
+                it = self._table.item(r, 4) or self._table.item(r, 1)
+                if it:
+                    self._search_box.setText(it.text())
+
         install_copy_menu(self._table, [
             ("separator",     None),
             ("Copy message",  _sys_copy_message),
             ("Copy host",     _sys_copy_host),
+            ("separator",     None),
+            ("Filter by host", _sys_filter_host),
         ])
 
-        body_lay.addWidget(self._table)
+        # ── Table / empty state stack inside the card ─────────────────────────
+        from PyQt6.QtWidgets import QStackedWidget
+        self._table_stack = QStackedWidget()
 
-        # Empty state label (shown until first message)
-        self._empty_lbl = QLabel("Waiting for syslog messages…")
-        self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_lbl.setStyleSheet(
-            f"font-size:13px; color:{INPUT_PLACEHOLDER}; background:{BG_CARD}; padding:32px;"
+        _empty_card = EmptyStateCard(
+            icon="◉",
+            title="Syslog Receiver",
+            what_it_shows=(
+                "Live syslog messages from routers, switches, and Linux hosts — "
+                "timestamp, severity, source, app name, and message text."
+            ),
+            why_it_matters=(
+                "Syslog is the earliest warning of hardware failures, authentication "
+                "attempts, and configuration changes across your infrastructure."
+            ),
+            btn_label="Waiting for messages…",
         )
-        body_lay.addWidget(self._empty_lbl)
-        self._table.hide()
+        # The CTA has no action — the page is already listening; disable it
+        _empty_card.findChild(QPushButton).setEnabled(False)
+
+        self._table_stack.addWidget(_empty_card)  # index 0 — no messages yet
+        self._table_stack.addWidget(self._table)  # index 1 — messages present
+        body_lay.addWidget(self._table_stack)
 
         root.addWidget(card, stretch=1)
 
@@ -377,12 +400,8 @@ class SyslogPage(QWidget):
         self._rebuild_table(rows)
 
     def _rebuild_table(self, rows: list[dict]) -> None:
-        if rows:
-            self._empty_lbl.hide()
-            self._table.show()
-        else:
-            self._table.hide()
-            self._empty_lbl.show()
+        self._table_stack.setCurrentIndex(1 if rows else 0)
+        if not rows:
             return
 
         self._table.setRowCount(0)
@@ -425,8 +444,7 @@ class SyslogPage(QWidget):
         self._total = self._crit_count = self._err_count = self._info_count = 0
         self._update_kpis()
         self._table.setRowCount(0)
-        self._table.hide()
-        self._empty_lbl.show()
+        self._table_stack.setCurrentIndex(0)
 
     def _on_row_dbl_click(self, index) -> None:
         row = index.row()

@@ -27,10 +27,12 @@ class _FakeStore:
 def test_module_imports_without_flask(monkeypatch):
     """rest_api must import cleanly even when Flask is not installed."""
     import sys
+    import modules as _modules_pkg
     # Stash and restore both flask and modules.rest_api to avoid poisoning
     # subsequent tests in the same process.
     orig_flask     = sys.modules.get("flask",        ...)
     orig_rest_api  = sys.modules.get("modules.rest_api", ...)
+    orig_attr      = getattr(_modules_pkg, "rest_api", ...)
 
     try:
         # Hide flask so the module re-imports with FLASK_AVAILABLE=False
@@ -40,7 +42,10 @@ def test_module_imports_without_flask(monkeypatch):
         import modules.rest_api as m
         assert m.FLASK_AVAILABLE is False
     finally:
-        # Full cleanup — remove the tainted module and restore originals
+        # Full cleanup — remove the tainted module and restore originals.
+        # Must also restore the 'rest_api' attribute on the 'modules' package
+        # object, because Python's import machinery sets it on every import
+        # and the sys.modules entry alone is not sufficient.
         sys.modules.pop("modules.rest_api", None)
         if orig_flask is ...:
             sys.modules.pop("flask", None)
@@ -48,6 +53,8 @@ def test_module_imports_without_flask(monkeypatch):
             sys.modules["flask"] = orig_flask  # type: ignore
         if orig_rest_api is not ...:
             sys.modules["modules.rest_api"] = orig_rest_api  # type: ignore
+        if orig_attr is not ...:
+            setattr(_modules_pkg, "rest_api", orig_attr)
 
 
 def test_flask_available_flag():

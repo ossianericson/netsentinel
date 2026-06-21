@@ -51,6 +51,7 @@ from modules.maintenance_window import (
     MaintenanceWindow, MaintenanceWindowManager,
 )
 from ui.widgets.context_menu import install_copy_menu
+from ui.widgets.empty_state_card import EmptyStateCard
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -255,6 +256,7 @@ class MaintenancePage(QWidget):
         super().__init__(parent)
         self.setObjectName("contentArea")
         self._manager: Optional[MaintenanceWindowManager] = None
+        self._content_stack = None  # set during __init__ below
 
         # Auto-refresh timer (updates Active/Scheduled/Expired status every minute)
         self._timer = QTimer(self)
@@ -294,7 +296,28 @@ class MaintenancePage(QWidget):
         il.addWidget(self._build_log_card())
         il.addStretch()
         scroll.setWidget(inner)
-        outer.addWidget(scroll, 1)
+
+        # ── Empty state + content stack ───────────────────────────────────────
+        from PyQt6.QtWidgets import QStackedWidget
+        self._content_stack = QStackedWidget()
+
+        _empty = EmptyStateCard(
+            icon="◈",
+            title="Maintenance Windows",
+            what_it_shows=(
+                "Scheduled suppression windows — while a window is active, alerts for "
+                "selected hosts are silently dropped so planned work doesn't flood your inbox."
+            ),
+            why_it_matters=(
+                "Without maintenance windows, every restart or config change during planned "
+                "work triggers false alerts. One window removes all that noise."
+            ),
+            btn_label="Add Maintenance Window",
+        )
+        _empty.clicked.connect(self._add_window)
+        self._content_stack.addWidget(_empty)   # index 0 — empty state
+        self._content_stack.addWidget(scroll)   # index 1 — content
+        outer.addWidget(self._content_stack, 1)
 
     # ── Windows card ──────────────────────────────────────────────────────────
 
@@ -335,9 +358,14 @@ class MaintenancePage(QWidget):
         def _win_delete():
             self._delete_window()
 
+        def _win_edit():
+            self._edit_window()
+
         install_copy_menu(self._win_table, [
             ("separator",      None),
             ("Copy label",     _win_copy_label),
+            ("separator",      None),
+            ("Edit window",    _win_edit),
             ("separator",      None),
             ("Delete window",  _win_delete),
         ])
@@ -441,7 +469,8 @@ class MaintenancePage(QWidget):
             return
         from PyQt6.QtGui import QColor
         self._win_table.setRowCount(0)
-        for w in self._manager.get_windows():
+        windows = self._manager.get_windows()
+        for w in windows:
             row = self._win_table.rowCount()
             self._win_table.insertRow(row)
             hosts_str  = ", ".join(w.hosts) if w.hosts else "(all hosts)"
@@ -457,6 +486,8 @@ class MaintenancePage(QWidget):
                     item.setForeground(QColor(color))
                 self._win_table.setItem(row, col, item)
         self._update_kpis()
+        if self._content_stack is not None:
+            self._content_stack.setCurrentIndex(1 if windows else 0)
 
     def _update_kpis(self) -> None:
         if self._manager is None:

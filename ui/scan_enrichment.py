@@ -6,9 +6,11 @@ ScanResultMixin inherits ScanEnrichmentMixin.
 """
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
 
 from ui.tabs import _add_row
@@ -37,9 +39,10 @@ class ScanEnrichmentMixin:
         clients  = data.get("clients", [])
         provider = data.get("provider", "mesh").title()
         self._mesh_units      = data.get("units", [])
-        self._mesh_enrichment = {c.mac: c for c in clients}
+        from modules.deco_client import _norm_mac as _nm
+        self._mesh_enrichment = {_nm(c.mac): c for c in clients}
         self._apply_mesh_enrichment()
-        matched  = sum(1 for c in clients if c.mac in self._mesh_enrichment)
+        matched  = len(clients)
         summary  = getattr(self, "_m1_scan_summary", "")
         self._m1_status.setText(
             f"{summary}  ·  {provider}: {matched} device{'s' if matched != 1 else ''} enriched"
@@ -456,9 +459,7 @@ class ScanEnrichmentMixin:
             for col, val in enumerate([p.host, p.ip, rtt_str, p.status]):
                 item = QTableWidgetItem(str(val))
                 item.setForeground(
-                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(
-                        color if col == 3 else TEXT_PRIMARY
-                    )
+                    QColor(color if col == 3 else TEXT_PRIMARY)
                 )
                 self._diag_ping_table.setItem(row, col, item)
 
@@ -472,9 +473,7 @@ class ScanEnrichmentMixin:
             for col, val in enumerate([d.server, lat_str, d.resolved_ip, d.status]):
                 item = QTableWidgetItem(str(val))
                 item.setForeground(
-                    __import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(
-                        color if col == 3 else TEXT_PRIMARY
-                    )
+                    QColor(color if col == 3 else TEXT_PRIMARY)
                 )
                 self._diag_dns_table.setItem(row, col, item)
 
@@ -700,10 +699,9 @@ class ScanEnrichmentMixin:
         # Require a scan result to do anything.
         if not self._m1_result:
             return
-        from PyQt6.QtGui import QColor
         from modules.deco_client import _norm_mac
 
-        _mac_re = __import__("re").compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", __import__("re").I)
+        _mac_re = re.compile(r"^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$", re.I)
         any_matched = False
         plugin_any_matched = False
 

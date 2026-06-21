@@ -22,6 +22,12 @@ Usage:
 Architecture note (ARCH RULE 2):
   MetricStore is instantiated ONCE in app.py / svc.py and injected as a dependency.
   Never construct MetricStore inside a page widget or module.
+
+Split plan (Sprint 2 — execute if file exceeds 730 lines):
+  Next chunk to extract: write-path methods for device_state and known_device tables
+  (record_device_state, upsert_known_device, update_known_device_label and their helpers)
+  → target file: modules/metric_store_writes_device.py (new _DeviceWritesMixin).
+  MetricStore would inherit the new mixin after _UptimeQueriesMixin.
 """
 
 import sqlite3

@@ -346,7 +346,10 @@ class _NotifExtraChannelsMixin:
         if lbl:
             lbl.setText("✓ Copied to clipboard")
             lbl.setVisible(True)
-            QTimer.singleShot(3000, lambda: lbl.setVisible(False))
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(lambda: lbl.setVisible(False))
+            _t.start(3000)
 
     # ── Morning briefing card (S8-1) ──────────────────────────────────────────
 

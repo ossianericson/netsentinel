@@ -430,7 +430,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         def _norm(m: str) -> str:
             return m.lower().replace("-", "").replace(":", "")
 
-        # Update DeviceInfo objects
+        # Update DeviceInfo objects in memory
         for d in self._m1_result.get("devices", []):
             d_mac = (d.mac if not isinstance(d, dict) else d.get("mac", "")) or ""
             if _norm(d_mac) == norm:
@@ -438,6 +438,24 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     d["vendor"] = vendor
                 else:
                     d.vendor = vendor
+
+        # Persist the resolved vendor to MetricStore so it survives restart.
+        # Without this, the async OUI lookup result is lost on every app restart
+        # and the Inventory page shows 'Unknown' vendor for all devices.
+        _store = getattr(self, "_store", None)
+        if _store is not None:
+            try:
+                _store.upsert_known_device(mac.lower(), vendor=vendor)
+            except Exception:
+                pass  # non-fatal — best-effort persistence
+
+        # Update Inventory page _snap_table so the resolved vendor shows immediately
+        # without requiring a restart or rescan.
+        if hasattr(self, "_inventory_page"):
+            try:
+                self._inventory_page.update_device_vendor(mac, vendor)
+            except Exception:
+                pass  # non-fatal — table update is best-effort
 
         # Update the vendor cell (col 3) in _m1_table
         try:
@@ -504,6 +522,13 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._inventory_page.set_scan_devices(
                 self._merge_scan_with_persistent(devices)
             )
+        # Disable sorting while inserting rows: with setSortingEnabled(True) and an
+        # active sort indicator (set by a prior sortByColumn call), each setItem()
+        # immediately re-sorts the row to its sorted position. The static `row`
+        # variable in _add_row then writes subsequent columns into the wrong row,
+        # producing blank cells everywhere. Re-enable after all rows are inserted;
+        # the sortByColumn() call below will apply the persisted sort order cleanly.
+        self._m1_table.setSortingEnabled(False)
         self._m1_table.setRowCount(0)
         _store_ref = getattr(self, "_store", None)
         # Snapshot known devices before the loop so we can detect IP/hostname changes
@@ -572,6 +597,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     "Port Scan) to improve classification."
                 )
 
+        self._m1_table.setSortingEnabled(True)
         # Re-apply search/chip filter and restore persisted sort (FILTER-1 / FILTER-2)
         self._m1_apply_filter()
         _qs = QSettings("NetSentinel", "NetSentinel")
@@ -1237,15 +1263,29 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except Exception:
             _map_cache = None
 
-        # Populate the Devices table (Risk column shows "—", not a stale level)
+        # Populate the Devices table — prefer map cache (full data: hostname,
+        # MAC, vendor, device_type, risk_level, mesh_unit/band) over the DB
+        # reconstruction which may have NULL fields for unresolved devices.
+        _m1_src = _map_cache["devices"] if _map_cache else devices
         self._m1_table.setRowCount(0)
-        for d in devices:
-            _add_row(
-                self._m1_table,
-                [d["ip"], d["hostname"] or "—", d["mac"], d["vendor"],
-                 "—", d["device_type"], "", "", ""],
-                "UNKNOWN",
-            )
+        _has_mesh = False
+        for d in _m1_src:
+            _g = d.get if isinstance(d, dict) else lambda k, dv="": getattr(d, k, dv)
+            _ip = _g("ip", "?") or "?"
+            _hn = _g("hostname", "") or ""
+            _mc = _g("mac", "") or "?"
+            _vn = _g("vendor", "") or "Unknown"
+            _dt = _g("device_type", "") or "Unknown Device"
+            _rl = _g("risk_level", "") or "UNKNOWN"
+            _mu = _g("mesh_unit", "") or ""
+            _mb = _g("mesh_band", "") or ""
+            if _mu:
+                _has_mesh = True
+            _add_row(self._m1_table,
+                     [_ip, _hn or "—", _mc, _vn, _rl, _dt, _mu, _mb, ""], _rl)
+        if _has_mesh:
+            self._m1_table.setColumnHidden(6, False)
+            self._m1_table.setColumnHidden(7, False)
 
         # Switch from empty-state placeholder to table view
         if hasattr(self, "_m1_stack"):
@@ -1280,10 +1320,42 @@ class ScanResultMixin(ScanEnrichmentMixin):
             "high_risk_count": 0,
         }
 
-        # Feed Inventory page with cached device list (display_state included)
+        # Feed Inventory page — prefer the map cache (same rich data the Network
+        # Map uses: full hostname/vendor/device_type/risk_level from the last
+        # live scan) over the DB reconstruction which may have NULL fields.
+        # Inject display_state from the DB-age lookup so freshness dots are correct.
         if hasattr(self, "_inventory_page"):
             try:
-                self._inventory_page.set_scan_devices(devices)
+                if _map_cache:
+                    # Build IP → (display_state, last_seen_ts) from DB reconstruction
+                    _state_by_ip: dict = {}
+                    for _kd in devices:
+                        _kd_ip = _kd.get("ip", "") if isinstance(_kd, dict) else getattr(_kd, "ip", "")
+                        _kd_st = _kd.get("display_state", "") if isinstance(_kd, dict) else getattr(_kd, "display_state", "")
+                        _kd_ls = _kd.get("last_seen_ts", 0) if isinstance(_kd, dict) else getattr(_kd, "last_seen_ts", 0)
+                        if _kd_ip:
+                            _state_by_ip[_kd_ip] = (_kd_st or "cached", int(_kd_ls or 0))
+                    # Enrich map-cache devices with display_state so Inventory shows
+                    # correct freshness dots (◌ amber cached / ○ gray stale)
+                    _inv_devices = []
+                    for _cd in _map_cache["devices"]:
+                        _cd_ip = _cd.get("ip", "") if isinstance(_cd, dict) else getattr(_cd, "ip", "")
+                        _st, _ls = _state_by_ip.get(_cd_ip, ("cached", 0))
+                        if isinstance(_cd, dict):
+                            _copy = dict(_cd)
+                            _copy["display_state"] = _st
+                            _copy["last_seen_ts"]  = _ls
+                            _inv_devices.append(_copy)
+                        else:
+                            # DeviceInfo object: convert to dict so display_state can be added
+                            import dataclasses as _dc
+                            _base = _dc.asdict(_cd) if _dc.is_dataclass(_cd) else vars(_cd)
+                            _base["display_state"] = _st
+                            _base["last_seen_ts"]  = _ls
+                            _inv_devices.append(_base)
+                    self._inventory_page.set_scan_devices(_inv_devices)
+                else:
+                    self._inventory_page.set_scan_devices(devices)
             except Exception:
                 pass  # non-fatal
 
@@ -1344,6 +1416,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     )
                 if hasattr(self._network_map_page, "_stale_label"):
                     self._network_map_page._stale_label.setVisible(True)
+            except Exception:
+                pass  # non-fatal
+
+        # Re-apply plugin enrichment so satellite grouping is restored on startup
+        # without waiting for the HW plugin poll to fire (10–14 s delay).
+        if _map_cache and getattr(self, "_plugin_enrichments", {}):
+            try:
+                self._apply_mesh_enrichment()
             except Exception:
                 pass  # non-fatal
 

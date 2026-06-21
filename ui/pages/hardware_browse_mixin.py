@@ -494,4 +494,7 @@ class _HardwareBrowseMixin:
         QApplication.clipboard().setText(prompt)
         orig = btn.text()
         btn.setText("✓  Copied!")
-        QTimer.singleShot(2000, lambda: btn.setText(orig))
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: btn.setText(orig))
+        _t.start(2000)

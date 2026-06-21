@@ -90,6 +90,27 @@ _ES_CONTINUOUS       = 0x80000000
 _ES_SYSTEM_REQUIRED  = 0x00000001
 _ES_DISPLAY_REQUIRED = 0x00000002
 
+# HWNDs of windows that must never receive WM_CLOSE from the dialog-guard.
+# Captured at import time, before the app is launched, so they reflect the
+# environment hosting the monkey test (PowerShell console, Windows Terminal,
+# VS Code integrated terminal, etc.).
+#
+# _OWN_CONSOLE_HWND  — classic Win32 console (GetConsoleWindow); NULL in
+#                       pseudo-terminals (VS Code, Windows Terminal conpty).
+# _OWN_FOREGROUND_HWND — whatever window was in the foreground when the
+#                        script was imported.  In VS Code this is the VS Code
+#                        Electron window (class "Chrome_WidgetWin_1"); in a
+#                        classic console it overlaps with _OWN_CONSOLE_HWND.
+try:
+    _OWN_CONSOLE_HWND: int = ctypes.windll.kernel32.GetConsoleWindow()
+except Exception:
+    _OWN_CONSOLE_HWND = 0
+
+try:
+    _OWN_FOREGROUND_HWND: int = ctypes.windll.user32.GetForegroundWindow()
+except Exception:
+    _OWN_FOREGROUND_HWND = 0
+
 # UIA control types the dispatcher knows how to handle.
 # Hyperlink is intentionally excluded — clicking UIA Hyperlink controls
 # activates their default action (follows the link), which opens Chrome,
@@ -519,7 +540,7 @@ def _get_foreground_hwnd() -> int:
 
 
 def _is_system_hwnd(hwnd: int) -> bool:
-    """Return True when *hwnd* belongs to a Windows shell or system window.
+    """Return True when *hwnd* belongs to a Windows shell, system, or console window.
 
     Sending WM_CLOSE (or WM_COMMAND/IDCANCEL) to the Desktop/Shell window
     triggers the "Shut Down Windows" dialog — the same mechanism as the
@@ -527,17 +548,38 @@ def _is_system_hwnd(hwnd: int) -> bool:
     before every call to _dismiss_native_window() so we never accidentally
     close-message a system window regardless of which button was last clicked.
 
+    Also protects terminal/console windows:  if the monkey test is running
+    inside a PowerShell or Windows Terminal window and that window briefly
+    steals focus (e.g. the user clicks it, or a control's tooltip moves it),
+    the dialog-guard must NOT send WM_CLOSE to it — that would kill the host
+    process and terminate the test.  Bug first seen at interaction ~2709 when
+    hwnd=0x1079a (a terminal window) gained focus and the guard dismissed it.
+
     Covered cases:
-      HWND 0 / NULL         — GetForegroundWindow() returned NULL (no focused window)
-      GetDesktopWindow()    — the desktop root window (class "Progman")
-      GetShellWindow()      — the Windows shell host
-      class "Progman"       — desktop icon host (same as Desktop on most systems)
-      class "WorkerW"       — behind-the-desktop wallpaper worker
-      class "DV2ControlHost"— Windows taskbar / Start menu host
-      class "Shell_TrayWnd" — primary taskbar window
+      HWND 0 / NULL                  — GetForegroundWindow() returned NULL
+      GetDesktopWindow()             — the desktop root window (class "Progman")
+      GetShellWindow()               — the Windows shell host
+      _OWN_CONSOLE_HWND              — the console window running this script (classic console)
+      _OWN_FOREGROUND_HWND           — foreground window at import time (VS Code, Windows Terminal)
+      class "Progman"                — desktop icon host
+      class "WorkerW"                — behind-the-desktop wallpaper worker
+      class "DV2ControlHost"         — Windows taskbar / Start menu host
+      class "Shell_TrayWnd"          — primary taskbar window
       class "Shell_SecondaryTrayWnd" — secondary monitor taskbar
+      class "ConsoleWindowClass"     — classic Win32 console (cmd, PowerShell)
+      class "CASCADIA_HOSTING_WINDOW_CLASS" — Windows Terminal app
+      class "PseudoConsoleWindow"    — conhost pseudo-console host
     """
     if not hwnd:
+        return True
+    # Explicitly protect the terminal/IDE window that launched the monkey test.
+    # _OWN_CONSOLE_HWND covers classic cmd/PowerShell (GetConsoleWindow).
+    # _OWN_FOREGROUND_HWND covers VS Code / Windows Terminal (pseudo-console hosts
+    # where GetConsoleWindow() returns NULL but the IDE window is in the foreground
+    # at script import time, before the app under test is launched).
+    if _OWN_CONSOLE_HWND and hwnd == _OWN_CONSOLE_HWND:
+        return True
+    if _OWN_FOREGROUND_HWND and hwnd == _OWN_FOREGROUND_HWND:
         return True
     try:
         user32 = ctypes.windll.user32
@@ -550,6 +592,11 @@ def _is_system_hwnd(hwnd: int) -> bool:
         if buf.value in (
             "Progman", "WorkerW", "DV2ControlHost",
             "Shell_TrayWnd", "Shell_SecondaryTrayWnd",
+            # Terminal / console windows — never send WM_CLOSE to these or
+            # the monkey test kills its own host process (seen at iter ~2709).
+            "ConsoleWindowClass",           # classic cmd / PowerShell console
+            "CASCADIA_HOSTING_WINDOW_CLASS", # Windows Terminal (wt.exe)
+            "PseudoConsoleWindow",          # conhost pseudo-console wrapper
         ):
             return True
     except Exception:

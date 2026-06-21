@@ -39,7 +39,7 @@ from modules.utils import get_offenders_path, is_admin
 
 # ─── Module Tab Helpers (defined in ui/tabs.py, re-exported here) ────────────
 from ui.tabs import (
-    _table, _add_row, _add_skeleton_rows,
+    _table, _add_row,
     _empty_state_widget,
 )
 from ui.tabs_helpers import _page_header  # noqa: F401 — re-exported; used via lazy `from ui.dashboard import _page_header`
@@ -769,7 +769,23 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     def _show_welcome_overlay(self) -> None:
         """Entry point called at startup — shows coach mark on first launch."""
+        self._maybe_start_guided_tour()
         self._maybe_start_onboarding()
+
+    def _maybe_start_guided_tour(self) -> None:
+        """Fire the 5-step v2 guided tour on first launch (tour/v2_done key)."""
+        from ui.guided_tour import GuidedTour
+        if not GuidedTour.should_show():
+            return
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: GuidedTour(self).start())
+        _t.start(600)
+
+    def restart_guided_tour(self) -> None:
+        """Public method — called from Settings 'Restart guided tour' button."""
+        from ui.guided_tour import GuidedTour
+        GuidedTour(self).restart()
 
     def _maybe_start_onboarding(self) -> None:
         from ui.onboarding import should_show_onboarding, mark_onboarding_done
@@ -972,6 +988,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         if hasattr(self, "_overview_page"):
             self._overview_page.set_scanning(scanning)
         self._progress.setVisible(scanning)
+        # Sprint 7: show scan status in the persistent bottom status-bar label
+        if hasattr(self, "_pulse_scan_lbl") and scanning:
+            self._pulse_scan_lbl.setText("⏳  Scanning…")
         # Update KPI scan-status tile
         if scanning:
             self._kpi_scan_val.setText("Scanning…")
@@ -1849,8 +1868,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._m4_result = self._m5_result = None
         self._m1_grouping_active = False
         self._m1_group_btn.setVisible(False)
-        self._m1_table.setRowCount(0)
-        _add_skeleton_rows(self._m1_table)
         self._m2_table.setRowCount(0)
         self._m3_table.setRowCount(0)
         self._m4_table.setRowCount(0)

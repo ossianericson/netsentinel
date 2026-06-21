@@ -183,13 +183,21 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.14 (current)
+### v2.1.15 (current)
+
+**Added**
+- Settings page category chip bar (`All | Appearance | Monitoring | Alerts | Integrations | Advanced`) with per-session persistence
+- `ui/guided_tour.py` — 5-step first-run guided tour; auto-starts on first launch, restartable from Settings → Advanced
+- `ui/widgets/inventory_dialogs.py` — 4 dialog classes extracted from `inventory_page.py` (file budget relief)
+- `ui/widgets/scan_radar_widget.py` — phosphor-green radar sweep animation on Home page during scan
+- Empty state cards with inline CTA on 8 pages; right-click context menus on all 19 scan result tables; loading states on scan-dependent pages
+- RULE-T2 worker lifecycle tests for 22 workers; behavioral integration tests for 18 additional pages
 
 **Fixed**
-- Command palette dismiss now returns focus to the main window (prevents focus falling to the Windows Desktop)
-- Hardware integration browse and register are re-entry guarded against rapid repeated clicks
-- `monkey_test.py` RULE-LINT2 compliance: bare `pass` in `except` block now has an explanatory comment
-- `test_no_duplicate_methods.py` now correctly exempts `@pyqtProperty` getter/setter pairs
+- Devices table blank after scan (`DeviceInfo.get()` eager-eval crash); table now preserved atomically during scan
+- Discovered Devices showing only raw IPs on restart — seeded from network map cache
+- Three Inventory scan bugs: vendor persistence, mesh enrichment, blank cells on re-scan
+- Settings page redundant left sidebar removed; all unparented `QTimer.singleShot` replaced (RULE-WIN5)
 
 ---
 

@@ -322,7 +322,10 @@ class ServiceDiagnosticsPage(QWidget):
             f"border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
             f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
         )
-        install_copy_menu(self._layers_table)
+        install_copy_menu(self._layers_table, [
+            ("separator",    None),
+            ("Re-run probe", self._on_run_clicked),
+        ])
         self._layers_table.setFixedHeight(24 * 4 + 28)
         vlay.addWidget(self._layers_table)
 

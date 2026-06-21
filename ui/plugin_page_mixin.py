@@ -154,6 +154,7 @@ class _PluginPageMixin:
         pg = PluginDevicePage(path, label, hw_type, hw_ip=hw_ip,
                               credential_label=cred_lbl, parent=None)
         pg.test_requested.connect(self._on_plugin_page_test)
+        pg.navigate_to.connect(self._nav_rail_go_to)
         if not ok or not Path(path).is_file():
             pg.mark_unavailable()
         self._plugin_pages[path] = pg
@@ -323,6 +324,8 @@ class _PluginPageMixin:
         ))
         w1.error.connect(lambda e: self._m1_status.setText(f"Error: {e}"))
         w1.finished.connect(self._on_worker_done)
+        if hasattr(self, "_home_page"):
+            w1.device_found.connect(self._home_page.on_device_found)
         self._workers.append(w1)
         self._active_count += 1
 

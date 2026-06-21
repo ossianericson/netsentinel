@@ -485,6 +485,13 @@ class ThreatIntelPage(QWidget):
         if itype == "ip":
             act_check = menu.addAction("🔎  Check IP (AbuseIPDB)")
             act_check.triggered.connect(lambda: self._check_ip_from_menu(indicator))
+            act_open = menu.addAction("↗  Open in AbuseIPDB")
+            _ind_url = indicator
+            act_open.triggered.connect(
+                lambda _=False, ip=_ind_url: __import__("webbrowser").open(
+                    f"https://www.abuseipdb.com/check/{ip}"
+                )
+            )
 
         menu.addSeparator()
         act_export = menu.addAction("↓  Export Row")
@@ -570,6 +577,7 @@ class ThreatIntelPage(QWidget):
         if self._refresh_worker and self._refresh_worker.isRunning():
             return
         self._refresh_btn.setEnabled(False)
+        self._refresh_btn.setText("Running…")
         self._cache_btn.setEnabled(False)
         self._status_lbl.setText("Downloading threat feeds…")
         self._refresh_worker = ThreatFeedRefreshWorker()
@@ -581,11 +589,13 @@ class ThreatIntelPage(QWidget):
 
     def _on_refresh_done(self, db: ThreatIntelDB) -> None:
         self._refresh_btn.setEnabled(True)
+        self._refresh_btn.setText("Update Feeds")
         self._cache_btn.setEnabled(True)
         self._on_db_ready(db, from_cache=False)
 
     def _on_refresh_error(self, msg: str) -> None:
         self._refresh_btn.setEnabled(True)
+        self._refresh_btn.setText("Update Feeds")
         self._cache_btn.setEnabled(True)
         self._status_lbl.setText(f"Feed refresh failed: {msg}")
 
@@ -738,6 +748,7 @@ class ThreatIntelPage(QWidget):
             return
 
         self._lookup_btn.setEnabled(False)
+        self._lookup_btn.setText("Checking…")
         self._abuse_worker = AbuseIpDbWorker(ip=ip, api_key=api_key)
         self._abuse_worker.result_ready.connect(self._on_abuse_result)
         self._abuse_worker.no_result.connect(
@@ -748,6 +759,7 @@ class ThreatIntelPage(QWidget):
 
     def _on_abuse_result(self, result: AbuseIpDbResult) -> None:
         self._lookup_btn.setEnabled(True)
+        self._lookup_btn.setText("Check IP")
         score = result.abuse_score
         color = RED if score >= 25 else (AMBER if score >= 5 else GREEN)
         cats  = ", ".join(result.categories) if result.categories else "none"
@@ -760,10 +772,12 @@ class ThreatIntelPage(QWidget):
 
     def _on_abuse_no_result(self, msg: str, local_hit: Optional[ThreatEntry]) -> None:
         self._lookup_btn.setEnabled(True)
+        self._lookup_btn.setText("Check IP")
         base = self._lookup_result.text()
         self._lookup_result.setText(f"{base} | AbuseIPDB: {msg}")
 
     def _on_abuse_error(self, msg: str) -> None:
         self._lookup_btn.setEnabled(True)
+        self._lookup_btn.setText("Check IP")
         base = self._lookup_result.text()
         self._lookup_result.setText(f"{base} | AbuseIPDB error: {msg}")

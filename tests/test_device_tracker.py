@@ -400,3 +400,93 @@ class TestDeviceAuditEvents:
         tracker.process_scan(devices)
         events = get_device_events("aa:bb:cc:11:22:cc", store)
         assert any(ev["event_type"] == "first_seen" for ev in events)
+
+
+# ── Vendor preservation — Bug regression guard ────────────────────────────────
+
+class TestVendorPreservation:
+    """Regression guard: 'Unknown' vendor from scan must not clobber a resolved vendor.
+
+    Root cause: DeviceInfo.vendor defaults to "Unknown". When OUI lookup fails,
+    the scan emits vendor="Unknown". DeviceTracker.process_scan passes this to
+    upsert_known_device(vendor="Unknown"). The SQL COALESCE(excluded.vendor, vendor)
+    treats "Unknown" as a real (non-NULL) value and overwrites any previously
+    resolved vendor (e.g. "Apple Inc." stored by async OUI lookup).
+
+    Fix: _normalise() must treat "Unknown" / "Unknown Vendor" as empty so that
+    upsert_known_device receives vendor=None, allowing COALESCE to preserve the
+    existing resolved value.
+    """
+
+    def test_upsert_known_device_unknown_string_does_not_clobber(self, store):
+        """upsert_known_device with vendor='Unknown' must preserve the existing resolved vendor.
+
+        This tests the MetricStore contract directly — if this fails the COALESCE logic
+        needs a new approach; if this passes, the bug is purely in the caller passing 'Unknown'.
+        """
+        mac = "aa:bb:cc:dd:ee:01"
+        store.upsert_known_device(mac, ip="192.168.1.10", vendor="Apple Inc.")
+        # Simulate a re-scan that didn't resolve the OUI — should NOT overwrite
+        store.upsert_known_device(mac, ip="192.168.1.10", vendor=None)
+        kd = store.get_known_devices()[mac]
+        assert kd.vendor == "Apple Inc.", (
+            f"Expected vendor='Apple Inc.' preserved after upsert with vendor=None; "
+            f"got '{kd.vendor}' — COALESCE(NULL, existing) should return existing"
+        )
+
+    def test_process_scan_unknown_vendor_does_not_clobber_resolved_vendor(self, store):
+        """process_scan with DeviceInfo.vendor='Unknown' must NOT overwrite a stored resolved vendor.
+
+        This is the primary regression test for Bug #1 (restart shows only IPs).
+
+        Flow:
+          1. Async OUI lookup previously resolved and persisted vendor='Apple Inc.'
+          2. Next scan: device found, OUI not in local DB, DeviceInfo.vendor='Unknown'
+          3. process_scan calls upsert_known_device(vendor='Unknown')
+          4. Bug: COALESCE('Unknown', 'Apple Inc.') = 'Unknown' → clobbers resolved vendor
+          5. Fix: _normalise treats 'Unknown' as '' → upsert_known_device(vendor=None)
+             → COALESCE(NULL, 'Apple Inc.') = 'Apple Inc.' → preserved
+        """
+        mac = "aa:bb:cc:dd:ee:02"
+        # Step 1: resolved vendor stored (simulates async OUI lookup having run)
+        store.upsert_known_device(mac, ip="192.168.1.10", vendor="Apple Inc.")
+        # Step 2: re-scan — OUI not in local DB, vendor defaults to "Unknown"
+        tracker = DeviceTracker(store=store)
+        tracker.process_scan([{
+            "mac": mac, "ip": "192.168.1.10",
+            "hostname": "", "vendor": "Unknown", "device_type": "Laptop",
+        }])
+        kd = store.get_known_devices()[mac]
+        assert kd.vendor == "Apple Inc.", (
+            f"Expected vendor='Apple Inc.' preserved after process_scan with vendor='Unknown'; "
+            f"got '{kd.vendor}' — 'Unknown' string clobbered the resolved vendor. "
+            "Fix: _normalise must convert 'Unknown'→'' so upsert receives vendor=None"
+        )
+
+    def test_process_scan_unknown_vendor_string_does_not_clobber(self, store):
+        """Variant: 'Unknown Vendor' string must also not clobber a resolved vendor."""
+        mac = "aa:bb:cc:dd:ee:03"
+        store.upsert_known_device(mac, ip="192.168.1.11", vendor="Samsung Electronics")
+        tracker = DeviceTracker(store=store)
+        tracker.process_scan([{
+            "mac": mac, "ip": "192.168.1.11",
+            "hostname": "", "vendor": "Unknown Vendor", "device_type": "",
+        }])
+        kd = store.get_known_devices()[mac]
+        assert kd.vendor == "Samsung Electronics", (
+            f"Expected 'Samsung Electronics' preserved; got '{kd.vendor}'"
+        )
+
+    def test_process_scan_real_vendor_overwrites_unknown_in_store(self, store):
+        """When a scan resolves a real vendor, it should update the stored 'Unknown'."""
+        mac = "aa:bb:cc:dd:ee:04"
+        store.upsert_known_device(mac, ip="192.168.1.12", vendor="Unknown")
+        tracker = DeviceTracker(store=store)
+        tracker.process_scan([{
+            "mac": mac, "ip": "192.168.1.12",
+            "hostname": "", "vendor": "Cisco Systems", "device_type": "Router",
+        }])
+        kd = store.get_known_devices()[mac]
+        assert kd.vendor == "Cisco Systems", (
+            f"Expected 'Cisco Systems' to overwrite stored 'Unknown'; got '{kd.vendor}'"
+        )

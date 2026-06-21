@@ -319,9 +319,14 @@ class BaselinePage(QWidget):
             from PyQt6.QtWidgets import QApplication as _QApp
             _QApp.clipboard().setText(",".join(headers) + "\n" + ",".join(values))
 
+        def _snap_reset_baseline():
+            self._delete_snapshot()
+
         install_copy_menu(self._snap_table, [
-            ("separator",  None),
-            ("Export row", _snap_export_row),
+            ("separator",      None),
+            ("Export row",     _snap_export_row),
+            ("separator",      None),
+            ("Reset baseline", _snap_reset_baseline),
         ])
         bl.addWidget(self._snap_table)
 

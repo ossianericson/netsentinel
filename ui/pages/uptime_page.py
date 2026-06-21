@@ -247,13 +247,21 @@ class UptimePage(QWidget):
                 )
             QMessageBox.information(self, "How to Fix", msg)
 
+        def _upt_show_timeline():
+            from PyQt6.QtWidgets import QApplication as _QA
+            win = _QA.instance().activeWindow()
+            if hasattr(win, "_nav_rail_go_to"):
+                win._nav_rail_go_to("Network Timeline")
+
         install_copy_menu(self._table, [
-            ("separator",    None),
-            ("Copy host",    _upt_copy_host),
-            ("separator",    None),
-            ("Export row",   _upt_export_row),
-            ("separator",    None),
-            ("How to Fix",   _upt_how_to_fix),
+            ("separator",       None),
+            ("Copy host",       _upt_copy_host),
+            ("separator",       None),
+            ("Export row",      _upt_export_row),
+            ("separator",       None),
+            ("Show in Timeline", _upt_show_timeline),
+            ("separator",       None),
+            ("How to Fix",      _upt_how_to_fix),
         ])
 
         card_layout.addWidget(self._table)

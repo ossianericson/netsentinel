@@ -52,6 +52,7 @@ from ui.styles import (
     WHITE,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
+from ui.widgets.empty_state_card import EmptyStateCard
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -105,8 +106,9 @@ def _expires_label(ts: int) -> str:
 class DhcpLeasePage(QWidget):
     """Displays DHCP lease inventory from local lease files / ARP cache."""
 
-    navigate_to   = pyqtSignal(str)  # page label
-    select_device = pyqtSignal(str)  # IP address
+    navigate_to    = pyqtSignal(str)  # page label
+    select_device  = pyqtSignal(str)  # IP address
+    scan_requested = pyqtSignal()     # emitted by empty-state CTA
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -222,37 +224,39 @@ class DhcpLeasePage(QWidget):
         _dt_row.addWidget(DensityToggle("dhcp_leases", self._table))
         card_lay.addLayout(_dt_row)
         card_lay.addWidget(self._table)
-        root.addWidget(card, stretch=1)
         self._table.horizontalHeader().sectionResized.connect(
             lambda _l, _o, _n: save_column_widths(self._table, "dhcp")
         )
 
-        # Empty state placeholder
-        self._empty_widget = QWidget()
-        _el = QVBoxLayout(self._empty_widget)
-        _el.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _el.setSpacing(10)
-        _el.setContentsMargins(40, 20, 40, 20)
-        _empty_lbl = QLabel(
-            "No DHCP leases found — this page reads lease files from\n"
-            "your system and the ARP cache. Click below to scan again."
+        # ── Empty state + content stack ───────────────────────────────────────
+        from PyQt6.QtWidgets import QStackedWidget
+        self._content_stack = QStackedWidget()
+
+        _empty = EmptyStateCard(
+            icon="◆",
+            title="DHCP Lease Inventory",
+            what_it_shows=(
+                "Every IP address currently assigned by your router's DHCP server — "
+                "hostname, MAC, expiry time, and which DHCP server handed it out."
+            ),
+            why_it_matters=(
+                "A rogue DHCP server can redirect all your network traffic. "
+                "Seeing an unexpected server here is an immediate red flag."
+            ),
+            btn_label="Scan DHCP Leases",
         )
-        _empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        _empty_lbl.setWordWrap(True)
-        _empty_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
-        _el.addWidget(_empty_lbl)
-        _btn_empty_scan = QPushButton("▶  Scan DHCP Leases")
-        _btn_empty_scan.setFixedHeight(32)
-        _btn_empty_scan.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:12px;"
-            f" font-weight:bold; border:none; border-radius:4px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
-        )
-        _btn_empty_scan.clicked.connect(self._run_scan)
-        _el.addWidget(_btn_empty_scan, alignment=Qt.AlignmentFlag.AlignCenter)
-        self._empty_widget.hide()
-        root.addWidget(self._empty_widget)
+        _empty.clicked.connect(self.scan_requested.emit)
+        _empty.clicked.connect(self._run_scan)
+
+        _content_w = QWidget()
+        _content_lay = QVBoxLayout(_content_w)
+        _content_lay.setContentsMargins(0, 0, 0, 0)
+        _content_lay.setSpacing(0)
+        _content_lay.addWidget(card, stretch=1)
+
+        self._content_stack.addWidget(_empty)    # index 0 — empty state
+        self._content_stack.addWidget(_content_w)  # index 1 — content
+        root.addWidget(self._content_stack, stretch=1)
 
     # ── Scan logic ────────────────────────────────────────────────────────────
 
@@ -310,11 +314,11 @@ class DhcpLeasePage(QWidget):
         total = len(all_leases)
         if not leases:
             self._table.setRowCount(0)
-            self._empty_widget.show()
+            self._content_stack.setCurrentIndex(0)
             self._status_lbl.setText("No lease data found.")
             return
 
-        self._empty_widget.hide()
+        self._content_stack.setCurrentIndex(1)
         self._table.setRowCount(0)
         self._table.setSortingEnabled(False)
 

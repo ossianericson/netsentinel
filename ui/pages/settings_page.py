@@ -29,8 +29,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BORDER,
-    TEXT_MUTED, TEXT_PRIMARY,
+    ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, BG_CARD, BG_DARK, BORDER,
+    TEXT_MUTED, TEXT_PRIMARY, WHITE,
 )
 
 from ui.pages.settings_cards import (
@@ -56,12 +56,23 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
     #: Emitted when "Configure →" is clicked in the integrations card.
     navigate_to = pyqtSignal(str)
 
+    # category → set of card titles
+    _CATEGORY_MAP: dict[str, set[str]] = {
+        "Appearance":   {"Appearance — Colour Theme", "Display"},
+        "Monitoring":   {"Network Scanning", "Scheduled Full Scan", "Internet Plan"},
+        "Alerts":       {"Notifications & Tray"},
+        "Integrations": {"Active Integrations", "Plugin Marketplace"},
+        "Advanced":     {"App Health", "Maintenance", "Keyboard Shortcuts",
+                         "Configuration Status"},
+    }
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("contentArea")
         self._dirty = False
-        self._all_cards: list[tuple[QFrame, str]] = []
+        self._all_cards: list[tuple[QFrame, str, str, str]] = []  # (card, title, kw, category)
         self._notif_test_workers: list[_NotifTestWorker] = []  # prevent GC
+        self._active_category: str = "All"
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -115,6 +126,51 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         search_lay.addWidget(self._settings_search, 1)
         outer.addWidget(search_row)
 
+        # SETTINGS-CAT: category chip bar
+        cat_row = QFrame()
+        cat_row.setStyleSheet(
+            f"QFrame {{ background:{BG_DARK}; border-bottom:1px solid {BORDER}; }}"
+        )
+        cat_lay = QHBoxLayout(cat_row)
+        cat_lay.setContentsMargins(16, 6, 16, 6)
+        cat_lay.setSpacing(6)
+        self._cat_btns: dict[str, QPushButton] = {}
+        _chip_base = (
+            f"QPushButton {{ font-size:11px; padding:3px 12px;"
+            f" border:1px solid {BORDER}; border-radius:10px;"
+            f" background:{BG_CARD}; color:{TEXT_MUTED}; }}"
+            f"QPushButton:hover {{ border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT}; }}"
+        )
+        _chip_active = (
+            f"QPushButton {{ font-size:11px; padding:3px 12px;"
+            f" border:1px solid {ACCENT}; border-radius:10px;"
+            f" background:{ACCENT}; color:{WHITE}; }}"
+            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; border-color:{ACCENT_LITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
+        )
+        qs_cat = QSettings("NetSentinel", "NetSentinel")
+        saved_cat = qs_cat.value("settings/last_category", "All", type=str)
+        for chip_label in ["All", "Appearance", "Monitoring", "Alerts", "Integrations", "Advanced"]:
+            btn = QPushButton(chip_label)
+            btn.setCheckable(False)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedHeight(24)
+            is_active = chip_label == saved_cat
+            btn.setStyleSheet(_chip_active if is_active else _chip_base)
+            btn.clicked.connect(
+                lambda _, lbl=chip_label, base=_chip_base, active=_chip_active:
+                self._on_category_changed(lbl, base, active)
+            )
+            cat_lay.addWidget(btn)
+            self._cat_btns[chip_label] = btn
+        cat_lay.addStretch()
+        outer.addWidget(cat_row)
+        self._active_category = saved_cat
+        # Store QSS strings for later toggling
+        self._chip_base_qss = _chip_base
+        self._chip_active_qss = _chip_active
+
         self._settings_scroll = QScrollArea()
         self._settings_scroll.setWidgetResizable(True)
         self._settings_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -153,100 +209,38 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
              "reset export import oui backup restore data"),
         ]:
             card = builder()
-            self._all_cards.append((card, title, keywords))
+            # resolve category
+            cat = "Advanced"  # default
+            for _cat, _titles in self._CATEGORY_MAP.items():
+                if title in _titles:
+                    cat = _cat
+                    break
+            self._all_cards.append((card, title, keywords, cat))
             bl.addWidget(card)
         bl.addStretch()
 
         self._settings_scroll.setWidget(body)
 
-        # Section anchor sidebar (POLISH-5)
-        _ANCHORS = [
-            ("Notifications", "Notifications & Tray"),
-            ("Schedule",      "Scheduled Full Scan"),
-            ("Scanning",      "Network Scanning"),
-            ("Appearance",    "Appearance — Colour Theme"),
-            ("Maintenance",   "Maintenance"),
-            ("About",         "App Health"),
-        ]
-        sidebar = QFrame()
-        sidebar.setFixedWidth(110)
-        sidebar.setStyleSheet(
-            f"QFrame {{ background:{BG_DARK}; border-right:1px solid {BORDER}; }}"
-        )
-        _sb_lay = QVBoxLayout(sidebar)
-        _sb_lay.setContentsMargins(0, 10, 0, 10)
-        _sb_lay.setSpacing(2)
-        self._anchor_btns: list[tuple[str, QPushButton]] = []
-        _btn_base = (
-            f"QPushButton {{ color:{TEXT_MUTED}; font-size:11px; text-align:left;"
-            f" padding:4px 12px; background:transparent; border:none; border-left:2px solid transparent; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-        )
-        for short, full_title in _ANCHORS:
-            btn = QPushButton(short)
-            btn.setFlat(True)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet(_btn_base)
-            for card, title, _kw in self._all_cards:
-                if title == full_title:
-                    btn.clicked.connect(
-                        lambda _, c=card: self._settings_scroll.ensureWidgetVisible(c)
-                    )
-                    break
-            _sb_lay.addWidget(btn)
-            self._anchor_btns.append((full_title, btn))
-        _sb_lay.addStretch()
-
-        self._settings_scroll.verticalScrollBar().valueChanged.connect(
-            self._update_settings_anchor
-        )
-
-        content_row = QHBoxLayout()
-        content_row.setSpacing(0)
-        content_row.setContentsMargins(0, 0, 0, 0)
-        content_row.addWidget(sidebar)
-        content_row.addWidget(self._settings_scroll, 1)
-        outer.addLayout(content_row, 1)
-
-    # ── Section anchor sidebar scroll-spy (POLISH-5) ─────────────────────────
-
-    def _update_settings_anchor(self) -> None:
-        """Highlight sidebar button for the section currently at the top of the scroll."""
-        if not hasattr(self, "_anchor_btns") or not hasattr(self, "_settings_scroll"):
-            return
-        scroll_y = self._settings_scroll.verticalScrollBar().value()
-        body = self._settings_scroll.widget()
-        _btn_active = (
-            f"QPushButton {{ color:{ACCENT}; font-size:11px; text-align:left;"
-            f" padding:4px 12px; background:{ACCENT}15; border:none; border-left:2px solid {ACCENT}; }}"
-        )
-        _btn_inactive = (
-            f"QPushButton {{ color:{TEXT_MUTED}; font-size:11px; text-align:left;"
-            f" padding:4px 12px; background:transparent; border:none; border-left:2px solid transparent; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-        )
-        active_title = ""
-        best_y = -1
-        for card, title, _kw in self._all_cards:
-            if not card.isVisible():
-                continue
-            card_y = card.mapTo(body, card.rect().topLeft()).y()
-            if card_y <= scroll_y + 10 and card_y >= best_y:
-                best_y = card_y
-                active_title = title
-        for full_title, btn in self._anchor_btns:
-            btn.setStyleSheet(_btn_active if full_title == active_title else _btn_inactive)
+        outer.addWidget(self._settings_scroll, 1)
 
     # ── Search + dirty guard ─────────────────────────────────────────────────
 
+    def _on_category_changed(self, label: str, base_qss: str, active_qss: str) -> None:
+        self._active_category = label
+        QSettings("NetSentinel", "NetSentinel").setValue("settings/last_category", label)
+        for lbl, btn in self._cat_btns.items():
+            btn.setStyleSheet(active_qss if lbl == label else base_qss)
+        self._apply_visibility()
+
+    def _apply_visibility(self) -> None:
+        q = self._settings_search.text().strip().lower()
+        for card, title, keywords, cat in self._all_cards:
+            cat_ok = self._active_category == "All" or cat == self._active_category
+            search_ok = len(q) < 3 or (q in title.lower() or q in keywords.lower())
+            card.setVisible(cat_ok and search_ok)
+
     def _on_search_changed(self, text: str) -> None:
-        q = text.strip().lower()
-        if len(q) < 3:
-            for card, _t, _kw in self._all_cards:
-                card.setVisible(True)
-        else:
-            for card, title, keywords in self._all_cards:
-                card.setVisible(q in title.lower() or q in keywords.lower())
+        self._apply_visibility()
 
     def refresh_theme(self) -> None:
         self._refresh_theme_buttons()

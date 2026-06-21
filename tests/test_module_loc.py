@@ -25,12 +25,6 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # Natural split: move segment + traffic-sample write methods to metric_store_schema.py.
     "metric_store.py": 730,
 
-    # S4-1: resolution tracking (_host_down_since, _service_down_since) + HEALTHY alerts
-    # S4-3: consolidation logic added to evaluate_cycle.
-    # S4-4: _ACTION_STEPS dict + _append_action() helper + inline message updates (~50 lines).
-    # Natural split: move evaluate_cert_checks + evaluate_service_checks → alert_engine_checks.py.
-    "alert_engine.py": 800,
-
     # Cytoscape.js element builder (686 lines after HTML/JS page builder split).
     # HTML/JS template + build_cytoscape_html + build_elements_for_update moved to
     # topology_cytoscape_html.py (RULE-AH1 budget split complete).
@@ -59,7 +53,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
     # Sprint 19: _NavBuilderMixin → nav/builder.py; _MonitorStateMixin → monitor_state.py;
     # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines. FINAL GOAL ACHIEVED.
-    "dashboard.py": 2500,  # actual 2,208 + 200 margin (v1.9.94–v1.9.95 sprint growth); bumped for monitor resume bar + #7
+    "dashboard.py": 2520,  # Sprint 11: +7 lines (guided tour wiring); target remains dashboard decomposition
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -98,7 +92,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
     # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1420,  # Sprint 5: S5-1 device naming suggestion toast (+25 lines)
+    "scan_wiring.py": 1495,  # v2.1.16: startup cache restore — Inventory (+24) + m1_table map-cache (+14) + mesh re-apply (+7)
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.
@@ -129,7 +123,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # _SettingsCardsMixin — all card builder methods + workers.
     # Still large; next split: extract per-section QWidget subclasses.
-    "pages/settings_cards.py": 1560,  # actual 1,340 + 200 margin (S14-3c new file; +skip-hints button)
+    "pages/settings_cards.py": 1409,  # actual 1,209 + 200 margin (Sprint 2: appearance split to settings_appearance.py)
 
     # Hardware integration page — plugin hub shell + worker management.
     # S14-2 complete: plugin_guide.py + credential_dialog.py + plugin_wizard_mixin.py +

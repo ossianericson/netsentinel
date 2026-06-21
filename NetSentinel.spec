@@ -91,8 +91,10 @@ hiddenimports: list = [
     # ── modules/ — every backend module listed explicitly ─────────────────────
     "modules.alert_baseline",
     "modules.alert_engine",
+    "modules.alert_engine_checks",
     "modules.alert_pattern_detector",
     "modules.alert_suppressor",
+    "modules.alert_types",
     "modules.quiet_notifier",
     "modules.morning_briefing",
     "modules.weekly_report",
@@ -310,6 +312,7 @@ hiddenimports: list = [
     "ui.widgets.device_popover",
     "ui.widgets.device_detail_pane",
     "ui.widgets.device_detail_panels",
+    "ui.widgets.inventory_dialogs",
     "ui.widgets.empty_state_card",
     "ui.widgets.home_widgets",
     "ui.widgets.home_session_widgets",
@@ -329,6 +332,7 @@ hiddenimports: list = [
     "ui.widgets.usage_insights_card",
     "ui.widgets.weekly_report_card",
     "ui.widgets.quick_check_window",
+    "ui.widgets.scan_radar_widget",
     # ── Scapy 802.11 layer (M9 — wifi_monitor_worker) ─────────────────────────
     "scapy.layers.dot11",
     # ── waitress WSGI server (REST API production backend) ────────────────────

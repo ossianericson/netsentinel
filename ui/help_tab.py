@@ -360,10 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("In-app Feedback", "Press Ctrl+K and type 'Give Feedback' to submit comments — entries are saved locally to feedback.log with no network calls."),
-        ("Status Shape Icons", "Service Heartbeat, Uptime, and Monitor verdict displays now use accessible shape-coded icons (●/▲/■/?) in addition to colour — distinguishable without colour vision."),
-        ("Focus Rings", "Activity-rail buttons and flyout items now show a visible focus ring when keyboard-navigated (Tab / arrow keys)."),
-        ("Nav Timing Warnings", "Navigation to slow-loading pages now logs a warning in the debug console when init takes over 300 ms."),
+        ("Settings Category Bar", "Settings page now has a chip bar (All / Appearance / Monitoring / Alerts / Integrations / Advanced) to filter visible cards — your last selection is remembered."),
+        ("First-Run Guided Tour", "A 5-step tour bar appears on first launch to orient you; restart it any time from Settings → Advanced → 'Restart Guided Tour'."),
+        ("Inventory Dialogs", "Device label, type override, scan compare, and segment editor dialogs are now shared widgets — no change to how you use them."),
+        ("Broader Test Coverage", "Behavioral integration tests added for 18 additional pages, bringing the total test suite to 4,353 tests."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

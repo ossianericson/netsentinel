@@ -4,6 +4,33 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.15
+
+**Added**
+- `ui/widgets/inventory_dialogs.py` — `_DeviceLabelDialog`, `_TypeOverrideDialog`, `_ScanCompareDialog`, `_SegmentEditorDialog` extracted from `inventory_page.py` (Sprint 11)
+- Settings page category chip bar (`All | Appearance | Monitoring | Alerts | Integrations | Advanced`) with `QSettings("settings/last_category")` persistence
+- `ui/guided_tour.py` — 5-step first-run guided tour using `tour/v2_done` key; auto-starts on first launch, restartable from Settings → Advanced
+- `ui/widgets/scan_radar_widget.py` — phosphor-green radar sweep animation on Home page during scan wait state (Sprint 6)
+- `modules/alert_engine_checks.py` — `_AlertChecksMixin` split from `alert_engine.py` for cert/service check evaluation (file budget relief, Sprint 2)
+- Empty state cards with inline "Run Scan" CTA on 8 pages: Connections, CVE, DHCP Lease, DNS Zone, Geo Map, Security Overview, Threat Intel, Uptime (Sprint 5, RULE-UX5)
+- Right-click context menus on all 19 scan result tables with "Copy" and "How to Fix" actions (Sprint 4, RULE-UX3)
+- Loading states and skeleton placeholders on scan-dependent pages (Sprint 7, RULE-UX2)
+- Radar sweep and scan progress bar moved inline into Home page action bar (replaces separate widget)
+- RULE-T2 worker lifecycle tests for 22 workers; REST API security tests (`test_rest_api_security.py`)
+- Behavioral integration tests for 18 additional pages (`BaselinePage`, `CertPage`, `DhcpLeasePage`, `DnsZonePage`, `GeoMapPage`, `HomeAutomationPage`, `IpCalculatorPage`, `LabModePage`, `LiveBandwidthPage`, `MaintenancePage`, `MonitorOverviewPage`, `MqttPage`, `NetworkDocPage`, `ProtocolVizPage`, `SnmpTrapPage`, `SyslogPage`, `TimelinePage`, `TrendPage`)
+
+**Fixed**
+- Devices table blank after scan — `DeviceInfo.get()` was eagerly evaluated before data arrived; now lazy
+- Three Inventory scan bugs: vendor not persisted after enrichment, mesh enrichment overwriting live data, blank cells on re-scan
+- Scan wiped Devices table for ~10 s on every scan — previous table data now preserved during scan and replaced atomically on completion
+- Discovered Devices showing only raw IPs after restart — `_m1_table` now seeded from network map cache on startup
+- Redundant left sidebar removed from Settings page; chip bar is now the sole category navigator
+- Parented `QTimer(self)` replaces all unparented `QTimer.singleShot` calls in widget classes (RULE-WIN5)
+- Removed `__import__` abuse in plugin system; bare `except` blocks annotated with RULE-LINT2 comments
+- Chaos foreground claim now asserted before chaos iterations begin, preventing first-iteration miss
+
+---
+
 ### v2.1.14
 
 **Fixed**

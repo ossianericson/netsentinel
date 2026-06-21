@@ -204,7 +204,10 @@ def show_credential_dialog(
                 _save_last_result(iid, result)
             except Exception:
                 pass  # non-fatal
-            QTimer.singleShot(600, dlg.accept)
+            _t = QTimer(dlg)
+            _t.setSingleShot(True)
+            _t.timeout.connect(dlg.accept)
+            _t.start(600)
 
         def _on_failure(msg: str) -> None:
             try:

@@ -19,12 +19,15 @@ from datetime import datetime
 from typing import Optional
 
 from PyQt6.QtCore    import Qt, pyqtSignal
+from ui.widgets.context_menu import install_copy_menu
 from PyQt6.QtGui     import QColor, QFont
 from PyQt6.QtWidgets import (
     QCheckBox, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QScrollArea, QSizePolicy, QTableWidget,
-    QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QLineEdit, QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
+    QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem,
+    QVBoxLayout, QWidget,
 )
+from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
@@ -197,7 +200,9 @@ _TREE_SS = (
 class PluginDevicePage(QWidget):
     """Live status page for one hardware plugin."""
 
-    test_requested = pyqtSignal(str)   # emits plugin path when Test button clicked
+    test_requested   = pyqtSignal(str)  # emits plugin path when Test button clicked
+    reload_requested = pyqtSignal(str)  # emits plugin path when Reload is chosen
+    navigate_to      = pyqtSignal(str)  # emits nav label to jump to another page
 
     _keyring_warned: bool = False      # class-level: warn once per session
 
@@ -224,7 +229,23 @@ class PluginDevicePage(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border:none; }")
-        outer.addWidget(scroll)
+
+        _empty = EmptyStateCard(
+            icon="⬡",
+            title="Plugin Device",
+            what_it_shows=("Live status from this hardware plugin — signal quality, connected "
+                           "clients, modem bands, or custom metrics, depending on plugin type."),
+            why_it_matters=("Plugin devices update every 60 seconds once a successful test "
+                            "has run. The first data appears after you click Test on the "
+                            "Hardware page."),
+            btn_label="Go to Hardware →",
+        )
+        _empty.clicked.connect(lambda: self.navigate_to.emit("Hardware"))
+
+        self._content_stack = QStackedWidget()
+        self._content_stack.addWidget(_empty)   # index 0 — no data yet
+        self._content_stack.addWidget(scroll)   # index 1 — content
+        outer.addWidget(self._content_stack)
 
         inner = QWidget()
         inner.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
@@ -590,6 +611,14 @@ class PluginDevicePage(QWidget):
         self._r_client_tbl.setAlternatingRowColors(True)
         self._r_client_tbl.setStyleSheet(_TBL_SS)
         self._r_client_tbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        def _pdp_reload_plugin():
+            self.reload_requested.emit(self._path)
+
+        install_copy_menu(self._r_client_tbl, [
+            ("separator",    None),
+            ("Reload plugin", _pdp_reload_plugin),
+        ])
         card3_outer.addWidget(self._r_client_tbl)
         self._root.addWidget(card3)
 
@@ -605,6 +634,7 @@ class PluginDevicePage(QWidget):
 
     def update(self, result: dict) -> None:
         """Refresh the page from a plugin result dict."""
+        self._content_stack.setCurrentIndex(1)   # switch from empty state to content
         info    = result.get("info", {})
         status  = result.get("status", {})
         clients = result.get("clients", [])

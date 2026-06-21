@@ -179,16 +179,28 @@ def restore_settings(window) -> None:
     # Auto-start stability logger if the user opted in (or on first launch)
     if _qs_app.value("logger/auto_start", True, type=bool):
         from PyQt6.QtCore import QTimer as _QTimer
-        _QTimer.singleShot(1500, window._toggle_logger)
+        _t_lg = _QTimer(window)
+        _t_lg.setSingleShot(True)
+        _t_lg.timeout.connect(window._toggle_logger)
+        _t_lg.start(1500)
 
     # Auto-resume monitors that were running when the app was last closed
     from PyQt6.QtCore import QTimer as _QT_MR
-    _QT_MR.singleShot(3000, window._restore_running_monitors)
+    _t_mr = _QT_MR(window)
+    _t_mr.setSingleShot(True)
+    _t_mr.timeout.connect(window._restore_running_monitors)
+    _t_mr.start(3000)
 
     # Retention helpers — run after the event loop is warm
     from PyQt6.QtCore import QTimer as _QT2
-    _QT2.singleShot(2000, window._compute_last_visit_summary)
-    _QT2.singleShot(4000, window._maybe_send_weekly_digest)
+    _t2a = _QT2(window)
+    _t2a.setSingleShot(True)
+    _t2a.timeout.connect(window._compute_last_visit_summary)
+    _t2a.start(2000)
+    _t2b = _QT2(window)
+    _t2b.setSingleShot(True)
+    _t2b.timeout.connect(window._maybe_send_weekly_digest)
+    _t2b.start(4000)
 
     # Cache minimize-to-tray setting once so changeEvent() has no QSettings I/O
     window._minimize_to_tray = QSettings("NetSentinel", "NetSentinel").value(

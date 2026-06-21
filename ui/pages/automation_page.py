@@ -36,6 +36,7 @@ from modules.automation_hooks import (
     template_wol, template_log_to_file, get_engine,
 )
 from ui.widgets.context_menu import install_copy_menu
+from ui.widgets.empty_state_card import EmptyStateCard
 
 
 # ── Card / layout helpers ─────────────────────────────────────────────────────
@@ -259,6 +260,7 @@ class AutomationPage(QWidget):
         super().__init__(parent)
         self._engine: AutomationEngine = get_engine()
         self._test_worker = None
+        self._content_stack = None  # set in _setup_ui
         self._setup_ui()
         self._reload_table()
 
@@ -374,11 +376,21 @@ class AutomationPage(QWidget):
         def _auto_run_now():
             self._test_rule()
 
+        def _auto_toggle_enabled():
+            rule = self._selected_rule()
+            if rule is None:
+                return
+            rule.enabled = not rule.enabled
+            self._engine.update_rule(rule)
+            self._reload_table()
+
         install_copy_menu(self._table, [
-            ("separator",   None),
-            ("Copy name",   _auto_copy_name),
-            ("separator",   None),
-            ("Run now",     _auto_run_now),
+            ("separator",         None),
+            ("Copy name",         _auto_copy_name),
+            ("separator",         None),
+            ("Enable / Disable",  _auto_toggle_enabled),
+            ("separator",         None),
+            ("Run now",           _auto_run_now),
         ])
 
         rules_body.addLayout(tpl_row)
@@ -411,7 +423,28 @@ class AutomationPage(QWidget):
         splitter.addWidget(log_frame)
 
         splitter.setSizes([350, 200])
-        root.addWidget(splitter, 1)
+
+        # ── Empty state + content stack ───────────────────────────────────────
+        from PyQt6.QtWidgets import QStackedWidget
+        self._content_stack = QStackedWidget()
+
+        _empty = EmptyStateCard(
+            icon="⚙",
+            title="Automation Hooks",
+            what_it_shows=(
+                "Event-driven rules that run a shell command or script when "
+                "something happens on your network — device joined, alert fired, etc."
+            ),
+            why_it_matters=(
+                "Automate repetitive responses: send a WoL packet when a device "
+                "rejoins, log every alert to a file, or ping a webhook."
+            ),
+            btn_label="Add First Rule",
+        )
+        _empty.clicked.connect(self._add_rule)
+        self._content_stack.addWidget(_empty)    # index 0 — empty state
+        self._content_stack.addWidget(splitter)  # index 1 — content
+        root.addWidget(self._content_stack, 1)
 
     # ── Table management ──────────────────────────────────────────────────────
 
@@ -421,6 +454,8 @@ class AutomationPage(QWidget):
         for rule in rules:
             self._append_row(rule)
         self._on_selection_changed()
+        if self._content_stack is not None:
+            self._content_stack.setCurrentIndex(1 if rules else 0)
 
     def _append_row(self, rule: AutomationRule) -> None:
         row = self._table.rowCount()

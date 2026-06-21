@@ -36,8 +36,10 @@ netsentinel/
 ├── modules/                # All backend logic (no PyQt imports)
 │   ├── alert_baseline.py       # BaselineLearner — 7-day rolling mean/stddev baselines for anomaly alerting (S4-2)
 │   ├── alert_engine.py
+│   ├── alert_engine_checks.py  # _AlertChecksMixin — evaluate_cert_checks + evaluate_service_checks (Sprint 2 split)
 │   ├── alert_pattern_detector.py  # PatternDetector — repeated alert pattern → maintenance window suggestions (S4-6)
 │   ├── alert_suppressor.py     # EscalationPolicy + _default_rules + rule_settings_key (S20-4 split)
+│   ├── alert_types.py          # RULE_TYPES + AlertRule + AlertFired dataclasses — shared types to break circular imports
 │   ├── arp_monitor.py          # Real-time ARP packet monitor
 │   ├── quiet_notifier.py       # check_and_maybe_notify() — "all quiet" opt-in daily tray notification (S4-5)
 │   ├── morning_briefing.py     # check_and_build_briefing() — opt-in daily 3-bullet tray briefing (S8-1)
@@ -269,8 +271,9 @@ netsentinel/
 │       ├── home_session_widgets.py # FreshnessStrip, GettingStartedCard, _GradeBreakdownDialog, StandardWelcomePage, ProWelcomePage (Sprint 17)
 │       ├── credential_dialog.py    # show_credential_dialog() + show_unsigned_warning() — standalone plugin credential dialogs (S14-2 split)
 │       ├── feedback_dialog.py      # FeedbackDialog + show_feedback_dialog() — local feedback log, no telemetry (Sprint 10, S10-7)
-│       ├── device_detail_pane.py   # _DeviceLabelDialog, _DeviceDrawer, _ScanCompareDialog — InventoryPage helper dialogs (Sprint 13)
+│       ├── device_detail_pane.py   # _DeviceDrawer — slide-in device detail panel for InventoryPage (Sprint 13)
 │       ├── device_detail_panels.py # _ModemDetailPanel, _RouterDetailPanel — hardware detail panels (Sprint 13 split)
+│       ├── inventory_dialogs.py    # _DeviceLabelDialog, _TypeOverrideDialog, _ScanCompareDialog, _SegmentEditorDialog — extracted from inventory_page.py (Sprint 11)
 │       ├── hub_card.py             # HubCard, PipInstallDialog and all plugin helpers
 │       ├── hub_helpers.py          # Pure data-persistence and utility helpers extracted from hub_card.py (no widget logic)
 │       ├── health_status_card.py   # HealthStatusCard — full-width ambient health card with sparkline for HomePage (Sprint 2)
@@ -291,7 +294,8 @@ netsentinel/
 │       ├── scan_summary_sheet.py   # Bottom sheet showing scan summary stats
 │       ├── signal_bar.py           # 5-bar phone-style signal-strength indicator (POLISH-12)
 │       ├── skeleton.py             # Skeleton loading placeholder rows (widget variant)
-│       └── toast.py                # Non-blocking toast notification widget
+│       ├── toast.py                # Non-blocking toast notification widget
+│       └── scan_radar_widget.py    # ScanRadarWidget — phosphor-green radar sweep animation for Home page scan waiting state (Sprint 6)
 ├── workers/                    # QThread wrappers (signals only, no logic)
 │   ├── availability_worker.py
 │   ├── cert_worker.py

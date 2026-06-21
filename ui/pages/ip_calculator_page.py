@@ -29,6 +29,7 @@ from ui.styles import (
     IP_CALC_HOST_FG, IP_CALC_NET_FG, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, WHITE,
 )
+from ui.widgets.context_menu import install_copy_menu
 
 # ── palette shortcuts ─────────────────────────────────────────────────────────
 _NET_BIT_BG  = TH_BG   # blue tint for network bits
@@ -403,7 +404,7 @@ class IpCalculatorPage(QWidget):
             tbl.horizontalHeader().setVisible(False)
             tbl.verticalHeader().setVisible(False)
             tbl.setShowGrid(False)
-            tbl.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+            tbl.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
             tbl.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             tbl.setStyleSheet(
                 f"QTableWidget{{background:{BG_CARD};border:none;font-size:10px;}}"
@@ -441,6 +442,18 @@ class IpCalculatorPage(QWidget):
                 tbl.setItem(i, 1, m)
                 tbl.setItem(i, 2, h)
 
+            def _copy_subnet(t=tbl):
+                r = t.currentRow()
+                if r >= 0:
+                    it = t.item(r, 0)
+                    if it:
+                        from PyQt6.QtWidgets import QApplication as _QApp
+                        _QApp.clipboard().setText(it.text())
+
+            install_copy_menu(tbl, [
+                ("separator",   None),
+                ("Copy subnet", _copy_subnet),
+            ])
             hbox.addWidget(tbl)
 
         cl.addWidget(container)

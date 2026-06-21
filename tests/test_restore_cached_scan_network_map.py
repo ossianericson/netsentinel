@@ -46,7 +46,10 @@ class _Stub:
 
     def __init__(self, store):
         self._store = store
-        self._m1_table = SimpleNamespace(setRowCount=lambda *_a: None)
+        self._m1_table = SimpleNamespace(
+            setRowCount=lambda *_a: None,
+            setColumnHidden=lambda *_a: None,
+        )
         self._m1_status = SimpleNamespace(
             setText=lambda *_a: None, setStyleSheet=lambda *_a: None,
         )
@@ -130,3 +133,51 @@ def test_uses_cached_live_render_when_present(tmp_path, monkeypatch):
     m1_devices = stub._m1_result["devices"]
     assert m1_devices[0]["risk_level"] == "HIGH"
     assert m1_devices[0]["mesh_unit"] == "Kitchen"
+
+
+def test_inventory_gets_map_cache_data_on_startup(tmp_path, monkeypatch):
+    """Regression: Inventory page must receive map-cache rich data on restart.
+
+    Bug: Inventory page received the DB reconstruction (hostname/vendor/device_type
+    often NULL) while the Network Map correctly received _map_cache["devices"].
+    Fix: Inventory page now also prefers _map_cache["devices"] when available.
+    """
+    _patch_app_data_dir(monkeypatch, tmp_path)
+    monkeypatch.setattr("ui.scan_wiring._add_row", lambda *_a, **_kw: None)
+    from modules.network_map_cache import save_render_cache
+
+    save_render_cache(
+        devices=[{
+            "ip": "192.168.1.20", "mac": "aa:bb:cc:dd:ee:20",
+            "hostname": "my-laptop", "vendor": "Dell Inc.",
+            "device_type": "Workstation", "risk_level": "LOW",
+        }],
+        gateway_ip="192.168.1.1", gateway_mac="aa:bb:cc:dd:ee:01",
+        modem_data=None, edges=None,
+    )
+
+    # DB reconstruction has NULL hostname/vendor (common on first-seen devices)
+    known = {"192.168.1.20": SimpleNamespace(
+        ip="192.168.1.20", custom_name="", hostname=None, mac="aa:bb:cc:dd:ee:20",
+        vendor=None, last_seen=10_000_000_000, is_pinned=False,
+        device_type=None, inferred_role="client", scan_count=1, ip_stability=0.5,
+    )}
+    inv_calls: list = []
+    stub = _Stub(_fake_store(known))
+    stub._inventory_page = SimpleNamespace(
+        set_scan_devices=lambda devs: inv_calls.append(devs)
+    )
+
+    stub._restore_cached_scan()
+
+    assert inv_calls, "set_scan_devices was never called"
+    inv_devices = inv_calls[0]
+    assert len(inv_devices) == 1
+    d = inv_devices[0]
+    assert d["hostname"] == "my-laptop", "Inventory must show hostname from map cache"
+    assert d["vendor"]   == "Dell Inc.", "Inventory must show vendor from map cache"
+    assert d["device_type"] == "Workstation", "Inventory must show device_type from map cache"
+    # Freshness dot must be injected (device seen recently → cached)
+    assert d.get("display_state") in ("cached", "pinned", "stale"), (
+        "display_state must be injected so Inventory freshness dots work"
+    )

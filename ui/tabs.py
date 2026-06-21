@@ -353,6 +353,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
             _pg = PluginDevicePage(_hw_p, _hw_label, _hw_type, hw_ip=_hw_ip,
                                    credential_label=_cred_lbl, parent=None)
             _pg.test_requested.connect(self._on_plugin_page_test)
+            _pg.navigate_to.connect(self._nav_rail_go_to)
             if not _ok or not _HwPath(_hw_p).is_file():
                 _pg.mark_unavailable()
             else:

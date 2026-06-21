@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 from PyQt6.QtGui import QColor
 
@@ -239,6 +240,16 @@ class LiveBandwidthPage(QWidget):
             f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
             f"QTableWidget::item {{ border-bottom:1px solid {TABLE_ROW_BORDER}; }}"
         )
+        def _bw_show_inventory():
+            from PyQt6.QtWidgets import QApplication as _QA
+            win = _QA.instance().activeWindow()
+            if hasattr(win, "_nav_rail_go_to"):
+                win._nav_rail_go_to("Devices")
+
+        install_copy_menu(self._tbl, [
+            ("separator",         None),
+            ("Show in Inventory", _bw_show_inventory),
+        ])
         content_lay.addWidget(self._tbl)
 
         self._content_stack.addWidget(content_w)

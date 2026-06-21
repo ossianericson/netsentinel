@@ -42,6 +42,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -67,6 +68,8 @@ from ui.styles import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT, WHITE,
 )
+from ui.widgets.context_menu import install_copy_menu
+from ui.widgets.empty_state_card import EmptyStateCard
 
 
 # ── Worker ────────────────────────────────────────────────────────────────────
@@ -198,23 +201,43 @@ class WifiHeatmapPage(QWidget):
         root.addWidget(title)
         root.addWidget(sub)
 
-        # Toolbar row
+        # Toolbar row (always visible — has Import / Load buttons)
         root.addWidget(self._build_toolbar())
 
-        # Status bar
+        # Main stack: index 0 = empty state, index 1 = survey content
+        self._main_stack = QStackedWidget()
+
+        empty = EmptyStateCard(
+            icon="⬡",
+            title="No floor plan loaded",
+            what_it_shows="Interactive WiFi signal-strength heatmap overlaid on your floor plan.",
+            why_it_matters="Walk around with the app open to map signal coverage across every room.",
+            btn_label="Import Floor Plan",
+        )
+        empty.clicked.connect(self._on_import_floor_plan)
+        self._main_stack.addWidget(empty)
+
+        # Content widget: status bar + splitter
+        content_w = QWidget()
+        content_lay = QVBoxLayout(content_w)
+        content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(4)
+
         self._status_label = QLabel("No survey active.  Import a floor plan to begin.")
         self._status_label.setStyleSheet(
             f"color:{TEXT_SECONDARY}; font-size:10px; padding:2px 0;"
         )
-        root.addWidget(self._status_label)
+        content_lay.addWidget(self._status_label)
 
-        # Main splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
-
         splitter.addWidget(self._build_left_panel())
         splitter.addWidget(self._build_canvas_panel())
         splitter.setSizes([300, 800])
-        root.addWidget(splitter, 1)
+        content_lay.addWidget(splitter, 1)
+
+        self._main_stack.addWidget(content_w)
+        self._main_stack.setCurrentIndex(0)
+        root.addWidget(self._main_stack, 1)
 
     def _build_toolbar(self) -> QWidget:
         bar = QWidget()
@@ -297,6 +320,7 @@ class WifiHeatmapPage(QWidget):
         self._sample_table.horizontalHeader().setStretchLastSection(True)
         self._sample_table.setMinimumHeight(200)
         self._sample_table.itemSelectionChanged.connect(self._on_sample_selected)
+        install_copy_menu(self._sample_table)
         samp_layout.addWidget(self._sample_table)
 
         # Delete selected sample button
@@ -309,6 +333,19 @@ class WifiHeatmapPage(QWidget):
         cov_card, cov_layout = _card("Coverage Stats")
         self._cov_table = _table(["SSID / BSSID", "Best dBm", "Quality"])
         self._cov_table.setFixedHeight(120)
+
+        def _heat_copy_bssid():
+            r = self._cov_table.currentRow()
+            if r >= 0:
+                it = self._cov_table.item(r, 0)
+                if it:
+                    from PyQt6.QtWidgets import QApplication as _QApp
+                    _QApp.clipboard().setText(it.text())
+
+        install_copy_menu(self._cov_table, [
+            ("separator",  None),
+            ("Copy BSSID", _heat_copy_bssid),
+        ])
         cov_layout.addWidget(self._cov_table)
         lay.addWidget(cov_card)
 
@@ -452,6 +489,7 @@ class WifiHeatmapPage(QWidget):
         self._survey.floor_plan_path = path
         self._fp_lbl.setText(Path(path).name)
         self._set_buttons_enabled(True)
+        self._main_stack.setCurrentIndex(1)
         self._redraw_floor_plan()
         self._set_status("Floor plan loaded. Click '● Add Sample' or click directly on the map.")
 
@@ -469,6 +507,7 @@ class WifiHeatmapPage(QWidget):
         self._btn_new.setEnabled(True)
         self._btn_load.setEnabled(True)
         self._reset_canvas()
+        self._main_stack.setCurrentIndex(0)
         self._set_status("New survey created. Import a floor plan to begin.")
 
     def _on_load_survey(self) -> None:
@@ -523,6 +562,8 @@ class WifiHeatmapPage(QWidget):
         self._btn_new.setEnabled(True)
         self._btn_load.setEnabled(True)
         self._btn_save.setEnabled(True)
+        if self._floor_plan_img is not None:
+            self._main_stack.setCurrentIndex(1)
         self._redraw_floor_plan()
         self._set_status(f"Loaded '{self._survey.name}' ({len(self._survey.readings)} samples).")
 

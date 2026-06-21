@@ -550,8 +550,14 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
                 item.setForeground(QColor(r, g, b))
 
         _apply(0.6)
-        QTimer.singleShot(100, lambda: _apply(0.8))
-        QTimer.singleShot(200, lambda: _apply(1.0))
+        _t1 = QTimer(self)
+        _t1.setSingleShot(True)
+        _t1.timeout.connect(lambda: _apply(0.8))
+        _t1.start(100)
+        _t2 = QTimer(self)
+        _t2.setSingleShot(True)
+        _t2.timeout.connect(lambda: _apply(1.0))
+        _t2.start(200)
 
     def _apply_filter(self) -> None:
         filt = self._search_box.text().strip().lower()

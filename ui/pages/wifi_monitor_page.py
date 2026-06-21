@@ -20,6 +20,7 @@ from ui.styles import (
     ACCENT, AMBER, BORDER, GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_TEXT,
 )
+from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 
 
@@ -132,6 +133,22 @@ class WiFiMonitorPage(QWidget):
             f"QHeaderView::section{{background:{ACCENT};color:{TH_TEXT};"
             f"font-size:10px;font-weight:bold;padding:3px 5px;border:none;}}"
         )
+        def _wm_filter_bssid():
+            r = self._table.currentRow()
+            if r < 0:
+                return
+            src_item = self._table.item(r, 2)
+            if src_item is None:
+                return
+            bssid = src_item.text()
+            for row in range(self._table.rowCount()):
+                it = self._table.item(row, 2)
+                self._table.setRowHidden(row, it is None or it.text() != bssid)
+
+        install_copy_menu(self._table, [
+            ("separator",      None),
+            ("Filter by BSSID", _wm_filter_bssid),
+        ])
         _tlay.addWidget(self._table, 1)
 
         bottom = QHBoxLayout()

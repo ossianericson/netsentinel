@@ -12,6 +12,11 @@ Architecture rules:
   • No direct DB writes.
   • Colours are passed in from the caller (ui/styles.py tokens) so this module
     has no dependency on ui/.
+
+Split plan (Sprint 3 — execute if file exceeds 680 lines):
+  Extract _build_style() and _build_stylesheet() (and any stylesheet-only helpers)
+  → target file: modules/topology_cytoscape_style.py.
+  Import them back here as module-level functions; no class restructuring needed.
 """
 from __future__ import annotations
 

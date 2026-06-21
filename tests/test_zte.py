@@ -43,8 +43,8 @@ class ZTEMC889:
             try:
                 if resp.json().get("result") in ["0", "success"]:
                     return True
-            except:
-                continue
+            except Exception:
+                continue  # non-fatal — JSON decode may fail on unexpected response format
         return False
 
     def get_data(self):
@@ -62,8 +62,8 @@ class ZTEMC889:
         url = f"{self.base_url}/goform_get_cmd_process?isTest=false&isReadPc=1&multi_data=1&cmd={params}"
         try:
             return self.session.get(url).json()
-        except:
-            return None
+        except Exception:
+            return None  # non-fatal — response JSON may be malformed or request may fail
 
     def signal_quality(self, rsrp):
         try:
@@ -72,8 +72,8 @@ class ZTEMC889:
             elif r >= -90: return "🟢 Good"
             elif r >= -100:return "🟡 Fair"
             else:          return "🔴 Poor"
-        except:
-            return "N/A"
+        except Exception:
+            return "N/A"  # non-fatal — rsrp value may be non-numeric
 
     def print_status(self, data):
         if not data:

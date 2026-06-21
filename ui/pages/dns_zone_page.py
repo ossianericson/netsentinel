@@ -326,13 +326,21 @@ class DnsZonePage(QWidget):
                 )
             QMessageBox.information(self, "How to Fix", msg)
 
+        def _rec_lookup_threat():
+            from PyQt6.QtWidgets import QApplication as _QA
+            win = _QA.instance().activeWindow()
+            if hasattr(win, "_nav_rail_go_to"):
+                win._nav_rail_go_to("Threat Intel")
+
         install_copy_menu(self._rec_table, [
-            ("separator",     None),
-            ("Copy record",   _rec_copy_record),
-            ("separator",     None),
-            ("Export row",    _rec_export),
-            ("separator",     None),
-            ("How to Fix",    _rec_how_to_fix),
+            ("separator",              None),
+            ("Copy record",            _rec_copy_record),
+            ("separator",              None),
+            ("Export row",             _rec_export),
+            ("separator",              None),
+            ("Lookup in Threat Intel", _rec_lookup_threat),
+            ("separator",              None),
+            ("How to Fix",             _rec_how_to_fix),
         ])
 
         self._rec_empty = QLabel("No records — run AXFR or server refused transfer.")

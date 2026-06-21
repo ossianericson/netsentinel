@@ -419,9 +419,32 @@ class TriggerBuilderPage(QWidget):
                 from PyQt6.QtWidgets import QApplication as _QApp
                 _QApp.clipboard().setText(rule.expression)
 
+        def _trig_duplicate():
+            r = self._rule_table.currentRow()
+            if r < 0 or r >= len(self._rules):
+                return
+            rule_id_data = self._rule_table.item(r, 0).data(Qt.ItemDataRole.UserRole)
+            src = next((x for x in self._rules if x.id == rule_id_data), None)
+            if src is None:
+                return
+            dup = TriggerRule(
+                id=new_rule_id(),
+                name=f"{src.name} (copy)",
+                expression=src.expression,
+                severity=src.severity,
+                cooldown_s=src.cooldown_s,
+                description=src.description,
+                enabled=src.enabled,
+            )
+            self._rules.append(dup)
+            save_rules(self._rules)
+            self._refresh_table()
+
         install_copy_menu(self._rule_table, [
             ("separator",        None),
             ("Copy expression",  _trig_copy_expression),
+            ("separator",        None),
+            ("Duplicate trigger", _trig_duplicate),
         ])
 
         self._rules_stack.addWidget(self._rule_table)

@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
+from modules.alert_types import AlertRule
+
 
 # ── Escalation policy ─────────────────────────────────────────────────────────
 
@@ -50,7 +52,6 @@ def _default_rules():
     Users must explicitly enable each rule in Settings → Notifications before
     any alert fires.  This prevents surprise notifications on first launch.
     """
-    from modules.alert_engine import AlertRule
     return [
         AlertRule(
             name="High RTT",

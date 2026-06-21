@@ -9,7 +9,7 @@ from __future__ import annotations
 import datetime
 import json
 
-from PyQt6.QtCore import Qt, QSettings, QUrl, pyqtSlot
+from PyQt6.QtCore import Qt, QSettings, QTimer, QUrl, pyqtSlot
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget,
@@ -579,15 +579,39 @@ class _HomeDataMixin:
             self._hero_sub.setText(
                 "Scan in progress — tiles will update as each module completes."
             )
+            if hasattr(self, "_radar"):
+                self._radar.start()
+                self._radar.setVisible(True)
         else:
             self._update_scan_button_label()
             self._hero_sub.setText("Discover devices · check stability · detect threats")
-            self._freshness_strip.set_scan_progress("")
+            if hasattr(self, "_scan_progress_lbl"):
+                self._scan_progress_lbl.setVisible(False)
+                self._scan_progress_lbl.setText("")
+            if hasattr(self, "_radar"):
+                self._radar.stop()
+                _t = QTimer(self)
+                _t.setSingleShot(True)
+                _t.timeout.connect(lambda: self._radar.setVisible(False))
+                _t.start(400)
+
+    @pyqtSlot(dict)
+    def on_device_found(self, info: dict) -> None:
+        """Forward a discovered device to the radar animation."""
+        if hasattr(self, "_radar"):
+            self._radar.add_device(
+                info.get("ip", ""),
+                info.get("name", ""),
+                info.get("type", ""),
+            )
 
     @pyqtSlot(str)
     def set_scan_progress(self, message: str) -> None:
-        """Show per-host scan status in the freshness strip (SCAN-2)."""
-        self._freshness_strip.set_scan_progress(message)
+        """Show per-host scan status inline in the action bar."""
+        if hasattr(self, "_scan_progress_lbl"):
+            self._scan_progress_lbl.setText(message)
+            self._scan_progress_lbl.setVisible(bool(message))
+        self._freshness_strip.set_scan_progress("")
 
     # ── Data preload ──────────────────────────────────────────────────────────
 

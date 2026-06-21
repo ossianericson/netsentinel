@@ -594,6 +594,18 @@ class GeoMapPage(QWidget):
             QHeaderView.ResizeMode.ResizeToContents)
         self._ip_table.horizontalHeader().setStretchLastSection(True)
         self._ip_table.itemSelectionChanged.connect(self._on_table_selection)
+
+        def _geo_show_inventory():
+            from PyQt6.QtWidgets import QApplication as _QA
+            win = _QA.instance().activeWindow()
+            if hasattr(win, "_nav_rail_go_to"):
+                win._nav_rail_go_to("Devices")
+
+        from ui.widgets.context_menu import install_copy_menu as _icm
+        _icm(self._ip_table, [
+            ("separator",          None),
+            ("Show in Inventory",  _geo_show_inventory),
+        ])
         layout.addWidget(self._ip_table)
         return card
 

@@ -337,3 +337,187 @@ def test_ip_keyed_sync_no_gateway_info_updates_all():
     assert d_b.hostname == "DeviceB"
 
     _cleanup(table)
+
+
+# ---------------------------------------------------------------------------
+# Bug #2 — _mesh_enrichment must use normalised (lowercase) MAC keys
+# ---------------------------------------------------------------------------
+
+class TestMeshMacNormalization:
+    """_mesh_enrichment must store normalised lowercase MAC keys.
+
+    Bug: _on_mesh_result builds the dict as {c.mac: c for c in clients}.
+    If c.mac is uppercase (raw Deco API MAC), the lookup in _apply_mesh_enrichment
+    calls _norm_mac() on the scan-table MAC (→ lowercase) and never finds a match.
+    Result: any_matched stays False → Node and Band columns remain hidden.
+
+    Fix: normalise key at construction time:
+        {_norm_mac(c.mac): c for c in clients}
+    """
+
+    def test_on_mesh_result_stores_normalised_mac_key(self):
+        """After _on_mesh_result, _mesh_enrichment must have a lowercase MAC key.
+
+        Fails before fix: {c.mac: c for c in clients} stores "AA:BB:CC:DD:EE:FF".
+        Passes after fix: {_norm_mac(c.mac): c for c in clients} stores "aa:bb:cc:dd:ee:ff".
+        """
+        from unittest.mock import MagicMock
+        from modules.deco_client import MeshClient
+        from ui.scan_enrichment import ScanEnrichmentMixin
+
+        class _S(ScanEnrichmentMixin):
+            def _update_m4_deco_chips(self):
+                pass  # not under test
+
+        raw_mac = "AA:BB:CC:DD:EE:FF"
+        client = MeshClient(
+            name="device", mac=raw_mac, ip="192.168.1.10",
+            unit_mac="aa:bb:cc:00:11:22", unit_name="Main", band="2.4G",
+        )
+
+        stub = _S()
+        stub._m1_result = {}
+        stub._m1_table = QTableWidget(0, 8)
+        stub._mesh_enrichment = {}
+        stub._plugin_enrichments = {}
+        stub._plugin_nodes = {}
+        stub._m1_group_by_node = False
+        stub._m1_status = MagicMock()  # setText() called by _on_mesh_result
+        stub._store = None
+        stub._last_mesh_log_ts = 0
+
+        stub._on_mesh_result({"clients": [client], "provider": "deco", "units": []})
+
+        assert raw_mac not in stub._mesh_enrichment, (
+            "_mesh_enrichment must not use raw uppercase MAC as key; "
+            "this causes a lookup miss in _apply_mesh_enrichment"
+        )
+        assert raw_mac.lower() in stub._mesh_enrichment, (
+            f"_mesh_enrichment must use normalised lowercase key '{raw_mac.lower()}' "
+            f"after _on_mesh_result; got keys: {list(stub._mesh_enrichment.keys())}"
+        )
+
+        stub._m1_table.deleteLater()
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()
+
+    def test_node_band_populated_when_mesh_mac_is_uppercase(self):
+        """Node (col 6) and Band (col 7) must be populated for an uppercase MeshClient MAC.
+
+        Simulates a MeshClient with an uppercase MAC (as returned by a Deco router
+        before normalisation) and verifies that the Devices table row gets the Node and
+        Band cells filled in after _on_mesh_result + _apply_mesh_enrichment.
+
+        Fails before fix: {c.mac: c} stores "AA:BB:CC:DD:EE:FF" but the lookup
+        _norm_mac(scan_mac) = "aa:bb:cc:dd:ee:ff" → miss → col 6 empty.
+        Passes after fix: key is normalised → lookup hits → col 6 = "Living Room".
+        """
+        from unittest.mock import MagicMock
+        from modules.deco_client import MeshClient
+
+        scan_mac = "AA:BB:CC:DD:EE:FF"
+        table = _make_table([("192.168.1.10", "phone", scan_mac)])
+
+        client = MeshClient(
+            name="iPhone", mac=scan_mac, ip="192.168.1.10",
+            unit_mac="aa:bb:cc:00:11:22", unit_name="Living Room", band="5G",
+        )
+        m1_result = {"devices": [
+            {"mac": scan_mac, "ip": "192.168.1.10", "hostname": "",
+             "vendor": "Apple Inc.", "risk_level": "CLEAN", "device_type": "Smartphone"},
+        ]}
+        stub = _make_stub(table, m1_result, {})
+        stub._m1_status = MagicMock()
+        stub._store = None
+        stub._last_mesh_log_ts = 0
+
+        stub._on_mesh_result({"clients": [client], "provider": "deco", "units": []})
+
+        node_item = table.item(0, 6)
+        node_text = node_item.text() if node_item else ""
+        assert node_text == "Living Room", (
+            f"Col 6 (Node) must be 'Living Room' after enrichment with uppercase MeshClient MAC; "
+            f"got '{node_text}' — indicates _mesh_enrichment key='{scan_mac}' (raw) "
+            f"does not match _norm_mac(scan_mac)='aa:bb:cc:dd:ee:ff' (lookup)"
+        )
+
+        band_item = table.item(0, 7)
+        band_text = band_item.text() if band_item else ""
+        assert band_text == "5G", (
+            f"Col 7 (Band) must be '5G'; got '{band_text}'"
+        )
+
+        _cleanup(table)
+
+
+# ---------------------------------------------------------------------------
+# Bug #3 — blank cells after second scan when sort indicator is active
+# ---------------------------------------------------------------------------
+
+class TestM1TableSortingRegression:
+    """Regression for Bug #3: blank cells in Discovered Devices after re-scan.
+
+    Root cause: setSortingEnabled(True) with an active sort indicator causes each
+    setItem() to immediately re-sort the newly inserted row to its sorted position.
+    _add_row uses a static `row` index (saved before insertRow), so items for
+    columns after the sort column land in whatever row happened to be at that index
+    after the re-sort — i.e., the WRONG row — leaving the intended row blank.
+
+    Fix: scan_wiring._on_m1_result calls setSortingEnabled(False) before
+    setRowCount(0) + _add_row loop, then setSortingEnabled(True) after all rows
+    are inserted.  The sortByColumn() call at the end applies the persisted sort
+    order cleanly to fully-populated rows.
+    """
+
+    def test_all_columns_populated_when_sort_active_before_rescan(self):
+        """All 9 columns must have the correct value after inserting rows with the
+        fix (sorting disabled during insertion, active sort indicator present)."""
+        from PyQt6.QtCore import Qt
+
+        from ui.tabs_helpers import _add_row
+
+        t = QTableWidget(0, 9)
+        t.setHorizontalHeaderLabels(
+            ["IP", "Hostname", "MAC", "Vendor", "Risk", "Type", "Node", "Band", "Verdict"]
+        )
+        t.setSortingEnabled(True)
+
+        # First scan: populate two rows and apply a sort (sets the sort indicator)
+        t.setSortingEnabled(False)
+        t.setRowCount(0)
+        _add_row(t, ["192.168.1.200", "host-z", "bb:bb:bb:bb:bb:bb",
+                     "Vendor Z", "CLEAN", "Laptop", "", "", "safe"], "CLEAN")
+        _add_row(t, ["192.168.1.100", "host-a", "aa:aa:aa:aa:aa:aa",
+                     "Vendor A", "LOW", "Phone", "", "", "ok"], "LOW")
+        t.setSortingEnabled(True)
+        t.sortByColumn(0, Qt.SortOrder.AscendingOrder)  # sets active sort indicator
+
+        # Second scan: disable sorting BEFORE clear+insert (the fix in scan_wiring.py)
+        t.setSortingEnabled(False)
+        t.setRowCount(0)
+        row_data = [
+            "192.168.1.55", "my-host", "cc:cc:cc:cc:cc:cc",
+            "Apple Inc.", "CLEAN", "iPhone", "", "", "ok",
+        ]
+        _add_row(t, row_data, "CLEAN")
+        t.setSortingEnabled(True)
+        t.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+
+        assert t.rowCount() == 1, "Row was not inserted"
+        for col, expected in enumerate(row_data):
+            item = t.item(0, col)
+            assert item is not None, (
+                f"Col {col} is None — row was displaced by active sort during insert "
+                f"(sorting must be disabled before setRowCount(0) + _add_row)"
+            )
+            assert item.text() == str(expected), (
+                f"Col {col}: expected '{expected}', got '{item.text()}'"
+            )
+
+        t.deleteLater()
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()

@@ -50,68 +50,18 @@ Parent/child dependency suppression (T3#12):
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
+from modules.alert_types import AlertFired, AlertRule, RULE_TYPES  # noqa: F401 — re-exported
 from modules.metric_store import MetricStore
 from modules.alert_suppressor import EscalationPolicy, _default_rules, rule_settings_key
+from modules.alert_engine_checks import _AlertChecksMixin
 
 # Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
-__all__ = ["AlertRule", "AlertFired", "AlertEngine", "EscalationPolicy", "rule_settings_key"]
-
-
-# ── Valid rule types ──────────────────────────────────────────────────────────
-
-RULE_TYPES = frozenset({
-    "RTT_THRESHOLD",
-    "LOSS_THRESHOLD",
-    "HOST_DOWN",
-    "HOST_DEGRADED",
-    "NEW_DEVICE",
-    "DEVICE_GONE",
-    "CERT_EXPIRY",
-    "CERT_EXPIRED",
-    "FLAP",
-    "SERVICE_DOWN",
-})
-
-
-# ── Data types ────────────────────────────────────────────────────────────────
-
-@dataclass
-class AlertRule:
-    name:           str
-    rule_type:      str
-    host:           Optional[str] = None      # None = any host
-    threshold_ms:   float         = 200.0     # RTT_THRESHOLD
-    threshold_pct:  float         = 10.0      # LOSS_THRESHOLD
-    threshold_days: int           = 30        # CERT_EXPIRY — fire when days_remaining < this
-    flap_count:     int           = 4         # FLAP — min transitions to be "flapping"
-    flap_window_s:  int           = 600       # FLAP — rolling window (10 min default)
-    cooldown_s:     int           = 300        # 5 min default
-    enabled:        bool          = True
-
-    def __post_init__(self):
-        rt = self.rule_type.upper()
-        if rt not in RULE_TYPES:
-            raise ValueError(f"Unknown rule_type {self.rule_type!r}. Valid: {sorted(RULE_TYPES)}")
-        self.rule_type = rt
-
-
-@dataclass
-class AlertFired:
-    """An alert that has been triggered by a rule evaluation."""
-    rule_name:   str
-    rule_type:   str
-    host:        str
-    message:     str
-    severity:    str           # "INFO" | "WARNING" | "CRITICAL" | "HEALTHY"
-    ts:          int
-    value:       Optional[float] = None   # the triggering metric value
-    cta_page:    Optional[str]  = None   # nav label of the page that can resolve this alert
-    cta_filter:  Optional[str]  = None   # opaque filter string passed to that page (e.g. IP)
-    is_resolution: bool         = False  # True when this alert clears a previous one
-    downtime_s:  Optional[int]  = None   # seconds the host/service was down (resolutions only)
+__all__ = [
+    "AlertRule", "AlertFired", "AlertEngine",
+    "EscalationPolicy", "rule_settings_key", "RULE_TYPES",
+]
 
 
 # ── CTA routing — maps rule_type → (nav_label, filter_string) ────────────────
@@ -140,7 +90,7 @@ def _cta_for_rule(rule_type: str, host: str) -> tuple[Optional[str], Optional[st
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
-class AlertEngine:
+class AlertEngine(_AlertChecksMixin):
     """
     Stateless rule evaluator. Call the appropriate evaluate_* method after
     each monitoring cycle or scan result.
@@ -454,145 +404,6 @@ class AlertEngine:
                         fired.append(alert)
                         if self._on_alert:
                             self._on_alert(alert)
-
-        return fired
-
-    def evaluate_service_checks(self, service_results) -> List[AlertFired]:
-        """
-        Evaluate SERVICE_DOWN rules against a list of service check results.
-        Accepts objects or dicts with: host, port, up, label, error.
-        """
-        fired: List[AlertFired] = []
-        now = int(time.time())
-
-        def _get(obj, attr):
-            return obj.get(attr) if isinstance(obj, dict) else getattr(obj, attr, None)
-
-        for rule in self._rules:
-            if not rule.enabled or rule.rule_type != "SERVICE_DOWN":
-                continue
-            for result in service_results:
-                host  = _get(result, "host") or ""
-                port  = _get(result, "port") or 0
-                up    = _get(result, "up")
-                label = _get(result, "label") or f"{host}:{port}"
-                key   = f"{host}:{port}"
-
-                if rule.host and rule.host not in (host, key, label):
-                    continue
-
-                if up:
-                    # ── S4-1: service came back — fire resolution if it was down ──
-                    if key in self._service_down_since:
-                        down_ts = self._service_down_since.pop(key)
-                        downtime = now - down_ts
-                        mins, secs = divmod(downtime, 60)
-                        if mins >= 60:
-                            duration = f"{mins // 60}h {mins % 60}m"
-                        elif mins > 0:
-                            duration = f"{mins}m {secs}s"
-                        else:
-                            duration = f"{secs}s"
-                        resolution = AlertFired(
-                            rule_name=rule.name,
-                            rule_type="SERVICE_DOWN",
-                            host=key,
-                            message=(
-                                f"{label} is back — was unreachable for {duration}."
-                            ),
-                            severity="HEALTHY",
-                            ts=now,
-                            is_resolution=True,
-                            downtime_s=downtime,
-                            cta_page="Service Heartbeat",
-                            cta_filter=key,
-                        )
-                        fired.append(resolution)
-                        if self._on_alert:
-                            self._on_alert(resolution)
-                    continue
-
-                alert = self._fire_if_cooled(
-                    rule, key, now,
-                    message=(
-                        f"{label} is not responding on {host} (port {port}) — "
-                        f"the service may be offline or blocked by a firewall.  "
-                        f"→ Restart the service  → Check firewall rules for port {port}"
-                    ),
-                    severity="CRITICAL",
-                    value=None,
-                )
-                if alert:
-                    self._service_down_since.setdefault(key, now)
-                    fired.append(alert)
-                    if self._on_alert:
-                        self._on_alert(alert)
-
-        return fired
-
-    def evaluate_cert_checks(self, cert_results) -> List[AlertFired]:
-        """
-        Evaluate CERT_EXPIRY / CERT_EXPIRED rules against a list of cert
-        check objects.  Accepts any objects (or dicts) with the attributes:
-          host, port, days_remaining, is_expired, error.
-        """
-        fired: List[AlertFired] = []
-        now = int(time.time())
-
-        def _get(obj, attr):
-            return obj.get(attr) if isinstance(obj, dict) else getattr(obj, attr, None)
-
-        for rule in self._rules:
-            if not rule.enabled:
-                continue
-            if rule.rule_type not in ("CERT_EXPIRY", "CERT_EXPIRED"):
-                continue
-            for result in cert_results:
-                host        = _get(result, "host") or ""
-                port        = _get(result, "port") or 443
-                is_expired  = _get(result, "is_expired") or False
-                days        = _get(result, "days_remaining")
-                error       = _get(result, "error")
-                target_key  = f"{host}:{port}"
-
-                if rule.host and rule.host not in (host, target_key):
-                    continue
-                if error:   # unreachable — skip cert rule evaluation
-                    continue
-
-                if rule.rule_type == "CERT_EXPIRED" and is_expired:
-                    alert = self._fire_if_cooled(
-                        rule, target_key, now,
-                        message=self._append_action(
-                            f"Security certificate expired on {host}:{port} — "
-                            f"connections may show security warnings. Renew it now.",
-                            "CERT_EXPIRED",
-                        ),
-                        severity="CRITICAL",
-                        value=float(days) if days is not None else None,
-                    )
-                    if alert:
-                        fired.append(alert)
-                        if self._on_alert:
-                            self._on_alert(alert)
-
-                elif rule.rule_type == "CERT_EXPIRY":
-                    if days is not None and not is_expired and days < rule.threshold_days:
-                        alert = self._fire_if_cooled(
-                            rule, target_key, now,
-                            message=self._append_action(
-                                f"Security certificate on {host}:{port} expires in "
-                                f"{days} day{'s' if days != 1 else ''} — "
-                                f"renew before it expires to avoid connection warnings.",
-                                "CERT_EXPIRY",
-                            ),
-                            severity="WARNING",
-                            value=float(days),
-                        )
-                        if alert:
-                            fired.append(alert)
-                            if self._on_alert:
-                                self._on_alert(alert)
 
         return fired
 

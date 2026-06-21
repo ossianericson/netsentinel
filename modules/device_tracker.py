@@ -47,6 +47,9 @@ class TrackerResult:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+_VENDOR_UNKNOWN = frozenset({"unknown", "unknown vendor", "unknown device"})
+
+
 def _normalise(d) -> Optional[TrackedDevice]:
     """Convert a scan device (dict or object) to a TrackedDevice, or None if no MAC."""
     if isinstance(d, dict):
@@ -64,6 +67,13 @@ def _normalise(d) -> Optional[TrackedDevice]:
     mac = mac.lower().strip()
     if not mac or mac in ("?", "00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
         return None
+    # Treat placeholder strings as "no info" so upsert_known_device receives vendor=None.
+    # COALESCE(NULL, existing) preserves a previously resolved vendor; COALESCE("Unknown",
+    # existing) = "Unknown" — clobbering it.  The same logic applies to device_type.
+    if vnd.lower() in _VENDOR_UNKNOWN:
+        vnd = ""
+    if dt.lower() in ("unknown device", "unknown"):
+        dt = ""
     return TrackedDevice(mac=mac, ip=ip, hostname=hn, vendor=vnd, device_type=dt)
 
 

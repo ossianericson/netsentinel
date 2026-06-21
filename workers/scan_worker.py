@@ -93,9 +93,10 @@ def _storm_scan_process_target(duration, warn_threshold, storm_threshold,
 
 class Module1Worker(QThread):
     """Rogue Device Fingerprinter."""
-    result  = pyqtSignal(dict)
-    status  = pyqtSignal(str)
-    error   = pyqtSignal(str)
+    result       = pyqtSignal(dict)
+    status       = pyqtSignal(str)
+    error        = pyqtSignal(str)
+    device_found = pyqtSignal(dict)  # {"ip": str, "name": str, "type": str}
 
     def __init__(self, offenders_path: Path, parent=None):
         super().__init__(parent)
@@ -106,6 +107,12 @@ class Module1Worker(QThread):
             from modules.rogue_device import scan
             self.status.emit("Scanning ARP table and fingerprinting devices...")
             data = scan(self.offenders_path)
+            for d in data.get("devices", []):
+                self.device_found.emit({
+                    "ip":   d.get("ip",   "") if isinstance(d, dict) else getattr(d, "ip",          ""),
+                    "name": d.get("hostname", "") if isinstance(d, dict) else getattr(d, "hostname",     ""),
+                    "type": d.get("device_type", "") if isinstance(d, dict) else getattr(d, "device_type",  ""),
+                })
             self.result.emit(data)
         except Exception as exc:
             self.error.emit(f"Module 1 error: {exc}")
