@@ -1189,3 +1189,176 @@ class _HomeDataMixin:
             hw_type = match.get("type", "") if isinstance(match, dict) else ""
             if hw_type:
                 card.notify_hw_detected(hw_type)
+
+    # ── Scan Center card ──────────────────────────────────────────────────────
+
+    def _build_scan_center_card(self) -> "QFrame":
+        """Build the compact Scan Center card — 5 scan categories with state dots."""
+        from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+        from PyQt6.QtCore import Qt
+
+        card = QFrame()
+        card.setObjectName("scanCenterCard")
+        card.setStyleSheet(
+            f"QFrame#scanCenterCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+        )
+        outer = QVBoxLayout(card)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Card header
+        hdr_frame = QFrame()
+        hdr_frame.setFixedHeight(32)
+        hdr_frame.setStyleSheet(
+            f"QFrame {{ background:{BG_CARD}; border-bottom:1px solid {BORDER}; }}"
+        )
+        hdr_lay = QHBoxLayout(hdr_frame)
+        hdr_lay.setContentsMargins(12, 0, 10, 0)
+        hdr_lay.setSpacing(8)
+        hdr_lbl = QLabel("SCAN CENTER")
+        hdr_lbl.setStyleSheet(
+            f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY}; border:none;"
+            " letter-spacing:1.5px;"
+        )
+        run_all_btn = QPushButton("▶  Run All")
+        run_all_btn.setFixedHeight(22)
+        run_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        run_all_btn.setStyleSheet(
+            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:10px;"
+            f" border:none; border-radius:3px; padding:0 8px; }}"
+            f"QPushButton:hover   {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        run_all_btn.clicked.connect(self.rescan_requested)
+        hdr_lay.addWidget(hdr_lbl)
+        hdr_lay.addStretch()
+        hdr_lay.addWidget(run_all_btn)
+        outer.addWidget(hdr_frame)
+
+        # Row definitions: (display_name, registry_key, btn_text, nav_target)
+        # nav_target=None → emit rescan_requested
+        _ROWS: list = [
+            ("Device Scan",    "Devices",             "Rescan",      None),
+            ("Security Audit", "_security_aggregate", "Run Audit →", "Security Overview"),
+            ("Speed Test",     "Speed Test",          "Run Test →",  "Speed Test"),
+            ("Service Health", "Service Diagnostics", "View →",      "Service Diagnostics"),
+            ("Network Logger", "_logger",             "View →",      "Network Logger"),
+        ]
+        self._scan_center_row_configs: list = _ROWS
+        self._scan_center_dot_labels:  list = []
+        self._scan_center_age_labels:  list = []
+
+        rows_frame = QFrame()
+        rows_frame.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; }}")
+        rows_lay = QVBoxLayout(rows_frame)
+        rows_lay.setContentsMargins(12, 2, 10, 4)
+        rows_lay.setSpacing(0)
+
+        for display, _, btn_text, nav_target in _ROWS:
+            row_lay = QHBoxLayout()
+            row_lay.setContentsMargins(0, 3, 0, 3)
+            row_lay.setSpacing(8)
+
+            dot = QLabel("●")
+            dot.setFixedWidth(14)
+            dot.setStyleSheet(
+                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+
+            name_lbl = QLabel(display)
+            name_lbl.setFixedWidth(110)
+            name_lbl.setStyleSheet(
+                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            )
+
+            age_lbl = QLabel("Never")
+            age_lbl.setStyleSheet(
+                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            )
+
+            btn = QPushButton(btn_text)
+            btn.setFixedHeight(22)
+            btn.setFixedWidth(96)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(
+                f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:10px;"
+                f" border:1px solid {BORDER}; border-radius:3px; padding:0 6px; }}"
+                f"QPushButton:hover   {{ background:{BG_HOVER}; border-color:{ACCENT}; }}"
+                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            )
+            if nav_target is None:
+                btn.clicked.connect(self.rescan_requested)
+            else:
+                btn.clicked.connect(lambda _=False, t=nav_target: self.navigate_to.emit(t))
+
+            row_lay.addWidget(dot)
+            row_lay.addWidget(name_lbl)
+            row_lay.addWidget(age_lbl, 1)
+            row_lay.addWidget(btn)
+            rows_lay.addLayout(row_lay)
+
+            self._scan_center_dot_labels.append(dot)
+            self._scan_center_age_labels.append(age_lbl)
+
+        outer.addWidget(rows_frame)
+        return card
+
+    def _refresh_scan_center(self) -> None:
+        """Refresh Scan Center dots and age strings from the persisted scan registry."""
+        if not hasattr(self, "_scan_center_dot_labels"):
+            return
+        import json as _json
+        from ui.tabs_helpers import _scan_age_str
+
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            registry: dict = _json.loads(qs.value("scan_registry/state", "{}", type=str))
+        except Exception:
+            registry = {}
+
+        _SEC_LABELS = [
+            "Port Scan (TCP)", "CVE Lookup", "OS Detection",
+            "Login Test", "Threat Intel", "TLS & Exposure",
+            "Exposed to Internet", "Full Device Discovery",
+        ]
+        _sec_ts    = 0.0
+        _sec_state = "never"
+        for sec_lbl in _SEC_LABELS:
+            entry = registry.get(sec_lbl, {})
+            st = entry.get("state", "never")
+            ts = entry.get("ts", 0.0) or 0.0
+            if st == "fresh" and (_sec_state != "fresh" or ts > _sec_ts):
+                _sec_ts    = ts
+                _sec_state = "fresh"
+            elif st == "stale" and _sec_state == "never":
+                _sec_ts    = ts
+                _sec_state = "stale"
+
+        _STATE_COLOR = {
+            "fresh":   GREEN,
+            "stale":   AMBER,
+            "running": ACCENT,
+            "error":   RED,
+            "never":   TEXT_MUTED,
+        }
+
+        for i, (_, reg_key, _, _nav) in enumerate(self._scan_center_row_configs):
+            dot     = self._scan_center_dot_labels[i]
+            age_lbl = self._scan_center_age_labels[i]
+
+            if reg_key == "_security_aggregate":
+                state = _sec_state
+                ts    = _sec_ts
+            elif reg_key == "_logger":
+                state = "never"
+                ts    = 0.0
+            else:
+                entry = registry.get(reg_key, {})
+                state = entry.get("state", "never")
+                ts    = entry.get("ts", 0.0) or 0.0
+
+            color = _STATE_COLOR.get(state, TEXT_MUTED)
+            dot.setStyleSheet(
+                f"font-size:10px; color:{color}; background:transparent; border:none;"
+            )
+            age_lbl.setText(_scan_age_str(ts) if ts else "Never")

@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-4100%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-4400%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -18,7 +18,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
-**62 pages &nbsp;·&nbsp; 90+ detection modules &nbsp;·&nbsp; 4,100+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
+**62 pages &nbsp;·&nbsp; 90+ detection modules &nbsp;·&nbsp; 4,400+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -139,7 +139,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**4,100+ automated tests** across 230 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**4,400+ automated tests** across 284 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -183,7 +183,19 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.15 (current)
+### v2.1.16 (current)
+
+**Added**
+- Security Overview Scan Center card with per-audit verdicts, last-run timestamps, and staleness timer; scan results persist across restarts
+- Scan Status Overview tile with live verdict chips for all 5 audit categories; Last Run chips on Security Overview header
+
+**Fixed**
+- "Run Audit" from Security Overview now navigates to the correct audit page (was running silently with no feedback)
+- Verdict strings now populated in all 5 Scan Status card rows
+
+---
+
+### v2.1.15
 
 **Added**
 - Settings page category chip bar (`All | Appearance | Monitoring | Alerts | Integrations | Advanced`) with per-session persistence

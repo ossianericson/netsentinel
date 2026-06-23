@@ -21,17 +21,17 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.15**
+Current version: **v2.1.16**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
-Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness sprints) → v1.9.55–v1.9.60 (test-suite stability, module splits, MetricStore health) → v1.9.61–v1.9.62 (dashboard decomposition: tabs, help, header, settings, page splits) → v1.9.63–v1.9.64 (hex-colour purge, module test coverage, spec integrity) → v1.9.65 (home/hardware/notif/log/settings page splits, tabs sub-mixins) → v1.9.66 (Sprint 16–19: nav/monitor/plugin mixins, dashboard.py 13,483→1,967 lines — dashboard decomposition complete) → v1.9.67–v1.9.90 (CodeQL hardening, 2,000+ test suite, chaos/monkey harness, guided tour, onboarding rewrite — **Microsoft Store ready**) → v1.9.91–v1.9.94 (QTimer crash fixes, test suite stabilised to 3,099 tests, APM rules hardened, cross-feature discoverability improvements — feature set complete) → v2.0.0 (Sprint 1–4: device identification improvements, async OUI enrichment, service mapper engine, service connectivity diagnostics engine + probes, Service Diagnostics page) → v2.1.0 (Sprint 5: What's Wrong? service-unreachable tile; Service Heartbeat Diagnose → action; vendor/type enrichment on first scan; probe and enrichment fixes) → v2.1.2 (Sprint 4: network segment/zone grouping — device inventory grouped into colour-coded /24 subnets with pill filter bar and right-click editor; MetricStore schema v11) → v2.1.12 (UX sprint polish, performance audit, status icons, focus rings, feedback — 4,100+ tests; Microsoft Store submitted)
+Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness sprints) → v1.9.55–v1.9.60 (test-suite stability, module splits, MetricStore health) → v1.9.61–v1.9.62 (dashboard decomposition: tabs, help, header, settings, page splits) → v1.9.63–v1.9.64 (hex-colour purge, module test coverage, spec integrity) → v1.9.65 (home/hardware/notif/log/settings page splits, tabs sub-mixins) → v1.9.66 (Sprint 16–19: nav/monitor/plugin mixins, dashboard.py 13,483→1,967 lines — dashboard decomposition complete) → v1.9.67–v1.9.90 (CodeQL hardening, 2,000+ test suite, chaos/monkey harness, guided tour, onboarding rewrite — **Microsoft Store ready**) → v1.9.91–v1.9.94 (QTimer crash fixes, test suite stabilised to 3,099 tests, APM rules hardened, cross-feature discoverability improvements — feature set complete) → v2.0.0 (Sprint 1–4: device identification improvements, async OUI enrichment, service mapper engine, service connectivity diagnostics engine + probes, Service Diagnostics page) → v2.1.0 (Sprint 5: What's Wrong? service-unreachable tile; Service Heartbeat Diagnose → action; vendor/type enrichment on first scan; probe and enrichment fixes) → v2.1.2 (Sprint 4: network segment/zone grouping — device inventory grouped into colour-coded /24 subnets with pill filter bar and right-click editor; MetricStore schema v11) → v2.1.12 (UX sprint polish, performance audit, status icons, focus rings, feedback — 4,100+ tests; Microsoft Store submitted) → v2.1.16 (Security UX sprint: scan registry, flyout dot badges, rail badge aggregation, Scan Center card, _ScanStatusTile, Security Overview Scan Status card, audit coordinator, last-run chips on Speed Test and DNS Zone pages)
 
 **Development phase:** The feature set is complete as of v2.1.0. All future development is **polish and user-requested changes only** — UX refinements, documentation accuracy, cross-feature discoverability glue, and bug fixes. No new features should be added without an explicit user request.
 
 ---
 
-## Implemented Features (as of v2.1.2)
+## Implemented Features (as of v2.1.16)
 
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection
@@ -81,9 +81,12 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Page help popover (?)** — floating 300px panel anchored below the ? button; screen-edge clamped so it never renders off-screen
 - **Lucide SVG rail section icons** — RULE 25; clean scalable SVG at any size
 - **Three colour themes** — Arctic Clean, Midnight Pro, Obsidian Neon; all values in `ui/styles.py`
-- **Configurable Overview tile dashboard** — drag to reorder, layout persists
+- **Configurable Overview tile dashboard** — drag to reorder, layout persists; `_LAYOUT_VER = 4`
 - **Skeleton loading rows** — `ui/widgets/skeleton.py`; placeholder rows while scan workers run
 - **Feature Guide** — `discover_page.py`; 83 feature entries across 9 groups with filter bar and Open buttons
+- **Scan Registry / flyout dot badges** — `_nav_set_scan_state()` in `_NavBuilderMixin` updates per-page state (never/running/fresh/stale/error); flyout items show coloured dots (GREEN/AMBER/ACCENT/RED); Security Audit rail button shows worst-state badge across all 9 audit labels; state persists across sessions via QSettings key `scan_registry/state`; auto-promoted from fresh → stale after per-label threshold via 5-minute staleness timer
+- **_ScanStatusTile** — new Overview tile (TILE_ID `"scan_status"`) pinned as first tile by default; shows live scan state for all 9 Security Audit tools from `_scan_registry`
+- **Last run chips** — `SpeedTestPage` and `DnsZonePage` each show a "Last run: N ago" chip in `_page_header_bar` updated after each successful run; `DnsZonePage` emits `scan_complete = pyqtSignal(str)` on success
 
 ### Home Page
 - **"Since you were last here" banner** — new devices and outages since last session
@@ -91,6 +94,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Weekly digest tray notification** — 7-day summary on startup if 7+ days elapsed
 - **Dismissible browser dashboard strip** — shown when REST API is enabled; links to `/dashboard`
 - **Dismissible Quick Tips card** — Ctrl+K, right-click pin, right-click device rows, REST API hint
+- **Scan Center card** — always-visible 5-row card on Home page (Device Scan, Security Audit, Speed Test, Service Health, Network Logger); each row shows a state dot from `_scan_registry` and a per-row action button; "▶ Run All" triggers `rescan_requested`
 
 ### Diagnosis & Root Cause
 - **One-click "What's Wrong?" diagnosis** — `DiagnosisPage`; symptom tiles → sequenced scan → plain-English findings; tiles: slow internet, dropping connection, no connection, **a service is unreachable** (new — selects service via combobox, routes finding to Service Diagnostics); accessible from Home page button and Ctrl+K
@@ -116,7 +120,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Scheduled Reports** — `report_scheduler_worker.py`; configurable delivery schedule
 
 ### Security Audit (requires admin or Npcap)
-- **Security Overview** — aggregate security findings dashboard with grade; `security_overview_page.py`
+- **Security Overview** — aggregate security findings dashboard with grade; `security_overview_page.py`; Scan Status card shows per-tool state (9 rows) with pill badges and last-run age for all audit labels in `_AUDIT_SCAN_LABELS`; "▶ Run Security Audit" button fires `_AUDIT_SEQUENCE` (Port Scan TCP + Exposed to Internet) sequentially via the audit coordinator in `dashboard._advance_security_audit()`
 - **Full Device Discovery** — comprehensive multi-method device enumeration
 - **Login Test** — credentialed scan (SSH, SMB, FTP, Telnet); `modules/credentialed_scan.py`
 - **Natural language device search** — `modules/nl_query.py`

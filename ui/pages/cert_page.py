@@ -50,6 +50,7 @@ class CertPage(QWidget):
 
     certs_changed   = pyqtSignal(list)   # list[CertTarget]
     scan_requested  = pyqtSignal()       # emitted when first host added from empty state
+    scan_complete   = pyqtSignal()       # emitted when a check_done cycle finishes
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -127,14 +128,14 @@ class CertPage(QWidget):
             icon="◈",
             title="No certificates monitored yet",
             what_it_shows=(
-                "Days remaining until the TLS certificate expires for each site you monitor, "
-                "plus whether the certificate chain is valid and trusted."
+                "TLS certificate expiry, validity, and issuer details for any host you monitor. "
+                "Run a network scan to populate discovered devices, or add a specific host below."
             ),
             why_it_matters=(
                 "An expired certificate makes your site unreachable with a scary error message "
                 "— NetSentinel alerts you 30 days before expiry so you never get caught out."
             ),
-            btn_label="Add a Host to Monitor",
+            btn_label="→ Scan Network",
         )
 
         e0_host = QLineEdit()
@@ -155,7 +156,7 @@ class CertPage(QWidget):
             e0_host.clear()
             self.scan_requested.emit()
 
-        e0_card.clicked.connect(e0_host.setFocus)
+        e0_card.clicked.connect(self.scan_requested.emit)
         e0_add.clicked.connect(_add_from_empty)
         e0_host.returnPressed.connect(_add_from_empty)
 
@@ -329,6 +330,7 @@ class CertPage(QWidget):
     def on_check_done(self, results: list) -> None:
         """Slot — connected to CertWorker.check_done."""
         self._refresh()
+        self.scan_complete.emit()
 
     # ── Table population ──────────────────────────────────────────────────────
 

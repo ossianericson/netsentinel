@@ -4,6 +4,19 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.16
+
+**Added**
+- Security Overview Scan Center card — per-audit verdict, last-run timestamp, and staleness timer; scan registry persists results across restarts
+- Scan Status tile on the Overview page with live verdict chips for all 5 audit categories
+- Last Run chips on the Security Overview header row for at-a-glance audit freshness
+
+**Fixed**
+- Security Overview "Run Audit" button now navigates to the correct audit page (was running silently in background with no visible feedback)
+- Verdict strings wired into all 5 Scan Status card rows (rows previously showed blank verdict)
+
+---
+
 ### v2.1.15
 
 **Added**

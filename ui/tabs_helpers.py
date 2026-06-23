@@ -234,3 +234,39 @@ def _page_header(title: str, subtitle: str = "") -> "QFrame":
         )
         vbox.addWidget(s)
     return container
+
+
+# ── Scan-status label helpers ─────────────────────────────────────────────────
+
+def _scan_age_str(ts: float) -> str:
+    """Return a human-readable age string for a scan timestamp.
+
+    Examples: ``"just now"``, ``"2m ago"``, ``"1h 4m ago"``, ``"3d ago"``.
+    Returns ``"never"`` when ``ts`` is 0 or None.
+    """
+    import time as _time
+    if not ts:
+        return "never"
+    age = max(0.0, _time.time() - ts)
+    if age < 60:
+        return "just now"
+    if age < 3600:
+        return f"{int(age // 60)}m ago"
+    if age < 86400:
+        h = int(age // 3600)
+        m = int((age % 3600) // 60)
+        return f"{h}h {m}m ago" if m else f"{h}h ago"
+    return f"{int(age // 86400)}d ago"
+
+
+def format_scan_status(verdict: str, ts: float) -> str:
+    """Build the standardised scan status string used on every scan page.
+
+    Format: ``"<verdict> · Last run: <age>"``
+
+    When ``ts`` is 0/None (never run), returns ``"<verdict> · Never run"``.
+    """
+    age = _scan_age_str(ts)
+    if age == "never":
+        return f"{verdict} · Never run"
+    return f"{verdict} · Last run: {age}"

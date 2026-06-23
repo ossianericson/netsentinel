@@ -400,6 +400,25 @@ def _wire_cross_page(window):
     window._hardware_integration_page.plugin_page_added.connect(window._home_page.on_hardware_added)
     window._home_page._freshness_strip.navigate_to.connect(window._nav_rail_go_to)
 
+    def _on_cert_scan_complete() -> None:
+        if getattr(window, "_pending_security_tools", []):
+            window._advance_security_audit()
+        window._nav_set_scan_state("TLS & Exposure", "fresh")
+
+    def _on_threat_intel_scan_complete() -> None:
+        if getattr(window, "_pending_security_tools", []):
+            window._advance_security_audit()
+        window._nav_set_scan_state("Threat Intel", "fresh")
+
+    window._cert_page.scan_complete.connect(_on_cert_scan_complete)
+    window._threat_intel_page.scan_complete.connect(_on_threat_intel_scan_complete)
+    window._service_diagnostics_page.scan_started.connect(
+        lambda: window._nav_set_scan_state("Service Diagnostics", "running")
+    )
+    window._service_diagnostics_page.scan_complete.connect(
+        lambda: window._nav_set_scan_state("Service Diagnostics", "fresh")
+    )
+
 
 def _wire_scan_ctas(window):
     window._network_doc_page.scan_requested.connect(window._start_full_scan)
@@ -522,7 +541,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.15")
+    app.setApplicationVersion("2.1.16")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -558,7 +577,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.15")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.16")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)

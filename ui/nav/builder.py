@@ -17,8 +17,12 @@ from ui.help import _PAGE_HELP
 from ui.nav.rail import _NavEntry, _RailButton, _make_nav_icon
 from ui.perf_audit import warn_if_nav_slow
 from ui.styles import (
+    ACCENT,
+    AMBER,
     AUDIT_RED,
     BORDER,
+    GREEN,
+    RED,
     SIDEBAR_BG,
     SIDEBAR_ITEM_FG,
     SIDEBAR_SECTION_BG,
@@ -66,6 +70,22 @@ class _NavBuilderMixin:
         _nav_history            list[str]
         _fade_anim              QPropertyAnimation | None
     """
+
+    # C-2: freshness thresholds (seconds from scan timestamp before dot turns amber)
+    _FRESH_SECONDS: dict[str, int] = {
+        "Devices":                30 * 60,
+        "Port Scan (TCP)":         2 * 3600,
+        "Port Scan (UDP)":         2 * 3600,
+        "CVE Lookup":              6 * 3600,
+        "Threat Intel":            1 * 3600,
+        "TLS & Exposure":          2 * 3600,
+        "Login Test":              6 * 3600,
+        "OS Detection":            6 * 3600,
+        "Exposed to Internet":     2 * 3600,
+        "Full Device Discovery":   2 * 3600,
+        "Service Diagnostics":    30 * 60,
+    }
+    _DEFAULT_FRESH_SECONDS: int = 3600
 
     # ── Flat-nav structure helpers ────────────────────────────────────────────
 
@@ -431,6 +451,10 @@ class _NavBuilderMixin:
             if _aitem:
                 _aitem.setForeground(_QColor(AUDIT_RED))
 
+        # C-1/C-2: restore scan dots/badges from QSettings; start staleness timer
+        self._restore_scan_registry()
+        self._start_staleness_timer()
+
     def _nav_ref(self, icon: str, label: str, widget: "QWidget") -> int:
         """Add a nav alias entry for a widget already registered in the stack."""
         idx = self._stack.indexOf(widget)
@@ -743,6 +767,162 @@ class _NavBuilderMixin:
         else:
             super().keyPressEvent(event)
 
+    # ── Scan state registry ───────────────────────────────────────────────────
+
+    def _nav_set_scan_state(
+        self,
+        label: str,
+        state: str,
+        ts: float | None = None,
+        error: str | None = None,
+        verdict: str | None = None,
+    ) -> None:
+        """Record a scan state transition and update the flyout dot for ``label``.
+
+        Parameters
+        ----------
+        label:   canonical nav label string (e.g. ``"Port Scan (TCP)"``)
+        state:   one of ``"never"`` | ``"running"`` | ``"fresh"`` | ``"stale"`` | ``"error"``
+        ts:      Unix timestamp of the transition; defaults to ``time.time()``
+        error:   human-readable error string (only meaningful when state is ``"error"``)
+        verdict: short result summary stored in registry for tooltip display
+        """
+        import logging as _logging
+
+        ts = ts if ts is not None else time.time()
+        registry: dict = getattr(self, "_scan_registry", {})
+        registry[label] = {"state": state, "ts": ts, "error": error, "verdict": verdict}
+        if hasattr(self, "_scan_registry"):
+            self._scan_registry = registry
+
+        _dot_map = {
+            "fresh":   GREEN,
+            "stale":   AMBER,
+            "running": ACCENT,
+            "error":   RED,
+            "never":   "",
+        }
+        color = _dot_map.get(state, "")
+
+        dots: dict = getattr(self, "_flyout_dots", {})
+        dots[label] = color
+        if hasattr(self, "_flyout_dots"):
+            self._flyout_dots = dots
+
+        if hasattr(self, "_nav_flyout"):
+            self._nav_flyout.apply_dot(label, color)
+            # B-2: rich tooltip on the flyout item
+            if state == "never":
+                tip = "Never run"
+            else:
+                from ui.tabs_helpers import _scan_age_str
+                age = _scan_age_str(ts)
+                tip = f"Last run: {age}"
+                if verdict:
+                    tip += f" — {verdict}"
+                elif error:
+                    tip += f" — Error: {error}"
+            self._nav_flyout.set_item_tooltip(label, tip)
+
+        # B-1: aggregate section badge — worst state among all labels in this section
+        _page_to_sec = getattr(self, "_nav_page_to_section", {})
+        section = _page_to_sec.get(label, "")
+        if section and hasattr(self, "_nav_rail_buttons"):
+            _priority = {"": 0, GREEN: 1, ACCENT: 2, AMBER: 3, RED: 4}
+            worst_color = ""
+            for lbl, col in getattr(self, "_flyout_dots", {}).items():
+                if _page_to_sec.get(lbl) == section:
+                    if _priority.get(col, 0) > _priority.get(worst_color, 0):
+                        worst_color = col
+            btn = self._nav_rail_buttons.get(section)
+            if btn:
+                btn.set_badge(worst_color)
+
+        _logging.getLogger("scan_registry").info(
+            "[SCAN] %s  state=%s  ts=%d", label, state, int(ts)
+        )
+
+        # C-1: persist registry to QSettings so dots survive app restart
+        try:
+            import json as _json
+            _qs_persist = QSettings("NetSentinel", "NetSentinel")
+            _qs_persist.setValue("scan_registry/state", _json.dumps({
+                k: {"state": v["state"], "ts": v["ts"],
+                    "verdict": v.get("verdict"), "error": v.get("error")}
+                for k, v in registry.items()
+            }))
+        except Exception:
+            pass  # non-fatal — QSettings may be unavailable in headless test context
+        # C-1: push updated registry to Security Overview scan status card
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.update_scan_registry(dict(registry))
+
+    def _restore_scan_registry(self) -> None:
+        """C-1: Re-apply _scan_registry dots/badges from the QSettings snapshot.
+
+        Called once at the end of _rebuild_nav_for_mode() so flyout dots and
+        rail badges reflect the last known scan state immediately on launch,
+        before any new scans run.  'running' entries are skipped (treated as
+        'never') because the scan never completed.
+        """
+        if getattr(self, "_scan_registry_restored", False):
+            return  # idempotent — only restore once per session
+        self._scan_registry_restored = True
+        import json as _json
+        try:
+            _qs = QSettings("NetSentinel", "NetSentinel")
+            raw = _qs.value("scan_registry/state", "")
+        except Exception:
+            return  # non-fatal — QSettings unavailable (headless test context)
+        if not raw:
+            return
+        try:
+            saved: dict = _json.loads(raw)
+        except Exception:
+            return  # non-fatal — malformed JSON in QSettings
+        for label, entry in saved.items():
+            state = entry.get("state", "never")
+            if state == "running":
+                state = "never"  # app was closed mid-scan; show as never on restart
+            ts = entry.get("ts") or 0.0
+            error = entry.get("error")
+            verdict = entry.get("verdict")
+            self._nav_set_scan_state(label, state, ts=ts, error=error, verdict=verdict)
+        # Apply staleness immediately so dots are correct on launch, not on first tick
+        self._check_and_stale_registry()
+
+    def _start_staleness_timer(self) -> None:
+        """C-2: Start a parented QTimer that promotes fresh → stale on threshold expiry.
+
+        Uses QTimer(self) (RULE-WIN5) so the timer is destroyed with the widget.
+        Idempotent — calling it a second time (e.g. on nav rebuild) is a no-op.
+        """
+        if getattr(self, "_staleness_timer", None) is not None:
+            return  # already started
+        from PyQt6.QtCore import QTimer as _QTimer
+        t = _QTimer(self)
+        t.setInterval(5 * 60 * 1000)  # check every 5 minutes
+        t.timeout.connect(self._check_and_stale_registry)
+        t.start()
+        self._staleness_timer = t
+
+    def _check_and_stale_registry(self) -> None:
+        """C-2: Promote 'fresh' registry entries to 'stale' past their threshold."""
+        registry: dict = getattr(self, "_scan_registry", {})
+        now = time.time()
+        for label, entry in list(registry.items()):
+            if entry.get("state") != "fresh":
+                continue
+            ts = entry.get("ts") or 0.0
+            threshold = self._FRESH_SECONDS.get(label, self._DEFAULT_FRESH_SECONDS)
+            if (now - ts) > threshold:
+                self._nav_set_scan_state(
+                    label, "stale",
+                    ts=ts,
+                    error=entry.get("error"),
+                    verdict=entry.get("verdict"),
+                )
+
     # ── Page-navigation shortcuts ─────────────────────────────────────────────
 
     @pyqtSlot()
@@ -952,6 +1132,18 @@ class _NavBuilderMixin:
         except Exception:
             visited = set()
         suggestions = []
+
+        # High-priority nudge: security audit not yet run
+        qs_ns = QSettings("NetSentinel", "NetSentinel")
+        if not qs_ns.value("security/any_scan_done", False, type=bool):
+            suggestions.append({
+                "text": "Security audit not run — check for open ports, CVEs, and TLS issues",
+                "action_label": "Open Security Audit →",
+                "target": "Security Overview",
+                "priority": "high",
+                "action_key": "security_audit_nudge",
+            })
+
         for page_label, description in self._DISCOVERY_PAGES:
             if page_label not in visited:
                 suggestions.append({
@@ -960,7 +1152,7 @@ class _NavBuilderMixin:
                     "target": page_label,
                     "priority": "low",
                 })
-            if len(suggestions) >= 3:
+            if len(suggestions) >= 4:
                 break
         self._home_page.set_suggestions(suggestions)
 
@@ -1308,7 +1500,7 @@ class _NavBuilderMixin:
     def _open_shortcut_overlay(self) -> None:
         """Show the keyboard shortcut reference overlay (KEYBOARD-1)."""
         from PyQt6.QtWidgets import QDialog, QDialogButtonBox
-        from ui.styles import BG_CARD, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, ACCENT, WHITE
+        from ui.styles import BG_CARD, TEXT_PRIMARY, TEXT_SECONDARY, WHITE
         dlg = QDialog(self)
         dlg.setWindowTitle("Keyboard Shortcuts")
         dlg.setMinimumWidth(420)

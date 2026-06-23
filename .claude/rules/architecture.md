@@ -168,7 +168,7 @@ netsentinel/
 │   ├── nav/                    # Activity-rail navigation widget package
 │   │   ├── __init__.py         # Re-exports from rail.py + builder.py
 │   │   ├── rail.py             # _RailButton, _FlyoutPanel, _NavEntry and all nav widget classes
-│   │   └── builder.py          # _NavBuilderMixin — all nav building/runtime/palette/pin methods (Sprint 19)
+│   │   └── builder.py          # _NavBuilderMixin — nav building/runtime/palette/pin; scan registry (_scan_registry, _flyout_dots, _nav_set_scan_state, _restore_scan_registry, _check_and_stale_registry, _FRESH_SECONDS); Security Audit badge aggregation (Sprint 19 + Security UX)
 │   ├── command_palette.py      # Ctrl+K global fuzzy-search overlay
 │   ├── empty_state.py          # EmptyStateOverlay — auto-shows/hides via model signals
 │   ├── expanding_table.py      # ExpandingTable — inline master-detail row expansion
@@ -192,7 +192,7 @@ netsentinel/
 │   │   ├── diagnosis_page.py       # "What's Wrong?" DiagnosisPage — symptom tiles → scan → findings
 │   │   ├── discover_page.py        # Feature Guide — filter bar + card widget (RULE-D2)
 │   │   ├── discover_data.py        # _FEATURES list + _GROUPS_ORDER — pure data for FeatureGuidePage (Sprint 13)
-│   │   ├── dns_zone_page.py
+│   │   ├── dns_zone_page.py        # DNS Zone — emits `scan_complete = pyqtSignal(str)` on success; `_page_header_bar` with "Last run" chip
 │   │   ├── geo_map_page.py         # Offline MaxMind geolocation map
 │   │   ├── hardware_integration_page.py  # Hardware — USB/serial/GPIO device integration (Extend section)
 │   │   ├── hardware_browse_mixin.py  # _HardwareBrowseMixin — community browse tab, catalog, and detection (S14-2 split)
@@ -201,7 +201,7 @@ netsentinel/
 │   │   ├── plugin_guide.py         # PluginGuide widget — collapsible 4-step plugin authoring guide (S14-2 split)
 │   │   ├── plugin_wizard_mixin.py  # _PluginWizardMixin — "New Plugin" template wizard (S14-2 split)
 │   │   ├── home_automation_page.py
-│   │   ├── home_data_mixin.py      # _HomeDataMixin — all data handlers + public slots for HomePage (Sprint 15)
+│   │   ├── home_data_mixin.py      # _HomeDataMixin — all data handlers + public slots for HomePage; `_build_scan_center_card()` — 5-row Scan Center card (Device Scan, Security Audit, Speed Test, Service Health, Network Logger) with state dots and per-row action buttons (Sprint 15)
 │   │   ├── home_page.py            # Landing page — hero, suggestions, tips, dashboard strip
 │   │   ├── home_suggestions.py     # _HomeSuggestionsMixin — 'What to do next' strip logic (Sprint 13)
 │   │   ├── inventory_page.py
@@ -226,7 +226,7 @@ netsentinel/
 │   │   ├── protocol_viz_page.py    # Interactive ARP/DNS/TCP/DHCP/STP animation
 │   │   ├── reports_page.py
 │   │   ├── rest_api_page.py        # REST API — enable toggle, port, API key, live status probe, endpoint reference
-│   │   ├── security_overview_page.py # Security Overview — aggregate security findings dashboard
+│   │   ├── security_overview_page.py # Security Overview — aggregate security findings dashboard; `_AUDIT_SCAN_LABELS` tuple (9 nav-page labels shown in Scan Status card); `_AUDIT_SEQUENCE` tuple (2-item subset that the "Run Security Audit" coordinator fires: "Port Scan (TCP)", "Exposed to Internet"); Scan Status card with `_scan_status_table`; `update_scan_registry(registry)`, `notify_scan_complete()` public API
 │   │   ├── network_map_page.py     # Network Map — QWebEngineView Cytoscape.js topology + classic fallback (Sprint 6)
 │   │   ├── service_diagnostics_page.py  # Service Diagnostics — streaming/gaming service probe page (Sprint 4)
 │   │   ├── service_page.py
@@ -234,7 +234,7 @@ netsentinel/
 │   │   ├── settings_appearance.py  # _SettingsAppearanceMixin — INCOMPLETE SPLIT: appearance card stubs (Sprint 13); not inherited by SettingsPage — appearance methods remain in settings_cards.py
 │   │   ├── settings_page.py
 │   │   ├── snmp_trap_page.py
-│   │   ├── speed_test_page.py      # Speed Test — history rows store full modem signal dict; clicking a row restores signal panel
+│   │   ├── speed_test_page.py      # Speed Test — history rows store full modem signal dict; clicking a row restores signal panel; `_page_header_bar` with "Last run" chip updated after each test
 │   │   ├── syslog_page.py
 │   │   ├── threat_intel_page.py
 │   │   ├── timeline_page.py        # Timeline — chronological event log across all sources
@@ -248,7 +248,7 @@ netsentinel/
 │   ├── scan_wiring.py          # ScanResultMixin — scan result handlers (extracted from dashboard.py); _merge_scan_with_persistent() appends pinned/static-candidate offline devices after each live scan
 │   ├── scan_enrichment.py      # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers (Sprint 13)
 │   ├── tabs.py                 # TabBuilderMixin — page factory and sidebar assembly; inherits all _*TabsMixin sub-mixins (Sprint 6)
-│   ├── tabs_helpers.py         # Shared UI utility functions for tab builders; re-exported via tabs.py (Sprint 8)
+│   ├── tabs_helpers.py         # Shared UI utility functions for tab builders; `_scan_age_str()`, `format_scan_status()` — scan freshness formatting for status labels; re-exported via tabs.py (Sprint 8)
 │   ├── tabs_scan.py            # _ScanTabsMixin — scan result tab content builders M1–M5 (Sprint 8 split)
 │   ├── tabs_network.py         # _NetworkTabsMixin — network configuration tab builder (Sprint 8 split)
 │   ├── tabs_diag.py            # _DiagTabsMixin — diagnostics tab builder; inherits _DiagExtraTabsMixin + _LoggerTabMixin (Sprint 8 split)
@@ -285,7 +285,7 @@ netsentinel/
 │       ├── kpi_bar.py              # _KpiBarMixin — four KPI tiles for the Devices page (Sprint 13 split)
 │       ├── objective_badge.py      # ObjectiveBadge — compact exam-objective pill badge (N+/CCNA/Sec+) for Lab Mode and Protocol Viz (Sprint B3)
 │       ├── modem_signal_panel.py   # _ModemSignalPanelMixin — modem signal panel builder/updater for SpeedTestPage (Sprint 13)
-│       ├── overview_tile.py        # Core tile classes (_BaseTile subclasses), _TILE_CLASSES/_DEFAULT_ORDER
+│       ├── overview_tile.py        # Core tile classes (_BaseTile subclasses); `_ScanStatusTile` (TILE_ID="scan_status", first in _DEFAULT_ORDER); `_TILE_CLASSES`/`_DEFAULT_ORDER`; `_LAYOUT_VER = 4`
 │       ├── overview_tile_monitor.py # Monitoring-domain tiles: LiveBandwidth, DnsStability, ModemSignal, TopTalkers, RecentEvents, TrendStatus (Sprint 13)
 │       ├── page_header.py          # Standard page header with title, help button, actions bar
 │       ├── help_mode_overlay.py    # HelpModeOverlay — ephemeral 'What can I do here?' tooltip-labelling overlay (Sprint 9, S9-5)
@@ -327,7 +327,8 @@ netsentinel/
 ├── tests/
 └── tools/
     ├── debug_launch.py         # GUI smoke-launch with Qt message handler → netsentinel_debug.log (COMMIT GATE Step 2)
-    └── monkey_test.py          # Chaos / monkey tester — pywinauto UIA + psutil; --source/--connect/exe modes
+    ├── monkey_test.py          # Chaos / monkey tester — pywinauto UIA + psutil; --source/--connect/exe modes
+    └── audit_check.py          # Runtime audit: verifies scan_complete signal, Scan Center card, _ScanStatusTile, last_run chips are correctly wired after Security UX sprint
 ```
 
 ## Key Architectural Patterns
@@ -394,6 +395,39 @@ Add new icons to `_LUCIDE` before using them in `_nav_begin_section()`. Do not u
 - Security Audit — RED-labelled; elevated-privilege scan tools (Security Overview, Port Scan, CVE, Threat Intel, TLS, Login Test, OS Detection, Risk Score, Exposure, Discovery, SMB, Plugins, Private Endpoint, Cloud Metadata, DHCP Rogue)
 - Education — learning tools (Protocol Visualizer, Lab Mode, Feature Guide, Help)
 - Extend — hardware integrations and physical device management (Hardware)
+
+### Scan Registry / Audit Status system
+`_NavBuilderMixin` (in `ui/nav/builder.py`) maintains a per-page scan state registry that drives flyout dot badges, rail button badges, tooltips, and the Security Overview Scan Status card.
+
+**API:**
+```python
+self._nav_set_scan_state(
+    label: str,      # exact nav page label, e.g. "Port Scan (TCP)"
+    state: str,      # "never" | "running" | "fresh" | "stale" | "error"
+    ts: float = None,    # epoch seconds of last completion (None → now)
+    verdict: str = None, # one-line result summary for tooltip / Scan Status card
+    error: str = None,   # error message when state == "error"
+)
+```
+
+**State → flyout dot colour:**
+- `"fresh"` → `GREEN`
+- `"stale"` → `AMBER`
+- `"running"` → `ACCENT`
+- `"error"` → `RED`
+- `"never"` → `""` (dot hidden)
+
+**Freshness thresholds** (`_FRESH_SECONDS` class dict on `_NavBuilderMixin`):
+Port scans default to 2 h; CVE/TLS to 24 h; unknown labels use `_DEFAULT_FRESH_SECONDS = 3600` (1 h).
+`_check_and_stale_registry()` runs every 5 minutes and promotes `"fresh"` → `"stale"` when the threshold is exceeded.
+
+**QSettings persistence** — key `scan_registry/state` (JSON). Restored on startup via `_restore_scan_registry()`; any entry stored as `"running"` is reset to `"never"` on restore (mid-scan interrupted by exit).
+
+**`_AUDIT_SCAN_LABELS`** (in `security_overview_page.py`) — 9-item tuple of all nav page labels shown in the Scan Status card rows: `"Port Scan (TCP)"`, `"Port Scan (UDP)"`, `"CVE Lookup"`, `"Threat Intel"`, `"TLS & Exposure"`, `"Login Test"`, `"OS Detection"`, `"Exposed to Internet"`, `"Full Device Discovery"`. These must exactly match the strings passed to `_nav_set_scan_state()` in `ScanResultMixin`.
+
+**`_AUDIT_SEQUENCE`** (in `security_overview_page.py`) — 2-item tuple that the "▶ Run Security Audit" button fires sequentially: `"Port Scan (TCP)"` and `"Exposed to Internet"`. Only scans that need no user-supplied host target belong here. The full `_AUDIT_SCAN_LABELS` list contains more items but those require manual triggering from each tool's own page.
+
+**Security Audit Coordinator** — `dashboard.py._advance_security_audit()` pops from `_pending_security_tools` and fires each scan sequentially; `_security_audit_total` tracks progress for the Security Overview progress bar.
 
 ### Scan workers
 All network operations run in `workers/` (QThread subclasses). Emit `result_ready` and `error` signals. **Never** do blocking I/O on the main thread.

@@ -81,6 +81,13 @@ class _HighlightRing(QWidget):
             if y < 0:
                 h += y
                 y = 0
+            # Clamp right and bottom edges — prevents the ring painting outside the
+            # window as a full-width/height amber bar when a target near the edges
+            # is highlighted during onboarding.
+            if p.width() > 0 and x + w > p.width():
+                w = p.width() - x
+            if p.height() > 0 and y + h > p.height():
+                h = p.height() - y
             self.setGeometry(x, y, max(0, w), max(0, h))
         except Exception:
             pass  # non-fatal — target may be unmapped or deleted

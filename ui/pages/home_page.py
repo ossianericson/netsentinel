@@ -129,6 +129,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._refresh_hw_nudge()
+        self._refresh_scan_center()
         if hasattr(self, "_usage_card"):
             self._usage_card.refresh()
 
@@ -907,6 +908,10 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ri_outer.addLayout(_ri_text_col, 1)
         _ri_outer.addWidget(_ri_x)
         lay.addWidget(self._recurring_intro_card)
+
+        # ── Scan Center card (always visible — 5 scan categories with state dots) ─
+        self._scan_center_card = self._build_scan_center_card()
+        lay.addWidget(self._scan_center_card)
 
         # Grade + This Week side-by-side (POLISH-1)
         _stats_hbox = QHBoxLayout()

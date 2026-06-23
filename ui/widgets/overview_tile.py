@@ -30,7 +30,7 @@ _COLS         = 3
 _SETTINGS_KEY = "overview/tile_order"
 _TILE_HEIGHT      = 175   # uniform fixed height for every tile
 _EXPANDED_HEIGHT  = 280   # height when tile is expanded (OVERVIEW-1)
-_LAYOUT_VER   = 3     # bump when _DEFAULT_ORDER changes; triggers a one-time reset
+_LAYOUT_VER   = 4     # bump when _DEFAULT_ORDER changes; triggers a one-time reset
 
 
 # ── Animated count label ──────────────────────────────────────────────────────
@@ -1883,6 +1883,98 @@ class _SecurityScanPanel(QWidget):
             self.run_clicked.emit(selected)
 
 
+# ── _ScanStatusTile ───────────────────────────────────────────────────────────
+
+class _ScanStatusTile(_BaseTile):
+    """Compact 5-row scan status tile: dot + category + age for each scan type."""
+
+    TILE_ID    = "scan_status"
+    TILE_LABEL = "Scan Status"
+    TILE_ICON  = "◉"
+
+    def _build_body(self) -> None:
+        _ROWS: List[tuple] = [
+            ("Device Scan",    "Devices",             "Devices"),
+            ("Security Audit", "_security_aggregate", "Security Overview"),
+            ("Speed Test",     "Speed Test",          "Speed Test"),
+            ("Service Health", "Service Diagnostics", "Service Diagnostics"),
+            ("Network Logger", "_logger",             "Network Logger"),
+        ]
+        self._sc_dots: List[QLabel] = []
+        self._sc_ages: List[QLabel] = []
+        self._sc_keys: List[str]    = [r[1] for r in _ROWS]
+
+        from ui.tabs_helpers import _scan_age_str as _sas
+        self._scan_age_str = _sas
+
+        for display, _reg_key, _nav in _ROWS:
+            row = QHBoxLayout()
+            row.setSpacing(6)
+            row.setContentsMargins(0, 2, 0, 2)
+
+            dot = QLabel("●")
+            dot.setFixedWidth(12)
+            dot.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED}; border:none;")
+
+            nm = QLabel(display)
+            nm.setFixedWidth(102)
+            nm.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY}; border:none;")
+
+            age = QLabel("Never")
+            age.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED}; border:none;")
+
+            row.addWidget(dot)
+            row.addWidget(nm)
+            row.addWidget(age, 1)
+            self._body_layout.addLayout(row)
+
+            self._sc_dots.append(dot)
+            self._sc_ages.append(age)
+
+        self._body_layout.addStretch()
+
+    def refresh(self, store=None) -> None:
+        if not hasattr(self, "_sc_dots"):
+            return
+        import json as _j
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        try:
+            registry: dict = _j.loads(qs.value("scan_registry/state", "{}", type=str))
+        except Exception:
+            registry = {}
+
+        _SEC = [
+            "Port Scan (TCP)", "CVE Lookup", "OS Detection",
+            "Login Test", "Threat Intel", "TLS & Exposure",
+            "Exposed to Internet", "Full Device Discovery",
+        ]
+        _sec_ts, _sec_state = 0.0, "never"
+        for lbl in _SEC:
+            e = registry.get(lbl, {})
+            st, ts = e.get("state", "never"), e.get("ts", 0.0) or 0.0
+            if st == "fresh" and (_sec_state != "fresh" or ts > _sec_ts):
+                _sec_ts, _sec_state = ts, "fresh"
+            elif st == "stale" and _sec_state == "never":
+                _sec_ts, _sec_state = ts, "stale"
+
+        _COLOR = {
+            "fresh": GREEN, "stale": AMBER,
+            "running": ACCENT, "error": RED, "never": TEXT_MUTED,
+        }
+        for i, reg_key in enumerate(self._sc_keys):
+            if reg_key == "_security_aggregate":
+                state, ts = _sec_state, _sec_ts
+            elif reg_key == "_logger":
+                state, ts = "never", 0.0
+            else:
+                e = registry.get(reg_key, {})
+                state, ts = e.get("state", "never"), e.get("ts", 0.0) or 0.0
+            color = _COLOR.get(state, TEXT_MUTED)
+            self._sc_dots[i].setStyleSheet(f"font-size:9px; color:{color}; border:none;")
+            self._sc_ages[i].setText(self._scan_age_str(ts) if ts else "Never")
+
+
 # ── Tile registry & defaults ──────────────────────────────────────────────────
 
 _TILE_CLASSES: Dict[str, type] = {
@@ -1891,11 +1983,13 @@ _TILE_CLASSES: Dict[str, type] = {
         RttSummaryTile, NetworkGradeTile, AlertFeedTile, EventFeedTile,
         HaDevicesTile, LiveBandwidthTile, DnsStabilityTile,
         ModemSignalTile, TopTalkersTile, RecentEventsTile, TrendStatusTile,
+        _ScanStatusTile,
     ]
 }
 
 # All tiles shown by default — each has a graceful empty state when data is absent.
 _DEFAULT_ORDER: List[str] = [
+    "scan_status",
     "device_count",
     "live_bandwidth",
     "modem_signal",
@@ -1910,6 +2004,13 @@ _DEFAULT_ORDER: List[str] = [
     "recent_events",
     "trend_status",
 ]
+
+# Import-time integrity check: every tile in the default order must be registered.
+# Also reads _LAYOUT_VER so both exports are recognised as used by static analysis.
+assert all(t in _TILE_CLASSES for t in _DEFAULT_ORDER), (
+    f"_DEFAULT_ORDER (layout v{_LAYOUT_VER}) contains unregistered tile IDs: "
+    f"{[t for t in _DEFAULT_ORDER if t not in _TILE_CLASSES]}"
+)
 
 
 # ── Overview page ─────────────────────────────────────────────────────────────

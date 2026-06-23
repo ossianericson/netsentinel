@@ -193,6 +193,7 @@ class ThreatIntelPage(QWidget):
     show_on_map         = pyqtSignal(str)   # emitted when user picks "Show on Geolocation Map"
     scan_requested      = pyqtSignal()      # emitted by empty-state CTA to trigger feed refresh
     show_in_connections = pyqtSignal(str)   # IP → navigate to Connections + filter
+    scan_complete       = pyqtSignal()      # emitted when a feed load cycle finishes
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -611,6 +612,7 @@ class ThreatIntelPage(QWidget):
             f"Last updated {self._last_updated}."
         )
         self.entries_updated.emit(self._threat_entries)
+        self.scan_complete.emit()
 
     # ── Table population ──────────────────────────────────────────────────────
 

@@ -79,6 +79,8 @@ class ServiceDiagnosticsPage(QWidget):
 
     # Emitted when the page wants the dashboard to run a full scan
     scan_requested = pyqtSignal()
+    scan_started = pyqtSignal()
+    scan_complete = pyqtSignal()
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -397,6 +399,7 @@ class ServiceDiagnosticsPage(QWidget):
         self._worker.error.connect(self._on_error)
         self._worker.progress.connect(self._set_status)
         self._worker.start()
+        self.scan_started.emit()
 
     def _on_result(self, result: ServiceDiagnosticResult) -> None:
         self._last_result = result
@@ -404,11 +407,13 @@ class ServiceDiagnosticsPage(QWidget):
         self._stack.setCurrentIndex(1)
         self._run_btn.setText("Run Diagnostics")
         self._run_btn.setEnabled(True)
+        self.scan_complete.emit()
 
     def _on_error(self, msg: str) -> None:
         self._set_status(msg, is_error=True)
         self._run_btn.setText("Run Diagnostics")
         self._run_btn.setEnabled(True)
+        self.scan_complete.emit()
 
     def set_service(self, service_id: str) -> None:
         """Pre-select a service in the combo box by ID and focus the run button."""

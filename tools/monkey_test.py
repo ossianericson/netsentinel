@@ -75,7 +75,7 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.6.4"
+_VERSION = "1.6.5"
 # Title STARTS with "NetSentinel" — never matches VS Code's
 # "monkey_test.py — NetSentinel — Visual Studio Code" title.
 _WINDOW_RE = r"^NetSentinel"
@@ -209,6 +209,8 @@ _BLACKLIST: List[str] = [
     "diagnose",         # Service Heartbeat "Diagnose →" button → fires probes
     "run health check", # health check probe
     "check connection", # connectivity probe
+    "run security audit",  # SecurityOverviewPage "▶  Run Security Audit" → _advance_security_audit() fires Port Scan (TCP) + Exposed to Internet sequentially
+    "run all",             # Scan Center card "▶  Run All" → rescan_requested signal → triggers full network scan
     "re-run",           # re-triggers any prior scan/probe
     "run again",        # re-triggers any prior scan/probe
     # --- Packet capture / active monitors (Scapy / Npcap) ---

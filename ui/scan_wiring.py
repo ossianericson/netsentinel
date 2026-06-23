@@ -6,13 +6,14 @@ Dashboard inherits ScanResultMixin to receive these methods.
 """
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import QTableWidgetItem
 
 from ui.tabs import _add_row
-from ui.tabs_helpers import risk_to_label
+from ui.tabs_helpers import format_scan_status, risk_to_label
 
 from ui.styles import (
     ACCENT_LITE, AMBER, AMBER_BG, BLUE, BORDER,
@@ -100,6 +101,24 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # non-fatal
         if hasattr(self, "_compute_suggestions"):
             self._compute_suggestions()
+        # Auto-run risk scorer with M1 device list
+        if hasattr(self, "_run_risk_scorer") and self._m1_result.get("devices"):
+            try:
+                self._run_risk_scorer()
+            except Exception:
+                pass  # non-fatal — risk scorer may fail on limited M1 data
+        # Update OS tab status with device count
+        if hasattr(self, "_update_os_tab_from_m1"):
+            try:
+                self._update_os_tab_from_m1()
+            except Exception:
+                pass  # non-fatal
+        # Pre-fill OS Detection table with low-confidence inferred guesses
+        if hasattr(self, "_prefill_os_from_m1"):
+            try:
+                self._prefill_os_from_m1()
+            except Exception:
+                pass  # non-fatal
 
     def _on_ipv6_result(self, devices: list):
         from PyQt6.QtGui import QColor
@@ -279,7 +298,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
             if cve_n:
                 cve_item.setToolTip(f"Click to view {cve_n} CVE(s) for {p.service}")
             self._recon_syn_table.setItem(row, 4, cve_item)
-        self._syn_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
+        _ts_syn = time.time()
+        _syn_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
+        self._syn_status.setText(format_scan_status(_syn_verdict, _ts_syn))
+        self._nav_set_scan_state("Port Scan (TCP)", "fresh", ts=_ts_syn, verdict=_syn_verdict)
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.on_port_scan_result(result)
         # ── Update NetworkDocPage with accumulated port data ──────────────────
@@ -307,6 +329,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
             )
         except Exception:
             pass  # non-fatal
+        if getattr(self, "_pending_security_tools", []):
+            self._advance_security_audit()
 
     def _on_udp_result(self, result):
         from PyQt6.QtGui import QColor
@@ -320,7 +344,12 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 item = QTableWidgetItem(val)
                 item.setForeground(QColor(color))
                 self._recon_udp_table.setItem(row, col, item)
-        self._udp_status.setText(result.plain_verdict if not result.error else f"⚠ {result.error}")
+        _ts_udp = time.time()
+        _udp_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
+        self._udp_status.setText(format_scan_status(_udp_verdict, _ts_udp))
+        self._nav_set_scan_state("Port Scan (UDP)", "fresh", ts=_ts_udp, verdict=_udp_verdict)
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.on_port_scan_result(result)
 
     def _on_os_result(self, data: dict):
         self._os_stack.setCurrentIndex(1)
@@ -336,7 +365,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 getattr(guess, "banner_hint", ""),
             ]):
                 self._recon_os_table.setItem(row, col, QTableWidgetItem(str(val)))
-        self._os_status.setText(f"Fingerprinted {len(data.get('guesses', []))} host(s).")
+        _ts_os = time.time()
+        _os_verdict = f"Fingerprinted {len(data.get('guesses', []))} host(s)."
+        self._os_status.setText(format_scan_status(_os_verdict, _ts_os))
+        self._nav_set_scan_state("OS Detection", "fresh", ts=_ts_os, verdict=_os_verdict)
 
     def _on_cve_result(self, service_version: str, result):
         from PyQt6.QtGui import QColor
@@ -358,6 +390,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 self._recon_cve_table.setItem(row, col, item)
         if hasattr(self, "_monitor_overview_page"):
             self._monitor_overview_page.set_cve_count(self._recon_cve_table.rowCount())
+        _cve_n = self._recon_cve_table.rowCount()
+        _cve_verdict = f"{_cve_n} CVE{'s' if _cve_n != 1 else ''} found" if _cve_n else "No CVEs found"
+        self._nav_set_scan_state("CVE Lookup", "fresh", ts=time.time(), verdict=_cve_verdict)
 
     def _on_exposure_result(self, result):
         from PyQt6.QtGui import QColor
@@ -382,11 +417,16 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 item = QTableWidgetItem(str(val))
                 item.setForeground(QColor(row_color))
                 self._recon_exposure_table.setItem(row, col, item)
-        self._exposure_status.setText(
+        _ts_exp = time.time()
+        _exp_verdict = (
             f"WAN IP: {result.wan_ip or 'unknown'} | "
             f"CGNAT: {'Yes' if result.cgnat else 'No'} | "
             f"UPnP mappings: {len(result.upnp_mappings)}"
         )
+        self._exposure_status.setText(format_scan_status(_exp_verdict, _ts_exp))
+        self._nav_set_scan_state("Exposed to Internet", "fresh", ts=_ts_exp, verdict=_exp_verdict)
+        if getattr(self, "_pending_security_tools", []):
+            self._advance_security_audit()
 
     def _start_vendor_lookups(self, devices: list) -> None:
         """Kick off background OUI vendor lookup for devices still showing Unknown vendor.
@@ -475,14 +515,15 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # non-fatal — table update is best-effort
 
     def _on_m1_result(self, data: dict):
-        import time as _t
-        self._last_scan_time = _t.time()
+        self._last_scan_time = time.time()
+        self._nav_set_scan_state("Devices", "fresh", ts=self._last_scan_time)
         self._m1_result = data
         devices = data.get("devices", [])
         if hasattr(self, "_overview_page") and devices:
             self._overview_page.set_has_results(True)
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.notify_scan_complete()
+            self._security_overview_page.on_scan_result(data)
         if hasattr(self, "_monitor_overview_page"):
             import datetime as _dt
             self._monitor_overview_page.set_last_scan_time(_dt.datetime.now())
@@ -982,7 +1023,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # auto-snapshot errors must never break the scan result handler
 
 
-        # After scan from home: show post-scan coach marks on first scan, else go to Overview.
+        # After scan from home: show post-scan coach marks on first scan only.
         if getattr(self, "_scan_from_home", False) and len(devices) > 0:
             self._scan_from_home = False
             from PyQt6.QtCore import QSettings as _QS
@@ -991,9 +1032,6 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 _qs.setValue("tour/post_scan_done", True)
                 from PyQt6.QtCore import QTimer as _QT
                 _QT.singleShot(600, self._start_post_scan_coach_marks)
-            else:
-                if not getattr(self, "_onboarding_active", False):
-                    self._nav_rail_go_to("Dashboard")
 
         # Always apply enrichment — re-classifies device types and rebuilds dependent
         # views even on the first scan; also layers in cached mesh/plugin data when present.

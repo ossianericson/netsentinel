@@ -273,14 +273,13 @@ class CvePage(QWidget):
             icon="⬡",
             title="No CVEs tracked yet",
             what_it_shows=(
-                "CVE data is populated after a port scan finds open services. "
-                "Run a full scan, then use \"Import from Scan\" to record "
-                "discovered service versions and track their CVEs."
+                "Run Port Scan (TCP) to discover open services — CVE data will "
+                "populate automatically once a port scan finds software versions."
             ),
             why_it_matters="CVE tracking requires service version strings from an active port scan.",
-            btn_label="Run Scan",
+            btn_label="→ Run Port Scan (TCP)",
         )
-        _empty.clicked.connect(self.scan_requested.emit)
+        _empty.clicked.connect(lambda: self.navigate_to.emit("Port Scan (TCP)"))
         self._content_stack.addWidget(_empty)
 
         # ── Page 1: main content ─────────────────────────────────────────────

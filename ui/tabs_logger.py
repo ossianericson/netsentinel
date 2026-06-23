@@ -546,6 +546,49 @@ class _LoggerTabMixin:
             return
         suggestions: list = []
 
+        # High-priority nudge: security audit not yet run after first device scan
+        if getattr(self, "_m1_result", None):
+            from PyQt6.QtCore import QSettings as _QS2
+            if not _QS2("NetSentinel", "NetSentinel").value(
+                "security/any_scan_done", False, type=bool
+            ):
+                suggestions.append({
+                    "action_key": "security_audit_nudge",
+                    "text": "Security audit not run — check for open ports, CVEs, and TLS issues",
+                    "action_label": "Open Security Audit →",
+                    "target": "Security Overview",
+                    "priority": "high",
+                })
+
+        # Stale security scan nudge — checks per-tool registry state if available
+        _registry: dict = getattr(self, "_scan_registry", {})
+        if _registry:
+            _key_tools = ("Port Scan (TCP)", "Exposed to Internet")
+            _stale_tools = [
+                lbl for lbl in _key_tools
+                if _registry.get(lbl, {}).get("state") in ("stale", "never", "")
+            ]
+            if _stale_tools:
+                from PyQt6.QtCore import QSettings as _QS3
+                import datetime as _dt
+                _qs3 = _QS3("NetSentinel", "NetSentinel")
+                from ui.pages.home_suggestions import _HomeSuggestionsMixin as _HSM
+                if not _HSM._suggestion_is_suppressed(
+                    _qs3, _dt.datetime.now(), "security_stale_nudge"
+                ):
+                    _n = len(_stale_tools)
+                    _tool_str = ", ".join(_stale_tools[:2]) + (" + more" if _n > 2 else "")
+                    suggestions.append({
+                        "action_key": "security_stale_nudge",
+                        "text": (
+                            f"{_tool_str} scan{'s are' if _n > 1 else ' is'}"
+                            " stale or never run — re-run Security Audit"
+                        ),
+                        "action_label": "Open Security Audit →",
+                        "target": "Security Overview",
+                        "priority": "high",
+                    })
+
         # High-risk devices from last scan
         if getattr(self, "_m1_result", None):
             high = self._m1_result.get("high_risk_count", 0)

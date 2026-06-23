@@ -20,8 +20,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, BG_HOVER, NAV_DIVIDER, SIDEBAR_BG, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG, TEXT_MUTED,
-    TEXT_SECONDARY, WHITE,
+    ACCENT, BG_HOVER, NAV_DIVIDER, SIDEBAR_BG, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG,
+    TEXT_MUTED, TEXT_SECONDARY, WHITE,
 )
 
 
@@ -727,6 +727,12 @@ class _FlyoutPanel(QWidget):
         btn = self._items.get(label)
         if btn:
             btn.set_dot(color)
+
+    def set_item_tooltip(self, label: str, text: str) -> None:
+        """Set the tooltip on a flyout item (shown on hover)."""
+        btn = self._items.get(label)
+        if btn:
+            btn.setToolTip(text)
 
     def open(self) -> None:
         self._anim.stop()

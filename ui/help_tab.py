@@ -360,10 +360,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Settings Category Bar", "Settings page now has a chip bar (All / Appearance / Monitoring / Alerts / Integrations / Advanced) to filter visible cards — your last selection is remembered."),
-        ("First-Run Guided Tour", "A 5-step tour bar appears on first launch to orient you; restart it any time from Settings → Advanced → 'Restart Guided Tour'."),
-        ("Inventory Dialogs", "Device label, type override, scan compare, and segment editor dialogs are now shared widgets — no change to how you use them."),
-        ("Broader Test Coverage", "Behavioral integration tests added for 18 additional pages, bringing the total test suite to 4,353 tests."),
+        ("Security Overview Scan Center", "Each audit type now has a card showing its last-run time, pass/fail verdict, and a staleness timer — results persist across restarts."),
+        ("Scan Status tile", "The Overview page Scan Status tile shows live verdict chips for all 5 audit categories at a glance."),
+        ("Security audit navigation fix", "Clicking 'Run Audit' in Security Overview now navigates to the correct audit page instead of running silently in the background."),
+        ("Test suite: 4,456 tests", "4,456 automated tests now cover all pages, workers, and modules across 284 test files."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

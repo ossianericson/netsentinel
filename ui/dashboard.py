@@ -146,6 +146,10 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._m5_result   = None
         self._lldp_result = None  # list[LldpNeighbor] from Sprint 5 LLDP worker
 
+        # Security audit coordinator state
+        self._pending_security_tools: list = []
+        self._security_audit_total: int = 0
+
         # Mesh enrichment — populated when MeshRouterPage scan completes
         self._mesh_enrichment: dict = {}   # normalised MAC → MeshClient
 
@@ -181,6 +185,13 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         # Network pulse bar state
         self._last_scan_time:   float = 0.0  # epoch set on each m1 result
         self._last_log_status:  str   = ""   # "OK" | "SLOW" | "FAIL" | ""
+
+        # ScanRegistry — per-label state tracking for Sprint A freshness UX
+        # Keys: canonical nav label strings (e.g. "Port Scan (TCP)")
+        # Values: {"state": "never"|"running"|"fresh"|"stale"|"error", "ts": float, "error": str|None}
+        self._scan_registry: dict = {}
+        # Flyout dot colours — persisted between flyout open/close by _nav_rail_toggle
+        self._flyout_dots: dict = {}
 
         # Page transition animation
         self._fade_anim: QPropertyAnimation | None = None
@@ -1840,13 +1851,42 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     @pyqtSlot(list)
     def _run_security_scans(self, tool_labels: list) -> None:
-        """Navigate to the first selected security tool page (Phase 1)."""
+        """Launch a coordinated security audit: fire each tool silently, stay on Security Overview."""
         if not tool_labels:
             return
         if self._active_count > 0:
             self._set_status("Main scan in progress — please wait before running security tools.")
             return
-        self._nav_rail_go_to(tool_labels[0])
+        self._pending_security_tools = list(tool_labels)
+        self._security_audit_total = len(tool_labels)
+        self._advance_security_audit()
+
+    def _advance_security_audit(self) -> None:
+        """Fire the next pending security scan worker silently — never navigate away from Security Overview."""
+        if not self._pending_security_tools:
+            if hasattr(self, "_security_overview_page"):
+                self._security_overview_page.clear_audit_progress()
+            self._set_status("Security audit complete — see Security Overview for findings.")
+            return
+        label = self._pending_security_tools.pop(0)
+        step_n = self._security_audit_total - len(self._pending_security_tools)
+        if hasattr(self, "_security_overview_page"):
+            self._security_overview_page.set_audit_progress(
+                label, step_n, self._security_audit_total
+            )
+        if label == "Port Scan (TCP)":
+            gw = self._net_info.get("gateway", "") if self._net_info else ""
+            if not gw:
+                # No gateway known yet — skip and advance to next tool
+                self._advance_security_audit()
+                return
+            self._syn_host.setText(gw)
+            self._start_syn_scan()
+        elif label == "Exposed to Internet":
+            self._start_exposure_check()
+        else:
+            # Unrecognised label — skip silently
+            self._advance_security_audit()
 
     @pyqtSlot()
     def _start_full_scan(self):
@@ -2103,6 +2143,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         sig = getattr(result, "modem_signal", None)
         if sig:
             self._on_modem_signal(sig)
+        import time as _time
+        dl = getattr(result, "download_mbps", 0.0) or 0.0
+        ul = getattr(result, "upload_mbps",  0.0) or 0.0
+        _speed_verdict = f"{dl:.1f} Mbps ↓ / {ul:.1f} Mbps ↑" if dl > 0 else "Speed test complete"
+        self._nav_set_scan_state("Speed Test", "fresh", ts=_time.time(), verdict=_speed_verdict)
 
     @pyqtSlot()
     def _on_modem_disconnect(self) -> None:

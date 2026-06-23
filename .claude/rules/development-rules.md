@@ -343,7 +343,11 @@ This rule covers **rail section buttons only**. Flyout item prefix characters ar
 3. Create `ui/pages/<name>_page.py` — receives `store: MetricStore` as constructor parameter
 4. Register in `dashboard._build_pro_nav()` via `_nav_add_rail_item(label, widget)` inside the correct section block
 5. Add result cache `self._<name>_result = None` in Dashboard `__init__`
-6. Wire `result_ready` signal to a `_on_<name>_result()` slot
+6. Wire `result_ready` signal to a `_on_<name>_result()` slot; inside that handler call:
+   - `self._nav_set_scan_state("Nav Label", "fresh", ts=time.time(), verdict=<one-line summary>)`
+   - At scan start: `self._nav_set_scan_state("Nav Label", "running")`
+   - In the error slot: `self._nav_set_scan_state("Nav Label", "error", error=str(e))`
+   - If the page is a Security Audit scan, add `"Nav Label"` to `_AUDIT_SCAN_LABELS` in `security_overview_page.py`
 7. All colours must come from `ui/styles.py`
 8. Add `tests/test_<name>.py` with at least one passing test
 9. Update architecture.instructions.md layout table
@@ -1427,6 +1431,45 @@ a post-hoc rule that just says "use parented timers."
 
 The technical mechanism is clearest during debugging. Writing the rule after the fact means
 writing from memory, which produces shallower rules.
+
+### RULE-SS1 (blocking): Every Security Audit result handler must call _nav_set_scan_state
+
+The Security Overview Scan Status card, flyout dot badges, and rail button badge all read from
+`_scan_registry`. If a scan result handler does not call `_nav_set_scan_state`, the page shows
+"Never run" in the Scan Status card even after the scan completed — a silent mismatch between
+actual scan state and displayed state.
+
+**Required pattern in every `_on_*_result()` handler for a Security Audit scan:**
+```python
+def _on_syn_result(self, result):
+    # ... populate table ...
+    self._nav_set_scan_state(
+        "Port Scan (TCP)",
+        "fresh",
+        ts=time.time(),
+        verdict=f"{len(result.open_ports)} open ports",
+    )
+
+def _start_syn_scan(self):
+    self._nav_set_scan_state("Port Scan (TCP)", "running")
+    self._syn_worker.start()
+
+def _on_syn_error(self, msg: str):
+    self._nav_set_scan_state("Port Scan (TCP)", "error", error=msg)
+```
+
+**Label matching:** the string passed to `_nav_set_scan_state` must exactly match the entry
+in `_AUDIT_SCAN_LABELS` in `security_overview_page.py` and the nav item label registered via
+`_nav_add_rail_item()`. A mismatch produces a silent "Never run" row in the Scan Status card.
+
+**Adding a new Security Audit scan tool:**
+1. Add the exact nav label to `_AUDIT_SCAN_LABELS` in `security_overview_page.py` (adds a row to the Scan Status card).
+2. If the scan needs no user-supplied host (can run automatically), also add it to `_AUDIT_SEQUENCE` in `security_overview_page.py` — this includes it in the "▶ Run Security Audit" coordinator. Currently only 2 scans qualify: Port Scan (TCP) and Exposed to Internet.
+3. Wire `_nav_set_scan_state` calls in all three slots: start, result, error.
+
+Enforcement: `tests/test_scan_status_labels.py` and `tests/test_nav_scan_badges.py` cover the
+registry update logic. No automated test enforces that every audit handler calls this — rely on
+code review and the fact that a missing call produces a visibly wrong "Never run" in the UI.
 
 ### RULE-ENFORCE1 (required): Rules that rely on agent memory or discipline fail — prefer tool enforcement
 

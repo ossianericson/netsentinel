@@ -543,6 +543,7 @@ class SpeedTestPage(QWidget):
         )
         root.addWidget(hdr)
         self._page_header_bar = hdr
+        hdr.add_chip("Last run: never", key="last_run")
 
         # ── Ookla CLI install banner (hidden if CLI already present) ──────────
         self._ookla_banner = OoklaCliBanner(parent=self)
@@ -1034,6 +1035,22 @@ class SpeedTestPage(QWidget):
         import time
         if time.time() - self._last_fetch_ts > 1800:
             self._fetch_servers()
+        self._refresh_last_run_chip()
+
+    def _refresh_last_run_chip(self) -> None:
+        """Update the 'Last run' chip from the scan registry."""
+        try:
+            import json
+            from PyQt6.QtCore import QSettings
+            from ui.tabs_helpers import _scan_age_str
+            raw = QSettings("NetSentinel", "NetSentinel").value(
+                "scan_registry/state", "{}", type=str
+            )
+            reg = json.loads(raw)
+            ts = reg.get("Speed Test", {}).get("ts", 0)
+            self._page_header_bar.set_chip_by_key("last_run", f"Last run: {_scan_age_str(ts)}")
+        except Exception:
+            pass  # non-fatal — chip stays at its last value
 
     @pyqtSlot(list)
     def _on_servers_ready(self, servers: list) -> None:

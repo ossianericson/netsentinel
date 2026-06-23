@@ -124,8 +124,11 @@ class _ReconTabsMixin:
         from PyQt6.QtWidgets import QStackedWidget as _SW3
         self._syn_stack = _SW3()
         self._syn_stack.addWidget(_empty_state_widget(
-            "🔎", "No scan run yet",
-            "Open ports on every device in your network, ranked by risk.",
+            "◈", "Port Scan (TCP) — not yet run",
+            "Discovers open TCP ports on every device in your network, ranked by risk.\n\n"
+            "Requires: Administrator + Npcap\n"
+            "Scan time: ~2–5 minutes for 20 devices\n\n"
+            "High-risk findings appear automatically in Security Overview.",
             None, None,
         ))
         self._syn_stack.addWidget(self._recon_syn_table)
@@ -151,6 +154,7 @@ class _ReconTabsMixin:
         )
         self._recon_syn_table.setRowCount(0)
         self._syn_status.setText("⏳  Scanning ports…  this may take up to 30 seconds")
+        self._nav_set_scan_state("Port Scan (TCP)", "running")
         mode_text = self._syn_ports_combo.currentText()
         if "Full range" in mode_text:
             ports = list(range(1, 65536))
@@ -242,8 +246,11 @@ class _ReconTabsMixin:
         from PyQt6.QtWidgets import QStackedWidget as _SW
         self._udp_stack = _SW()
         self._udp_stack.addWidget(_empty_state_widget(
-            "📻", "No scan run yet",
-            "Enter an IP or hostname above and click UDP Scan to probe UDP services.",
+            "◆", "UDP Scan — not yet run",
+            "Probes UDP services on a specific host — DNS, DHCP, SNMP, TFTP, and others.\n\n"
+            "Requires: Administrator + Npcap\n"
+            "Scan time: ~1–3 minutes per host\n\n"
+            "Findings appear automatically in Security Overview.",
             None, None,
         ))
         self._udp_stack.addWidget(self._recon_udp_table)
@@ -263,6 +270,7 @@ class _ReconTabsMixin:
             return
         self._recon_udp_table.setRowCount(0)
         self._udp_status.setText("⏳  Scanning UDP ports…  this may take 1–2 minutes")
+        self._nav_set_scan_state("Port Scan (UDP)", "running")
         self._udp_worker = UDPScanWorker(host=host)
         self._udp_worker.result.connect(self._on_udp_result)
         self._udp_worker.status.connect(self._udp_status.setText)
@@ -322,6 +330,7 @@ class _ReconTabsMixin:
         if self._os_worker and self._os_worker.isRunning():
             return
         self._recon_os_table.setRowCount(0)
+        self._nav_set_scan_state("OS Detection", "running")
         self._os_worker = OSFingerprintWorker(ips=ips)
         self._os_worker.result.connect(self._on_os_result)
         self._os_worker.status.connect(self._os_status.setText)
@@ -332,7 +341,9 @@ class _ReconTabsMixin:
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(8, 8, 8, 8)
-        self._risk_status = QLabel("Risk scorer idle. Run Device Fingerprint scan first.")
+        self._risk_status = QLabel(
+            "Risk scorer idle — will populate automatically after network scan."
+        )
         self._risk_status.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:11px;padding:4px 0;")
         ctrl = QHBoxLayout()
         btn = QPushButton("🎯  Score All Devices")
@@ -449,13 +460,20 @@ class _ReconTabsMixin:
             return
 
         self._recon_cve_table.setRowCount(0)
+        self._nav_set_scan_state("CVE Lookup", "running")
         self._cve_worker = CVELookupWorker(service_versions=list(set(versions)))
         self._cve_worker.cve_result.connect(self._on_cve_result)
         self._cve_worker.status.connect(self._cve_status.setText)
         self._cve_worker.finished_all.connect(lambda: self._cve_status.setText(
             self._cve_status.text() + "  ✓ Done."
         ), Qt.ConnectionType.QueuedConnection)
+        self._cve_worker.finished_all.connect(self._on_cve_finished, Qt.ConnectionType.QueuedConnection)
         self._cve_worker.start()
+
+    @pyqtSlot()
+    def _on_cve_finished(self) -> None:
+        if getattr(self, "_pending_security_tools", []):
+            self._advance_security_audit()
 
     def _build_recon_exposure_tab(self) -> QWidget:
         w = QWidget()
@@ -507,6 +525,7 @@ class _ReconTabsMixin:
             return
         self._recon_exposure_table.setRowCount(0)
         self._exposure_verdict.hide()
+        self._nav_set_scan_state("Exposed to Internet", "running")
         self._exposure_worker = InternetExposureWorker()
         self._exposure_worker.result.connect(self._on_exposure_result)
         self._exposure_worker.status.connect(self._exposure_status.setText)
@@ -625,6 +644,7 @@ class _ReconTabsMixin:
         self._cred_worker.result.connect(self._on_cred_result)
         self._cred_worker.status.connect(self._cred_status.setText)
         self._cred_worker.error.connect(lambda e: self._cred_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._nav_set_scan_state("Login Test", "running")
         self._cred_worker.start()
 
     def _build_recon_discovery_tab(self) -> QWidget:
@@ -690,6 +710,7 @@ class _ReconTabsMixin:
         self._discovery_worker.result.connect(self._on_discovery_result)
         self._discovery_worker.status.connect(self._disc_status.setText)
         self._discovery_worker.error.connect(lambda e: self._disc_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
+        self._nav_set_scan_state("Full Device Discovery", "running")
         self._discovery_worker.start()
 
     def _build_recon_smb_tab(self) -> QWidget:
@@ -1478,4 +1499,82 @@ class _ReconTabsMixin:
             f"✓ Done — {total} endpoint(s), {fails} FAIL, {total - fails} OK."
         )
         self._btn_pe_run.setEnabled(True)
+
+    # ── OS Detection helpers ───────────────────────────────────────────────────
+
+    def _update_os_tab_from_m1(self) -> None:
+        """Update OS Detection status when M1 data arrives — shows device count as CTA."""
+        if not hasattr(self, "_os_status") or not getattr(self, "_m1_result", None):
+            return
+        devices = self._m1_result.get("devices", [])
+        n = len(devices)
+        if n > 0:
+            s = "s" if n != 1 else ""
+            self._os_status.setText(
+                f"{n} device{s} discovered — click Fingerprint to detect operating systems "
+                f"(requires admin + Npcap)"
+            )
+
+    def _prefill_os_from_m1(self) -> None:
+        """Infer OS family from M1 device_type/vendor/hostname. Low-confidence — shown until active fingerprint runs."""
+        if not hasattr(self, "_os_stack") or not getattr(self, "_m1_result", None):
+            return
+        devices = self._m1_result.get("devices", [])
+        if not devices:
+            return
+
+        _OS_HINTS: dict[str, tuple] = {
+            "router":         ("Linux / Router OS",    "Medium — inferred from role"),
+            "gateway":        ("Linux / Router OS",    "Medium — inferred from role"),
+            "switch":         ("Cisco IOS / Linux",    "Low — inferred from role"),
+            "access point":   ("Linux (embedded)",     "Low — inferred from role"),
+            "printer":        ("Embedded RTOS",        "Low — inferred from role"),
+            "apple":          ("macOS / iOS",          "Medium — vendor match"),
+            "samsung":        ("Android",              "Medium — vendor match"),
+            "android":        ("Android",              "Medium — vendor match"),
+            "windows":        ("Windows",              "Medium — hostname hint"),
+            "linux":          ("Linux",                "Medium — hostname hint"),
+            "raspberry":      ("Linux (Raspberry Pi)", "High — hostname match"),
+            "synology":       ("DSM (Linux)",          "High — vendor match"),
+            "qnap":           ("QTS (Linux)",          "High — vendor match"),
+            "esxi":           ("VMware ESXi",          "High — hostname match"),
+            "plex":           ("Linux",                "Medium — service hint"),
+        }
+
+        from PyQt6.QtWidgets import QTableWidgetItem as _TI
+        from PyQt6.QtGui import QColor as _QC
+        t = self._recon_os_table
+        t.setRowCount(0)
+        for d in devices:
+            if isinstance(d, dict):
+                ip          = d.get("ip", "")
+                device_type = (d.get("device_type") or "").lower()
+                vendor      = (d.get("vendor") or "").lower()
+                hostname    = (d.get("hostname") or "").lower()
+            else:
+                ip          = getattr(d, "ip", "")
+                device_type = (getattr(d, "device_type", "") or "").lower()
+                vendor      = (getattr(d, "vendor", "") or "").lower()
+                hostname    = (getattr(d, "hostname", "") or "").lower()
+
+            combined = f"{device_type} {vendor} {hostname}"
+            os_family, confidence = "Unknown", "Low — no hint available"
+            for key, (fam, conf) in _OS_HINTS.items():
+                if key in combined:
+                    os_family, confidence = fam, conf
+                    break
+
+            row = t.rowCount()
+            t.insertRow(row)
+            for col, val in enumerate([ip, "—", os_family, confidence, "—", "—"]):
+                item = _TI(val)
+                item.setForeground(_QC(TEXT_SECONDARY if col in (1, 4, 5) else TEXT_PRIMARY))
+                t.setItem(row, col, item)
+
+        if t.rowCount() > 0:
+            self._os_stack.setCurrentIndex(1)  # show table, hide empty state
+            self._os_status.setText(
+                f"Showing {t.rowCount()} inferred OS guesses from device discovery — "
+                f"click Fingerprint to get accurate results"
+            )
 

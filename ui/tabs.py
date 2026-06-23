@@ -203,6 +203,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         from ui.pages.dns_zone_page import DnsZonePage
         self._dns_zone_page = DnsZonePage(parent=None)
+        self._dns_zone_page.scan_complete.connect(self._on_dns_zone_complete)
 
         from ui.pages.threat_intel_page import ThreatIntelPage
         self._threat_intel_page = ThreatIntelPage(parent=None)
@@ -288,6 +289,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         from ui.pages.service_diagnostics_page import ServiceDiagnosticsPage
         self._service_diagnostics_page = ServiceDiagnosticsPage(parent=None)
+        self._service_diagnostics_page.scan_complete.connect(self._on_service_diag_complete)
 
         from ui.pages.hardware_integration_page import HardwareIntegrationPage
         self._hardware_integration_page = HardwareIntegrationPage(parent=None)
@@ -1005,6 +1007,22 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         # Keep self._tabs pointing at something for any legacy code that checks it
         self._tabs = container
         return container
+
+    def _on_dns_zone_complete(self, verdict: str) -> None:
+        """Feed DNS Zone scan completion into the scan registry."""
+        import time as _time
+        self._nav_set_scan_state("DNS Zone Map", "fresh", ts=_time.time(), verdict=verdict)
+
+    def _on_service_diag_complete(self) -> None:
+        """Feed Service Diagnostics completion into the scan registry."""
+        import time as _time
+        result = getattr(self._service_diagnostics_page, "_last_result", None)
+        verdict = ""
+        if result is not None:
+            svc = getattr(result, "service_name", "")
+            layer = getattr(result, "failure_layer", "none")
+            verdict = f"{svc}: {layer}" if layer != "none" else f"{svc}: OK"
+        self._nav_set_scan_state("Service Diagnostics", "fresh", ts=_time.time(), verdict=verdict or "Diagnostics complete")
 
     def _on_service_page_diagnose(self, service_id: str) -> None:
         """Navigate to Service Diagnostics, pre-selecting service_id if provided."""

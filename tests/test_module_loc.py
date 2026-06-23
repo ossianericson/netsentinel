@@ -53,7 +53,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
     # Sprint 19: _NavBuilderMixin → nav/builder.py; _MonitorStateMixin → monitor_state.py;
     # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines. FINAL GOAL ACHIEVED.
-    "dashboard.py": 2520,  # Sprint 11: +7 lines (guided tour wiring); target remains dashboard decomposition
+    "dashboard.py": 2560,  # Security UX: +8 audit coordinator state; +10 silent audit dispatch; scan registry feed for Speed Test (+5)
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -87,12 +87,12 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # All Overview tile classes (_BaseTile subclasses) + _TILE_CLASSES/_DEFAULT_ORDER.
     # Single concern, appropriate size for now.  Watch for growth.
-    "widgets/overview_tile.py": 1950,  # actual 1,867 + margin (Sprint 4 new file; S15-1)
+    "widgets/overview_tile.py": 2100,  # actual 1,916 + _ScanStatusTile (~85 lines); split planned to overview_tile_scan.py
 
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
     # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1495,  # v2.1.16: startup cache restore — Inventory (+24) + m1_table map-cache (+14) + mesh re-apply (+7)
+    "scan_wiring.py": 1530,  # Sprint A: +5 lines (_nav_set_scan_state wiring in result handlers)
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.
@@ -215,7 +215,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # _NavBuilderMixin — all nav structure building + runtime + command palette + pin management.
     # Extracted from dashboard.py (Sprint 19). If grows past 1,500, split: nav_palette.py.
-    "nav/builder.py": 1623,  # actual 1,423 + 200 margin (Sprint 7: Recent rail shortcut, S7-4)
+    "nav/builder.py": 1730,  # Sprint C: +106 lines (_FRESH_SECONDS, _restore_scan_registry, _start_staleness_timer, _check_and_stale_registry, QSettings persistence)
 
     # _MonitorStateMixin — verdict/badge/pill display, KPI tiles, pulse bar, overall verdict.
     # Also contains RiskBadge, VerdictPanel, _color_for_level, _bg_for_level.

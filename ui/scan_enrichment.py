@@ -7,6 +7,7 @@ ScanResultMixin inherits ScanEnrichmentMixin.
 from __future__ import annotations
 
 import re
+import time
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
@@ -407,6 +408,11 @@ class ScanEnrichmentMixin:
             + (f"  ·  connected: {my_ssid}" if my_ssid else "")
         )
         self._update_overall_verdict()
+        _m4_verdict = (
+            f"{len(networks)} networks — {rogue_c} suspicious, {hidden_c} hidden"
+            + (f"  ·  connected: {my_ssid}" if my_ssid else "")
+        )
+        self._nav_set_scan_state("WiFi Networks", "fresh", ts=time.time(), verdict=_m4_verdict)
 
     def _on_m5_result(self, corr):
         self._m5_result = corr
@@ -551,6 +557,7 @@ class ScanEnrichmentMixin:
         )
         self._cred_verdict.show()
         self._cred_status.setText("Credentialed scan complete.")
+        self._nav_set_scan_state("Login Test", "fresh", ts=time.time(), verdict=res.plain_verdict)
 
         # ── Device Info tab ───────────────────────────────────────────────
         info_rows = [
@@ -599,6 +606,7 @@ class ScanEnrichmentMixin:
     def _on_discovery_result(self, res):
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
         self._disc_status.setText(res.plain_verdict)
+        self._nav_set_scan_state("Full Device Discovery", "fresh", ts=time.time(), verdict=res.plain_verdict)
         for dev in res.devices:
             r = self._recon_disc_table.rowCount()
             self._recon_disc_table.insertRow(r)
