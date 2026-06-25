@@ -4,6 +4,16 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.18
+
+**Added**
+- `modules/device_types.py` — canonical device-type label constants (`TYPE_SMART_PLUG`, `TYPE_SMART_THERMOSTAT`, `TYPE_SMART_BULB`, Matter); import from here, never hardcode strings (P1-1–P1-4)
+
+**Fixed**
+- Nest vendor regex no longer collides with generic Nest thermostats; wearable dead-code path removed (P0-1, P0-2)
+
+---
+
 ### v2.1.17
 
 **Fixed**

@@ -183,7 +183,19 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.17 (current)
+### v2.1.18 (current)
+
+**Added**
+- `modules/device_types.py` — canonical IoT device-type label constants (`TYPE_SMART_PLUG`, `TYPE_SMART_THERMOSTAT`, `TYPE_SMART_BULB`, Matter)
+
+**Fixed**
+- Nest vendor regex collision resolved; wearable dead-code path removed
+- Monitor resume bar is now blue (informational) instead of amber
+- "Action needed" card on Home page only appears for genuine unacknowledged alerts
+
+---
+
+### v2.1.17
 
 **Fixed**
 - Monitor resume bar is now blue (informational) instead of amber — resuming a monitor is expected, not a warning
