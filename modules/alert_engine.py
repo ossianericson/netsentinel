@@ -201,7 +201,7 @@ class AlertEngine(_AlertChecksMixin):
         """Set how many simultaneous HOST_DOWN alerts trigger consolidation (default 5)."""
         self._consolidation_threshold = max(2, int(n))
 
-    def check_escalations(self, store) -> List[dict]:
+    def check_escalations(self, store: MetricStore) -> List[dict]:
         """
         Return fired alerts that are unacknowledged and past their escalation threshold.
 

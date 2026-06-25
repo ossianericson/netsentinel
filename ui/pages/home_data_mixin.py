@@ -416,18 +416,9 @@ class _HomeDataMixin:
     # ── Action-needed card ────────────────────────────────────────────────────
 
     def set_action_needed(self, pending_alerts: int, offline_devices: int) -> None:
-        """Update the offline-devices portion of the Action Needed card (DASH-1)."""
-        self._ac_offline_count = offline_devices
-        if offline_devices > 0:
-            self._ac_devices_lbl.setText(
-                f"{offline_devices} device{'s' if offline_devices != 1 else ''} offline"
-            )
-        else:
-            self._ac_devices_lbl.setText("")
-        if pending_alerts == 0:
-            has_alert_rows = self._ac_alert_rows_lay.count() > 0
-            if not has_alert_rows:
-                self._action_card.setVisible(offline_devices > 0)
+        """Hide the action card when alerts clear (offline devices are not actionable)."""
+        if pending_alerts == 0 and self._ac_alert_rows_lay.count() == 0:
+            self._action_card.setVisible(False)
 
     def set_pending_alert_rows(self, alerts: list) -> None:
         """ALERT-3: Populate the action-needed card with per-alert rows + inline ack."""
@@ -504,7 +495,7 @@ class _HomeDataMixin:
         has_alerts = len(alerts) > 0
         self._ac_alert_rows_widget.setVisible(has_alerts)
         self._ac_view_all_btn.setVisible(has_alerts)
-        self._action_card.setVisible(has_alerts or self._ac_offline_count > 0)
+        self._action_card.setVisible(has_alerts)
 
     def _ack_alert_row(self, alert_id, row_widget) -> None:
         if self._store and alert_id is not None:
@@ -523,8 +514,7 @@ class _HomeDataMixin:
         if remaining == 0:
             self._ac_alert_rows_widget.setVisible(False)
             self._ac_view_all_btn.setVisible(False)
-            if self._ac_offline_count == 0:
-                self._action_card.setVisible(False)
+            self._action_card.setVisible(False)
 
     def _scroll_to_setup_card(self) -> None:
         """Scroll to / expand the Getting Started card."""

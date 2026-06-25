@@ -24,7 +24,10 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from modules.metric_store import MetricStore
 
 # ── Days required before baseline is considered mature ───────────────────────
 _BASELINE_DAYS = 7
@@ -127,7 +130,7 @@ class BaselineLearner:
             return True
         return any(b.is_mature for b in self._host_baselines.values())
 
-    def refresh(self, store) -> None:
+    def refresh(self, store: MetricStore) -> None:
         """Recompute baselines from MetricStore.  Call periodically (not on every cycle)."""
         now = time.time()
         self._refresh_host_baselines(store, now)

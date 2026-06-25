@@ -110,7 +110,8 @@ netsentinel/
 │   ├── port_scanner.py
 │   ├── private_endpoint_checker.py  # RFC 1918 boundary exposure checker
 │   ├── process_monitor.py      # Active process-to-socket correlation (psutil-based)
-│   ├── protocol_animator.py    # AnimNode/AnimStep scene builders for protocol viz
+│   ├── protocol_animator.py    # AnimNode/AnimStep scene builders for protocol viz (ARP, DNS, TCP, DHCP, STP)
+│   ├── protocol_animator_extra.py # Five additional scene builders — OSPF, NAT, VLAN 802.1Q, TLS 1.3, ICMP traceroute
 │   ├── report_exporter.py      # Public API: save_*() entry points, JSON/CSV/NMap/card/lab
 │   ├── report_isp.py           # ISP Accountability Report builder (S20-5 split)
 │   ├── report_html.py          # HTML generation helpers — CSS, _badge, module HTML builders (S2-2 split)
@@ -223,7 +224,7 @@ netsentinel/
 │   │   ├── ookla_cli_banner.py     # Dismissible install banner for Ookla CLI
 │   │   ├── overview_page.py
 │   │   ├── plugin_device_page.py   # Plugin Devices — plugin-provided virtual device pages
-│   │   ├── protocol_viz_page.py    # Interactive ARP/DNS/TCP/DHCP/STP animation
+│   │   ├── protocol_viz_page.py    # Interactive protocol animation — 10 protocols (ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN, TLS, ICMP) in a 2-row grid picker
 │   │   ├── reports_page.py
 │   │   ├── rest_api_page.py        # REST API — enable toggle, port, API key, live status probe, endpoint reference
 │   │   ├── security_overview_page.py # Security Overview — aggregate security findings dashboard; `_AUDIT_SCAN_LABELS` tuple (9 nav-page labels shown in Scan Status card); `_AUDIT_SEQUENCE` tuple (2-item subset that the "Run Security Audit" coordinator fires: "Port Scan (TCP)", "Exposed to Internet"); Scan Status card with `_scan_status_table`; `update_scan_registry(registry)`, `notify_scan_complete()` public API

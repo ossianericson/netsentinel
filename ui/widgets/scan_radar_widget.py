@@ -45,30 +45,13 @@ class ScanRadarWidget(QWidget):
         self._tick_timer.start()
 
     def stop(self) -> None:
-        """Stop the animation (does not clear devices — last frame stays visible)."""
+        """Stop the animation and clear the widget."""
         self._tick_timer.stop()
+        self._devices.clear()
+        self.repaint()
 
     def add_device(self, ip: str, name: str = "", device_type: str = "") -> None:
-        """Add a device dot at the position derived from its IP octets."""
-        parts = ip.split(".")
-        try:
-            third  = int(parts[2]) if len(parts) > 2 else 0
-            fourth = int(parts[3]) if len(parts) > 3 else 0
-        except ValueError:
-            third, fourth = 0, 0
-
-        azimuth = (fourth * 360 / 256 + third * 47) % 360
-        ring    = ((third % 4) + 1) / 4          # 0.25 / 0.50 / 0.75 / 1.00
-
-        self._devices.append({
-            "ip":        ip,
-            "name":      name or ip,
-            "type":      device_type,
-            "azimuth":   azimuth,
-            "ring":      ring,
-            "born_tick": self._tick_count,
-        })
-        self.update()
+        pass  # intentional no-op: radar is a pure sweep animation
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
@@ -130,45 +113,6 @@ class ScanRadarWidget(QWidget):
             int(cx), int(cy),
             int(cx + radius * math.sin(sweep_rad)),
             int(cy - radius * math.cos(sweep_rad)),
-        )
-
-        # ── Device dots ───────────────────────────────────────────────────────
-        for dev in self._devices:
-            dot_rad  = math.radians(dev["azimuth"])
-            dot_r    = radius * dev["ring"]
-            dx = cx + dot_r * math.sin(dot_rad)
-            dy = cy - dot_r * math.cos(dot_rad)
-
-            age = self._tick_count - dev["born_tick"]
-            if age < self._BURST_TICKS:
-                # Burst ring fades out over BURST_TICKS frames
-                burst_alpha = int(200 * (1 - age / self._BURST_TICKS))
-                burst_size  = self._DOT_RADIUS + age * 2
-                burst_c = QColor(RADAR_GREEN)
-                burst_c.setAlpha(burst_alpha)
-                p.setPen(QPen(burst_c, 1))
-                p.setBrush(QColor(0, 0, 0, 0))
-                p.drawEllipse(
-                    int(dx - burst_size), int(dy - burst_size),
-                    burst_size * 2, burst_size * 2,
-                )
-
-            dot_colour = QColor(RADAR_GREEN)
-            p.setBrush(dot_colour)
-            p.setPen(QPen(QColor(RADAR_BG), 1))
-            p.drawEllipse(
-                int(dx - self._DOT_RADIUS), int(dy - self._DOT_RADIUS),
-                self._DOT_RADIUS * 2, self._DOT_RADIUS * 2,
-            )
-
-        # ── Status text ───────────────────────────────────────────────────────
-        p.setPen(QColor(RADAR_GREEN))
-        count = len(self._devices)
-        txt = f"Scanning…  {count} device{'s' if count != 1 else ''} found"
-        p.drawText(
-            0, int(cy + radius + 6), w, 20,
-            0x0004 | 0x0080,   # AlignHCenter | TextSingleLine (Qt alignment flags)
-            txt,
         )
 
         p.end()

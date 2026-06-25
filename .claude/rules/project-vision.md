@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.16**
+Current version: **v2.1.17**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -126,7 +126,7 @@ Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness 
 - **Natural language device search** — `modules/nl_query.py`
 
 ### Education
-- **Interactive protocol visualizer** — animated ARP/DNS/TCP/DHCP/STP diagrams using real scan data (`ui/pages/protocol_viz_page.py`, `modules/protocol_animator.py`)
+- **Interactive protocol visualizer** — 10-protocol animated diagrams (ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN 802.1Q, TLS 1.3, ICMP traceroute) using real scan data (`ui/pages/protocol_viz_page.py`, `modules/protocol_animator.py`, `modules/protocol_animator_extra.py`)
 - **Lab / scenario mode** — guided exercises with hints, solution reveals, exportable HTML results; live challenges injected from Network Logger events (`ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`)
 - **Contextual explainer panel** — `ui/widgets/explainer_panel.py`; collapsible plain-English panel on detection pages
 

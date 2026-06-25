@@ -46,6 +46,7 @@ def _isolate_render_cache(tmp_path, monkeypatch):
     monkeypatch.setattr("modules.network_map_cache.get_app_data_dir", lambda: tmp_path)
 
 
+
 @pytest.fixture
 def page(qt_app):
     p = NetworkMapPage()

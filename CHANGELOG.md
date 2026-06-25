@@ -4,9 +4,18 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.17
+
+**Fixed**
+- Monitor resume bar now uses informational blue styling instead of amber/warning — resuming a monitor from the previous session is expected behaviour, not a caution event
+- "Action needed" card on Home page no longer appears for offline devices; card is now reserved for genuine unacknowledged user-configured alerts only
+
+---
+
 ### v2.1.16
 
 **Added**
+- `modules/protocol_animator_extra.py` — five additional scene builders (OSPF Hello/LSA, NAT translation, VLAN 802.1Q, TLS 1.3 handshake, ICMP traceroute); Protocol Visualizer expanded from 5 to 10 protocols with a 2-row button grid
 - Security Overview Scan Center card — per-audit verdict, last-run timestamp, and staleness timer; scan registry persists results across restarts
 - Scan Status tile on the Overview page with live verdict chips for all 5 audit categories
 - Last Run chips on the Security Overview header row for at-a-glance audit freshness

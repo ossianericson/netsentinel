@@ -1,6 +1,10 @@
 """Tests for modules/alert_pattern_detector.py (S4-6 pattern-based suppression)."""
 import datetime
+import statistics
+import time
 from unittest.mock import MagicMock
+
+import pytest
 
 
 def _ts_for(day_of_week: int, hour: int, week_offset: int = 0) -> int:
@@ -107,22 +111,19 @@ def test_suggestion_has_description():
     assert len(s.suggested_label) > 0
 
 
-# ── Window bounds include buffer ──────────────────────────────────────────────
+# ── Window bounds — parametrized across boundary conditions ───────────────────
 
-def test_window_bounds_include_buffer():
+@pytest.mark.parametrize("hour,expected_start,expected_end", [
+    pytest.param(2,  (1, 30),  (3, 30),  id="normal-buffer"),
+    pytest.param(0,  (0,  0),  (1, 30),  id="midnight-floor"),
+    pytest.param(23, (22, 30), (23, 59), id="last-hour-cap"),
+    pytest.param(12, (11, 30), (13, 30), id="noon-symmetric"),
+])
+def test_window_bounds(hour, expected_start, expected_end):
     from modules.alert_pattern_detector import _window_bounds
-    start_h, start_m, end_h, end_m = _window_bounds(2)
-    # 2:00 with ±30 min buffer → start at 1:30, end at 3:30
-    assert (start_h, start_m) == (1, 30)
-    assert (end_h, end_m) == (3, 30)
-
-
-def test_window_bounds_midnight_floor():
-    from modules.alert_pattern_detector import _window_bounds
-    start_h, start_m, end_h, end_m = _window_bounds(0)
-    # Can't go before 00:00
-    assert start_h == 0
-    assert start_m == 0
+    start_h, start_m, end_h, end_m = _window_bounds(hour)
+    assert (start_h, start_m) == expected_start
+    assert (end_h, end_m) == expected_end
 
 
 # ── INFO alerts are ignored ───────────────────────────────────────────────────
@@ -170,3 +171,40 @@ def test_store_error_returns_empty():
     detector = PatternDetector()
     result = detector.find_suggestions(store)
     assert result == []
+
+
+# ── Scaling guard — O(n) not O(n²) ────────────────────────────────────────────
+
+def _median_time(fn, repeats: int = 5) -> float:
+    times = []
+    for _ in range(repeats):
+        t0 = time.perf_counter()
+        fn()
+        times.append(time.perf_counter() - t0)
+    return statistics.median(times)
+
+
+def test_find_suggestions_scales_linearly():
+    """Alert history 10× larger should not take more than 15× longer (O(n) budget)."""
+    from modules.alert_pattern_detector import PatternDetector
+
+    def _alerts(n: int):
+        return [
+            _make_alert("Host Down", f"192.168.1.{i % 254 + 1}", i % 7, i % 24, i % 3)
+            for i in range(n)
+        ]
+
+    small, large = _alerts(100), _alerts(1000)
+    detector = PatternDetector()
+
+    t_small = _median_time(lambda: detector.find_suggestions(_make_store(small)))
+    t_large = _median_time(lambda: detector.find_suggestions(_make_store(large)))
+
+    if t_small < 1e-7:
+        pytest.skip("below measurement threshold")
+
+    ratio = t_large / t_small
+    assert ratio < 15, (
+        f"Scaling ratio {ratio:.1f}x for 10x input suggests O(n²) regression "
+        f"(small={t_small:.6f}s, large={t_large:.6f}s)"
+    )

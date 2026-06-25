@@ -230,7 +230,7 @@ class _RttMiniChart(QWidget):
         super().__init__(parent)
         self._fig    = Figure(figsize=(3.5, 1.4), dpi=96, facecolor=BG_CARD)
         self._ax     = self._fig.add_subplot(111)
-        self._fig.set_tight_layout({"pad": 0.5})  # applied once; avoids per-redraw accumulation
+        self._fig.set_layout_engine("tight", pad=0.5)  # applied once; avoids per-redraw accumulation
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed

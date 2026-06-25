@@ -253,7 +253,7 @@ def test_mdns_hint_table(svc_type, expected_hint, expected_conf):
     ("internetgatewaydevice", "Router / Gateway",       "high"),
     ("mediarenderer",         "Smart TV",               "high"),
     ("printer",               "Print Server",           "high"),
-    ("binarylight",           "IoT Device",             "high"),
+    ("binarylight",           "Smart Plug",             "high"),
     ("digitalsecuritycamera", "IP Camera",              "high"),
     ("mediaserver",           "File / NAS Server",      "low"),
 ])

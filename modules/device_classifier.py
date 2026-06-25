@@ -16,6 +16,13 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from modules.device_types import (
+    TYPE_SMART_BULB,
+    TYPE_SMART_PLUG,
+    TYPE_SMART_SPEAKER,
+    TYPE_SMART_THERMOSTAT,
+)
+
 
 # ── Classification result type ────────────────────────────────────────────────
 
@@ -147,9 +154,93 @@ _RULES: list[dict] = [
         "label": "IP Camera",
         "hostname_re": r"cam|camera|ipcam|dvr|nvr|cctv",
     },
+    # ── Nest device disambiguation ─────────────────────────────────────────────
+    # These rules must precede the Video Doorbell rule.  Without them, any
+    # device with vendor="Nest Labs" (Hub, Thermostat, Audio) would be
+    # misclassified as a Video Doorbell by the first-match rule below.
+    {
+        "label": "Smart Home Hub / Display",
+        "vendor_re": r"nest",
+        "hostname_re": r"nest[\-_]?(hub|display|audio|mini)",
+    },
+    {
+        "label": "Smart Thermostat",
+        "vendor_re": r"nest",
+        "any_ports": {9543},
+    },
+    {
+        "label": "Smart Thermostat",
+        "vendor_re": r"nest",
+        "hostname_re": r"nest[\-_]?(thermostat|therm)",
+    },
+    # Nest Doorbell / Cam requires a video-streaming port to be confirmed.
+    # Port 9543 is the Nest local API (thermostat); 554/8443 are video streams.
     {
         "label": "Video Doorbell / Intercom",
-        "vendor_re": r"ring|nest|arlo|doorbird|aiphone|2n",
+        "vendor_re": r"nest",
+        "any_ports": {554, 8443},
+    },
+    {
+        "label": "Video Doorbell / Intercom",
+        "vendor_re": r"ring|arlo|doorbird|aiphone|2n",
+    },
+    # ── Smart Plugs ──────────────────────────────────────────────────────────
+    # Allterco Robotics manufactures the Shelly family (plugs, relays, dimmers).
+    {
+        "label": TYPE_SMART_PLUG,
+        "vendor_re": r"allterco",
+    },
+    {
+        "label": TYPE_SMART_PLUG,
+        "hostname_re": r"shellyplug|shelly1pm|shelly2pm|shelly[\-_]?em|shelly[\-_]?plug",
+    },
+    # TP-Link smart plugs (Kasa/Tapo) share the tp-link OUI with routers.
+    # Port 9999 is the Kasa local-control API — not open on routers.
+    {
+        "label": TYPE_SMART_PLUG,
+        "vendor_re": r"tp.?link|kasa",
+        "any_ports": {9999},
+    },
+    {
+        "label": TYPE_SMART_PLUG,
+        "hostname_re": r"kasa[\-_]?plug|hs1\d{2}|ep\d{2,3}|kp\d{2,3}",
+    },
+    # ── Smart Bulbs ──────────────────────────────────────────────────────────
+    {
+        "label": TYPE_SMART_BULB,
+        "vendor_re": r"lifx",
+    },
+    {
+        "label": TYPE_SMART_BULB,
+        "vendor_re": r"govee",
+    },
+    {
+        "label": TYPE_SMART_BULB,
+        "hostname_re": r"shellydimmer|shellyrgbw|shellyflood|shelly[\-_]?bulb",
+    },
+    # ── Smart Thermostats ────────────────────────────────────────────────────
+    {
+        "label": TYPE_SMART_THERMOSTAT,
+        "vendor_re": r"ecobee",
+    },
+    {
+        "label": TYPE_SMART_THERMOSTAT,
+        "hostname_re": r"ecobee",
+    },
+    {
+        "label": TYPE_SMART_THERMOSTAT,
+        "vendor_re": r"tado",
+    },
+    {
+        "label": TYPE_SMART_THERMOSTAT,
+        "hostname_re": r"tado[\-_\.]",
+    },
+    # Honeywell thermostat disambiguation: must precede the Industrial / ICS
+    # vendor rule which matches "honeywell" with no other discriminator.
+    {
+        "label": TYPE_SMART_THERMOSTAT,
+        "vendor_re": r"honeywell",
+        "hostname_re": r"tcc[\-_]?\d|hz[\-_]?therm|th\d{4}|lyric|evohome|t[6-9]\d{3}[\-_]",
     },
     # ── Smart home & IoT ─────────────────────────────────────────────────────
     {
@@ -169,12 +260,12 @@ _RULES: list[dict] = [
         "vendor_re": r"espressif|particle|arduino|seeed|sonoff|tasmota",
     },
     {
-        "label": "Smart Speaker / Display",
-        "vendor_re": r"amazon|google|sonos|bose|harman|jbl|anker soundcore",
-        "hostname_re": r"echo|alexa|nest|chromecast|home.?pod|sonos|google.?home",
+        "label": TYPE_SMART_SPEAKER,
+        "vendor_re": r"amazon|google|bose|harman|jbl|anker soundcore",
+        "hostname_re": r"echo|alexa|nest|chromecast|home.?pod|google.?home",
     },
     {
-        "label": "Smart Speaker / Display",
+        "label": TYPE_SMART_SPEAKER,
         "hostname_re": r"echo|alexa|chromecast|homepod",
     },
     {
@@ -326,6 +417,11 @@ _RULES: list[dict] = [
     {
         "label": "Single Board Computer",
         "hostname_re": r"raspberrypi|raspberry[\-_]pi|\brpi\d*\b|libreelec|dietpi|armbian|orangepi|bananapi|odroid|rock[\-_]?pi",
+    },
+    # ── Wearables ─────────────────────────────────────────────────────────────
+    {
+        "label": "Wearable",
+        "vendor_re": r"garmin|fitbit|polar electro|whoop|oura|suunto",
     },
     # ── Fallback by OS ────────────────────────────────────────────────────────
     {

@@ -1,8 +1,9 @@
 """
 Protocol Visualizer page — interactive animated protocol diagrams.
 
-Shows five protocols animated using real addresses from the last scan:
-  ARP resolution, DNS lookup, TCP three-way handshake, DHCP lease, STP election.
+Shows ten protocols animated using real addresses from the last scan:
+  ARP resolution, DNS lookup, TCP three-way handshake, DHCP lease, STP election,
+  OSPF Hello/LSA, NAT translation, VLAN 802.1Q tagging, TLS 1.3 handshake, ICMP traceroute.
 
 Auto-plays on protocol selection with play/pause, reset, and manual step controls.
 """
@@ -15,7 +16,7 @@ _IP_RE = _re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -26,6 +27,13 @@ from modules.protocol_animator import (
     build_dns_scene,
     build_stp_scene,
     build_tcp_scene,
+)
+from modules.protocol_animator_extra import (
+    build_icmp_scene,
+    build_nat_scene,
+    build_ospf_scene,
+    build_tls_scene,
+    build_vlan_scene,
 )
 from ui.styles import (
     ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER,
@@ -43,6 +51,11 @@ _PROTOCOLS = [
     ("TCP",  "TCP Three-Way Handshake", "Layer 4 — Transmission Control Protocol"),
     ("DHCP", "DHCP Lease (DORA)",       "Layer 7 — Dynamic Host Configuration Protocol"),
     ("STP",  "STP Root Election",       "Layer 2 — Spanning Tree Protocol"),
+    ("OSPF", "OSPF Hello / LSA",        "Layer 3 — Open Shortest Path First routing"),
+    ("NAT",  "NAT Translation",         "Layer 3 — Network Address Translation"),
+    ("VLAN", "VLAN 802.1Q",             "Layer 2 — Virtual LAN tagging"),
+    ("TLS",  "TLS Handshake",           "Layer 4/7 — Transport Layer Security 1.3"),
+    ("ICMP", "ICMP Traceroute",         "Layer 3 — Internet Control Message Protocol"),
 ]
 
 # "Why this protocol matters" content shown below the step description.
@@ -93,6 +106,60 @@ _PROTOCOL_CONTEXT: dict[str, tuple[str, str, str]] = {
         "via Ethernet are a common source. NetSentinel's Rogue Bridge scanner captures BPDU frames "
         "and flags any switch that has claimed the root role unexpectedly.",
         "Rogue Bridge (STP)",
+    ),
+    "OSPF": (
+        "OSPF (Open Shortest Path First) is a link-state routing protocol used inside enterprise "
+        "and ISP networks. Every OSPF router floods its local link-state information to all peers, "
+        "so every router builds an identical map of the network and computes shortest paths independently.",
+        "OSPF relies on Hello packets to detect neighbor failures. If Hellos stop arriving within "
+        "the Dead Interval (typically 40 s), the link is declared down and SPF re-runs — causing "
+        "a brief traffic disruption. Misconfigured hello/dead timers or mismatched area IDs are "
+        "common causes of OSPF neighbor failures in lab environments.",
+        "Devices",
+    ),
+    "NAT": (
+        "NAT (Network Address Translation) allows many private devices to share a single public IP "
+        "address. The router maintains a translation table mapping internal (private IP:port) to "
+        "external (public IP:port) entries. Without NAT, IPv4 address exhaustion would have "
+        "prevented the internet from scaling to billions of devices.",
+        "NAT breaks end-to-end connectivity: inbound connections cannot reach private hosts unless "
+        "a port-forwarding rule is configured. It can also interfere with protocols that embed IP "
+        "addresses in their payload (FTP active mode, SIP, some VPN protocols). "
+        "NetSentinel's Exposure scanner checks whether your public ports are reachable from outside.",
+        "Exposed to Internet",
+    ),
+    "VLAN": (
+        "VLANs (Virtual Local Area Networks) partition a physical switch into multiple isolated "
+        "broadcast domains. Each VLAN behaves as if it were a separate physical network — devices "
+        "in different VLANs cannot communicate without a Layer 3 router, regardless of how many "
+        "ports they share on the same switch hardware.",
+        "A misconfigured trunk port that allows all VLANs (instead of a pruned list) can expose "
+        "one VLAN's traffic to another — a VLAN hopping attack. Rogue DHCP servers on one VLAN "
+        "can also leak into adjacent VLANs if 802.1Q tagging is not enforced on every port. "
+        "NetSentinel's DHCP scanner flags rogue servers regardless of VLAN placement.",
+        "DHCP Leases",
+    ),
+    "TLS": (
+        "TLS (Transport Layer Security) encrypts application data and authenticates servers using "
+        "digital certificates. TLS 1.3 (RFC 8446) replaced vulnerable earlier versions by removing "
+        "RSA key exchange, RC4, SHA-1, and CBC-mode ciphers — every connection now uses ECDH and "
+        "achieves perfect forward secrecy by default.",
+        "Expired, self-signed, or weak-cipher TLS certificates silently expose connections to "
+        "man-in-the-middle attacks. TLS 1.0/1.1 are deprecated; servers still accepting them are "
+        "vulnerable to POODLE and BEAST. NetSentinel's TLS & Exposure scanner checks certificate "
+        "expiry, cipher suite strength, and protocol version for every monitored host.",
+        "TLS & Exposure",
+    ),
+    "ICMP": (
+        "ICMP (Internet Control Message Protocol) is used for diagnostics and network error reporting. "
+        "Traceroute exploits the TTL mechanism: each router decrements TTL by 1 and replies with "
+        "Time Exceeded when TTL hits zero, revealing its IP address and the hop latency. "
+        "This lets you map every router between your device and any internet destination.",
+        "Asymmetric paths, rate-limited ICMP, and firewalls that block Time Exceeded messages can "
+        "produce misleading traceroute output ('* * *' hops). High RTT at one hop does not always "
+        "mean congestion there — routers deprioritise ICMP replies. "
+        "NetSentinel's Hop-by-Hop Trace page runs a full traceroute and annotates each hop.",
+        "Hop-by-Hop Trace",
     ),
 }
 
@@ -273,7 +340,7 @@ class ProtocolVizPage(QWidget):
         hdr_lay.setSpacing(2)
         hdr_lay.addWidget(_label("Protocol Visualizer", 16, TEXT_PRIMARY, bold=True))
         hdr_lay.addWidget(_label(
-            "Animated step-by-step diagrams of five protocols using your network's real addresses.",
+            "Animated step-by-step diagrams of ten protocols using your network's real addresses.",
             11, TEXT_SECONDARY,
         ))
         outer.addWidget(hdr)
@@ -296,10 +363,10 @@ class ProtocolVizPage(QWidget):
         picker_lay.setSpacing(6)
         picker_lay.addWidget(_label("Choose a protocol", 11, TEXT_SECONDARY))
 
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
+        proto_grid = QGridLayout()
+        proto_grid.setSpacing(8)
         self._proto_btns: dict[str, QPushButton] = {}
-        for key, title, sub in _PROTOCOLS:
+        for i, (key, title, sub) in enumerate(_PROTOCOLS):
             btn = QPushButton(title)
             btn.setCheckable(True)
             _defn = get_definition(key)
@@ -308,8 +375,8 @@ class ProtocolVizPage(QWidget):
             btn.setFixedHeight(36)
             btn.clicked.connect(lambda _checked, k=key: self._select_protocol(k))
             self._proto_btns[key] = btn
-            btn_row.addWidget(btn)
-        picker_lay.addLayout(btn_row)
+            proto_grid.addWidget(btn, i // 5, i % 5)
+        picker_lay.addLayout(proto_grid)
         bl.addWidget(picker_card)
         self._style_proto_btns()
 
@@ -543,6 +610,16 @@ class ProtocolVizPage(QWidget):
             scene = build_dhcp_scene(self._net_info)
         elif key == "STP":
             scene = build_stp_scene(self._m2_result)
+        elif key == "OSPF":
+            scene = build_ospf_scene(self._net_info)
+        elif key == "NAT":
+            scene = build_nat_scene(self._net_info)
+        elif key == "VLAN":
+            scene = build_vlan_scene(self._net_info)
+        elif key == "TLS":
+            scene = build_tls_scene(self._net_info, self._devices)
+        elif key == "ICMP":
+            scene = build_icmp_scene(self._net_info)
         else:
             scene = build_arp_scene(self._net_info, self._devices)
         self._enrich_scene_nodes(scene)

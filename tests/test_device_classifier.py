@@ -316,3 +316,254 @@ def test_get_all_device_types_all_strings():
     result = get_all_device_types()
     for item in result:
         assert isinstance(item, str) and item, f"Non-string or empty item: {item!r}"
+
+
+# ── P0-1: Nest vendor regex collision fix ────────────────────────────────────
+
+def test_nest_without_video_port_not_doorbell():
+    # Nest Hub / Thermostat with no video-streaming port must NOT become a doorbell.
+    result = classify(vendor="Nest Labs", hostname="", open_ports=set())
+    assert result != "Video Doorbell / Intercom"
+
+
+def test_nest_without_video_port_not_doorbell_443_only():
+    # Port 443 is cloud-only for Nest — not enough to confirm a doorbell.
+    result = classify(vendor="Nest Labs", hostname="", open_ports={443})
+    assert result != "Video Doorbell / Intercom"
+
+
+def test_nest_hub_by_hostname():
+    result = classify(vendor="Nest Labs", hostname="nest-hub-living", open_ports=set())
+    assert result == "Smart Home Hub / Display"
+
+
+def test_nest_hub_mini_by_hostname():
+    result = classify(vendor="Nest Labs", hostname="nestmini-abc123", open_ports=set())
+    assert result == "Smart Home Hub / Display"
+
+
+def test_nest_audio_by_hostname():
+    result = classify(vendor="Nest Labs", hostname="nest-audio-kitchen", open_ports=set())
+    assert result == "Smart Home Hub / Display"
+
+
+def test_nest_thermostat_by_local_api_port():
+    # Port 9543 is the Nest thermostat local API — conclusive evidence.
+    result = classify(vendor="Nest Labs", hostname="", open_ports={9543})
+    assert result == "Smart Thermostat"
+
+
+def test_nest_thermostat_by_hostname():
+    result = classify(vendor="Nest Labs", hostname="nest-thermostat-a1b2", open_ports=set())
+    assert result == "Smart Thermostat"
+
+
+def test_nest_doorbell_with_rtsp_port():
+    # Port 554 (RTSP) is a video-streaming port — confirms Nest doorbell / cam.
+    # Note: the IP Camera port rule fires before the Nest doorbell rule when port
+    # 554 is open, so "IP Camera" is also an acceptable result here.
+    result = classify(vendor="Nest Labs", hostname="", open_ports={554})
+    assert result in ("Video Doorbell / Intercom", "IP Camera")
+
+
+def test_nest_doorbell_with_8443_port():
+    # Port 8443 is Nest's video-stream port — confirms doorbell, not caught by
+    # the generic IP Camera port rule (which only matches 554/8554).
+    result = classify(vendor="Nest Labs", hostname="", open_ports={8443})
+    assert result == "Video Doorbell / Intercom"
+
+
+def test_ring_doorbell_still_works():
+    # Removing nest from the shared vendor_re must not break Ring.
+    result = classify(vendor="Ring Inc.", hostname="", open_ports=set())
+    assert result == "Video Doorbell / Intercom"
+
+
+def test_arlo_doorbell_still_works():
+    result = classify(vendor="Arlo Technologies", hostname="", open_ports=set())
+    assert result == "Video Doorbell / Intercom"
+
+
+# ── P0-2: Wearable classification ───────────────────────────────────────────
+
+def test_garmin_classified_as_wearable():
+    result = classify(vendor="Garmin International Inc.", hostname="", open_ports=set())
+    assert result == "Wearable"
+
+
+def test_fitbit_classified_as_wearable():
+    result = classify(vendor="Fitbit Inc.", hostname="", open_ports=set())
+    assert result == "Wearable"
+
+
+def test_suunto_classified_as_wearable():
+    result = classify(vendor="Suunto Oy", hostname="", open_ports=set())
+    assert result == "Wearable"
+
+
+def test_wearable_label_in_get_all_device_types():
+    from modules.device_classifier import get_all_device_types
+    assert "Wearable" in get_all_device_types()
+
+
+# ── P1-1: Smart Speaker label canonical fix ──────────────────────────────────
+
+def test_smart_speaker_canonical_label_not_display():
+    # "Smart Speaker / Display" was the old label; canonical is now "Smart Speaker"
+    result = classify(vendor="Amazon", hostname="echo-dot", open_ports=set())
+    assert result == "Smart Speaker"
+    assert result != "Smart Speaker / Display"
+
+
+def test_smart_speaker_google_home():
+    result = classify(vendor="Google", hostname="google-home-mini", open_ports=set())
+    assert result == "Smart Speaker"
+    assert result != "Smart Speaker / Display"
+
+
+def test_sonos_not_captured_by_smart_speaker_rule():
+    # Sonos should fall through to "Smart Speaker / Audio", not "Smart Speaker"
+    result = classify(vendor="Sonos", hostname="sonos-living-room", open_ports=set())
+    assert result == "Smart Speaker / Audio"
+    assert result != "Smart Speaker"
+
+
+def test_smart_speaker_label_in_get_all_device_types():
+    from modules.device_classifier import get_all_device_types
+    types = get_all_device_types()
+    assert "Smart Speaker" in types
+    assert "Smart Speaker / Display" not in types
+
+
+# ── P1-2: Smart Plug rules ────────────────────────────────────────────────────
+
+def test_shelly_vendor_classified_as_smart_plug():
+    result = classify(vendor="Allterco Robotics", hostname="", open_ports=set())
+    assert result == "Smart Plug"
+    assert result != "IoT Device"
+
+
+def test_shelly_hostname_classified_as_smart_plug():
+    result = classify(vendor="", hostname="shellyplug-s-abc123", open_ports=set())
+    assert result == "Smart Plug"
+    assert result != "IoT Device"
+
+
+def test_shelly_1pm_hostname_classified_as_smart_plug():
+    result = classify(vendor="Allterco Robotics", hostname="shelly1pm-abc", open_ports=set())
+    assert result == "Smart Plug"
+    assert result != "IoT Device"
+
+
+def test_tplink_kasa_port_9999_classified_as_smart_plug():
+    # TP-Link with Kasa local-control API port → Smart Plug, not Router
+    result = classify(vendor="TP-Link", hostname="", open_ports={9999})
+    assert result == "Smart Plug"
+    assert result != "Router / Gateway"
+
+
+def test_tplink_router_without_port_9999_not_smart_plug():
+    # TP-Link with standard web ports → still Router / Gateway
+    result = classify(vendor="TP-Link", hostname="", open_ports={80, 443})
+    assert result == "Router / Gateway"
+    assert result != "Smart Plug"
+
+
+def test_kasa_hostname_classified_as_smart_plug():
+    result = classify(vendor="", hostname="kasa-plug-kitchen", open_ports=set())
+    assert result == "Smart Plug"
+    assert result != "IoT Device"
+
+
+def test_hs110_kasa_model_hostname():
+    result = classify(vendor="", hostname="hs110-living-room", open_ports=set())
+    assert result == "Smart Plug"
+    assert result != "IoT Device"
+
+
+# ── P1-2: Smart Bulb rules ────────────────────────────────────────────────────
+
+def test_lifx_vendor_classified_as_smart_bulb():
+    result = classify(vendor="LIFX Inc.", hostname="", open_ports=set())
+    assert result == "Smart Bulb"
+    assert result != "IoT Device"
+
+
+def test_govee_vendor_classified_as_smart_bulb():
+    result = classify(vendor="Govee", hostname="", open_ports=set())
+    assert result == "Smart Bulb"
+    assert result != "IoT Device"
+
+
+def test_shelly_dimmer_hostname_classified_as_smart_bulb():
+    result = classify(vendor="", hostname="shellydimmer-abc123", open_ports=set())
+    assert result == "Smart Bulb"
+    assert result != "Smart Plug"
+    assert result != "IoT Device"
+
+
+def test_shellyrgbw_hostname_classified_as_smart_bulb():
+    result = classify(vendor="", hostname="shellyrgbw2-kitchen", open_ports=set())
+    assert result == "Smart Bulb"
+    assert result != "IoT Device"
+
+
+# ── P1-3: Thermostat rules ────────────────────────────────────────────────────
+
+def test_ecobee_vendor_classified_as_thermostat():
+    result = classify(vendor="Ecobee Technologies", hostname="", open_ports=set())
+    assert result == "Smart Thermostat"
+    assert result != "IoT Device"
+
+
+def test_ecobee_hostname_classified_as_thermostat():
+    result = classify(vendor="", hostname="ecobee-thermostat-hall", open_ports=set())
+    assert result == "Smart Thermostat"
+    assert result != "IoT Device"
+
+
+def test_tado_vendor_classified_as_thermostat():
+    result = classify(vendor="Tado GmbH", hostname="", open_ports=set())
+    assert result == "Smart Thermostat"
+    assert result != "IoT Device"
+
+
+def test_tado_hostname_classified_as_thermostat():
+    result = classify(vendor="", hostname="tado-thermostat-01.local", open_ports=set())
+    assert result == "Smart Thermostat"
+    assert result != "IoT Device"
+
+
+def test_honeywell_thermostat_not_ics():
+    # Honeywell T-series thermostat hostname must NOT fall to Industrial / ICS.
+    result = classify(vendor="Honeywell International", hostname="lyric-thermostat", open_ports=set())
+    assert result == "Smart Thermostat"
+    assert result != "Industrial / ICS Device"
+
+
+def test_honeywell_evohome_not_ics():
+    result = classify(vendor="Honeywell", hostname="evohome-controller", open_ports=set())
+    assert result == "Smart Thermostat"
+    assert result != "Industrial / ICS Device"
+
+
+def test_honeywell_plc_without_thermostat_hostname_is_ics():
+    # Honeywell with no thermostat-specific hostname must still reach ICS rule.
+    result = classify(vendor="Honeywell", hostname="", open_ports=set())
+    assert result == "Industrial / ICS Device"
+    assert result != "Smart Thermostat"
+
+
+def test_smart_plug_label_in_get_all_device_types():
+    from modules.device_classifier import get_all_device_types
+    assert "Smart Plug" in get_all_device_types()
+
+
+def test_smart_bulb_label_in_get_all_device_types():
+    from modules.device_classifier import get_all_device_types
+    assert "Smart Bulb" in get_all_device_types()
+
+
+def test_smart_thermostat_label_in_get_all_device_types():
+    from modules.device_classifier import get_all_device_types
+    assert "Smart Thermostat" in get_all_device_types()

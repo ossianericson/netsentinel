@@ -1409,8 +1409,12 @@ class _NavBuilderMixin:
                 })
 
         _PAGE_SHORTCUTS: dict[str, str] = {
-            "Network Logger":  "Ctrl+L",
-            "Settings": "Ctrl+,",
+            "Overview":        "Alt+1",
+            "Devices":         "Alt+2",
+            "Speed Test":      "Alt+3",
+            "What's Wrong?":   "Alt+4",
+            "Network Logger":  "Alt+5 / Ctrl+L",
+            "Settings":        "Ctrl+,",
         }
         seen: set = set()
         pages = []
@@ -1470,11 +1474,17 @@ class _NavBuilderMixin:
             pass  # non-fatal — discover_data not importable
 
         actions = [
-            {"icon": "⟳", "label": "Run Full Scan",    "kind": "action"},
-            {"icon": "⚙", "label": "Open Settings",    "kind": "action"},
-            {"icon": "◄", "label": "Toggle Sidebar",   "kind": "action"},
-            {"icon": "◈", "label": "Diagnose Network", "kind": "action"},
-            {"icon": "◎", "label": "Give Feedback",    "kind": "action"},
+            {"icon": "⟳", "label": "Run Full Scan",          "kind": "action", "shortcut": "Ctrl+R"},
+            {"icon": "⚡", "label": "Start Speed Test",       "kind": "action", "shortcut": "Alt+3"},
+            {"icon": "◈", "label": "Run Diagnosis",          "kind": "action", "shortcut": "Alt+4"},
+            {"icon": "▣", "label": "Export Report",          "kind": "action"},
+            {"icon": "⊕", "label": "Add Monitored Service",  "kind": "action"},
+            {"icon": "▲", "label": "View Alert History",     "kind": "action"},
+            {"icon": "◆", "label": "Copy API Key",           "kind": "action"},
+            {"icon": "▤", "label": "Open Network Doc",       "kind": "action"},
+            {"icon": "⚙", "label": "Open Settings",          "kind": "action", "shortcut": "Ctrl+,"},
+            {"icon": "◄", "label": "Toggle Sidebar",         "kind": "action"},
+            {"icon": "◎", "label": "Give Feedback",          "kind": "action"},
         ]
         return recent_items + pages_section + feat_section + actions
 
@@ -1524,6 +1534,11 @@ class _NavBuilderMixin:
             ("Ctrl+,",      "Settings"),
             ("Ctrl+L",      "Network Logger"),
             ("Ctrl+Q",      "Quit"),
+            ("Alt+1",       "Overview"),
+            ("Alt+2",       "Devices"),
+            ("Alt+3",       "Speed Test"),
+            ("Alt+4",       "What's Wrong?"),
+            ("Alt+5",       "Network Logger"),
             ("J / K",       "Next / previous row in tables"),
             ("Escape",      "Close panel / flyout"),
         ]
@@ -1575,12 +1590,37 @@ class _NavBuilderMixin:
             self._replay_recent_action(action[len("__recent__"):])
         elif action == "Run Full Scan":
             self._start_full_scan()
+        elif action in ("Start Speed Test", "Run Speed Test"):
+            self._nav_rail_go_to("Speed Test")
+            if hasattr(self, "_speed_test_page"):
+                self._speed_test_page.scan_requested.emit()
+        elif action in ("Run Diagnosis", "Diagnose Network"):
+            self._open_diagnosis()
+        elif action == "Export Report":
+            self._export_report()
+        elif action == "Add Monitored Service":
+            self._nav_rail_go_to("Service Heartbeat")
+        elif action == "View Alert History":
+            self._nav_rail_go_to("Notifications")
+            if hasattr(self, "_notifications_page"):
+                self._notifications_page.switch_to_history_tab()
+        elif action == "Copy API Key":
+            try:
+                from modules.rest_api import get_or_create_api_key
+                from PyQt6.QtWidgets import QApplication as _QApp
+                key = get_or_create_api_key()
+                if key:
+                    _QApp.clipboard().setText(key)
+            except Exception:
+                pass  # non-fatal — REST API may be disabled
+        elif action == "Open Network Doc":
+            self._nav_rail_go_to("Network Doc")
+            if hasattr(self, "_network_doc_page"):
+                self._network_doc_page._generate()
         elif action == "Open Settings":
             self._open_settings_dialog()
         elif action == "Toggle Sidebar":
             self._toggle_sidebar()
-        elif action == "Diagnose Network":
-            self._open_diagnosis()
         elif action == "Give Feedback":
             from ui.widgets.feedback_dialog import show_feedback_dialog
             show_feedback_dialog(self)

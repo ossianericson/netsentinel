@@ -266,6 +266,11 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         _quickcheck_sc = QShortcut(QKeySequence("Ctrl+Shift+H"), self)
         _quickcheck_sc.activated.connect(self._show_quick_check_window)
 
+        # Alt+1–5 — quick jump to five most-used pages
+        for _i, _lbl in enumerate(["Overview", "Devices", "Speed Test", "What's Wrong?", "Network Logger"], 1):
+            _sc = QShortcut(QKeySequence(f"Alt+{_i}"), self)
+            _sc.activated.connect(lambda _l=_lbl: self._nav_rail_go_to(_l))
+
         # Pinned pages — persisted across sessions
         self._nav_pinned_labels: list = self._load_pinned_labels()
         self._nav_label_to_widget: dict = {}
@@ -700,19 +705,19 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     def _build_monitor_resume_bar(self) -> "QWidget":
         from PyQt6.QtWidgets import QWidget as _W, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
         from PyQt6.QtCore import Qt as _Qt
-        from ui.styles import AMBER, TEXT_PRIMARY, BG_HOVER, NAV_BAR
+        from ui.styles import ACCENT, TEXT_PRIMARY, BG_HOVER, NAV_BAR
         container = _W()
         container.setObjectName("monitorResumeBar")
         container.setFixedHeight(28)
         container.setStyleSheet(
-            f"QWidget#monitorResumeBar {{ background:{AMBER}18;"
-            f" border-bottom: 1px solid {AMBER}55; }}"
+            f"QWidget#monitorResumeBar {{ background:{ACCENT}18;"
+            f" border-bottom: 1px solid {ACCENT}44; }}"
         )
         row = _HL(container)
         row.setContentsMargins(12, 0, 8, 0)
         row.setSpacing(6)
-        icon = _L("▶")
-        icon.setStyleSheet(f"color:{AMBER}; font-size:11px; background:transparent; border:none;")
+        icon = _L("●")
+        icon.setStyleSheet(f"color:{ACCENT}; font-size:8px; background:transparent; border:none;")
         row.addWidget(icon)
         self._monitor_resume_lbl = _L("")
         self._monitor_resume_lbl.setStyleSheet(
@@ -722,9 +727,9 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         btn_stop = _B("Stop all")
         btn_stop.setFixedHeight(20)
         btn_stop.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
             f" border-radius:3px; font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{AMBER}22; }}"
+            f"QPushButton:hover {{ background:{ACCENT}18; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         btn_stop.clicked.connect(self._stop_all_resumed_monitors)

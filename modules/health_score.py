@@ -15,7 +15,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from modules.metric_store import MetricStore
 
 
 @dataclass
@@ -41,7 +44,7 @@ class HealthScoreCalculator:
     _GREEN = 75
     _AMBER = 45
 
-    def compute(self, store) -> HealthSnapshot:
+    def compute(self, store: MetricStore) -> HealthSnapshot:
         """Return a HealthSnapshot by querying MetricStore."""
         if store is None:
             return self._unknown_snapshot()
@@ -81,7 +84,7 @@ class HealthScoreCalculator:
 
     # ── Score components ──────────────────────────────────────────────────────
 
-    def _availability_score(self, store) -> Optional[float]:
+    def _availability_score(self, store: MetricStore) -> Optional[float]:
         """Average 24-hour uptime % across monitored hosts (0-100 scale)."""
         try:
             table = store.query_uptime_table(hours_list=[24.0])
@@ -98,7 +101,7 @@ class HealthScoreCalculator:
             return None
         return sum(uptimes) / len(uptimes)
 
-    def _latency_score(self, store) -> Optional[float]:
+    def _latency_score(self, store: MetricStore) -> Optional[float]:
         """Score based on average RTT vs expected thresholds (last 1 hour)."""
         try:
             hosts = store.query_all_rtt_hosts(hours=1.0)
@@ -131,7 +134,7 @@ class HealthScoreCalculator:
             return None
         return sum(scores) / len(scores)
 
-    def _alert_score(self, store) -> Optional[float]:
+    def _alert_score(self, store: MetricStore) -> Optional[float]:
         """Score penalised by recent unacknowledged alerts (last 24 h)."""
         try:
             alerts = store.get_recent_alerts(hours=24.0, limit=50)
@@ -152,7 +155,7 @@ class HealthScoreCalculator:
             return "amber"
         return "red"
 
-    def _stable_hours(self, store) -> float:
+    def _stable_hours(self, store: MetricStore) -> float:
         """Hours elapsed since the most recent alert."""
         try:
             alerts = store.get_recent_alerts(hours=168.0, limit=1)
@@ -224,7 +227,7 @@ class HealthScoreCalculator:
 
         return headline, sub
 
-    def _nothing_to_report(self, store) -> bool:
+    def _nothing_to_report(self, store: MetricStore) -> bool:
         """True when there is genuinely nothing for the user to act on (S8-6)."""
         try:
             if store.get_recent_alerts(hours=24.0, limit=5):

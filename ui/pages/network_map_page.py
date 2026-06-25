@@ -289,6 +289,13 @@ class NetworkMapPage(QWidget):
         if saved_view == "classic" or not self._web_available:
             self._inner_tab.setCurrentIndex(1)
 
+        # Traffic overlay is turned on the first time the page is shown (in
+        # showEvent) so the bandwidth legend is visible by default.  Deferring
+        # to showEvent keeps __init__ safe for headless tests that never call
+        # show() — BandwidthOverlayWorker (Scapy sniffer) must not start until
+        # the widget is actually on screen.
+        self._traffic_overlay_defaulted = False
+
     def _build_toolbar(self) -> QHBoxLayout:
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(0, 2, 0, 2)
@@ -1031,6 +1038,31 @@ class NetworkMapPage(QWidget):
         self._lldp_hint_label.setText(f"Traffic Overlay unavailable: {msg.splitlines()[0]}")
         self._lldp_hint_label.setVisible(True)
 
+    def showEvent(self, event) -> None:  # noqa: N802
+        """Fit the active view each time the page becomes visible, and apply
+        the traffic-overlay default on first show.
+
+        Cytoscape viewport may be at a stale zoom/scroll position after the
+        user navigates away and back; a short-delay fit snaps it to the current
+        node extents without requiring a manual "Fit" press.
+
+        Traffic overlay is defaulted to on here (not in __init__) so that
+        headless tests which never call show() never spawn a Scapy sniffer
+        thread (BandwidthOverlayWorker).
+        """
+        super().showEvent(event)
+        # Default traffic overlay to checked on first real show — legend helps
+        # users understand node colours.  _on_bw_error untoggles it gracefully
+        # if Scapy or admin rights are absent.
+        if not self._traffic_overlay_defaulted:
+            self._traffic_overlay_defaulted = True
+            self._btn_traffic.setChecked(True)
+        if self._outer_stack.currentIndex() == 1 and self._topology_loaded:
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(self.fit_view)
+            _t.start(200)
+
     @pyqtSlot(int)
     def _on_view_tab_changed(self, index: int) -> None:
         QSettings().setValue(_SETTINGS_KEY_VIEW, "interactive" if index == 0 else "classic")
@@ -1042,6 +1074,13 @@ class NetworkMapPage(QWidget):
             self._refresh_web_view(
                 diff=self._last_render_kwargs.get("diff") if self._diff_mode else None
             )
+            # Fit after switching back — the viewport may be zoomed in or
+            # scrolled from the last time Interactive was active.
+            if self._topology_loaded:
+                _t = QTimer(self)
+                _t.setSingleShot(True)
+                _t.timeout.connect(self.fit_view)
+                _t.start(300)
 
     def _on_export(self) -> None:
         """Trigger JS to capture a PNG from the Cytoscape view."""

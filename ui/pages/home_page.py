@@ -104,7 +104,6 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         super().__init__(parent)
         self._store = store
         self._alert_count = 0
-        self._ac_offline_count = 0
         self._device_count: int = 0
         self._signals_connected: bool = False
         self._first_run_mode: bool = False
@@ -590,29 +589,6 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._ac_view_all_btn.setVisible(False)
         _ac_outer.addWidget(self._ac_view_all_btn)
 
-        # ── Offline devices row (separate concern, unchanged) ─────────────────
-        _ac_devices_row = QHBoxLayout()
-        _ac_devices_row.setSpacing(8)
-        self._ac_devices_lbl = QLabel("")
-        self._ac_devices_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
-        _ac_devices_btn = QPushButton("View Devices →")
-        _ac_devices_btn.setFixedHeight(24)
-        _ac_devices_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        _ac_devices_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{RED}; border:1px solid {RED};"
-            f" border-radius:3px; font-size:11px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{RED}22; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{RED}; }}"
-        )
-        _ac_devices_btn.clicked.connect(lambda: self.navigate_to.emit("Inventory Changes"))
-        _ac_devices_row.addWidget(self._ac_devices_lbl)
-        _ac_devices_row.addWidget(_ac_devices_btn)
-        _ac_devices_row.addStretch()
-        _ac_outer.addLayout(_ac_devices_row)
-
-        self._ac_offline_count = 0  # track so ack-all can decide whether to hide card
         lay.addWidget(self._action_card)
 
         # ── Post-scan delta banner (hidden until 2nd+ scan) ───────────────────

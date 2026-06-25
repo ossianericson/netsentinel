@@ -18,8 +18,11 @@ Architecture rules
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Tuple
 import datetime
+
+if TYPE_CHECKING:
+    from modules.metric_store import MetricStore
 
 
 # ── Tuning constants ──────────────────────────────────────────────────────────
@@ -65,7 +68,7 @@ class PatternDetector:
         print(s.description)
     """
 
-    def find_suggestions(self, store) -> List[SuppSuggestion]:
+    def find_suggestions(self, store: MetricStore) -> List[SuppSuggestion]:
         """
         Return a list of ``SuppSuggestion`` instances for patterns detected
         in the last 21 days of alert history.  Returns an empty list on any

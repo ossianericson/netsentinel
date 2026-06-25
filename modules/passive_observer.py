@@ -19,6 +19,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
+from modules.device_types import TYPE_MATTER_DEVICE, TYPE_SMART_BULB, TYPE_SMART_PLUG
+
 _log = logging.getLogger(__name__)
 
 # ── Classification tables ──────────────────────────────────────────────────────
@@ -36,9 +38,9 @@ _SSDP_HINTS: dict[str, tuple[str, str]] = {
     "urn:schemas-upnp-org:device:printbasic":             ("Print Server",             "high"),
     "urn:schemas-upnp-org:device:scanner":                ("Print Server",             "low"),
     "urn:schemas-upnp-org:device:basic":                  ("IoT Device",               "low"),
-    "urn:schemas-upnp-org:device:binarylight":            ("IoT Device",               "high"),
-    "urn:schemas-upnp-org:device:dimminglamp":            ("IoT Device",               "high"),
-    "urn:schemas-upnp-org:device:switchpower":            ("IoT Device",               "high"),
+    "urn:schemas-upnp-org:device:binarylight":            (TYPE_SMART_PLUG,            "high"),
+    "urn:schemas-upnp-org:device:dimminglamp":            (TYPE_SMART_BULB,            "high"),
+    "urn:schemas-upnp-org:device:switchpower":            (TYPE_SMART_PLUG,            "high"),
     "urn:schemas-upnp-org:device:hvac":                   ("IoT Device",               "high"),
     "urn:schemas-upnp-org:device:digitalsecuritycamera":  ("IP Camera",                "high"),
     "urn:schemas-upnp-org:device:remoteuiclient":         ("Smart TV",                 "low"),
@@ -57,7 +59,9 @@ _MDNS_HINTS: dict[str, tuple[str, str]] = {
     "_raop._tcp":           ("Smart TV",                 "high"),
     "_homekit._tcp":        ("IoT Device",               "high"),
     "_hap._tcp":            ("IoT Device",               "high"),
-    "_matter._tcp":         ("IoT Device",               "high"),
+    "_matter._tcp":         (TYPE_MATTER_DEVICE,         "high"),
+    "_matter._udp":         (TYPE_MATTER_DEVICE,         "high"),
+    "_meshcop._udp":        (TYPE_MATTER_DEVICE,         "high"),
     "_smb._tcp":            ("File / NAS Server",        "low"),
     "_afpovertcp._tcp":     ("File / NAS Server",        "low"),
     "_nfs._tcp":            ("File / NAS Server",        "low"),

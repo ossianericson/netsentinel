@@ -125,7 +125,7 @@ All features in this section require running as Administrator / `sudo`. Most als
 
 | Feature | What it does | Key module |
 |---|---|---|
-| **Protocol Visualizer** | Animated step-by-step diagrams of ARP resolution, DNS lookup, TCP handshake, DHCP lease, and STP election — using real scan data from your own network. CompTIA N+ / CCNA objective badges on each diagram. | `ui/pages/protocol_viz_page.py` |
+| **Protocol Visualizer** | Animated step-by-step diagrams of 10 protocols: ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN 802.1Q, TLS 1.3, and ICMP traceroute — using real scan data from your own network. CompTIA N+ / CCNA objective badges on each diagram. | `ui/pages/protocol_viz_page.py`, `modules/protocol_animator_extra.py` |
 | **Lab Mode** | Four guided exercises: Find the Rogue Device, Diagnose Slow DNS, Identify the Broadcast Storm Source, Map Your Subnet. Progressive hints, solution reveal, exportable HTML result reports. Live challenges injected from Network Logger events. | `ui/pages/lab_mode_page.py` |
 | **Feature Guide** | Searchable catalog of all 83+ features across 9 groups with filter bar and direct Open buttons. | `ui/pages/discover_page.py` |
 | **Help** | Per-page help popovers (? button). 24-term networking glossary accessible from any page. "Common Scenarios" lookup table mapping 17 user goals to the correct feature. | `ui/help.py` |

@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-4400%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-4480%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -18,7 +18,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
-**62 pages &nbsp;·&nbsp; 90+ detection modules &nbsp;·&nbsp; 4,400+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
+**4,480+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -130,7 +130,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 </p>
 
 **Built-in reference material:**
-- **Protocol Visualizer** — animated ARP/DNS/TCP/DHCP/STP diagrams using real scan data from your own network (not placeholder addresses)
+- **Protocol Visualizer** — 10-protocol animated diagrams (ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN, TLS, ICMP) using real scan data from your own network (not placeholder addresses)
 - **Lab / Scenario Mode** — four guided exercises with progressive hints, solution reveal, and exportable HTML result reports
 - **IP subnet calculator** with CIDR reference and subnetting examples
 - **24-term networking glossary** accessible via the help button from any page
@@ -139,7 +139,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**4,400+ automated tests** across 284 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**4,480+ automated tests** across 280 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -155,7 +155,7 @@ python -m pytest tests/ -v --tb=short
 
 Three strict layers: `modules/` holds all detection logic with zero PyQt imports; `workers/` are QThread wrappers that emit signals and never touch UI state; `ui/` reads from MetricStore and never writes to it directly. Every file write goes through `get_app_data_dir()` — the installed binary lives in a read-only `Program Files` directory.
 
-`dashboard.py` started at 13,483 lines. Decomposed over four sprints into six inherited mixins and nine page-factory mixins — now 1,967 lines. Every module capped at 600 lines by `tests/test_module_loc.py`; 19 modules split during development when they hit the limit.
+`dashboard.py` is a thin shell that delegates to six inherited mixins and nine page-factory mixins, each responsible for a single concern. A CI-enforced 600-line budget per module keeps every file readable and independently testable.
 
 → **[Architecture reference](docs/architecture.md)** — design decisions, module inventory, worker table, test architecture
 
@@ -183,15 +183,11 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.16 (current)
-
-**Added**
-- Security Overview Scan Center card with per-audit verdicts, last-run timestamps, and staleness timer; scan results persist across restarts
-- Scan Status Overview tile with live verdict chips for all 5 audit categories; Last Run chips on Security Overview header
+### v2.1.17 (current)
 
 **Fixed**
-- "Run Audit" from Security Overview now navigates to the correct audit page (was running silently with no feedback)
-- Verdict strings now populated in all 5 Scan Status card rows
+- Monitor resume bar is now blue (informational) instead of amber — resuming a monitor is expected, not a warning
+- "Action needed" card on Home page now only appears for genuine unacknowledged user-configured alerts; offline devices no longer trigger it
 
 ---
 
@@ -199,17 +195,15 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 **Added**
 - Settings page category chip bar (`All | Appearance | Monitoring | Alerts | Integrations | Advanced`) with per-session persistence
-- `ui/guided_tour.py` — 5-step first-run guided tour; auto-starts on first launch, restartable from Settings → Advanced
-- `ui/widgets/inventory_dialogs.py` — 4 dialog classes extracted from `inventory_page.py` (file budget relief)
-- `ui/widgets/scan_radar_widget.py` — phosphor-green radar sweep animation on Home page during scan
-- Empty state cards with inline CTA on 8 pages; right-click context menus on all 19 scan result tables; loading states on scan-dependent pages
-- RULE-T2 worker lifecycle tests for 22 workers; behavioral integration tests for 18 additional pages
+- Guided first-run tour — 5 steps covering core navigation; auto-starts on first launch, restartable from Settings → Advanced
+- Radar sweep animation on the Home page while a scan is running
+- Empty state cards with inline action buttons on pages that require a scan; right-click context menus on all scan result tables; loading states on scan-dependent pages
 
 **Fixed**
-- Devices table blank after scan (`DeviceInfo.get()` eager-eval crash); table now preserved atomically during scan
-- Discovered Devices showing only raw IPs on restart — seeded from network map cache
-- Three Inventory scan bugs: vendor persistence, mesh enrichment, blank cells on re-scan
-- Settings page redundant left sidebar removed; all unparented `QTimer.singleShot` replaced (RULE-WIN5)
+- Devices table blank after scan; table now updated atomically
+- Discovered Devices showing only raw IPs on restart — now seeded from the network map cache
+- Vendor persistence, mesh enrichment, and blank cells on re-scan in the Inventory table
+- Timer-fires-on-destroyed-widget crashes eliminated across all pages
 
 ---
 

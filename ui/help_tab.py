@@ -281,15 +281,25 @@ def build_help_tab(window) -> QWidget:
         # Navigation
         ("Ctrl + K",           "Open command palette — fuzzy-search any page or action"),
         ("Ctrl + F",           "Focus sidebar search"),
+        ("?",                  "Show keyboard shortcuts reference (press from anywhere)"),
         ("Escape",             "Close flyout panel / dismiss command palette"),
+        # Quick-jump (Alt + number)
+        ("Alt + 1",            "Jump to Overview"),
+        ("Alt + 2",            "Jump to Devices"),
+        ("Alt + 3",            "Jump to Speed Test"),
+        ("Alt + 4",            "Jump to What's Wrong?"),
+        ("Alt + 5 / Ctrl+L",   "Jump to Network Logger"),
+        ("Ctrl + ,",           "Open Settings"),
         # Scanning
         ("Ctrl + R",           "Run full scan"),
         ("Ctrl + E",           "Export last scan results"),
         # Application
+        ("Ctrl + Shift + H",   "Quick Check Window — compact floating health status"),
         ("Ctrl + Q",           "Quit application"),
         ("F5",                 "Refresh current page"),
         ("Ctrl + Shift + M",   "Visual Diagnostic Overlay (Matrix mode)"),
         # Tables & rows
+        ("J / K",              "Next / previous row in any table"),
         ("Right-click row",    "Context menu: Copy IP / Copy MAC / How to Fix / Port Scan / WoL"),
         ("Click column header","Sort table by that column"),
         # macOS equivalents
@@ -319,7 +329,7 @@ def build_help_tab(window) -> QWidget:
         ("WiFi Heatmap",         "Import floor plan, record signal-strength readings, IDW heatmap overlay per AP"),
         ("Geolocation Map",      "World-map plot of internet-facing IPs — MaxMind GeoLite2 local DB, no external API"),
         ("Custom Triggers",      'Alert expressions: avg(rtt["ip"], 5m) > 80 — visual builder, test now, cooldown'),
-        ("Protocol Visualizer",  "Animated ARP, DNS, TCP, DHCP, and STP diagrams using your real scan data"),
+        ("Protocol Visualizer",  "Animated diagrams of 10 protocols (ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN, TLS, ICMP) using your real scan data"),
         ("Lab Mode",             "Hands-on sandbox exercises for learning networking protocols step by step"),
     ]))
 
@@ -360,10 +370,8 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Security Overview Scan Center", "Each audit type now has a card showing its last-run time, pass/fail verdict, and a staleness timer — results persist across restarts."),
-        ("Scan Status tile", "The Overview page Scan Status tile shows live verdict chips for all 5 audit categories at a glance."),
-        ("Security audit navigation fix", "Clicking 'Run Audit' in Security Overview now navigates to the correct audit page instead of running silently in the background."),
-        ("Test suite: 4,456 tests", "4,456 automated tests now cover all pages, workers, and modules across 284 test files."),
+        ("Monitor resume bar", "The bar shown when background monitors restart from the previous session is now blue (informational) instead of amber — resuming is expected, not a warning."),
+        ("Action needed card", "The 'Action needed' card on the Home page now only appears for genuine unacknowledged alerts you configured. Offline devices are no longer flagged as requiring action."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

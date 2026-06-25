@@ -1,0 +1,137 @@
+"""Tests for modules/protocol_animator_extra.py — five additional scene builders."""
+
+
+_NET_INFO = {
+    "gateway": "192.168.1.1",
+    "local_ips": [{"ip": "192.168.1.100"}],
+    "gateway_mac": "aa:bb:cc:dd:ee:ff",
+    "dns_servers": ["8.8.8.8"],
+}
+
+
+def test_protocol_animator_extra_import():
+    from modules import protocol_animator_extra
+    assert protocol_animator_extra is not None
+
+
+def test_build_ospf_scene_returns_valid_structure():
+    from modules.protocol_animator_extra import build_ospf_scene
+    from modules.protocol_animator import ProtocolSceneData
+    scene = build_ospf_scene(_NET_INFO)
+    assert isinstance(scene, ProtocolSceneData)
+    assert scene.protocol == "OSPF"
+    assert len(scene.nodes) >= 2
+    assert len(scene.steps) >= 2
+
+
+def test_build_ospf_scene_fallback_with_empty_net_info():
+    from modules.protocol_animator_extra import build_ospf_scene
+    from modules.protocol_animator import ProtocolSceneData
+    scene = build_ospf_scene({})
+    assert isinstance(scene, ProtocolSceneData)
+    assert len(scene.nodes) == 3
+    assert len(scene.steps) == 4
+
+
+def test_build_nat_scene_returns_valid_structure():
+    from modules.protocol_animator_extra import build_nat_scene
+    from modules.protocol_animator import ProtocolSceneData
+    scene = build_nat_scene(_NET_INFO)
+    assert isinstance(scene, ProtocolSceneData)
+    assert scene.protocol == "NAT"
+    assert len(scene.nodes) == 3
+    assert len(scene.steps) == 4
+
+
+def test_build_nat_scene_step_labels():
+    from modules.protocol_animator_extra import build_nat_scene
+    scene = build_nat_scene(_NET_INFO)
+    labels = [s.packet_label for s in scene.steps]
+    assert "TCP SYN" in labels[0]
+    assert "translated" in labels[1]
+    assert "SYN-ACK" in labels[2]
+
+
+def test_build_vlan_scene_returns_valid_structure():
+    from modules.protocol_animator_extra import build_vlan_scene
+    from modules.protocol_animator import ProtocolSceneData
+    scene = build_vlan_scene({})
+    assert isinstance(scene, ProtocolSceneData)
+    assert scene.protocol == "VLAN"
+    assert len(scene.nodes) == 4
+    assert len(scene.steps) == 4
+
+
+def test_build_vlan_scene_has_broadcast_step():
+    from modules.protocol_animator_extra import build_vlan_scene
+    scene = build_vlan_scene({})
+    has_broadcast = any(s.is_broadcast for s in scene.steps)
+    assert has_broadcast, "VLAN scene should include a broadcast step for isolation explanation"
+
+
+def test_build_tls_scene_returns_valid_structure():
+    from modules.protocol_animator_extra import build_tls_scene
+    from modules.protocol_animator import ProtocolSceneData
+    scene = build_tls_scene(_NET_INFO, [])
+    assert isinstance(scene, ProtocolSceneData)
+    assert scene.protocol == "TLS"
+    assert len(scene.nodes) == 2
+    assert len(scene.steps) == 4
+
+
+def test_build_tls_scene_has_reply_steps():
+    from modules.protocol_animator_extra import build_tls_scene
+    scene = build_tls_scene(_NET_INFO, [])
+    reply_count = sum(1 for s in scene.steps if s.is_reply)
+    assert reply_count >= 2, "TLS scene should have at least two reply steps"
+
+
+def test_build_icmp_scene_returns_valid_structure():
+    from modules.protocol_animator_extra import build_icmp_scene
+    from modules.protocol_animator import ProtocolSceneData
+    scene = build_icmp_scene(_NET_INFO)
+    assert isinstance(scene, ProtocolSceneData)
+    assert scene.protocol == "ICMP"
+    assert len(scene.nodes) == 4
+    assert len(scene.steps) == 4
+
+
+def test_build_icmp_scene_includes_gateway_as_hop1():
+    from modules.protocol_animator_extra import build_icmp_scene
+    scene = build_icmp_scene(_NET_INFO)
+    hop1_label = next(n.label for n in scene.nodes if n.id == "hop1")
+    assert "192.168.1.1" in hop1_label
+
+
+def test_all_scenes_have_non_empty_explanations():
+    from modules.protocol_animator_extra import (
+        build_icmp_scene, build_nat_scene, build_ospf_scene,
+        build_tls_scene, build_vlan_scene,
+    )
+    builders = [
+        build_ospf_scene(_NET_INFO),
+        build_nat_scene(_NET_INFO),
+        build_vlan_scene({}),
+        build_tls_scene(_NET_INFO, []),
+        build_icmp_scene(_NET_INFO),
+    ]
+    for scene in builders:
+        for step in scene.steps:
+            assert step.explanation.strip(), (
+                f"{scene.protocol} step '{step.packet_label}' has empty explanation"
+            )
+
+
+def test_all_scenes_have_non_empty_subtitles():
+    from modules.protocol_animator_extra import (
+        build_icmp_scene, build_nat_scene, build_ospf_scene,
+        build_tls_scene, build_vlan_scene,
+    )
+    for fn in [build_ospf_scene, build_nat_scene, build_icmp_scene]:
+        scene = fn(_NET_INFO)
+        assert scene.subtitle, f"{scene.protocol} subtitle should not be empty"
+    for fn in [build_vlan_scene]:
+        scene = fn({})
+        assert scene.subtitle, f"{scene.protocol} subtitle should not be empty"
+    scene = build_tls_scene(_NET_INFO, [])
+    assert scene.subtitle, "TLS subtitle should not be empty"

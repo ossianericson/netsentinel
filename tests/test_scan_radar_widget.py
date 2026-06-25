@@ -48,41 +48,41 @@ def test_stop_deactivates_timer(radar_widget):
     assert not radar_widget._tick_timer.isActive()
 
 
-def test_start_clears_devices(radar_widget):
-    radar_widget.add_device("192.168.1.1", "Router", "router")
-    assert len(radar_widget._devices) == 1
+def test_start_resets_state(radar_widget):
+    # start() must reset sweep angle and tick count; _devices stays empty (add_device is no-op)
     radar_widget.start()
+    assert radar_widget._sweep_angle == 0.0
+    assert radar_widget._tick_count == 0
     assert radar_widget._devices == []
     radar_widget.stop()
 
 
-def test_add_device(radar_widget):
+def test_add_device_is_noop(radar_widget):
+    # add_device() is a pure no-op; _devices must remain empty after any call
     radar_widget.add_device("192.168.1.5", "Router", "router")
-    assert len(radar_widget._devices) == 1
-    dev = radar_widget._devices[0]
-    assert dev["ip"] == "192.168.1.5"
-    assert dev["name"] == "Router"
-    assert dev["type"] == "router"
+    assert radar_widget._devices == []
 
 
-def test_add_multiple_devices(radar_widget):
+def test_add_multiple_devices_noop(radar_widget):
+    # multiple calls to add_device() must not populate _devices
     radar_widget.add_device("192.168.1.1", "Gateway", "router")
     radar_widget.add_device("192.168.1.10", "Laptop", "laptop")
     radar_widget.add_device("192.168.1.20", "Phone", "mobile")
-    assert len(radar_widget._devices) == 3
+    assert radar_widget._devices == []
 
 
-def test_add_device_ip_fallback_for_empty_name(radar_widget):
+def test_add_device_accepts_optional_args(radar_widget):
+    # add_device() must accept call with only ip (no optional args) without raising
     radar_widget.add_device("10.0.0.1")
-    assert radar_widget._devices[0]["name"] == "10.0.0.1"
+    assert radar_widget._devices == []
 
 
-def test_device_position_is_deterministic(radar_widget):
-    radar_widget.add_device("192.168.1.100", "A", "pc")
-    radar_widget.add_device("192.168.1.100", "B", "pc")
-    # Same IP → same azimuth and ring
-    assert radar_widget._devices[0]["azimuth"] == radar_widget._devices[1]["azimuth"]
-    assert radar_widget._devices[0]["ring"] == radar_widget._devices[1]["ring"]
+def test_stop_clears_widget(radar_widget):
+    # Regression test for the green-blob bug: stop() must clear _devices and stop the timer
+    radar_widget.start()
+    radar_widget.stop()
+    assert not radar_widget._tick_timer.isActive()
+    assert radar_widget._devices == []
 
 
 def test_minimum_size(radar_widget):

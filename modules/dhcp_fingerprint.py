@@ -23,6 +23,8 @@ import threading
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+from modules.device_types import TYPE_SMART_PLUG
+
 
 # ── Result type ────────────────────────────────────────────────────────────────
 
@@ -58,6 +60,13 @@ _VCI_MAP: List[Tuple[str, str, str, str]] = [
     (r"^Apple\b",                  "Apple Device",           "Apple OS",             "low"),
     # Linux — dhcpcd (used by Arch, Alpine, Void, Pi OS)
     (r"^dhcpcd-",                  "Linux / Unix Host",      "Linux",                "low"),
+    # TP-Link Kasa / Tapo smart plugs (udhcpc with brand-specific VCI prefix)
+    (r"^[Kk]asa",                  TYPE_SMART_PLUG,          "Kasa OS",              "high"),
+    (r"^[Tt]apo",                  TYPE_SMART_PLUG,          "Tapo OS",              "high"),
+    # Shelly smart plugs / relays (Allterco Robotics)
+    (r"^[Ss]helly",                TYPE_SMART_PLUG,          "Shelly OS",            "high"),
+    # Tuya OEM modules (many white-label smart plugs; type uncertain → IoT)
+    (r"^TUYA|^tuya[\-_]?",         "IoT Device",             "Tuya OS",              "low"),
     # Linux — udhcpc / udhcpd (BusyBox; routers, IoT, embedded)
     (r"^udhcpc?[\s\-]",            "IoT Device",             "Embedded Linux",       "low"),
     # Raspberry Pi

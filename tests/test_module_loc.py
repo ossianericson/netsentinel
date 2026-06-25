@@ -32,6 +32,11 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # Natural next split: extract _build_style() → topology_cytoscape_style.py.
     "topology_cytoscape.py": 720,
 
+    # Grew to ~694 lines after P1-2/P1-3 additions (Smart Plug, Smart Bulb,
+    # Thermostat rules + device_types import).  Natural split: extract _RULES
+    # list (~340 lines) into device_classifier_rules.py; classifier becomes ~360 lines.
+    "device_classifier.py": 720,
+
 }
 
 
