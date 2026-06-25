@@ -76,7 +76,7 @@ def test_smart_speaker_canonical_label():
 
 def test_no_smart_speaker_display_constant():
     # "Smart Speaker / Display" was the old wrong label; it must not exist as a constant.
-    import modules.device_types as dt
+    from modules import device_types as dt
     assert not hasattr(dt, "TYPE_SMART_SPEAKER_DISPLAY"), (
         "TYPE_SMART_SPEAKER_DISPLAY must not exist — use TYPE_SMART_SPEAKER instead"
     )

@@ -370,8 +370,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Monitor resume bar", "The bar shown when background monitors restart from the previous session is now blue (informational) instead of amber — resuming is expected, not a warning."),
-        ("Action needed card", "The 'Action needed' card on the Home page now only appears for genuine unacknowledged alerts you configured. Offline devices are no longer flagged as requiring action."),
+        ("IoT device-type constants", "New modules/device_types.py defines canonical labels (TYPE_SMART_PLUG, TYPE_SMART_THERMOSTAT, TYPE_SMART_BULB, Matter) — device classifier and rules now import from one place instead of hardcoding strings."),
+        ("Nest vendor fix", "Nest vendor regex no longer collides with unrelated devices; wearable dead-code path removed."),
+        ("Monitor resume bar", "The bar shown when background monitors restart is now blue (informational) instead of amber — resuming is expected, not a warning."),
+        ("Action needed card", "The 'Action needed' card on the Home page now only appears for genuine unacknowledged alerts you configured."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

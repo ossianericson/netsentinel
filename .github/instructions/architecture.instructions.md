@@ -57,6 +57,7 @@ netsentinel/
 │   ├── cve_lookup.py
 │   ├── deco_client.py          # TP-Link Deco XE75 mesh router API client
 │   ├── device_classifier.py    # OUI → device type + risk score
+│   ├── device_types.py         # Canonical device-type label constants (TYPE_SMART_PLUG, TYPE_SMART_THERMOSTAT, etc.) — import from here, never hardcode strings
 │   ├── device_health_summary.py # Per-device Online/Offline/Slow/Unusual classification (Sprint 5, S5-3)
 │   ├── device_naming.py        # Smart device name suggestions from hostname/vendor/type (Sprint 5, S5-1)
 │   ├── device_stability.py     # IP stability scoring + role inference engine (persistent device map)
