@@ -14,6 +14,7 @@ Note: This is for Synology ROUTERS (SRM firmware), not NAS devices (DSM).
 """
 
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
@@ -31,22 +32,35 @@ DESCRIPTION      = "Synology SRM routers — RT6600ax, RT2600ac, MR2200ac, WRX56
 CREDENTIAL_LABEL = "Password"
 
 
+def _host() -> str:
+    """Resolve the live device host (RULE-PL1): per-instance IP, env shim, then default."""
+    return (globals().get("_NETSENTINEL_INSTANCE_IP")
+            or os.environ.get("NETSENTINEL_PLUGIN_IP")
+            or HARDWARE_IP)
+
+
 def _load_password() -> str:
+    host = _host()
+    iid  = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", _ip)
+        pw = None
+        if iid:
+            pw = keyring.get_password("NetSentinel/plugin", iid)
+        if not pw:
+            pw = keyring.get_password("NetSentinel/hardware", host)
         if pw:
             return pw
     except Exception:
-        pass  # non-fatal
+        pass  # keyring unavailable — fall through to RuntimeError below
     raise RuntimeError(
-        f"No password saved for {HARDWARE_IP}. "
+        f"No password saved for {host}. "
         "Enter it in the Hardware Hub password field and click Save."
     )
 
 
 def _api_call(session_id: str, api: str, method: str, version: int = 1, **kwargs) -> dict:
-    base = f"http://{HARDWARE_IP}:{SRM_PORT}/webapi/entry.cgi"
+    base = f"http://{_host()}:{SRM_PORT}/webapi/entry.cgi"
     params = {"api": api, "method": method, "version": version, "_sid": session_id}
     params.update(kwargs)
     url = base + "?" + urllib.parse.urlencode(params)
@@ -64,7 +78,7 @@ def _login() -> str:
     if _cached_sid is not None:
         return _cached_sid
     pw   = _load_password()
-    base = f"http://{HARDWARE_IP}:{SRM_PORT}/webapi/auth.cgi"
+    base = f"http://{_host()}:{SRM_PORT}/webapi/auth.cgi"
     params = urllib.parse.urlencode({
         "api":     "SYNO.API.Auth",
         "version": 6,
@@ -101,7 +115,7 @@ def get_info() -> dict:
     return {
         "name":         HARDWARE_NAME,
         "type":         HARDWARE_TYPE,
-        "ip":           HARDWARE_IP,
+        "ip":           _host(),
         "manufacturer": "Synology",
         "model":        "SRM Router",
     }

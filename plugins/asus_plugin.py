@@ -15,6 +15,7 @@ Supports: RT-AX88U, RT-AX86U, RT-AX58U, ZenWiFi AX (XT8), ZenWiFi Pro ET12, and 
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -38,16 +39,29 @@ def _check_deps():
         sys.exit(1)
 
 
+def _host() -> str:
+    """Resolve the live device host (RULE-PL1): per-instance IP, env shim, then default."""
+    return (globals().get("_NETSENTINEL_INSTANCE_IP")
+            or os.environ.get("NETSENTINEL_PLUGIN_IP")
+            or HARDWARE_IP)
+
+
 def _load_password() -> str:
+    host = _host()
+    iid  = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", _ip)
+        pw = None
+        if iid:
+            pw = keyring.get_password("NetSentinel/plugin", iid)
+        if not pw:
+            pw = keyring.get_password("NetSentinel/hardware", host)
         if pw:
             return pw
     except Exception:
-        pass  # non-fatal
+        pass  # keyring unavailable — fall through to RuntimeError below
     raise RuntimeError(
-        f"No password saved for {HARDWARE_IP}. "
+        f"No password saved for {host}. "
         "Enter it in the Hardware Hub password field and click Save."
     )
 
@@ -59,7 +73,7 @@ _cached_fetch = None  # (devices, info) tuple — reused by get_status + get_cli
 async def _fetch_all_async():
     from asusrouter import AsusRouter
     pw = _load_password()
-    router = AsusRouter(host=HARDWARE_IP, username=USERNAME, password=pw, use_ssl=False)
+    router = AsusRouter(host=_host(), username=USERNAME, password=pw, use_ssl=False)
     await router.async_connect()
     try:
         devices = await router.async_get_connected_devices()
@@ -96,7 +110,7 @@ def get_info() -> dict:
     return {
         "name":         HARDWARE_NAME,
         "type":         HARDWARE_TYPE,
-        "ip":           HARDWARE_IP,
+        "ip":           _host(),
         "manufacturer": "ASUS",
         "model":        "Router / ZenWiFi",
     }

@@ -4,6 +4,24 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.20
+
+**Added**
+- `modules/scan_status_md.py` — renders the Security-Audit scan registry as a GitHub-flavoured Markdown table; "⧉ Copy as Markdown" button on the Security Overview `Scan Status` card copies a shareable status snapshot (tool, state, last-run age, finding) to the clipboard for tickets and email
+
+**Fixed**
+- Credential loading repaired in 8 bundled hardware plugins
+- `protocol_animator` and report charts now use embedded `Figure`/`Line2D` instead of the pyplot state machine
+- Restore window focus after dismissing UI banners and cards
+- Resolved 4 CodeQL `py/import-and-import-from` alerts in test files
+- Untracked `NetSentinel.ini` temp file; ignore `NetSentinel.ini.*`
+
+**Changed**
+- Consolidated the APM governance layer (dedupe, de-rot, prune); hardened the chaos-test harness and pinned `wingetcreate`
+- `ruff` requirement bumped to `>=0.15.20`
+
+---
+
 ### v2.1.19
 
 **Changed**

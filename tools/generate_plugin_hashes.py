@@ -28,7 +28,11 @@ def main() -> None:
     for pyf in sorted(PLUGINS_DIR.glob("*.py")):
         if pyf.name.startswith("_"):
             continue
-        sha256 = hashlib.sha256(pyf.read_bytes()).hexdigest()
+        # Normalise CRLF→LF before hashing so build-time digests match the
+        # runtime check in modules.plugin_tools.verify_signature() regardless of
+        # the checkout's line endings (Windows CRLF vs Linux/macOS LF).
+        normalised = pyf.read_bytes().replace(b"\r\n", b"\n")
+        sha256 = hashlib.sha256(normalised).hexdigest()
         hashes[pyf.name] = sha256
         print(f"  {pyf.name:<40}  {sha256[:16]}…")
 

@@ -295,6 +295,22 @@ def test_scan_table_empty_on_startup(page):
     assert not page._scan_empty.isHidden()   # empty label not hidden when no data
 
 
+def test_copy_scan_status_md_puts_markdown_on_clipboard(page):
+    """RULE-T7: Copy-as-Markdown button copies a rendered table to the clipboard."""
+    import time as _time
+    page.update_scan_registry({
+        "Port Scan (TCP)": {"state": "fresh", "ts": _time.time(),
+                            "verdict": "2 open ports", "error": None},
+    })
+    page._copy_scan_status_md()
+    clip = QApplication.clipboard()
+    text = clip.text()
+    assert text.startswith("## ")
+    assert "| Port Scan (TCP) |" in text
+    assert "2 open ports" in text
+    assert page._copy_md_status.text() == "Copied to clipboard"
+
+
 def test_scan_table_shows_port_finding(page):
     result = _PortScanResult(
         host="192.168.1.5",

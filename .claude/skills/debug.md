@@ -126,7 +126,39 @@ to debug than the original problem.
 
 ---
 
-## Phase 6 — Ghost window / FOUC diagnosis
+## Phase 6 — Improve (after every successful fix)
+
+Once the fix passes the full test suite, answer one question before closing the session:
+
+**Does this root cause reflect a recurring pattern?**
+
+It's recurring if:
+- The same mechanism has caused a bug before (check `git log --oneline | grep -i fix`)
+- It's a class of mistake that's easy to repeat (unparented QTimer, stale Edit cache, wrong PyQt6 kwarg, bare `except: pass`)
+- The fix required knowledge that isn't written down anywhere in the rules
+
+**If yes — write the RULE now, while the mechanism is fresh.**
+
+Add a `RULE-*` entry to `.apm/instructions/development-rules.instructions.md`:
+
+```
+### RULE-XXX (blocking): <Short name>
+<What the violation looks like.>
+<Why it causes the bug — the mechanism, step by step.>
+<The correct pattern.>
+```
+
+Then run `apm compile` (if available) or manually copy the new rule to `CLAUDE.md` and `.claude/rules/development-rules.md`.
+
+**Why now matters:** A rule written during debugging captures the mechanism because you just traced it. A rule written from memory captures only the symptom. RULE-WIN5 (zombie C++ object corruption chain — written during debugging) prevents the bug; a post-hoc rule that just says "use parented timers" only names it.
+
+**If no recurring pattern** — state "no pattern captured" and proceed to commit.
+
+This phase is referenced by RULE-TP4 in `development-rules.md`.
+
+---
+
+## Phase 7 — Ghost window / FOUC diagnosis
 
 Use this phase only when the symptom is: a widget appearing before the main window, a flash
 of the wrong widget, or a widget that renders off-screen or invisible.
@@ -176,6 +208,7 @@ Stop immediately and restart from Phase 1 if:
 - Two different patches were applied without re-establishing a clean baseline between them
 - The same approach was tried more than once
 - The proposed fix is described as "just try X and see" with no mechanistic explanation
+- You are skipping Phase 6 because "the pattern is obvious" — write it down anyway
 
 ---
 
@@ -187,5 +220,6 @@ Phase 2 — Hypothesis: [full hypothesis block]
 Phase 3 — Fix 1: [change made] → [result]
 Phase 4 — Fix 2 (if needed): [revised hypothesis + change made] → [result]
 Phase 5 — Isolation (if needed): [file-by-file results]
+Phase 6 — Improve: [RULE added / "no pattern captured"]
 Resolution: [what the root cause was and what fixed it]
 ```

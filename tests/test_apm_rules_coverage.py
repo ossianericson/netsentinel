@@ -1,12 +1,14 @@
 """
 test_apm_rules_coverage.py
 
-Ensures .apm/instructions/architecture.instructions.md stays in sync with the
-actual source tree. Every .py file under modules/, workers/, ui/pages/, and
-ui/widgets/ must be mentioned by name in the architecture layout block.
+Ensures .apm/instructions/architecture.instructions.md keeps a directory-level
+map of the source tree. Every tracked package must be referenced in the layout
+block; per-file descriptions are intentionally NOT required — each file's own
+module docstring is the authoritative, drift-proof description (RULE-GARDEN1).
 
 This is the automated enforcement of RULE-APM1 (keep APM rules current).
-A failure here means a file was added without updating the architecture docs.
+A failure here means a whole package was added/renamed without updating the
+architecture map.
 """
 
 from __future__ import annotations
@@ -18,40 +20,31 @@ import pytest
 ROOT = Path(__file__).parent.parent
 ARCH = ROOT / ".apm" / "instructions" / "architecture.instructions.md"
 
-# Directories whose .py files must appear in the architecture layout.
-_TRACKED_DIRS = [
-    ROOT / "modules",
-    ROOT / "workers",
-    ROOT / "ui" / "pages",
-    ROOT / "ui" / "widgets",
-]
-
-# Files intentionally excluded from the layout (generated, test fixtures, etc.)
-_EXCLUDE = {"__init__.py"}
+# Source packages that must be referenced (by directory token) in the layout map.
+# Map each package to the substring expected in the architecture layout text.
+_TRACKED_PACKAGES = {
+    "modules": "modules/",
+    "workers": "workers/",
+    "ui/pages": "pages/",
+    "ui/widgets": "widgets/",
+}
 
 
 def _layout_text() -> str:
     return ARCH.read_text(encoding="utf-8")
 
 
-def _tracked_files() -> list[Path]:
-    files = []
-    for d in _TRACKED_DIRS:
-        if d.exists():
-            files.extend(
-                p for p in d.glob("*.py")
-                if p.name not in _EXCLUDE
-            )
-    return sorted(files)
-
-
-@pytest.mark.parametrize("src_file", _tracked_files(), ids=lambda p: f"{p.parent.name}/{p.name}")
-def test_file_in_architecture_layout(src_file: Path):
-    """Each source file must be named in the architecture.instructions.md layout."""
+@pytest.mark.parametrize("pkg, token", sorted(_TRACKED_PACKAGES.items()))
+def test_package_in_architecture_layout(pkg: str, token: str):
+    """Each tracked package must be referenced in the architecture layout map."""
+    if not (ROOT / pkg).exists():
+        pytest.skip(f"{pkg} not present")
     layout = _layout_text()
-    assert src_file.name in layout, (
-        f"{src_file.parent.name}/{src_file.name} is missing from "
-        f".apm/instructions/architecture.instructions.md\n"
-        f"Add it to the repository layout tree under the correct section, "
-        f"then run: apm install --target all && apm compile --all"
+    assert token in layout, (
+        f"Package '{pkg}' (expected token {token!r}) is missing from "
+        f".apm/instructions/architecture.instructions.md.\n"
+        f"The layout map is directory-level by design — add the package to the "
+        f"map, then run: apm install --target all && apm compile --all.\n"
+        f"Per-file descriptions belong in each file's module docstring, not here "
+        f"(RULE-GARDEN1)."
     )

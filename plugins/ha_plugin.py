@@ -18,6 +18,7 @@ Import via Hardware Hub — no password in the card needed (token is in the scri
 """
 
 import json
+import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -34,17 +35,30 @@ DESCRIPTION      = "Home Assistant — all HA-tracked devices (Hue, Sonos, IoT�
 CREDENTIAL_LABEL = "Token"
 
 
+def _host() -> str:
+    """Resolve the live HA host (RULE-PL1): per-instance IP, env shim, then default."""
+    return (globals().get("_NETSENTINEL_INSTANCE_IP")
+            or os.environ.get("NETSENTINEL_PLUGIN_IP")
+            or HARDWARE_IP)
+
+
 def _load_token() -> str:
     """Return HA token — from variable above or OS keyring fallback."""
     if HA_TOKEN:
         return HA_TOKEN
+    host = _host()
+    iid  = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
     try:
         import keyring
-        tok = keyring.get_password("NetSentinel/hardware", _ip)
+        tok = None
+        if iid:
+            tok = keyring.get_password("NetSentinel/plugin", iid)
+        if not tok:
+            tok = keyring.get_password("NetSentinel/hardware", host)
         if tok:
             return tok
     except Exception:
-        pass  # non-fatal
+        pass  # keyring unavailable — fall through to RuntimeError below
     raise RuntimeError(
         "No Home Assistant token configured. "
         "Edit ha_plugin.py and set HA_TOKEN, or save it via the Hardware Hub password field."
@@ -53,7 +67,7 @@ def _load_token() -> str:
 
 def _ha_get(endpoint: str) -> object:
     req = urllib.request.Request(
-        f"{HA_URL}/api/{endpoint}",
+        f"http://{_host()}:8123/api/{endpoint}",
         headers={
             "Authorization": f"Bearer {_load_token()}",
             "Content-Type":  "application/json",
@@ -93,7 +107,7 @@ def get_info() -> dict:
     return {
         "name":         HARDWARE_NAME,
         "type":         HARDWARE_TYPE,
-        "ip":           HARDWARE_IP,
+        "ip":           _host(),
         "manufacturer": "Home Assistant",
         "model":        "Local HA instance",
     }

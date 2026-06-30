@@ -122,17 +122,9 @@ def bump(ver: str) -> None:
          rf'\g<1>{ver}',
          count=1)
 
-    # CLAUDE.md  ── "Current version" marker and version history chain
-    _sub(ROOT / "CLAUDE.md",
-         rf'(Current version:\s*\*\*v){_VER}(\*\*)',
-         rf'\g<1>{ver}\g<2>')
-    # Appends new version to end of the history line: "... → vX.Y.Z" → "... → vX.Y.Z → vNEW"
-    _sub(ROOT / "CLAUDE.md",
-         rf'(Version history \(condensed\):.*→ v)({_VER})$',
-         rf'\g<1>\g<2> → v{ver}',
-         re.MULTILINE)
-
     # .apm/instructions/project-vision.instructions.md  ── "Current version:" line
+    # (This is the canonical version-stamped doc. CLAUDE.md is no longer generated
+    #  or tracked — Claude Code reads .claude/rules/ directly via `apm install`.)
     _sub(ROOT / ".apm" / "instructions" / "project-vision.instructions.md",
          rf'(Current version:\s*\*\*v){_VER}(\*\*)',
          rf'\g<1>{ver}\g<2>')
@@ -169,7 +161,7 @@ def bump(ver: str) -> None:
         ".github/winget/NetSentinel.NetSentinel.yaml",
         ".github/winget/NetSentinel.NetSentinel.installer.yaml",
         ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml",
-        "README.md", "CHANGELOG.md", "CLAUDE.md", "AGENTS.md", "ui/dashboard.py",
+        "README.md", "CHANGELOG.md", "AGENTS.md", "ui/dashboard.py",
         ".apm/instructions/project-vision.instructions.md",
         ".claude/rules/project-vision.md",
         ".github/instructions/project-vision.instructions.md",

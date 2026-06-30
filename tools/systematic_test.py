@@ -120,6 +120,7 @@ _BLACKLIST: List[str] = [
     "reset to default", "install speedtest", "install ookla", "install npcap",
     "", "", "", "", "", "",
     "_chromebutton",
+    "close/x",          # accessible-name variant seen in seed=1 crash at iter 268
     "quit", "exit application",
     # --- File open/save dialogs (Windows native) — must never be opened ---
     # A Windows file picker steals focus and stalls the test run permanently.
@@ -485,7 +486,7 @@ class SystematicTester:
             self._win.type_keys(query, with_spaces=True, pause=0.04)
             time.sleep(0.35)
             self._win.type_keys("{ENTER}")
-            time.sleep(0.8)
+            time.sleep(2.0)   # allow 160ms palette animation + page render + skeleton loaders
             return True
         except Exception as exc:
             self.log.warning("Navigation to %r failed: %s", page, exc)
@@ -505,7 +506,7 @@ class SystematicTester:
                 _force_foreground(hwnd)
             else:
                 self._win.set_focus()
-            time.sleep(0.15)
+            time.sleep(0.5)
             all_ctrl = self._win.descendants()
         except Exception as exc:
             self.log.debug("descendants() failed: %s", exc)
@@ -548,10 +549,10 @@ class SystematicTester:
                             continue
                     except Exception:
                         self.log.debug("rectangle() failed; skipping bounds check")
-                # Skip title-bar chrome (top 38px)
+                # Skip title-bar chrome (top 60px — AppHeaderMixin header is ~40px)
                 if win_rect is not None and ctype in ("Button", "SplitButton"):
                     try:
-                        if ctrl.rectangle().top - win_rect.top < 38:
+                        if ctrl.rectangle().top - win_rect.top < 60:
                             continue
                     except Exception:
                         self.log.debug("title-bar check failed")
@@ -632,6 +633,13 @@ class SystematicTester:
             return res
 
         controls = self._get_controls()
+        if not controls:
+            for _retry in range(3):
+                self.log.debug("  0 controls on %r — retry %d/3 (waiting 1.5s)", page, _retry + 1)
+                time.sleep(1.5)
+                controls = self._get_controls()
+                if controls:
+                    break
         res.controls_found = len(controls)
         self.log.info("  Found %d controls", len(controls))
 

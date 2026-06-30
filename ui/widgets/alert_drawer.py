@@ -331,7 +331,17 @@ class AlertDrawer(QFrame):
         self._anim.stop()
         self._anim.setStartValue(self.maximumWidth())
         self._anim.setEndValue(0)
+        self._anim.finished.connect(self._restore_focus)
         self._anim.start()
+
+    def _restore_focus(self) -> None:
+        try:
+            self._anim.finished.disconnect(self._restore_focus)
+        except RuntimeError:
+            pass  # non-fatal — already disconnected after a prior close
+        w = self.window()
+        if w:
+            w.activateWindow()
 
     def is_open(self) -> bool:
         return self.maximumWidth() > 0

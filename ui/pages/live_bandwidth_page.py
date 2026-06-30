@@ -19,8 +19,8 @@ from typing import Deque, Dict, List, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 from PyQt6.QtCore import QTimer, pyqtSlot
 from PyQt6.QtWidgets import (
@@ -197,8 +197,8 @@ class LiveBandwidthPage(QWidget):
         chart_lay = QVBoxLayout(chart_frame)
         chart_lay.setContentsMargins(8, 8, 8, 8)
 
-        self._fig, self._ax = plt.subplots(figsize=(10, 3.2))
-        self._fig.patch.set_facecolor(CHART_BG)
+        self._fig = Figure(figsize=(10, 3.2), facecolor=CHART_BG)
+        self._ax = self._fig.add_subplot(111)
         self._fig.subplots_adjust(left=0.06, right=0.99, top=0.93, bottom=0.15)
         self._canvas = FigureCanvas(self._fig)
         self._canvas.setStyleSheet(f"background:{CHART_BG}; border:none;")

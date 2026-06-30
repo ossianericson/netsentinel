@@ -14,6 +14,7 @@ Supports: hAP ax³, hAP ac², CCR2004, RB4011, Audience LTE6, and any device
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -38,16 +39,29 @@ def _check_deps():
         sys.exit(1)
 
 
+def _host() -> str:
+    """Resolve the live device host (RULE-PL1): per-instance IP, env shim, then default."""
+    return (globals().get("_NETSENTINEL_INSTANCE_IP")
+            or os.environ.get("NETSENTINEL_PLUGIN_IP")
+            or HARDWARE_IP)
+
+
 def _load_password() -> str:
+    host = _host()
+    iid  = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", _ip)
+        pw = None
+        if iid:
+            pw = keyring.get_password("NetSentinel/plugin", iid)
+        if not pw:
+            pw = keyring.get_password("NetSentinel/hardware", host)
         if pw:
             return pw
     except Exception:
-        pass  # non-fatal
+        pass  # keyring unavailable — fall through to RuntimeError below
     raise RuntimeError(
-        f"No password saved for {HARDWARE_IP}. "
+        f"No password saved for {host}. "
         "Enter it in the Hardware Hub password field and click Save."
     )
 
@@ -61,7 +75,7 @@ def _make_api():
         import routeros_api
         pw   = _load_password()
         pool = routeros_api.RouterOsApiPool(
-            HARDWARE_IP,
+            _host(),
             username=USERNAME,
             password=pw,
             port=API_PORT,
@@ -90,7 +104,7 @@ def get_info() -> dict:
     return {
         "name":         HARDWARE_NAME,
         "type":         HARDWARE_TYPE,
-        "ip":           HARDWARE_IP,
+        "ip":           _host(),
         "manufacturer": "MikroTik",
         "model":        "RouterOS",
     }

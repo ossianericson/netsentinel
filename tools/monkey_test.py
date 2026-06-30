@@ -23,6 +23,8 @@ Options:
     --no-screenshots      Skip PIL screenshots on crash
     --mem-limit MB        RSS limit before leak warning (default: 800)
     --log FILE            Log file path (default: netsentinel_monkey.log)
+    --max-restarts N      Max app restarts on unexpected exit (default: 3)
+    --warmup-secs SECS    Wait after overlay dismissal before first click (default: 5)
 
 Requirements:
     pip install pywinauto psutil Pillow
@@ -167,6 +169,7 @@ _BLACKLIST: List[str] = [
     # Catch-all for any _ChromeButton by auto_id (close/min/max that
     # slipped past the 38px spatial filter — confirmed crash cause from seed=99).
     "_chromebutton",   # matches auto_id: QApplication.Dashboard.QWidget.appBar._ChromeButton
+    "close/x",         # accessible-name variant seen in seed=1 crash at iter 268
     # --- System power / OS lifecycle (initiates Windows restart or shutdown) ---
     # These are the primary source of the "Windows restart dialog" bug — any button
     # containing these words must never be clicked during automated testing.
@@ -296,6 +299,8 @@ class Config:
     focus_interval: float = 1.5     # seconds between focus-heartbeat pulses
     prevent_sleep: bool = True       # suppress Windows sleep/screensaver
     tracemalloc: bool = False        # enable in-process tracemalloc snapshots in app
+    max_restarts: int = 3            # auto-restart app when window vanishes unexpectedly
+    warmup_secs: float = 5.0        # seconds to wait after overlay dismissal before first click
 
     def resolved_log_file(self) -> str:
         if self.log_file:
@@ -315,6 +320,7 @@ class Stats:
     blacklisted: int = 0
     peak_rss_mb: float = 0.0
     focus_stolen: int = 0   # how many times another window grabbed foreground
+    restarts: int = 0       # app restart count (auto-restart on unexpected exit)
     by_type: Dict[str, int] = dataclasses.field(default_factory=dict)
     by_action: Dict[str, int] = dataclasses.field(default_factory=dict)
 
@@ -337,6 +343,7 @@ class Stats:
             "blacklisted_skipped": self.blacklisted,
             "peak_rss_mb": round(self.peak_rss_mb, 1),
             "focus_stolen_count": self.focus_stolen,
+            "restarts": self.restarts,
             "by_control_type": self.by_type,
             "by_action": self.by_action,
         }
@@ -1279,7 +1286,9 @@ class MonkeyTester:
         Sets self._stop on any serious problem.
         """
         while not self._stop.is_set():
-            time.sleep(_HEALTH_INTERVAL)
+            self._stop.wait(_HEALTH_INTERVAL)
+            if self._stop.is_set():
+                return  # signalled to stop during wait (restart or shutdown)
 
             # Process alive?
             if not self._alive():
@@ -1360,6 +1369,66 @@ class MonkeyTester:
                 time.sleep(0.5)
         return False
 
+    # ── App restart ───────────────────────────────────────────────────────
+
+    def _restart_app(self) -> bool:
+        """Kill the current app and relaunch it after an unexpected exit.
+
+        Called when the main window disappears (e.g. the close button slipped
+        past the spatial/blacklist filter).  Returns True if relaunch succeeded.
+        """
+        self.stats.restarts += 1
+        self.log.info(
+            "[restart] App exited unexpectedly — relaunch attempt %d/%d",
+            self.stats.restarts, self.cfg.max_restarts,
+        )
+        # Signal old background threads to exit; threads using _stop.wait() respond immediately.
+        self._stop.set()
+        time.sleep(0.3)   # allow focus heartbeat (uses _stop.wait) to notice and exit
+
+        self._kill_stale_netsentinel()
+        self._proc = None
+        self._win = None
+
+        # Clear stop so new threads can run
+        self._stop.clear()
+
+        # Relaunch the app
+        ok = self._launch_source() if self.cfg.use_source else self._launch_exe()
+        if not ok:
+            self.log.error("[restart] Relaunch failed — giving up")
+            return False
+        if not self._connect():
+            self.log.error("[restart] Could not reconnect after restart — giving up")
+            return False
+
+        # Start fresh monitoring threads (old ones exited on _stop.set() above)
+        _ht = threading.Thread(
+            target=self._health_monitor, daemon=True,
+            name=f"health_r{self.stats.restarts}",
+        )
+        _ht.start()
+        _ft = threading.Thread(
+            target=self._focus_heartbeat, daemon=True,
+            name=f"focus_r{self.stats.restarts}",
+        )
+        _ft.start()
+
+        self._dismiss_startup_overlays()
+        time.sleep(2.0)   # additional settle time after restart overlays clear
+        try:
+            hwnd = self._win.handle
+            _force_foreground(hwnd)
+            self.log.info("[restart] Foreground claimed (hwnd=0x%x)", hwnd)
+        except Exception:
+            pass  # non-fatal — main loop will assert focus on next iteration
+        self._last_iter_time = time.time()
+        self.log.info(
+            "[restart] App relaunched — continuing from iteration %d",
+            self.stats.completed + 1,
+        )
+        return True
+
     # ── Iteration ─────────────────────────────────────────────────────────
 
     def _get_controls(self) -> List:
@@ -1425,7 +1494,7 @@ class MonkeyTester:
                 if win_top is not None and ctype in ("Button", "SplitButton"):
                     try:
                         ctrl_top = ctrl.rectangle().top
-                        if ctrl_top - win_top < 38:
+                        if ctrl_top - win_top < 60:   # AppHeaderMixin header is ~40px; 60 gives margin
                             self.stats.blacklisted += 1
                             continue
                     except Exception:
@@ -1597,7 +1666,7 @@ class MonkeyTester:
         # Safe to call in --connect mode too: it checks for overlay buttons
         # and silently moves on if none are present.
         self._dismiss_startup_overlays()
-        time.sleep(2.0)   # let animations settle before first interaction
+        time.sleep(self.cfg.warmup_secs)   # let animations settle before first interaction
 
         # Claim foreground explicitly before starting chaos — without this,
         # the terminal that launched us (e.g. VS Code) retains focus and the
@@ -1622,8 +1691,16 @@ class MonkeyTester:
         self._last_iter_time = time.time()
 
         for i in range(1, self.cfg.iterations + 1):
-            # Health monitor signalled a problem
+            # Health monitor signalled a problem — try auto-restart before giving up
             if self._stop.is_set():
+                if self.stats.restarts < self.cfg.max_restarts:
+                    self.log.warning(
+                        "[restart] Health monitor triggered at iter %d — "
+                        "restarting app (attempt %d/%d)",
+                        i, self.stats.restarts + 1, self.cfg.max_restarts,
+                    )
+                    if self._restart_app():
+                        continue
                 self._crash_report("health monitor triggered")
                 crashed = True
                 break
@@ -1655,6 +1732,14 @@ class MonkeyTester:
                 ok = self._alive() and self._window_ok()
 
             if not ok:
+                if self.stats.restarts < self.cfg.max_restarts:
+                    self.log.warning(
+                        "[restart] Window/process gone at iter %d — "
+                        "restarting app (attempt %d/%d)",
+                        i, self.stats.restarts + 1, self.cfg.max_restarts,
+                    )
+                    if self._restart_app():
+                        continue
                 self._crash_report(f"iteration {i}")
                 crashed = True
                 break
@@ -1726,6 +1811,10 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Enable tracemalloc profiling inside the app (sets NETSENTINEL_TRACEMALLOC=1; "
                         "requires --source; writes top-20 allocation snapshots to the app's debug log "
                         "every 60 s so you can identify the retained object type)")
+    p.add_argument("--max-restarts", type=int, default=3, metavar="N",
+                   help="Max auto-restarts when the app window vanishes unexpectedly (default 3; 0 = disabled)")
+    p.add_argument("--warmup-secs", type=float, default=5.0, metavar="SECS",
+                   help="Seconds to wait after overlay dismissal before the first click (default 5)")
     return p
 
 
@@ -1758,6 +1847,8 @@ def main() -> None:
         focus_interval=args.focus_interval,
         prevent_sleep=not args.no_prevent_sleep,
         tracemalloc=args.tracemalloc and args.source,
+        max_restarts=args.max_restarts,
+        warmup_secs=args.warmup_secs,
     )
 
     sys.exit(MonkeyTester(cfg).run())

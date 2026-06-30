@@ -18,6 +18,18 @@ set OUT=%FULLOUT%
 :: Create output directory now so the test can write to it even if a step exits early
 mkdir "%OUT%" >nul 2>&1
 
+:: ── Venv activation (ensures correct Python on fresh boot) ─────────────────
+set "REPO=%~dp0.."
+if exist "%REPO%\.venv\Scripts\activate.bat" (
+    call "%REPO%\.venv\Scripts\activate.bat"
+    echo [setup] Activated .venv
+) else if exist "%REPO%\venv\Scripts\activate.bat" (
+    call "%REPO%\venv\Scripts\activate.bat"
+    echo [setup] Activated venv
+) else (
+    echo [setup] No venv found - using system Python
+)
+
 :: ── Pre-flight: disable Quick Edit + suppress sleep ───────────────────────────
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0test_setup.ps1"
 

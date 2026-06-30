@@ -181,4 +181,4 @@ Main window: permanent 48 px activity rail + 280 px animated flyout + `QStackedW
 - Ctrl+K opens the command palette (fuzzy-match any page); Ctrl+F focuses sidebar search; Esc closes the flyout
 - Right-click any flyout item to pin it; pinned items appear in a "Pinned" rail section at index 0
 
-Full coding conventions and all development rules: [`CLAUDE.md`](../CLAUDE.md)
+Full coding conventions and all development rules: [`.claude/rules/`](../.claude/rules/) (APM source: `.apm/instructions/`)

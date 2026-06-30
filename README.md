@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-4523%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-4400%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -18,7 +18,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
-**4,523+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
+**4,400+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -139,13 +139,13 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**4,480+ automated tests** across 280 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**4,400+ automated tests** across 287 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
 ```
 
-**9-hour chaos run** (June 2026): 10,001 automated UIA interactions across mild, moderate, and wild randomisation levels. Zero application crashes. All 62 pages confirmed functional in identical systematic pre/post runs.
+**9-hour chaos run** (June 2026): 10,000 automated UIA interactions across mild, moderate, and wild randomisation levels (seeds 1, 42, 99). Zero crashes and zero unhandled exceptions. All 67 pages confirmed functional in byte-identical systematic pre/post runs.
 
 **Every commit gated by:** `ruff` (unused imports/variables) · `mypy` (module type errors) · `pip-audit` (dependency CVEs) · `debug_launch.py` smoke test (catches PyQt6 runtime errors that only appear when the app actually starts) · CodeQL static analysis on every push.
 
@@ -183,7 +183,17 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.19 (current)
+### v2.1.20 (current)
+
+**Added**
+- "⧉ Copy as Markdown" button on the Security Overview `Scan Status` card — copies a shareable status snapshot (tool, state, last-run age, finding) to the clipboard
+
+**Fixed**
+- Credential loading repaired in 8 bundled hardware plugins; report charts moved off the pyplot state machine; window focus restored after dismissing banners; 4 CodeQL alerts resolved
+
+---
+
+### v2.1.19
 
 **Changed**
 - New `/check` skill for session-start health snapshots; new `/triage` skill for structured bug write-ups; debug skill extended with a Phase 6 "write the RULE while the mechanism is fresh" step

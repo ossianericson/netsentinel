@@ -24,6 +24,18 @@ set OUT=%FULLOUT%
 :: Create output directory so steps can write even if an earlier step exits early
 mkdir "%OUT%" >nul 2>&1
 
+:: ── Venv activation (ensures correct Python on fresh boot) ─────────────────
+set "REPO=%~dp0.."
+if exist "%REPO%\.venv\Scripts\activate.bat" (
+    call "%REPO%\.venv\Scripts\activate.bat"
+    echo [setup] Activated .venv
+) else if exist "%REPO%\venv\Scripts\activate.bat" (
+    call "%REPO%\venv\Scripts\activate.bat"
+    echo [setup] Activated venv
+) else (
+    echo [setup] No venv found - using system Python
+)
+
 :: ── Pre-flight: disable Quick Edit mode + suppress sleep ───────────────────────
 :: test_setup.ps1 is optional (may not exist in all checkouts)
 if exist "%~dp0test_setup.ps1" (

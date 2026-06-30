@@ -417,7 +417,7 @@ jobs:
 
       - name: Install wingetcreate
         shell: pwsh
-        run: winget install --id Microsoft.Wingetcreate --source winget --silent --accept-package-agreements --accept-source-agreements
+        run: winget install --id Microsoft.Wingetcreate --version 1.10.3.0 --source winget --silent --accept-package-agreements --accept-source-agreements
 
       - name: Resolve version
         id: ver

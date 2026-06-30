@@ -215,6 +215,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         bar = getattr(self, "_hw_nudge_bar", None)
         if bar:
             bar.setVisible(False)
+        self.window().activateWindow()
 
     def _build_tip_card(
         self, icon: str, name: str, desc_first: str, page: "str | None", dismissed_key: str
@@ -275,6 +276,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             )
             self._tip_card_dismissed = True
             _bar.setVisible(False)
+            self.window().activateWindow()
 
         _dismiss.clicked.connect(_on_dismiss)
         _lay.addWidget(_dismiss)
@@ -615,7 +617,9 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
-        _db_dismiss.clicked.connect(lambda: self._delta_banner.setVisible(False))
+        _db_dismiss.clicked.connect(
+            lambda: (self._delta_banner.setVisible(False), self.window().activateWindow())
+        )
         _db_lay.addWidget(self._delta_chips_lbl, 1)
         _db_lay.addWidget(_db_dismiss)
         lay.addWidget(self._delta_banner)
@@ -646,7 +650,9 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
         )
-        _mb_dismiss.clicked.connect(lambda: self._milestone_banner.setVisible(False))
+        _mb_dismiss.clicked.connect(
+            lambda: (self._milestone_banner.setVisible(False), self.window().activateWindow())
+        )
         _mb_lay.addWidget(self._milestone_lbl, 1)
         _mb_lay.addWidget(_mb_dismiss)
         lay.addWidget(self._milestone_banner)

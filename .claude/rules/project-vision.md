@@ -7,9 +7,13 @@ paths:
 
 ## Strategic Goals
 
-NetSentinel has one  strategic goal:
+NetSentinel has two parallel strategic goals:
 
 1. **De-facto home network standard** — become the first tool recommended when anyone says "my network is broken". The tool must show what is happening on the real network, in plain English, without requiring the user to already know what STP, ARP, or DNS are.
+
+2. **Educational standard** — become the natural starting point for anyone learning how networks actually work. Every feature should produce output that maps directly to a textbook concept or exam objective and can be submitted as evidence of work.
+
+Both goals are served by the same core property: zero prior knowledge required.
 
 ---
 
@@ -17,17 +21,20 @@ NetSentinel has one  strategic goal:
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.18**
+Current version: **v2.1.20**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
-Version history (condensed): v1.9.40 → v1.9.54 (plugin ecosystem + robustness sprints) → v1.9.55–v1.9.60 (test-suite stability, module splits, MetricStore health) → v1.9.61–v1.9.62 (dashboard decomposition: tabs, help, header, settings, page splits) → v1.9.63–v1.9.64 (hex-colour purge, module test coverage, spec integrity) → v1.9.65 (home/hardware/notif/log/settings page splits, tabs sub-mixins) → v1.9.66 (Sprint 16–19: nav/monitor/plugin mixins, dashboard.py 13,483→1,967 lines — dashboard decomposition complete) → v1.9.67–v1.9.90 (CodeQL hardening, 2,000+ test suite, chaos/monkey harness, guided tour, onboarding rewrite — **Microsoft Store ready**) → v1.9.91–v1.9.94 (QTimer crash fixes, test suite stabilised to 3,099 tests, APM rules hardened, cross-feature discoverability improvements — feature set complete) → v2.0.0 (Sprint 1–4: device identification improvements, async OUI enrichment, service mapper engine, service connectivity diagnostics engine + probes, Service Diagnostics page) → v2.1.0 (Sprint 5: What's Wrong? service-unreachable tile; Service Heartbeat Diagnose → action; vendor/type enrichment on first scan; probe and enrichment fixes) → v2.1.2 (Sprint 4: network segment/zone grouping — device inventory grouped into colour-coded /24 subnets with pill filter bar and right-click editor; MetricStore schema v11) → v2.1.12 (UX sprint polish, performance audit, status icons, focus rings, feedback — 4,100+ tests; Microsoft Store submitted) → v2.1.16 (Security UX sprint: scan registry, flyout dot badges, rail badge aggregation, Scan Center card, _ScanStatusTile, Security Overview Scan Status card, audit coordinator, last-run chips on Speed Test and DNS Zone pages)
+The full version history lives in `CHANGELOG.md` (and the highlights in
+`README.md`). It is not duplicated here — a per-version chain in this file only
+rots out of date. The app reached feature-complete at v2.1.0; everything since is
+polish, discoverability, and bug fixes.
 
 **Development phase:** The feature set is complete as of v2.1.0. All future development is **polish and user-requested changes only** — UX refinements, documentation accuracy, cross-feature discoverability glue, and bug fixes. No new features should be added without an explicit user request.
 
 ---
 
-## Implemented Features (as of v2.1.16)
+## Implemented Features
 
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection

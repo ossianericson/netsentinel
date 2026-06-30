@@ -145,6 +145,7 @@ class _HomeDataMixin:
             "home/dashboard_strip_dismissed", True
         )
         self._dashboard_strip.setVisible(False)
+        self.window().activateWindow()
 
     def _dismiss_recurring_intro(self) -> None:
         """Dismiss the one-time recurring mode intro card."""
@@ -153,6 +154,7 @@ class _HomeDataMixin:
         )
         if hasattr(self, "_recurring_intro_card"):
             self._recurring_intro_card.setVisible(False)
+        self.window().activateWindow()
 
     def _on_setup_complete(self) -> None:
         """Called when all Getting Started steps are complete (via completion_done signal)."""
@@ -861,6 +863,7 @@ class _HomeDataMixin:
         )
         if hasattr(self, "_first_scan_banner"):
             self._first_scan_banner.setVisible(False)
+        self.window().activateWindow()
 
     def _check_logger_milestones(self) -> None:
         """Check 24h / 7d logging milestones; call at startup after store is ready."""

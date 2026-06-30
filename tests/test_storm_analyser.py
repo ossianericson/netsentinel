@@ -1,15 +1,14 @@
 """Tests for modules/storm_analyser.py — broadcast storm analyser."""
 from modules.storm_analyser import (
-    SCAPY_AVAILABLE, StormResult, THRESHOLD_WARNING, BROADCAST_MAC,
+    SCAPY_AVAILABLE, StormResult, THRESHOLD_WARNING, BROADCAST_MAC, scan,
 )
 
 
 def test_import():
-    import modules.storm_analyser as m
-    assert hasattr(m, "scan")
-    assert hasattr(m, "StormResult")
-    assert hasattr(m, "SCAPY_AVAILABLE")
-    assert hasattr(m, "BROADCAST_MAC")
+    assert callable(scan)
+    assert StormResult is not None
+    assert isinstance(SCAPY_AVAILABLE, bool)
+    assert BROADCAST_MAC == "ff:ff:ff:ff:ff:ff"
 
 
 def test_scapy_flag_is_bool():
@@ -88,9 +87,8 @@ def test_storm_result_top_sources_ordering():
 
 def test_scan_no_scapy_calls_on_error(monkeypatch):
     monkeypatch.setattr("modules.storm_analyser.SCAPY_AVAILABLE", False)
-    import modules.storm_analyser as m
     errors = []
-    result = m.scan(duration=1, on_error=errors.append)
+    result = scan(duration=1, on_error=errors.append)
     assert result.storm_level == "UNKNOWN"
     assert len(errors) == 1
     assert "scapy" in errors[0].lower() or "Scapy" in errors[0]
@@ -98,16 +96,14 @@ def test_scan_no_scapy_calls_on_error(monkeypatch):
 
 def test_scan_calls_progress_cb_no_scapy(monkeypatch):
     monkeypatch.setattr("modules.storm_analyser.SCAPY_AVAILABLE", False)
-    import modules.storm_analyser as m
     calls = []
-    m.scan(duration=1, progress_cb=calls.append)
+    scan(duration=1, progress_cb=calls.append)
     # No progress_cb calls expected when Scapy absent; test is non-crashing
     assert isinstance(calls, list)
 
 
 def test_scan_result_has_plain_verdict_when_no_scapy(monkeypatch):
     monkeypatch.setattr("modules.storm_analyser.SCAPY_AVAILABLE", False)
-    import modules.storm_analyser as m
-    result = m.scan(duration=1)
+    result = scan(duration=1)
     assert isinstance(result.plain_verdict, str)
     assert len(result.plain_verdict) > 0

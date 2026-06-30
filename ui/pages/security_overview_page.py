@@ -22,7 +22,7 @@ from typing import List, Optional
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
+    QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -301,8 +301,46 @@ class SecurityOverviewPage(QWidget):
         t.setMaximumHeight(len(_AUDIT_SCAN_LABELS) * 24 + 28)
         self._scan_status_table = t
         lay.addWidget(t)
+
+        # Copy-as-Markdown action row — shareable status snapshot for tickets/email
+        action_row = QHBoxLayout()
+        action_row.setContentsMargins(0, 0, 0, 0)
+        self._copy_md_btn = QPushButton("⧉  Copy as Markdown")
+        self._copy_md_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._copy_md_btn.setStyleSheet(
+            f"QPushButton {{ color:{ACCENT}; font-size:9px; background:transparent;"
+            f" border:none; padding:2px 0; text-align:left; }}"
+            f"QPushButton:hover {{ color:{ACCENT_LITE}; }}"
+            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
+        )
+        self._copy_md_btn.clicked.connect(self._copy_scan_status_md)
+        action_row.addWidget(self._copy_md_btn)
+        action_row.addStretch()
+        self._copy_md_status = QLabel("")
+        self._copy_md_status.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:9px; background:transparent;"
+        )
+        action_row.addWidget(self._copy_md_status)
+        lay.addLayout(action_row)
+
         self._rebuild_scan_status_table()
         return card
+
+    def _copy_scan_status_md(self) -> None:
+        """Copy the current scan registry as a Markdown table to the clipboard."""
+        from modules.scan_status_md import render_scan_status_md
+
+        registry = getattr(self, "_scan_registry_data", {}) or {}
+        md = render_scan_status_md(registry, _AUDIT_SCAN_LABELS)
+        clip = QApplication.clipboard()
+        if clip is not None:
+            clip.setText(md)
+        self._copy_md_status.setText("Copied to clipboard")
+        # parented one-shot so it is auto-destroyed with the widget (RULE-WIN5)
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._copy_md_status.setText(""))
+        _t.start(2500)
 
     def update_scan_registry(self, registry: dict) -> None:
         """Receive live scan registry updates from _nav_set_scan_state (C-3)."""

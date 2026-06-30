@@ -47,7 +47,7 @@ def test_every_module_has_a_test_file():
         "Modules missing a test file (RULE-T1 violation):\n"
         + "\n".join(f"  modules/{m}.py  →  add tests/test_{m}.py" for m in sorted(missing))
         + "\n\nAdd a test file for each listed module. "
-        "See tests/CLAUDE.md for test conventions. "
+        "See .claude/rules/tests.instructions.md for test conventions. "
         "Only add to EXEMPT if the module is a documented re-export stub."
     )
 

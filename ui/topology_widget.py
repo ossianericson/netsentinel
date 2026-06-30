@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -917,6 +916,7 @@ class TopologyWidget(QWidget):
     # ── shared legend ─────────────────────────────────────────────────────────
 
     def _legend(self, ax, mesh: bool = False, modem: bool = False) -> None:
+        from matplotlib.lines import Line2D as _L2D
         items = [
             (RED,           "HIGH risk"),
             (AMBER,         "MEDIUM risk"),
@@ -926,7 +926,11 @@ class TopologyWidget(QWidget):
         ]
         if mesh:
             items.append((MESH_SAT_COLOR, "Mesh satellite"))
-        handles = [plt.scatter([], [], c=c, s=80, label=lbl) for c, lbl in items]
+        handles = [
+            _L2D([0], [0], marker="o", color="w", markerfacecolor=c,
+                 markersize=9, label=lbl)
+            for c, lbl in items
+        ]
         ax.legend(handles=handles, loc="lower right", fontsize=8,
                   labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
                   edgecolor=BORDER, framealpha=0.9)

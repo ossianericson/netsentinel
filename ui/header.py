@@ -563,7 +563,11 @@ class AppHeaderMixin:
             f"QPushButton:hover {{ color:{UPDATE_BAR_FG}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
-        btn_dismiss.clicked.connect(container.hide)
+        def _dismiss_update_bar() -> None:
+            container.hide()
+            self.activateWindow()
+
+        btn_dismiss.clicked.connect(_dismiss_update_bar)
         row.addWidget(btn_dismiss)
         return container
 

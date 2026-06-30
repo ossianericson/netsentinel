@@ -243,7 +243,7 @@ self._my_page = MyPage(store=self._store, parent=None)
 
 **Step 3 — Register the page in `_build_pro_nav()`**
 
-Inside `_build_pro_nav()`, find the correct section block (see CLAUDE.md nav section placement guide) and call `_nav_add_rail_item()`:
+Inside `_build_pro_nav()`, find the correct section block (see the nav section placement guide in `.claude/rules/architecture.md`) and call `_nav_add_rail_item()`:
 
 ```python
 # Inside the correct _nav_begin_section("Monitor", "monitor") block:

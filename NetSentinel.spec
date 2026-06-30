@@ -182,6 +182,7 @@ hiddenimports: list = [
     "modules.snmp_trap_receiver",
     "modules.firewall_rules",
     "modules.service_mapper",
+    "modules.scan_status_md",
     "modules.speed_tester",
     "modules.speed_tester_backends",
     "modules.speed_tester_servers",

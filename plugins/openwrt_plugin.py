@@ -13,6 +13,7 @@ Supports: any router running OpenWrt 18.06+ or LEDE with LuCI installed.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -36,16 +37,29 @@ def _check_deps():
         sys.exit(1)
 
 
+def _host() -> str:
+    """Resolve the live device host (RULE-PL1): per-instance IP, env shim, then default."""
+    return (globals().get("_NETSENTINEL_INSTANCE_IP")
+            or os.environ.get("NETSENTINEL_PLUGIN_IP")
+            or HARDWARE_IP)
+
+
 def _load_password() -> str:
+    host = _host()
+    iid  = globals().get("_NETSENTINEL_INSTANCE_ID") or ""
     try:
         import keyring
-        pw = keyring.get_password("NetSentinel/hardware", _ip)
+        pw = None
+        if iid:
+            pw = keyring.get_password("NetSentinel/plugin", iid)
+        if not pw:
+            pw = keyring.get_password("NetSentinel/hardware", host)
         if pw:
             return pw
     except Exception:
-        pass  # non-fatal
+        pass  # keyring unavailable — fall through to RuntimeError below
     raise RuntimeError(
-        f"No password saved for {HARDWARE_IP}. "
+        f"No password saved for {host}. "
         "Enter it in the Hardware Hub password field and click Save."
     )
 
@@ -57,7 +71,7 @@ def _make_rpc():
     global _cached_rpc
     if _cached_rpc is None:
         from openwrt_luci_rpc import OpenWrtRpc
-        _cached_rpc = OpenWrtRpc(HARDWARE_IP, USERNAME, _load_password())
+        _cached_rpc = OpenWrtRpc(_host(), USERNAME, _load_password())
     return _cached_rpc
 
 
@@ -80,7 +94,7 @@ def get_info() -> dict:
     return {
         "name":         HARDWARE_NAME,
         "type":         HARDWARE_TYPE,
-        "ip":           HARDWARE_IP,
+        "ip":           _host(),
         "manufacturer": "OpenWrt",
         "model":        "OpenWrt / LEDE",
     }

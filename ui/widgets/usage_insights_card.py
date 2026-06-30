@@ -242,3 +242,4 @@ class UsageInsightsCard(QWidget):
                 f"usage_insights/qos_dismissed/{self._qos_key}", True,
             )
         self._qos_row_w.setVisible(False)
+        self.window().activateWindow()
