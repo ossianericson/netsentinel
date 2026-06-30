@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-4480%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-4523%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -18,7 +18,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
-**4,480+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
+**4,523+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
 
 ---
 
@@ -183,7 +183,14 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.18 (current)
+### v2.1.19 (current)
+
+**Changed**
+- New `/check` skill for session-start health snapshots; new `/triage` skill for structured bug write-ups; debug skill extended with a Phase 6 "write the RULE while the mechanism is fresh" step
+
+---
+
+### v2.1.18
 
 **Added**
 - `modules/device_types.py` — canonical IoT device-type label constants (`TYPE_SMART_PLUG`, `TYPE_SMART_THERMOSTAT`, `TYPE_SMART_BULB`, Matter)

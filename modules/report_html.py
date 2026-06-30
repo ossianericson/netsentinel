@@ -16,7 +16,8 @@ from modules.colours import (
     EXPORT_RED_BG, EXPORT_AMBER_BG, EXPORT_GREEN_BG,
     EXPORT_RED_FG, EXPORT_AMBER_FG, EXPORT_GREEN_FG,
     EXPORT_CARD, EXPORT_BORDER, EXPORT_ACCENT_FG,
-    EXPORT_TH_BG, EXPORT_ROW_HOVER,
+    EXPORT_TH_BG, EXPORT_ROW_HOVER, EXPORT_NEUTRAL_GRAY,
+    PRINT_BG, PRINT_TEXT, PRINT_BORDER_MED, PRINT_BG_LIGHT, PRINT_BG_TH, PRINT_BORDER_TD,
     BADGE_HIGH_BG, BADGE_HIGH_FG, BADGE_MEDIUM_BG, BADGE_MEDIUM_FG,
     BADGE_LOW_BG, BADGE_LOW_FG, BADGE_CLEAN_BG, BADGE_CLEAN_FG,
     BADGE_UNKNOWN_BG, BADGE_UNKNOWN_FG,
@@ -53,12 +54,12 @@ tr:hover td { background: $EXPORT_ROW_HOVER; color: $EXPORT_TEXT; }
 .badge.UNKNOWN { background: $BADGE_UNKNOWN_BG; color: $BADGE_UNKNOWN_FG; }
 .meta { color: $EXPORT_META; font-size: 0.8rem; margin-top: 24px; border-top: 1px solid $EXPORT_TH_BG; padding-top: 12px; }
 @media print {
-  body { background: #fff !important; color: #111 !important; }
-  .module, .verdict-box { border-color: #999 !important; background: #fff !important; }
-  h1, h3, .module h3 { color: #111 !important; }
-  .badge { border: 1px solid #999 !important; background: #eee !important; color: #111 !important; }
-  th { background: #ddd !important; color: #111 !important; }
-  td { border-bottom: 1px solid #ccc !important; color: #111 !important; }
+  body { background: $PRINT_BG !important; color: $PRINT_TEXT !important; }
+  .module, .verdict-box { border-color: $PRINT_BORDER_MED !important; background: $PRINT_BG !important; }
+  h1, h3, .module h3 { color: $PRINT_TEXT !important; }
+  .badge { border: 1px solid $PRINT_BORDER_MED !important; background: $PRINT_BG_LIGHT !important; color: $PRINT_TEXT !important; }
+  th { background: $PRINT_BG_TH !important; color: $PRINT_TEXT !important; }
+  td { border-bottom: 1px solid $PRINT_BORDER_TD !important; color: $PRINT_TEXT !important; }
 }
 """).substitute(
     EXPORT_BG=EXPORT_BG, EXPORT_TEXT=EXPORT_TEXT,
@@ -69,6 +70,8 @@ tr:hover td { background: $EXPORT_ROW_HOVER; color: $EXPORT_TEXT; }
     EXPORT_CARD=EXPORT_CARD, EXPORT_BORDER=EXPORT_BORDER,
     EXPORT_ACCENT_FG=EXPORT_ACCENT_FG, EXPORT_TH_BG=EXPORT_TH_BG,
     EXPORT_ROW_HOVER=EXPORT_ROW_HOVER,
+    PRINT_BG=PRINT_BG, PRINT_TEXT=PRINT_TEXT, PRINT_BORDER_MED=PRINT_BORDER_MED,
+    PRINT_BG_LIGHT=PRINT_BG_LIGHT, PRINT_BG_TH=PRINT_BG_TH, PRINT_BORDER_TD=PRINT_BORDER_TD,
     BADGE_HIGH_BG=BADGE_HIGH_BG, BADGE_HIGH_FG=BADGE_HIGH_FG,
     BADGE_MEDIUM_BG=BADGE_MEDIUM_BG, BADGE_MEDIUM_FG=BADGE_MEDIUM_FG,
     BADGE_LOW_BG=BADGE_LOW_BG, BADGE_LOW_FG=BADGE_LOW_FG,
@@ -215,7 +218,7 @@ def _module5_html(data: Optional[Any]) -> str:
         f"<tbody>{rows}</tbody></table>" if rows else "<p>No micro-outages detected.</p>"
     )
     dns_note = (
-        "<p style='color:#f59e0b;margin-top:12px'>"
+        f"<p style='color:{EXPORT_AMBER_FG};margin-top:12px'>"
         "⚠ DNS-specific failure detected: pings succeeded but DNS timed out. "
         "Gateway DNS proxy is being disrupted.</p>"
         if dns_fail else ""
@@ -228,7 +231,7 @@ def _diagnostics_html(result) -> str:
         return "<p>Diagnostics not run.</p>"
     rows = ""
     for p in getattr(result, "ping_results", []):
-        color = {"OK": "#22c55e", "SLOW": "#f59e0b", "FAIL": "#ef4444"}.get(p.status, "#888")
+        color = {"OK": EXPORT_GREEN_FG, "SLOW": EXPORT_AMBER_FG, "FAIL": EXPORT_RED_FG}.get(p.status, EXPORT_NEUTRAL_GRAY)
         rtt = f"{p.rtt_ms:.0f} ms" if p.rtt_ms >= 0 else "unreachable"
         rows += (f"<tr><td>{html.escape(p.host)}</td>"
                  f"<td style='color:{color}'>{p.status}</td>"
@@ -241,7 +244,7 @@ def _diagnostics_html(result) -> str:
     dns_leak = getattr(result, "dns_leak", None)
     leak_html = ""
     if dns_leak:
-        color = "#ef4444" if dns_leak.leak_detected else "#22c55e"
+        color = EXPORT_RED_FG if dns_leak.leak_detected else EXPORT_GREEN_FG
         leak_html = (
             f"<p style='margin-top:10px;color:{color}'>"
             f"<strong>DNS Leak:</strong> {html.escape(dns_leak.plain_verdict)}</p>"
@@ -251,7 +254,7 @@ def _diagnostics_html(result) -> str:
     pub = getattr(result, "public_ip", "") or ""
     pub_html = f"<p><strong>Public IP:</strong> {html.escape(pub)}</p>" if pub else ""
     return ping_table + speed_html + pub_html + leak_html + (
-        f"<p style='margin-top:8px;color:#888'>{html.escape(verdict)}</p>" if verdict else ""
+        f"<p style='margin-top:8px;color:{EXPORT_NEUTRAL_GRAY}'>{html.escape(verdict)}</p>" if verdict else ""
     )
 
 
@@ -276,7 +279,7 @@ def _network_info_html(info: Optional[Dict]) -> str:
     adp_rows = ""
     for a in adapters:
         connected = a.get("connected", False)
-        st_color = "#22c55e" if connected else "#ef4444"
+        st_color = EXPORT_GREEN_FG if connected else EXPORT_RED_FG
         st = "Connected" if connected else "Disconnected"
         sig = a.get("signal_pct", -1)
         sig_str = f"{sig}%" if sig >= 0 else "—"

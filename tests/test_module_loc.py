@@ -25,13 +25,6 @@ KNOWN_LARGE_MODULES: dict[str, int] = {
     # Natural split: move segment + traffic-sample write methods to metric_store_schema.py.
     "metric_store.py": 730,
 
-    # Cytoscape.js element builder (686 lines after HTML/JS page builder split).
-    # HTML/JS template + build_cytoscape_html + build_elements_for_update moved to
-    # topology_cytoscape_html.py (RULE-AH1 budget split complete).
-    # Exceeds 600 default due to _build_style() stylesheet list (~210 lines).
-    # Natural next split: extract _build_style() → topology_cytoscape_style.py.
-    "topology_cytoscape.py": 720,
-
     # Grew to ~694 lines after P1-2/P1-3 additions (Smart Plug, Smart Bulb,
     # Thermostat rules + device_types import).  Natural split: extract _RULES
     # list (~340 lines) into device_classifier_rules.py; classifier becomes ~360 lines.
@@ -126,9 +119,9 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # settings_page.py is now 282 lines (shell only).
     "pages/settings_page.py": 482,  # actual 282 + 200 margin (S14-3c delivered)
 
-    # _SettingsCardsMixin — all card builder methods + workers.
-    # Still large; next split: extract per-section QWidget subclasses.
-    "pages/settings_cards.py": 1409,  # actual 1,209 + 200 margin (Sprint 2: appearance split to settings_appearance.py)
+    # _SettingsCardsMixin — all card builders + workers + _ThemeSwatch.
+    # _ThemeSwatch + appearance/display cards merged in (Audit Cleanup); split if exceeds 1,800.
+    "pages/settings_cards.py": 1800,  # actual ~1,581 + 200 margin (Audit Cleanup)
 
     # Hardware integration page — plugin hub shell + worker management.
     # S14-2 complete: plugin_guide.py + credential_dialog.py + plugin_wizard_mixin.py +
@@ -179,9 +172,6 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # _NotifExtraChannelsMixin — Pushover/Ntfy/Telegram/Escalation/WeeklyDigest builders.
     "pages/notif_extra_channels.py": 595,  # actual 395 + 200 margin (Sprint 13 new file)
-
-    # _SettingsAppearanceMixin — appearance + display card builders.
-    "pages/settings_appearance.py": 406,  # actual 206 + 200 margin (Sprint 13 new file)
 
     # ScanEnrichmentMixin — mesh + hardware plugin enrichment handlers + M1 table helpers.
     # Sprint 18: _apply_mesh_enrichment + _m1_* + _filter_m1_by_nl moved here from dashboard.py.

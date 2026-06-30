@@ -98,6 +98,7 @@ netsentinel/
 │   ├── nl_query.py             # Natural language query parser for device and event search
 │   ├── topology_cytoscape.py      # Cytoscape.js element builder + stylesheet — pure Python, no PyQt (Sprint 6)
 │   ├── topology_cytoscape_html.py # HTML/JS page template builder for Cytoscape map (RULE-AH1 split from topology_cytoscape.py)
+│   ├── topology_cytoscape_style.py # Cytoscape.js stylesheet list — extracted from topology_cytoscape.py (Audit Cleanup sprint)
 │   ├── topology_layout.py      # NodePosition dataclass + load/save/clear layout + compute_scan_id (Sprint 2)
 │   ├── topology_layouts.py     # Deterministic geometric layout engines — geo_hierarchy, geo_concentric, geo_grid (Sprint 7)
 │   ├── topology_snapshot.py    # TopologySnapshot + TopologyDiff + save/load/diff — change detection (Sprint 4)

@@ -7,13 +7,9 @@ paths:
 
 ## Strategic Goals
 
-NetSentinel has two parallel strategic goals:
+NetSentinel has one  strategic goal:
 
 1. **De-facto home network standard** — become the first tool recommended when anyone says "my network is broken". The tool must show what is happening on the real network, in plain English, without requiring the user to already know what STP, ARP, or DNS are.
-
-2. **Educational standard** — become the natural starting point for anyone learning how networks actually work. Every feature should produce output that maps directly to a textbook concept or exam objective and can be submitted as evidence of work.
-
-Both goals are served by the same core property: zero prior knowledge required.
 
 ---
 

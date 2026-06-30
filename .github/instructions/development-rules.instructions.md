@@ -9,70 +9,12 @@ description: "Development rules, commit gates, and architectural constraints for
 
 ## COMMIT GATE — Mandatory Before Every Commit or Push
 
-**These steps are BLOCKING. Do not commit, tag, or push until ALL are complete.**
+Invoke `/commit-gate` before every commit or push. The skill runs all 5 steps with hard gates:
+ruff + mypy + pip-audit → full test suite → debug_launch → UI sign-off → explicit commit instruction.
 
-### Step 1 — Run linters and static analysis (HARD GATE)
-```powershell
-ruff check . --select=F401,F811,F841
-python -m mypy modules/
-pip-audit -r requirements.txt --desc
-```
-All three must exit 0 with no errors. Fix every violation before proceeding — these
-are the same checks CI runs, so a failure here means a failed CI run after push.
-
-**IMPORTANT:** Run `ruff` as a direct CLI executable (`ruff check .`), NOT as `python -m ruff`.
-The installed `ruff` CLI is on the PATH; `python -m ruff` can pick up a wrong interpreter.
-
-- **ruff**: unused imports (F401/F811) and unused variables (F841). Fix by removing
-  the unused name or adding `# noqa: F401` with a comment explaining the re-export.
-- **mypy**: type errors in `modules/`. Add `ignore_errors = True` under a
-  `[mypy-modules.<name>]` section in `mypy.ini` for Windows-specific APIs
-  (winreg, ctypes.windll, subprocess.CREATE_NO_WINDOW) that only exist on Windows.
-- **pip-audit**: known CVEs in dependencies. Update the affected package in
-  `requirements.txt` and rerun to confirm the finding is resolved.
-
-### Step 2 — Run the full test suite
-```powershell
-python -m pytest tests/ -q
-```
-All tests must pass. Fix any failures before proceeding.
-
-### Step 3 — Verify the app starts (HARD GATE)
-```powershell
-python tools/debug_launch.py
-```
-Read `netsentinel_debug.log` and confirm:
-- `Dashboard() instantiated OK` is present
-- `window.show() called OK` is present
-- No `UNHANDLED EXCEPTION` block in the log
-
-**CRITICAL — always read `netsentinel_debug.log` (the main log), never the
-timestamped variants (`netsentinel_debug_YYYYMMDD_HHMMSS.log`).** The timestamped
-files are from older runs and may describe bugs that have since been fixed. The
-`debug_launch.py` script now deletes all old timestamped logs before each run, so
-only one timestamped log (the current run) and `netsentinel_debug.log` ever exist.
-
-If old timestamped logs are present from a session before this rule was enforced, delete them:
-```powershell
-Remove-Item netsentinel_debug_????????_??????.log -Force -ErrorAction SilentlyContinue
-```
-
-**Do NOT proceed to Step 4 until this passes.** PyQt6 TypeError crashes (wrong
-kwarg on addLayout, bad signal signature, missing import) only surface here —
-not in the test suite. A clean test run does not prove the app starts.
-
-### Step 4 — UI sign-off
-Tell the user: "Tests pass, app launched cleanly — please verify the window looks correct and say 'looks good' to proceed."
-
-Wait for the user's visual confirmation before Step 5.
-Accepted phrases: "looks good", "lgtm", "fine", "ok".
-Do NOT treat silence, a new question, or a feature request as approval.
-
-### Step 5 — Explicit commit instruction (HARD GATE)
-Do NOT run `git commit`, `git push`, `git tag`, or any destructive git operation unless the user explicitly says so.
-
-Required trigger phrases: "commit to repo", "push to repo", "go ahead and commit", "push it", "commit it".
-"looks good" or "lgtm" do **not** grant permission to commit.
+**Step 5 reminder:** `git commit`, `git push`, and `git tag` require the user to say one of:
+"commit to repo" · "push to repo" · "go ahead and commit" · "push it" · "commit it".
+"looks good" or "lgtm" from the UI sign-off do **not** grant permission to commit.
 
 ---
 
@@ -215,35 +157,15 @@ if latest and _ver(latest) > _ver(current):
 ### RULE 20: Winget CI job structure
 The winget submission job must live in `release.yml` as `needs: [release]`. Never use a separate workflow triggered by `workflow_run`.
 
-### RULE 21: Release checklist (autonomous — do not ask the user to do these)
-For every shipped feature or fix:
-- **21-A**: Bump version in all files (RULE 11); run version consistency test
-- **21-B**: Update README (version, features table, project structure, changelog, "How it was built")
-- **21-C**: Update in-app Help "What's New" to match changelog
-- **21-D**: Update BACKLOG.md (remove completed items, add date)
-- **21-E**: Add test file `tests/test_<module>.py` for every new module
-- **21-F**: Register new pages in `_build_pro_nav()` + README
-- **21-G**: Add new modules to architecture.instructions.md layout table
-- **21-H**: Commit message format: `feat: <description>  vX.Y.Z`
-- **21-I**: "Tag" means this EXACT four-step sequence — no exceptions, no shortcuts:
-  1. `python bump_version.py X.Y.Z` (plain semver only — no suffixes like `-codeql`)
-  2. `git push origin main`
-  3. `git tag vX.Y.Z`
-  4. `git push origin vX.Y.Z`
+### RULE 21: Release checklist — invoke /bump
+All release checklist items (21-A through 21-I) are handled by the `/bump` skill.
+Invoke `/bump X.Y.Z` whenever shipping a feature or fix. Never do this manually.
 
-**CRITICAL — bump → branch → tag. Every single time.**
-- Non-semver tags (e.g. `v1.9.52-codeql`) break `AppxManifest.xml` (requires `X.Y.Z.0`) and the version-consistency tests.
-- Branch push must precede the tag push: `codeql.yml` and `docs.yml` trigger on `push: branches: [main]`; pushing only the tag means CI never runs on the commit.
-- Never tag without bumping first. Even a one-line patch commit must bump to the next semver.
-
-**Self-verification checklist before presenting to user:**
-- [ ] Version bumped in all 9 files; consistency test passes
-- [ ] README: badge, features, structure, changelog updated
-- [ ] In-app Help "What's New" matches changelog
-- [ ] BACKLOG.md: completed items removed, date updated
-- [ ] All new modules have tests; full suite passes
-- [ ] New pages registered in `_build_pro_nav()` and listed in README
-- [ ] `git push origin main` done before `git push origin vX.Y.Z`
+Key constraints the skill enforces:
+- CHANGELOG.md entry must precede `bump_version.py` (the script promotes the topmost header)
+- Branch push (`git push origin main`) must precede the tag push — CI won't run on tag-only
+- Plain semver only — non-semver tags (e.g. `v1.9.52-codeql`) break `AppxManifest.xml`
+- 30-minute monkey test is required before every version bump (RULE-CHAOS1)
 
 ### RULE 22-A: Secrets in OS keychain
 API keys, passwords, SMTP credentials, SNMP community strings, and tokens must be stored via `keyring`. Never write secrets to `QSettings`, `NetSentinel.ini`, or any file.
@@ -373,14 +295,21 @@ This rule covers **rail section buttons only**. Flyout item prefix characters ar
 
 ## Testing Enforcement
 
-### RULE-T1 (blocking): Every new module must have a test file
-Every new file under `modules/` must have a corresponding `tests/test_<name>.py` in the same PR, with at minimum one import test and one behavioural test.
+### RULE-TDD1 (blocking): New modules/ code must be written test-first via RED-GREEN-REFACTOR
+No implementation code in `modules/` without a failing test first. The Iron Law: if you didn't watch the test fail, you don't know if it tests the right thing.
+
+Invoke `/test-driven-development` at the start of any session that will add or change `modules/` files. The skill enforces hard gates (paste failing output before writing implementation; paste passing output before refactoring).
+
+This rule does NOT apply to `ui/pages/` — PyQt6 widget lifecycle constraints make strict test-first impractical there. Use RULE-T7 for UI pages instead.
+
+### RULE-T1 (blocking): Every new module must be built test-first; test file ships in the same PR
+Every new file under `modules/` must have a corresponding `tests/test_<name>.py` covering at minimum one import test and one behavioural test. The test file must be written **before** the implementation (RED-GREEN-REFACTOR per RULE-TDD1), not added after the fact.
 
 ### RULE-T2 (blocking): Every new worker must have a start/stop lifecycle test
 Every new file under `workers/` must have a test that (1) imports the worker, (2) instantiates it, (3) calls `start()`, waits briefly, calls `stop()`, and asserts `isRunning()` is `False`.
 
-### RULE-T3 (blocking): Every bug fix must include a regression test
-Every bug fix PR must include a new test that reproduces the original failure and passes after the fix.
+### RULE-T3 (blocking): Every bug fix starts with a failing regression test
+Before writing any fix code, write a test that reproduces the original failure and watch it fail (RED). Then write the minimum fix to make it pass (GREEN). The failing test output must be observed — a test added after the fix cannot verify it catches the original bug.
 
 ### RULE-T4 (blocking): Smoke test list must stay current
 `app.py _smoke_test()` must be updated whenever a new module or worker is added.
@@ -438,25 +367,12 @@ substitute "tests pass" or "screenshots show" for an actual walk-through of user
 
 ## Release Integrity
 
-### RULE-BUMP1 (blocking): "version bump" always means run bump_version.py
-When the user says "version bump", "bump version", "bump to X.Y.Z", or any variation:
+### RULE-BUMP1 (blocking): "version bump" always means invoke /bump
+When the user says "version bump", "bump version", "bump to X.Y.Z", or any variation,
+invoke `/bump X.Y.Z`. The skill handles the full workflow: CHANGELOG → README → What's New →
+`bump_version.py` → monkey test → `git push origin main` → tag → `git push origin vX.Y.Z`.
 
-1. Determine the target version — use the version the user specifies, or increment the patch digit (X.Y.Z+1) if none given.
-2. Add a `### vX.Y.Z` entry at the **top** of `CHANGELOG.md` with full detail (one bullet per logical change). Update the short `### vX.Y.Z (current)` block under `## Changelog` in `README.md` with a 3–5 bullet plain-English summary of the most important changes (RULE-R1b).
-3. Update "What's New" in `ui/dashboard.py` (`_section(f"What's New in v{app_ver}", [...])`) to match the changelog entry.
-4. Run `python bump_version.py X.Y.Z` — this updates all tracked version files, runs the consistency tests, **and automatically stages + commits the version files**. **Never edit version strings by hand across files.**
-5. If `bump_version.py` exits non-zero, fix the reported failures before continuing.
-6. After `bump_version.py` exits 0, the version commit already exists locally. Push and tag:
-
-```powershell
-# bump_version.py now auto-commits — only push and tag remain
-python bump_version.py X.Y.Z
-git push origin main
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-Do NOT manually edit `app.py`, `cli.py`, `apm.yml`, `installer.iss`, winget manifests, etc. — `bump_version.py` handles all of them.
+Do NOT manually edit version strings across files — `bump_version.py` handles all of them.
 
 ### RULE-R1b (blocking): Every version bump needs a CHANGELOG.md entry and a README.md summary update
 Before running `bump_version.py`:
@@ -786,68 +702,24 @@ Add to `_ENDPOINTS` in `RestApiPage._update_endpoint_ref()` in the same session 
 
 ## Sprint Planning
 
-### RULE-SPRINT1 (blocking): Git log first when starting a sprint
-Whenever the user says "work on the next sprint", "start Sprint N", or any variation,
-the **mandatory first step** is:
-```powershell
-git log --oneline -5
-```
-Read the output to understand what was delivered in previous sprints.
-Only then pick up the next available items from the plan.
-Do **not** start by reading files or checking current state before reviewing git history.
+### RULE-SPRINT1 (blocking): Use /sprint when starting or closing a sprint
+When the user says "start sprint", "work on next sprint", or any variation: invoke `/sprint start`.
+The skill runs `git log` first (hard gate), finds the active plan doc, and states the sprint scope.
 
-### RULE-SPRINT2 (blocking): Update the active plan document when a sprint ends
-When a sprint's work is complete (all items done or explicitly deferred), locate the
-active backlog, plan, or sprint-tracking document and update it before closing the
-session.  Do **not** assume a specific filename — look for the document that contains
-the implementation-order table or sprint queue for the current body of work.
-
-Required updates (regardless of document name or format):
-1. Mark every completed item with ✅.
-2. Add a note for any items that were scoped but not completed, with the target sprint.
-3. Update the footer or summary line with the sprint completion date.
-4. Record the next sprint's planned queue so the next session can start without research.
-
-This keeps the plan current so any future agent or session can start immediately
-with the right context, without re-deriving what was already done.
+When a sprint's work is complete: invoke `/sprint end`.
+The skill confirms the RULE-SD1 5-item done checklist and updates the plan document
+(mark ✅, add deferred notes, record next queue) before closing the session.
 
 ---
 
 ## Debugging & Troubleshooting
 
-### RULE-DBG1 (blocking): Git Diff First — read the diff before writing any diagnostic plan
-```powershell
-git diff HEAD
-git status
-```
-A crash that references code in the diff is almost certainly caused by that change. Trust the diff over the narrative.
+### RULE-DBG (blocking): Use /debug when investigating any crash or unexpected behaviour
+Invoke `/debug` at the start of any debugging session. The skill enforces:
+git diff first (hard gate) → stated hypothesis with mechanism → fix 1 → fix 2 →
+two-attempt isolation if both fail → ghost window event filter for FOUC symptoms.
 
-### RULE-DBG2 (blocking): Plan Before Fix — state the hypothesis before changing any code
-Format:
-```
-Hypothesis: [specific change] causes [symptom] because [mechanism].
-Fix: [what we will change].
-Expected outcome: [crash gone / different crash / test passes].
-```
-
-### RULE-DBG3 (blocking): Two-Attempt Isolation Rule — stop patching after two failed fixes
-After two failed attempts: revert all changes → confirm baseline is clean → re-apply one file at a time → binary-search the culprit block.
-
-### RULE-DBG4 (blocking): Anti-Loop Memory — never repeat a failed fix
-Before each attempt, review all previous attempts. If the proposed fix is materially the same as one already tried, it is blocked.
-
-### RULE-DBG5 (blocking): FOUC / ghost window diagnosis — inject a global Show event filter before guessing layout causes
-```python
-from PyQt6.QtCore import QObject, QEvent
-class _ShowTracker(QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Type.Show:
-            print(f"SHOW: {obj.metaObject().className()} name={obj.objectName()}")
-        return False
-_tracker = _ShowTracker()
-app.installEventFilter(_tracker)
-```
-Read terminal output. The widget that prints before the main window is the culprit. Remove the filter before committing.
+Never patch code before reading the diff. Never apply fix 2 if it is materially the same as fix 1.
 
 ---
 

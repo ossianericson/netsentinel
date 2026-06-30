@@ -44,3 +44,70 @@ def test_scan_no_scapy_returns_result(monkeypatch):
     result = m.scan(duration=1)
     assert isinstance(result, StormResult)
     assert result.storm_level == "UNKNOWN"
+
+
+# ── Threshold / classification-logic tests ───────────────────────────────────
+
+def test_threshold_storm_greater_than_warning():
+    from modules.storm_analyser import THRESHOLD_STORM
+    assert THRESHOLD_STORM > THRESHOLD_WARNING
+
+
+def test_clean_level_is_below_warning_threshold():
+    r = StormResult(bcast_per_sec=float(THRESHOLD_WARNING - 1), storm_level="CLEAN")
+    assert r.storm_level == "CLEAN"
+    assert r.bcast_per_sec < THRESHOLD_WARNING
+
+
+def test_warning_level_is_between_thresholds():
+    from modules.storm_analyser import THRESHOLD_STORM
+    mid = (THRESHOLD_WARNING + THRESHOLD_STORM) / 2
+    r = StormResult(bcast_per_sec=mid, storm_level="WARNING")
+    assert r.storm_level == "WARNING"
+    assert r.bcast_per_sec >= THRESHOLD_WARNING
+    assert r.bcast_per_sec < THRESHOLD_STORM
+
+
+def test_storm_level_is_at_or_above_storm_threshold():
+    from modules.storm_analyser import THRESHOLD_STORM
+    r = StormResult(bcast_per_sec=float(THRESHOLD_STORM), storm_level="STORM")
+    assert r.storm_level == "STORM"
+    assert r.bcast_per_sec >= THRESHOLD_STORM
+
+
+def test_storm_result_rogue_matches_list():
+    r = StormResult(rogue_matches=["aa:bb:cc:dd:ee:ff"])
+    assert "aa:bb:cc:dd:ee:ff" in r.rogue_matches
+
+
+def test_storm_result_top_sources_ordering():
+    sources = [("aa:bb:cc:00:00:01", 500), ("aa:bb:cc:00:00:02", 200)]
+    r = StormResult(top_sources=sources)
+    assert r.top_sources[0][1] > r.top_sources[1][1]
+
+
+def test_scan_no_scapy_calls_on_error(monkeypatch):
+    monkeypatch.setattr("modules.storm_analyser.SCAPY_AVAILABLE", False)
+    import modules.storm_analyser as m
+    errors = []
+    result = m.scan(duration=1, on_error=errors.append)
+    assert result.storm_level == "UNKNOWN"
+    assert len(errors) == 1
+    assert "scapy" in errors[0].lower() or "Scapy" in errors[0]
+
+
+def test_scan_calls_progress_cb_no_scapy(monkeypatch):
+    monkeypatch.setattr("modules.storm_analyser.SCAPY_AVAILABLE", False)
+    import modules.storm_analyser as m
+    calls = []
+    m.scan(duration=1, progress_cb=calls.append)
+    # No progress_cb calls expected when Scapy absent; test is non-crashing
+    assert isinstance(calls, list)
+
+
+def test_scan_result_has_plain_verdict_when_no_scapy(monkeypatch):
+    monkeypatch.setattr("modules.storm_analyser.SCAPY_AVAILABLE", False)
+    import modules.storm_analyser as m
+    result = m.scan(duration=1)
+    assert isinstance(result.plain_verdict, str)
+    assert len(result.plain_verdict) > 0

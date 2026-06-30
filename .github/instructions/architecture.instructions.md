@@ -57,6 +57,7 @@ netsentinel/
 │   ├── cve_lookup.py
 │   ├── deco_client.py          # TP-Link Deco XE75 mesh router API client
 │   ├── device_classifier.py    # OUI → device type + risk score
+│   ├── device_types.py         # Canonical device-type label constants (TYPE_SMART_PLUG, TYPE_SMART_THERMOSTAT, etc.) — import from here, never hardcode strings
 │   ├── device_health_summary.py # Per-device Online/Offline/Slow/Unusual classification (Sprint 5, S5-3)
 │   ├── device_naming.py        # Smart device name suggestions from hostname/vendor/type (Sprint 5, S5-1)
 │   ├── device_stability.py     # IP stability scoring + role inference engine (persistent device map)
@@ -97,6 +98,7 @@ netsentinel/
 │   ├── nl_query.py             # Natural language query parser for device and event search
 │   ├── topology_cytoscape.py      # Cytoscape.js element builder + stylesheet — pure Python, no PyQt (Sprint 6)
 │   ├── topology_cytoscape_html.py # HTML/JS page template builder for Cytoscape map (RULE-AH1 split from topology_cytoscape.py)
+│   ├── topology_cytoscape_style.py # Cytoscape.js stylesheet list — extracted from topology_cytoscape.py (Audit Cleanup sprint)
 │   ├── topology_layout.py      # NodePosition dataclass + load/save/clear layout + compute_scan_id (Sprint 2)
 │   ├── topology_layouts.py     # Deterministic geometric layout engines — geo_hierarchy, geo_concentric, geo_grid (Sprint 7)
 │   ├── topology_snapshot.py    # TopologySnapshot + TopologyDiff + save/load/diff — change detection (Sprint 4)

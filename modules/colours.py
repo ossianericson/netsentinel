@@ -19,6 +19,29 @@ GREEN      = "#2E7D32"
 ACCENT     = "#0078D4"
 TEXT_MUTED = "#9BA8B4"
 
+# ── Network topology Cytoscape.js colours ────────────────────────────────────
+# Mirror the Arctic Clean palette from ui/styles.py; no PyQt dependency.
+TEXT_PRIMARY   = "#1A1A2E"   # node label colour
+TEXT_SECONDARY = "#5A6A7A"   # default/unknown node fill
+WHITE          = "#FFFFFF"   # text outline so labels remain readable on any fill
+BORDER         = "#D4D4D4"   # default node border
+ACCENT_DARK    = "#005A9E"   # gateway node border (deeper blue)
+ACCENT_PURPLE  = "#7C3AED"   # mesh-satellite node / mesh edge
+TEAL           = "#0E7490"   # infrastructure / LLDP node fill and edge
+
+# ── Print-media override colours ─────────────────────────────────────────────
+# Used by modules/report_html.py @media print block.
+PRINT_BG         = "#FFFFFF"   # page and card background in print
+PRINT_TEXT       = "#111111"   # body text in print
+PRINT_BORDER_MED = "#999999"   # border for modules and badges in print
+PRINT_BG_LIGHT   = "#EEEEEE"   # badge background in print
+PRINT_BG_TH      = "#DDDDDD"   # table header background in print
+PRINT_BORDER_TD  = "#CCCCCC"   # table cell border in print
+
+# ── Neutral grays for HTML reports ───────────────────────────────────────────
+EXPORT_TEXT_DIM     = "#cccccc"   # dim body text in HTML report templates
+EXPORT_NEUTRAL_GRAY = "#888888"   # unknown-grade / muted text in HTML reports
+
 # ── Dark export palette ───────────────────────────────────────────────────────
 # Used by log_chart.py (PNG exports) and report_exporter.py (HTML reports).
 # Intentionally dark — these are standalone documents, not Qt UI widgets.

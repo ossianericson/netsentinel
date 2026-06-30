@@ -109,10 +109,10 @@ _MODULE_BUDGETS: dict[str, int] = {
     "modules/digest_builder.py": 34,
     "modules/report_scheduler.py": 30,
     "modules/web_dashboard.py": 21,
-    "modules/report_html.py": 22,
+    "modules/report_html.py": 0,
     "modules/net_doc_generator.py": 13,
     "modules/report_exporter.py": 0,
-    "modules/report_isp.py": 4,   # inherited from report_exporter.py split (S20-5)
+    "modules/report_isp.py": 0,
     "modules/network_benchmark.py": 1,
     # SEGMENT_PALETTE — 8 hex entries; business-logic data, not UI code.
     # Migrate to modules/colours.py in a future purge sprint.
@@ -120,9 +120,6 @@ _MODULE_BUDGETS: dict[str, int] = {
     # DDL DEFAULT '#0078D4' in network_segments table schema string.
     # Migrate to modules/colours.py in a future purge sprint.
     "modules/metric_store_schema.py": 1,
-    # Cytoscape.js CSS in embedded HTML/JS template (Cytoscape stylesheet, not Python UI).
-    # Migrate to modules/colours.py in a future purge sprint.
-    "modules/topology_cytoscape.py": 46,
     # HTML/CSS strings in Cytoscape HTML builder template.
     # Migrate to modules/colours.py in a future purge sprint.
     "modules/topology_cytoscape_html.py": 5,

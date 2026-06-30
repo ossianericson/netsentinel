@@ -4,6 +4,15 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.19
+
+**Changed**
+- `.claude/skills/check.md` — new session-start health-snapshot skill (`/check`)
+- `.claude/skills/triage.md` — new bug triage skill (`/triage`) writes structured records to `.triage/`
+- `.claude/skills/debug.md` — added Phase 6 "Improve" section: after every fix, evaluate whether a new `RULE-*` should be written while the mechanism is fresh
+
+---
+
 ### v2.1.18
 
 **Added**

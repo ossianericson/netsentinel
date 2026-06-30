@@ -14,7 +14,7 @@ from string import Template as _Template
 from modules.report_html import _CSS
 from modules.colours import (
     EXPORT_TEXT, EXPORT_HEADING_FG, EXPORT_META,
-    EXPORT_RED_FG,
+    EXPORT_RED_FG, EXPORT_GREEN_FG, EXPORT_TEXT_DIM, EXPORT_NEUTRAL_GRAY,
     EXPORT_BORDER, EXPORT_ACCENT_FG,
     EXPORT_TH_BG, EXPORT_ISP_HEADER, EXPORT_NOTE_BG,
     GRADE_A_BG, GRADE_A_FG, GRADE_A_BORDER,
@@ -90,7 +90,7 @@ def generate_isp_report(
     else:
         grade_letter = "N/A"
         grade_css    = "grade-F"
-        grade_color  = "#888"
+        grade_color  = EXPORT_NEUTRAL_GRAY
         overall_txt  = "No benchmark data available."
         score        = "—"
 
@@ -168,7 +168,7 @@ Packet loss first appearing at hop 2+ = ISP infrastructure issue.
     elif log_summary:
         outage_section = (
             '<div class="section-title">Recorded Outages</div>'
-            '<p style="color:#22c55e">No outages recorded during the monitoring period.</p>'
+            f'<p style="color:{EXPORT_GREEN_FG}">No outages recorded during the monitoring period.</p>'
         )
 
     uptime  = getattr(log_summary, "uptime_pct",   100.0) if log_summary else None
@@ -208,7 +208,7 @@ Packet loss first appearing at hop 2+ = ISP infrastructure issue.
     <div style="font-size:1.1rem;font-weight:bold;color:{grade_color}">
       Network Health Score: {score}
     </div>
-    <div style="color:#ccc;margin-top:6px;max-width:600px">{overall_txt}</div>
+    <div style="color:{EXPORT_TEXT_DIM};margin-top:6px;max-width:600px">{overall_txt}</div>
   </div>
 </div>
 
@@ -227,7 +227,7 @@ Packet loss first appearing at hop 2+ = ISP infrastructure issue.
 
 <div class="module">
   <div class="section-title">How to Use This Report</div>
-  <ul style="padding-left:18px;line-height:1.9;color:#ccc;font-size:0.9rem">
+  <ul style="padding-left:18px;line-height:1.9;color:{EXPORT_TEXT_DIM};font-size:0.9rem">
     <li>Share this HTML file or print it to PDF (Ctrl+P → Save as PDF) and attach to your ISP support ticket.</li>
     <li>Point the technician to the <strong>Network Path</strong> table — packet loss first appearing at hop 2 or later is in the ISP's network.</li>
     <li>The <strong>Recorded Outages</strong> section provides timestamped evidence of every disconnection.</li>
