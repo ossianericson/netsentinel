@@ -98,6 +98,8 @@ class OverviewPage(QWidget):
         self._has_results = False
         self._hidden: set = self._load_hidden()
         self._tile_order = self._load_order()
+        self._edit_snapshot_order: List[str] = list(self._tile_order)
+        self._edit_snapshot_hidden: set = set(self._hidden)
         self._tiles: Dict[str, _BaseTile] = {}
         self._filler: Optional[QWidget]   = None
         self._card_data  = None  # CardData instance; None until first benchmark
@@ -179,6 +181,19 @@ class OverviewPage(QWidget):
         )
         self._edit_btn.toggled.connect(self._on_edit_toggled)
         hdr.addWidget(self._edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
+
+        self._cancel_edit_btn = QPushButton("Cancel")
+        self._cancel_edit_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; padding:4px 14px;"
+            f" font-size:11px; border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        self._cancel_edit_btn.setToolTip("Discard layout changes made since entering Edit Layout")
+        self._cancel_edit_btn.clicked.connect(self._on_cancel_edit)
+        self._cancel_edit_btn.hide()
+        hdr.addWidget(self._cancel_edit_btn, alignment=Qt.AlignmentFlag.AlignBottom)
 
         self._report_btn = QPushButton("▣  Report")
         self._report_btn.setStyleSheet(
@@ -582,13 +597,32 @@ class OverviewPage(QWidget):
     def _on_edit_toggled(self, checked: bool) -> None:
         self._edit_mode = checked
         self._edit_btn.setText("Save Layout" if checked else "Edit Layout")
+        self._cancel_edit_btn.setVisible(checked)
         for tile in self._tiles.values():
             tile.set_edit_mode(checked)
         if checked:
+            self._edit_snapshot_order = list(self._tile_order)
+            self._edit_snapshot_hidden = set(self._hidden)
             self._refresh_add_strip()
         else:
             self._add_strip.hide()
             self._save_order()
+
+    def _on_cancel_edit(self) -> None:
+        """Discard any tile reordering/hide/add made since entering Edit Layout."""
+        self._tile_order = list(getattr(self, "_edit_snapshot_order", self._tile_order))
+        self._hidden = set(getattr(self, "_edit_snapshot_hidden", self._hidden))
+        self._save_order()
+        self._reflow()
+        self._edit_btn.blockSignals(True)
+        self._edit_btn.setChecked(False)
+        self._edit_btn.blockSignals(False)
+        self._edit_mode = False
+        self._edit_btn.setText("Edit Layout")
+        self._cancel_edit_btn.hide()
+        for tile in self._tiles.values():
+            tile.set_edit_mode(False)
+        self._refresh_add_strip()
 
     # ── Data slots ────────────────────────────────────────────────────────────
 

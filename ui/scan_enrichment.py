@@ -945,6 +945,11 @@ class ScanEnrichmentMixin:
                 _vendor = _d.vendor   if not isinstance(_d, dict) else _d.get("vendor", "")
                 if _mac:
                     _label_map[_mac.lower()] = _hn or _vendor or _mac
+            # This machine's own network adapters — overlay "This PC" labels so
+            # App Traffic / Bandwidth Usage / Timeline never show a bare MAC for
+            # traffic that originates from the box the app is running on.
+            from modules.utils_net import get_local_mac_label_map
+            _label_map.update(get_local_mac_label_map())
             if _label_map:
                 if hasattr(self, "_app_traffic_page"):
                     self._app_traffic_page.set_label_map(_label_map)

@@ -1395,6 +1395,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 vendor = d.get("vendor", "") if isinstance(d, dict) else (getattr(d, "vendor", "") or "")
                 if mac:
                     label_map[mac.lower()] = host or vendor or mac
+        from modules.utils_net import get_local_mac_label_map
+        label_map.update(get_local_mac_label_map())
         self._bw_worker = BandwidthWorker(interval_s=5.0, label_map=label_map)
         self._bw_worker.snapshot.connect(self._on_bw_snapshot)
         self._bw_worker.status.connect(self._bw_status.setText)
