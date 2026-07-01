@@ -113,6 +113,7 @@ class TimelinePage(QWidget):
             _SOURCE_CHANGES, _SOURCE_LOGGER,
         }
         self._events: list[_Ev] = []
+        self._label_map: dict[str, str] = {}
         self._tl_search_timer = QTimer(self)
         self._tl_search_timer.setSingleShot(True)
         self._tl_search_timer.setInterval(200)
@@ -259,6 +260,13 @@ class TimelinePage(QWidget):
 
         self._reload()
 
+    # ── External label map (from scan result) ───────────────────────────────
+
+    def set_label_map(self, label_map: dict) -> None:
+        """Pass MAC→display-name mapping from latest scan result."""
+        self._label_map = dict(label_map)
+        self._reload()
+
     # ── Data loading ──────────────────────────────────────────────────────────
 
     def _reload(self) -> None:
@@ -367,10 +375,11 @@ class TimelinePage(QWidget):
                     _new   = ev.get("new_value", "")
                     _src   = ev.get("source", "")
                     _detail = (f"{_old} → {_new}" if _old and _new else (_new or _src))
+                    _name  = self._label_map.get(_mac.lower(), _mac[:17]) if _mac != "?" else _mac
                     events.append(_Ev(
                         ts     = _ts,
                         source = _SOURCE_CHANGES,
-                        title  = f"{_label}: {_mac[:17]}",
+                        title  = f"{_label}: {_name}",
                         detail = _detail,
                         severity = "info",
                     ))

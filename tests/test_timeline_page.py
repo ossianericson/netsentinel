@@ -53,3 +53,18 @@ def test_events_table_row_count_is_zero_initially(page):
     if table is not None:
         assert table.rowCount() >= 0
     assert page is not None
+
+
+def test_device_change_event_shows_hostname_after_set_label_map(page, tmp_path):
+    """Regression: device-change rows must resolve MAC to hostname when a
+    label map has been supplied, same as App Traffic / Live Bandwidth."""
+    from modules.device_tracker import record_event
+
+    mac = "aa:bb:cc:11:22:33"
+    record_event(mac, "hostname_changed", "", "living-room-tv", "scan", page._store)
+
+    page.set_label_map({mac: "Living Room TV"})
+
+    titles = [ev.title for ev in page._events]
+    assert any("Living Room TV" in t for t in titles)
+    assert not any(mac in t for t in titles)

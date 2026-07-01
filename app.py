@@ -521,6 +521,11 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
 
 def _wire_cross_page(window):
     window._threat_intel_page.entries_updated.connect(window._geo_map_page.set_threat_entries)
+    # ThreatIntelPage loads its local cache synchronously in __init__, which runs
+    # (and fires entries_updated) before this connection exists — seed the map
+    # once with whatever it already loaded so startup data isn't silently dropped.
+    if window._threat_intel_page._threat_entries:
+        window._geo_map_page.set_threat_entries(window._threat_intel_page._threat_entries)
     window._hardware_integration_page.plugin_page_added.connect(window._home_page.on_hardware_added)
     window._home_page._freshness_strip.navigate_to.connect(window._nav_rail_go_to)
 

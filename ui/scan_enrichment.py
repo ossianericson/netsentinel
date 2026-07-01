@@ -950,6 +950,8 @@ class ScanEnrichmentMixin:
                     self._app_traffic_page.set_label_map(_label_map)
                 if getattr(self, "_bw_worker", None) is not None:
                     self._bw_worker.label_map = _label_map
+                if hasattr(self, "_timeline_page"):
+                    self._timeline_page.set_label_map(_label_map)
         except Exception:
             pass  # non-fatal
 

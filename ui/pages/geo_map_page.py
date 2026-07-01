@@ -393,7 +393,11 @@ class GeoMapPage(QWidget):
         self._db_layout.addWidget(self._db_path_lbl)
 
         # Quick download (P3TERX mirror — no account required)
-        quick_row = QHBoxLayout()
+        # Hidden once a database is already loaded (see _refresh_db_status) —
+        # a "download" CTA makes no sense when the DB is already in place.
+        self._quick_dl_row = QWidget()
+        quick_row = QHBoxLayout(self._quick_dl_row)
+        quick_row.setContentsMargins(0, 0, 0, 0)
         quick_row.setSpacing(6)
         quick_lbl = QLabel("No database?")
         quick_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY};")
@@ -406,7 +410,7 @@ class GeoMapPage(QWidget):
         quick_row.addWidget(quick_lbl)
         quick_row.addWidget(self._btn_quick_dl)
         quick_row.addStretch()
-        self._db_layout.addLayout(quick_row)
+        self._db_layout.addWidget(self._quick_dl_row)
 
         # Custom URL download (MaxMind permalink or any trusted URL)
         dl_row = QHBoxLayout()
@@ -1225,6 +1229,18 @@ class GeoMapPage(QWidget):
             self._db_status_lbl.setText("No database — download below or copy .mmdb manually")
             self._db_status_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_MUTED};")
         self._db_path_lbl.setText(str(path))
+
+        # The "no database?" quick-download CTA is only relevant before a DB
+        # is in place — once loaded, "Reload DB" above is the right action.
+        self._quick_dl_row.setVisible(not self._locator.is_available)
+        if self._locator.is_available:
+            self._permalink_edit.setPlaceholderText(
+                "Paste a permalink URL to replace the current database…")
+            self._btn_dl.setText("↓  Replace")
+        else:
+            self._permalink_edit.setPlaceholderText(
+                "Or paste a custom MaxMind permalink URL…")
+            self._btn_dl.setText("↓  Download")
 
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
