@@ -131,9 +131,6 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         from ui.pages.snmp_trap_page import SnmpTrapPage
         self._snmp_trap_page = SnmpTrapPage(store=self._store)
-        self._snmp_trap_page.navigate_to_settings.connect(
-            lambda: self._nav_go_to("Settings")
-        )
 
         from ui.pages.syslog_page import SyslogPage
         self._syslog_page = SyslogPage(parent=None)
