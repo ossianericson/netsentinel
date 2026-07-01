@@ -274,6 +274,7 @@ class GeoMapPage(QWidget):
         # ip → (GeoResult, category, [linked labels])
         self._points: Dict[str, Tuple[GeoResult, str, List[str]]] = {}
         self._lookup_worker: Optional[_LookupWorker] = None
+        self._pending_lookups: List[Tuple[list, str, dict]] = []
         self._dl_worker: Optional[_DownloadWorker] = None
         self._selected_ip: Optional[str] = None
 
@@ -297,12 +298,22 @@ class GeoMapPage(QWidget):
         super().hideEvent(event)
 
     def showEvent(self, event) -> None:
-        """Re-open the MaxMind mmdb when the page becomes visible again."""
+        """Re-open the MaxMind mmdb when the page becomes visible again.
+
+        hideEvent() closes the *shared* GeoLocator singleton, and since this
+        page starts hidden (it's not the initial QStackedWidget page), any
+        lookup that runs before the user ever visits it — e.g. the threat
+        intel auto-seed at startup — resolves every IP to lat=lon=0.0 because
+        the DB is closed. Those points are stored permanently at 0,0 and never
+        redrawn, so the IP table fills in but no dots ever appear on the map.
+        Re-resolving on show fixes them the first time the page is opened.
+        """
         super().showEvent(event)
         try:
             get_locator().reload()
         except Exception:
             pass  # non-fatal — mmdb may not be installed yet
+        self._after_db_loaded()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -929,19 +940,33 @@ class GeoMapPage(QWidget):
 
     def _queue_lookup(self, ips: List[str], category: str,
                       link_map: Dict[str, object]) -> None:
-        """Filter to public IPs and start lookup worker."""
+        """Filter to public IPs and start lookup worker.
+
+        If a lookup is already running (e.g. the startup auto-seed from threat
+        intel is still resolving a large feed), the request is queued rather
+        than silently dropped — otherwise a user click that lands mid-lookup
+        would appear to do nothing.
+        """
         public = [ip for ip in ips if _is_plottable(ip)]
         if not public:
             return
         if self._lookup_worker and self._lookup_worker.isRunning():
-            # Queue is simplified: just drop if busy (no long queues of public IPs)
+            self._pending_lookups.append((public, category, link_map))
             return
         self._lookup_worker = _LookupWorker(public, self._locator)
         self._lookup_worker.result_ready.connect(
             lambda results, cat=category, lm=link_map: self._on_results(results, cat, lm))
         self._lookup_worker.error.connect(
             lambda msg: None)   # silent fail — geo is best-effort
+        self._lookup_worker.finished.connect(self._on_lookup_worker_finished)
         self._lookup_worker.start()
+
+    def _on_lookup_worker_finished(self) -> None:
+        """Start the next queued lookup, if any, once the current one finishes."""
+        if not self._pending_lookups:
+            return
+        ips, category, link_map = self._pending_lookups.pop(0)
+        self._queue_lookup(ips, category, link_map)
 
     @pyqtSlot(list)
     def _on_results(self, results: List[GeoResult], category: str,
