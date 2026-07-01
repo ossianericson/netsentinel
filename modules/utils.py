@@ -7,6 +7,10 @@ live in modules/utils_net.py and are re-exported here for backwards compatibilit
 
 IPv6 scanning functions (get_ipv6_devices, ping_sweep_ipv6) live in
 modules/utils_platform.py and are re-exported here for backwards compatibility.
+
+This module is also the canonical entry point for the vendor lookup, hostname
+resolver, and device classifier helpers (lookup_vendor, resolve, resolve_batch,
+classify, classify_device, classify_with_evidence) — re-exported below.
 """
 import concurrent.futures
 import os
@@ -22,10 +26,18 @@ from typing import List, Tuple
 from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details  # noqa: F401
 from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6  # noqa: F401
 
+# Canonical re-exports for lookup/resolver/classifier helpers (do not remove).
+from modules.mac_lookup import lookup_vendor  # noqa: F401
+from modules.name_resolver import ResolvedName, resolve, resolve_batch  # noqa: F401
+from modules.device_classifier import classify, classify_device, classify_with_evidence  # noqa: F401
+
 # Explicit re-export list so CodeQL recognises these as intentional re-exports.
 __all__ = [
     "get_network_info", "get_dhcp_info", "get_interface_details",
     "get_ipv6_devices", "ping_sweep_ipv6",
+    "lookup_vendor",
+    "ResolvedName", "resolve", "resolve_batch",
+    "classify", "classify_device", "classify_with_evidence",
 ]
 
 
