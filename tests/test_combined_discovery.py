@@ -8,6 +8,23 @@ def test_import():
     import modules.combined_discovery  # noqa: F401
 
 
+def test_resolve_hostname_delegates_to_name_resolver(monkeypatch):
+    """combined_discovery._resolve_hostname must call name_resolver.rdns (Phase 2a reroute)."""
+    from modules import combined_discovery
+    from modules import name_resolver
+
+    calls = []
+
+    def fake_rdns(ip, timeout=1.0):
+        calls.append((ip, timeout))
+        return "fake-host"
+
+    monkeypatch.setattr(name_resolver, "rdns", fake_rdns)
+    result = combined_discovery._resolve_hostname("192.168.1.10", timeout=0.5)
+    assert result == "fake-host"
+    assert calls == [("192.168.1.10", 0.5)]
+
+
 def test_discovered_device_dataclass():
     from modules.combined_discovery import DiscoveredDevice
     d = DiscoveredDevice(

@@ -98,12 +98,8 @@ def _get_local_cidr() -> str:
 
 
 def _resolve_hostname(ip: str, timeout: float = 0.5) -> str:
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            fut = ex.submit(socket.gethostbyaddr, ip)
-            return fut.result(timeout=timeout)[0]
-    except Exception:
-        return ""
+    from modules.name_resolver import rdns
+    return rdns(ip, timeout)
 
 
 # ── Method 1: ARP cache (passive, instant) ────────────────────────────────────

@@ -3,6 +3,10 @@ Service Diagnostics Probes — low-level network probes used by DiagnosticEngine
 
 Each probe runs one measurement and returns a structured result.
 Pure Python — no admin privileges required, no PyQt6 imports.
+
+Not a name_resolver duplicate: dns_probe here performs *forward* DNS
+resolution (hostname -> IP) as a service-health check, distinct from
+name_resolver's reverse-DNS/NetBIOS/mDNS best-effort device naming.
 """
 from __future__ import annotations
 
