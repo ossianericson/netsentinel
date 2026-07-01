@@ -335,7 +335,8 @@ def build_help_tab(window) -> QWidget:
 
     bl.addWidget(_section("Advanced Features (Standard and Pro modes)", [
         ("Hop-by-Hop Trace",     "Continuous MTR — live per-hop loss % and RTT, updating every cycle"),
-        ("Tools & Wake-on-LAN",  "TCP port scanner (Fast / Normal / Low), service banners, WoL sender"),
+        ("Tools & Wake-on-LAN",  "Wake-on-LAN sender and New Device Alerts baseline diff"),
+        ("Port Scanner",         "TCP port scanner (Fast / Normal / Low) with service banners — no admin required"),
         ("Network Map",          "Visual topology diagram of devices and their relationships"),
         ("ARP Spoof Watch",      "Detects ARP poisoning and MITM attacks in real time"),
         ("DHCP Leases",          "DHCP lease inventory — all IPs handed out by your router"),
@@ -443,7 +444,7 @@ def build_help_tab(window) -> QWidget:
         ("…prove to my ISP the problem is theirs","Stability Log for 30+ min → Network Grade → Network Health Report"),
         ("…check if a device is hacked",          "Device Risk Score + CVE Lookup (Security Audit section)"),
         ("…monitor uptime of my servers",         "Service Heartbeat → add hosts + ports to watch"),
-        ("…see all open ports on a device",       "Tools & Wake-on-LAN → TCP Port Scan (Advanced section)"),
+        ("…see all open ports on a device",       "Port Scanner → TCP Port Scan (Advanced section)"),
         ("…detect ARP spoofing / MITM attack",    "ARP Spoof Watch (Advanced section)"),
         ("…see who is using the most bandwidth",  "Bandwidth Usage (Advanced section)"),
         ("…check TLS certificate expiry",         "TLS & Exposure (Security Audit section)"),

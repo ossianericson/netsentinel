@@ -408,6 +408,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
+        self._port_scanner_tab_widget = self._build_port_scanner_tab()
         self._topology_tab_widget = self._build_topology_tab()
         self._arp_tab_widget      = self._build_arp_monitor_tab()
         self._dhcp_tab_widget     = self._build_dhcp_tab()

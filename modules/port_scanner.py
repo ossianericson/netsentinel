@@ -140,7 +140,7 @@ import re as _re
 import ssl as _ssl
 
 
-def _probe_service(sock: "socket.socket", port: int, ip: str, timeout: float) -> tuple[str, str]:
+def probe_service(sock: "socket.socket", port: int, ip: str, timeout: float) -> tuple[str, str]:
     """
     Protocol-aware service probe.  Returns (banner, service_version).
 
@@ -303,7 +303,7 @@ def scan(
         risk = "HIGH" if port in HIGH_RISK_PORTS else "LOW"
         try:
             with socket.create_connection((result.ip, port), timeout=_timeout) as s:
-                banner, version = _probe_service(s, port, result.ip, _timeout)
+                banner, version = probe_service(s, port, result.ip, _timeout)
                 return PortResult(port=port, name=name, open=True,
                                   banner=banner, service_version=version, risk=risk)
         except Exception:

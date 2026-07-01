@@ -111,13 +111,15 @@ class _ReconTabsMixin:
         ctrl.addWidget(btn)
         ctrl.addWidget(btn_stop)
         ctrl.addStretch()
-        self._recon_syn_table = _table(["Port", "State", "Protocol", "Service", "CVEs"])
+        self._recon_syn_table = _table(["Port", "State", "Protocol", "Service", "Version", "Banner", "CVEs"])
         self._recon_syn_table.verticalHeader().setDefaultSectionSize(24)
         self._recon_syn_table.setColumnWidth(0, 70)
         self._recon_syn_table.setColumnWidth(1, 90)
         self._recon_syn_table.setColumnWidth(2, 70)
         self._recon_syn_table.setColumnWidth(3, 180)
-        self._recon_syn_table.setColumnWidth(4, 70)
+        self._recon_syn_table.setColumnWidth(4, 160)
+        self._recon_syn_table.setColumnWidth(5, 200)
+        self._recon_syn_table.setColumnWidth(6, 70)
         self._recon_syn_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._recon_syn_table.customContextMenuRequested.connect(self._syn_table_context_menu)
         self._recon_syn_table.cellClicked.connect(self._on_syn_cell_clicked)
@@ -178,7 +180,7 @@ class _ReconTabsMixin:
 
     @pyqtSlot(int, int)
     def _on_syn_cell_clicked(self, row: int, col: int) -> None:
-        if col != 4:
+        if col != 6:
             return
         svc_item = self._recon_syn_table.item(row, 3)
         if svc_item and svc_item.text():

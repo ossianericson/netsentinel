@@ -1283,6 +1283,7 @@ class _NavBuilderMixin:
         self._nav_add_rail_item("Hop-by-Hop Trace",    self._mtr_tab_widget)
         self._nav_add_rail_item("SNMP Device Info",    self._snmp_tab_widget)
         self._nav_add_rail_item("Tools & Wake-on-LAN", self._adv_tab_widget)
+        self._nav_add_rail_item("Port Scanner",        self._port_scanner_tab_widget)
         self._nav_add_rail_item("Geolocation Map",       self._geo_map_page)
         self._nav_add_rail_item("Trend Forecasts",       self._trend_page)
         self._nav_add_rail_item("Service Diagnostics",    self._service_diagnostics_page)
@@ -1666,7 +1667,7 @@ class _NavBuilderMixin:
         self._nav_rail_go_to(page)
         if page == "Port Scan (TCP)" and hasattr(self, "_syn_host"):
             self._syn_host.setText(params.get("host", ""))
-        elif page == "Tools & Wake-on-LAN" and hasattr(self, "_ps_host"):
+        elif page == "Port Scanner" and hasattr(self, "_ps_host"):
             self._ps_host.setText(params.get("host", ""))
         elif page == "Hop-by-Hop Trace" and hasattr(self, "_mtr_target"):
             self._mtr_target.setText(params.get("target", ""))

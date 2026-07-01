@@ -79,15 +79,15 @@ class _DiagExtraTabsMixin:
         self._mtr_cycle = 0
         return w
 
-    # ── Advanced Tools tab ────────────────────────────────────────────────────
+    # ── Port Scanner tab ──────────────────────────────────────────────────────
 
-    def _build_advanced_tools_tab(self) -> QWidget:
+    def _build_port_scanner_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(10)
 
-        title = QLabel("🔧  Advanced Tools")
+        title = QLabel("🔍  Port Scanner")
         title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
         lay.addWidget(title)
@@ -100,10 +100,6 @@ class _DiagExtraTabsMixin:
         ps_l = QVBoxLayout(ps_frame)
         ps_l.setContentsMargins(16, 12, 16, 12)
         ps_l.setSpacing(6)
-        ps_title = QLabel("🔍  Port Scanner")
-        ps_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        ps_title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
-        ps_l.addWidget(ps_title)
         ps_desc = QLabel(
             "TCP connect-scan of common ports on any host.  "
             "No admin required.  Right-click a device in Device Fingerprinter → Port Scan."
@@ -145,6 +141,22 @@ class _DiagExtraTabsMixin:
         ps_l.addWidget(self._ps_table)
         lay.addWidget(ps_frame)
 
+        lay.addStretch()
+        return w
+
+    # ── Advanced Tools tab ────────────────────────────────────────────────────
+
+    def _build_advanced_tools_tab(self) -> QWidget:
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(10, 10, 10, 10)
+        lay.setSpacing(10)
+
+        title = QLabel("⚡  Wake-on-LAN")
+        title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
+        lay.addWidget(title)
+
         # Wake-on-LAN card
         wol_frame = QFrame()
         wol_frame.setStyleSheet(
@@ -153,10 +165,6 @@ class _DiagExtraTabsMixin:
         wol_l = QVBoxLayout(wol_frame)
         wol_l.setContentsMargins(16, 12, 16, 12)
         wol_l.setSpacing(6)
-        wol_title = QLabel("⚡  Wake-on-LAN")
-        wol_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        wol_title.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:18px; font-weight:bold; background:transparent; border:none;")
-        wol_l.addWidget(wol_title)
         wol_row = QHBoxLayout()
         self._wol_mac = QLineEdit()
         self._wol_mac.setPlaceholderText("MAC address  aa:bb:cc:dd:ee:ff")
@@ -282,13 +290,13 @@ class _DiagExtraTabsMixin:
         self._record_recent_action(
             action_id=f"ps:{host}",
             label=f"Port scan · {host}",
-            page="Tools & Wake-on-LAN",
+            page="Port Scanner",
             params={"host": host},
         )
         from workers.scan_worker import PortScanWorker
         if hasattr(self, "_ps_host"):
             self._ps_host.setText(host)
-        self._nav_rail_go_to("Tools & Wake-on-LAN")
+        self._nav_rail_go_to("Port Scanner")
         self._ps_table.setRowCount(0)
         mode = self._ps_mode.currentText().lower() if hasattr(self, "_ps_mode") else "normal"
         if hasattr(self, "_ps_status"):
