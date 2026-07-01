@@ -67,7 +67,7 @@ Layer 2 features (STP detection, ARP monitor, broadcast storm analysis) require 
 | "Is it my ISP or my router?" | Root Cause Correlator — 5-hop ping chain test; isolates ISP vs LAN failures |
 | Need to prove an outage to support | ISP Accountability Report — MTR table + packet loss % + DNS latency as exportable HTML |
 | Open ports I didn't expect | Port Scanner (Security Audit) — SYN stealth scan with service banner grabbing |
-| Service is unreachable | Service Diagnostics — DNS/TCP/HTTPS/traceroute probes; failure-layer classification |
+| Service is unreachable | Service Diagnostics — DNS/TCP/HTTPS/traceroute probes on catalog services or any custom hostname; failure-layer classification including "filtered" (blocked despite healthy ping) |
 | ARP spoofing / MITM attack | ARP Spoof Watch — real-time IP–MAC conflict detection on the segment |
 
 ---
@@ -89,7 +89,7 @@ Layer 2 features (STP detection, ARP monitor, broadcast storm analysis) require 
 - **CVE lookup** — cross-references discovered OS and service versions against the NVD database on demand
 - **Wi-Fi scan** — hidden SSIDs, rogue APs, WPS-enabled networks, co-channel interference, signal levels
 - **IoT behaviour baseline** — learns normal traffic per IoT device; alerts on port scans, new destinations, and traffic rate spikes
-- **Service diagnostics** — DNS/TCP/HTTPS/ICMP/traceroute probes for streaming and gaming services; failure-layer classification (device → local_network → dns → isp → routing → remote_outage)
+- **Service diagnostics** — DNS/TCP/HTTPS/ICMP/traceroute probes for streaming/gaming services or any custom hostname; failure-layer classification (device → local_network → dns → isp → routing → remote_outage → filtered)
 - **DHCP lease inventory** — lists active leases; flags any rogue DHCP server on the segment
 - **Network topology map** — interactive Cytoscape.js diagram; upgrades to a mesh tree when Deco credentials are configured
 - **REST API** — read-only local HTTP API at `http://127.0.0.1:8765`; query devices, alerts, and uptime from Home Assistant or scripts
@@ -183,10 +183,26 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.20 (current)
+### v2.1.21 (current)
+
+**Changed**
+- Navigation colours extracted to 8 named semantic tokens; Arctic Clean sidebar is now white chrome; Midnight Pro card background elevated — all nav hover/active/focus states use theme-aware tokens instead of hardcoded `rgba()` values
+- Badge, info-box, banner, and canvas colours moved into per-theme dicts across both themes
+
+**Fixed**
+- Dark-theme `BORDER` (`rgba(255,255,255,0.08)`) no longer crashes matplotlib or renders black in `QColor`; new `CHART_SPINE` plain-hex alias routes all non-QSS border colours safely
+- Monitor resume and alert banners confined to the content area (no longer bleed over the nav rail)
+- Arctic Clean active nav text raised to WCAG AA+ contrast (~6.9:1)
+
+---
+
+### v2.1.20
 
 **Added**
 - "⧉ Copy as Markdown" button on the Security Overview `Scan Status` card — copies a shareable status snapshot (tool, state, last-run age, finding) to the clipboard
+
+**Changed**
+- Themes streamlined to two polished options — `Arctic Clean` (light) and `Midnight Pro` (dark); both reworked for contrast and cohesion: theme-aware badges/info-boxes/inline-warnings, a refined slate-blue Arctic accent with a cohesive cool-slate sidebar, a neutral resume banner with a crisp green accent, and higher-contrast form-field borders. A WCAG-AA contrast gate now guards these in CI
 
 **Fixed**
 - Credential loading repaired in 8 bundled hardware plugins; report charts moved off the pyplot state machine; window focus restored after dismissing banners; 4 CodeQL alerts resolved

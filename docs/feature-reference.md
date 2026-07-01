@@ -43,7 +43,7 @@ Complete list of all NetSentinel pages and features, organised by navigation sec
 | **Inventory Changes** | Config baseline snapshots and structured diff viewer: added/removed/changed devices between scans. | — | `modules/config_baseline.py` |
 | **Bandwidth Usage** | Per-device bandwidth statistics over time. | — | `modules/bandwidth_monitor.py` |
 | **Service Heartbeat** | TCP/HTTP/HTTPS probe per configured service. Alerts on failure. "Diagnose →" action opens Service Diagnostics pre-loaded for that service. | — | `modules/service_monitor.py` |
-| **Service Diagnostics** | DNS/TCP/HTTPS/ICMP/traceroute probes for streaming and gaming services. Failure-layer classification: device → local_network → dns → isp → routing → remote_outage. | — | `modules/service_diagnostics.py` |
+| **Service Diagnostics** | DNS/TCP/HTTPS/ICMP/traceroute probes for streaming/gaming services or any custom hostname. Failure-layer classification: device → local_network → dns → isp → routing → remote_outage → filtered (silent TCP blocking despite healthy ICMP — firewall/VPN/ISP signature). | — | `modules/service_diagnostics.py` |
 | **IPv6 Devices** | IPv6 neighbor discovery via NDP and ping sweep. | — | `modules/utils_platform.py` |
 | **Uptime & SLA** | Uptime percentage per device; availability history charts. | — | `modules/metric_store_queries_uptime.py` |
 | **Syslog Viewer** | UDP syslog message receiver, parser, and viewer. | — | `modules/syslog_receiver.py` |

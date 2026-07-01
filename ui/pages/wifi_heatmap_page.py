@@ -64,7 +64,7 @@ from modules.wifi_scanner import scan as wifi_scan
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CARD_RADIUS, CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER, RED,
+    CARD_HDR_BORDER, CARD_RADIUS, CHART_PLOT_BG, CHART_SPINE, GREEN, INPUT_PLACEHOLDER, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_TEXT, WHITE,
 )
@@ -378,8 +378,8 @@ class WifiHeatmapPage(QWidget):
         self._ax.set_yticks([])
         self._ax.spines["top"].set_visible(False)
         self._ax.spines["right"].set_visible(False)
-        self._ax.spines["bottom"].set_color(BORDER)
-        self._ax.spines["left"].set_color(BORDER)
+        self._ax.spines["bottom"].set_color(CHART_SPINE)
+        self._ax.spines["left"].set_color(CHART_SPINE)
         self._ax.text(0.5, 0.5,
                       "Import a floor plan to begin.\n"
                       "Then walk around and click your position\n"

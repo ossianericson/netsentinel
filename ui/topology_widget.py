@@ -30,8 +30,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QMenu, QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
-    ACCENT, AMBER, BG_CARD, BG_DARK, BLUE, BORDER,
-    CHART_PURPLE, CHART_TITLE, GREEN, RED, TEAL,
+    ACCENT, AMBER, BG_CARD, BG_DARK, BLUE,
+    CHART_PURPLE, CHART_SPINE, CHART_TITLE, GREEN, RED, TEAL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
 from modules.topology_layout import (
@@ -222,7 +222,7 @@ class TopologyWidget(QWidget):
                 textcoords="offset points",
                 ha="center", va="bottom", fontsize=8, zorder=6,
                 color=TEXT_PRIMARY,
-                bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=BORDER, alpha=0.95),
+                bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=CHART_SPINE, alpha=0.95),
             )
             self._hover_ann.set_visible(False)
 
@@ -375,14 +375,14 @@ class TopologyWidget(QWidget):
 
         if has_modem:
             mx, my = positions["__modem__"]
-            ax.plot([ix, mx], [iy, my], color=BORDER, linewidth=1.5, zorder=1)
-            ax.plot([mx, gx], [my, gy], color=BORDER, linewidth=1.5, zorder=1)
+            ax.plot([ix, mx], [iy, my], color=CHART_SPINE, linewidth=1.5, zorder=1)
+            ax.plot([mx, gx], [my, gy], color=CHART_SPINE, linewidth=1.5, zorder=1)
         else:
-            ax.plot([ix, gx], [iy, gy], color=BORDER, linewidth=1.5, zorder=1)
+            ax.plot([ix, gx], [iy, gy], color=CHART_SPINE, linewidth=1.5, zorder=1)
 
         for node in nodes[2:]:
             nx, ny = positions[node["id"]]
-            ax.plot([gx, nx], [gy, ny], color=BORDER, linewidth=1.0, zorder=1)
+            ax.plot([gx, nx], [gy, ny], color=CHART_SPINE, linewidth=1.0, zorder=1)
 
         # Draw infrastructure nodes (no segment colouring)
         for node in nodes[:2]:
@@ -548,25 +548,25 @@ class TopologyWidget(QWidget):
         ix, iy = pos["__internet__"]
         if has_modem:
             mx, my = pos["__modem__"]
-            ax.plot([ix, mx], [iy, my], color=BORDER, linewidth=2.0, zorder=1)
-            ax.plot([mx, gx], [my, gy], color=BORDER, linewidth=2.0, zorder=1)
+            ax.plot([ix, mx], [iy, my], color=CHART_SPINE, linewidth=2.0, zorder=1)
+            ax.plot([mx, gx], [my, gy], color=CHART_SPINE, linewidth=2.0, zorder=1)
         else:
-            ax.plot([ix, gx], [iy, gy], color=BORDER, linewidth=2.0, zorder=1)
+            ax.plot([ix, gx], [iy, gy], color=CHART_SPINE, linewidth=2.0, zorder=1)
 
         for unit in satellites:
             sx, sy = pos[unit.mac]
-            ax.plot([gx, sx], [gy, sy], color=BORDER, linewidth=1.4, zorder=1)
+            ax.plot([gx, sx], [gy, sy], color=CHART_SPINE, linewidth=1.4, zorder=1)
             for d in by_unit.get(unit.name, []):
                 did = _dev_id(d)
                 if did in pos:
                     cx, cy = pos[did]
-                    ax.plot([sx, cx], [sy, cy], color=BORDER, linewidth=0.7, zorder=1)
+                    ax.plot([sx, cx], [sy, cy], color=CHART_SPINE, linewidth=0.7, zorder=1)
 
         for d in unassigned:
             did = _dev_id(d)
             if did in pos:
                 cx, cy = pos[did]
-                ax.plot([gx, cx], [gy, cy], color=BORDER, linewidth=0.7,
+                ax.plot([gx, cx], [gy, cy], color=CHART_SPINE, linewidth=0.7,
                         linestyle="--", alpha=0.55, zorder=1)
 
         # ── Draw infrastructure nodes ─────────────────────────────────────────
@@ -628,7 +628,7 @@ class TopologyWidget(QWidget):
             return AMBER, max(lw, 1.4)
         if edge.status == "up":
             return GREEN, lw
-        return BORDER, 1.0  # unknown — let the base grey line show through
+        return CHART_SPINE, 1.0  # unknown — let the base grey line show through
 
     def _draw_health_overlays(
         self,
@@ -669,7 +669,7 @@ class TopologyWidget(QWidget):
                         xy=(mx, my), fontsize=7, ha="center", va="center",
                         zorder=5, color=TEXT_PRIMARY,
                         bbox=dict(boxstyle="round,pad=0.15", fc=BG_CARD,
-                                  ec=BORDER, alpha=0.92, linewidth=0.8),
+                                  ec=CHART_SPINE, alpha=0.92, linewidth=0.8),
                     )
 
         # ── Node status dots ───────────────────────────────────────────────
@@ -786,7 +786,7 @@ class TopologyWidget(QWidget):
             ax.legend(
                 handles=legend_items, loc="upper left", fontsize=8,
                 labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
-                edgecolor=BORDER, framealpha=0.9,
+                edgecolor=CHART_SPINE, framealpha=0.9,
                 title="Changes", title_fontsize=8,
             )
 
@@ -873,7 +873,7 @@ class TopologyWidget(QWidget):
                 textcoords="offset points",
                 ha="center", va="top", fontsize=7,
                 color=TEXT_PRIMARY, zorder=4, clip_on=False,
-                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.90),
+                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=CHART_SPINE, alpha=0.90),
             )
 
         # Draw diamond-marker leaf LLDP nodes
@@ -888,7 +888,7 @@ class TopologyWidget(QWidget):
                 textcoords="offset points",
                 ha="center", va="top", fontsize=7,
                 color=TEXT_PRIMARY, zorder=4, clip_on=False,
-                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.90),
+                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=CHART_SPINE, alpha=0.90),
             )
 
         # LLDP legend items (appended below the main risk legend)
@@ -909,7 +909,7 @@ class TopologyWidget(QWidget):
             ax.legend(
                 handles=lldp_items, loc="lower left", fontsize=8,
                 labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
-                edgecolor=BORDER, framealpha=0.9,
+                edgecolor=CHART_SPINE, framealpha=0.9,
                 title="LLDP", title_fontsize=8,
             )
 
@@ -933,7 +933,7 @@ class TopologyWidget(QWidget):
         ]
         ax.legend(handles=handles, loc="lower right", fontsize=8,
                   labelcolor=TEXT_SECONDARY, facecolor=BG_CARD,
-                  edgecolor=BORDER, framealpha=0.9)
+                  edgecolor=CHART_SPINE, framealpha=0.9)
 
     # ── interactive event handlers ────────────────────────────────────────────
 
@@ -1046,7 +1046,7 @@ def _scatter(ax, pos: tuple, color: str, size: int, label: str,
                 textcoords="offset points",
                 ha="center", va="top", fontsize=7,
                 color=TEXT_PRIMARY, zorder=4, clip_on=False,
-                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=BORDER, alpha=0.9))
+                bbox=dict(boxstyle="round,pad=0.2", fc=BG_CARD, ec=CHART_SPINE, alpha=0.9))
 
 
 def _modem_label(data: dict) -> str:

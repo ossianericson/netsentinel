@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.20**
+Current version: **v2.1.21**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -71,7 +71,7 @@ polish, discoverability, and bug fixes.
 - **802.11 Monitor Mode** — passive frame capture via Npcap; `wifi_monitor_page.py`; requires admin
 - **Monitor Overview** — aggregated dashboard across all monitoring streams; `monitor_overview_page.py`
 - **Timeline** — chronological event log across all monitoring sources; `timeline_page.py`
-- **Service Diagnostics** — `ui/pages/service_diagnostics_page.py`; on-demand DNS/TCP/HTTPS/ICMP/traceroute probes for streaming and gaming services; failure-layer classification (device → local_network → dns → isp → routing → remote_outage); backed by `modules/service_diagnostics.py`, `modules/service_diagnostics_probes.py`, `workers/service_diagnostics_worker.py` (Sprints 3–4, Monitor section)
+- **Service Diagnostics** — `ui/pages/service_diagnostics_page.py`; on-demand DNS/TCP/HTTPS/ICMP/traceroute probes for streaming and gaming services, plus any arbitrary hostname via the "Custom host…" picker entry (`DiagnosticEngine.run_custom()`); failure-layer classification (device → local_network → dns → isp → routing → remote_outage → filtered); `filtered` flags the ICMP-succeeds/TCP-fails signature of a firewall, VPN, or ISP silently blocking a connection, distinct from a real remote outage; backed by `modules/service_diagnostics.py`, `modules/service_diagnostics_probes.py`, `workers/service_diagnostics_worker.py` (Sprints 3–4, Monitor section)
 
 ### Navigation & UI
 - **VSCode-style activity rail navigation** — permanent 48 px icon rail + 280 px animated flyout; 9 sections; full feature set always visible; last-open section restored via QSettings; mode switcher removed
@@ -83,7 +83,7 @@ polish, discoverability, and bug fixes.
 - **Sidebar search (Ctrl+F)** — focuses sidebar search from anywhere in the app
 - **Page help popover (?)** — floating 300px panel anchored below the ? button; screen-edge clamped so it never renders off-screen
 - **Lucide SVG rail section icons** — RULE 25; clean scalable SVG at any size
-- **Three colour themes** — Arctic Clean, Midnight Pro, Obsidian Neon; all values in `ui/styles.py`
+- **Two colour themes** — Arctic Clean (light, cohesive cool-slate chrome) and Midnight Pro (dark); all values in `ui/styles.py`
 - **Configurable Overview tile dashboard** — drag to reorder, layout persists; `_LAYOUT_VER = 4`
 - **Skeleton loading rows** — `ui/widgets/skeleton.py`; placeholder rows while scan workers run
 - **Feature Guide** — `discover_page.py`; 83 feature entries across 9 groups with filter bar and Open buttons

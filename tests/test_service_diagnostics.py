@@ -234,12 +234,31 @@ def test_classify_dns_failure_ref_unreachable():
 
 
 def test_classify_remote_outage():
-    """DNS resolved, reference reachable, but service itself unreachable."""
+    """DNS resolved, reference reachable, but service is completely dead (ICMP fails too)."""
     from modules.service_diagnostics import _classify
-    r = _make_result_with_probes(dns_ok=True, tcp_ok=False, https_ok=False)
+    r = _make_result_with_probes(dns_ok=True, tcp_ok=False, https_ok=False, icmp_avg=0)
     _classify(r, ref_reachable=True)
     assert r.failure_layer == "remote_outage"
     assert r.confidence >= 70
+
+
+def test_classify_filtered_icmp_ok_tcp_blocked():
+    """ICMP succeeds cleanly but TCP/HTTPS both fail — silent filtering, not an outage.
+
+    This is the GitHub-over-Telenor signature: ping round-trips fine while every
+    TCP SYN to the same host times out. That asymmetry means routers along the path
+    are up and forwarding ICMP — something (firewall/VPN/ISP filter) is deliberately
+    dropping only the TCP handshake, which is a materially different fix than "wait
+    for the remote outage to resolve".
+    """
+    from modules.service_diagnostics import _classify
+    r = _make_result_with_probes(
+        dns_ok=True, tcp_ok=False, https_ok=False, icmp_avg=14.0, icmp_loss=0.0
+    )
+    _classify(r, ref_reachable=True)
+    assert r.failure_layer == "filtered"
+    assert r.confidence >= 70
+    assert "ping" in r.summary.lower() or "firewall" in r.summary.lower()
 
 
 def test_classify_local_network_failure():
@@ -341,6 +360,45 @@ def test_engine_unknown_service():
     assert result.service_id == "does_not_exist_xyz"
     assert "Unknown service" in result.summary
     assert result.confidence == 100
+
+
+def test_engine_run_custom_host_uses_probes(monkeypatch):
+    """run_custom() must reuse the same probe/_classify pipeline as run(), keyed by hostname."""
+    from modules import service_diagnostics as sd
+
+    monkeypatch.setattr(sd, "dns_probe", lambda host, server=None: _make_dns_ok(host))
+    monkeypatch.setattr(
+        sd, "tcp_probe", lambda host, port, timeout=5.0: _make_tcp_ok(host, port)
+    )
+    monkeypatch.setattr(sd, "https_probe", lambda url, timeout=8.0: _make_https_ok(url))
+    monkeypatch.setattr(sd, "icmp_probe", lambda host, count=4: _make_icmp_ok())
+
+    engine = sd.DiagnosticEngine()
+    result = engine.run_custom("github.com")
+
+    assert result.service_id == "custom:github.com"
+    assert result.service_name == "github.com"
+    assert result.failure_layer == "none"
+
+
+def test_engine_run_custom_host_detects_filtering(monkeypatch):
+    """run_custom() classification must surface the filtered layer, same as run()."""
+    from modules import service_diagnostics as sd
+
+    def _tcp(host, port, timeout=5.0):
+        # Reference hosts (1.1.1.1/8.8.8.8) are probed on :80 and must stay reachable —
+        # only the target host's own port is blocked, which is the filtering signature.
+        return _make_tcp_fail(host, port) if port == 443 else _make_tcp_ok(host, port)
+
+    monkeypatch.setattr(sd, "dns_probe", lambda host, server=None: _make_dns_ok(host))
+    monkeypatch.setattr(sd, "tcp_probe", _tcp)
+    monkeypatch.setattr(sd, "https_probe", lambda url, timeout=8.0: _make_https_fail(url))
+    monkeypatch.setattr(sd, "icmp_probe", lambda host, count=4: _make_icmp_ok(avg=14.0, loss=0.0))
+
+    engine = sd.DiagnosticEngine()
+    result = engine.run_custom("github.com")
+
+    assert result.failure_layer == "filtered"
 
 
 # ── Ping output parsing ───────────────────────────────────────────────────────
@@ -458,5 +516,5 @@ def test_live_engine_run_youtube():
     assert result.service_id == "youtube"
     assert isinstance(result.confidence, int)
     assert result.failure_layer in (
-        "none", "device", "local_network", "dns", "isp", "routing", "remote_outage"
+        "none", "device", "local_network", "dns", "isp", "routing", "remote_outage", "filtered"
     )

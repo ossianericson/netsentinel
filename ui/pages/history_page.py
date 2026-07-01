@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     ACCENT, AMBER, BG_CARD, BG_DARK,
     BG_HOVER, BORDER, BTN_DISABLED_BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, CHART_PURPLE,
+    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, CHART_PURPLE, CHART_SPINE,
     GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, TH_BG, WHITE,
 )
@@ -50,7 +50,7 @@ def _style_ax(ax, title: str) -> None:
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
     for spine in ("bottom", "left"):
-        ax.spines[spine].set_color(BORDER)
+        ax.spines[spine].set_color(CHART_SPINE)
     ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
     ax.set_title(title, color=TH_BG, fontsize=10, fontweight="bold", pad=6)
     ax.grid(True, color=CHART_GRID, linewidth=0.7, axis="y")
@@ -344,7 +344,7 @@ class HistoryPage(QWidget):
         self._hover_annot = ax.annotate(
             "", xy=(0, 0), xytext=(10, 10),
             textcoords="offset points",
-            bbox=dict(boxstyle="round,pad=0.4", fc=BG_CARD, ec=BORDER, alpha=0.9),
+            bbox=dict(boxstyle="round,pad=0.4", fc=BG_CARD, ec=CHART_SPINE, alpha=0.9),
             fontsize=9,
             color=TEXT_PRIMARY,
         )

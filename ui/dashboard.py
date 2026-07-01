@@ -31,7 +31,7 @@ from ui.npcap_banner import NpcapMissingBanner
 from ui.perf_audit import profile_page_init
 from ui.styles import (
     ACCENT, ACCENT_LITE, BG_CARD, BG_DARK, BORDER, CHART_BG, CHART_GRID,
-    CHART_PLOT_BG, GREEN, MAIN_STYLE, NAV_DIVIDER,
+    CHART_PLOT_BG, CHART_SPINE, GREEN, MAIN_STYLE, NAV_DIVIDER,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from modules.utils import get_offenders_path, is_admin
@@ -321,15 +321,16 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._update_bar = self._build_update_bar()
         self._update_bar.setVisible(False)
         self._update_available.connect(self._on_update_available)
-        root.addWidget(self._update_bar)
 
         # Monitor resume bar — hidden; shown when monitors are auto-resumed at startup
         self._monitor_resume_bar = self._build_monitor_resume_bar()
         self._monitor_resume_bar.setVisible(False)
-        root.addWidget(self._monitor_resume_bar)
 
         # Main area: sidebar+content fills window
         _main = profile_page_init(self._build_tabs)
+        # Insert notification bars inside content_wrapper so they never bleed over the rail
+        self._content_area_layout.insertWidget(0, self._update_bar)
+        self._content_area_layout.insertWidget(1, self._monitor_resume_bar)
         self._verdict_area = self._build_verdict_area()  # kept alive for exports; not shown
         root.addWidget(_main, 1)
 
@@ -705,31 +706,33 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
     def _build_monitor_resume_bar(self) -> "QWidget":
         from PyQt6.QtWidgets import QWidget as _W, QHBoxLayout as _HL, QLabel as _L, QPushButton as _B
         from PyQt6.QtCore import Qt as _Qt
-        from ui.styles import ACCENT, TEXT_PRIMARY, BG_HOVER, NAV_BAR
+        from ui.styles import BANNER_BG, GREEN, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER
         container = _W()
         container.setObjectName("monitorResumeBar")
         container.setFixedHeight(28)
+        # Neutral surface + crisp green left accent + green text (no saturated fill)
         container.setStyleSheet(
-            f"QWidget#monitorResumeBar {{ background:{ACCENT}18;"
-            f" border-bottom: 1px solid {ACCENT}44; }}"
+            f"QWidget#monitorResumeBar {{ background:{BANNER_BG};"
+            f" border-left: 3px solid {GREEN};"
+            f" border-bottom: 1px solid {BORDER}; }}"
         )
         row = _HL(container)
         row.setContentsMargins(12, 0, 8, 0)
         row.setSpacing(6)
         icon = _L("●")
-        icon.setStyleSheet(f"color:{ACCENT}; font-size:8px; background:transparent; border:none;")
+        icon.setStyleSheet(f"color:{GREEN}; font-size:8px; background:transparent; border:none;")
         row.addWidget(icon)
         self._monitor_resume_lbl = _L("")
         self._monitor_resume_lbl.setStyleSheet(
-            f"color:{TEXT_PRIMARY}; font-size:11px; background:transparent; border:none;"
+            f"color:{GREEN}; font-size:11px; font-weight:bold; background:transparent; border:none;"
         )
         row.addWidget(self._monitor_resume_lbl, 1)
         btn_stop = _B("Stop all")
         btn_stop.setFixedHeight(20)
         btn_stop.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT};"
-            f" border-radius:3px; font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}18; }}"
+            f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         btn_stop.clicked.connect(self._stop_all_resumed_monitors)
@@ -739,7 +742,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         lbl_dismiss.setAlignment(_Qt.AlignmentFlag.AlignCenter)
         lbl_dismiss.setCursor(_Qt.CursorShape.PointingHandCursor)
         lbl_dismiss.setStyleSheet(
-            f"color:{NAV_BAR}; font-size:16px; font-weight:bold; background:transparent;"
+            f"color:{TEXT_SECONDARY}; font-size:16px; font-weight:bold; background:transparent;"
         )
         lbl_dismiss.mousePressEvent = lambda _e: container.hide()
         row.addWidget(lbl_dismiss)
@@ -1592,7 +1595,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             for sp in ("top", "right"):
                 self._snmp_if_ax.spines[sp].set_visible(False)
             for sp in ("bottom", "left"):
-                self._snmp_if_ax.spines[sp].set_color(BORDER)
+                self._snmp_if_ax.spines[sp].set_color(CHART_SPINE)
             self._snmp_if_ax.set_title(
                 "Error distribution per interface", fontsize=9,
                 color=TEXT_PRIMARY, pad=4,

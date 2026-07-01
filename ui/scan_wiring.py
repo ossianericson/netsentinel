@@ -16,8 +16,7 @@ from ui.tabs import _add_row
 from ui.tabs_helpers import format_scan_status, risk_to_label
 
 from ui.styles import (
-    ACCENT_LITE, AMBER, AMBER_BG, BLUE, BORDER,
-    CHART_GRID, CHART_PLOT_BG,
+    ACCENT_LITE, AMBER, AMBER_BG, BLUE, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
     GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
 )
 from ui.scan_enrichment import ScanEnrichmentMixin
@@ -245,7 +244,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         for sp in ("top", "right"):
             ax.spines[sp].set_visible(False)
         for sp in ("bottom", "left"):
-            ax.spines[sp].set_color(BORDER)
+            ax.spines[sp].set_color(CHART_SPINE)
 
         labels  = [e.if_descr[:12] for e in entries]
         in_err  = [e.in_errors   for e in entries]

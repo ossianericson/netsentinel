@@ -22,6 +22,8 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     ACCENT, BG_HOVER, NAV_DIVIDER, SIDEBAR_BG, SIDEBAR_ITEM_FG, SIDEBAR_SECTION_BG,
     TEXT_MUTED, TEXT_SECONDARY, WHITE,
+    NAV_RAIL_HOVER_BG, NAV_RAIL_ACTIVE_BG, NAV_RAIL_FOCUS_BORDER,
+    NAV_ITEM_PIN_HOVER_FG,
 )
 
 
@@ -300,16 +302,16 @@ class _RailButton(QPushButton):
             "  border: 1px solid transparent;"
             "  border-radius: 4px;"
             "}"
-            "QPushButton:hover {"
-            "  background: rgba(255,255,255,0.07);"
-            "}"
-            f"QPushButton:checked {{"
-            f"  background: rgba(255,255,255,0.10);"
+            f"QPushButton:hover {{"
+            f"  background: {NAV_RAIL_HOVER_BG};"
             f"}}"
-            "QPushButton:focus {"
-            "  border: 1px solid rgba(255,255,255,0.40);"
-            "  outline: none;"
-            "}"
+            f"QPushButton:checked {{"
+            f"  background: {NAV_RAIL_ACTIVE_BG};"
+            f"}}"
+            f"QPushButton:focus {{"
+            f"  border: 1px solid {NAV_RAIL_FOCUS_BORDER};"
+            f"  outline: none;"
+            f"}}"
         )
 
     @pyqtProperty(float)
@@ -446,7 +448,7 @@ class _RailButton(QPushButton):
         # Short label below the icon
         font = QFont("Segoe UI", 7)
         p.setFont(font)
-        lbl_color = _s.WHITE if self.isChecked() else _s.SIDEBAR_ITEM_FG
+        lbl_color = _s.NAV_ITEM_ACTIVE_FG if self.isChecked() else _s.SIDEBAR_ITEM_FG
         p.setPen(QColor(lbl_color))
         fm = QFontMetrics(font)
         text = fm.elidedText(self._short_label, Qt.TextElideMode.ElideRight, self.width() - 4)
@@ -457,7 +459,7 @@ class _RailButton(QPushButton):
 
     def _refresh_icon(self):
         from ui import styles as _s
-        color = _s.WHITE if self.isChecked() else _s.SIDEBAR_ITEM_FG
+        color = _s.NAV_ITEM_ACTIVE_FG if self.isChecked() else _s.SIDEBAR_ITEM_FG
         self.setIcon(_make_nav_icon(self._icon_name, 20, color))
         self.setIconSize(QSize(20, 20))
 
@@ -468,8 +470,25 @@ class _RailButton(QPushButton):
     def refresh_theme(self) -> None:
         from ui import styles as _s
         _RailButton._COLOR_NORMAL = _s.SIDEBAR_ITEM_FG
-        _RailButton._COLOR_ACTIVE = _s.WHITE
+        _RailButton._COLOR_ACTIVE = _s.NAV_ITEM_ACTIVE_FG
         _RailButton._LABEL_COLOR  = _s.TEXT_MUTED
+        self.setStyleSheet(
+            "QPushButton {"
+            "  background: transparent;"
+            "  border: 1px solid transparent;"
+            "  border-radius: 4px;"
+            "}"
+            f"QPushButton:hover {{"
+            f"  background: {_s.NAV_RAIL_HOVER_BG};"
+            f"}}"
+            f"QPushButton:checked {{"
+            f"  background: {_s.NAV_RAIL_ACTIVE_BG};"
+            f"}}"
+            f"QPushButton:focus {{"
+            f"  border: 1px solid {_s.NAV_RAIL_FOCUS_BORDER};"
+            f"  outline: none;"
+            f"}}"
+        )
         self._refresh_icon()
         self.update()
 
@@ -506,10 +525,14 @@ class _FlyoutItem(QPushButton):
             f"  background: transparent; color: {_fg};"
             f"  border: 1px solid transparent; font-size: 11px;"
             f"}}"
-            f"QPushButton:hover {{ background: {_s.SIDEBAR_HOVER}; color: {_s.WHITE}; }}"
-            f"QPushButton:checked {{ background: {_s.SIDEBAR_SEL_BG}; color: {_s.WHITE}; }}"
+            f"QPushButton:hover {{ background: {_s.SIDEBAR_HOVER}; color: {_s.NAV_ITEM_HOVER_FG}; }}"
+            f"QPushButton:checked {{"
+            f"  background: {_s.SIDEBAR_SEL_BG}; color: {_s.NAV_ITEM_ACTIVE_FG};"
+            f"  border-left: 3px solid {_s.ACCENT};"
+            f"  border-top: 1px solid transparent; border-right: 1px solid transparent; border-bottom: 1px solid transparent;"
+            f"}}"
             f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_fg}; }}"
-            f"QPushButton:focus {{ border: 1px solid rgba(255,255,255,0.35); outline: none; }}"
+            f"QPushButton:focus {{ border: 1px solid {_s.NAV_FLYOUT_FOCUS_BORDER}; outline: none; }}"
         )
 
     def refresh_theme(self) -> None:
@@ -607,8 +630,8 @@ class _FlyoutPanel(QWidget):
         hlay.setSpacing(4)
         self._title_lbl = QLabel()
         self._title_lbl.setStyleSheet(
-            f"color: {TEXT_MUTED}; font-size: 9px; font-weight: 600;"
-            f" letter-spacing: 1px; background: transparent; border: none;"
+            f"color: {TEXT_MUTED}; font-size: 8px; font-weight: 600;"
+            f" letter-spacing: 1.5px; background: transparent; border: none;"
         )
         self._pin_btn = QPushButton("⊞")
         self._pin_btn.setFixedSize(24, 24)
@@ -618,7 +641,7 @@ class _FlyoutPanel(QWidget):
         self._pin_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; border: none;"
             f" color: {TEXT_SECONDARY}; font-size: 14px; }}"
-            f"QPushButton:hover {{ color: {WHITE}; }}"
+            f"QPushButton:hover {{ color: {NAV_ITEM_PIN_HOVER_FG}; }}"
             f"QPushButton:checked {{ color: {ACCENT}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
         )
@@ -661,13 +684,13 @@ class _FlyoutPanel(QWidget):
             f"background: {_s.SIDEBAR_SECTION_BG}; border-bottom: 1px solid {_s.NAV_DIVIDER};"
         )
         self._title_lbl.setStyleSheet(
-            f"color: {_s.TEXT_MUTED}; font-size: 9px; font-weight: 600;"
-            f" letter-spacing: 1px; background: transparent; border: none;"
+            f"color: {_s.TEXT_MUTED}; font-size: 8px; font-weight: 600;"
+            f" letter-spacing: 1.5px; background: transparent; border: none;"
         )
         self._pin_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; border: none;"
             f" color: {_s.TEXT_SECONDARY}; font-size: 14px; }}"
-            f"QPushButton:hover {{ color: {_s.WHITE}; }}"
+            f"QPushButton:hover {{ color: {_s.NAV_ITEM_PIN_HOVER_FG}; }}"
             f"QPushButton:checked {{ color: {_s.ACCENT}; }}"
             f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_SECONDARY}; }}"
         )

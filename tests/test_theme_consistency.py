@@ -1,7 +1,7 @@
 """Theme consistency audit (UX Sprint 10, S10-6).
 
 Validates:
-  1. All four theme dicts have identical key sets — no theme-specific gaps.
+  1. Both theme dicts have identical key sets — no theme-specific gaps.
   2. All colour values are valid 6-digit or 8-digit hex strings.
   3. WCAG AA contrast ratio (≥ 4.5:1) for primary text / card background pairs.
   4. No raw hex strings remain in UI files outside ui/styles.py (deferred to
@@ -14,16 +14,20 @@ import re
 
 # ── Pull theme dicts directly so we don't need Qt ────────────────────────────
 
-from ui.styles import THEMES, _ARCTIC_CLEAN, _DARK_PRO, _OBSIDIAN_NEON, _ABYSS
+from ui.styles import THEMES, _ARCTIC_CLEAN, _DARK_PRO
 
 _ALL_THEMES = {
     "Arctic Clean":  _ARCTIC_CLEAN,
     "Midnight Pro":  _DARK_PRO,
-    "Obsidian Neon": _OBSIDIAN_NEON,
-    "Abyss":         _ABYSS,
 }
 
-_HEX_RE = re.compile(r"^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+_HEX_RE  = re.compile(r"^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+_RGBA_RE = re.compile(r"^rgba\(\d+,\s*\d+,\s*\d+,\s*[\d.]+\)$")
+
+
+def _is_valid_colour(val: str) -> bool:
+    """Accept both #RRGGBB hex and rgba(r,g,b,a) — both are valid QSS colour formats."""
+    return bool(_HEX_RE.match(val)) or bool(_RGBA_RE.match(val))
 
 
 # ── 1. Key parity ─────────────────────────────────────────────────────────────
@@ -42,20 +46,20 @@ def test_all_themes_have_same_keys():
 
 
 def test_themes_registry_matches_module_dicts():
-    """THEMES dict must contain all four built-in themes."""
+    """THEMES dict must contain both built-in themes."""
     assert set(_ALL_THEMES.keys()) == set(THEMES.keys())
 
 
 # ── 2. Hex validity ───────────────────────────────────────────────────────────
 
 def test_all_theme_values_are_valid_hex():
-    """No theme key may have a non-hex or empty value."""
+    """No theme key may have a non-hex or empty value (rgba() is also accepted)."""
     offenders = []
     for name, theme in _ALL_THEMES.items():
         for key, value in theme.items():
-            if not _HEX_RE.match(value):
+            if not _is_valid_colour(value):
                 offenders.append(f"{name}.{key} = {value!r}")
-    assert not offenders, "Invalid hex values in themes:\n" + "\n".join(offenders)
+    assert not offenders, "Invalid colour values in themes:\n" + "\n".join(offenders)
 
 
 def test_no_theme_value_is_empty():
@@ -147,3 +151,44 @@ def test_card_and_content_backgrounds_are_distinct_in_dark_themes():
             f"{theme_name}: BG_CARD and BG_DARK are identical ({theme['BG_CARD']}) "
             "— cards will be invisible against the page background"
         )
+
+
+# ── 5. Theme-aware chrome pairs must read on both themes (regression gate) ─────
+# Foreground-on-background pairs for badges, info boxes, inline warnings and the
+# resume banner — these used to be baked for one theme and rendered low-contrast
+# on the other. Each must meet WCAG AA for the text it carries.
+_FG_BG_TEXT_PAIRS = [
+    ("INFO_BOX_FG",   "INFO_BOX_BG"),
+    ("BADGE_OK_FG",   "BADGE_OK_BG"),
+    ("BADGE_OFF_FG",  "BADGE_OFF_BG"),
+    ("INLINE_WARN_FG", "INLINE_WARN_BG"),
+    ("GREEN",         "BANNER_BG"),   # resume banner: green text/accent on neutral surface
+]
+
+
+def test_themed_chrome_pairs_meet_wcag_aa():
+    """Badge / info-box / inline-warning / banner fg-on-bg pairs must be ≥ 4.5:1."""
+    offenders = []
+    for theme_name, theme in _ALL_THEMES.items():
+        for fg_key, bg_key in _FG_BG_TEXT_PAIRS:
+            fg, bg = theme[fg_key], theme[bg_key]
+            ratio = _contrast_ratio(fg, bg)
+            if ratio < 4.5:
+                offenders.append(
+                    f"{theme_name}: {fg_key}({fg}) on {bg_key}({bg}) "
+                    f"= {ratio:.2f}:1 (need ≥ 4.5)"
+                )
+    assert not offenders, "Themed chrome contrast failures:\n" + "\n".join(offenders)
+
+
+def test_input_border_distinct_from_card():
+    """INPUT_BORDER must read clearly vs BG_CARD (≥ 2.3:1) without a heavy/focused look."""
+    offenders = []
+    for theme_name, theme in _ALL_THEMES.items():
+        ratio = _contrast_ratio(theme["INPUT_BORDER"], theme["BG_CARD"])
+        if ratio < 2.3:
+            offenders.append(
+                f"{theme_name}: INPUT_BORDER({theme['INPUT_BORDER']}) on "
+                f"BG_CARD({theme['BG_CARD']}) = {ratio:.2f}:1 (need ≥ 2.3)"
+            )
+    assert not offenders, "Input-border contrast failures:\n" + "\n".join(offenders)

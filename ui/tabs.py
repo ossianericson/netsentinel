@@ -836,6 +836,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         cw_lay = QVBoxLayout(content_wrapper)
         cw_lay.setContentsMargins(12, 10, 12, 8)
         cw_lay.setSpacing(0)
+        self._content_area_layout = cw_lay
 
         # Breadcrumb row — label + "?" help button
         bc_row = QHBoxLayout()

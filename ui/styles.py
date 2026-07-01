@@ -1,11 +1,9 @@
 """
 UI colour palette and QSS stylesheet for NetSentinel.
 
-Four built-in themes:
-  • Arctic Clean  — professional light (default)
-  • Midnight Pro  — modern dark with electric blue (GitHub Dark palette)
-  • Obsidian Neon — warm dark with violet accent (Catppuccin Mocha-inspired)
-  • Abyss         — WCAG AA true-black high-contrast (electric cyan accent)
+Two built-in themes:
+  • Arctic Clean  — professional light, cohesive cool-slate chrome
+  • Midnight Pro  — modern dark with electric blue (GitHub Dark palette, default)
 
 Theme is persisted in QSettings under "ui/theme".
 All colour constants are injected into module globals at import time
@@ -17,24 +15,24 @@ restart the application.
 # ── Palette definitions ───────────────────────────────────────────────────────
 
 _ARCTIC_CLEAN = {
-    # Structural
-    "NAV_BAR":            "#0C1014",
-    "SIDEBAR_BG":         "#0D1117",
-    "SIDEBAR_HOVER":      "#161B22",
-    "SIDEBAR_SEL":        "#0078D4",
-    "SIDEBAR_ITEM_FG":    "#A8B8C8",
-    "SIDEBAR_SEL_BG":     "#243348",
-    "BG_DARK":            "#F4F4F4",
+    # Structural — white sidebar + cool-slate chrome top bar (Arctic Clean)
+    "NAV_BAR":            "#1E293B",
+    "SIDEBAR_BG":         "#FFFFFF",
+    "SIDEBAR_HOVER":      "rgba(0,120,212,0.06)",
+    "SIDEBAR_SEL":        "#2C6CB0",
+    "SIDEBAR_ITEM_FG":    "#334155",
+    "SIDEBAR_SEL_BG":     "rgba(0,120,212,0.10)",
+    "BG_DARK":            "#EEF2F7",
     "BG_CARD":            "#FFFFFF",
     "BG_HOVER":           "#EEF4FF",
     "BG_ALT_ROW":         "#F7F9FC",
-    # Accent
-    "ACCENT":             "#0078D4",
-    "ACCENT_LITE":        "#2B9FE8",
-    "ACCENT_DARK":        "#005A9E",
+    # Accent — refined slate blue (less neon than royal #0078D4)
+    "ACCENT":             "#2C6CB0",
+    "ACCENT_LITE":        "#3D86D4",
+    "ACCENT_DARK":        "#1F4E80",
     # Text
     "TEXT_PRIMARY":       "#1A1A2E",
-    "TEXT_SECONDARY":     "#5A6A7A",
+    "TEXT_SECONDARY":     "#475569",
     "TEXT_MUTED":         "#6D7A88",
     # Table headers
     "TH_BG":              "#1A3A5C",
@@ -46,13 +44,13 @@ _ARCTIC_CLEAN = {
     "RED":                "#D93025",
     "AMBER":              "#F59E0B",
     "GREEN":              "#2E7D32",
-    "BLUE":               "#0078D4",
+    "BLUE":               "#2C6CB0",
     # Status badge backgrounds
     "RED_BG":             "#FDF2F2",
     "AMBER_BG":           "#FFFBF0",
     "GREEN_BG":           "#F2FBF4",
     # Borders / dividers
-    "BORDER":             "#D4D4D4",
+    "BORDER":             "#E2E8F0",
     "BORDER_LITE":        "#EBEBEB",
     "BORDER_MED":         "#B8C4CF",
     "CARD_HDR_BORDER":    "#ECECEC",
@@ -70,7 +68,7 @@ _ARCTIC_CLEAN = {
     # Labels / tooltips
     "LABEL_SUBTITLE":     "#9DB0C4",
     "TOOLTIP_BG":         "#EEF4FF",
-    "TOOLTIP_BORDER":     "#0078D4",
+    "TOOLTIP_BORDER":     "#2C6CB0",
     "TOOLTIP_FG":         "#1A1A2E",
     # Notification bars
     "UPDATE_BAR_BG":      "#E8F4FF",
@@ -84,13 +82,41 @@ _ARCTIC_CLEAN = {
     "PRO_BANNER_BORDER":  "#F4C2C2",
     "PRO_WARN_BG":        "#FFF0F0",
     # Sidebar section headers
-    "SIDEBAR_SECTION_BG": "#0C1014",
-    "SIDEBAR_SECTION_FG": "#6A8099",
+    "SIDEBAR_SECTION_BG": "#F1F5F9",
+    "SIDEBAR_SECTION_FG": "#64748B",
     # Special-purpose nav colours (keep here so one file owns all colours)
     "AUDIT_RED":          "#FF5252",
-    "NAV_DIVIDER":        "#060810",
+    "NAV_DIVIDER":        "#E2E8F0",
+    # Navigation token rail — interactive states (theme-aware)
+    "NAV_RAIL_HOVER_BG":      "rgba(0,120,212,0.07)",
+    "NAV_RAIL_ACTIVE_BG":     "rgba(0,120,212,0.12)",
+    "NAV_RAIL_FOCUS_BORDER":  "rgba(0,120,212,0.40)",
+    "NAV_ITEM_HOVER_FG":      "#0F172A",
+    "NAV_ITEM_ACTIVE_FG":     "#1F4E80",
+    "NAV_FLYOUT_FOCUS_BORDER":"rgba(0,120,212,0.35)",
+    "NAV_ITEM_PIN_HOVER_FG":  "#0F172A",
+    "CARD_BORDER":            "#E2E8F0",
     # Pure white
     "WHITE":              "#FFFFFF",
+    # Form inputs / notification banner surface (theme-aware)
+    "INPUT_BORDER":       "#93A4B6",
+    "BANNER_BG":          "#EDF3EE",
+    # Status badges (enabled / disabled channel indicators)
+    "BADGE_OK_FG":        "#065F46",
+    "BADGE_OK_BG":        "#D1FAE5",
+    "BADGE_OK_BORDER":    "#10B981",
+    "BADGE_OFF_FG":       "#646A77",
+    "BADGE_OFF_BG":       "#F3F4F6",
+    "BADGE_OFF_BORDER":   "#D1D5DB",
+    # Info box (Ookla banner etc.)
+    "INFO_BOX_BG":        "#EBF4FF",
+    "INFO_BOX_BORDER":    "#B3D4F5",
+    "INFO_BOX_FG":        "#1A4A7A",
+    # Inline warning text / background
+    "INLINE_WARN_FG":     "#92400E",
+    "INLINE_WARN_BG":     "#FEF3C7",
+    # IP calculator alternating result-cell row
+    "IP_CALC_ALT_ROW":    "#EEF2F7",
     # Network benchmark grade colours
     "GRADE_A_BG":         "#14532d",
     "GRADE_B_FG":         "#4ade80",
@@ -103,6 +129,7 @@ _ARCTIC_CLEAN = {
     "CHART_BG":           "#FFFFFF",
     "CHART_PLOT_BG":      "#FAFBFC",
     "CHART_GRID":         "#E8EDF2",
+    "CHART_SPINE":        "#D4D4D4",
     "CHART_TITLE":        "#1A3A5C",
     # Critical severity (CVE, risk — darker than RED for emphasis)
     "CVE_CRITICAL_FG":    "#8B0000",
@@ -122,7 +149,7 @@ _DARK_PRO = {
     "SIDEBAR_ITEM_FG":    "#8B949E",
     "SIDEBAR_SEL_BG":     "#1D3045",
     "BG_DARK":            "#0D1117",
-    "BG_CARD":            "#161B22",
+    "BG_CARD":            "#1C2128",
     "BG_HOVER":           "#1A2233",
     "BG_ALT_ROW":         "#111820",
     # Accent
@@ -141,15 +168,15 @@ _DARK_PRO = {
     "TABLE_ROW_BORDER":   "#21262D",
     # Status colours
     "RED":                "#F85149",
-    "AMBER":              "#E3B341",
-    "GREEN":              "#3FB950",
+    "AMBER":              "#F5B942",
+    "GREEN":              "#4CAF50",
     "BLUE":               "#2F81F7",
     # Status badge backgrounds
-    "RED_BG":             "#2D0F0F",
-    "AMBER_BG":           "#2A1A00",
-    "GREEN_BG":           "#0D2D15",
+    "RED_BG":             "rgba(217,48,37,0.12)",
+    "AMBER_BG":           "rgba(245,158,11,0.12)",
+    "GREEN_BG":           "rgba(46,125,50,0.15)",
     # Borders / dividers
-    "BORDER":             "#30363D",
+    "BORDER":             "rgba(255,255,255,0.08)",
     "BORDER_LITE":        "#484F58",
     "BORDER_MED":         "#3A424B",
     "CARD_HDR_BORDER":    "#21262D",
@@ -185,8 +212,36 @@ _DARK_PRO = {
     "SIDEBAR_SECTION_BG": "#0D1117",
     "SIDEBAR_SECTION_FG": "#6E7681",
     "AUDIT_RED":          "#F85149",
+    # Navigation token rail — interactive states (theme-aware)
+    "NAV_RAIL_HOVER_BG":      "rgba(255,255,255,0.07)",
+    "NAV_RAIL_ACTIVE_BG":     "rgba(255,255,255,0.10)",
+    "NAV_RAIL_FOCUS_BORDER":  "rgba(255,255,255,0.40)",
+    "NAV_ITEM_HOVER_FG":      "#E6EDF3",
+    "NAV_ITEM_ACTIVE_FG":     "#FFFFFF",
+    "NAV_FLYOUT_FOCUS_BORDER":"rgba(255,255,255,0.35)",
+    "NAV_ITEM_PIN_HOVER_FG":  "#E6EDF3",
+    "CARD_BORDER":            "rgba(255,255,255,0.08)",
     # Pure white
     "WHITE":              "#E6EDF3",
+    # Form inputs / notification banner surface (theme-aware)
+    "INPUT_BORDER":       "#525C69",
+    "BANNER_BG":          "#1A2330",
+    # Status badges (enabled / disabled channel indicators)
+    "BADGE_OK_FG":        "#3FB950",
+    "BADGE_OK_BG":        "#0D2D15",
+    "BADGE_OK_BORDER":    "#238636",
+    "BADGE_OFF_FG":       "#8B949E",
+    "BADGE_OFF_BG":       "#21262D",
+    "BADGE_OFF_BORDER":   "#30363D",
+    # Info box (Ookla banner etc.)
+    "INFO_BOX_BG":        "#102030",
+    "INFO_BOX_BORDER":    "#204050",
+    "INFO_BOX_FG":        "#58A6FF",
+    # Inline warning text / background
+    "INLINE_WARN_FG":     "#E3B341",
+    "INLINE_WARN_BG":     "#2A1A00",
+    # IP calculator alternating result-cell row
+    "IP_CALC_ALT_ROW":    "#1A2233",
     # Network benchmark grade colours
     "GRADE_A_BG":         "#14532d",
     "GRADE_B_FG":         "#3FB950",
@@ -199,201 +254,10 @@ _DARK_PRO = {
     "CHART_BG":           "#161B22",
     "CHART_PLOT_BG":      "#0D1117",
     "CHART_GRID":         "#21262D",
+    "CHART_SPINE":        "#30363D",
     "CHART_TITLE":        "#58A6FF",
     # Critical severity
     "CVE_CRITICAL_FG":    "#FF6E6E",
-    # Scan radar animation
-    "RADAR_BG":           "#050F05",
-    "RADAR_GRID":         "#0D2E0D",
-    "RADAR_GREEN":        "#00FF41",
-    "RADAR_TRAIL":        "#00CC33",
-}
-
-_OBSIDIAN_NEON = {
-    # Structural — warm charcoal with violet accent (Catppuccin Mocha-inspired)
-    "NAV_BAR":            "#181825",
-    "SIDEBAR_BG":         "#1E1E2E",
-    "SIDEBAR_HOVER":      "#2A2A3F",
-    "SIDEBAR_SEL":        "#7C3AED",
-    "SIDEBAR_ITEM_FG":    "#A6ADC8",
-    "SIDEBAR_SEL_BG":     "#2D1F4A",
-    "BG_DARK":            "#181825",
-    "BG_CARD":            "#1E1E2E",
-    "BG_HOVER":           "#2A2A3F",
-    "BG_ALT_ROW":         "#181825",
-    # Accent
-    "ACCENT":             "#8042ED",
-    "ACCENT_LITE":        "#9D5CF6",
-    "ACCENT_DARK":        "#5B21B6",
-    # Text
-    "TEXT_PRIMARY":       "#CDD6F4",
-    "TEXT_SECONDARY":     "#A6ADC8",
-    "TEXT_MUTED":         "#6C7086",
-    # Table headers
-    "TH_BG":              "#12101D",
-    "TH_TEXT":            "#CDD6F4",
-    "TH_BORDER":          "#302040",
-    "TABLE_SEL":          "#2D1F4A",
-    "TABLE_ROW_BORDER":   "#262638",
-    # Status colours
-    "RED":                "#F38BA8",
-    "AMBER":              "#FAB387",
-    "GREEN":              "#A6E3A1",
-    "BLUE":               "#89DCEB",
-    # Status badge backgrounds
-    "RED_BG":             "#2D0F1A",
-    "AMBER_BG":           "#2A1A00",
-    "GREEN_BG":           "#0D2018",
-    # Borders / dividers
-    "BORDER":             "#302040",
-    "BORDER_LITE":        "#4A3065",
-    "BORDER_MED":         "#3A2F5A",
-    "CARD_HDR_BORDER":    "#262638",
-    "NAV_DIVIDER":        "#0D0B14",
-    # Buttons
-    "BTN_HOVER_BG":       "#2D1F4A",
-    "BTN_EXPORT_HOVER":   "#0D2018",
-    "BTN_DISABLED_BORDER":"#302040",
-    "BTN_DISABLED_FG":    "#6C7086",
-    "INPUT_BTN_BG":       "#262638",
-    "INPUT_PLACEHOLDER":  "#4A3065",
-    # Scrollbar / progress
-    "PROGRESS_TRACK":     "#181825",
-    "SCROLLBAR_TRACK":    "#181825",
-    "SCROLLBAR_HANDLE":   "#302040",
-    # Labels / tooltips
-    "LABEL_SUBTITLE":     "#9D5CF6",
-    "TOOLTIP_BG":         "#181825",
-    "TOOLTIP_BORDER":     "#302040",
-    "TOOLTIP_FG":         "#CDD6F4",
-    # Notification bars
-    "UPDATE_BAR_BG":      "#1A1030",
-    "UPDATE_BAR_BORDER":  "#3A2060",
-    "UPDATE_BAR_FG":      "#9D5CF6",
-    "ADMIN_WARN_FG":      "#FAB387",
-    "ADMIN_WARN_BG":      "#2A1500",
-    "ADMIN_WARN_BORDER":  "#664400",
-    "ADMIN_WARN_HOVER":   "#FAD0A0",
-    # Pro mode banner colours
-    "PRO_BANNER_BORDER":  "#7A2040",
-    "PRO_WARN_BG":        "#2D0A18",
-    # Sidebar section headers
-    "SIDEBAR_SECTION_BG": "#181825",
-    "SIDEBAR_SECTION_FG": "#6C7086",
-    "AUDIT_RED":          "#F38BA8",
-    # Pure white
-    "WHITE":              "#CDD6F4",
-    # Network benchmark grade colours
-    "GRADE_A_BG":         "#0D2018",
-    "GRADE_B_FG":         "#A6E3A1",
-    "GRADE_B_BG":         "#0A1A10",
-    "GRADE_C_BG":         "#2A1500",
-    "GRADE_D_BG":         "#2D0F1A",
-    "GRADE_F_FG":         "#F38BA8",
-    "GRADE_F_BG":         "#2D0F1A",
-    # Chart (matplotlib)
-    "CHART_BG":           "#1E1E2E",
-    "CHART_PLOT_BG":      "#181825",
-    "CHART_GRID":         "#262638",
-    "CHART_TITLE":        "#9D5CF6",
-    # Critical severity
-    "CVE_CRITICAL_FG":    "#FF8080",
-    # Scan radar animation
-    "RADAR_BG":           "#050F05",
-    "RADAR_GRID":         "#0D2E0D",
-    "RADAR_GREEN":        "#00FF41",
-    "RADAR_TRAIL":        "#00CC33",
-}
-
-_ABYSS = {
-    # Structural — true black, WCAG AA (all foreground text ≥ 4.5:1 on backgrounds)
-    "NAV_BAR":            "#000000",
-    "SIDEBAR_BG":         "#000000",
-    "SIDEBAR_HOVER":      "#111111",
-    "SIDEBAR_SEL":        "#008DB8",  # steel teal — 3.4:1 with #F0F2F5 (≥3.0 large text)
-    "SIDEBAR_ITEM_FG":    "#AABBD0",  # 7.1:1 on black
-    "SIDEBAR_SEL_BG":     "#001822",
-    "BG_DARK":            "#000000",
-    "BG_CARD":            "#0A0A0A",
-    "BG_HOVER":           "#111111",
-    "BG_ALT_ROW":         "#050505",
-    # Accent — steel teal (dark enough for white text ≥ 3:1; pressed darker ≥ 4.5:1)
-    "ACCENT":             "#008DB8",  # 3.4:1 with #F0F2F5 on buttons (≥3.0 req)
-    "ACCENT_LITE":        "#22D4FF",  # decorative / hover glow — not used as button bg
-    "ACCENT_DARK":        "#005E7A",  # 6.6:1 with #F0F2F5 (≥4.5 req for pressed)
-    # Text
-    "TEXT_PRIMARY":       "#F0F2F5",  # 17:1 on black
-    "TEXT_SECONDARY":     "#9AAABB",  # 6.5:1 on black
-    "TEXT_MUTED":         "#6A7A88",  # 4.6:1 on black — meets AA for large text
-    # Table headers
-    "TH_BG":              "#000000",
-    "TH_TEXT":            "#F0F2F5",
-    "TH_BORDER":          "#222222",
-    "TABLE_SEL":          "#001822",
-    "TABLE_ROW_BORDER":   "#1A1A1A",
-    # Status colours — all ≥ 5:1 contrast on black
-    "RED":                "#FF6060",  # 5.9:1 on black
-    "AMBER":              "#FFB833",  # 9.2:1 on black
-    "GREEN":              "#44DD77",  # 8.3:1 on black
-    "BLUE":               "#00C8FF",  # 12:1 on black
-    # Status badge backgrounds — very dark, no opacity
-    "RED_BG":             "#200808",
-    "AMBER_BG":           "#201400",
-    "GREEN_BG":           "#082010",
-    # Borders / dividers
-    "BORDER":             "#1E1E1E",
-    "BORDER_LITE":        "#2A2A2A",
-    "BORDER_MED":         "#222222",
-    "CARD_HDR_BORDER":    "#1A1A1A",
-    "NAV_DIVIDER":        "#000000",
-    # Buttons
-    "BTN_HOVER_BG":       "#001822",
-    "BTN_EXPORT_HOVER":   "#082010",
-    "BTN_DISABLED_BORDER":"#1E1E1E",
-    "BTN_DISABLED_FG":    "#686878",  # 3.6:1 on #0A0A0A card bg (≥3.0)
-    "INPUT_BTN_BG":       "#111111",
-    "INPUT_PLACEHOLDER":  "#444455",
-    # Scrollbar / progress
-    "PROGRESS_TRACK":     "#000000",
-    "SCROLLBAR_TRACK":    "#000000",
-    "SCROLLBAR_HANDLE":   "#222222",
-    # Labels / tooltips
-    "LABEL_SUBTITLE":     "#22D4FF",
-    "TOOLTIP_BG":         "#000000",
-    "TOOLTIP_BORDER":     "#1E1E1E",
-    "TOOLTIP_FG":         "#F0F2F5",
-    # Notification bars
-    "UPDATE_BAR_BG":      "#001020",
-    "UPDATE_BAR_BORDER":  "#003050",
-    "UPDATE_BAR_FG":      "#22D4FF",
-    "ADMIN_WARN_FG":      "#FFB833",
-    "ADMIN_WARN_BG":      "#201400",
-    "ADMIN_WARN_BORDER":  "#503300",
-    "ADMIN_WARN_HOVER":   "#FFD070",
-    # Pro mode banner colours
-    "PRO_BANNER_BORDER":  "#500A0A",
-    "PRO_WARN_BG":        "#1A0000",
-    # Sidebar section headers
-    "SIDEBAR_SECTION_BG": "#000000",
-    "SIDEBAR_SECTION_FG": "#5A6A7A",
-    "AUDIT_RED":          "#FF6060",
-    # Pure white (used for button text, logo text on dark bg)
-    "WHITE":              "#F0F2F5",
-    # Network benchmark grade colours
-    "GRADE_A_BG":         "#082010",
-    "GRADE_B_FG":         "#44DD77",
-    "GRADE_B_BG":         "#041008",
-    "GRADE_C_BG":         "#201400",
-    "GRADE_D_BG":         "#200808",
-    "GRADE_F_FG":         "#FF6060",
-    "GRADE_F_BG":         "#1A0000",
-    # Chart (matplotlib)
-    "CHART_BG":           "#000000",
-    "CHART_PLOT_BG":      "#050505",
-    "CHART_GRID":         "#1A1A1A",
-    "CHART_TITLE":        "#22D4FF",
-    # Critical severity
-    "CVE_CRITICAL_FG":    "#FF8080",
     # Scan radar animation
     "RADAR_BG":           "#050F05",
     "RADAR_GRID":         "#0D2E0D",
@@ -406,8 +270,6 @@ _ABYSS = {
 THEMES: dict = {
     "Arctic Clean":  _ARCTIC_CLEAN,
     "Midnight Pro":  _DARK_PRO,
-    "Obsidian Neon": _OBSIDIAN_NEON,
-    "Abyss":         _ABYSS,
 }
 
 DEFAULT_THEME = "Midnight Pro"
@@ -503,7 +365,6 @@ CHART_PURPLE = "#8E44AD"   # 6th data-series colour (history charts)
 MAP_LAND_BG        = "#1E2D3D"   # geo map — land fill (dark ocean-contrast)
 MAP_LAND_BORDER    = "#3A4F63"   # geo map — land border (subtle outline)
 
-IP_CALC_ALT_ROW    = "#1A2435"   # ip calculator — alternating dark row background
 IP_CALC_NET_BIT_BG = "#1A3A5C"   # ip calculator — network bit cell (reuses TH_BG value)
 IP_CALC_HOST_BIT_BG = "#2D4A2D"  # ip calculator — host bit cell (green tint)
 IP_CALC_NET_FG     = "#7EB8F7"   # ip calculator — network bit foreground (light blue)
@@ -523,26 +384,13 @@ BLACK              = "#000000"   # pure black (specific UI use cases)
 ORANGE             = "#FFA726"   # orange (plugin device type indicator)
 STATUS_OFFLINE     = "#636366"   # status dot — offline/inactive (neutral gray)
 
-INLINE_WARN_FG     = "#92400E"   # inline warning text (dark amber)
-INLINE_WARN_BG     = "#FEF3C7"   # inline warning background (pale amber)
-
-# ── Status badge colours (notification channel enabled/disabled indicators) ───
-BADGE_OK_FG        = "#065F46"   # enabled-state badge text (dark teal)
-BADGE_OK_BG        = "#D1FAE5"   # enabled-state badge background (light teal)
-BADGE_OK_BORDER    = "#10B981"   # enabled-state badge border (medium teal)
-BADGE_OFF_FG       = "#6B7280"   # disabled-state badge text (neutral gray)
-BADGE_OFF_BG       = "#F3F4F6"   # disabled-state badge background
-BADGE_OFF_BORDER   = "#D1D5DB"   # disabled-state badge border
+# NOTE: BADGE_OK_*, BADGE_OFF_*, INFO_BOX_*, INLINE_WARN_*, and IP_CALC_ALT_ROW are
+# theme-aware and live in the per-theme palette dicts above (injected into globals).
 
 # ── Accent colour presets (user-selectable colours in Settings) ────────────────
 TEAL               = "#00897B"   # teal preset accent
 DEEP_ORANGE        = "#E65100"   # deep orange preset accent
-ACCENT_PURPLE      = "#7C3AED"   # purple preset accent (also Obsidian Neon ACCENT)
-
-# ── Ookla CLI / info-box banner colours ───────────────────────────────────────
-INFO_BOX_BG        = "#EBF4FF"   # info banner light blue background
-INFO_BOX_BORDER    = "#B3D4F5"   # info banner border
-INFO_BOX_FG        = "#1A4A7A"   # info banner dark blue text
+ACCENT_PURPLE      = "#7C3AED"   # purple preset accent
 
 # ── Certification brand colours (ObjectiveBadge — fixed, not theme-specific) ──
 CERT_NETPLUS_BG    = "#C23B22"   # CompTIA Network+ red
@@ -1014,7 +862,7 @@ QProgressBar::chunk {{
 /* ── SpinBox / ComboBox ── */
 QSpinBox, QComboBox {{
     background-color: {BG_CARD};
-    border: 1px solid {BORDER_MED};
+    border: 1px solid {INPUT_BORDER};
     border-radius: 3px;
     padding: 3px 22px 3px 6px;
     color: {TEXT_PRIMARY};
@@ -1082,7 +930,7 @@ QCheckBox {{
 QCheckBox::indicator {{
     width: 14px;
     height: 14px;
-    border: 1px solid {BORDER_MED};
+    border: 1px solid {INPUT_BORDER};
     border-radius: 2px;
     background: {BG_CARD};
 }}
@@ -1094,7 +942,7 @@ QCheckBox::indicator:checked {{
 /* ── Line edit ── */
 QLineEdit {{
     background-color: {BG_CARD};
-    border: 1px solid {BORDER_MED};
+    border: 1px solid {INPUT_BORDER};
     border-radius: 3px;
     padding: 4px 8px;
     color: {TEXT_PRIMARY};

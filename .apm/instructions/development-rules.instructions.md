@@ -105,16 +105,28 @@ Use `self._nav_add_rail_item(label, widget)` (or with `admin_required`/`audit_it
 
 ### RULE 10: matplotlib charts use theme constants — no raw hex
 Charts must use style constants from `ui/styles.py`, not raw hex literals (RULE-AH3).
+
+**Critical — `BORDER` is QSS-only:** `BORDER` may be `rgba(255,255,255,0.08)` in the dark theme.
+Qt stylesheets parse it, but **non-QSS consumers reject it**, so `BORDER` must never reach:
+- **matplotlib** — `ax.spines[...].set_color`, `ec=`/`edgecolor=` (incl. inside `annotate(bbox=dict(...))`)
+  → raises `ValueError: Invalid RGBA argument`.
+- **`QColor(...)`** — `QColor("rgba(...)")` is *invalid* and silently renders opaque **black**
+  (QPen/QBrush/QPainter pens, list-item backgrounds).
+- **QSS alpha-append** — `f"background:{BORDER}22"` yields `rgba(...)22`, an invalid value Qt drops.
+
+Use the plain-hex `CHART_SPINE` (matplotlib/QColor-safe, defined in both theme dicts) for any
+spine, edge, divider, or pen colour that is not set through a Qt stylesheet string.
+
 ```python
-from ui.styles import CHART_BG, CHART_PLOT_BG, CHART_GRID, BORDER, TEXT_SECONDARY
+from ui.styles import CHART_BG, CHART_PLOT_BG, CHART_GRID, CHART_SPINE, TEXT_SECONDARY
 
 fig = Figure(facecolor=CHART_BG)
 ax = fig.add_subplot(111)
 ax.set_facecolor(CHART_PLOT_BG)
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
-ax.spines["bottom"].set_color(BORDER)
-ax.spines["left"].set_color(BORDER)
+ax.spines["bottom"].set_color(CHART_SPINE)
+ax.spines["left"].set_color(CHART_SPINE)
 ax.tick_params(colors=TEXT_SECONDARY, labelsize=9)
 ax.grid(True, color=CHART_GRID, linewidth=0.8, linestyle="-")
 ```
@@ -557,9 +569,9 @@ CI failure condition. All UI colours → `ui/styles.py`. Chart/report colours �
 
 ### RULE-AH6 (blocking): After adding a new key to any theme dict in styles.py, update all consumer imports
 `ui/styles.py` injects theme dict keys into module globals via `globals().update()`. Static analysers
-cannot see them. When you add a new key to `_ARCTIC_CLEAN` / `_DARK_PRO` / `_OBSIDIAN_NEON` / `_ABYSS`:
+cannot see them. When you add a new key to `_ARCTIC_CLEAN` / `_DARK_PRO`:
 
-1. Add the same key to **all four** theme dicts.
+1. Add the same key to **both** theme dicts.
 2. Run `python -m pytest tests/test_style_imports.py -v` — this catches any UI file that references
    the new name as a bare variable without importing it.
 3. Add the name to the explicit `from ui.styles import (...)` block in every file that uses it.

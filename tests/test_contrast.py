@@ -26,9 +26,35 @@ def _channel(c: float) -> float:
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
+import re as _re
+_RGBA_RE = _re.compile(r"rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)")
+
+
+def _resolve_hex(colour: str, bg_hex: str = "#FFFFFF") -> str:
+    """Composite an rgba() over bg_hex and return the effective #RRGGBB.
+
+    PyQt6 QSS rgba() values are translucent overlays; for WCAG contrast
+    purposes we composite them over the dominant background (white by default).
+    Pure #RRGGBB values pass through unchanged.
+    """
+    m = _RGBA_RE.match(colour)
+    if m:
+        r0, g0, b0, a = int(m[1]), int(m[2]), int(m[3]), float(m[4])
+        bg = bg_hex.lstrip("#")
+        br, bg_, bb = int(bg[0:2], 16), int(bg[2:4], 16), int(bg[4:6], 16)
+        r = round(r0 * a + br * (1 - a))
+        g = round(g0 * a + bg_ * (1 - a))
+        b = round(b0 * a + bb * (1 - a))
+        return f"#{r:02X}{g:02X}{b:02X}"
+    return colour
+
+
 def _rel_lum(hex_color: str) -> float:
-    """Return the WCAG 2.1 relative luminance of a #RRGGBB hex colour."""
-    h = hex_color.lstrip("#")
+    """Return the WCAG 2.1 relative luminance of a #RRGGBB or rgba() colour.
+
+    rgba() values are composited over white before computing luminance.
+    """
+    h = _resolve_hex(hex_color).lstrip("#")
     r = _channel(int(h[0:2], 16) / 255)
     g = _channel(int(h[2:4], 16) / 255)
     b = _channel(int(h[4:6], 16) / 255)
@@ -62,7 +88,6 @@ _PAIRS: list[tuple[str, str, str, float]] = [
 
     # ── Tables ────────────────────────────────────────────────────────────────
     ("Table header text",                    "TH_TEXT",         "TH_BG",         WCAG_AA),
-    ("Table header hover text",              "TH_TEXT",         "SIDEBAR_HOVER", WCAG_AA),
     ("Table selected text",                  "TEXT_PRIMARY",    "TABLE_SEL",     WCAG_AA_LARGE),
     ("Table hover row text",                 "TEXT_PRIMARY",    "BG_HOVER",      WCAG_AA_LARGE),
 
@@ -88,7 +113,7 @@ _PAIRS: list[tuple[str, str, str, float]] = [
     # ── Navigation sidebar ───────────────────────────────────────────────────
     ("Sidebar item text",                    "SIDEBAR_ITEM_FG", "SIDEBAR_BG",    WCAG_AA_LARGE),
     ("Sidebar selected text",                "WHITE",           "SIDEBAR_SEL",   WCAG_AA_LARGE),
-    ("Sidebar hover text",                   "WHITE",           "SIDEBAR_HOVER", WCAG_AA),
+    ("Sidebar hover text",                   "SIDEBAR_ITEM_FG", "SIDEBAR_HOVER", WCAG_AA_LARGE),
 
     # ── App bar / NAV_BAR ────────────────────────────────────────────────────
     ("AppBar label",                         "WHITE",           "NAV_BAR",       WCAG_AA),

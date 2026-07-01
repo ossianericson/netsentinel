@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     ACCENT, AMBER,
-    BG_CARD, BG_HOVER, BORDER,
+    BG_CARD, BG_HOVER, BORDER, CHART_SPINE,
     CARD_RADIUS, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
@@ -114,7 +114,7 @@ class _GradeRing(QWidget):
         thickness = 4.0
 
         # Track circle (dim)
-        pen_track = QPen(QColor(BORDER), thickness)
+        pen_track = QPen(QColor(CHART_SPINE), thickness)
         pen_track.setCapStyle(Qt.PenCapStyle.FlatCap)
         p.setPen(pen_track)
         p.drawEllipse(QRectF(cx - r, cy - r, 2 * r, 2 * r))
@@ -173,7 +173,7 @@ class _MiniSparkline(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         if len(pts) < 2:
-            p.setPen(QColor(BORDER))
+            p.setPen(QColor(CHART_SPINE))
             p.drawLine(0, self.height() // 2, self.width(), self.height() // 2)
             p.end()
             return

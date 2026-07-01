@@ -12,7 +12,7 @@ analysers cannot see these names — only runtime can.  If a UI file writes
 navigation, not at startup).
 
 This test:
-1. Collects the dynamic constant names from all four theme dicts in styles.py.
+1. Collects the dynamic constant names from both theme dicts in styles.py.
 2. For every ui/**/*.py file (excluding styles.py itself):
    a. Walks the AST to find all names imported from ui.styles.
    b. Walks the AST to find all bare Name nodes that match a dynamic constant,
@@ -42,7 +42,7 @@ _UI_ROOT = Path(__file__).parent.parent / "ui"
 
 _styles_src = _STYLES_PATH.read_text(encoding="utf-8")
 
-# Extract keys from all _*_CLEAN / _DARK_PRO / _OBSIDIAN_NEON / _ABYSS dicts.
+# Extract keys from the _ARCTIC_CLEAN / _DARK_PRO theme dicts.
 # These are the names injected by globals().update() — invisible to static analysis.
 _DYNAMIC_CONSTANTS: frozenset[str] = frozenset(
     re.findall(r'"([A-Z][A-Z0-9_]{2,})":', _styles_src)

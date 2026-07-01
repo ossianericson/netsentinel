@@ -16,7 +16,7 @@ bridge that lets modules use named colours without importing PyQt.
 RED        = "#D93025"
 AMBER      = "#F59E0B"
 GREEN      = "#2E7D32"
-ACCENT     = "#0078D4"
+ACCENT     = "#2C6CB0"
 TEXT_MUTED = "#9BA8B4"
 
 # ── Network topology Cytoscape.js colours ────────────────────────────────────
@@ -25,7 +25,7 @@ TEXT_PRIMARY   = "#1A1A2E"   # node label colour
 TEXT_SECONDARY = "#5A6A7A"   # default/unknown node fill
 WHITE          = "#FFFFFF"   # text outline so labels remain readable on any fill
 BORDER         = "#D4D4D4"   # default node border
-ACCENT_DARK    = "#005A9E"   # gateway node border (deeper blue)
+ACCENT_DARK    = "#1F4E80"   # gateway node border (deeper slate blue)
 ACCENT_PURPLE  = "#7C3AED"   # mesh-satellite node / mesh edge
 TEAL           = "#0E7490"   # infrastructure / LLDP node fill and edge
 

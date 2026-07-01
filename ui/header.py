@@ -116,6 +116,7 @@ class AppHeaderMixin:
         lay = QHBoxLayout(w)
         lay.setContentsMargins(14, 0, 0, 0)
         lay.setSpacing(6)
+        lay.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         # ── Brand (left, fixed) ───────────────────────────────────────────────
         import sys as _sys
@@ -538,9 +539,9 @@ class AppHeaderMixin:
 
         container = QWidget()
         container.setObjectName("updateNotifBar")
-        container.setFixedHeight(28)
+        container.setFixedHeight(36)
         row = QHBoxLayout(container)
-        row.setContentsMargins(12, 0, 8, 0)
+        row.setContentsMargins(12, 4, 8, 4)
         row.setSpacing(6)
         container.setStyleSheet(
             f"QWidget#updateNotifBar {{ background:{UPDATE_BAR_BG}; "

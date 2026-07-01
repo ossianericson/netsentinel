@@ -2,7 +2,7 @@
 Service Connectivity Diagnostics — Sprint 3.
 
 Determines whether a connectivity problem originates from:
-  device | local_network | dns | isp | routing | remote_outage
+  device | local_network | dns | isp | routing | remote_outage | filtered
 
 Usage:
     from modules.service_diagnostics import DiagnosticEngine, SERVICE_CATALOG
@@ -188,7 +188,7 @@ class ServiceDiagnosticResult:
     icmp_result: Optional[IcmpProbeResult] = None
     trace: Optional[TracerouteResult] = None
 
-    # device | local_network | dns | isp | routing | remote_outage | none
+    # device | local_network | dns | isp | routing | remote_outage | filtered | none
     failure_layer: str = "none"
     summary: str = ""
     confidence: int = 0    # 0–100
@@ -208,6 +208,7 @@ class BatchDiagnosticResult:
 _RTT_WARN_MS = 200.0      # avg RTT above this → latency warning
 _LOSS_WARN_PCT = 5.0      # packet loss above this → loss warning
 _DNS_SLOW_MS = 500.0      # DNS RTT above this → DNS warning
+_ICMP_HEALTHY_LOSS_PCT = 50.0  # ICMP loss below this while TCP/HTTPS fail → "filtered", not an outage
 
 # Reference hosts used to separate service-specific failures from systemic ones
 _REFERENCE_HOSTS = ["1.1.1.1", "8.8.8.8"]
@@ -267,6 +268,34 @@ class DiagnosticEngine:
         # 6 — Optional path analysis
         if traceroute:
             result.trace = traceroute_probe(primary)
+
+        _classify(result, ref_reachable)
+        return result
+
+    def run_custom(
+        self, host: str, *, port: int = 443, traceroute: bool = False
+    ) -> ServiceDiagnosticResult:
+        """
+        Run full diagnostics for an arbitrary hostname not in SERVICE_CATALOG
+        (e.g. a work VPN gateway or a site the user is having trouble reaching).
+        Reuses the same probe pipeline and classifier as run().
+        """
+        host = host.strip()
+        result = ServiceDiagnosticResult(
+            service_id=f"custom:{host}",
+            service_name=host,
+        )
+
+        result.dns_probes.append(dns_probe(host))
+        result.tcp_probes.append(tcp_probe(host, port))
+        result.https_probes.append(https_probe(f"https://{host}"))
+        result.icmp_result = icmp_probe(host, count=4)
+
+        ref_results = [tcp_probe(h, 80) for h in _REFERENCE_HOSTS]
+        ref_reachable = any(r.up for r in ref_results)
+
+        if traceroute:
+            result.trace = traceroute_probe(host)
 
         _classify(result, ref_reachable)
         return result
@@ -430,6 +459,21 @@ def _assign_layer(result: ServiceDiagnosticResult, ref_reachable: bool) -> None:
                     "ISP-level outage or upstream routing problem likely."
                 )
                 result.confidence = 70
+        elif icmp and icmp.avg_ms > 0 and icmp.loss_pct < _ICMP_HEALTHY_LOSS_PCT:
+            result.failure_layer = "filtered"
+            path_note = (
+                f" Path analysis found anomalies: {result.path.detail}."
+                if result.trace and not result.path.passed else ""
+            )
+            result.summary = (
+                f"{name} responds to ping (avg {icmp.avg_ms:.0f} ms, {icmp.loss_pct:.0f}% loss) "
+                f"but every TCP/HTTPS connection attempt failed.{path_note} "
+                "This is the signature of a firewall, VPN, or ISP silently blocking the "
+                "connection rather than a real outage — routers along the path are still "
+                "forwarding ICMP. Try a different network (mobile hotspot or VPN) to confirm, "
+                "or check local/ISP firewall filtering."
+            )
+            result.confidence = 75
         elif result.trace and not result.path.passed:
             result.failure_layer = "routing"
             result.summary = (

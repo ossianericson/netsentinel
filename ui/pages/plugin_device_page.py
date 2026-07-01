@@ -32,7 +32,7 @@ from ui.widgets.empty_state_card import EmptyStateCard
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
-    BG_HOVER, BLACK, BORDER, GREEN,
+    BORDER, GREEN,
     ORANGE, RED, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, WHITE,
 )
@@ -406,12 +406,13 @@ class PluginDevicePage(QWidget):
         self._cred_forget_btn.setFixedHeight(24)
         self._cred_forget_btn.setEnabled(False)
         self._cred_forget_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Destructive action → red treatment (amber is reserved for warnings/stale state)
         self._cred_forget_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{AMBER}; border:1px solid {AMBER};"
+            f"QPushButton {{ background:transparent; color:{RED}; border:1px solid {RED};"
             " border-radius:3px; font-size:11px; padding:0 10px; }"
-            f"QPushButton:hover {{ background:{AMBER}; color:{BLACK}; }}"
+            f"QPushButton:hover {{ background:{RED}; color:{WHITE}; }}"
             f"QPushButton:disabled {{ color:{TEXT_MUTED}; border-color:{BORDER}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
+            f"QPushButton:pressed {{ background:{RED}; color:{WHITE}; }}"
         )
         self._cred_forget_btn.clicked.connect(self._on_forget_clicked)
         row2_lay.addWidget(self._cred_forget_btn)

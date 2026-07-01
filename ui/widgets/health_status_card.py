@@ -373,10 +373,12 @@ class HealthStatusCard(QWidget):
     def _apply_state_style(self, state: str) -> None:
         border_colour = _STATE_BORDER.get(state, BORDER)
         bg_colour     = _STATE_BG.get(state, BG_CARD)
+        # Crisp neutral border on all four sides; the coloured left accent + internal
+        # status icon convey state (avoids the washed-out translucent-colour border).
         self._frame.setStyleSheet(
             f"QFrame#healthFrame {{"
             f" background:{bg_colour};"
-            f" border:1px solid {border_colour}44;"
+            f" border:1px solid {BORDER};"
             f" border-left:3px solid {border_colour};"
             f" border-radius:{CARD_RADIUS};"
             f"}}"

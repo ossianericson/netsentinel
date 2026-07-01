@@ -4,10 +4,42 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.22
+
+**Added**
+- `DiagnosticEngine.run_custom()` in `modules/service_diagnostics.py` — Service Diagnostics can now probe any typed hostname (e.g. `github.com`) via a "Custom host…" entry in the picker, not just the streaming/gaming catalog
+- New `filtered` failure-layer classification: flags the ICMP-succeeds-but-TCP-fails signature of a firewall, VPN, or ISP silently blocking a connection, distinguishing it from a genuine `remote_outage`
+
+---
+
+### v2.1.21
+
+**Changed**
+- Navigation colour tokens extracted from hardcoded `rgba()` values into 8 named semantic tokens in `ui/styles.py` (`NAV_RAIL_HOVER_BG`, `NAV_RAIL_ACTIVE_BG`, `NAV_RAIL_FOCUS_BORDER`, `NAV_ITEM_HOVER_FG`, `NAV_ITEM_ACTIVE_FG`, `NAV_FLYOUT_FOCUS_BORDER`, `NAV_ITEM_PIN_HOVER_FG`, `CARD_BORDER`); Arctic Clean sidebar is now white chrome; `rail.py` `refresh_theme()` re-applies full QSS for live switching
+- Badge/info-box/inline-warning/banner colours moved into per-theme palette dicts; Midnight Pro card background elevated to `#1C2128`; Arctic Clean canvas cooled to `#EEF2F7`
+
+**Fixed**
+- Dark-theme `BORDER` token (`rgba(255,255,255,0.08)`) crashed matplotlib (`ValueError: Invalid RGBA argument`) and silently rendered opaque black in `QColor`; new `CHART_SPINE` plain-hex token routes all non-QSS consumers (spines, edges, dividers, pens) safely
+- Monitor resume banner and alert banners now render inside the content area only — both were inserted into the root `QVBoxLayout` and bled over the 48 px nav rail
+- `setupCompleteCard` and `recurringIntroCard` now use semantic fill tokens (`GREEN_BG`, `INFO_BOX_BG`) instead of plain `BG_CARD`
+- Arctic Clean active nav item text contrast raised from `#0078D4` (~3.7:1) to `#1F4E80` (~6.9:1, WCAG AA+)
+
+---
+
 ### v2.1.20
 
 **Added**
 - `modules/scan_status_md.py` — renders the Security-Audit scan registry as a GitHub-flavoured Markdown table; "⧉ Copy as Markdown" button on the Security Overview `Scan Status` card copies a shareable status snapshot (tool, state, last-run age, finding) to the clipboard for tickets and email
+
+**Changed**
+- Theme lineup consolidated to two polished themes — `Arctic Clean` (light, cohesive cool-slate chrome) and `Midnight Pro` (dark); `Obsidian Neon` and `Abyss` removed. A saved theme that no longer exists falls back to `Midnight Pro` on next launch
+- `ui/styles.py`: badge, info-box, inline-warning and IP-calculator cell colours are now theme-aware (moved into the per-theme palette dicts) instead of being baked for a single theme — fixes low-contrast "bar same as background" rendering on the non-design theme
+- `Arctic Clean`: sidebar softened from near-black to a cohesive cool slate; primary accent refined from royal blue to slate blue (`#2C6CB0`)
+- Monitor resume banner restyled to a neutral surface with a crisp green left accent (was a muddy translucent fill); dismiss `×` and "Stop all" now use visible neutral tokens
+- New theme-aware `INPUT_BORDER` token raises form-field border contrast; "Forget Saved Password" recoloured to a destructive red treatment (amber reserved for warnings/stale state); health status card uses a crisp neutral border with a coloured left accent
+- `tests/test_theme_consistency.py` extended with a WCAG-AA contrast gate over badge/info-box/inline-warning/banner foreground-on-background pairs and the input-border token, locking theme quality against regression
+- Consolidated the APM governance layer (dedupe, de-rot, prune); hardened the chaos-test harness and pinned `wingetcreate`
+- `ruff` requirement bumped to `>=0.15.20`
 
 **Fixed**
 - Credential loading repaired in 8 bundled hardware plugins
@@ -15,10 +47,6 @@ All notable changes to NetSentinel are documented here. The current version summ
 - Restore window focus after dismissing UI banners and cards
 - Resolved 4 CodeQL `py/import-and-import-from` alerts in test files
 - Untracked `NetSentinel.ini` temp file; ignore `NetSentinel.ini.*`
-
-**Changed**
-- Consolidated the APM governance layer (dedupe, de-rot, prune); hardened the chaos-test harness and pinned `wingetcreate`
-- `ruff` requirement bumped to `>=0.15.20`
 
 ---
 

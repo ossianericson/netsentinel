@@ -34,6 +34,8 @@ from ui.styles import (
     BORDER,
     CARD_RADIUS,
     GREEN,
+    GREEN_BG,
+    INFO_BOX_BG,
     RED,
     TEXT_MUTED,
     TEXT_PRIMARY,
@@ -401,7 +403,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._setup_complete_card = QFrame()
         self._setup_complete_card.setObjectName("setupCompleteCard")
         self._setup_complete_card.setStyleSheet(
-            f"QFrame#setupCompleteCard {{ background:{BG_CARD};"
+            f"QFrame#setupCompleteCard {{ background:{GREEN_BG};"
             f" border:1px solid {GREEN}44; border-left:3px solid {GREEN};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
@@ -845,7 +847,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._recurring_intro_card = QFrame()
         self._recurring_intro_card.setObjectName("recurringIntroCard")
         self._recurring_intro_card.setStyleSheet(
-            f"QFrame#recurringIntroCard {{ background:{BG_CARD};"
+            f"QFrame#recurringIntroCard {{ background:{INFO_BOX_BG};"
             f" border:1px solid {BORDER}; border-left:3px solid {ACCENT};"
             f" border-radius:{CARD_RADIUS}; }}"
         )

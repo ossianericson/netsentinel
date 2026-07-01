@@ -41,15 +41,16 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
+    ACCENT, AMBER, AMBER_BG, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, GREEN,
-    PROGRESS_TRACK, RED, TABLE_ROW_BORDER, TABLE_SEL,
+    CARD_RADIUS, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, GREEN,
+    PROGRESS_TRACK, RED, RED_BG, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     TH_BORDER, TH_TEXT,
 )
 
 from ui.pages.ookla_cli_banner import OoklaCliBanner
+from modules.speed_drop_detector import evaluate_speed_drop
 
 # ── Gauge constants ───────────────────────────────────────────────────────────
 _GAUGE_START_DEG = 210     # 7 o'clock — 0 Mbps (left)
@@ -496,6 +497,7 @@ class SpeedTestPage(QWidget):
     modem_pause_requested  = pyqtSignal()  # pause ZteWorker before capturing signal
     modem_resume_requested = pyqtSignal()  # restart ZteWorker after test finishes
     scan_requested         = pyqtSignal()  # emitted when the user clicks Run Speed Test
+    speed_drop_detected    = pyqtSignal(dict)  # emitted when download is a severe drop vs typical
 
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -683,6 +685,12 @@ class SpeedTestPage(QWidget):
         )
         self._comparison_lbl.setVisible(False)
         root.addWidget(self._comparison_lbl)
+
+        # ── Speed-drop warning banner ──────────────────────────────────────────
+        self._drop_banner = QLabel("")
+        self._drop_banner.setWordWrap(True)
+        self._drop_banner.setVisible(False)
+        root.addWidget(self._drop_banner)
 
         # ── History table ─────────────────────────────────────────────────────
         hist_card, hist_body = _card("Test History")
@@ -1295,6 +1303,7 @@ class SpeedTestPage(QWidget):
 
         # S8-5: comparative context — "this is your Xth fastest test…"
         comparison_text = None
+        history_60d = None
         if self._store:
             try:
                 import time as _time
@@ -1306,6 +1315,36 @@ class SpeedTestPage(QWidget):
                 comparison_text = None
         self._comparison_lbl.setText(comparison_text or "")
         self._comparison_lbl.setVisible(bool(comparison_text))
+
+        # Speed-drop warning: flag a severe drop vs. the user's recent typical.
+        # history_60d already includes the just-recorded test as the newest
+        # (first) entry, so prior samples exclude it via [1:].
+        if self._store and history_60d:
+            prior_downloads = [p.download_mbps for p in history_60d[1:]]
+            verdict = evaluate_speed_drop(result.download_mbps, prior_downloads)
+            if verdict.is_drop:
+                bg = RED_BG if verdict.severity == "High" else AMBER_BG
+                border = RED if verdict.severity == "High" else AMBER
+                steps_html = "".join(f"<li>{s}</li>" for s in verdict.steps)
+                self._drop_banner.setText(
+                    f"<b>{verdict.headline}</b><ul style='margin:4px 0 0 16px'>{steps_html}</ul>"
+                )
+                self._drop_banner.setStyleSheet(
+                    f"background:{bg}; border:1px solid {border}; border-radius:{CARD_RADIUS};"
+                    f"color:{TEXT_PRIMARY}; padding:8px 12px; font-size:11px;"
+                )
+                self._drop_banner.setVisible(True)
+                self.speed_drop_detected.emit({
+                    "headline": verdict.headline,
+                    "severity": verdict.severity,
+                    "current_mbps": verdict.current_mbps,
+                    "typical_mbps": verdict.typical_mbps,
+                    "drop_pct": verdict.drop_pct,
+                })
+            else:
+                self._drop_banner.setVisible(False)
+        else:
+            self._drop_banner.setVisible(False)
 
         # Show modem signal snapshot panel if present
         if sig:
@@ -1544,8 +1583,8 @@ class SpeedTestPage(QWidget):
         ax.set_facecolor(CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["bottom"].set_color(BORDER)
-        ax.spines["left"].set_color(BORDER)
+        ax.spines["bottom"].set_color(CHART_SPINE)
+        ax.spines["left"].set_color(CHART_SPINE)
         ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
         ax.grid(True, color=CHART_GRID, linewidth=0.8, linestyle="-")
         ax.set_ylabel("Mbps", fontsize=8, color=TEXT_SECONDARY)
@@ -1606,7 +1645,7 @@ class SpeedTestPage(QWidget):
 
         annot = ax.annotate(
             "", xy=(0, 0), xytext=(8, 8), textcoords="offset points",
-            bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=BORDER, lw=0.8),
+            bbox=dict(boxstyle="round,pad=0.3", fc=BG_CARD, ec=CHART_SPINE, lw=0.8),
             fontsize=8, color=TEXT_PRIMARY,
             arrowprops=dict(arrowstyle="->", color=TEXT_SECONDARY, lw=0.8),
         )

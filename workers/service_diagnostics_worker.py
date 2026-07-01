@@ -26,11 +26,13 @@ class ServiceDiagnosticsWorker(QThread):
     def __init__(
         self,
         service_id: Optional[str] = None,
+        custom_host: Optional[str] = None,
         traceroute: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self._service_id      = service_id
+        self._custom_host     = custom_host
         self._traceroute      = traceroute
         self._stop_requested  = False
 
@@ -38,6 +40,12 @@ class ServiceDiagnosticsWorker(QThread):
 
     def set_service(self, service_id: str, traceroute: bool = False) -> None:
         self._service_id = service_id
+        self._custom_host = None
+        self._traceroute = traceroute
+
+    def set_custom_host(self, host: str, traceroute: bool = False) -> None:
+        self._custom_host = host
+        self._service_id = None
         self._traceroute = traceroute
 
     def stop(self) -> None:
@@ -47,23 +55,26 @@ class ServiceDiagnosticsWorker(QThread):
 
     def run(self) -> None:
         self._stop_requested = False
-        if not self._service_id:
+        target = self._custom_host or self._service_id
+        if not target:
             self.error.emit("No service selected.")
             return
 
         try:
-            name = self._service_id
-            self.progress.emit(f"Probing {name} — DNS resolution…")
+            self.progress.emit(f"Probing {target} — DNS resolution…")
             engine = DiagnosticEngine()
-            # DiagnosticEngine.run() is blocking; emitting progress before is enough
-            # as the engine itself runs quickly (traceroute aside, ~5-10 s total).
-            result = engine.run(self._service_id, traceroute=self._traceroute)
+            # DiagnosticEngine.run()/run_custom() is blocking; emitting progress before
+            # is enough as the engine itself runs quickly (traceroute aside, ~5-10 s total).
+            if self._custom_host:
+                result = engine.run_custom(self._custom_host, traceroute=self._traceroute)
+            else:
+                result = engine.run(self._service_id, traceroute=self._traceroute)
             if not self._stop_requested:
                 self.progress.emit("Done.")
                 self.result_ready.emit(result)
         except Exception as exc:  # noqa: BLE001
             if not self._stop_requested:
                 self.error.emit(
-                    f"Diagnostics failed for '{self._service_id}': {exc}. "
+                    f"Diagnostics failed for '{target}': {exc}. "
                     "Check your network connection and try again."
                 )

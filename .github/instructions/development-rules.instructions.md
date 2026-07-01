@@ -571,9 +571,9 @@ CI failure condition. All UI colours → `ui/styles.py`. Chart/report colours �
 
 ### RULE-AH6 (blocking): After adding a new key to any theme dict in styles.py, update all consumer imports
 `ui/styles.py` injects theme dict keys into module globals via `globals().update()`. Static analysers
-cannot see them. When you add a new key to `_ARCTIC_CLEAN` / `_DARK_PRO` / `_OBSIDIAN_NEON` / `_ABYSS`:
+cannot see them. When you add a new key to `_ARCTIC_CLEAN` / `_DARK_PRO`:
 
-1. Add the same key to **all four** theme dicts.
+1. Add the same key to **both** theme dicts.
 2. Run `python -m pytest tests/test_style_imports.py -v` — this catches any UI file that references
    the new name as a bare variable without importing it.
 3. Add the name to the explicit `from ui.styles import (...)` block in every file that uses it.

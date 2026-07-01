@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -57,6 +58,7 @@ _LAYER_LABELS = {
     "isp":            ("ISP issue", AMBER),
     "routing":        ("Routing problem", AMBER),
     "remote_outage":  ("Remote outage", AMBER),
+    "filtered":       ("Blocked / filtered", AMBER),
 }
 
 def _layer_badge(failure_layer: str) -> tuple[str, str]:
@@ -124,7 +126,14 @@ class ServiceDiagnosticsPage(QWidget):
         self._service_combo = QComboBox()
         self._service_combo.setMinimumWidth(200)
         self._populate_service_picker()
+        self._service_combo.currentIndexChanged.connect(self._on_service_combo_changed)
         lay.addWidget(self._service_combo)
+
+        self._custom_host_edit = QLineEdit()
+        self._custom_host_edit.setPlaceholderText("e.g. github.com")
+        self._custom_host_edit.setMinimumWidth(160)
+        self._custom_host_edit.setVisible(False)
+        lay.addWidget(self._custom_host_edit)
 
         self._traceroute_chk = QCheckBox("Include traceroute")
         self._traceroute_chk.setToolTip(
@@ -162,6 +171,11 @@ class ServiceDiagnosticsPage(QWidget):
             self._service_combo.addItem(f"{entry.name}  (Streaming)", entry.id)
         for entry in gaming_entries:
             self._service_combo.addItem(f"{entry.name}  (Gaming)", entry.id)
+        self._service_combo.addItem("Custom host…", None)
+
+    def _on_service_combo_changed(self, idx: int) -> None:
+        is_custom = self._service_combo.itemData(idx) is None
+        self._custom_host_edit.setVisible(is_custom)
 
     def _build_empty_state(self) -> QWidget:
         w = QWidget()
@@ -384,6 +398,13 @@ class ServiceDiagnosticsPage(QWidget):
         service_id = self._service_combo.itemData(idx)
         traceroute = self._traceroute_chk.isChecked()
 
+        custom_host = None
+        if service_id is None:
+            custom_host = self._custom_host_edit.text().strip()
+            if not custom_host:
+                self._set_status("Enter a hostname to diagnose.", is_error=True)
+                return
+
         self._run_btn.setEnabled(False)
         self._run_btn.setText("Running…")
         self._set_status("Connecting to probes…")
@@ -393,7 +414,8 @@ class ServiceDiagnosticsPage(QWidget):
             self._worker.wait(3000)
 
         self._worker = ServiceDiagnosticsWorker(
-            service_id=service_id, traceroute=traceroute, parent=self
+            service_id=service_id, custom_host=custom_host,
+            traceroute=traceroute, parent=self,
         )
         self._worker.result_ready.connect(self._on_result)
         self._worker.error.connect(self._on_error)

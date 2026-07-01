@@ -64,6 +64,7 @@ chmod +x NetSentinel && sudo ./NetSentinel
 - [Scan Plugin Authoring](plugin-authoring.md) — custom security checks against the device list
 - [Contributing](../CONTRIBUTING.md) — dev setup, PR checklist, three contribution tracks
 - [Networking Guide](networking-guide.md) — plain-English explanations of ARP, STP, DNS, TCP, DHCP
+- [Incident Patterns](incident-patterns.md) — real-world faults behind the speed-drop and filtered-layer detectors; on-demand vs. tray coverage
 
 ---
 

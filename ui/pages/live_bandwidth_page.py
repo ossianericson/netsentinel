@@ -44,7 +44,7 @@ from PyQt6.QtGui import QColor
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
     BORDER, CHART_AXIS, CHART_BG,
-    CHART_DOWN, CHART_GRID, CHART_PLOT_BG, CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
+    CHART_DOWN, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, CHART_UP, GREEN, RED, TABLE_ROW_BORDER,
     TABLE_SEL, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     TH_BG, TH_BORDER, TH_TEXT,
 )
@@ -359,7 +359,7 @@ class LiveBandwidthPage(QWidget):
         ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
         ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor(BORDER)
+            sp.set_edgecolor(CHART_SPINE)
         ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
         self._canvas.draw_idle()
 
@@ -386,10 +386,10 @@ class LiveBandwidthPage(QWidget):
         ax.set_ylabel("Mbps", fontsize=8, color=CHART_AXIS)
         ax.tick_params(labelsize=7, colors=CHART_AXIS)
         for sp in ax.spines.values():
-            sp.set_edgecolor(BORDER)
+            sp.set_edgecolor(CHART_SPINE)
         ax.grid(True, linestyle="--", linewidth=0.4, color=CHART_GRID)
         ax.legend(loc="upper left", fontsize=7, framealpha=0.7,
-                  facecolor=CHART_BG, edgecolor=BORDER)
+                  facecolor=CHART_BG, edgecolor=CHART_SPINE)
 
         # Event annotation ticks (device join = green, rate spike = red)
         y_top = ax.get_ylim()[1]

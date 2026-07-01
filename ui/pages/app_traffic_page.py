@@ -49,7 +49,7 @@ from modules.metric_store import MetricStore
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE,
     BG_ALT_ROW, BG_CARD, BORDER,
-    CHART_AXIS, CHART_BG, CHART_GRID, CHART_PLOT_BG,
+    CHART_AXIS, CHART_BG, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
     GREEN, RED, RED_DARK, RED_HOVER, TABLE_ROW_BORDER, TABLE_SEL,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     TH_BG, TH_BORDER, TH_TEXT, WHITE,
@@ -467,7 +467,7 @@ class AppTrafficPage(QWidget):
         self._fig.patch.set_facecolor(CHART_BG)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(BORDER)
+            sp.set_edgecolor(CHART_SPINE)
         ax.text(
             0.5, 0.5,
             "Start monitoring to see per-host protocol breakdown",
@@ -525,7 +525,7 @@ class AppTrafficPage(QWidget):
         ax.set_xlabel("KB (this window)", fontsize=8, color=CHART_AXIS)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(BORDER)
+            sp.set_edgecolor(CHART_SPINE)
         ax.grid(True, axis="x", linestyle="--", linewidth=0.4, color=CHART_GRID)
         self._canvas.draw_idle()
 
@@ -555,7 +555,7 @@ class AppTrafficPage(QWidget):
         self._fig_hist.patch.set_facecolor(CHART_BG)
         ax.tick_params(colors=CHART_AXIS, labelsize=8)
         for sp in ax.spines.values():
-            sp.set_edgecolor(BORDER)
+            sp.set_edgecolor(CHART_SPINE)
 
         totals: Dict[str, int] = {}
         if self._store:

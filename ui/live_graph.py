@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
 
 from ui.styles import (
     ACCENT, AMBER, BG_CARD,
-    BORDER, CHART_BG, CHART_GRID, CHART_PLOT_BG,
-    CHART_TITLE, GREEN, RED, TEXT_PRIMARY,
+    CHART_BG, CHART_GRID, CHART_PLOT_BG,
+    CHART_SPINE, CHART_TITLE, GREEN, RED, TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
 
@@ -51,8 +51,8 @@ class LiveGraphWidget(QWidget):
         ax = self._ax
         ax.set_facecolor(CHART_PLOT_BG)
         ax.tick_params(colors=TEXT_SECONDARY, labelsize=9)
-        ax.spines["bottom"].set_color(BORDER)
-        ax.spines["left"].set_color(BORDER)
+        ax.spines["bottom"].set_color(CHART_SPINE)
+        ax.spines["left"].set_color(CHART_SPINE)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.set_xlabel("Elapsed (s)", color=TEXT_SECONDARY, fontsize=9)
@@ -101,7 +101,7 @@ class LiveGraphWidget(QWidget):
             loc="upper right",
             fontsize=8,
             facecolor=BG_CARD,
-            edgecolor=BORDER,
+            edgecolor=CHART_SPINE,
             labelcolor=TEXT_PRIMARY,
         )
         self._canvas.draw_idle()

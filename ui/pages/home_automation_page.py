@@ -50,7 +50,7 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
-    CARD_HDR_BORDER, CHART_GRID, CHART_PLOT_BG, GREEN,
+    CARD_HDR_BORDER, CHART_GRID, CHART_PLOT_BG, CHART_SPINE, GREEN,
     RED, TABLE_ROW_BORDER, TABLE_SEL, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_BORDER,
     TH_TEXT,
@@ -246,8 +246,8 @@ class _RttMiniChart(QWidget):
         ax.set_facecolor(CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color(BORDER)
-        ax.spines["bottom"].set_color(BORDER)
+        ax.spines["left"].set_color(CHART_SPINE)
+        ax.spines["bottom"].set_color(CHART_SPINE)
         ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
         ax.set_xlabel("", fontsize=0)
         ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
@@ -263,8 +263,8 @@ class _RttMiniChart(QWidget):
         ax.set_facecolor(CHART_PLOT_BG)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color(BORDER)
-        ax.spines["bottom"].set_color(BORDER)
+        ax.spines["left"].set_color(CHART_SPINE)
+        ax.spines["bottom"].set_color(CHART_SPINE)
         ax.tick_params(colors=TEXT_SECONDARY, labelsize=8)
         ax.set_ylabel("RTT ms", color=TEXT_SECONDARY, fontsize=8)
         ax.grid(True, color=CHART_GRID, linewidth=0.6)

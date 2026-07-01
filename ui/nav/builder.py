@@ -21,6 +21,7 @@ from ui.styles import (
     AMBER,
     AUDIT_RED,
     BORDER,
+    CHART_SPINE,
     GREEN,
     RED,
     SIDEBAR_BG,
@@ -101,7 +102,7 @@ class _NavBuilderMixin:
             _div = QListWidgetItem()
             _div.setFlags(Qt.ItemFlag.NoItemFlags)
             _div.setSizeHint(QSize(0, 9))
-            _div.setBackground(QBrush(QColor(BORDER)))
+            _div.setBackground(QBrush(QColor(CHART_SPINE)))
             self._nav.addItem(_div)
             self._nav_separators.add(self._nav.count() - 1)
         item = QListWidgetItem()
@@ -1133,6 +1134,17 @@ class _NavBuilderMixin:
             visited = set()
         suggestions = []
 
+        # High-priority nudge: severe speed-test drop vs. the user's typical
+        drop = getattr(self, "_pending_speed_drop", None)
+        if drop is not None:
+            suggestions.append({
+                "text": drop["headline"],
+                "action_label": "Run Speed Test →",
+                "target": "Speed Test",
+                "priority": "high",
+                "action_key": "speed_drop",
+            })
+
         # High-priority nudge: security audit not yet run
         qs_ns = QSettings("NetSentinel", "NetSentinel")
         if not qs_ns.value("security/any_scan_done", False, type=bool):
@@ -1155,6 +1167,11 @@ class _NavBuilderMixin:
             if len(suggestions) >= 4:
                 break
         self._home_page.set_suggestions(suggestions)
+
+    def _on_speed_drop_detected(self, payload: dict) -> None:
+        """Store the latest speed-drop verdict and surface it as a Home suggestion."""
+        self._pending_speed_drop = payload
+        self._refresh_home_suggestions()
 
     # ── Pin management ────────────────────────────────────────────────────────
 
@@ -1551,7 +1568,7 @@ class _NavBuilderMixin:
             key_lbl.setFixedWidth(110)
             key_lbl.setStyleSheet(
                 f"font-family:monospace; font-size:11px; font-weight:bold;"
-                f" color:{ACCENT}; background:{BORDER}22;"
+                f" color:{ACCENT}; background:{CHART_SPINE};"
                 f" border:1px solid {BORDER}; border-radius:3px; padding:1px 5px;"
             )
             desc_lbl = QLabel(desc)

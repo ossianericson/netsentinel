@@ -47,6 +47,55 @@ def test_worker_stop_flag():
     w.deleteLater()
 
 
+def test_worker_custom_host_attribute():
+    from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
+    w = ServiceDiagnosticsWorker(custom_host="github.com")
+    assert w._custom_host == "github.com"
+    assert w._service_id is None
+    w.deleteLater()
+
+
+def test_worker_custom_host_uses_run_custom(qt_app, monkeypatch):
+    """Worker with custom_host must call DiagnosticEngine.run_custom(), not run()."""
+    from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
+    from modules.service_diagnostics import ServiceDiagnosticResult
+
+    fake_result = ServiceDiagnosticResult(
+        service_id="custom:github.com",
+        service_name="github.com",
+        failure_layer="filtered",
+        summary="Filtered.",
+        confidence=75,
+    )
+    calls = []
+
+    def _mock_run_custom(self_engine, host, *, port=443, traceroute=False):
+        calls.append(host)
+        return fake_result
+
+    monkeypatch.setattr(
+        "modules.service_diagnostics.DiagnosticEngine.run_custom", _mock_run_custom
+    )
+
+    results = []
+    w = ServiceDiagnosticsWorker(custom_host="github.com")
+    w.result_ready.connect(results.append)
+    w.start()
+    finished = w.wait(5000)
+    qt_app.processEvents()
+
+    assert finished, "Worker did not finish within 5 s"
+    assert calls == ["github.com"]
+    assert len(results) == 1
+    assert results[0].service_name == "github.com"
+
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass  # already cleaned up
+    qt_app.processEvents()
+
+
 def test_worker_no_service_emits_error(qt_app):
     """Worker with no service_id emits error immediately and doesn't crash."""
     from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
@@ -145,9 +194,64 @@ def test_page_service_picker_populated(qt_app):
 
     page = ServiceDiagnosticsPage(store=None)
     count = page._service_combo.count()
-    assert count == len(SERVICE_CATALOG), (
-        f"Expected {len(SERVICE_CATALOG)} services in picker, got {count}"
+    # +1 for the "Custom host..." entry (data=None) that lets users probe an
+    # arbitrary hostname (e.g. github.com) not in the catalog.
+    assert count == len(SERVICE_CATALOG) + 1, (
+        f"Expected {len(SERVICE_CATALOG) + 1} picker entries, got {count}"
     )
+
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass  # already cleaned up
+    qt_app.processEvents()
+
+
+def test_page_custom_host_field_toggles_with_selection(qt_app):
+    from ui.pages.service_diagnostics_page import ServiceDiagnosticsPage
+
+    page = ServiceDiagnosticsPage(store=None)
+    page.show()
+    custom_idx = next(
+        i for i in range(page._service_combo.count())
+        if page._service_combo.itemData(i) is None
+    )
+    page._service_combo.setCurrentIndex(custom_idx)
+    assert page._custom_host_edit.isVisible()
+
+    page._service_combo.setCurrentIndex(0 if custom_idx != 0 else 1)
+    assert not page._custom_host_edit.isVisible()
+
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass  # already cleaned up
+    qt_app.processEvents()
+
+
+def test_page_run_with_custom_host_starts_worker(qt_app, monkeypatch):
+    from ui.pages.service_diagnostics_page import ServiceDiagnosticsPage
+    from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
+
+    started = {}
+
+    def _fake_start(self):
+        started["custom_host"] = self._custom_host
+        started["service_id"] = self._service_id
+
+    monkeypatch.setattr(ServiceDiagnosticsWorker, "start", _fake_start)
+
+    page = ServiceDiagnosticsPage(store=None)
+    custom_idx = next(
+        i for i in range(page._service_combo.count())
+        if page._service_combo.itemData(i) is None
+    )
+    page._service_combo.setCurrentIndex(custom_idx)
+    page._custom_host_edit.setText("github.com")
+    page._on_run_clicked()
+
+    assert started.get("custom_host") == "github.com"
+    assert started.get("service_id") is None
 
     try:
         page.deleteLater()
