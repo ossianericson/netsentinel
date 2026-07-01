@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime
 from typing import Optional
 
-from PyQt6.QtCore    import Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore    import Qt, pyqtSlot
 from PyQt6.QtWidgets import (
     QDialog, QHBoxLayout, QLabel, QSizePolicy,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QPushButton,
@@ -113,8 +113,6 @@ _MAX_ROWS = 500    # cap live table at 500 rows to prevent memory growth
 
 class SnmpTrapPage(QWidget):
     """Live SNMP trap viewer page."""
-
-    navigate_to_settings = pyqtSignal()
 
     def __init__(self, store: Optional[MetricStore] = None, parent=None):
         super().__init__(parent)
@@ -215,9 +213,11 @@ class SnmpTrapPage(QWidget):
                 "SNMP traps let network devices push alerts to you instantly, "
                 "instead of waiting for your next poll cycle."
             ),
-            btn_label="Configure SNMP →",
+            btn_label="Waiting for traps…",
         )
-        self._empty_state.clicked.connect(self.navigate_to_settings)
+        # The receiver listens automatically at startup — there is no config
+        # UI to send the user to, so the CTA is informational only.
+        self._empty_state.findChild(QPushButton).setEnabled(False)
         card_body.addWidget(self._empty_state)
 
         root.addWidget(card, 1)

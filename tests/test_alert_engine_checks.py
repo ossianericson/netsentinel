@@ -110,3 +110,66 @@ def test_cert_checks_skips_on_error():
     results = [{"host": "down.example.com", "port": 443, "days_remaining": 5, "is_expired": False, "error": "timeout"}]
     fired = engine.evaluate_cert_checks(results)
     assert fired == []
+
+
+# ── evaluate_baseline_metrics (Sprint 3 — BASELINE_DROP) ─────────────────────
+
+def test_mixin_has_evaluate_baseline_metrics():
+    from modules.alert_engine_checks import _AlertChecksMixin
+    assert hasattr(_AlertChecksMixin, "evaluate_baseline_metrics")
+
+
+def test_evaluate_baseline_metrics_no_drop():
+    """A current speed close to typical does not fire."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="speed_test", rule_type="BASELINE_DROP", cooldown_s=0)
+    ])
+    fired = engine.evaluate_baseline_metrics(730.0, [740.0, 735.0, 742.0, 745.0])
+    assert fired == []
+
+
+def test_evaluate_baseline_metrics_fires_on_severe_drop():
+    """A >50% drop vs. the rolling median fires — the 740->94 Mbps incident case."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="speed_test", rule_type="BASELINE_DROP", cooldown_s=0)
+    ])
+    fired = engine.evaluate_baseline_metrics(94.0, [740.0, 735.0, 742.0, 745.0])
+    assert len(fired) == 1
+    assert fired[0].rule_type == "BASELINE_DROP"
+    assert fired[0].severity == "CRITICAL"
+    assert "94" in fired[0].message
+    assert fired[0].cta_page == "Speed Test"
+
+
+def test_evaluate_baseline_metrics_respects_min_samples():
+    """Fewer than min_samples prior tests → no false positive."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="speed_test", rule_type="BASELINE_DROP", min_samples=4, cooldown_s=0)
+    ])
+    fired = engine.evaluate_baseline_metrics(94.0, [740.0, 735.0])
+    assert fired == []
+
+
+def test_evaluate_baseline_metrics_respects_cooldown():
+    """Repeated drops within cooldown fire at most once."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="speed_test", rule_type="BASELINE_DROP", cooldown_s=3600)
+    ])
+    prior = [740.0, 735.0, 742.0, 745.0]
+    first = engine.evaluate_baseline_metrics(94.0, prior)
+    second = engine.evaluate_baseline_metrics(90.0, prior)
+    assert len(first) == 1
+    assert second == []
+
+
+def test_evaluate_baseline_metrics_disabled_rule_does_not_fire():
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="speed_test", rule_type="BASELINE_DROP", cooldown_s=0, enabled=False)
+    ])
+    fired = engine.evaluate_baseline_metrics(94.0, [740.0, 735.0, 742.0, 745.0])
+    assert fired == []

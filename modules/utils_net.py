@@ -441,3 +441,22 @@ def get_interface_details() -> List[dict]:
             pass  # non-fatal
 
     return [a for a in adapters if a.get("name")]
+
+
+def get_local_mac_label_map() -> dict:
+    """Return {mac (lowercase) -> "This PC (<hostname>)"} for this machine's own adapters.
+
+    Used to overlay device-label maps (App Traffic, Bandwidth Usage, Timeline, ...) so
+    traffic captured from the box the app is running on never displays as a bare MAC.
+    """
+    label_map: dict = {}
+    try:
+        import socket
+        hostname = socket.gethostname()
+        for iface in get_interface_details():
+            mac = (iface.get("mac") or "").lower()
+            if mac:
+                label_map[mac] = f"This PC ({hostname})"
+    except Exception:
+        pass  # non-fatal — local adapter enumeration is best-effort
+    return label_map

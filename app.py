@@ -99,6 +99,9 @@ def _smoke_test() -> None:
         "modules.speed_tester_servers",
         "modules.firewall_rules",
         "modules.alert_engine",
+        "modules.service_escalation",
+        "modules.proactive_digest",
+        "modules.digest_bullets",
         "modules.notification_router",
         "modules.utils",
         "modules.maintenance_window",
@@ -129,6 +132,7 @@ def _smoke_test() -> None:
         "modules.diagnostic_card",
         "workers.service_worker",
         "workers.report_scheduler_worker",
+        "workers.proactive_probe_worker",
         "workers.snmp_trap_worker",
         "workers.syslog_worker",
         "workers.rest_api_worker",
@@ -181,6 +185,7 @@ def _smoke_test() -> None:
         "modules.health_score",
         "workers.health_worker",
         "ui.widgets.health_status_card",
+        "modules.scheduled_speed_test",
     ]
     for _mod in _checks:
         try:
@@ -347,7 +352,7 @@ def _wire_notifications(window, alerts, notif_router, maint_manager, report_work
     )
 
 
-def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
+def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router, store):
     avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._inventory_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
@@ -368,11 +373,85 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
     window._service_page.services_changed.connect(svc_worker.set_targets)
     window._service_page.check_now_requested.connect(svc_worker.check_now)
 
+    # ── Sprint 1: SERVICE_DOWN escalation ──────────────────────────────────────
+    # The plain "unreachable" toast above fires immediately. When escalation is
+    # enabled, run DiagnosticEngine classification in the background (via the
+    # existing ServiceDiagnosticsWorker, RULE 4 — never block the main thread)
+    # and dispatch a richer follow-up on the SAME rule_type=SERVICE_DOWN a few
+    # seconds later, explaining *why* (filtered / local / real outage).
+    import time as _time
+    from PyQt6.QtCore import QSettings
+    from modules.alert_types import AlertFired
+    from modules.service_escalation import (
+        ServiceEscalationTracker, layer_to_message, parse_service_key,
+        to_alert_severity,
+    )
+    from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
+
+    _escalation_tracker = ServiceEscalationTracker()
+    _escalation_workers: list = []  # keep QThread refs alive until they finish
+
+    def _persist_alert(a) -> None:
+        # Sprint 4: persist every fired alert so modules.digest_bullets has
+        # overnight history to summarize — nothing wrote to alert_fired before
+        # this sprint, so get_recent_alerts()-backed digest bullets would
+        # otherwise always report "nothing happened" in the live app.
+        try:
+            store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+        except Exception:
+            pass  # non-fatal — persistence failure must not block notification delivery
+
+    def _escalation_enabled() -> bool:
+        return QSettings("NetSentinel", "NetSentinel").value(
+            "notif/service_escalation_enabled", True, type=bool
+        )
+
+    def _run_service_escalation(alert) -> None:
+        host, port = parse_service_key(alert.host)
+        if not host or not _escalation_tracker.should_escalate(host, port):
+            return
+        _escalation_tracker.mark_escalated(host, port)
+
+        worker = ServiceDiagnosticsWorker(custom_host=host)
+
+        def _cleanup() -> None:
+            if worker in _escalation_workers:
+                _escalation_workers.remove(worker)
+            worker.deleteLater()
+
+        def _on_result(result, _rule_name=alert.rule_name, _key=alert.host) -> None:
+            ui_severity, message = layer_to_message(result.failure_layer, host, port)
+            escalation = AlertFired(
+                rule_name=_rule_name,
+                rule_type="SERVICE_DOWN",
+                host=_key,
+                message=message,
+                severity=to_alert_severity(ui_severity),
+                ts=int(_time.time()),
+                cta_page="Service Diagnostics",
+                cta_filter=host,
+            )
+            notif_router.dispatch(escalation)  # dispatch() already invokes the toast callback
+            window._home_page.on_alert(escalation)
+            _persist_alert(escalation)
+            _cleanup()
+
+        def _on_error(_msg: str) -> None:
+            _cleanup()  # non-fatal — the plain SERVICE_DOWN toast already fired
+
+        worker.result_ready.connect(_on_result)
+        worker.error.connect(_on_error)
+        _escalation_workers.append(worker)
+        worker.start()
+
     def _on_svc_check(results: list) -> None:
         fired = alerts.evaluate_service_checks(results)
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
+            _persist_alert(a)
+            if a.rule_type == "SERVICE_DOWN" and not a.is_resolution and _escalation_enabled():
+                _run_service_escalation(a)
         window._overview_page.on_svc_done(results)
 
     svc_worker.check_done.connect(_on_svc_check)
@@ -382,6 +461,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
+            _persist_alert(a)
         window._overview_page.on_cert_done(results)
 
     cert_worker.check_done.connect(_on_cert_check)
@@ -392,13 +472,60 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             window._overview_page.on_alert(a)
+            _persist_alert(a)
         window._overview_page.on_cycle_done(result_dict)
 
     avail_worker.cycle_done.connect(_on_cycle)
 
 
+def _wire_speedtest_scheduling(window, worker, alerts, store):
+    """
+    Sprint 3 — scheduled speed test.  ``worker`` is a ProactiveProbeWorker
+    running modules.scheduled_speed_test.run_scheduled_speed_test().  Each
+    completed probe is evaluated against the BASELINE_DROP rule; a fired
+    alert flows through the same window._show_alert_toast() +
+    window._home_page.on_alert() path every other evaluate_* caller uses
+    (see the pre-existing double-toast note in _wire_monitoring — left
+    alone here for the same reason: not this sprint's concern).
+
+    Sprint 4: also persists via store.record_alert_fired() so
+    modules.digest_bullets._speed_trend_bullet() has overnight BASELINE_DROP
+    history to summarize in the Morning Briefing.
+    """
+    def _on_probe_done(result) -> None:
+        fired = alerts.evaluate_baseline_metrics(result.download_mbps, result.prior_downloads)
+        for a in fired:
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+
+    def _on_probe_error(_msg: str) -> None:
+        pass  # non-fatal — the worker retries automatically on its next interval
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+    def _on_auto_speedtest_changed(enabled: bool, interval_hours: int) -> None:
+        worker.set_interval(interval_hours * 3600)
+        if enabled and not worker.isRunning():
+            worker.start()
+        elif not enabled and worker.isRunning():
+            worker.stop()
+            worker.wait(3000)
+
+    window._speed_test_page.auto_speedtest_changed.connect(_on_auto_speedtest_changed)
+
+
 def _wire_cross_page(window):
     window._threat_intel_page.entries_updated.connect(window._geo_map_page.set_threat_entries)
+    # ThreatIntelPage loads its local cache synchronously in __init__, which runs
+    # (and fires entries_updated) before this connection exists — seed the map
+    # once with whatever it already loaded so startup data isn't silently dropped.
+    if window._threat_intel_page._threat_entries:
+        window._geo_map_page.set_threat_entries(window._threat_intel_page._threat_entries)
     window._hardware_integration_page.plugin_page_added.connect(window._home_page.on_hardware_added)
     window._home_page._freshness_strip.navigate_to.connect(window._nav_rail_go_to)
 
@@ -544,7 +671,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.21")
+    app.setApplicationVersion("2.1.22")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -580,7 +707,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.21")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.22")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -689,6 +816,22 @@ def main():
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
 
+    # Sprint 5 — wire the previously-dead record_suppression() plumbing so
+    # suppressed alerts actually appear in the maintenance suppression log.
+    # AlertEngine only knows the window's label (from is_suppressed), not its
+    # id, so we look the matching window up by label to pass a real window_id.
+    def _record_alert_suppression(window_label, host, rule_name, severity, message):
+        window_id = ""
+        for _w in maint_manager.get_windows():
+            if _w.label == window_label:
+                window_id = _w.id
+                break
+        maint_manager.record_suppression(
+            window_id, window_label, host, rule_name, severity, message
+        )
+
+    alerts.set_suppression_recorder(_record_alert_suppression)
+
     # Pre-warm tplinkrouterc6u on the main STA thread before any plugin workers
     # start.  tplinkrouterc6u.common.encryption uses Windows COM-based crypto;
     # importing it from a background QThread raises RPC_E_WRONG_THREAD (0x8001010d).
@@ -724,6 +867,24 @@ def main():
     health_worker = HealthWorker(store=store)
     health_worker.start()
 
+    # Sprint 3 — scheduled background speed tests. Opt-in, default off: bandwidth
+    # consent is explicit and separate from notification consent (BASELINE_DROP
+    # rule, enabled independently under Notifications).
+    from workers.proactive_probe_worker import ProactiveProbeWorker
+    from modules.scheduled_speed_test import run_scheduled_speed_test
+
+    _speedtest_qs = QSettings("NetSentinel", "NetSentinel")
+    _speedtest_interval_h = int(_speedtest_qs.value("speedtest/scheduled_interval_hours", 6))
+    scheduled_speedtest_worker = ProactiveProbeWorker(
+        probe=lambda: run_scheduled_speed_test(store),
+        interval_s=_speedtest_interval_h * 3600,
+    )
+    # Sprint 5 — respect maintenance windows / quiet hours for the "speedtest"
+    # host key (same convention used by evaluate_baseline_metrics' cooldown key).
+    scheduled_speedtest_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("speedtest") is not None
+    )
+
     # REST API worker — only starts when user has enabled it in Settings
     _qs = QSettings("NetSentinel", "NetSentinel")
     rest_api_worker: RestApiWorker | None = None
@@ -747,9 +908,12 @@ def main():
 
     _wire_logging(window, passive_observer_worker, snmp_trap_worker, syslog_worker)
     _wire_notifications(window, alerts, notif_router, maint_manager, report_worker)
-    _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts)
+    _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router, store)
     _wire_cross_page(window)
     _wire_scan_ctas(window)
+    _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts, store)
+    if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
+        scheduled_speedtest_worker.start()
 
     # S2-5: wire ambient health worker → home page card + system tray
     health_worker.result_ready.connect(window._home_page.on_health_update)
@@ -966,6 +1130,9 @@ def main():
     syslog_worker.wait(5000)
     health_worker.stop()
     health_worker.wait(3000)
+    if scheduled_speedtest_worker.isRunning():
+        scheduled_speedtest_worker.stop()
+        scheduled_speedtest_worker.wait(5000)
     if rest_api_worker is not None:
         rest_api_worker.stop()
         rest_api_worker.wait(3000)

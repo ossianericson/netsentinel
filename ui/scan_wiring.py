@@ -285,18 +285,19 @@ class ScanResultMixin(ScanEnrichmentMixin):
             row = self._recon_syn_table.rowCount()
             self._recon_syn_table.insertRow(row)
             color = RED if p.state == "open" else AMBER
-            for col, val in enumerate([str(p.port), p.state, p.proto, p.service]):
+            _cols = [str(p.port), p.state, p.proto, p.service, p.service_version, p.banner]
+            for col, val in enumerate(_cols):
                 item = QTableWidgetItem(val)
                 item.setForeground(QColor(color))
                 self._recon_syn_table.setItem(row, col, item)
-            # CVE count badge (col 4)
+            # CVE count badge (col 6)
             svc_key = (p.service or "").split()[0].lower()
             cve_n = _cve_counts.get(svc_key, 0)
             cve_item = QTableWidgetItem(f"{cve_n} CVEs" if cve_n else "—")
             cve_item.setForeground(QColor(AMBER if cve_n else TEXT_MUTED))
             if cve_n:
                 cve_item.setToolTip(f"Click to view {cve_n} CVE(s) for {p.service}")
-            self._recon_syn_table.setItem(row, 4, cve_item)
+            self._recon_syn_table.setItem(row, 6, cve_item)
         _ts_syn = time.time()
         _syn_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
         self._syn_status.setText(format_scan_status(_syn_verdict, _ts_syn))
@@ -311,7 +312,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                     self._port_data_cache[_host_key] = [
                         {"port": str(p.port), "protocol": p.proto or "tcp",
                          "service": p.service or "", "state": p.state or "open",
-                         "banner": ""}
+                         "banner": p.banner or ""}
                         for p in result.open_ports
                     ]
             _nd_cert: list = []

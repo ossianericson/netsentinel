@@ -148,7 +148,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
         # Security audit coordinator state
         self._pending_security_tools: list = []
-        self._security_audit_total: int = 0
 
         # Mesh enrichment — populated when MeshRouterPage scan completes
         self._mesh_enrichment: dict = {}   # normalised MAC → MeshClient
@@ -1396,6 +1395,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 vendor = d.get("vendor", "") if isinstance(d, dict) else (getattr(d, "vendor", "") or "")
                 if mac:
                     label_map[mac.lower()] = host or vendor or mac
+        from modules.utils_net import get_local_mac_label_map
+        label_map.update(get_local_mac_label_map())
         self._bw_worker = BandwidthWorker(interval_s=5.0, label_map=label_map)
         self._bw_worker.snapshot.connect(self._on_bw_snapshot)
         self._bw_worker.status.connect(self._bw_status.setText)
@@ -1866,22 +1867,14 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._set_status("Main scan in progress — please wait before running security tools.")
             return
         self._pending_security_tools = list(tool_labels)
-        self._security_audit_total = len(tool_labels)
         self._advance_security_audit()
 
     def _advance_security_audit(self) -> None:
         """Fire the next pending security scan worker silently — never navigate away from Security Overview."""
         if not self._pending_security_tools:
-            if hasattr(self, "_security_overview_page"):
-                self._security_overview_page.clear_audit_progress()
             self._set_status("Security audit complete — see Security Overview for findings.")
             return
         label = self._pending_security_tools.pop(0)
-        step_n = self._security_audit_total - len(self._pending_security_tools)
-        if hasattr(self, "_security_overview_page"):
-            self._security_overview_page.set_audit_progress(
-                label, step_n, self._security_audit_total
-            )
         if label == "Port Scan (TCP)":
             gw = self._net_info.get("gateway", "") if self._net_info else ""
             if not gw:

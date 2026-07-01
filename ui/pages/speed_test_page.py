@@ -20,9 +20,10 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from PyQt6.QtCore import Qt, QEasingCurve, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QEasingCurve, QSettings, QTimer, QVariantAnimation, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -498,6 +499,9 @@ class SpeedTestPage(QWidget):
     modem_resume_requested = pyqtSignal()  # restart ZteWorker after test finishes
     scan_requested         = pyqtSignal()  # emitted when the user clicks Run Speed Test
     speed_drop_detected    = pyqtSignal(dict)  # emitted when download is a severe drop vs typical
+    auto_speedtest_changed = pyqtSignal(bool, int)  # (enabled, interval_hours) — Sprint 3
+
+    _AUTO_INTERVAL_HOURS = [1, 3, 6, 12, 24]
 
     def __init__(self, store=None, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -526,10 +530,69 @@ class SpeedTestPage(QWidget):
         self._hist_chart_pts:   list   = []
 
         self._setup_ui()
+        self._restore_auto_speedtest_settings()
         self._fetch_servers()
         self._load_history_from_db()
 
     # ── UI construction ───────────────────────────────────────────────────────
+
+    def _build_auto_speedtest_card(self) -> QWidget:
+        card, body = _card("Automatic Speed Tests")
+        body.setContentsMargins(8, 8, 8, 8)
+        body.setSpacing(6)
+
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        self._chk_auto_speedtest = QCheckBox("Run speed tests automatically in the background")
+        self._chk_auto_speedtest.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+        self._chk_auto_speedtest.stateChanged.connect(self._on_auto_speedtest_setting_changed)
+        row.addWidget(self._chk_auto_speedtest)
+        row.addStretch()
+        row.addWidget(QLabel("Every:"))
+        self._auto_interval_combo = QComboBox()
+        self._auto_interval_combo.addItems(["1 hour", "3 hours", "6 hours", "12 hours", "24 hours"])
+        self._auto_interval_combo.setCurrentIndex(2)  # default: 6 hours
+        self._auto_interval_combo.setFixedWidth(100)
+        self._auto_interval_combo.currentIndexChanged.connect(self._on_auto_speedtest_setting_changed)
+        row.addWidget(self._auto_interval_combo)
+        body.addLayout(row)
+
+        note = QLabel(
+            "Uses bandwidth in the background, even when you're not using the app. "
+            "A severe drop vs. your usual speed sends a notification if “Baseline "
+            "Speed Drop” is enabled under Notifications."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        body.addWidget(note)
+
+        return card
+
+    def _on_auto_speedtest_setting_changed(self, *_args) -> None:
+        if getattr(self, "_restoring_auto_speedtest", False):
+            return
+        qs = QSettings("NetSentinel", "NetSentinel")
+        enabled = self._chk_auto_speedtest.isChecked()
+        interval_hours = self._AUTO_INTERVAL_HOURS[self._auto_interval_combo.currentIndex()]
+        qs.setValue("speedtest/scheduled_enabled", enabled)
+        qs.setValue("speedtest/scheduled_interval_hours", interval_hours)
+        self.auto_speedtest_changed.emit(enabled, interval_hours)
+
+    def _restore_auto_speedtest_settings(self) -> None:
+        self._restoring_auto_speedtest = True
+        try:
+            qs = QSettings("NetSentinel", "NetSentinel")
+            enabled = qs.value("speedtest/scheduled_enabled", False, type=bool)
+            interval_hours = int(qs.value("speedtest/scheduled_interval_hours", 6))
+            self._chk_auto_speedtest.setChecked(enabled)
+            idx = (
+                self._AUTO_INTERVAL_HOURS.index(interval_hours)
+                if interval_hours in self._AUTO_INTERVAL_HOURS
+                else 2
+            )
+            self._auto_interval_combo.setCurrentIndex(idx)
+        finally:
+            self._restoring_auto_speedtest = False
 
     def _setup_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -551,6 +614,9 @@ class SpeedTestPage(QWidget):
         self._ookla_banner = OoklaCliBanner(parent=self)
         self._ookla_banner.installed.connect(self._on_ookla_installed)
         root.addWidget(self._ookla_banner)
+
+        # ── Automatic speed tests card (Sprint 3) ──────────────────────────────
+        root.addWidget(self._build_auto_speedtest_card())
 
         # ── Top row: server card + gauge card ─────────────────────────────────
         top_row = QHBoxLayout()

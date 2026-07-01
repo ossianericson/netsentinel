@@ -24,6 +24,7 @@ RULE_TYPES = frozenset({
     "CERT_EXPIRED",
     "FLAP",
     "SERVICE_DOWN",
+    "BASELINE_DROP",
 })
 
 
@@ -39,6 +40,10 @@ class AlertRule:
     threshold_days: int           = 30        # CERT_EXPIRY — fire when days_remaining < this
     flap_count:     int           = 4         # FLAP — min transitions to be "flapping"
     flap_window_s:  int           = 600       # FLAP — rolling window (10 min default)
+    baseline_metric: str          = "download_mbps"  # BASELINE_DROP — metric name (future use)
+    warn_pct:       float         = 50.0      # BASELINE_DROP — % drop for Warning severity
+    high_pct:       float         = 75.0      # BASELINE_DROP — % drop for High severity
+    min_samples:    int           = 4         # BASELINE_DROP — min prior samples required
     cooldown_s:     int           = 300       # 5 min default
     enabled:        bool          = True
 

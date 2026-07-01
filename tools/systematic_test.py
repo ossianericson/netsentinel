@@ -118,7 +118,6 @@ _BLACKLIST: List[str] = [
     "syn scan", "port scan", "run diagnostics",
     "delete", "remove device", "clear all", "wipe", "purge",
     "reset to default", "install speedtest", "install ookla", "install npcap",
-    "", "", "", "", "", "",
     "_chromebutton",
     "close/x",          # accessible-name variant seen in seed=1 crash at iter 268
     "quit", "exit application",

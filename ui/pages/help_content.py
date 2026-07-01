@@ -248,10 +248,16 @@ _PAGE_HELP: dict[str, dict] = {
         ],
     },
     "Tools & Wake-on-LAN": {
-        "what": "Ping, traceroute, WHOIS, port check, and Wake-on-LAN utilities in one place.",
+        "what": "Wake-on-LAN sender and New Device Alerts baseline diff.",
         "hidden": [
             "Wake-on-LAN requires the target device to have WoL enabled in its BIOS and the NIC driver settings.",
-            "The WHOIS lookup works on both IP addresses and domain names.",
+        ],
+    },
+    "Port Scanner": {
+        "what": "TCP connect-scan of common ports on any host. No admin required.",
+        "hidden": [
+            "Right-click a device in Devices or Network Info → Port Scan to pre-fill the host here.",
+            "For a deeper admin-required scan with CVE lookups, see Port Scan (TCP) in the Security Audit section.",
         ],
     },
     "Geolocation Map": {

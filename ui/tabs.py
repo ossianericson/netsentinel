@@ -131,9 +131,6 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         from ui.pages.snmp_trap_page import SnmpTrapPage
         self._snmp_trap_page = SnmpTrapPage(store=self._store)
-        self._snmp_trap_page.navigate_to_settings.connect(
-            lambda: self._nav_go_to("Settings")
-        )
 
         from ui.pages.syslog_page import SyslogPage
         self._syslog_page = SyslogPage(parent=None)
@@ -221,7 +218,6 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._security_overview_page = SecurityOverviewPage(store=self._store, parent=None)
         self._security_overview_page.navigate_to.connect(self._nav_rail_go_to)
         self._security_overview_page.scan_requested.connect(self._start_full_scan)
-        self._security_overview_page.security_scan_requested.connect(self._run_security_scans)
 
         from ui.pages.cve_page import CvePage
         self._cve_page = CvePage(self._store, parent=None)
@@ -408,6 +404,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
 
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
+        self._port_scanner_tab_widget = self._build_port_scanner_tab()
         self._topology_tab_widget = self._build_topology_tab()
         self._arp_tab_widget      = self._build_arp_monitor_tab()
         self._dhcp_tab_widget     = self._build_dhcp_tab()

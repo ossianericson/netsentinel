@@ -407,7 +407,6 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             f" border:1px solid {GREEN}44; border-left:3px solid {GREEN};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
-        self._setup_complete_card.setVisible(_already_done)
         _sc_lay = QVBoxLayout(self._setup_complete_card)
         _sc_lay.setContentsMargins(14, 12, 14, 12)
         _sc_lay.setSpacing(6)
@@ -468,6 +467,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _sc_lay.addWidget(_sc_sub)
         _sc_lay.addLayout(_sc_btn_row)
         lay.addWidget(self._setup_complete_card)
+        self._setup_complete_card.setVisible(_already_done)
 
         # ── Since you were last here (hidden until data loaded) ───────────────
         # S9-6: reused for both the routine "since last visit" note and the

@@ -1,12 +1,14 @@
 """
-alert_engine_checks.py — _AlertChecksMixin: cert and service check evaluation.
+alert_engine_checks.py — _AlertChecksMixin: cert, service, and baseline check
+evaluation.
 
 Extracted from alert_engine.py (Sprint 2 file-budget split) to keep that file
 within its 800-line budget.  AlertEngine inherits this mixin.
 
 Provides:
-  evaluate_cert_checks()    — CERT_EXPIRY / CERT_EXPIRED rule evaluation
-  evaluate_service_checks() — SERVICE_DOWN rule evaluation
+  evaluate_cert_checks()      — CERT_EXPIRY / CERT_EXPIRED rule evaluation
+  evaluate_service_checks()   — SERVICE_DOWN rule evaluation
+  evaluate_baseline_metrics() — BASELINE_DROP rule evaluation (Sprint 3)
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ from modules.alert_types import AlertFired
 
 
 class _AlertChecksMixin:
-    """Mixin for AlertEngine providing cert and service check evaluation methods."""
+    """Mixin for AlertEngine providing cert, service, and baseline check evaluation methods."""
 
     def evaluate_service_checks(self, service_results) -> List:
         """
@@ -155,5 +157,44 @@ class _AlertChecksMixin:
                             fired.append(alert)
                             if self._on_alert:
                                 self._on_alert(alert)
+
+        return fired
+
+    def evaluate_baseline_metrics(
+        self, current_mbps: float, prior_downloads: List[float]
+    ) -> List[AlertFired]:
+        """
+        Evaluate BASELINE_DROP rules — delegates the actual math/copy to
+        speed_drop_detector.evaluate_speed_drop() (reuse, not reimplement;
+        this is the same detector the manual Speed Test page uses).
+        """
+        from modules.speed_drop_detector import evaluate_speed_drop
+
+        fired: List[AlertFired] = []
+        now = int(time.time())
+
+        for rule in self._rules:
+            if not rule.enabled or rule.rule_type != "BASELINE_DROP":
+                continue
+            verdict = evaluate_speed_drop(
+                current_mbps,
+                prior_downloads,
+                min_samples=rule.min_samples,
+                warn_pct=rule.warn_pct,
+                high_pct=rule.high_pct,
+            )
+            if not verdict.is_drop:
+                continue
+            severity = "CRITICAL" if verdict.severity == "High" else "WARNING"
+            alert = self._fire_if_cooled(
+                rule, "speedtest", now,
+                message=self._append_action(verdict.headline, "BASELINE_DROP"),
+                severity=severity,
+                value=verdict.drop_pct,
+            )
+            if alert:
+                fired.append(alert)
+                if self._on_alert:
+                    self._on_alert(alert)
 
         return fired

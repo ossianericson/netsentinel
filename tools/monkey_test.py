@@ -18,6 +18,8 @@ Options:
     --source              Launch via "python app.py" instead of an exe
     --connect             Attach to an already-running NetSentinel window
     -n / --iterations N   Iterations (default: 200)
+    --duration SECS       Run by wall-clock time instead of a fixed iteration count
+                          (overrides -n/--iterations when both are given)
     --chaos LEVEL         mild | moderate | wild (default: moderate)
     --seed N              RNG seed for reproducibility
     --no-screenshots      Skip PIL screenshots on crash
@@ -77,7 +79,7 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.6.5"
+_VERSION = "1.6.6"
 # Title STARTS with "NetSentinel" — never matches VS Code's
 # "monkey_test.py — NetSentinel — Visual Studio Code" title.
 _WINDOW_RE = r"^NetSentinel"
@@ -145,6 +147,7 @@ _BLACKLIST: List[str] = [
     "full discovery",
     "syn scan",
     "port scan",
+    "scan ports",        # Port Scanner page "Scan Ports" button — TCP connect scan
     "run diagnostics",  # triggers several network probes
     # --- Destructive data operations ---
     "delete",
@@ -212,7 +215,7 @@ _BLACKLIST: List[str] = [
     "diagnose",         # Service Heartbeat "Diagnose →" button → fires probes
     "run health check", # health check probe
     "check connection", # connectivity probe
-    "run security audit",  # SecurityOverviewPage "▶  Run Security Audit" → _advance_security_audit() fires Port Scan (TCP) + Exposed to Internet sequentially
+    "run selected",     # Overview page Security Scan panel "Run Selected" → _advance_security_audit() fires selected tools sequentially
     "run all",             # Scan Center card "▶  Run All" → rescan_requested signal → triggers full network scan
     "re-run",           # re-triggers any prior scan/probe
     "run again",        # re-triggers any prior scan/probe
@@ -286,6 +289,7 @@ class Config:
     use_source: bool = False
     connect_only: bool = False       # attach to already-running app, do not launch
     iterations: int = 200
+    duration_secs: Optional[float] = None  # when set, run by wall-clock time instead of iteration count
     chaos: str = "moderate"          # mild | moderate | wild
     seed: Optional[int] = None
     screenshots: bool = True
@@ -1620,7 +1624,11 @@ class MonkeyTester:
         self.log.error(sep)
         self.log.error("MONKEY TEST FAILURE")
         self.log.error("Reason   : %s", reason)
-        self.log.error("Iteration: %d / %d", self.stats.completed, self.cfg.iterations)
+        if self.cfg.duration_secs:
+            self.log.error("Iteration: %d (%.0fs / %.0fs)",
+                            self.stats.completed, self.stats.elapsed, self.cfg.duration_secs)
+        else:
+            self.log.error("Iteration: %d / %d", self.stats.completed, self.cfg.iterations)
         self.log.error("Elapsed  : %.0fs", self.stats.elapsed)
         self.log.error(self.hist.fmt())
         self.log.error(sep)
@@ -1647,9 +1655,14 @@ class MonkeyTester:
 
     def run(self) -> int:
         self.log.info("NetSentinel Monkey Tester v%s", _VERSION)
-        self.log.info("chaos=%s  iterations=%d  seed=%s  mem_limit=%dMB",
-                      self.cfg.chaos, self.cfg.iterations, self.cfg.seed,
-                      self.cfg.mem_limit_mb)
+        if self.cfg.duration_secs:
+            self.log.info("chaos=%s  duration=%.0fs  seed=%s  mem_limit=%dMB",
+                          self.cfg.chaos, self.cfg.duration_secs, self.cfg.seed,
+                          self.cfg.mem_limit_mb)
+        else:
+            self.log.info("chaos=%s  iterations=%d  seed=%s  mem_limit=%dMB",
+                          self.cfg.chaos, self.cfg.iterations, self.cfg.seed,
+                          self.cfg.mem_limit_mb)
 
         # Launch or attach
         if self.cfg.connect_only:
@@ -1686,11 +1699,24 @@ class MonkeyTester:
         fthread = threading.Thread(target=self._focus_heartbeat, daemon=True, name="focus")
         fthread.start()
 
-        self.log.info("Starting %d iterations…", self.cfg.iterations)
+        if self.cfg.duration_secs:
+            self.log.info("Running for %.0fs (wall-clock)…", self.cfg.duration_secs)
+            loop_limit = sys.maxsize
+        else:
+            self.log.info("Starting %d iterations…", self.cfg.iterations)
+            loop_limit = self.cfg.iterations
         crashed = False
         self._last_iter_time = time.time()
 
-        for i in range(1, self.cfg.iterations + 1):
+        for i in range(1, loop_limit + 1):
+            # Wall-clock duration limit reached — stop cleanly, same as running out of iterations.
+            if self.cfg.duration_secs and self.stats.elapsed >= self.cfg.duration_secs:
+                self.log.info(
+                    "Duration limit reached (%.0fs elapsed) after %d iterations",
+                    self.stats.elapsed, self.stats.completed,
+                )
+                break
+
             # Health monitor signalled a problem — try auto-restart before giving up
             if self._stop.is_set():
                 if self.stats.restarts < self.cfg.max_restarts:
@@ -1712,14 +1738,23 @@ class MonkeyTester:
                     rss = self._proc.memory_info().rss / (1024 * 1024)
                 except Exception:
                     self.log.debug("memory_info() unavailable")
-                self.log.info(
-                    "Progress %d/%d  controls=%d  exceptions=%d  rss=%.0fMB  elapsed=%.0fs",
-                    i, self.cfg.iterations,
-                    sum(self.stats.by_type.values()),
-                    self.stats.exceptions,
-                    rss,
-                    self.stats.elapsed,
-                )
+                if self.cfg.duration_secs:
+                    self.log.info(
+                        "Progress iter=%d  elapsed=%.0fs/%.0fs  controls=%d  exceptions=%d  rss=%.0fMB",
+                        i, self.stats.elapsed, self.cfg.duration_secs,
+                        sum(self.stats.by_type.values()),
+                        self.stats.exceptions,
+                        rss,
+                    )
+                else:
+                    self.log.info(
+                        "Progress %d/%d  controls=%d  exceptions=%d  rss=%.0fMB  elapsed=%.0fs",
+                        i, self.cfg.iterations,
+                        sum(self.stats.by_type.values()),
+                        self.stats.exceptions,
+                        rss,
+                        self.stats.elapsed,
+                    )
 
             try:
                 ok = self._run_one(i)
@@ -1795,6 +1830,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--connect", action="store_true",
                    help="Attach to an already-running NetSentinel window (do not launch)")
     p.add_argument("-n", "--iterations", type=int, default=200)
+    p.add_argument("--duration", type=float, default=None, metavar="SECS",
+                   help="Run by wall-clock time instead of a fixed iteration count "
+                        "(overrides -n/--iterations when both are given)")
     p.add_argument("--chaos", choices=["mild", "moderate", "wild"], default="moderate")
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--no-screenshots", action="store_true")
@@ -1838,6 +1876,7 @@ def main() -> None:
         use_source=args.source,
         connect_only=args.connect,
         iterations=args.iterations,
+        duration_secs=args.duration,
         chaos=args.chaos,
         seed=args.seed,
         screenshots=not args.no_screenshots,

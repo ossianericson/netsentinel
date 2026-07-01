@@ -4,7 +4,7 @@ SecurityOverviewPage — full-aggregation Security Audit dashboard.
 Layout
 ──────
   Subtitle
-  Hero CTA card     (scan button + status indicators)
+  Scan Status card  (per-tool last-run state)
   Security Scan KPI row  (high-risk ports | CVE devices | TLS issues | login failures)
   Threat Intel KPI row   (indicators | malicious IPs | blocked domains | last updated)
   Quick-nav pills   (Port Scan → CVE Tracker → TLS & Exposure → Login Test → Threat Intel)
@@ -16,7 +16,6 @@ Layout
 from __future__ import annotations
 
 import time
-from datetime import datetime
 from typing import List, Optional
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
@@ -152,14 +151,6 @@ _AUDIT_SCAN_LABELS: tuple[str, ...] = (
     "Full Device Discovery",
 )
 
-# Ordered sequence for the coordinated "Run Security Audit" button.
-# Only tools that can fire silently (no host input required, or auto-detected)
-# belong here — the audit runs entirely in the background from Security Overview.
-_AUDIT_SEQUENCE: tuple[str, ...] = (
-    "Port Scan (TCP)",        # auto-uses gateway IP
-    "Exposed to Internet",    # no target needed — WAN IP / UPnP check
-)
-
 _STATE_COLORS: dict[str, str] = {
     "fresh":   GREEN,
     "stale":   AMBER,
@@ -183,7 +174,6 @@ class SecurityOverviewPage(QWidget):
 
     navigate_to             = pyqtSignal(str)
     scan_requested          = pyqtSignal()
-    security_scan_requested = pyqtSignal(list)
 
     def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -207,10 +197,6 @@ class SecurityOverviewPage(QWidget):
         # C-3: Scan Status card state (populated by _build_scan_status_card)
         self._scan_registry_data: dict = {}
         self._scan_status_table: Optional[QTableWidget] = None
-
-        # Per-tool audit progress rows (shown only during active audit)
-        self._audit_tool_rows: dict = {}  # label → {"dot": QLabel, "state": QLabel, "finding": QLabel}
-        self._audit_rows_widget: Optional[QWidget] = None
 
         self._build_ui()
 
@@ -248,29 +234,6 @@ class SecurityOverviewPage(QWidget):
         # C-3: Scan Status card at top — one row per audit scan type
         root.addWidget(self._build_scan_status_card())
 
-        root.addWidget(self._build_hero_card())
-
-        # Audit progress strip — shown only during a coordinated audit run
-        self._audit_progress_bar = QFrame()
-        self._audit_progress_bar.setStyleSheet(
-            f"QFrame {{ background:{ACCENT}; border-radius:3px; }}"
-        )
-        self._audit_progress_bar.setFixedHeight(2)
-        self._audit_progress_bar.setVisible(False)
-
-        self._audit_progress_lbl = QLabel("")
-        self._audit_progress_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;"
-        )
-        self._audit_progress_lbl.setVisible(False)
-
-        root.addWidget(self._audit_progress_bar)
-        root.addWidget(self._audit_progress_lbl)
-
-        self._audit_rows_widget = self._build_audit_rows_widget()
-        self._audit_rows_widget.setVisible(False)
-        root.addWidget(self._audit_rows_widget)
-
         scan_hdr = QLabel("Security Scan Findings")
         scan_hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         scan_hdr.setStyleSheet(
@@ -298,7 +261,7 @@ class SecurityOverviewPage(QWidget):
         """Build a compact card showing last-run state for each security scan type."""
         card, lay = _card("Scan Status")
         t = _make_table(["Scan", "Status", "Last Run", "Finding"])
-        t.setMaximumHeight(len(_AUDIT_SCAN_LABELS) * 24 + 28)
+        t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scan_status_table = t
         lay.addWidget(t)
 
@@ -375,229 +338,8 @@ class SecurityOverviewPage(QWidget):
             t.setCellWidget(r, 1, pill)
             t.setItem(r, 2, QTableWidgetItem(_scan_age_str(ts) if ts else "Never"))
             t.setItem(r, 3, QTableWidgetItem(verdict or "—"))
-
-    # ── Hero CTA card ──────────────────────────────────────────────────────────
-
-    def _build_hero_card(self) -> QWidget:
-        hero = QFrame()
-        hero.setObjectName("heroCard")
-        hero.setStyleSheet(
-            f"QFrame#heroCard {{ background:{BG_CARD}; border:1px solid {ACCENT};"
-            f" border-radius:6px; }}"
-        )
-        outer = QHBoxLayout(hero)
-        outer.setContentsMargins(18, 14, 14, 14)
-        outer.setSpacing(20)
-
-        left = QVBoxLayout()
-        left.setSpacing(4)
-
-        title = QLabel("Security Audit")
-        title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        title.setStyleSheet(f"color:{TEXT_PRIMARY}; border:none; background:transparent;")
-
-        body = QLabel(
-            "Run the full security audit to check for open ports, known CVEs, TLS certificate "
-            "issues, and threat intelligence indicators across all discovered devices."
-        )
-        body.setWordWrap(True)
-        body.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:10px; border:none; background:transparent;"
-        )
-
-        left.addWidget(title)
-        left.addWidget(body)
-        left.addStretch()
-
-        status_row = QHBoxLayout()
-        status_row.setSpacing(16)
-        self._last_net_scan_lbl = QLabel("● Network scan: not run")
-        self._last_net_scan_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
-        )
-        self._last_scan_lbl = QLabel("● Threat cache: not loaded")
-        self._last_scan_lbl.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
-        )
-        status_row.addWidget(self._last_net_scan_lbl)
-        status_row.addWidget(self._last_scan_lbl)
-        status_row.addStretch()
-        left.addLayout(status_row)
-
-        self._hero_status_lbl = QLabel("")
-        self._hero_status_lbl.setStyleSheet(
-            f"color:{GREEN}; font-size:9px; border:none; background:transparent;"
-        )
-        self._hero_status_lbl.setVisible(False)
-        left.addWidget(self._hero_status_lbl)
-
-        # Right side: primary audit button + secondary scan button + grade link
-        right = QVBoxLayout()
-        right.setSpacing(6)
-
-        self._audit_btn = QPushButton("▶  Run Security Audit")
-        self._audit_btn.setFixedHeight(40)
-        self._audit_btn.setMinimumWidth(185)
-        self._audit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._audit_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
-            f" font-size:12px; font-weight:bold; padding:0 18px; border-radius:5px; }}"
-            f"QPushButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-        )
-        self._audit_btn.clicked.connect(
-            lambda: self.security_scan_requested.emit(list(_AUDIT_SEQUENCE))
-        )
-
-        self._scan_btn = QPushButton("Scan Network")
-        self._scan_btn.setFixedHeight(28)
-        self._scan_btn.setMinimumWidth(185)
-        self._scan_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._scan_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {BORDER};"
-            f" font-size:10px; padding:0 14px; border-radius:4px; }}"
-            f"QPushButton:hover {{ background:{BG_ALT_ROW}; color:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ background:{BG_ALT_ROW}; color:{ACCENT_DARK}; }}"
-        )
-        self._scan_btn.clicked.connect(self.scan_requested.emit)
-
-        grade_link = QPushButton("See Network Grade →")
-        grade_link.setFlat(True)
-        grade_link.setCursor(Qt.CursorShape.PointingHandCursor)
-        grade_link.setStyleSheet(
-            f"QPushButton {{ color:{TEXT_SECONDARY}; font-size:10px; background:transparent;"
-            f" border:none; padding:2px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
-        )
-        grade_link.clicked.connect(lambda: self.navigate_to.emit("Network Grade"))
-
-        right.addWidget(self._audit_btn)
-
-        # Pre-flight scope toggle
-        self._scope_toggle_btn = QPushButton("▼  Show audit scope")
-        self._scope_toggle_btn.setFlat(True)
-        self._scope_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._scope_toggle_btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:9px; background:transparent;"
-            f" border:none; padding:2px 0; text-align:left; }}"
-            f"QPushButton:hover {{ color:{ACCENT_LITE}; }}"
-            f"QPushButton:pressed {{ color:{ACCENT_DARK}; }}"
-        )
-
-        self._scope_panel = QFrame()
-        self._scope_panel.setStyleSheet(
-            f"QFrame {{ background:{BG_ALT_ROW}; border:1px solid {BORDER};"
-            f" border-radius:3px; padding:4px; }}"
-        )
-        _scope_lay = QVBoxLayout(self._scope_panel)
-        _scope_lay.setContentsMargins(8, 4, 8, 4)
-        _scope_lay.setSpacing(2)
-        for i, tool in enumerate(_AUDIT_SEQUENCE, 1):
-            lbl = QLabel(f"{i}. {tool}")
-            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:9px; border:none;")
-            _scope_lay.addWidget(lbl)
-        self._scope_panel.setVisible(False)
-
-        self._scope_toggle_btn.clicked.connect(self._toggle_scope_panel)
-
-        right.addWidget(self._scope_toggle_btn)
-        right.addWidget(self._scope_panel)
-
-        right.addWidget(self._scan_btn)
-        right.addWidget(grade_link)
-
-        outer.addLayout(left, 1)
-        _right_w = QWidget()
-        _right_w.setLayout(right)
-        _right_w.setStyleSheet("background:transparent;")
-        outer.addWidget(_right_w, 0, Qt.AlignmentFlag.AlignVCenter)
-        return hero
-
-    def _build_audit_rows_widget(self) -> QWidget:
-        """Build the per-tool progress widget shown during a coordinated audit."""
-        container = QWidget()
-        container.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:3px;"
-        )
-        lay = QVBoxLayout(container)
-        lay.setContentsMargins(10, 6, 10, 6)
-        lay.setSpacing(3)
-        hdr = QLabel("Audit in progress")
-        hdr.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        hdr.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; border:none; background:transparent;"
-        )
-        lay.addWidget(hdr)
-        for tool in _AUDIT_SEQUENCE:
-            row_w = QWidget()
-            row_w.setStyleSheet("background:transparent; border:none;")
-            row_lay = QHBoxLayout(row_w)
-            row_lay.setContentsMargins(0, 1, 0, 1)
-            row_lay.setSpacing(6)
-            dot = QLabel("●")
-            dot.setFixedWidth(14)
-            dot.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
-            )
-            name_lbl = QLabel(tool)
-            name_lbl.setStyleSheet(
-                f"color:{TEXT_PRIMARY}; font-size:10px; border:none; background:transparent;"
-            )
-            name_lbl.setMinimumWidth(140)
-            state_lbl = QLabel("Waiting")
-            state_lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:9px; border:none; background:transparent;"
-            )
-            state_lbl.setMinimumWidth(60)
-            finding_lbl = QLabel("")
-            finding_lbl.setStyleSheet(
-                f"color:{TEXT_SECONDARY}; font-size:9px; border:none; background:transparent;"
-            )
-            row_lay.addWidget(dot)
-            row_lay.addWidget(name_lbl)
-            row_lay.addWidget(state_lbl)
-            row_lay.addWidget(finding_lbl)
-            row_lay.addStretch()
-            lay.addWidget(row_w)
-            self._audit_tool_rows[tool] = {
-                "dot": dot, "state": state_lbl, "finding": finding_lbl,
-            }
-        return container
-
-    def _set_tool_row_state(self, tool: str, state: str, finding: str = "") -> None:
-        """Update one per-tool progress row. state: 'waiting'|'running'|'done'|'error'."""
-        row = self._audit_tool_rows.get(tool)
-        if not row:
-            return
-        _dot_color = {
-            "waiting": TEXT_MUTED,
-            "running": ACCENT,
-            "done":    GREEN,
-            "error":   RED,
-        }.get(state, TEXT_MUTED)
-        _state_text = {
-            "waiting": "Waiting",
-            "running": "Running…",
-            "done":    "Done",
-            "error":   "Error",
-        }.get(state, state)
-        row["dot"].setStyleSheet(
-            f"color:{_dot_color}; font-size:9px; border:none; background:transparent;"
-        )
-        row["state"].setText(_state_text)
-        row["state"].setStyleSheet(
-            f"color:{_dot_color}; font-size:9px; border:none; background:transparent;"
-        )
-        if finding:
-            row["finding"].setText(finding)
-
-    def _toggle_scope_panel(self) -> None:
-        currently_shown = not self._scope_panel.isHidden()
-        self._scope_panel.setVisible(not currently_shown)
-        self._scope_toggle_btn.setText(
-            "▲  Hide audit scope" if not currently_shown else "▼  Show audit scope"
-        )
+        # Exact-fit height — no internal scrollbar, all rows always visible.
+        t.setFixedHeight(t.horizontalHeader().height() + t.verticalHeader().length() + 2)
 
     # ── Security Scan KPI row ──────────────────────────────────────────────────
 
@@ -805,7 +547,6 @@ class SecurityOverviewPage(QWidget):
         self._update_threat_kpis()
         self._update_scan_table()
         self._update_threat_table()
-        self._update_status_lbl()
 
     def _load_metricstore_data(self) -> None:
         if self._store is None:
@@ -954,17 +695,6 @@ class SecurityOverviewPage(QWidget):
                 )
                 self._findings_table.setItem(row, col, item)
 
-    def _update_status_lbl(self) -> None:
-        if self._last_loaded is None:
-            self._last_scan_lbl.setText("● Threat cache: not loaded")
-            return
-        dt    = datetime.fromtimestamp(self._last_loaded)
-        color = TEXT_SECONDARY if self._entries else TEXT_MUTED
-        self._last_scan_lbl.setText(f"● Threat cache: {dt.strftime('%H:%M:%S')}")
-        self._last_scan_lbl.setStyleSheet(
-            f"color:{color}; font-size:9px; border:none; background:transparent;"
-        )
-
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def refresh(self) -> None:
@@ -973,26 +703,16 @@ class SecurityOverviewPage(QWidget):
 
     def notify_scan_complete(self) -> None:
         """Called by dashboard after a network device scan finishes."""
-        dt = datetime.now()
-        self._last_net_scan_lbl.setText(f"● Network scan: {dt.strftime('%H:%M:%S')}")
-        self._last_net_scan_lbl.setStyleSheet(
-            f"color:{GREEN}; font-size:9px; border:none; background:transparent;"
-        )
         self._load_metricstore_data()
         self._update_scan_kpis()
         self._update_scan_table()
 
     def on_scan_result(self, result: dict) -> None:
-        """Called by dashboard after M1 device discovery — shows device count in hero."""
+        """Called by dashboard after M1 device discovery."""
         devices = result.get("devices", [])
         n = len(devices)
         if n > 0:
             self._m1_device_count = n
-            label = "device" if n == 1 else "devices"
-            self._hero_status_lbl.setText(
-                f"● {n} {label} discovered — run security scans to check for vulnerabilities"
-            )
-            self._hero_status_lbl.setVisible(True)
 
     def on_port_scan_result(self, result) -> None:
         """Accumulates HIGH-risk open port findings from any port scan result."""
@@ -1017,12 +737,6 @@ class SecurityOverviewPage(QWidget):
         _qs.setValue("security/port_scan_done", True)
         self._update_scan_kpis()
         self._update_scan_table()
-        _n = len(self._port_findings)
-        _s = "s" if _n != 1 else ""
-        self._set_tool_row_state(
-            "Port Scan (TCP)", "done",
-            finding=f"{_n} high-risk port{_s}" if _n else "No high-risk ports",
-        )
 
     def on_cred_result(self, result) -> None:
         """Records risk flags from a credentialed (login test) scan result."""
@@ -1032,53 +746,3 @@ class SecurityOverviewPage(QWidget):
         _qs.setValue("security/any_scan_done", True)
         _qs.setValue("security/cred_scan_done", True)
         self._update_scan_kpis()
-        _n = len(self._cred_flags)
-        _s = "s" if _n != 1 else ""
-        self._set_tool_row_state(
-            "Login Test", "done",
-            finding=f"{_n} risk flag{_s}" if _n else "No risk flags",
-        )
-
-    # ── Audit coordinator public API ──────────────────────────────────────────
-
-    def set_audit_progress(self, current_step: str, step_n: int, total_steps: int) -> None:
-        """Called by dashboard coordinator to show per-tool audit progress."""
-        # Show the rows widget on first step
-        if self._audit_rows_widget is not None:
-            self._audit_rows_widget.setVisible(True)
-        # Reset all to waiting on first step
-        if step_n == 1:
-            for tool in _AUDIT_SEQUENCE:
-                self._set_tool_row_state(tool, "waiting")
-        # Mark previous step done
-        if step_n > 1:
-            prev_idx = step_n - 2
-            if 0 <= prev_idx < len(_AUDIT_SEQUENCE):
-                self._set_tool_row_state(_AUDIT_SEQUENCE[prev_idx], "done")
-        # Mark current step running
-        if current_step in self._audit_tool_rows:
-            self._set_tool_row_state(current_step, "running")
-        # Keep legacy label in sync for any callers that read it
-        self._audit_progress_lbl.setText(
-            f"Step {step_n}/{total_steps}: {current_step}…"
-        )
-        self._audit_btn.setText("⏳  Audit in progress…")
-        self._audit_btn.setEnabled(False)
-
-    def clear_audit_progress(self) -> None:
-        """Called by dashboard coordinator when all scans complete."""
-        # Mark last running row as done
-        for tool, row in self._audit_tool_rows.items():
-            if row["state"].text() == "Running…":
-                self._set_tool_row_state(tool, "done")
-        # Hide rows widget after a short delay (parented timer — RULE-WIN5)
-        _t = QTimer(self)
-        _t.setSingleShot(True)
-        _t.timeout.connect(lambda: (
-            self._audit_rows_widget.setVisible(False)
-            if self._audit_rows_widget else None
-        ))
-        _t.start(3000)
-        self._audit_progress_lbl.setText("")
-        self._audit_btn.setText("▶  Run Security Audit")
-        self._audit_btn.setEnabled(True)

@@ -200,3 +200,35 @@ class TestSettingsPersistence:
         for name in ("Host Down", "New Device"):
             qs.setValue(rule_settings_key(name), False)
         qs.sync()
+
+
+# ---------------------------------------------------------------------------
+# Service Down escalation sub-toggle (Sprint 1)
+# ---------------------------------------------------------------------------
+
+class TestServiceEscalationToggle:
+    def test_checkbox_exists_and_defaults_checked(self):
+        """'Diagnose why' defaults to True once SERVICE_DOWN is enabled (opt-out, not opt-in)."""
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.remove("notif/service_escalation_enabled")
+        qs.sync()
+
+        page = _make_page()
+        assert hasattr(page, "_chk_service_escalation")
+        assert page._chk_service_escalation.isChecked() is True
+
+    def test_disabling_toggle_persists_across_reload(self):
+        from PyQt6.QtCore import QSettings
+        qs = QSettings("NetSentinel", "NetSentinel")
+
+        page_a = _make_page()
+        page_a._chk_service_escalation.setChecked(False)
+        page_a._save()
+
+        page_b = _make_page()
+        assert page_b._chk_service_escalation.isChecked() is False
+
+        # Clean up.
+        qs.setValue("notif/service_escalation_enabled", True)
+        qs.sync()

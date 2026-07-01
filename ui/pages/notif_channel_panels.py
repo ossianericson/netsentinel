@@ -201,6 +201,8 @@ _ALERT_RULE_DEFS = [
     ("Cert Expired",  "CERT_EXPIRED",   "Fires when a TLS certificate has already expired"),
     ("Host Flapping", "FLAP",           "Fires when a host oscillates between UP and DOWN repeatedly"),
     ("Service Down",  "SERVICE_DOWN",   "Fires when a monitored TCP service stops responding"),
+    ("Baseline Speed Drop", "BASELINE_DROP",
+     "Fires when a scheduled speed test shows a severe drop vs. your recent typical speed"),
 ]
 
 
@@ -325,7 +327,7 @@ class _NotifChannelsMixin:
         grid.setVerticalSpacing(6)
         for row_idx, (name, _rule_type, description) in enumerate(_ALERT_RULE_DEFS):
             chk = QCheckBox(name)
-            chk.setFixedWidth(140)
+            chk.setFixedWidth(175)
             chk.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
             chk.stateChanged.connect(self._save)
             desc_lbl = QLabel(description)
@@ -334,6 +336,25 @@ class _NotifChannelsMixin:
             grid.addWidget(desc_lbl, row_idx, 1)
             self._rule_checkboxes[name] = chk
         bl.addLayout(grid)
+
+        # ── Service Down sub-toggle — background root-cause diagnosis ──────────
+        esc_row = QHBoxLayout()
+        esc_row.setContentsMargins(20, 0, 0, 0)
+        esc_row.setSpacing(8)
+        self._chk_service_escalation = QCheckBox("Diagnose why (recommended)")
+        self._chk_service_escalation.setStyleSheet(
+            f"QCheckBox{{color:{TEXT_SECONDARY};font-size:10px;}}"
+        )
+        self._chk_service_escalation.stateChanged.connect(self._save)
+        esc_row.addWidget(self._chk_service_escalation)
+        esc_desc = QLabel(
+            "Runs a background diagnostic and explains why (filtered by a firewall, "
+            "local network issue, or a real outage)"
+        )
+        esc_desc.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; border:none;")
+        esc_row.addWidget(esc_desc, 1)
+        bl.addLayout(esc_row)
+
         return card
 
     def _update_rules_badge(self) -> None:

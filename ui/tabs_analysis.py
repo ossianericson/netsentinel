@@ -192,6 +192,7 @@ class _AnalysisTabsMixin:
             pass  # non-fatal
         try:
             from modules.log_chart import build_figure
+            from ui.dashboard import _make_chart_window
             self._btn_log_chart.setEnabled(False)
             self._log_status_lbl.setText("Rendering chart…")
             fig = build_figure(self._log_chart_summary)

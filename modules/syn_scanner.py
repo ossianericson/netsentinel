@@ -24,11 +24,15 @@ filtered, so we mark those ports as "open|filtered" (matching Nmap convention).
 
 from __future__ import annotations
 
+import concurrent.futures
 import random
+import socket
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
+
+from modules.port_scanner import probe_service
 
 # Top-1000 most common ports (subset shown; full list loaded from data below)
 # Source: derived from nmap-services frequency ordering
@@ -80,10 +84,12 @@ TOP_1000_PORTS: List[int] = sorted(set(_TOP_1000))
 
 @dataclass
 class SYNPortResult:
-    port:    int
-    state:   str   # "open" | "closed" | "filtered" | "open|filtered"
-    proto:   str   # "tcp" | "udp"
-    service: str = ""
+    port:            int
+    state:           str   # "open" | "closed" | "filtered" | "open|filtered"
+    proto:           str   # "tcp" | "udp"
+    service:         str = ""
+    banner:          str = ""   # e.g. "SSH-2.0-OpenSSH_8.9p1"
+    service_version: str = ""   # e.g. "OpenSSH 8.9p1", "Apache/2.4.54"
 
 
 @dataclass
@@ -130,6 +136,35 @@ _HIGH_RISK = {
     23, 445, 1883, 3389, 5900, 7547, 4444, 6379, 11211,
     27017, 5432, 3306, 1521, 2375, 5985, 5986, 7001,
 }
+
+
+def _grab_banners(open_ports: List["SYNPortResult"], ip: str, timeout: float) -> None:
+    """
+    Secondary pass: for each SYN-confirmed open port, complete a short-lived
+    TCP connect and reuse modules/port_scanner.py's protocol-aware
+    probe_service() to fill in banner/service_version.
+
+    A SYN scan alone cannot banner-grab (it never completes the handshake),
+    so this brief connect-and-probe step is what makes "Port Scan (TCP)"
+    competitive with the no-admin TCP-connect scanner's banner output.
+    Any per-port failure is swallowed — the port is already confirmed open
+    from the SYN response, so a failed probe must not affect scan results.
+    """
+    _t = min(timeout, 1.0)
+
+    def _probe(p: "SYNPortResult") -> None:
+        try:
+            with socket.create_connection((ip, p.port), timeout=_t) as sock:
+                banner, version = probe_service(sock, p.port, ip, _t)
+                p.banner = banner
+                p.service_version = version
+        except Exception:
+            pass  # port confirmed open via SYN-ACK; a failed banner probe is non-fatal
+
+    if not open_ports:
+        return
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(20, len(open_ports))) as ex:
+        list(ex.map(_probe, open_ports))
 
 
 # ── SYN scan ─────────────────────────────────────────────────────────────────
@@ -259,6 +294,9 @@ def syn_scan(
             closed_count += 1
 
     open_ports.sort(key=lambda p: p.port)
+    if progress_cb and open_ports:
+        progress_cb(f"Grabbing banners on {len(open_ports)} open port(s)…")
+    _grab_banners(open_ports, ip=result.ip, timeout=timeout)
     result.open_ports   = open_ports
     result.filtered     = filtered_count
     result.closed       = closed_count

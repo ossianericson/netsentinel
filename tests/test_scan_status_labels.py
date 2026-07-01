@@ -175,7 +175,7 @@ class TestStatusLabelAfterSynResult(unittest.TestCase):
                 )
                 # Attributes expected by _on_syn_result
                 self._syn_status = QLabel()
-                self._recon_syn_table = QTableWidget(0, 5)
+                self._recon_syn_table = QTableWidget(0, 7)
                 self._syn_stack = QStackedWidget()
                 self._syn_stack.addWidget(QLabel("empty"))
                 self._syn_stack.addWidget(QLabel("table"))

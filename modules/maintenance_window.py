@@ -45,6 +45,12 @@ class MaintenanceWindow:
     end_ts      : Unix timestamp — window closes at this time
     created_ts  : when the window was created (for audit log)
     active      : True = enabled; False = manually disabled without deletion
+    daily_start_hour : 0-23 local wall-clock hour — set together with
+                       daily_end_hour to make this a RECURRING daily window
+                       (e.g. nightly quiet hours) instead of a one-off absolute
+                       start_ts/end_ts window.  None (default) = not recurring.
+    daily_end_hour   : 0-23 local wall-clock hour, exclusive end of the daily
+                       window.  None (default) = not recurring.
     """
     label:      str
     start_ts:   int   # UTC Unix epoch seconds — MUST be stored as UTC, not local time
@@ -53,20 +59,44 @@ class MaintenanceWindow:
     id:         str        = field(default_factory=lambda: str(uuid.uuid4()))
     created_ts: int        = field(default_factory=lambda: int(time.time()))
     active:     bool       = True
+    daily_start_hour: Optional[int] = None  # local hour 0-23 — recurring mode only
+    daily_end_hour:   Optional[int] = None  # local hour 0-23 — recurring mode only
 
     @property
     def is_currently_active(self) -> bool:
         """True if this window is enabled and right now falls inside the window.
 
-        Comparison is UTC-vs-UTC: time.time() always returns UTC epoch seconds,
-        and start_ts/end_ts must also be UTC epoch seconds.  The UI layer must
-        convert local QDateTimeEdit values with:
-            dt.replace(tzinfo=timezone.utc).timestamp()
-        or equivalent — never with naive datetime.timestamp() which interprets
-        the value in the local timezone and shifts by the UTC offset.
+        Two modes:
+
+        1. Absolute (default) — comparison is UTC-vs-UTC: time.time() always
+           returns UTC epoch seconds, and start_ts/end_ts must also be UTC
+           epoch seconds.  The UI layer must convert local QDateTimeEdit
+           values with:
+               dt.replace(tzinfo=timezone.utc).timestamp()
+           or equivalent — never with naive datetime.timestamp() which
+           interprets the value in the local timezone and shifts by the UTC
+           offset.
+
+        2. Recurring daily (when daily_start_hour/daily_end_hour are both
+           set) — deliberately checked against LOCAL wall-clock hour via
+           time.localtime(), NOT UTC.  This is an intentional, isolated
+           exception to the UTC rule above: quiet hours ("don't page me
+           between 11pm and 7am") are inherently a local-time concept tied to
+           when the user is asleep, not a fixed instant in UTC.  Do not
+           "fix" this back to time.gmtime()/UTC — that would make quiet
+           hours drift with DST and make the feature useless for its actual
+           purpose.  start_ts/end_ts are ignored entirely in this mode.
         """
         if not self.active:
             return False
+        if self.daily_start_hour is not None and self.daily_end_hour is not None:
+            hour = time.localtime().tm_hour
+            start, end = self.daily_start_hour, self.daily_end_hour
+            if start <= end:
+                # Same-day window, e.g. 09:00-17:00 -> [9, 17)
+                return start <= hour < end
+            # Overnight wraparound, e.g. 23:00-07:00 -> hours 23,0..6
+            return hour >= start or hour < end
         now = int(time.time())
         return self.start_ts <= now <= self.end_ts
 
@@ -79,6 +109,8 @@ class MaintenanceWindow:
 
     @classmethod
     def from_dict(cls, d: dict) -> "MaintenanceWindow":
+        _daily_start = d.get("daily_start_hour")
+        _daily_end = d.get("daily_end_hour")
         return cls(
             label=d.get("label", ""),
             start_ts=int(d.get("start_ts", 0)),
@@ -87,6 +119,8 @@ class MaintenanceWindow:
             id=d.get("id", str(uuid.uuid4())),
             created_ts=int(d.get("created_ts", int(time.time()))),
             active=bool(d.get("active", True)),
+            daily_start_hour=int(_daily_start) if _daily_start is not None else None,
+            daily_end_hour=int(_daily_end) if _daily_end is not None else None,
         )
 
 

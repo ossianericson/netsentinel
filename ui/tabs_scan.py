@@ -388,11 +388,11 @@ class _ScanTabsMixin:
         em_btn.setObjectName("btnScan")
         em_btn.setFixedWidth(200)
         em_btn.clicked.connect(self._start_full_scan)
-        em_btn.setVisible(is_npcap_available())
         evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
         evl.addSpacing(12)
         evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         evl.addStretch()
+        em_btn.setVisible(is_npcap_available())
 
         # ── Page 1: content ───────────────────────────────────────────────────
         content = QWidget()
@@ -484,11 +484,11 @@ class _ScanTabsMixin:
         em_btn.setObjectName("btnScan")
         em_btn.setFixedWidth(220)
         em_btn.clicked.connect(self._start_full_scan)
-        em_btn.setVisible(is_npcap_available())
         evl.addWidget(em_desc, alignment=Qt.AlignmentFlag.AlignCenter)
         evl.addSpacing(12)
         evl.addWidget(em_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         evl.addStretch()
+        em_btn.setVisible(is_npcap_available())
 
         # ── Page 1: content ───────────────────────────────────────────────────
         content = QWidget()

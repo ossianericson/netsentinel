@@ -891,12 +891,24 @@ _FEATURES: list[dict] = [
         "icon": "⌂",
         "name": "Tools & Wake-on-LAN",
         "desc": (
-            "Network utility tools including Wake-on-LAN (send magic packet by MAC address), "
-            "ping sweep, and per-host port check."
+            "Wake-on-LAN (send magic packet by MAC address) and a New Device Alerts "
+            "baseline diff that highlights devices not seen before."
         ),
         "page": "Tools & Wake-on-LAN",
         "requires": None,
-        "tags": ["wake on lan", "wol", "magic packet", "mac", "tool", "ping", "port check", "sweep"],
+        "tags": ["wake on lan", "wol", "magic packet", "mac", "tool", "baseline", "new device"],
+    },
+    {
+        "group": "Diagnostics",
+        "icon": "⬡",
+        "name": "Port Scanner",
+        "desc": (
+            "TCP connect-scan of common ports on any host. No admin required — backs the "
+            "right-click Port Scan action on Devices and Network Info tables."
+        ),
+        "page": "Port Scanner",
+        "requires": None,
+        "tags": ["port scan", "tcp", "connect scan", "banner", "version", "service"],
     },
     # ── Monitoring (missing entries) ───────────────────────────────────────────
     {

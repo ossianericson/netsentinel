@@ -190,6 +190,7 @@ class NotificationsPage(
         qs.setValue("notif/escalation_wait",     self._spin_escalation_wait.value())
         qs.setValue("notif/escalation_channel",  self._combo_escalation_channel.currentText())
         qs.setValue("notif/escalation_rules",    self._txt_escalation_rules.text().strip())
+        qs.setValue("notif/service_escalation_enabled", self._chk_service_escalation.isChecked())
         any_rule_on = False
         for name, chk in self._rule_checkboxes.items():
             qs.setValue(_rule_key(name), chk.isChecked())
@@ -241,6 +242,9 @@ class NotificationsPage(
             if idx >= 0:
                 self._combo_escalation_channel.setCurrentIndex(idx)
             self._txt_escalation_rules.setText(qs.value("notif/escalation_rules", ""))
+            self._chk_service_escalation.setChecked(
+                qs.value("notif/service_escalation_enabled", True, type=bool)
+            )
             for name, chk in self._rule_checkboxes.items():
                 chk.setChecked(qs.value(_rule_key(name), False, type=bool))
         finally:
