@@ -250,6 +250,45 @@ class TestTrackerResult:
 
 # ── set_rules / get_rules ─────────────────────────────────────────────────────
 
+class TestMaintenanceSuppressionRecording:
+    """Sprint 5: MaintenanceWindowManager.record_suppression() was dead plumbing
+    (never called). AlertEngine must now call an injected suppression recorder
+    whenever an alert is dropped because a maintenance window covers the host."""
+
+    def test_suppression_recorder_called_when_alert_suppressed(self):
+        eng = _engine_with(AlertRule("High RTT", "RTT_THRESHOLD", threshold_ms=100.0, cooldown_s=0))
+        eng.set_maintenance_checker(lambda host: "Nightly Quiet Hours")
+        calls = []
+        eng.set_suppression_recorder(
+            lambda window_label, host, rule_name, severity, message: calls.append(
+                (window_label, host, rule_name, severity, message)
+            )
+        )
+        fired = eng.evaluate_cycle(_cycle({"8.8.8.8": "DEGRADED"}, {"8.8.8.8": 250.0}))
+        assert fired == []
+        assert len(calls) == 1
+        window_label, host, rule_name, severity, message = calls[0]
+        assert window_label == "Nightly Quiet Hours"
+        assert host == "8.8.8.8"
+        assert rule_name == "High RTT"
+
+    def test_suppression_recorder_not_called_when_not_suppressed(self):
+        eng = _engine_with(AlertRule("High RTT", "RTT_THRESHOLD", threshold_ms=100.0, cooldown_s=0))
+        eng.set_maintenance_checker(lambda host: None)  # no window covers this host
+        calls = []
+        eng.set_suppression_recorder(lambda *a: calls.append(a))
+        fired = eng.evaluate_cycle(_cycle({"8.8.8.8": "DEGRADED"}, {"8.8.8.8": 250.0}))
+        assert len(fired) == 1
+        assert calls == []
+
+    def test_no_recorder_set_does_not_raise(self):
+        """Default (no recorder injected) must behave exactly as before."""
+        eng = _engine_with(AlertRule("High RTT", "RTT_THRESHOLD", threshold_ms=100.0, cooldown_s=0))
+        eng.set_maintenance_checker(lambda host: "Some Window")
+        fired = eng.evaluate_cycle(_cycle({"8.8.8.8": "DEGRADED"}, {"8.8.8.8": 250.0}))
+        assert fired == []
+
+
 class TestSetGetRules:
     def test_set_rules_replaces_existing(self):
         eng = AlertEngine()

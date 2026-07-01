@@ -811,6 +811,22 @@ def main():
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
 
+    # Sprint 5 — wire the previously-dead record_suppression() plumbing so
+    # suppressed alerts actually appear in the maintenance suppression log.
+    # AlertEngine only knows the window's label (from is_suppressed), not its
+    # id, so we look the matching window up by label to pass a real window_id.
+    def _record_alert_suppression(window_label, host, rule_name, severity, message):
+        window_id = ""
+        for _w in maint_manager.get_windows():
+            if _w.label == window_label:
+                window_id = _w.id
+                break
+        maint_manager.record_suppression(
+            window_id, window_label, host, rule_name, severity, message
+        )
+
+    alerts.set_suppression_recorder(_record_alert_suppression)
+
     # Pre-warm tplinkrouterc6u on the main STA thread before any plugin workers
     # start.  tplinkrouterc6u.common.encryption uses Windows COM-based crypto;
     # importing it from a background QThread raises RPC_E_WRONG_THREAD (0x8001010d).
@@ -857,6 +873,11 @@ def main():
     scheduled_speedtest_worker = ProactiveProbeWorker(
         probe=lambda: run_scheduled_speed_test(store),
         interval_s=_speedtest_interval_h * 3600,
+    )
+    # Sprint 5 — respect maintenance windows / quiet hours for the "speedtest"
+    # host key (same convention used by evaluate_baseline_metrics' cooldown key).
+    scheduled_speedtest_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("speedtest") is not None
     )
 
     # REST API worker — only starts when user has enabled it in Settings

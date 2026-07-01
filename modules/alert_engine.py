@@ -56,7 +56,9 @@ from typing import Callable, Dict, List, Optional
 
 from modules.alert_types import AlertFired, AlertRule, RULE_TYPES  # noqa: F401 — re-exported
 from modules.metric_store import MetricStore
-from modules.alert_suppressor import EscalationPolicy, _default_rules, rule_settings_key
+from modules.alert_suppressor import (
+    EscalationPolicy, _default_rules, rule_settings_key, _MaintenanceSuppressionMixin,
+)
 from modules.alert_engine_checks import _AlertChecksMixin
 from modules.speed_drop_detector import RESTART_CHECKLIST
 
@@ -94,7 +96,7 @@ def _cta_for_rule(rule_type: str, host: str) -> tuple[Optional[str], Optional[st
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
-class AlertEngine(_AlertChecksMixin):
+class AlertEngine(_AlertChecksMixin, _MaintenanceSuppressionMixin):
     """
     Stateless rule evaluator. Call the appropriate evaluate_* method after
     each monitoring cycle or scan result.
@@ -130,6 +132,8 @@ class AlertEngine(_AlertChecksMixin):
         self._dependency_map: Dict[str, List[str]] = {}
         # optional callable(host) → window_label|None — for maintenance suppression
         self._maintenance_checker: Optional[Callable[[str], Optional[str]]] = None
+        # optional callable(label, host, rule_name, severity, msg) — logs drops (record_suppression)
+        self._suppression_recorder: Optional[Callable[[str, str, str, str, str], None]] = None
         # escalation policies
         self._escalation_policies: List[EscalationPolicy] = []
         # boot-time warmup — suppress all alerts until this timestamp
@@ -174,16 +178,7 @@ class AlertEngine(_AlertChecksMixin):
         """Remove all registered parent/child dependencies."""
         self._dependency_map.clear()
 
-    def set_maintenance_checker(
-        self, checker: Optional[Callable[[str], Optional[str]]]
-    ) -> None:
-        """
-        Inject a callable(host) → window_label|None from MaintenanceWindowManager.
-        When set, any alert whose host is currently under maintenance is silently
-        dropped (not dispatched to on_alert).
-        Pass None to disable maintenance suppression.
-        """
-        self._maintenance_checker = checker
+    # set_maintenance_checker / set_suppression_recorder — see _MaintenanceSuppressionMixin
 
     def set_warmup_period(self, seconds: float) -> None:
         """Suppress all alert firings for *seconds* after this call.
@@ -510,11 +505,9 @@ class AlertEngine(_AlertChecksMixin):
         # Boot warmup — suppress all firings during the initial quiet period
         if time.time() < self._suppress_until:
             return None
-        # Maintenance suppression — silently drop when the host is in a window
-        if self._maintenance_checker is not None:
-            window_label = self._maintenance_checker(host)
-            if window_label is not None:
-                return None
+        # Maintenance suppression — drop when the host is in a window, but log it
+        if self._maintenance_suppresses(host, rule.name, severity, message):
+            return None
         key = f"{rule.name}::{host}"
         last = self._last_fired.get(key)
         if last is not None and now - last < rule.cooldown_s:

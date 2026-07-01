@@ -91,6 +91,63 @@ def test_error_emitted_when_probe_raises():
     _cleanup(w)
 
 
+def test_maintenance_checker_skips_probe_when_suppressed():
+    """Sprint 5: set_maintenance_checker(lambda: True) must skip the probe call
+    entirely — no probe_done, no error, counter never increments."""
+    from workers.proactive_probe_worker import ProactiveProbeWorker
+
+    counter = {"n": 0}
+
+    def _probe():
+        counter["n"] += 1
+        return "ran"
+
+    results = []
+    errors = []
+    w = ProactiveProbeWorker(probe=_probe, interval_s=60)
+    w.set_maintenance_checker(lambda: True)  # always suppressed
+    w.probe_done.connect(results.append)
+    w.error.connect(errors.append)
+    w.start()
+
+    app = QApplication.instance()
+    deadline = time.time() + 1.5
+    while time.time() < deadline:
+        if app:
+            app.processEvents()
+        time.sleep(0.05)
+
+    w.stop()
+    w.wait(3000)
+    assert counter["n"] == 0, "probe was called despite an active maintenance checker"
+    assert results == []
+    assert errors == []
+    _cleanup(w)
+
+
+def test_maintenance_checker_none_runs_probe_normally():
+    """Passing None (the default) must not change existing behaviour."""
+    from workers.proactive_probe_worker import ProactiveProbeWorker
+
+    results = []
+    w = ProactiveProbeWorker(probe=lambda: "ok", interval_s=60)
+    w.set_maintenance_checker(None)
+    w.probe_done.connect(results.append)
+    w.start()
+
+    app = QApplication.instance()
+    deadline = time.time() + 3
+    while not results and time.time() < deadline:
+        if app:
+            app.processEvents()
+        time.sleep(0.05)
+
+    w.stop()
+    w.wait(3000)
+    assert results == ["ok"]
+    _cleanup(w)
+
+
 def test_instantiated_in_app_py_for_scheduled_speed_test():
     """Sprint 3 wires this worker in for scheduled speed tests (grep-verified)."""
     from pathlib import Path

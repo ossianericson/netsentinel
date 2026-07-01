@@ -9,11 +9,14 @@ Covers:
   - to_json / load_from_json: round-trip serialisation
   - purge_expired
   - AlertEngine integration: set_maintenance_checker suppresses _fire_if_cooled
+  - Recurring daily windows (Sprint 5): daily_start_hour/daily_end_hour, overnight
+    wraparound, same-day windows, backward-compat JSON load
 """
 from __future__ import annotations
 
 import time
 import unittest
+from unittest.mock import patch
 
 from modules.maintenance_window import MaintenanceWindow, MaintenanceWindowManager
 
@@ -81,6 +84,116 @@ class TestMaintenanceWindow(unittest.TestCase):
         self.assertEqual(w2.end_ts, w.end_ts)
         self.assertEqual(w2.active, w.active)
         self.assertEqual(w2.id, w.id)
+
+
+def _mk_localtime(hour):
+    """Build a fake time.struct_time-like object with only tm_hour meaningful."""
+    return time.struct_time((2026, 7, 1, hour, 0, 0, 2, 182, 0))
+
+
+class TestRecurringDailyWindow(unittest.TestCase):
+    """Sprint 5: daily_start_hour/daily_end_hour recurring quiet-hours windows."""
+
+    def _recurring_window(self, daily_start_hour, daily_end_hour, hosts=None):
+        # start_ts/end_ts are irrelevant in recurring mode but must still be
+        # valid ints (dataclass requires them) — use an arbitrary past window.
+        return MaintenanceWindow(
+            label="Nightly Quiet Hours",
+            hosts=hosts or [],
+            start_ts=0,
+            end_ts=0,
+            daily_start_hour=daily_start_hour,
+            daily_end_hour=daily_end_hour,
+        )
+
+    def test_non_recurring_fields_default_to_none(self):
+        w = _active_window()
+        self.assertIsNone(w.daily_start_hour)
+        self.assertIsNone(w.daily_end_hour)
+
+    def test_overnight_wraparound_covers_late_night_hour(self):
+        w = self._recurring_window(23, 7)
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(23)):
+            self.assertTrue(w.is_currently_active)
+
+    def test_overnight_wraparound_covers_early_morning_hour(self):
+        w = self._recurring_window(23, 7)
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(6)):
+            self.assertTrue(w.is_currently_active)
+
+    def test_overnight_wraparound_covers_midnight(self):
+        w = self._recurring_window(23, 7)
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(0)):
+            self.assertTrue(w.is_currently_active)
+
+    def test_overnight_wraparound_excludes_midday(self):
+        w = self._recurring_window(23, 7)
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(12)):
+            self.assertFalse(w.is_currently_active)
+
+    def test_overnight_wraparound_excludes_end_hour_boundary(self):
+        # end hour is exclusive: [start, end) with wraparound
+        w = self._recurring_window(23, 7)
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(7)):
+            self.assertFalse(w.is_currently_active)
+
+    def test_same_day_recurring_window_covers_hour(self):
+        w = self._recurring_window(9, 17)
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(12)):
+            self.assertTrue(w.is_currently_active)
+
+    def test_same_day_recurring_window_excludes_hour(self):
+        w = self._recurring_window(9, 17)
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(20)):
+            self.assertFalse(w.is_currently_active)
+
+    def test_recurring_window_ignores_absolute_start_end(self):
+        """Even if start_ts/end_ts would say 'expired', recurring mode ignores them."""
+        now = int(time.time())
+        w = MaintenanceWindow(
+            label="Nightly",
+            start_ts=now - 999999,
+            end_ts=now - 999998,   # long expired, if absolute logic were used
+            daily_start_hour=23,
+            daily_end_hour=7,
+        )
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(23)):
+            self.assertTrue(w.is_currently_active)
+
+    def test_recurring_window_respects_active_flag(self):
+        w = self._recurring_window(23, 7)
+        w.active = False
+        with patch("modules.maintenance_window.time.localtime", return_value=_mk_localtime(23)):
+            self.assertFalse(w.is_currently_active)
+
+    def test_non_recurring_window_unaffected_by_new_fields(self):
+        """A plain absolute window with daily_* left at None must behave exactly
+        as before — no regression from adding the new fields."""
+        w = _active_window()
+        self.assertTrue(w.is_currently_active)
+        expired = _expired_window()
+        self.assertFalse(expired.is_currently_active)
+
+    def test_json_roundtrip_preserves_daily_fields(self):
+        w = self._recurring_window(23, 7)
+        d = w.to_dict()
+        w2 = MaintenanceWindow.from_dict(d)
+        self.assertEqual(w2.daily_start_hour, 23)
+        self.assertEqual(w2.daily_end_hour, 7)
+
+    def test_backward_compat_load_missing_daily_fields_defaults_none(self):
+        """Old JSON blobs saved before Sprint 5 have no daily_* keys at all."""
+        old_blob = {
+            "label": "Old Window",
+            "start_ts": int(time.time()) - 60,
+            "end_ts": int(time.time()) + 3600,
+            "hosts": [],
+            "active": True,
+        }
+        w = MaintenanceWindow.from_dict(old_blob)
+        self.assertIsNone(w.daily_start_hour)
+        self.assertIsNone(w.daily_end_hour)
+        self.assertTrue(w.is_currently_active)
 
 
 class TestManagerCrud(unittest.TestCase):

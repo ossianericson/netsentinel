@@ -12,7 +12,7 @@ Inert scaffolding as of Sprint 2 — nothing in app.py instantiates this yet.
 from __future__ import annotations
 
 import time
-from typing import Callable
+from typing import Callable, Optional
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
@@ -46,11 +46,22 @@ class ProactiveProbeWorker(QThread):
         self._interval_s = interval_s
         self._running    = False
         self._force_now  = False
+        self._maintenance_checker: Optional[Callable[[], bool]] = None
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_interval(self, interval_s: int) -> None:
         self._interval_s = interval_s
+
+    def set_maintenance_checker(self, checker: Optional[Callable[[], bool]]) -> None:
+        """
+        Inject a callable() -> bool from the caller (e.g. a MaintenanceWindowManager
+        quiet-hours lambda).  When set and it returns True, the probe is skipped
+        entirely for that iteration — no probe_done, no error — mirroring
+        AlertEngine.set_maintenance_checker's naming/pattern.
+        Pass None to disable (probe always runs; this is the default).
+        """
+        self._maintenance_checker = checker
 
     def trigger_now(self) -> None:
         """Request an immediate probe run, bypassing the remaining wait."""
@@ -65,11 +76,15 @@ class ProactiveProbeWorker(QThread):
         self._running = True
         while self._running:
             self._force_now = False
-            try:
-                result = self._probe()
-                self.probe_done.emit(result)
-            except Exception as exc:
-                self.error.emit(str(exc))
+            suppressed = (
+                self._maintenance_checker is not None and self._maintenance_checker()
+            )
+            if not suppressed:
+                try:
+                    result = self._probe()
+                    self.probe_done.emit(result)
+                except Exception as exc:
+                    self.error.emit(str(exc))
 
             # Interruptible sleep — check every second for stop/force signals
             for _ in range(self._interval_s):
