@@ -99,6 +99,7 @@ def _smoke_test() -> None:
         "modules.speed_tester_servers",
         "modules.firewall_rules",
         "modules.alert_engine",
+        "modules.service_escalation",
         "modules.notification_router",
         "modules.utils",
         "modules.maintenance_window",
@@ -347,7 +348,7 @@ def _wire_notifications(window, alerts, notif_router, maint_manager, report_work
     )
 
 
-def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
+def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router):
     avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._inventory_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
@@ -368,11 +369,73 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts):
     window._service_page.services_changed.connect(svc_worker.set_targets)
     window._service_page.check_now_requested.connect(svc_worker.check_now)
 
+    # ── Sprint 1: SERVICE_DOWN escalation ──────────────────────────────────────
+    # The plain "unreachable" toast above fires immediately. When escalation is
+    # enabled, run DiagnosticEngine classification in the background (via the
+    # existing ServiceDiagnosticsWorker, RULE 4 — never block the main thread)
+    # and dispatch a richer follow-up on the SAME rule_type=SERVICE_DOWN a few
+    # seconds later, explaining *why* (filtered / local / real outage).
+    import time as _time
+    from PyQt6.QtCore import QSettings
+    from modules.alert_types import AlertFired
+    from modules.service_escalation import (
+        ServiceEscalationTracker, layer_to_message, parse_service_key,
+        to_alert_severity,
+    )
+    from workers.service_diagnostics_worker import ServiceDiagnosticsWorker
+
+    _escalation_tracker = ServiceEscalationTracker()
+    _escalation_workers: list = []  # keep QThread refs alive until they finish
+
+    def _escalation_enabled() -> bool:
+        return QSettings("NetSentinel", "NetSentinel").value(
+            "notif/service_escalation_enabled", True, type=bool
+        )
+
+    def _run_service_escalation(alert) -> None:
+        host, port = parse_service_key(alert.host)
+        if not host or not _escalation_tracker.should_escalate(host, port):
+            return
+        _escalation_tracker.mark_escalated(host, port)
+
+        worker = ServiceDiagnosticsWorker(custom_host=host)
+
+        def _cleanup() -> None:
+            if worker in _escalation_workers:
+                _escalation_workers.remove(worker)
+            worker.deleteLater()
+
+        def _on_result(result, _rule_name=alert.rule_name, _key=alert.host) -> None:
+            ui_severity, message = layer_to_message(result.failure_layer, host, port)
+            escalation = AlertFired(
+                rule_name=_rule_name,
+                rule_type="SERVICE_DOWN",
+                host=_key,
+                message=message,
+                severity=to_alert_severity(ui_severity),
+                ts=int(_time.time()),
+                cta_page="Service Diagnostics",
+                cta_filter=host,
+            )
+            notif_router.dispatch(escalation)  # dispatch() already invokes the toast callback
+            window._home_page.on_alert(escalation)
+            _cleanup()
+
+        def _on_error(_msg: str) -> None:
+            _cleanup()  # non-fatal — the plain SERVICE_DOWN toast already fired
+
+        worker.result_ready.connect(_on_result)
+        worker.error.connect(_on_error)
+        _escalation_workers.append(worker)
+        worker.start()
+
     def _on_svc_check(results: list) -> None:
         fired = alerts.evaluate_service_checks(results)
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
+            if a.rule_type == "SERVICE_DOWN" and not a.is_resolution and _escalation_enabled():
+                _run_service_escalation(a)
         window._overview_page.on_svc_done(results)
 
     svc_worker.check_done.connect(_on_svc_check)
@@ -747,7 +810,7 @@ def main():
 
     _wire_logging(window, passive_observer_worker, snmp_trap_worker, syslog_worker)
     _wire_notifications(window, alerts, notif_router, maint_manager, report_worker)
-    _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts)
+    _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router)
     _wire_cross_page(window)
     _wire_scan_ctas(window)
 
