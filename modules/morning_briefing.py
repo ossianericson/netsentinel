@@ -13,9 +13,10 @@ Architecture rules
 """
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
+
+from modules.proactive_digest import DigestConfig, is_due
 
 # ── QSettings keys ────────────────────────────────────────────────────────────
 ENABLED_KEY   = "briefing/enabled"
@@ -23,6 +24,8 @@ HOUR_KEY      = "briefing/hour"          # 0-23, default 8
 LAST_SENT_KEY = "briefing/last_sent_day"
 
 _DEFAULT_HOUR = 8
+
+_DIGEST_CONFIG = DigestConfig(ENABLED_KEY, HOUR_KEY, LAST_SENT_KEY, _DEFAULT_HOUR)
 
 
 @dataclass
@@ -38,19 +41,10 @@ def check_and_build_briefing(
     settings_set: Callable[[str, object], None],
 ) -> Optional[BriefingResult]:
     """Return a ``BriefingResult`` if the daily briefing is due, else None."""
-    if not _truthy(settings_get(ENABLED_KEY)):
-        return None
-
-    today_str = time.strftime("%Y-%m-%d", time.localtime())
-    if settings_get(LAST_SENT_KEY) == today_str:
-        return None
-
-    configured_hour = _int_val(settings_get(HOUR_KEY), _DEFAULT_HOUR)
-    if time.localtime().tm_hour < configured_hour:
+    if not is_due(_DIGEST_CONFIG, settings_get, settings_set):
         return None
 
     bullets = build_briefing_bullets(store)
-    settings_set(LAST_SENT_KEY, today_str)
     return BriefingResult(headline="Your morning briefing", bullets=bullets)
 
 
@@ -108,22 +102,3 @@ def _quick_stat_bullet(store) -> str:
         dl = rows[0].download_mbps or 0.0
         return f"Last speed test: {dl:.0f} Mbps download."
     return "No speed test run in the last 24 hours."
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _truthy(val: object) -> bool:
-    if isinstance(val, bool):
-        return val
-    if isinstance(val, str):
-        return val.lower() in ("true", "1", "yes")
-    return bool(val)
-
-
-def _int_val(val: object, default: int) -> int:
-    if not isinstance(val, (int, float, str)):
-        return default
-    try:
-        return int(val)
-    except (TypeError, ValueError):
-        return default
