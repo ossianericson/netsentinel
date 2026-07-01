@@ -91,9 +91,10 @@ def test_error_emitted_when_probe_raises():
     _cleanup(w)
 
 
-def test_not_instantiated_in_app_py():
-    """Sprint 2 scaffolding must not be wired into app.py yet (grep-verified)."""
+def test_instantiated_in_app_py_for_scheduled_speed_test():
+    """Sprint 3 wires this worker in for scheduled speed tests (grep-verified)."""
     from pathlib import Path
     app_src = Path(__file__).resolve().parent.parent / "app.py"
     text = app_src.read_text(encoding="utf-8")
-    assert "ProactiveProbeWorker(" not in text
+    assert "ProactiveProbeWorker(" in text
+    assert "run_scheduled_speed_test" in text

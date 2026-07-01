@@ -201,6 +201,8 @@ _ALERT_RULE_DEFS = [
     ("Cert Expired",  "CERT_EXPIRED",   "Fires when a TLS certificate has already expired"),
     ("Host Flapping", "FLAP",           "Fires when a host oscillates between UP and DOWN repeatedly"),
     ("Service Down",  "SERVICE_DOWN",   "Fires when a monitored TCP service stops responding"),
+    ("Baseline Speed Drop", "BASELINE_DROP",
+     "Fires when a scheduled speed test shows a severe drop vs. your recent typical speed"),
 ]
 
 
@@ -325,7 +327,7 @@ class _NotifChannelsMixin:
         grid.setVerticalSpacing(6)
         for row_idx, (name, _rule_type, description) in enumerate(_ALERT_RULE_DEFS):
             chk = QCheckBox(name)
-            chk.setFixedWidth(140)
+            chk.setFixedWidth(175)
             chk.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
             chk.stateChanged.connect(self._save)
             desc_lbl = QLabel(description)

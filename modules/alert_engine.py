@@ -23,6 +23,8 @@ Supported rule types
   FLAP             — host oscillates UP<->DEGRADED/DOWN repeatedly
                      (flap_count transitions within flap_window_s seconds)
   SERVICE_DOWN     — a monitored TCP service/port stopped responding
+  BASELINE_DROP    — a scheduled speed test shows a severe drop vs. the
+                     rolling median of prior download speeds
 
 Each rule has:
   name           str    — unique human label
@@ -56,6 +58,7 @@ from modules.alert_types import AlertFired, AlertRule, RULE_TYPES  # noqa: F401 
 from modules.metric_store import MetricStore
 from modules.alert_suppressor import EscalationPolicy, _default_rules, rule_settings_key
 from modules.alert_engine_checks import _AlertChecksMixin
+from modules.speed_drop_detector import RESTART_CHECKLIST
 
 # Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
 __all__ = [
@@ -77,6 +80,7 @@ _RULE_CTA: Dict[str, str] = {
     "CERT_EXPIRED":   "TLS & Cert Monitor",
     "FLAP":           "Trend Forecasts",
     "SERVICE_DOWN":   "Service Heartbeat",
+    "BASELINE_DROP":  "Speed Test",
 }
 
 
@@ -239,6 +243,7 @@ class AlertEngine(_AlertChecksMixin):
         "CERT_EXPIRED":   "→ Renew the certificate now  → Visitors will see security warnings",
         "FLAP":           "→ Check the cable or Wi-Fi signal  → Look for interference",
         "SERVICE_DOWN":   "→ Restart the service  → Check firewall rules for this port",
+        "BASELINE_DROP":  "  ".join(f"→ {step}" for step in RESTART_CHECKLIST),
     }
 
     @staticmethod

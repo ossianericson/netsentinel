@@ -120,4 +120,14 @@ def _default_rules():
             cooldown_s=300,
             enabled=False,
         ),
+        AlertRule(
+            name="Baseline Speed Drop",
+            rule_type="BASELINE_DROP",
+            host=None,
+            warn_pct=50.0,
+            high_pct=75.0,
+            min_samples=4,
+            cooldown_s=3600,
+            enabled=False,
+        ),
     ]

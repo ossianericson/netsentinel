@@ -100,7 +100,7 @@ def test_escalation_policy_defaults():
 def test_default_rules_count():
     from modules.alert_suppressor import _default_rules
     rules = _default_rules()
-    assert len(rules) == 9
+    assert len(rules) == 10
     assert all(not r.enabled for r in rules)
 
 

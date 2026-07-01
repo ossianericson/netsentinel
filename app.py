@@ -184,6 +184,7 @@ def _smoke_test() -> None:
         "modules.health_score",
         "workers.health_worker",
         "ui.widgets.health_status_card",
+        "modules.scheduled_speed_test",
     ]
     for _mod in _checks:
         try:
@@ -460,6 +461,39 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
         window._overview_page.on_cycle_done(result_dict)
 
     avail_worker.cycle_done.connect(_on_cycle)
+
+
+def _wire_speedtest_scheduling(window, worker, alerts):
+    """
+    Sprint 3 — scheduled speed test.  ``worker`` is a ProactiveProbeWorker
+    running modules.scheduled_speed_test.run_scheduled_speed_test().  Each
+    completed probe is evaluated against the BASELINE_DROP rule; a fired
+    alert flows through the same window._show_alert_toast() +
+    window._home_page.on_alert() path every other evaluate_* caller uses
+    (see the pre-existing double-toast note in _wire_monitoring — left
+    alone here for the same reason: not this sprint's concern).
+    """
+    def _on_probe_done(result) -> None:
+        fired = alerts.evaluate_baseline_metrics(result.download_mbps, result.prior_downloads)
+        for a in fired:
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+
+    def _on_probe_error(_msg: str) -> None:
+        pass  # non-fatal — the worker retries automatically on its next interval
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+    def _on_auto_speedtest_changed(enabled: bool, interval_hours: int) -> None:
+        worker.set_interval(interval_hours * 3600)
+        if enabled and not worker.isRunning():
+            worker.start()
+        elif not enabled and worker.isRunning():
+            worker.stop()
+            worker.wait(3000)
+
+    window._speed_test_page.auto_speedtest_changed.connect(_on_auto_speedtest_changed)
 
 
 def _wire_cross_page(window):
@@ -789,6 +823,19 @@ def main():
     health_worker = HealthWorker(store=store)
     health_worker.start()
 
+    # Sprint 3 — scheduled background speed tests. Opt-in, default off: bandwidth
+    # consent is explicit and separate from notification consent (BASELINE_DROP
+    # rule, enabled independently under Notifications).
+    from workers.proactive_probe_worker import ProactiveProbeWorker
+    from modules.scheduled_speed_test import run_scheduled_speed_test
+
+    _speedtest_qs = QSettings("NetSentinel", "NetSentinel")
+    _speedtest_interval_h = int(_speedtest_qs.value("speedtest/scheduled_interval_hours", 6))
+    scheduled_speedtest_worker = ProactiveProbeWorker(
+        probe=lambda: run_scheduled_speed_test(store),
+        interval_s=_speedtest_interval_h * 3600,
+    )
+
     # REST API worker — only starts when user has enabled it in Settings
     _qs = QSettings("NetSentinel", "NetSentinel")
     rest_api_worker: RestApiWorker | None = None
@@ -815,6 +862,9 @@ def main():
     _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router)
     _wire_cross_page(window)
     _wire_scan_ctas(window)
+    _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts)
+    if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
+        scheduled_speedtest_worker.start()
 
     # S2-5: wire ambient health worker → home page card + system tray
     health_worker.result_ready.connect(window._home_page.on_health_update)
@@ -1031,6 +1081,9 @@ def main():
     syslog_worker.wait(5000)
     health_worker.stop()
     health_worker.wait(3000)
+    if scheduled_speedtest_worker.isRunning():
+        scheduled_speedtest_worker.stop()
+        scheduled_speedtest_worker.wait(5000)
     if rest_api_worker is not None:
         rest_api_worker.stop()
         rest_api_worker.wait(3000)
