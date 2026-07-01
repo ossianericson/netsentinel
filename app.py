@@ -101,6 +101,7 @@ def _smoke_test() -> None:
         "modules.alert_engine",
         "modules.service_escalation",
         "modules.proactive_digest",
+        "modules.digest_bullets",
         "modules.notification_router",
         "modules.utils",
         "modules.maintenance_window",
@@ -351,7 +352,7 @@ def _wire_notifications(window, alerts, notif_router, maint_manager, report_work
     )
 
 
-def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router):
+def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router, store):
     avail_worker.cycle_done.connect(window._history_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._inventory_page.on_cycle_done)
     avail_worker.cycle_done.connect(window._uptime_page.on_cycle_done)
@@ -390,6 +391,16 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     _escalation_tracker = ServiceEscalationTracker()
     _escalation_workers: list = []  # keep QThread refs alive until they finish
 
+    def _persist_alert(a) -> None:
+        # Sprint 4: persist every fired alert so modules.digest_bullets has
+        # overnight history to summarize — nothing wrote to alert_fired before
+        # this sprint, so get_recent_alerts()-backed digest bullets would
+        # otherwise always report "nothing happened" in the live app.
+        try:
+            store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+        except Exception:
+            pass  # non-fatal — persistence failure must not block notification delivery
+
     def _escalation_enabled() -> bool:
         return QSettings("NetSentinel", "NetSentinel").value(
             "notif/service_escalation_enabled", True, type=bool
@@ -422,6 +433,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
             )
             notif_router.dispatch(escalation)  # dispatch() already invokes the toast callback
             window._home_page.on_alert(escalation)
+            _persist_alert(escalation)
             _cleanup()
 
         def _on_error(_msg: str) -> None:
@@ -437,6 +449,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
+            _persist_alert(a)
             if a.rule_type == "SERVICE_DOWN" and not a.is_resolution and _escalation_enabled():
                 _run_service_escalation(a)
         window._overview_page.on_svc_done(results)
@@ -448,6 +461,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
+            _persist_alert(a)
         window._overview_page.on_cert_done(results)
 
     cert_worker.check_done.connect(_on_cert_check)
@@ -458,12 +472,13 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             window._overview_page.on_alert(a)
+            _persist_alert(a)
         window._overview_page.on_cycle_done(result_dict)
 
     avail_worker.cycle_done.connect(_on_cycle)
 
 
-def _wire_speedtest_scheduling(window, worker, alerts):
+def _wire_speedtest_scheduling(window, worker, alerts, store):
     """
     Sprint 3 — scheduled speed test.  ``worker`` is a ProactiveProbeWorker
     running modules.scheduled_speed_test.run_scheduled_speed_test().  Each
@@ -472,12 +487,20 @@ def _wire_speedtest_scheduling(window, worker, alerts):
     window._home_page.on_alert() path every other evaluate_* caller uses
     (see the pre-existing double-toast note in _wire_monitoring — left
     alone here for the same reason: not this sprint's concern).
+
+    Sprint 4: also persists via store.record_alert_fired() so
+    modules.digest_bullets._speed_trend_bullet() has overnight BASELINE_DROP
+    history to summarize in the Morning Briefing.
     """
     def _on_probe_done(result) -> None:
         fired = alerts.evaluate_baseline_metrics(result.download_mbps, result.prior_downloads)
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
 
     def _on_probe_error(_msg: str) -> None:
         pass  # non-fatal — the worker retries automatically on its next interval
@@ -859,10 +882,10 @@ def main():
 
     _wire_logging(window, passive_observer_worker, snmp_trap_worker, syslog_worker)
     _wire_notifications(window, alerts, notif_router, maint_manager, report_worker)
-    _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router)
+    _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, notif_router, store)
     _wire_cross_page(window)
     _wire_scan_ctas(window)
-    _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts)
+    _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts, store)
     if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
         scheduled_speedtest_worker.start()
 

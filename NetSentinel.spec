@@ -179,6 +179,7 @@ hiddenimports: list = [
     "modules.service_diagnostics_probes",
     "modules.service_escalation",
     "modules.proactive_digest",
+    "modules.digest_bullets",
     "modules.scheduled_speed_test",
     "modules.smb_enumerator",
     "modules.snmp_poller",

@@ -387,6 +387,14 @@ class _NotifExtraChannelsMixin:
         hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
         bl.addWidget(hint)
 
+        extra_hint = QLabel(
+            "If Service Down alerts or Automatic Speed Tests are enabled above, the "
+            "briefing also summarizes overnight service outages and speed drops."
+        )
+        extra_hint.setWordWrap(True)
+        extra_hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
+        bl.addWidget(extra_hint)
+
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_morning_briefing.setChecked(
             qs.value("briefing/enabled", False, type=bool)

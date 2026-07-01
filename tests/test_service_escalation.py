@@ -124,3 +124,22 @@ def test_to_alert_severity_maps_all_canonical_labels():
 def test_to_alert_severity_unknown_defaults_to_warning():
     from modules.service_escalation import to_alert_severity
     assert to_alert_severity("Nonsense") == "WARNING"
+
+
+# ── is_filtered_message — Sprint 4 digest bullet support ────────────────────────
+
+def test_is_filtered_message_true_for_filtered_layer_message():
+    from modules.service_escalation import is_filtered_message, layer_to_message
+    _, message = layer_to_message("filtered", "example.com", 443)
+    assert is_filtered_message(message) is True
+
+
+def test_is_filtered_message_false_for_other_layers():
+    from modules.service_escalation import is_filtered_message, layer_to_message
+    _, message = layer_to_message("remote_outage", "example.com", 443)
+    assert is_filtered_message(message) is False
+
+
+def test_is_filtered_message_false_for_unrelated_text():
+    from modules.service_escalation import is_filtered_message
+    assert is_filtered_message("some unrelated message") is False

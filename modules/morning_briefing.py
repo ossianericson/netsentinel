@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
+from modules.digest_bullets import build_digest_bullets
 from modules.proactive_digest import DigestConfig, is_due
 
 # ── QSettings keys ────────────────────────────────────────────────────────────
@@ -44,17 +45,28 @@ def check_and_build_briefing(
     if not is_due(_DIGEST_CONFIG, settings_get, settings_set):
         return None
 
-    bullets = build_briefing_bullets(store)
+    bullets = build_briefing_bullets(store, settings_get)
     return BriefingResult(headline="Your morning briefing", bullets=bullets)
 
 
-def build_briefing_bullets(store) -> List[str]:
-    """Compose the three plain-English bullets from already-collected data."""
-    return [
+def build_briefing_bullets(
+    store, settings_get: Optional[Callable[[str], object]] = None,
+) -> List[str]:
+    """
+    Compose the plain-English bullets from already-collected data: the
+    original 3 (status / overnight / quick stat), plus the Sprint 4 overnight
+    rollup of SERVICE_DOWN + BASELINE_DROP activity when ``settings_get`` is
+    supplied. Omitting ``settings_get`` (as existing unit tests do) skips the
+    Sprint 4 bullets entirely and preserves the original 3-bullet behavior.
+    """
+    bullets = [
         _status_bullet(store),
         _overnight_bullet(store),
         _quick_stat_bullet(store),
     ]
+    if settings_get is not None:
+        bullets.extend(build_digest_bullets(store, settings_get))
+    return bullets
 
 
 # ── Bullet builders ────────────────────────────────────────────────────────────

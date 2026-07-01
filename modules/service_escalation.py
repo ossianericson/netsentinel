@@ -118,3 +118,14 @@ def layer_to_message(
 def to_alert_severity(ui_severity: str) -> str:
     """Convert a canonical UI severity label to AlertFired's internal severity value."""
     return _UI_TO_ALERT_SEVERITY.get(ui_severity, "WARNING")
+
+
+def is_filtered_message(message: str) -> bool:
+    """
+    True if `message` was produced by layer_to_message() for the "filtered"
+    failure_layer — used by modules/digest_bullets.py to distinguish a
+    firewall/VPN/ISP block from a real outage in the overnight summary,
+    without duplicating the explanation text from _LAYER_INFO.
+    """
+    _, explanation = _LAYER_INFO["filtered"]
+    return explanation in message
