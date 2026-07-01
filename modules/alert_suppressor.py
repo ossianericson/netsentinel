@@ -9,9 +9,48 @@ backwards compatibility via re-exports in that module.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import Callable, List, Optional
 
 from modules.alert_types import AlertRule
+
+
+# ── Maintenance-window suppression (Sprint 5 file-budget split) ───────────────
+
+class _MaintenanceSuppressionMixin:
+    """Mixin for AlertEngine: maintenance-window checker + suppression logging.
+
+    Extracted out of alert_engine.py to stay under the 600-line RULE-AH1
+    budget. AlertEngine inherits this alongside _AlertChecksMixin.
+    """
+
+    def set_maintenance_checker(
+        self, checker: Optional[Callable[[str], Optional[str]]]
+    ) -> None:
+        """Inject callable(host) -> window_label|None from MaintenanceWindowManager.
+        When set, any alert whose host is currently under maintenance is silently
+        dropped (not dispatched to on_alert). Pass None to disable."""
+        self._maintenance_checker = checker
+
+    def set_suppression_recorder(
+        self, recorder: Optional[Callable[[str, str, str, str, str], None]]
+    ) -> None:
+        """callable(window_label, host, rule_name, severity, message) — called
+        whenever the maintenance checker drops an alert. None disables logging."""
+        self._suppression_recorder = recorder
+
+    def _maintenance_suppresses(
+        self, host: str, rule_name: str, severity: str, message: str
+    ) -> bool:
+        """True if `host` is currently under a maintenance window. Also invokes
+        the suppression recorder (if any) as a side effect when suppressing."""
+        if self._maintenance_checker is None:
+            return False
+        window_label = self._maintenance_checker(host)
+        if window_label is None:
+            return False
+        if self._suppression_recorder is not None:
+            self._suppression_recorder(window_label, host, rule_name, severity, message)
+        return True
 
 
 # ── Escalation policy ─────────────────────────────────────────────────────────
@@ -118,6 +157,16 @@ def _default_rules():
             rule_type="SERVICE_DOWN",
             host=None,
             cooldown_s=300,
+            enabled=False,
+        ),
+        AlertRule(
+            name="Baseline Speed Drop",
+            rule_type="BASELINE_DROP",
+            host=None,
+            warn_pct=50.0,
+            high_pct=75.0,
+            min_samples=4,
+            cooldown_s=3600,
             enabled=False,
         ),
     ]

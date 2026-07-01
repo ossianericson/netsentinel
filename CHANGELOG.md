@@ -7,12 +7,26 @@ All notable changes to NetSentinel are documented here. The current version summ
 ### v2.1.22
 
 **Added**
-- `DiagnosticEngine.run_custom()` in `modules/service_diagnostics.py` — Service Diagnostics can now probe any typed hostname (e.g. `github.com`) via a "Custom host…" entry in the picker, not just the streaming/gaming catalog
-- New `filtered` failure-layer classification: flags the ICMP-succeeds-but-TCP-fails signature of a firewall, VPN, or ISP silently blocking a connection, distinguishing it from a genuine `remote_outage`
+- `modules/service_escalation.py` — a `SERVICE_DOWN` heartbeat failure now triggers a background `DiagnosticEngine` probe and a follow-up notification classifying *why* the service is unreachable (filtered by a firewall/VPN/ISP vs. a genuine outage); new "Diagnose why (recommended)" sub-toggle under the `Service Down` alert rule
+- `modules/proactive_digest.py` / `workers/proactive_probe_worker.py` — reusable due-check/day-tracking base (used by Morning Briefing) and a generic interval-loop `QThread` for future background probes
+- `modules/scheduled_speed_test.py` and a new `BASELINE_DROP` `AlertRule` type — opt-in "Automatic Speed Tests" card on the Speed Test page (1h/3h/6h/12h/24h interval) fires a tray notification when download speed drops severely against your own rolling history, reusing `speed_drop_detector`'s verdict/copy
+- `modules/digest_bullets.py` — Morning Briefing now summarizes overnight `SERVICE_DOWN` escalations and `BASELINE_DROP` speed trends, each gated on the corresponding feature's own opt-in state, capped at `MAX_BULLETS` with a "+N more" suffix
+- Recurring daily "quiet hours" maintenance windows (`modules/maintenance_window.py`) — suppress scheduled speed tests and their notifications overnight without pausing the underlying heartbeat/monitoring data collection
+
+**Changed**
+- `MaintenanceWindowManager.record_suppression()` is now wired into `AlertEngine` via a new `set_suppression_recorder()` hook, so suppressed alerts actually appear in the maintenance suppression log
+- `modules/alert_engine.py` maintenance-checker logic split into a new `_MaintenanceSuppressionMixin` (in `modules/alert_suppressor.py`) to stay under the 600-line module budget
+
+**Fixed**
+- Startup flash of a native OS-decorated window (title bar + min/max/close) for a fraction of a second: `ui/tabs_scan.py` (STP Capture / Broadcast Storm empty-state buttons), `ui/pages/home_page.py` (`setupCompleteCard`), and `ui/pages/log_source_panel.py` (Network Logger source-toggle buttons) were calling `.setVisible(...)` on a widget *before* it was added to its parent layout — Qt treats a still-parentless widget as an independent top-level window and gives it full native chrome. Fix: call `.setVisible(...)` only after `addWidget()`
 
 ---
 
 ### v2.1.21
+
+**Added**
+- `DiagnosticEngine.run_custom()` in `modules/service_diagnostics.py` — Service Diagnostics can now probe any typed hostname (e.g. `github.com`) via a "Custom host…" entry in the picker, not just the streaming/gaming catalog
+- New `filtered` failure-layer classification: flags the ICMP-succeeds-but-TCP-fails signature of a firewall, VPN, or ISP silently blocking a connection, distinguishing it from a genuine `remote_outage`
 
 **Changed**
 - Navigation colour tokens extracted from hardcoded `rgba()` values into 8 named semantic tokens in `ui/styles.py` (`NAV_RAIL_HOVER_BG`, `NAV_RAIL_ACTIVE_BG`, `NAV_RAIL_FOCUS_BORDER`, `NAV_ITEM_HOVER_FG`, `NAV_ITEM_ACTIVE_FG`, `NAV_FLYOUT_FOCUS_BORDER`, `NAV_ITEM_PIN_HOVER_FG`, `CARD_BORDER`); Arctic Clean sidebar is now white chrome; `rail.py` `refresh_theme()` re-applies full QSS for live switching

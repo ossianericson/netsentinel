@@ -183,7 +183,13 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.21 (current)
+### v2.1.22 (current)
+
+**Added**
+- Service unreachable? NetSentinel now diagnoses *why* in the background and tells you — filtered by a firewall/VPN/ISP, or a real outage — right in the notification
+- Opt-in automatic speed tests with a tray alert when your download speed drops sharply against your own history
+- Morning Briefing now summarizes overnight service outages and speed drops, when those features are enabled
+- Recurring "quiet hours" — scheduled speed tests and their alerts stay silent overnight without pausing background monitoring
 
 **Changed**
 - Navigation colours extracted to 8 named semantic tokens; Arctic Clean sidebar is now white chrome; Midnight Pro card background elevated — all nav hover/active/focus states use theme-aware tokens instead of hardcoded `rgba()` values

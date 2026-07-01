@@ -336,11 +336,11 @@ class _LogSourcePanelMixin:
             self._style_toggle(btn, enabled, color)
             btn.clicked.connect(lambda checked, k=key: self._on_source_toggled(k, checked))
             self._toggle_btns[key] = btn
-            btn.setVisible(enabled and key != "plugin")
             btn.setToolTip(_SOURCE_TIPS.get(key, ""))
             if key == "modem" and not enabled:
                 btn.setToolTip("Enable modem logging in Scan Configuration to show here.")
             lay.addWidget(btn)
+            btn.setVisible(enabled and key != "plugin")
 
         self._source_plus_btn = QPushButton("+")
         self._source_plus_btn.setFixedSize(26, 26)
