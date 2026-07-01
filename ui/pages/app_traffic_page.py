@@ -125,6 +125,7 @@ class AppTrafficPage(QWidget):
         self._store = store
         self._worker = None
         self._running = False
+        self._label_map: Dict[str, str] = {}
 
         # {label/mac -> AppHostSnapshot} — last received data per host
         self._snapshots: Dict[str, object] = {}
@@ -332,6 +333,8 @@ class AppTrafficPage(QWidget):
         self._worker = AppTrafficWorker(interval_s=_INTERVAL_S, parent=self)
         self._worker.snapshot_ready.connect(self._on_snapshot)
         self._worker.error.connect(self._on_error)
+        if self._label_map:
+            self._worker.set_label_map(self._label_map)
         self._worker.start()
         self._running = True
         self._toggle_btn.setText("■  Stop Monitoring")
@@ -366,8 +369,9 @@ class AppTrafficPage(QWidget):
 
     def set_label_map(self, label_map: dict) -> None:
         """Pass MAC→display-name mapping from latest scan result."""
+        self._label_map = dict(label_map)
         if self._worker:
-            self._worker.set_label_map(label_map)
+            self._worker.set_label_map(self._label_map)
 
     # ── Slot: new snapshot ────────────────────────────────────────────────────
 

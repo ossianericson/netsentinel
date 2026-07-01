@@ -935,6 +935,24 @@ class ScanEnrichmentMixin:
         except Exception:
             pass  # non-fatal
 
+        # Refresh MAC → device-name label map for App Traffic and Live Bandwidth
+        # so both show hostnames/vendors instead of raw MAC addresses.
+        try:
+            _label_map: dict = {}
+            for _d in self._m1_result.get("devices", []):
+                _mac    = _d.mac      if not isinstance(_d, dict) else _d.get("mac", "")
+                _hn     = _d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")
+                _vendor = _d.vendor   if not isinstance(_d, dict) else _d.get("vendor", "")
+                if _mac:
+                    _label_map[_mac.lower()] = _hn or _vendor or _mac
+            if _label_map:
+                if hasattr(self, "_app_traffic_page"):
+                    self._app_traffic_page.set_label_map(_label_map)
+                if getattr(self, "_bw_worker", None) is not None:
+                    self._bw_worker.label_map = _label_map
+        except Exception:
+            pass  # non-fatal
+
         # Re-render topology — native mesh preferred; fall back to plugin node data
         try:
             gw_ip  = self._net_info.get("gateway")     if self._net_info else None
