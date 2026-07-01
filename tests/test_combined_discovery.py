@@ -25,6 +25,34 @@ def test_resolve_hostname_delegates_to_name_resolver(monkeypatch):
     assert calls == [("192.168.1.10", 0.5)]
 
 
+def test_ping_single_delegates_to_icmp_ping(monkeypatch):
+    """combined_discovery._ping_single must call utils_net.icmp_ping (Phase 2b reroute)."""
+    from modules import combined_discovery
+    from modules import utils_net
+
+    calls = []
+
+    def fake_icmp_ping(host, timeout=2.0):
+        calls.append((host, timeout))
+        return 12.5
+
+    monkeypatch.setattr(utils_net, "icmp_ping", fake_icmp_ping)
+    dev = combined_discovery._ping_single("192.168.1.20", timeout=0.5)
+    assert calls == [("192.168.1.20", 0.5)]
+    assert dev is not None
+    assert dev.ip == "192.168.1.20"
+    assert dev.response_ms == 12.5
+    assert dev.discovery_methods == ["icmp-ping"]
+
+
+def test_ping_single_returns_none_on_failure(monkeypatch):
+    from modules import combined_discovery
+    from modules import utils_net
+
+    monkeypatch.setattr(utils_net, "icmp_ping", lambda host, timeout=2.0: -1.0)
+    assert combined_discovery._ping_single("192.168.1.21", timeout=0.5) is None
+
+
 def test_discovered_device_dataclass():
     from modules.combined_discovery import DiscoveredDevice
     d = DiscoveredDevice(

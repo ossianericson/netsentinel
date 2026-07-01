@@ -607,6 +607,7 @@ class ScanEnrichmentMixin:
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
         self._disc_status.setText(res.plain_verdict)
         self._nav_set_scan_state("Full Device Discovery", "fresh", ts=time.time(), verdict=res.plain_verdict)
+        _store_ref = getattr(self, "_store", None)
         for dev in res.devices:
             r = self._recon_disc_table.rowCount()
             self._recon_disc_table.insertRow(r)
@@ -614,6 +615,11 @@ class ScanEnrichmentMixin:
             for c, v in enumerate([dev.ip, dev.mac, dev.hostname,
                                     ", ".join(dev.discovery_methods), ms]):
                 self._recon_disc_table.setItem(r, c, _TWI(v))
+            if _store_ref and dev.response_ms > 0 and dev.ip:
+                try:
+                    _store_ref.record_rtt(dev.ip, dev.response_ms)
+                except Exception:
+                    pass  # non-fatal — table may not exist on schema upgrade
 
     def _on_smb_result(self, res):
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI

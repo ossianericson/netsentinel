@@ -1,6 +1,10 @@
 """Tests for modules/utils_net.py — get_network_info, get_dhcp_info, get_interface_details."""
 
-from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details
+from unittest.mock import MagicMock, patch
+
+from modules.utils_net import (
+    get_network_info, get_dhcp_info, get_interface_details, icmp_ping,
+)
 
 
 def test_get_network_info_returns_dict():
@@ -37,6 +41,38 @@ def test_get_interface_details_returns_list():
         assert "type" in a
         assert "mac" in a
         assert "ipv4" in a
+
+
+def _make_ping_run(rtt_line="time=12ms"):
+    def _run(cmd, **kwargs):
+        mock = MagicMock()
+        mock.returncode = 0
+        mock.stdout = rtt_line
+        return mock
+    return _run
+
+
+def test_icmp_ping_parses_rtt_from_output():
+    with patch("subprocess.run", side_effect=_make_ping_run("time=12ms")):
+        assert icmp_ping("8.8.8.8", timeout=2.0) == 12.0
+
+
+def test_icmp_ping_sub_millisecond_reply():
+    # "time<1ms" also matches the primary time[=<](\d+)ms regex (group="1"), so this
+    # returns 1.0 — preserves the exact (pre-existing) behavior of the original
+    # network_logger._ping_once this helper was extracted from.
+    with patch("subprocess.run", side_effect=_make_ping_run("time<1ms")):
+        assert icmp_ping("8.8.8.8", timeout=2.0) == 1.0
+
+
+def test_icmp_ping_returns_negative_on_timeout():
+    with patch("subprocess.run", side_effect=TimeoutError):
+        assert icmp_ping("8.8.8.8", timeout=2.0) == -1.0
+
+
+def test_icmp_ping_returns_negative_on_no_match():
+    with patch("subprocess.run", side_effect=_make_ping_run("Request timed out.")):
+        assert icmp_ping("8.8.8.8", timeout=2.0) == -1.0
 
 
 def test_get_network_info_dns_deduplicated():

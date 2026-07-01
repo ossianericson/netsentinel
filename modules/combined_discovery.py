@@ -150,19 +150,10 @@ def _arp_sweep(cidr: str, timeout: float = 2.0) -> Dict[str, DiscoveredDevice]:
 # ── Method 3: ICMP ping sweep (active, no admin on most systems) ─────────────
 
 def _ping_single(ip: str, timeout: float) -> Optional[DiscoveredDevice]:
-    system = platform.system()
-    try:
-        if system == "Windows":
-            cmd = ["ping", "-n", "1", "-w", str(int(timeout * 1000)), ip]
-        else:
-            cmd = ["ping", "-c", "1", "-W", str(int(timeout)), ip]
-        t0 = time.monotonic()
-        r = subprocess.run(cmd, capture_output=True, timeout=timeout + 1, **({} if system != "Windows" else {"creationflags": subprocess.CREATE_NO_WINDOW}))
-        ms = (time.monotonic() - t0) * 1000
-        if r.returncode == 0:
-            return DiscoveredDevice(ip=ip, response_ms=ms, discovery_methods=["icmp-ping"])
-    except Exception:
-        pass  # non-fatal
+    from modules.utils_net import icmp_ping
+    ms = icmp_ping(ip, timeout=timeout)
+    if ms >= 0:
+        return DiscoveredDevice(ip=ip, response_ms=ms, discovery_methods=["icmp-ping"])
     return None
 
 
