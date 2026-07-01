@@ -215,7 +215,7 @@ _BLACKLIST: List[str] = [
     "diagnose",         # Service Heartbeat "Diagnose →" button → fires probes
     "run health check", # health check probe
     "check connection", # connectivity probe
-    "run security audit",  # SecurityOverviewPage "▶  Run Security Audit" → _advance_security_audit() fires Port Scan (TCP) + Exposed to Internet sequentially
+    "run selected",     # Overview page Security Scan panel "Run Selected" → _advance_security_audit() fires selected tools sequentially
     "run all",             # Scan Center card "▶  Run All" → rescan_requested signal → triggers full network scan
     "re-run",           # re-triggers any prior scan/probe
     "run again",        # re-triggers any prior scan/probe

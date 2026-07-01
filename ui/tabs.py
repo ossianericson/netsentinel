@@ -218,7 +218,6 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin, _Analys
         self._security_overview_page = SecurityOverviewPage(store=self._store, parent=None)
         self._security_overview_page.navigate_to.connect(self._nav_rail_go_to)
         self._security_overview_page.scan_requested.connect(self._start_full_scan)
-        self._security_overview_page.security_scan_requested.connect(self._run_security_scans)
 
         from ui.pages.cve_page import CvePage
         self._cve_page = CvePage(self._store, parent=None)

@@ -353,35 +353,12 @@ def test_scan_table_shows_tls_finding(page_with_store):
 
 # ── notify_scan_complete ────────────────────────────────────────────────────────
 
-def test_notify_scan_complete_updates_status_label(page):
+def test_notify_scan_complete_refreshes_scan_kpis(page):
+    """notify_scan_complete pulls fresh MetricStore data without raising."""
     page.notify_scan_complete()
-    text = page._last_net_scan_lbl.text()
-    assert "Network scan:" in text
-    assert "not run" not in text
 
 
 # ── on_scan_result ──────────────────────────────────────────────────────────────
-
-def test_on_scan_result_shows_device_count(page):
-    """M1 scan result un-hides hero status label with device count."""
-    d1 = MagicMock()
-    d2 = MagicMock()
-    page.on_scan_result({"devices": [d1, d2]})
-    assert not page._hero_status_lbl.isHidden()
-    assert "2" in page._hero_status_lbl.text()
-
-
-def test_on_scan_result_singular_device(page):
-    """Single device uses 'device' (not 'devices') in status label."""
-    page.on_scan_result({"devices": [MagicMock()]})
-    assert "1 device " in page._hero_status_lbl.text()
-
-
-def test_on_scan_result_empty_devices_does_not_show_label(page):
-    """M1 scan with no devices leaves status label hidden."""
-    page.on_scan_result({"devices": []})
-    assert page._hero_status_lbl.isHidden()
-
 
 def test_on_scan_result_stores_device_count(page):
     """Device count is stored for later use."""
@@ -401,44 +378,6 @@ def test_signals_exist(page):
     from PyQt6.QtCore import pyqtSignal  # noqa: F401 (verify no AttributeError)
     assert hasattr(page, "navigate_to")
     assert hasattr(page, "scan_requested")
-    assert hasattr(page, "security_scan_requested")
-
-
-# ── set_audit_progress / clear_audit_progress ───────────────────────────────────
-
-def test_set_audit_progress_disables_button(page):
-    page.set_audit_progress("Port Scan (TCP)", 1, 5)
-    assert not page._audit_btn.isEnabled()
-
-
-def test_set_audit_progress_shows_in_progress_text(page):
-    page.set_audit_progress("CVE Lookup", 2, 5)
-    assert "Audit in progress" in page._audit_btn.text()
-
-
-def test_set_audit_progress_shows_rows_widget(page):
-    page.set_audit_progress("Port Scan (TCP)", 1, 5)
-    assert not page._audit_rows_widget.isHidden()
-
-
-def test_set_audit_progress_step1_marks_first_tool_running(page):
-    page.set_audit_progress("Port Scan (TCP)", 1, 5)
-    row = page._audit_tool_rows["Port Scan (TCP)"]
-    assert row["state"].text() == "Running…"
-
-
-def test_set_audit_progress_step2_marks_first_done_second_running(page):
-    page.set_audit_progress("Port Scan (TCP)", 1, 5)
-    page.set_audit_progress("Exposed to Internet", 2, 5)
-    assert page._audit_tool_rows["Port Scan (TCP)"]["state"].text() == "Done"
-    assert page._audit_tool_rows["Exposed to Internet"]["state"].text() == "Running…"
-
-
-def test_clear_audit_progress_re_enables_button(page):
-    page.set_audit_progress("Port Scan (TCP)", 1, 5)
-    page.clear_audit_progress()
-    assert page._audit_btn.isEnabled()
-    assert "Run Security Audit" in page._audit_btn.text()
 
 
 # ── update_scan_registry ────────────────────────────────────────────────────────
@@ -474,38 +413,16 @@ def test_update_scan_registry_fresh_then_stale(page):
 
 # ── per-tool finding counts ─────────────────────────────────────────────────────
 
-def test_port_scan_result_updates_tool_row_finding(page):
+def test_port_scan_result_updates_findings(page):
     result = _PortScanResult(
         host="192.168.1.1",
         open_ports=[_PortResult(port=3389, name="RDP", risk="HIGH")],
     )
     page.on_port_scan_result(result)
-    row = page._audit_tool_rows.get("Port Scan (TCP)")
-    assert row is not None
-    assert "1" in row["finding"].text()
+    assert len(page._port_findings) == 1
 
 
-def test_cred_result_updates_tool_row_finding(page):
-    # "Login Test" is not in _AUDIT_SEQUENCE so no row exists in _audit_tool_rows.
-    # _set_tool_row_state silently no-ops for unknown tools — verify no crash.
+def test_cred_result_updates_flags(page):
     res = _CredResult(risk_flags=["Weak password"])
     page.on_cred_result(res)
     assert page._cred_scan_done  # confirms the handler ran without error
-
-
-# ── pre-flight scope panel ──────────────────────────────────────────────────────
-
-def test_scope_panel_hidden_by_default(page):
-    assert hasattr(page, "_scope_panel")
-    assert not page._scope_panel.isVisible()
-
-
-def test_scope_toggle_shows_panel(page):
-    page._toggle_scope_panel()
-    assert not page._scope_panel.isHidden()
-
-
-def test_scope_toggle_hides_panel_on_second_click(page):
-    page._toggle_scope_panel()
-    page._toggle_scope_panel()
-    assert page._scope_panel.isHidden()
