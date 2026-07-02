@@ -33,6 +33,9 @@ RULE_TYPES = frozenset({
     "RTT_ANOMALY",
     "IOT_BEHAVIOR",
     "TREND_FORECAST",
+    "NEW_OPEN_PORT",
+    "NEW_CVE",
+    "NEW_EXPOSURE",
 })
 
 

@@ -51,6 +51,7 @@ from modules.alert_suppressor import (
 )
 from modules.alert_engine_checks import _AlertChecksMixin
 from modules.alert_engine_checks2 import _AlertChecksMixin2
+from modules.alert_engine_checks3 import _AlertChecksMixin3
 from modules.speed_drop_detector import RESTART_CHECKLIST
 
 # Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
@@ -82,6 +83,9 @@ _RULE_CTA: Dict[str, str] = {
     "RTT_ANOMALY":        "DNS & Stability",
     "IOT_BEHAVIOR":       "IoT Behaviour",
     "TREND_FORECAST":     "Trend Forecasts",
+    "NEW_OPEN_PORT":      "Devices",
+    "NEW_CVE":            "CVE Lookup",
+    "NEW_EXPOSURE":       "Exposed to Internet",
 }
 
 
@@ -95,7 +99,7 @@ def _cta_for_rule(rule_type: str, host: str) -> tuple[Optional[str], Optional[st
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
-class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _MaintenanceSuppressionMixin):
+class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _MaintenanceSuppressionMixin):
     """
     Stateless rule evaluator. Call the appropriate evaluate_* method after
     each monitoring cycle or scan result.
@@ -245,6 +249,9 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _MaintenanceSuppression
         "FLAP":           "→ Check the cable or Wi-Fi signal  → Look for interference",
         "SERVICE_DOWN":   "→ Restart the service  → Check firewall rules for this port",
         "BASELINE_DROP":  "  ".join(f"→ {step}" for step in RESTART_CHECKLIST),
+        "NEW_OPEN_PORT":  "→ Confirm this was intentional  → If not, check the device for malware or a misconfigured service",
+        "NEW_CVE":        "→ Check for a firmware/software update for this service  → Restrict access if no patch exists yet",
+        "NEW_EXPOSURE":   "→ Check your router's port-forwarding rules  → Remove the forward if unintentional",
     }
 
     @staticmethod

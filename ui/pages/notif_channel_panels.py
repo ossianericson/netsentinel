@@ -219,6 +219,12 @@ _ALERT_RULE_DEFS = [
      "Fires when a device's traffic deviates from its learned baseline (new destination, port, or rate spike)"),
     ("Trend Forecast", "TREND_FORECAST",
      "Fires an early warning when a metric is projected to cross its threshold soon"),
+    ("New Open Port", "NEW_OPEN_PORT",
+     "Fires when a known device opens a port that wasn't open on the last nightly sweep"),
+    ("New CVE Found", "NEW_CVE",
+     "Fires when a tracked service gains a newly published CVE"),
+    ("New Internet Exposure", "NEW_EXPOSURE",
+     "Fires when a port becomes newly reachable from the internet"),
 ]
 
 

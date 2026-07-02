@@ -21,7 +21,7 @@ from typing import List, Optional
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
+    QApplication, QCheckBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
     QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -174,6 +174,9 @@ class SecurityOverviewPage(QWidget):
 
     navigate_to             = pyqtSignal(str)
     scan_requested          = pyqtSignal()
+    # V6 Sprint 3 — (posture_key, enabled); posture_key is one of
+    # "port_sweep" | "cve_recheck" | "exposure_check"
+    posture_scheduling_changed = pyqtSignal(str, bool)
 
     def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -234,6 +237,10 @@ class SecurityOverviewPage(QWidget):
         # C-3: Scan Status card at top — one row per audit scan type
         root.addWidget(self._build_scan_status_card())
 
+        # V6 Sprint 3: opt-in scheduled posture scans (nightly port sweep,
+        # CVE re-check, weekly exposure check) — off by default.
+        root.addWidget(self._build_posture_scans_card())
+
         scan_hdr = QLabel("Security Scan Findings")
         scan_hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         scan_hdr.setStyleSheet(
@@ -288,6 +295,51 @@ class SecurityOverviewPage(QWidget):
 
         self._rebuild_scan_status_table()
         return card
+
+    # ── V6 Sprint 3: scheduled posture scans ─────────────────────────────────
+
+    def _build_posture_scans_card(self) -> QWidget:
+        """Opt-in toggles for the three scheduled posture scans (3.1/3.2/3.4).
+
+        Each toggle persists to QSettings and emits posture_scheduling_changed
+        so app.py can start/stop the matching ProactiveProbeWorker — same
+        shape as SpeedTestPage.auto_speedtest_changed.
+        """
+        card, body = _card("Scheduled Posture Scans")
+        body.setContentsMargins(8, 8, 8, 8)
+        body.setSpacing(4)
+
+        note = QLabel(
+            "Off by default. When enabled, these scans run automatically in the "
+            "background and alert you only on what changed since the last run."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        body.addWidget(note)
+
+        self._posture_checks: dict[str, QCheckBox] = {}
+        _toggles = (
+            ("port_sweep", "Nightly port-scan sweep of known devices — alerts on newly opened ports"),
+            ("cve_recheck", "Twice-daily CVE re-check for already-tracked services"),
+            ("exposure_check", "Weekly internet-exposure check — alerts on newly exposed ports"),
+        )
+        for key, label in _toggles:
+            chk = QCheckBox(label)
+            chk.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+            chk.setChecked(QSettings("NetSentinel", "NetSentinel").value(
+                f"posture/{key}_enabled", False, type=bool
+            ))
+            chk.stateChanged.connect(lambda _state, k=key: self._on_posture_toggle_changed(k))
+            self._posture_checks[key] = chk
+            body.addWidget(chk)
+
+        return card
+
+    def _on_posture_toggle_changed(self, key: str) -> None:
+        chk = self._posture_checks[key]
+        enabled = chk.isChecked()
+        QSettings("NetSentinel", "NetSentinel").setValue(f"posture/{key}_enabled", enabled)
+        self.posture_scheduling_changed.emit(key, enabled)
 
     def _copy_scan_status_md(self) -> None:
         """Copy the current scan registry as a Markdown table to the clipboard."""

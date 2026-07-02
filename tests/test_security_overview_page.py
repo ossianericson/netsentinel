@@ -77,6 +77,9 @@ def page(monkeypatch):
     _qs.remove("security/any_scan_done")
     _qs.remove("security/port_scan_done")
     _qs.remove("security/cred_scan_done")
+    _qs.remove("posture/port_sweep_enabled")
+    _qs.remove("posture/cve_recheck_enabled")
+    _qs.remove("posture/exposure_check_enabled")
     monkeypatch.setattr(
         "ui.pages.security_overview_page._THREAT_OK", False
     )
@@ -426,3 +429,44 @@ def test_cred_result_updates_flags(page):
     res = _CredResult(risk_flags=["Weak password"])
     page.on_cred_result(res)
     assert page._cred_scan_done  # confirms the handler ran without error
+
+
+# ── V6 Sprint 3: Scheduled Posture Scans card ────────────────────────────────
+
+def test_posture_toggles_default_off(page):
+    assert page._posture_checks["port_sweep"].isChecked() is False
+    assert page._posture_checks["cve_recheck"].isChecked() is False
+    assert page._posture_checks["exposure_check"].isChecked() is False
+
+
+def test_toggling_posture_checkbox_persists_and_emits(page):
+    from PyQt6.QtCore import QSettings
+    received = []
+    page.posture_scheduling_changed.connect(lambda key, enabled: received.append((key, enabled)))
+
+    page._posture_checks["port_sweep"].setChecked(True)
+
+    assert received == [("port_sweep", True)]
+    qs = QSettings("NetSentinel", "NetSentinel")
+    assert qs.value("posture/port_sweep_enabled", False, type=bool) is True
+
+
+def test_posture_toggle_restores_from_qsettings(monkeypatch):
+    from PyQt6.QtCore import QSettings
+    from PyQt6.QtWidgets import QApplication
+    qs = QSettings("NetSentinel", "NetSentinel")
+    qs.setValue("posture/cve_recheck_enabled", True)
+    monkeypatch.setattr("ui.pages.security_overview_page._THREAT_OK", False)
+
+    from ui.pages.security_overview_page import SecurityOverviewPage
+    w = SecurityOverviewPage(store=None, parent=None)
+    try:
+        assert w._posture_checks["cve_recheck"].isChecked() is True
+    finally:
+        w._refresh_timer.stop()
+        w.deleteLater()
+        qs.remove("posture/cve_recheck_enabled")
+        app = QApplication.instance()
+        if app:
+            for _ in range(3):
+                app.processEvents()

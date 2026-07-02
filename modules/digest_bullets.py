@@ -41,6 +41,11 @@ _RTT_ANOMALY_RULE_NAME = "RTT Anomaly"
 _IOT_BEHAVIOR_RULE_NAME = "IoT Behavior Anomaly"
 _TREND_FORECAST_RULE_NAME = "Trend Forecast"
 
+# V6 Sprint 3 — scheduled security posture + diffing, same gating pattern.
+_NEW_OPEN_PORT_RULE_NAME = "New Open Port"
+_NEW_CVE_RULE_NAME = "New CVE Found"
+_NEW_EXPOSURE_RULE_NAME = "New Internet Exposure"
+
 
 def build_digest_bullets(
     store,
@@ -87,6 +92,18 @@ def build_digest_bullets(
     bullets += _simple_rule_bullets(
         store, settings_get, hours, _TREND_FORECAST_RULE_NAME,
         lambda a: f"Forecast: {a.get('message', 'a metric is trending toward its threshold')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _NEW_OPEN_PORT_RULE_NAME,
+        lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'a new port opened overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _NEW_CVE_RULE_NAME,
+        lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'a new CVE was found overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _NEW_EXPOSURE_RULE_NAME,
+        lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'a port became newly exposed overnight')}",
     )
     return _cap_bullets(bullets)
 

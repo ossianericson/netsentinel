@@ -107,23 +107,34 @@ routing to the relevant page — same discipline as Sprint 1.
 
 **Effort:** L | **Benefit:** The big one. The value is not the scan — it's the **diff between runs**.
 
-- [ ] **3.1 Nightly port-scan sweep** of known inventory devices (opt-in,
+- [x] **3.1 Nightly port-scan sweep** of known inventory devices (opt-in,
       quiet-hours aware, via a `ProactiveProbeWorker`-pattern worker).
       Store per-device open-port snapshots in MetricStore; diff vs previous
       sweep → **NEW_OPEN_PORT** alert: "Port 23/telnet opened on 192.168.1.40
-      (NAS) since last sweep".
-- [ ] **3.2 Scheduled CVE re-check** for already-fingerprinted services →
+      (NAS) since last sweep". Implemented in `modules/port_sweep.py`, reusing
+      `modules/config_baseline.py`'s snapshot/diff engine (no new schema).
+- [x] **3.2 Scheduled CVE re-check** for already-fingerprinted services →
       **NEW_CVE** alert when a tracked service gains a CVE since last check
-      (CVE lifecycle tracker tables exist, schema v8).
-- [ ] **3.3 Auto-TLS enrolment** — `CertWorker` today checks only manually
+      (CVE lifecycle tracker tables exist, schema v8). Implemented in
+      `modules/cve_recheck.py`.
+- [x] **3.3 Auto-TLS enrolment** — `CertWorker` today checks only manually
       configured hosts; auto-enrol discovered hosts with 443/8443 open so
-      CERT_EXPIRY coverage needs no user setup.
-- [ ] **3.4 Weekly exposure check** — schedule the existing "Exposed to
-      Internet" scan (already headless-capable via `_AUDIT_SEQUENCE`); alert
-      on any newly exposed port.
-- [ ] **3.5 Scan registry integration** — scheduled runs call
+      CERT_EXPIRY coverage needs no user setup. Implemented in
+      `modules/cert_auto_enroll.py`, fed by each port-sweep result; removed
+      auto-targets are tracked in `cert_monitor/auto_excluded` so they are
+      never silently re-added.
+- [x] **3.4 Weekly exposure check** — schedule the existing "Exposed to
+      Internet" scan; alert on any newly exposed port. Implemented in
+      `modules/exposure_watch.py`, same snapshot/diff reuse as 3.1.
+- [x] **3.5 Scan registry integration** — scheduled runs call
       `_nav_set_scan_state()` so flyout dots / Security Overview Scan Status
-      stay fresh without clicks.
+      stay fresh without clicks. Wired in `app.py` (`_wire_port_sweep`,
+      `_wire_cve_recheck`, `_wire_exposure_watch`), reusing the existing
+      "Port Scan (TCP)" / "CVE Lookup" / "Exposed to Internet" labels.
+
+  Opt-in toggles live on the Security Overview page's new "Scheduled Posture
+  Scans" card (off by default). Per-rule alert toggles (New Open Port / New
+  CVE Found / New Internet Exposure) live on the Notifications page.
 
 ## Sprint 4 — Passive always-on guards
 

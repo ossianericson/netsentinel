@@ -11,6 +11,7 @@ Or double-click the compiled executable.
 
 import sys
 import os
+import time
 
 # ── Suppress CMD flashes in windowed exe ─────────────────────────────────────
 # On Windows, scapy calls subprocess.Popen (for `route print`, `arp -a`, etc.)
@@ -362,7 +363,10 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     _cert_targets = window._cert_page._load_targets()
     if _cert_targets:
         from modules.cert_monitor import CertTarget as _CertTarget
-        cert_worker.set_targets([_CertTarget(host=t["host"], ports=t.get("ports", [443])) for t in _cert_targets])
+        cert_worker.set_targets([
+            _CertTarget(host=t["host"], ports=t.get("ports", [443]), label=t.get("label", ""))
+            for t in _cert_targets
+        ])
     window._cert_page.certs_changed.connect(cert_worker.set_targets)
 
     svc_worker.check_done.connect(window._service_page.on_check_done)
@@ -553,6 +557,85 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
             worker.wait(3000)
 
     window._speed_test_page.auto_speedtest_changed.connect(_on_auto_speedtest_changed)
+
+
+def _wire_port_sweep(window, worker, alerts, store, cert_worker):
+    """V6 Sprint 3.1/3.3/3.5 — nightly port-scan sweep of known devices,
+    diffed against the prior sweep for NEW_OPEN_PORT alerts.  Also drives
+    3.3 auto-TLS enrolment (hosts with 443/8443 open feed the Cert page)
+    and 3.5 scan-registry freshness (reuses the "Port Scan (TCP)" label
+    already shown on the Security Overview Scan Status card)."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_port_sweep_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        try:
+            from modules.cert_auto_enroll import auto_enroll_from_sweep
+            window._cert_page.merge_auto_targets(
+                auto_enroll_from_sweep(report.all_devices, cert_worker.get_targets())
+            )
+        except Exception:
+            pass  # non-fatal — auto-enrolment failure must not block the sweep's own alerts
+        window._nav_set_scan_state(
+            "Port Scan (TCP)", "fresh", ts=time.time(),
+            verdict=f"{len(report.new_ports)} new open port(s) across {len(report.all_devices)} device(s)",
+        )
+
+    def _on_probe_error(msg: str) -> None:
+        window._nav_set_scan_state("Port Scan (TCP)", "error", error=msg)
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_cve_recheck(window, worker, alerts, store):
+    """V6 Sprint 3.2/3.5 — scheduled CVE re-check for already-fingerprinted
+    services, diffed against cve_lifecycle for NEW_CVE alerts."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_cve_recheck_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._nav_set_scan_state(
+            "CVE Lookup", "fresh", ts=time.time(),
+            verdict=f"{len(report.new_cves)} new CVE(s) found",
+        )
+
+    def _on_probe_error(msg: str) -> None:
+        window._nav_set_scan_state("CVE Lookup", "error", error=msg)
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_exposure_watch(window, worker, alerts, store):
+    """V6 Sprint 3.4/3.5 — weekly internet-exposure check, diffed against the
+    prior week's snapshot for NEW_EXPOSURE alerts."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_exposure_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._nav_set_scan_state(
+            "Exposed to Internet", "fresh", ts=time.time(),
+            verdict=f"{len(report.new_exposed)} newly exposed port(s)",
+        )
+
+    def _on_probe_error(msg: str) -> None:
+        window._nav_set_scan_state("Exposed to Internet", "error", error=msg)
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
 
 
 def _wire_trend_forecast(window, worker, alerts, store):
@@ -955,6 +1038,42 @@ def main():
         lambda: maint_manager.is_suppressed("speedtest") is not None
     )
 
+    # V6 Sprint 3 — scheduled security posture scans. Opt-in, default off
+    # (BACKLOG-V6 guardrail: no new background network activity without an
+    # explicit toggle) — enabled/started from the Security Overview
+    # "Scheduled Posture Scans" card via posture_scheduling_changed below.
+    from modules.port_sweep import run_nightly_port_sweep
+    from modules.cve_recheck import run_cve_recheck
+    from modules.exposure_watch import run_weekly_exposure_check
+
+    _posture_qs = QSettings("NetSentinel", "NetSentinel")
+    port_sweep_worker = ProactiveProbeWorker(
+        probe=lambda: run_nightly_port_sweep(store),
+        interval_s=24 * 3600,
+    )
+    port_sweep_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("port_sweep") is not None
+    )
+    cve_recheck_worker = ProactiveProbeWorker(
+        probe=lambda: run_cve_recheck(store),
+        interval_s=12 * 3600,
+    )
+    cve_recheck_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("cve_recheck") is not None
+    )
+    exposure_watch_worker = ProactiveProbeWorker(
+        probe=lambda: run_weekly_exposure_check(store),
+        interval_s=7 * 24 * 3600,
+    )
+    exposure_watch_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("exposure_check") is not None
+    )
+    _posture_workers = {
+        "port_sweep": port_sweep_worker,
+        "cve_recheck": cve_recheck_worker,
+        "exposure_check": exposure_watch_worker,
+    }
+
     # REST API worker — only starts when user has enabled it in Settings
     _qs = QSettings("NetSentinel", "NetSentinel")
     rest_api_worker: RestApiWorker | None = None
@@ -985,6 +1104,29 @@ def main():
     if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
         scheduled_speedtest_worker.start()
     _wire_trend_forecast(window, trend_worker, alerts, store)
+
+    # V6 Sprint 3.1/3.3/3.5, 3.2/3.5, 3.4/3.5 — scheduled posture scans.
+    # Each starts only if its Security Overview toggle was already on at
+    # launch; the toggle's posture_scheduling_changed signal starts/stops
+    # the matching worker for the rest of the session.
+    _wire_port_sweep(window, port_sweep_worker, alerts, store, cert_worker)
+    _wire_cve_recheck(window, cve_recheck_worker, alerts, store)
+    _wire_exposure_watch(window, exposure_watch_worker, alerts, store)
+
+    def _on_posture_scheduling_changed(key: str, enabled: bool) -> None:
+        posture_worker = _posture_workers.get(key)
+        if posture_worker is None:
+            return
+        if enabled and not posture_worker.isRunning():
+            posture_worker.start()
+        elif not enabled and posture_worker.isRunning():
+            posture_worker.stop()
+            posture_worker.wait(3000)
+
+    window._security_overview_page.posture_scheduling_changed.connect(_on_posture_scheduling_changed)
+    for _key, _posture_worker in _posture_workers.items():
+        if _posture_qs.value(f"posture/{_key}_enabled", False, type=bool):
+            _posture_worker.start()
 
     # S2-5: wire ambient health worker → home page card + system tray
     health_worker.result_ready.connect(window._home_page.on_health_update)
