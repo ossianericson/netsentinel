@@ -2,6 +2,7 @@
 from modules.device_classifier import (
     ClassificationResult,
     classify,
+    classify_registry_first,
     classify_with_evidence,
     is_randomized_mac,
 )
@@ -567,3 +568,32 @@ def test_smart_bulb_label_in_get_all_device_types():
 def test_smart_thermostat_label_in_get_all_device_types():
     from modules.device_classifier import get_all_device_types
     assert "Smart Thermostat" in get_all_device_types()
+
+
+# ── classify_registry_first (Phase 2c — unified registry-first entry point) ──
+
+def test_classify_registry_first_uses_mac_registry_device_type():
+    # 54:60:09 is a Google Chromecast OUI mapped to "Streaming Stick" in mac_registry.
+    result = classify_registry_first(
+        mac="54:60:09:aa:bb:cc", vendor="", hostname="", open_ports=set(),
+    )
+    assert result == "Streaming Stick"
+
+
+def test_classify_registry_first_falls_back_to_classify_when_mac_unknown():
+    result = classify_registry_first(
+        mac="", vendor="Hikvision Digital Technology", hostname="", open_ports=set(),
+    )
+    assert result == "IP Camera"
+
+
+def test_classify_registry_first_falls_back_when_mac_not_in_registry():
+    result = classify_registry_first(
+        mac="00:00:00:00:00:00", vendor="Hikvision Digital Technology",
+        hostname="", open_ports=set(),
+    )
+    assert result == "IP Camera"
+
+
+def test_classify_registry_first_respects_is_gateway():
+    assert classify_registry_first(mac="", is_gateway=True) == "Router / Gateway"

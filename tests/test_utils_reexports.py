@@ -38,9 +38,13 @@ def test_classify_with_evidence_is_canonical():
     assert utils.classify_with_evidence is device_classifier.classify_with_evidence
 
 
+def test_classify_registry_first_is_canonical():
+    assert utils.classify_registry_first is device_classifier.classify_registry_first
+
+
 def test_all_reexports_listed_in_dunder_all():
     for name in (
         "lookup_vendor", "ResolvedName", "resolve", "resolve_batch",
-        "classify", "classify_device", "classify_with_evidence",
+        "classify", "classify_device", "classify_with_evidence", "classify_registry_first",
     ):
         assert name in utils.__all__

@@ -864,7 +864,7 @@ class ScanEnrichmentMixin:
         # Re-classify any device still showing "Unknown Device" that now has
         # a usable hostname from mesh/plugin enrichment.
         try:
-            from modules.device_classifier import classify_device as _cd
+            from modules.device_classifier import classify_registry_first as _cd
             from PyQt6.QtGui import QColor as _QC
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
             _mac_to_row: dict = {}
@@ -876,7 +876,14 @@ class ScanEnrichmentMixin:
                 _cur_type = (_d.device_type if not isinstance(_d, dict) else _d.get("device_type", "")) or ""
                 if _cur_type and _cur_type != "Unknown Device":
                     continue
-                _new_type = _cd(_d)
+                _is_dict = isinstance(_d, dict)
+                _new_type = _cd(
+                    mac=_d.get("mac", "") if _is_dict else getattr(_d, "mac", ""),
+                    vendor=_d.get("vendor", "") if _is_dict else getattr(_d, "vendor", ""),
+                    hostname=_d.get("hostname", "") if _is_dict else getattr(_d, "hostname", ""),
+                    open_ports=set(_d.get("open_ports", []) if _is_dict else (getattr(_d, "open_ports", []) or [])),
+                    os_family=_d.get("os_family", "") if _is_dict else getattr(_d, "os_family", ""),
+                )
                 if not _new_type or _new_type == "Unknown Device":
                     continue
                 if isinstance(_d, dict):

@@ -29,7 +29,9 @@ from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6  # noqa: F4
 # Canonical re-exports for lookup/resolver/classifier helpers (do not remove).
 from modules.mac_lookup import lookup_vendor  # noqa: F401
 from modules.name_resolver import ResolvedName, resolve, resolve_batch, rdns  # noqa: F401
-from modules.device_classifier import classify, classify_device, classify_with_evidence  # noqa: F401
+from modules.device_classifier import (  # noqa: F401
+    classify, classify_device, classify_with_evidence, classify_registry_first,
+)
 
 # Explicit re-export list so CodeQL recognises these as intentional re-exports.
 __all__ = [
@@ -37,7 +39,7 @@ __all__ = [
     "get_ipv6_devices", "ping_sweep_ipv6",
     "lookup_vendor",
     "ResolvedName", "resolve", "resolve_batch", "rdns",
-    "classify", "classify_device", "classify_with_evidence",
+    "classify", "classify_device", "classify_with_evidence", "classify_registry_first",
 ]
 
 
