@@ -629,7 +629,10 @@ class SpeedTestPage(QWidget):
         scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
 
         content = QWidget()
-        content.setStyleSheet("background:transparent;")
+        content.setObjectName("speedTestContent")
+        # RULE-QSS1: objectName-scoped — a bare "background:transparent;" here
+        # propagates to every descendant and wipes the Run button's app-QSS style
+        content.setStyleSheet("QWidget#speedTestContent { background: transparent; }")
         cbox = QVBoxLayout(content)
         cbox.setContentsMargins(0, 0, 0, 0)
         cbox.setSpacing(8)

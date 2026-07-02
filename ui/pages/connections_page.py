@@ -403,8 +403,12 @@ class ConnectionsPage(QWidget):
 
         # Blocked rules panel
         blocked_frame = QFrame()
+        blocked_frame.setObjectName("blockedRulesFrame")
+        # RULE-QSS1: objectName-scoped so the card style does not propagate to
+        # the Reload button (bare declarations wipe its app-QSS #btnNetRefresh style)
         blocked_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:0;"
+            f"QFrame#blockedRulesFrame {{ background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:0; }}"
         )
         blocked_lay = QVBoxLayout(blocked_frame)
         blocked_lay.setContentsMargins(12, 8, 12, 8)
@@ -418,8 +422,8 @@ class ConnectionsPage(QWidget):
         )
         btn_reload_rules = QPushButton("Reload")
         btn_reload_rules.setObjectName("btnNetRefresh")
-        btn_reload_rules.setFixedHeight(22)
-        btn_reload_rules.setFixedWidth(60)
+        # No tight fixed size — the app-QSS #btnNetRefresh style needs
+        # room for its own padding/min-height or the text clips
         btn_reload_rules.clicked.connect(self._load_blocked_rules)
         hdr.addWidget(hdr_lbl)
         hdr.addStretch()

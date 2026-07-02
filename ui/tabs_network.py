@@ -130,8 +130,12 @@ class _NetworkTabsMixin:
 
         # ── OS network settings shortcuts ─────────────────────────────────────
         os_frame = QFrame()
+        os_frame.setObjectName("osShortcutsCard")
+        # RULE-QSS1: objectName-scoped so the card style does not propagate to
+        # the shortcut buttons (bare declarations wipe their app-QSS #btnNetRefresh style)
         os_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+            f"QFrame#osShortcutsCard {{ background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
         )
         os_l = QVBoxLayout(os_frame)
         os_l.setContentsMargins(18, 12, 18, 12)

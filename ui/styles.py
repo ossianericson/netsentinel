@@ -490,6 +490,13 @@ QWidget {{
     font-family: 'Segoe UI', Arial, sans-serif;
     font-size: 12px;
 }}
+/* Labels never paint the page background — they sit on whatever surface their
+   container paints (card, header, tile). Without this, every unstyled QLabel
+   inherits the QWidget rule above and draws a BG_DARK box over its card
+   (RULE-QSS1). Labels that need a badge background set it explicitly. */
+QLabel {{
+    background: transparent;
+}}
 
 /* ── Top application bar (objectName="appBar") ── */
 #appBar {{

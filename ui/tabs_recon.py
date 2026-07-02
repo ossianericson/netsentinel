@@ -1385,8 +1385,12 @@ class _ReconTabsMixin:
 
         # ── Input area ────────────────────────────────────────────────────────
         input_frame = QFrame()
+        input_frame.setObjectName("peInputCard")
+        # RULE-QSS1: objectName-scoped so the card style does not propagate to
+        # the Run Checks button (bare declarations wipe its app-QSS #btnDiag style)
         input_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+            f"QFrame#peInputCard {{ background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
         )
         input_lay = QVBoxLayout(input_frame)
         input_lay.setContentsMargins(14, 10, 14, 10)
