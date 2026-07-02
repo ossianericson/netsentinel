@@ -23,11 +23,23 @@ Architecture note (ARCH RULE 2):
   MetricStore is instantiated ONCE in app.py / svc.py and injected as a dependency.
   Never construct MetricStore inside a page widget or module.
 
-Split plan (Sprint 2 — execute if file exceeds 730 lines):
-  Next chunk to extract: write-path methods for device_state and known_device tables
-  (record_device_state, upsert_known_device, update_known_device_label and their helpers)
-  → target file: modules/metric_store_writes_device.py (new _DeviceWritesMixin).
-  MetricStore would inherit the new mixin after _UptimeQueriesMixin.
+Single-writer invariant for scan-driven device inventory (Phase 3c):
+  • known_device.last_seen = timestamp of the most recent scan that saw the MAC
+    (any IP). known_device.last_seen == MAX(device_ip_history.last_seen) for
+    that MAC after every scan-driven update.
+  • device_ip_history.last_seen/seen_count is the per-(mac, ip) granular view,
+    written only via record_ip_observation().
+  • known_device.scan_count / ip_stability / inferred_role are derived from
+    device_ip_history and recomputed at the end of every
+    DeviceTracker.process_scan() call — never written elsewhere.
+  • No transaction wrapper across these writes: they stay sequential under
+    _write_lock. Telemetry is tolerably lossy and stability derives read-only
+    from device_ip_history, so a crash between steps self-heals on the next
+    scan. This is intentional — do not "fix" it with a transaction wrapper.
+
+Device-inventory write methods (record_ip_observation, upsert_known_device,
+record_device_state, device_annotations/device_events/topology_snapshots, etc.)
+live in modules/metric_store_writes_device.py (_DeviceWritesMixin, Phase 3 split).
 """
 
 import sqlite3
@@ -56,9 +68,10 @@ __all__ = [
     "RttPoint", "ServiceCheckPoint", "SpeedTestPoint",
 ]
 from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
+from modules.metric_store_writes_device import _DeviceWritesMixin
 
 
-class MetricStore(MetricStoreQueryMixin):
+class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
     """
     Thread-safe time-series store. Default backend is built-in sqlite3.
 
@@ -204,111 +217,6 @@ class MetricStore(MetricStoreQueryMixin):
             "INSERT INTO rtt_sample(ts, host, rtt_ms, loss_pct, jitter_ms) "
             "VALUES(?, ?, ?, ?, ?)",
             (now, host, rtt_ms, loss_pct, jitter_ms),
-        )
-
-    # ── Write: device state snapshots ────────────────────────────────────────
-
-    def record_device_state(
-        self,
-        ip: str,
-        mac: Optional[str],
-        hostname: Optional[str],
-        state: str,
-        rtt_ms: Optional[float] = None,
-        ts: Optional[int] = None,
-    ) -> None:
-        now = ts or int(time.time())
-        self._execute_write(
-            "INSERT INTO device_state(ts, ip, mac, hostname, state, rtt_ms) "
-            "VALUES(?, ?, ?, ?, ?, ?)",
-            (now, ip, mac, hostname, state.upper(), rtt_ms),
-        )
-
-    # ── Write: device events ──────────────────────────────────────────────────
-
-    def record_device_event(
-        self,
-        ip: str,
-        event_type: str,
-        mac: Optional[str] = None,
-        detail: Optional[str] = None,
-        ts: Optional[int] = None,
-    ) -> None:
-        now = ts or int(time.time())
-        _valid = {"JOINED", "LEFT", "UP", "DOWN", "DEGRADED", "RECOVERED"}
-        if event_type.upper() not in _valid:
-            raise ValueError(f"event_type must be one of {_valid}, got {event_type!r}")
-        self._execute_write(
-            "INSERT INTO device_event(ts, ip, mac, event_type, detail) "
-            "VALUES(?, ?, ?, ?, ?)",
-            (now, ip, mac, event_type.upper(), detail),
-        )
-
-    # ── Write: known device inventory ─────────────────────────────────────────
-
-    def upsert_known_device(
-        self,
-        mac: str,
-        ip: Optional[str] = None,
-        hostname: Optional[str] = None,
-        vendor: Optional[str] = None,
-        device_type: Optional[str] = None,
-        is_authorized: Optional[bool] = True,
-        ts: Optional[int] = None,
-        services: Optional[str] = None,
-        mac_randomized: Optional[bool] = None,
-        confidence: Optional[float] = None,
-    ) -> None:
-        now = ts or int(time.time())
-        auth_val: Optional[int] = None if is_authorized is None else int(is_authorized)
-        rand_val: Optional[int] = None if mac_randomized is None else int(mac_randomized)
-        self._execute_write(
-            """
-            INSERT INTO known_device
-                (mac, ip, hostname, vendor, device_type,
-                 first_seen, last_seen, is_authorized,
-                 services, mac_randomized, confidence)
-            VALUES(?, ?, ?, ?, ?, ?, ?, COALESCE(?, 1),
-                   ?, COALESCE(?, 0), COALESCE(?, 0.0))
-            ON CONFLICT(mac) DO UPDATE SET
-                ip            = excluded.ip,
-                hostname      = COALESCE(excluded.hostname, hostname),
-                vendor        = COALESCE(excluded.vendor,   vendor),
-                device_type   = COALESCE(excluded.device_type, device_type),
-                last_seen     = excluded.last_seen,
-                is_authorized = CASE WHEN ? IS NULL THEN is_authorized
-                                     ELSE ? END,
-                services      = COALESCE(excluded.services, services),
-                mac_randomized = COALESCE(excluded.mac_randomized, mac_randomized),
-                confidence    = COALESCE(excluded.confidence, confidence)
-            """,
-            (mac, ip, hostname, vendor, device_type, now, now, auth_val,
-             services, rand_val, confidence,
-             auth_val, auth_val),
-        )
-
-    def set_device_authorized(self, mac: str, authorized: bool) -> None:
-        self._execute_write(
-            "UPDATE known_device SET is_authorized = ? WHERE mac = ?",
-            (int(authorized), mac),
-        )
-
-    # ── Write: Classification overrides ──────────────────────────────────────
-
-    def set_classification_override(self, mac: str, device_type: str) -> None:
-        """Permanently override the device type for a MAC (survives all enrichment)."""
-        self._execute_write(
-            "INSERT INTO device_classification_overrides (mac, device_type) "
-            "VALUES (?, ?) ON CONFLICT(mac) DO UPDATE SET "
-            "device_type = excluded.device_type, overridden_at = datetime('now')",
-            (mac.lower(), device_type),
-        )
-
-    def clear_classification_override(self, mac: str) -> None:
-        """Remove the user type override for this MAC, restoring auto-classification."""
-        self._execute_write(
-            "DELETE FROM device_classification_overrides WHERE mac = ?",
-            (mac.lower(),),
         )
 
     # ── Write: TLS certificate checks ─────────────────────────────────────────

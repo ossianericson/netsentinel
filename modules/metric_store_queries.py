@@ -182,6 +182,149 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             for r in rows
         }
 
+    # ── Read: device IP history ───────────────────────────────────────────────
+
+    def get_ip_history(self, mac: str) -> List[Dict]:
+        """Return [{ip, first_seen, last_seen, seen_count}] sorted by last_seen desc."""
+        rows = self._execute_read(
+            """
+            SELECT ip, first_seen, last_seen, seen_count
+            FROM device_ip_history
+            WHERE mac = ?
+            ORDER BY last_seen DESC
+            """,
+            (mac.lower(),),
+        )
+        return [
+            {"ip": r[0], "first_seen": r[1], "last_seen": r[2], "seen_count": r[3]}
+            for r in rows
+        ]
+
+    # ── Read: device annotations ──────────────────────────────────────────────
+
+    def get_device_annotations(self, mac: str) -> Dict:
+        """Return annotation dict for a MAC; empty dict if not found."""
+        rows = self._execute_read(
+            "SELECT user_label, location, owner, notes, asset_tag, updated_at "
+            "FROM device_annotations WHERE mac = ?",
+            (mac.lower(),),
+        )
+        if not rows:
+            return {}
+        r = rows[0]
+        return {
+            "user_label": r[0] or "",
+            "location":   r[1] or "",
+            "owner":      r[2] or "",
+            "notes":      r[3] or "",
+            "asset_tag":  r[4] or "",
+            "updated_at": r[5] or "",
+        }
+
+    def get_all_device_annotations(self) -> Dict[str, Dict]:
+        """Return {mac: annotation_dict} for all annotated devices."""
+        rows = self._execute_read(
+            "SELECT mac, user_label, location, owner, notes, asset_tag, updated_at "
+            "FROM device_annotations",
+            (),
+        )
+        result: Dict[str, Dict] = {}
+        for r in rows:
+            result[r[0]] = {
+                "user_label": r[1] or "",
+                "location":   r[2] or "",
+                "owner":      r[3] or "",
+                "notes":      r[4] or "",
+                "asset_tag":  r[5] or "",
+                "updated_at": r[6] or "",
+            }
+        return result
+
+    # ── Read: device change audit trail (device_events table) ────────────────
+
+    def get_device_change_events(
+        self,
+        mac: str,
+        limit: int = 50,
+    ) -> List[Dict]:
+        """Return [{event_type, old_value, new_value, source, ts}] newest-first."""
+        rows = self._execute_read(
+            """
+            SELECT event_type, old_value, new_value, source, ts
+            FROM device_events
+            WHERE mac = ?
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (mac.lower(), limit),
+        )
+        return [
+            {
+                "event_type": r[0],
+                "old_value":  r[1] or "",
+                "new_value":  r[2] or "",
+                "source":     r[3] or "",
+                "ts":         r[4],
+            }
+            for r in rows
+        ]
+
+    def get_all_device_change_events(
+        self,
+        limit: int = 500,
+        hours: int = 168,
+    ) -> List[Dict]:
+        """Return recent device change events across all MACs, newest-first."""
+        rows = self._execute_read(
+            """
+            SELECT mac, event_type, old_value, new_value, source, ts
+            FROM device_events
+            WHERE ts >= datetime('now', ? || ' hours')
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (f"-{hours}", limit),
+        )
+        return [
+            {
+                "mac":        r[0],
+                "event_type": r[1],
+                "old_value":  r[2] or "",
+                "new_value":  r[3] or "",
+                "source":     r[4] or "",
+                "ts":         r[5],
+            }
+            for r in rows
+        ]
+
+    # ── Read: topology snapshots ──────────────────────────────────────────────
+
+    def get_last_topology_snapshot(self) -> Optional[tuple]:
+        """Return (ts, data_json) for the most recent topology snapshot, or None."""
+        rows = self._execute_read(
+            "SELECT ts, data_json FROM topology_snapshots ORDER BY ts DESC LIMIT 1",
+        )
+        return tuple(rows[0]) if rows else None
+
+    def query_known_devices_summary(self) -> List[Dict]:
+        """Return known_device rows as plain dicts (REST API /devices shape)."""
+        rows = self._execute_read(
+            "SELECT mac, ip, hostname, vendor, device_type, "
+            "first_seen, last_seen, is_authorized, category, custom_name, room "
+            "FROM known_device ORDER BY last_seen DESC",
+            (),
+        )
+        return [dict(r) for r in rows]
+
+    def query_device_state_since(self, ip: str, since: int) -> List[Dict]:
+        """Return device_state rows (ts, state, rtt_ms) for `ip` since `since` (REST API /uptime)."""
+        rows = self._execute_read(
+            "SELECT ts, state, rtt_ms FROM device_state "
+            "WHERE ip=? AND ts>=? ORDER BY ts ASC",
+            (ip, since),
+        )
+        return [dict(r) for r in rows]
+
     # ── Read: Classification overrides ───────────────────────────────────────
 
     def get_classification_override(self, mac: str) -> Optional[str]:

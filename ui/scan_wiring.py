@@ -580,11 +580,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
             host    = d.hostname if not isinstance(d, dict) else d.get("hostname", "")
             mac     = d.mac      if not isinstance(d, dict) else d.get("mac", "?")
             if _store_ref and mac and mac not in ("?", "00:00:00:00:00:00") and ip and ip != "?":
-                try:
-                    from modules.device_tracker import record_ip_observation as _rec_ip
-                    _rec_ip(mac, ip, _store_ref)
-                except Exception:
-                    pass  # non-fatal — table may not exist on schema upgrade
+                # record_ip_observation() is NOT called here — DeviceTracker.process_scan()
+                # (below, same handler) is the single write path for device_ip_history to
+                # avoid double-incrementing seen_count per scan (Phase 3a fix).
                 # ── Device change audit events ────────────────────────────────
                 _old_kd = _known_before.get(mac.lower())
                 if _old_kd:

@@ -199,6 +199,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 - Dark-theme `BORDER` (`rgba(255,255,255,0.08)`) no longer crashes matplotlib or renders black in `QColor`; new `CHART_SPINE` plain-hex alias routes all non-QSS border colours safely
 - Monitor resume and alert banners confined to the content area (no longer bleed over the nav rail)
 - Arctic Clean active nav text raised to WCAG AA+ contrast (~6.9:1)
+- Device inventory scan counts and IP-stability scores were quietly inflating (double-counted every scan) — fixed, and all direct database access from device tracking code now goes through the proper data layer
 
 ---
 

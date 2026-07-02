@@ -16,9 +16,12 @@ All notable changes to NetSentinel are documented here. The current version summ
 **Changed**
 - `MaintenanceWindowManager.record_suppression()` is now wired into `AlertEngine` via a new `set_suppression_recorder()` hook, so suppressed alerts actually appear in the maintenance suppression log
 - `modules/alert_engine.py` maintenance-checker logic split into a new `_MaintenanceSuppressionMixin` (in `modules/alert_suppressor.py`) to stay under the 600-line module budget
+- `modules/device_stability.py` and `modules/device_tracker.py` no longer call `MetricStore._execute_write()`/`_execute_read()` directly — all device inventory writes/reads (IP history, annotations, change-event audit trail, stability scoring, topology snapshots) now go through new public `MetricStore` methods; same for `modules/topology_snapshot.py` and the `/devices`/`/uptime` routes in `modules/rest_api.py`
+- `modules/metric_store.py` split: device-inventory write methods (`record_ip_observation`, `upsert_known_device`, `record_device_state`, etc.) moved to new `modules/metric_store_writes_device.py` (`_DeviceWritesMixin`) to stay under the module LOC budget
 
 **Fixed**
 - Startup flash of a native OS-decorated window (title bar + min/max/close) for a fraction of a second: `ui/tabs_scan.py` (STP Capture / Broadcast Storm empty-state buttons), `ui/pages/home_page.py` (`setupCompleteCard`), and `ui/pages/log_source_panel.py` (Network Logger source-toggle buttons) were calling `.setVisible(...)` on a widget *before* it was added to its parent layout — Qt treats a still-parentless widget as an independent top-level window and gives it full native chrome. Fix: call `.setVisible(...)` only after `addWidget()`
+- `device_ip_history.seen_count` no longer double-increments per scan: `ui/scan_wiring.py` was calling `record_ip_observation()` directly in the same handler where `DeviceTracker.process_scan()` (the intended single write path) also calls it, doubling `seen_count`/`scan_count` and skewing `ip_stability` every scan
 
 ---
 

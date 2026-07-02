@@ -15,6 +15,12 @@ class _FakeStore:
     def _execute_read(self, sql: str, params: tuple = ()):
         return []
 
+    def query_known_devices_summary(self):
+        return []
+
+    def query_device_state_since(self, ip: str, since: int):
+        return []
+
     def get_recent_alerts(self, hours: float = 24.0, limit: int = 200):
         return []
 

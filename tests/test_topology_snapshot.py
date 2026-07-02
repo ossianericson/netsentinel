@@ -230,6 +230,23 @@ class _StubStore:
     def _execute_read(self, sql, params=()):
         return self._conn.execute(sql, params).fetchall()
 
+    def save_topology_snapshot(self, ts, data_json, keep=10):
+        self._execute_write(
+            "INSERT INTO topology_snapshots (ts, data_json) VALUES (?, ?)",
+            (ts, data_json),
+        )
+        self._execute_write(
+            "DELETE FROM topology_snapshots WHERE id NOT IN "
+            "(SELECT id FROM topology_snapshots ORDER BY ts DESC LIMIT ?)",
+            (keep,),
+        )
+
+    def get_last_topology_snapshot(self):
+        rows = self._execute_read(
+            "SELECT ts, data_json FROM topology_snapshots ORDER BY ts DESC LIMIT 1",
+        )
+        return tuple(rows[0]) if rows else None
+
 
 def test_save_and_load_round_trip():
     from modules.topology_snapshot import TopologySnapshot, save_snapshot, load_last_snapshot

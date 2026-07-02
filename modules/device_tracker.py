@@ -13,7 +13,6 @@ Architecture rules observed:
 
 from __future__ import annotations
 
-import datetime
 import json
 import time
 from dataclasses import dataclass, field
@@ -112,6 +111,14 @@ class DeviceTracker:
           • Writes a LEFT event for known devices absent longer than gone_threshold_s.
 
         Returns a TrackerResult describing what changed.
+
+        Single-writer invariant (Phase 3c): this is the ONLY place scan-driven
+        known_device.last_seen / scan_count / ip_stability / inferred_role are
+        written. Callers must never call record_ip_observation() or update
+        those columns directly for scan results — route through process_scan()
+        instead (see MetricStore module docstring for the full invariant).
+        A prior bug had ui/scan_wiring.py call record_ip_observation() directly
+        in addition to this method for the same scan, doubling seen_count.
         """
         now     = int(time.time())
         result  = TrackerResult(scan_ts=now)
@@ -146,10 +153,12 @@ class DeviceTracker:
                 services=services_json,
             )
 
-            # Record this IP observation in device_ip_history (feeds stability scoring)
+            # Record this IP observation in device_ip_history (feeds stability scoring).
+            # Uses the same `now` as upsert_known_device() above so
+            # known_device.last_seen == MAX(device_ip_history.last_seen) holds exactly.
             if td.ip:
                 try:
-                    record_ip_observation(td.mac, td.ip, self._store)
+                    self._store.record_ip_observation(td.mac, td.ip, ts=now)
                 except Exception:
                     pass  # non-fatal — history table may not exist on first run
 
@@ -245,89 +254,26 @@ class DeviceTracker:
 
 # ── Module-level annotation / IP-history helpers (Sprint 2) ──────────────────
 
-def _utcnow() -> str:
-    return datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-
-
 def record_ip_observation(mac: str, ip: str, store: "MetricStore") -> None:
-    """Upsert mac+ip combo into device_ip_history."""
-    if not mac or not ip:
-        return
-    now = _utcnow()
-    store._execute_write(
-        """
-        INSERT INTO device_ip_history (mac, ip, first_seen, last_seen, seen_count)
-        VALUES (?, ?, ?, ?, 1)
-        ON CONFLICT(mac, ip) DO UPDATE SET
-            last_seen  = excluded.last_seen,
-            seen_count = seen_count + 1
-        """,
-        (mac.lower(), ip, now, now),
-    )
+    """Upsert mac+ip combo into device_ip_history. Delegates to MetricStore's
+    public API — kept as a module-level function so external callers/tests
+    don't break (see MetricStore.record_ip_observation for the write)."""
+    store.record_ip_observation(mac, ip)
 
 
 def get_ip_history(mac: str, store: "MetricStore") -> List[Dict]:
     """Return [{ip, first_seen, last_seen, seen_count}] sorted by last_seen desc."""
-    rows = store._execute_read(
-        """
-        SELECT ip, first_seen, last_seen, seen_count
-        FROM device_ip_history
-        WHERE mac = ?
-        ORDER BY last_seen DESC
-        """,
-        (mac.lower(),),
-    )
-    return [
-        {"ip": r[0], "first_seen": r[1], "last_seen": r[2], "seen_count": r[3]}
-        for r in rows
-    ]
+    return store.get_ip_history(mac)
 
 
 def save_annotations(mac: str, store: "MetricStore", **kwargs) -> None:
     """Upsert user_label/location/owner/notes/asset_tag for a MAC."""
-    now = _utcnow()
-    store._execute_write(
-        """
-        INSERT INTO device_annotations (mac, user_label, location, owner, notes, asset_tag, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(mac) DO UPDATE SET
-            user_label = excluded.user_label,
-            location   = excluded.location,
-            owner      = excluded.owner,
-            notes      = excluded.notes,
-            asset_tag  = excluded.asset_tag,
-            updated_at = excluded.updated_at
-        """,
-        (
-            mac.lower(),
-            kwargs.get("user_label", ""),
-            kwargs.get("location", ""),
-            kwargs.get("owner", ""),
-            kwargs.get("notes", ""),
-            kwargs.get("asset_tag", ""),
-            now,
-        ),
-    )
+    store.save_device_annotations(mac, **kwargs)
 
 
 def get_annotations(mac: str, store: "MetricStore") -> Dict:
     """Return annotation dict for a MAC; empty dict if not found."""
-    rows = store._execute_read(
-        "SELECT user_label, location, owner, notes, asset_tag, updated_at "
-        "FROM device_annotations WHERE mac = ?",
-        (mac.lower(),),
-    )
-    if not rows:
-        return {}
-    r = rows[0]
-    return {
-        "user_label": r[0] or "",
-        "location":   r[1] or "",
-        "owner":      r[2] or "",
-        "notes":      r[3] or "",
-        "asset_tag":  r[4] or "",
-        "updated_at": r[5] or "",
-    }
+    return store.get_device_annotations(mac)
 
 
 def record_event(
@@ -339,16 +285,7 @@ def record_event(
     store: "MetricStore",
 ) -> None:
     """Write a row to the device_events audit table."""
-    if not mac:
-        return
-    now = _utcnow()
-    store._execute_write(
-        """
-        INSERT INTO device_events (mac, event_type, old_value, new_value, source, ts)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (mac.lower(), event_type, old_value or "", new_value or "", source or "", now),
-    )
+    store.record_device_change_event(mac, event_type, old_value, new_value, source)
 
 
 def get_device_events(
@@ -357,26 +294,7 @@ def get_device_events(
     limit: int = 50,
 ) -> List[Dict]:
     """Return [{event_type, old_value, new_value, source, ts}] newest-first."""
-    rows = store._execute_read(
-        """
-        SELECT event_type, old_value, new_value, source, ts
-        FROM device_events
-        WHERE mac = ?
-        ORDER BY ts DESC
-        LIMIT ?
-        """,
-        (mac.lower(), limit),
-    )
-    return [
-        {
-            "event_type": r[0],
-            "old_value":  r[1] or "",
-            "new_value":  r[2] or "",
-            "source":     r[3] or "",
-            "ts":         r[4],
-        }
-        for r in rows
-    ]
+    return store.get_device_change_events(mac, limit)
 
 
 def get_all_device_events(
@@ -385,44 +303,9 @@ def get_all_device_events(
     hours: int = 168,
 ) -> List[Dict]:
     """Return recent device change events across all MACs, newest-first."""
-    rows = store._execute_read(
-        """
-        SELECT mac, event_type, old_value, new_value, source, ts
-        FROM device_events
-        WHERE ts >= datetime('now', ? || ' hours')
-        ORDER BY ts DESC
-        LIMIT ?
-        """,
-        (f"-{hours}", limit),
-    )
-    return [
-        {
-            "mac":        r[0],
-            "event_type": r[1],
-            "old_value":  r[2] or "",
-            "new_value":  r[3] or "",
-            "source":     r[4] or "",
-            "ts":         r[5],
-        }
-        for r in rows
-    ]
+    return store.get_all_device_change_events(limit, hours)
 
 
 def get_all_annotations(store: "MetricStore") -> Dict[str, Dict]:
     """Return {mac: annotation_dict} for all annotated devices."""
-    rows = store._execute_read(
-        "SELECT mac, user_label, location, owner, notes, asset_tag, updated_at "
-        "FROM device_annotations",
-        (),
-    )
-    result: Dict[str, Dict] = {}
-    for r in rows:
-        result[r[0]] = {
-            "user_label": r[1] or "",
-            "location":   r[2] or "",
-            "owner":      r[3] or "",
-            "notes":      r[4] or "",
-            "asset_tag":  r[5] or "",
-            "updated_at": r[6] or "",
-        }
-    return result
+    return store.get_all_device_annotations()

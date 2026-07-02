@@ -20,10 +20,12 @@ DEFAULT_BUDGET = 600
 # Each entry documents WHY and WHAT the split should be.
 # Budgets are set to current actuals + a small margin; tighten as splits land.
 KNOWN_LARGE_MODULES: dict[str, int] = {
-    # Grew after adding upsert_segment() + delete_segment() (Sprint 4 network segments).
-    # Sprint 6: added record_app_traffic_sample()/prune_app_traffic_samples().
-    # Natural split: move segment + traffic-sample write methods to metric_store_schema.py.
-    "metric_store.py": 730,
+    # Phase 3 (device-tracker double-count fix + raw-SQL encapsulation): extracted
+    # device-inventory write methods to metric_store_writes_device.py
+    # (_DeviceWritesMixin), bringing this file from 856 down to 625 lines.
+    # Natural next split: move segment + traffic-sample write methods to
+    # metric_store_schema.py to get under the 600-line default budget.
+    "metric_store.py": 650,
 
     # Grew to ~694 lines after P1-2/P1-3 additions (Smart Plug, Smart Bulb,
     # Thermostat rules + device_types import).  Natural split: extract _RULES
