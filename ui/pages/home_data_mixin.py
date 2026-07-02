@@ -1213,9 +1213,13 @@ class _HomeDataMixin:
             f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY}; border:none;"
             " letter-spacing:1.5px;"
         )
-        run_all_btn = QPushButton("▶  Run All")
+        run_all_btn = QPushButton("▶  Rescan")
         run_all_btn.setFixedHeight(22)
         run_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        run_all_btn.setToolTip(
+            "Runs a full device scan. For Security Audit, Speed Test, and other "
+            "categories, use each row's own button below."
+        )
         run_all_btn.setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:10px;"
             f" border:none; border-radius:3px; padding:0 8px; }}"

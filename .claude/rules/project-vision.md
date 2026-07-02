@@ -97,7 +97,7 @@ polish, discoverability, and bug fixes.
 - **Weekly digest tray notification** — 7-day summary on startup if 7+ days elapsed
 - **Dismissible browser dashboard strip** — shown when REST API is enabled; links to `/dashboard`
 - **Dismissible Quick Tips card** — Ctrl+K, right-click pin, right-click device rows, REST API hint
-- **Scan Center card** — always-visible 5-row card on Home page (Device Scan, Security Audit, Speed Test, Service Health, Network Logger); each row shows a state dot from `_scan_registry` and a per-row action button; "▶ Run All" triggers `rescan_requested`
+- **Scan Center card** — always-visible 5-row card on Home page (Device Scan, Security Audit, Speed Test, Service Health, Network Logger); each row shows a state dot from `_scan_registry` and a per-row action button; "▶ Rescan" triggers `rescan_requested` (full device scan only — other categories run from their own row button)
 
 ### Diagnosis & Root Cause
 - **One-click "What's Wrong?" diagnosis** — `DiagnosisPage`; symptom tiles → sequenced scan → plain-English findings; tiles: slow internet, dropping connection, no connection, **a service is unreachable** (new — selects service via combobox, routes finding to Service Diagnostics); accessible from Home page button and Ctrl+K

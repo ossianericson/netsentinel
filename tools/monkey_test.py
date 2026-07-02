@@ -216,7 +216,7 @@ _BLACKLIST: List[str] = [
     "run health check", # health check probe
     "check connection", # connectivity probe
     "run selected",     # Overview page Security Scan panel "Run Selected" → _advance_security_audit() fires selected tools sequentially
-    "run all",             # Scan Center card "▶  Run All" → rescan_requested signal → triggers full network scan
+    "rescan",           # Scan Center card "▶  Rescan" → rescan_requested signal → triggers full network scan
     "re-run",           # re-triggers any prior scan/probe
     "run again",        # re-triggers any prior scan/probe
     # --- Packet capture / active monitors (Scapy / Npcap) ---
