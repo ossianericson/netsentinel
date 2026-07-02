@@ -22,12 +22,12 @@ from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
-    QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_ALT_ROW, BG_CARD, BORDER, CARD_HDR_BORDER,
+    BG_ALT_ROW, BG_CARD, BG_DARK, BORDER, CARD_HDR_BORDER,
     CARD_RADIUS, GREEN, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
     WHITE,
@@ -212,7 +212,21 @@ class SecurityOverviewPage(QWidget):
     # ── UI construction ────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+
+        inner = QWidget()
+        inner.setStyleSheet(f"background:{BG_DARK};")
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+
+        root = QVBoxLayout(inner)
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(10)
 
@@ -269,6 +283,11 @@ class SecurityOverviewPage(QWidget):
         card, lay = _card("Scan Status")
         t = _make_table(["Scan", "Status", "Last Run", "Finding"])
         t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Status column holds a QSS-padded pill widget — ResizeToContents under-measures
+        # it (padding isn't reflected in sizeHint() before the widget is polished/shown),
+        # so pin a fixed width wide enough for the longest label ("Never run").
+        t.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        t.setColumnWidth(1, 90)
         self._scan_status_table = t
         lay.addWidget(t)
 
