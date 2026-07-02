@@ -760,7 +760,6 @@ def _wire_scan_ctas(window):
     window._trigger_page.scan_requested.connect(window._start_full_scan)
     window._diagnosis_page.scan_requested.connect(window._start_full_scan)
     window._cve_page.scan_requested.connect(window._start_full_scan)
-    window._geo_map_page.scan_requested.connect(window._start_full_scan)
     window._timeline_page.scan_requested.connect(window._start_full_scan)
     window._trend_page.scan_requested.connect(window._start_full_scan)
 

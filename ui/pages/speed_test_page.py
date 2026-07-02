@@ -839,7 +839,7 @@ class SpeedTestPage(QWidget):
             ),
             btn_label="Run Speed Test →",
         )
-        _hist_empty.clicked.connect(self.scan_requested.emit)
+        _hist_empty.clicked.connect(self._run_test)
         # Date-range filter (FILTER-13)
         _date_row = QHBoxLayout()
         _date_row.setSpacing(6)

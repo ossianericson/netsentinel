@@ -265,7 +265,6 @@ class GeoMapPage(QWidget):
     """World-map geolocation of internet-facing IPs."""
 
     navigate_requested = pyqtSignal(str)   # page label — emitted by "View in Threat Intel →"
-    scan_requested     = pyqtSignal()      # emitted by empty-state CTA
 
     def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -363,9 +362,9 @@ class GeoMapPage(QWidget):
                 "Knowing where external connections originate helps spot "
                 "geo-suspicious traffic and suspicious ISPs at a glance."
             ),
-            btn_label="Scan to discover IPs →",
+            btn_label="Go to Threat Intel →",
         )
-        _empty.clicked.connect(self.scan_requested.emit)
+        _empty.clicked.connect(lambda: self.navigate_requested.emit("Threat Intel"))
         self._map_stack.addWidget(_empty)
 
         # Page 1 — map + IP table
