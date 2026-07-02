@@ -722,10 +722,27 @@ class _AnalysisTabsMixin:
                 m3_result=self._m3_result,
             )
             self._last_benchmark_result = result
+            # V6 Sprint 1 — GRADE_REGRESSION: capture the prior grade before overwriting it.
+            _prior_grade = None
+            try:
+                _prior_row = self._store.query_last_grade()
+                _prior_grade = _prior_row.get("grade") if _prior_row else None
+            except Exception:
+                pass  # non-fatal
             try:
                 self._store.record_grade(result.overall_grade, result.overall_score, result.overall_verdict)
             except Exception:
                 pass  # non-fatal
+            if self._alert_engine is not None:
+                for a in self._alert_engine.evaluate_grade_check(
+                    result.overall_grade, result.overall_score, result.overall_verdict, _prior_grade,
+                ):
+                    self._show_alert_toast(a)
+                    self._home_page.on_alert(a)
+                    try:
+                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                    except Exception:
+                        pass  # non-fatal — persistence failure must not block grade display
 
             # Update grade circle
             grade_styles = {

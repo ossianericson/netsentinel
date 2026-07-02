@@ -468,6 +468,19 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
 
     def _on_cycle(result_dict: dict) -> None:
         fired = alerts.evaluate_cycle(result_dict)
+
+        # V6 Sprint 1 — JITTER_HIGH: sustained jitter over the last 10 min per host.
+        jitter_by_host: dict = {}
+        for host in result_dict.get("states", {}):
+            try:
+                pts = store.query_rtt_history(host, hours=10.0 / 60.0)
+            except Exception:
+                pts = []
+            vals = [p.jitter_ms for p in pts if p.jitter_ms is not None and p.jitter_ms >= 0]
+            if vals:
+                jitter_by_host[host] = vals
+        fired += alerts.evaluate_jitter_checks(jitter_by_host)
+
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)

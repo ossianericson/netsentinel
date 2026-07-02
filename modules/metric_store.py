@@ -573,8 +573,9 @@ class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
     # ── Write: grade result ───────────────────────────────────────────────────
 
     def record_grade(self, grade: str, score: float, verdict: str) -> None:
+        """Append a grade result. History is retained (not overwritten) so
+        GRADE_REGRESSION alerting can compare against the prior grade."""
         import time as _time
-        self._execute_write("DELETE FROM grade_result", ())
         self._execute_write(
             "INSERT INTO grade_result(ts, grade, score, verdict) VALUES(?, ?, ?, ?)",
             (int(_time.time()), grade, score, verdict),

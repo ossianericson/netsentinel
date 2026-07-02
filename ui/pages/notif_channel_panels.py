@@ -203,6 +203,16 @@ _ALERT_RULE_DEFS = [
     ("Service Down",  "SERVICE_DOWN",   "Fires when a monitored TCP service stops responding"),
     ("Baseline Speed Drop", "BASELINE_DROP",
      "Fires when a scheduled speed test shows a severe drop vs. your recent typical speed"),
+    ("Jitter High", "JITTER_HIGH",
+     "Fires when a host's jitter stays above threshold for several minutes"),
+    ("Mesh Degraded", "MESH_DEGRADED",
+     "Fires when a mesh node drops offline or has a weak signal"),
+    ("Modem Signal Drop", "MODEM_SIGNAL_DROP",
+     "Fires when your modem's signal drops well below normal or downgrades from 5G to LTE"),
+    ("Grade Regression", "GRADE_REGRESSION",
+     "Fires when your network health grade declines vs. the previous run"),
+    ("IP Churn", "IP_CHURN",
+     "Fires when a device uses 3 or more different IP addresses within 24 hours"),
 ]
 
 

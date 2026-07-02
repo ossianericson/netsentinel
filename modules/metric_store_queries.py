@@ -200,6 +200,24 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             for r in rows
         ]
 
+    def query_ip_churn(self, hours: float = 24.0, min_ips: int = 3) -> Dict[str, int]:
+        """Return {mac: distinct_ip_count} for devices seen at >= min_ips
+        distinct IPs within the last `hours` — signals missing DHCP
+        reservations (IP_CHURN rule, V6 Sprint 1)."""
+        import datetime as _dt
+        cutoff = (_dt.datetime.utcnow() - _dt.timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = self._execute_read(
+            """
+            SELECT mac, COUNT(DISTINCT ip) AS cnt
+            FROM device_ip_history
+            WHERE last_seen >= ?
+            GROUP BY mac
+            HAVING cnt >= ?
+            """,
+            (cutoff, min_ips),
+        )
+        return {r["mac"]: int(r["cnt"]) for r in rows}
+
     # ── Read: device annotations ──────────────────────────────────────────────
 
     def get_device_annotations(self, mac: str) -> Dict:
@@ -427,7 +445,7 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
     def query_last_grade(self) -> Optional[dict]:
         """Return {grade, score, verdict, ts} or None if no grade has been run."""
         rows = self._execute_read(
-            "SELECT ts, grade, score, verdict FROM grade_result ORDER BY ts DESC LIMIT 1",
+            "SELECT ts, grade, score, verdict FROM grade_result ORDER BY ts DESC, id DESC LIMIT 1",
             (),
         )
         if not rows:
@@ -446,7 +464,7 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
         for tbl in (
             "rtt_sample", "device_state", "device_event", "cert_check",
             "service_check", "speed_test", "ha_detected",
-            "modem_signal_log", "mesh_signal_log", "plugin_log",
+            "modem_signal_log", "mesh_signal_log", "plugin_log", "grade_result",
         ):
             self._execute_write(f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,))
             deleted += 1

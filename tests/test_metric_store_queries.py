@@ -102,6 +102,38 @@ def test_list_snapshots_empty(store):
     assert store.list_snapshots() == []
 
 
+def test_record_grade_retains_history_for_regression_detection(store):
+    """record_grade() must append, not replace — GRADE_REGRESSION needs the
+    prior grade to still be queryable after a new one is recorded (V6 Sprint 1)."""
+    store.record_grade("A", 95.0, "Excellent")
+    first = store.query_last_grade()
+    store.record_grade("C", 70.0, "Degraded")
+    second = store.query_last_grade()
+    assert first["grade"] == "A"
+    assert second["grade"] == "C"
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM grade_result", ())
+    assert rows[0]["n"] == 2
+
+
+def test_query_ip_churn_flags_devices_with_multiple_ips(store):
+    mac = "aa:bb:cc:00:00:01"
+    store.record_ip_observation(mac, "10.0.0.1")
+    store.record_ip_observation(mac, "10.0.0.2")
+    store.record_ip_observation(mac, "10.0.0.3")
+    stable_mac = "aa:bb:cc:00:00:02"
+    store.record_ip_observation(stable_mac, "10.0.0.9")
+    churn = store.query_ip_churn(hours=24.0, min_ips=3)
+    assert churn.get(mac) == 3
+    assert stable_mac not in churn
+
+
+def test_query_ip_churn_empty_when_below_threshold(store):
+    mac = "aa:bb:cc:00:00:03"
+    store.record_ip_observation(mac, "10.0.0.1")
+    store.record_ip_observation(mac, "10.0.0.2")
+    assert store.query_ip_churn(hours=24.0, min_ips=3) == {}
+
+
 def test_list_snapshots_after_store(store):
     store.store_snapshot(int(time.time()), "test", '{"key": "val"}')
     snaps = store.list_snapshots()

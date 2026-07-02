@@ -786,6 +786,18 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         self._show_alert_toast(a)
                         self._home_page.on_alert(a)
                         self._mqtt_page.on_alert(a.severity, a.message, a.host)
+                    # V6 Sprint 1 — IP_CHURN: device_ip_history churn since last scan
+                    try:
+                        churn = self._store.query_ip_churn(hours=24.0, min_ips=3)
+                    except Exception:
+                        churn = {}
+                    for a in self._alert_engine.evaluate_ip_churn_checks(churn):
+                        self._show_alert_toast(a)
+                        self._home_page.on_alert(a)
+                        try:
+                            self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                        except Exception:
+                            pass  # non-fatal — persistence failure must not block the scan handler
                 # Forward device events to MQTT publisher
                 for _d in tr.new_devices:
                     self._mqtt_page.on_device_event("joined", {

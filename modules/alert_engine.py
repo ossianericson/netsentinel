@@ -25,6 +25,11 @@ Supported rule types
   SERVICE_DOWN     — a monitored TCP service/port stopped responding
   BASELINE_DROP    — a scheduled speed test shows a severe drop vs. the
                      rolling median of prior download speeds
+  JITTER_HIGH      — sustained rtt_sample.jitter above threshold_ms (V6 Sprint 1)
+  MESH_DEGRADED    — a mesh node dropped offline or has a weak RSSI (V6 Sprint 1)
+  MODEM_SIGNAL_DROP — modem SINR baseline drop or a 5G->LTE band downgrade (V6 Sprint 1)
+  GRADE_REGRESSION — the network health grade declined vs. the prior run (V6 Sprint 1)
+  IP_CHURN         — a device used 3+ distinct IPs within 24h (V6 Sprint 1)
 
 Each rule has:
   name           str    — unique human label
@@ -83,6 +88,11 @@ _RULE_CTA: Dict[str, str] = {
     "FLAP":           "Trend Forecasts",
     "SERVICE_DOWN":   "Service Heartbeat",
     "BASELINE_DROP":  "Speed Test",
+    "JITTER_HIGH":        "Network Logger",
+    "MESH_DEGRADED":      "Hardware",
+    "MODEM_SIGNAL_DROP":  "Hardware",
+    "GRADE_REGRESSION":   "Network Grade",
+    "IP_CHURN":           "Devices",
 }
 
 
@@ -146,6 +156,11 @@ class AlertEngine(_AlertChecksMixin, _MaintenanceSuppressionMixin):
         # ── S4-3: consolidation ────────────────────────────────────────────────
         # minimum simultaneous HOST_DOWN alerts to consolidate into one
         self._consolidation_threshold: int = 5
+        # ── V6 Sprint 1: resolution tracking for new rule types ────────────────
+        self._jitter_high_since: Dict[str, int] = {}
+        self._mesh_degraded_since: Dict[str, int] = {}
+        self._modem_degraded_since: Dict[str, int] = {}
+        self._ip_churn_since: Dict[str, int] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
 

@@ -48,6 +48,30 @@ class ScanEnrichmentMixin:
         self._m1_status.setText(
             f"{summary}  ·  {provider}: {matched} device{'s' if matched != 1 else ''} enriched"
         )
+
+        # Compute mesh health once — used by both alert evaluation and snapshot logging.
+        units        = self._mesh_units
+        unit_count   = len(units)
+        online_count = sum(1 for u in units if getattr(u, "online", True))
+        worst_name, worst_rssi = None, None
+        for u in units:
+            rssi = getattr(u, "rssi", None) or getattr(u, "signal_level", None)
+            if rssi is not None and (worst_rssi is None or rssi < worst_rssi):
+                worst_rssi = rssi
+                worst_name = getattr(u, "name", "") or getattr(u, "device_id", "")
+
+        # V6 Sprint 1 — MESH_DEGRADED: evaluated on every mesh result, independent
+        # of whether Monitor logging is enabled below.
+        if unit_count > 0 and self._alert_engine is not None:
+            for a in self._alert_engine.evaluate_mesh_checks(unit_count, online_count, worst_name, worst_rssi):
+                self._show_alert_toast(a)
+                self._home_page.on_alert(a)
+                if self._store is not None:
+                    try:
+                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                    except Exception:
+                        pass  # non-fatal — persistence failure must not block the scan handler
+
         # Monitor logging — live entry + throttled DB write
         if hasattr(self, "_log_hub_page"):
             from PyQt6.QtCore import QSettings
@@ -58,15 +82,6 @@ class ScanEnrichmentMixin:
                 interval_s = s.value("logging/mesh_interval_min", 5, type=int) * 60
                 now = _time.time()
                 if self._store and now - self._last_mesh_log_ts >= interval_s:
-                    units        = self._mesh_units
-                    unit_count   = len(units)
-                    online_count = sum(1 for u in units if getattr(u, "online", True))
-                    worst_name, worst_rssi = None, None
-                    for u in units:
-                        rssi = getattr(u, "rssi", None) or getattr(u, "signal_level", None)
-                        if rssi is not None and (worst_rssi is None or rssi < worst_rssi):
-                            worst_rssi = rssi
-                            worst_name = getattr(u, "name", "") or getattr(u, "device_id", "")
                     try:
                         self._store.record_mesh_snapshot(
                             unit_count=unit_count,

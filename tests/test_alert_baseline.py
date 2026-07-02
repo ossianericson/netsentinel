@@ -151,3 +151,28 @@ def test_low_threshold_for_speed():
     # 95 Mbps ± 10 Mbps stddev → low threshold at 75 Mbps
     m = BaselineMetric(mean=95.0, stddev=10.0, sample_count=50, days_covered=8.0)
     assert m.low_threshold(2.0) == pytest.approx(75.0)
+
+
+# ── modem_sinr_dropped (V6 Sprint 1 — MODEM_SIGNAL_DROP) ─────────────────────
+
+def test_modem_sinr_dropped_below_baseline():
+    from modules.alert_baseline import modem_sinr_dropped
+    prior = [20.0] * 25  # stable 20 dB SINR, stddev ~0 except one outlier below
+    prior[0] = 10.0
+    assert modem_sinr_dropped(2.0, prior, min_samples=20) is True
+
+
+def test_modem_sinr_dropped_within_normal_range():
+    from modules.alert_baseline import modem_sinr_dropped
+    prior = [20.0, 21.0, 19.0, 20.5, 19.5] * 5
+    assert modem_sinr_dropped(20.0, prior, min_samples=20) is False
+
+
+def test_modem_sinr_dropped_insufficient_samples():
+    from modules.alert_baseline import modem_sinr_dropped
+    assert modem_sinr_dropped(2.0, [10.0, 20.0], min_samples=20) is False
+
+
+def test_modem_sinr_dropped_none_current():
+    from modules.alert_baseline import modem_sinr_dropped
+    assert modem_sinr_dropped(None, [20.0] * 25, min_samples=20) is False

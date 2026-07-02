@@ -53,7 +53,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
     # Sprint 19: _NavBuilderMixin → nav/builder.py; _MonitorStateMixin → monitor_state.py;
     # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines. FINAL GOAL ACHIEVED.
-    "dashboard.py": 2560,  # Security UX: +8 audit coordinator state; +10 silent audit dispatch; scan registry feed for Speed Test (+5)
+    "dashboard.py": 2610,  # V6 Sprint 1: +~30 lines MODEM_SIGNAL_DROP alert evaluation wiring
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -92,7 +92,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
     # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1530,  # Sprint A: +5 lines (_nav_set_scan_state wiring in result handlers)
+    "scan_wiring.py": 1560,  # V6 Sprint 1: +~15 lines IP_CHURN alert evaluation wiring
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.

@@ -2201,6 +2201,22 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 interval_s = s.value("logging/modem_interval_min", 5, type=int) * 60
                 now = _time.time()
                 if self._store and now - self._last_modem_log_ts >= interval_s:
+                    # V6 Sprint 1 — MODEM_SIGNAL_DROP: capture the prior 7-day SINR
+                    # history before this row is inserted, so it forms the baseline.
+                    _prior_type = None
+                    _prior_sinr: list = []
+                    if self._alert_engine is not None:
+                        try:
+                            _hist = self._store.query_modem_signal_log(hours=168.0, limit=500)
+                        except Exception:
+                            _hist = []
+                        if _hist:
+                            _prior_type = _hist[0].network_type
+                            _prior_sinr = [
+                                (p.nr5g_sinr if p.network_type and "5G" in p.network_type else p.lte_snr)
+                                for p in _hist
+                            ]
+                            _prior_sinr = [v for v in _prior_sinr if v is not None]
                     try:
                         self._store.record_modem_signal(
                             network_type=data.get("network_type"),
@@ -2226,6 +2242,23 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                         self._last_modem_log_ts = now
                     except Exception:
                         pass  # log_modem_entry is best-effort; DB write failure is non-fatal
+                    if self._alert_engine is not None:
+                        _cur_type = data.get("network_type")
+                        _cur_sinr = (
+                            data.get("nr5g_sinr_db") if _cur_type and "5G" in _cur_type
+                            else data.get("lte_snr_db")
+                        )
+                        for a in self._alert_engine.evaluate_modem_checks(
+                            _cur_type, _cur_sinr, _prior_sinr, _prior_type,
+                        ):
+                            self._show_alert_toast(a)
+                            self._home_page.on_alert(a)
+                            try:
+                                self._store.record_alert_fired(
+                                    a.rule_name, a.host, a.severity, a.message, ts=a.ts,
+                                )
+                            except Exception:
+                                pass  # non-fatal — persistence failure must not block modem UI updates
 
     @pyqtSlot(dict)
     def _on_avail_cycle_done(self, result: dict) -> None:

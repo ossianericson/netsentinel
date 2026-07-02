@@ -25,6 +25,11 @@ RULE_TYPES = frozenset({
     "FLAP",
     "SERVICE_DOWN",
     "BASELINE_DROP",
+    "JITTER_HIGH",
+    "MESH_DEGRADED",
+    "MODEM_SIGNAL_DROP",
+    "GRADE_REGRESSION",
+    "IP_CHURN",
 })
 
 

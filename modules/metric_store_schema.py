@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS alert_fired (
 CREATE INDEX IF NOT EXISTS idx_af_ts    ON alert_fired(ts);
 CREATE INDEX IF NOT EXISTS idx_af_acked ON alert_fired(acked_ts);
 
--- Last network grade result — only one row ever kept (schema v8)
+-- Network grade history — one row per grading run (schema v8; append-only since V6 Sprint 1)
 CREATE TABLE IF NOT EXISTS grade_result (
     id      INTEGER PRIMARY KEY,
     ts      INTEGER NOT NULL,
