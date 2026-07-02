@@ -36,6 +36,11 @@ _MODEM_SIGNAL_DROP_RULE_NAME = "Modem Signal Drop"
 _GRADE_REGRESSION_RULE_NAME = "Grade Regression"
 _IP_CHURN_RULE_NAME = "IP Churn"
 
+# V6 Sprint 2 — dormant baseline engines, same gating pattern as Sprint 1.
+_RTT_ANOMALY_RULE_NAME = "RTT Anomaly"
+_IOT_BEHAVIOR_RULE_NAME = "IoT Behavior Anomaly"
+_TREND_FORECAST_RULE_NAME = "Trend Forecast"
+
 
 def build_digest_bullets(
     store,
@@ -70,6 +75,18 @@ def build_digest_bullets(
     bullets += _simple_rule_bullets(
         store, settings_get, hours, _IP_CHURN_RULE_NAME,
         lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'unstable IP address overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _RTT_ANOMALY_RULE_NAME,
+        lambda a: f"{a.get('host', 'A host')}: {a.get('message', 'slower than its usual pattern overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _IOT_BEHAVIOR_RULE_NAME,
+        lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'unusual behavior detected overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _TREND_FORECAST_RULE_NAME,
+        lambda a: f"Forecast: {a.get('message', 'a metric is trending toward its threshold')}",
     )
     return _cap_bullets(bullets)
 

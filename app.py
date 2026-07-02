@@ -466,6 +466,25 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
 
     cert_worker.check_done.connect(_on_cert_check)
 
+    # V6 Sprint 2 — RTT_ANOMALY: per-host mean+2sigma baseline, refreshed hourly
+    # (7-day history queries per host are too costly to redo every cycle).
+    from modules.alert_baseline import BaselineLearner
+    from PyQt6.QtCore import QTimer as _QTimer
+
+    _baseline_learner = BaselineLearner()
+
+    def _refresh_baselines() -> None:
+        try:
+            _baseline_learner.refresh(store)
+        except Exception:
+            pass  # non-fatal — anomaly checks just skip hosts with no baseline yet
+
+    _refresh_baselines()
+    _baseline_timer = _QTimer(window)
+    _baseline_timer.setInterval(3600_000)
+    _baseline_timer.timeout.connect(_refresh_baselines)
+    _baseline_timer.start()
+
     def _on_cycle(result_dict: dict) -> None:
         fired = alerts.evaluate_cycle(result_dict)
 
@@ -480,6 +499,10 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
             if vals:
                 jitter_by_host[host] = vals
         fired += alerts.evaluate_jitter_checks(jitter_by_host)
+
+        # V6 Sprint 2 — RTT_ANOMALY: per-host baseline, gated on Baseline.is_mature.
+        rtts_by_host = {h: r for h, r in result_dict.get("rtts", {}).items() if r >= 0}
+        fired += alerts.evaluate_rtt_anomaly_checks(rtts_by_host, _baseline_learner)
 
         for a in fired:
             window._show_alert_toast(a)
@@ -530,6 +553,28 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
             worker.wait(3000)
 
     window._speed_test_page.auto_speedtest_changed.connect(_on_auto_speedtest_changed)
+
+
+def _wire_trend_forecast(window, worker, alerts, store):
+    """V6 Sprint 2 — TREND_FORECAST.  ``worker`` is a ProactiveProbeWorker
+    running modules.trend_analyser.run_full_trend_report() hourly.  Each
+    completed report is evaluated against the TREND_FORECAST rule; fired
+    early-warning alerts flow through the same toast/home-page/persist path
+    every other evaluate_* caller uses."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_trend_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+
+    def _on_probe_error(_msg: str) -> None:
+        pass  # non-fatal — the worker retries automatically on its next interval
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
 
 
 def _wire_cross_page(window):
@@ -880,6 +925,18 @@ def main():
     health_worker = HealthWorker(store=store)
     health_worker.start()
 
+    # V6 Sprint 2 — TREND_FORECAST: hourly OLS ETA-to-threshold sweep. Pure DB
+    # analysis (no new network probing), so it runs always-on like health_worker;
+    # the TREND_FORECAST alert rule itself stays opt-in/disabled by default.
+    from workers.proactive_probe_worker import ProactiveProbeWorker as _ProactiveProbeWorker
+    from modules.trend_analyser import run_full_trend_report as _run_full_trend_report
+
+    trend_worker = _ProactiveProbeWorker(
+        probe=lambda: _run_full_trend_report(store),
+        interval_s=3600,
+    )
+    trend_worker.start()
+
     # Sprint 3 — scheduled background speed tests. Opt-in, default off: bandwidth
     # consent is explicit and separate from notification consent (BASELINE_DROP
     # rule, enabled independently under Notifications).
@@ -927,6 +984,7 @@ def main():
     _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts, store)
     if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
         scheduled_speedtest_worker.start()
+    _wire_trend_forecast(window, trend_worker, alerts, store)
 
     # S2-5: wire ambient health worker → home page card + system tray
     health_worker.result_ready.connect(window._home_page.on_health_update)

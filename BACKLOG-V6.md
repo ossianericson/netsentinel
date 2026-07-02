@@ -55,41 +55,53 @@ consolidation / resolution tracking, `modules/speed_drop_detector.py`
 
 **Effort:** M | **Benefit:** Highest ROI — zero new collection, zero new privileges; five real-issue detectors from existing tables.
 
-- [ ] **1.1 JITTER_HIGH** — sustained jitter above threshold (default >20 ms
+- [x] **1.1 JITTER_HIGH** — sustained jitter above threshold (default >20 ms
       for 10 min) from `rtt_sample.jitter`. New rule type; CTA routes to
       Network Logger. Today jitter only powers RootCauseCorrelator.
-- [ ] **1.2 MESH_DEGRADED** — from `mesh_signal_log`: fires when
+- [x] **1.2 MESH_DEGRADED** — from `mesh_signal_log`: fires when
       `online_count < unit_count` (node dropped) or worst RSSI < −75 dBm.
       CTA → Mesh Router page.
-- [ ] **1.3 MODEM_SIGNAL_DROP** — from `modem_signal_log`: SINR/RSRP degrades
+- [x] **1.3 MODEM_SIGNAL_DROP** — from `modem_signal_log`: SINR/RSRP degrades
       vs 7-day baseline (reuse `alert_baseline.py` mean+2σ) OR band downgrade
       event (5G → LTE). CTA → 5G Modem page.
-- [ ] **1.4 GRADE_REGRESSION** — network health grade declines (e.g. A→C).
+- [x] **1.4 GRADE_REGRESSION** — network health grade declines (e.g. A→C).
       Requires small schema change: `grade_result` currently keeps latest only;
       retain history. CTA → Network Grade page.
-- [ ] **1.5 IP_CHURN** — device gets ≥3 distinct IPs in 24 h from
+- [x] **1.5 IP_CHURN** — device gets ≥3 distinct IPs in 24 h from
       `device_ip_history` (DHCP instability / missing reservation).
       CTA → Devices page.
-- [ ] **1.6** Digest bullet in `digest_bullets.py` + Morning Briefing rollup
+- [x] **1.6** Digest bullet in `digest_bullets.py` + Morning Briefing rollup
       for each of the five new rule types.
 
 ## Sprint 2 — Wire the dormant baseline engines
 
 **Effort:** M | **Benefit:** Anomaly detection that adapts to each network instead of static thresholds.
 
-- [ ] **2.1 Per-host RTT anomaly** — wire `alert_baseline.py` into
-      `AlertEngine.evaluate_cycle()`: alert when a host's RTT exceeds its own
-      learned mean+2σ (catches "the NAS got slow" below the static threshold).
-      Gate on `Baseline.is_mature` (≥30 samples over 7 days) to kill
-      false positives during learning.
-- [ ] **2.2 IoT behaviour watch** — run `iot_baseline.py` monitoring phase as
-      a background worker (opt-in; requires scapy + admin, module already
-      degrades gracefully). NEW_DEST / METADATA_PROBE / SYN_SCAN / RATE_SPIKE
-      become real AlertEngine alerts instead of page-only findings.
-- [ ] **2.3 Trend-forecast alerts** — the OLS ETA-to-threshold logic
-      (`modules/trend_analyser.py`, Trend Forecasts page) fires an early-warning
-      alert ("RTT to gateway will cross 100 ms in ~3 days") instead of waiting
-      to be viewed.
+- [x] **2.1 Per-host RTT anomaly** — new RTT_ANOMALY rule type
+      (`modules/alert_engine_checks2.py`); a `BaselineLearner` is refreshed
+      hourly in `app.py` and evaluated every availability cycle against each
+      host's own mean+sigma RTT baseline. Gated on `Baseline.is_mature`
+      (`BaselineMetric.is_valid` + `days_covered >= 7`) so the learning
+      period cannot produce false positives.
+- [x] **2.2 IoT behaviour watch** — new IOT_BEHAVIOR rule type. Reused the
+      existing manually-started `IoTMonitor` drain loop in
+      `ui/tabs_analysis.py` (opt-in via the page's "Start Anomaly Monitor"
+      button) rather than adding a second background worker; each drained
+      `IoTAlert` (NEW_DEST / NEW_PORT / METADATA_PROBE / SYN_SCAN /
+      RATE_SPIKE) now also flows through
+      `AlertEngine.evaluate_iot_behavior_checks()` into the same toast/digest
+      pipeline as every other rule type.
+- [x] **2.3 Trend-forecast alerts** — new TREND_FORECAST rule type. A new
+      always-on hourly `ProactiveProbeWorker` runs
+      `trend_analyser.run_full_trend_report()` (pure DB analysis, no new
+      network probing) and fires an early-warning alert only for results
+      with a projected `eta_hours` that have not already crossed their
+      threshold (an already-crossed value stays RTT_THRESHOLD/
+      LOSS_THRESHOLD's job — firing both would be a duplicate alert).
+
+All three rules: opt-in/disabled by default, Notifications page toggle,
+Morning Briefing digest bullet (`modules/digest_bullets.py`), and CTA
+routing to the relevant page — same discipline as Sprint 1.
 
 ## Sprint 3 — Scheduled security posture + diffing
 

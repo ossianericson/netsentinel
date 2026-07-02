@@ -213,6 +213,12 @@ _ALERT_RULE_DEFS = [
      "Fires when your network health grade declines vs. the previous run"),
     ("IP Churn", "IP_CHURN",
      "Fires when a device uses 3 or more different IP addresses within 24 hours"),
+    ("RTT Anomaly", "RTT_ANOMALY",
+     "Fires when a host's response time rises above its own learned normal (needs 7+ days of data)"),
+    ("IoT Behavior Anomaly", "IOT_BEHAVIOR",
+     "Fires when a device's traffic deviates from its learned baseline (new destination, port, or rate spike)"),
+    ("Trend Forecast", "TREND_FORECAST",
+     "Fires an early warning when a metric is projected to cross its threshold soon"),
 ]
 
 

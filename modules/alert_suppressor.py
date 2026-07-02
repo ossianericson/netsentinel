@@ -206,4 +206,26 @@ def _default_rules():
             cooldown_s=3600,
             enabled=False,
         ),
+        AlertRule(
+            name="RTT Anomaly",
+            rule_type="RTT_ANOMALY",
+            host=None,
+            sigma=2.0,
+            cooldown_s=600,
+            enabled=False,
+        ),
+        AlertRule(
+            name="IoT Behavior Anomaly",
+            rule_type="IOT_BEHAVIOR",
+            host=None,
+            cooldown_s=300,
+            enabled=False,
+        ),
+        AlertRule(
+            name="Trend Forecast",
+            rule_type="TREND_FORECAST",
+            host=None,
+            cooldown_s=3600,
+            enabled=False,
+        ),
     ]

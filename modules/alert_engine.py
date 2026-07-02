@@ -10,26 +10,11 @@ Architecture rules observed:
   • MetricStore injected as constructor parameter.
   • Alert delivery (toast/email/webhook) is the caller's responsibility.
 
-Supported rule types
---------------------
-  RTT_THRESHOLD    — rtt_ms for a host exceeds threshold_ms
-  LOSS_THRESHOLD   — loss_pct for a host exceeds threshold_pct
-  HOST_DOWN        — host state transitions to DOWN
-  HOST_DEGRADED    — host state transitions to DEGRADED
-  NEW_DEVICE       — a device with a new MAC is found on the network
-  DEVICE_GONE      — a known device has not been seen for gone_threshold_s
-  CERT_EXPIRY      — TLS cert has fewer than threshold_days days remaining
-  CERT_EXPIRED     — TLS cert has already expired
-  FLAP             — host oscillates UP<->DEGRADED/DOWN repeatedly
-                     (flap_count transitions within flap_window_s seconds)
-  SERVICE_DOWN     — a monitored TCP service/port stopped responding
-  BASELINE_DROP    — a scheduled speed test shows a severe drop vs. the
-                     rolling median of prior download speeds
-  JITTER_HIGH      — sustained rtt_sample.jitter above threshold_ms (V6 Sprint 1)
-  MESH_DEGRADED    — a mesh node dropped offline or has a weak RSSI (V6 Sprint 1)
-  MODEM_SIGNAL_DROP — modem SINR baseline drop or a 5G->LTE band downgrade (V6 Sprint 1)
-  GRADE_REGRESSION — the network health grade declined vs. the prior run (V6 Sprint 1)
-  IP_CHURN         — a device used 3+ distinct IPs within 24h (V6 Sprint 1)
+Supported rule types — see RULE_TYPES in modules/alert_types.py for the
+canonical list; V6 Sprint 1 added JITTER_HIGH/MESH_DEGRADED/
+MODEM_SIGNAL_DROP/GRADE_REGRESSION/IP_CHURN, V6 Sprint 2 added
+RTT_ANOMALY/IOT_BEHAVIOR/TREND_FORECAST (per-host baseline anomaly,
+iot_baseline.py monitor alerts, and trend_analyser.py ETA forecasts).
 
 Each rule has:
   name           str    — unique human label
@@ -65,6 +50,7 @@ from modules.alert_suppressor import (
     EscalationPolicy, _default_rules, rule_settings_key, _MaintenanceSuppressionMixin,
 )
 from modules.alert_engine_checks import _AlertChecksMixin
+from modules.alert_engine_checks2 import _AlertChecksMixin2
 from modules.speed_drop_detector import RESTART_CHECKLIST
 
 # Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
@@ -93,6 +79,9 @@ _RULE_CTA: Dict[str, str] = {
     "MODEM_SIGNAL_DROP":  "Hardware",
     "GRADE_REGRESSION":   "Network Grade",
     "IP_CHURN":           "Devices",
+    "RTT_ANOMALY":        "DNS & Stability",
+    "IOT_BEHAVIOR":       "IoT Behaviour",
+    "TREND_FORECAST":     "Trend Forecasts",
 }
 
 
@@ -106,7 +95,7 @@ def _cta_for_rule(rule_type: str, host: str) -> tuple[Optional[str], Optional[st
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
-class AlertEngine(_AlertChecksMixin, _MaintenanceSuppressionMixin):
+class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _MaintenanceSuppressionMixin):
     """
     Stateless rule evaluator. Call the appropriate evaluate_* method after
     each monitoring cycle or scan result.
@@ -161,6 +150,8 @@ class AlertEngine(_AlertChecksMixin, _MaintenanceSuppressionMixin):
         self._mesh_degraded_since: Dict[str, int] = {}
         self._modem_degraded_since: Dict[str, int] = {}
         self._ip_churn_since: Dict[str, int] = {}
+        # ── V6 Sprint 2: resolution tracking for the dormant-engine rules ──────
+        self._rtt_anomaly_since: Dict[str, int] = {}
 
     # ── Public API ────────────────────────────────────────────────────────────
 

@@ -524,6 +524,20 @@ class _AnalysisTabsMixin:
                             self._monitor_overview_page.set_iot_anomaly_count(
                                 self._iot_alert_table.rowCount()
                             )
+                        # V6 Sprint 2 — IOT_BEHAVIOR: route the same signal through
+                        # AlertEngine so it becomes a real toast/digest alert instead
+                        # of a page-only table row.
+                        if self._alert_engine is not None:
+                            for a in self._alert_engine.evaluate_iot_behavior_checks([alert]):
+                                self._show_alert_toast(a)
+                                self._home_page.on_alert(a)
+                                if self._store is not None:
+                                    try:
+                                        self._store.record_alert_fired(
+                                            a.rule_name, a.host, a.severity, a.message, ts=a.ts,
+                                        )
+                                    except Exception:
+                                        pass  # non-fatal — persistence failure must not block the drain loop
                 except _q.Empty:
                     pass  # queue exhausted — all pending alerts processed this tick
 

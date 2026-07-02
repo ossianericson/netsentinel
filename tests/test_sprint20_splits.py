@@ -100,7 +100,7 @@ def test_escalation_policy_defaults():
 def test_default_rules_count():
     from modules.alert_suppressor import _default_rules
     rules = _default_rules()
-    assert len(rules) == 15  # V6 Sprint 1: +5 (Jitter High, Mesh Degraded, Modem Signal Drop, Grade Regression, IP Churn)
+    assert len(rules) == 18  # V6 Sprint 1: +5; V6 Sprint 2: +3 (RTT Anomaly, IoT Behavior Anomaly, Trend Forecast)
     assert all(not r.enabled for r in rules)
 
 
