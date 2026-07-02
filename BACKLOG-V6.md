@@ -175,20 +175,28 @@ routing to the relevant page — same discipline as Sprint 1.
 
 **Effort:** M | **Benefit:** Smarter findings, not more findings. Depends on Sprints 1–4 signals existing.
 
-- [ ] **5.1 Root Cause Correlator inputs** — feed mesh/modem signal,
+- [x] **5.1 Root Cause Correlator inputs** — feed mesh/modem signal,
       BASELINE_DROP, and IoT alerts into `root_cause_correlator.py` so
       "slow internet" can resolve to "your 5G modem dropped to LTE at 14:02".
-      (Correlator currently consumes only diagnostics/storm/STP/logger.)
-- [ ] **5.2 Speed↔signal correlation** — when BASELINE_DROP fires and the
+      Implemented as `_correlate_recent_alerts()` consuming
+      `store.get_recent_alerts()`, threaded through `DiagnosisWorker(store=...)`.
+- [x] **5.2 Speed↔signal correlation** — when BASELINE_DROP fires and the
       saved per-test modem snapshot shows poor SINR, the alert says
-      "radio, not ISP". (Data already saved with every speed test.)
-- [ ] **5.3 Weekly security digest** — "what changed this week": new devices,
-      new open ports, new CVEs, approaching cert expiries; delivered via the
-      existing NotificationRouter channels. Extends `digest_bullets.py`.
-- [ ] **5.4 Alert-fatigue guardrails** — per-rule enable toggles + sensitivity
-      on the Notifications page for every rule added in V6; all
-      default-conservative. Trust is the product — a noisy detector gets
-      disabled by the user and never re-enabled.
+      "radio, not ISP". `evaluate_baseline_metrics()` now accepts
+      `current_sinr`/`prior_sinr` and reuses `alert_baseline.modem_sinr_dropped()`;
+      `scheduled_speed_test.py` reads the modem_signal_log to supply them.
+- [x] **5.3 Weekly security digest** — "what changed this week": new devices,
+      new open ports, new CVEs, approaching cert expiries. Rather than
+      duplicating the existing Sunday weekly-digest pipeline
+      (`digest_builder.py` + `dashboard._check_weekly_digest()`, already
+      dispatched via NotificationRouter), extended `digest_builder.py` with
+      "New Open Ports" and "Certificates Expiring Soon" sections.
+- [x] **5.4 Alert-fatigue guardrails** — global sensitivity control
+      (Conservative/Balanced/Aggressive) on the Notifications page, on top of
+      the per-rule enable toggles already shipped alongside each V6 rule.
+      `modules/alert_sensitivity.py` scales thresholds/cooldowns/min-samples;
+      applied once at startup in `app.py` (`alerts/sensitivity` QSettings key,
+      default "balanced" = shipped defaults unchanged).
 
 ---
 

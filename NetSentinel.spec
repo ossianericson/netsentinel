@@ -96,6 +96,8 @@ hiddenimports: list = [
     "modules.alert_engine_checks3",
     "modules.alert_engine_checks4",
     "modules.alert_engine_routing",
+    "modules.alert_sensitivity",
+    "modules.root_cause_correlator_alerts",
     "modules.alert_pattern_detector",
     "modules.alert_suppressor",
     "modules.alert_types",

@@ -39,6 +39,7 @@ class DiagnosisWorker(QThread):
         gateway_mac: Optional[str] = None,
         symptom: str = "",
         focused_on: Optional[str] = None,
+        store=None,
         parent=None,
     ):
         super().__init__(parent)
@@ -46,6 +47,7 @@ class DiagnosisWorker(QThread):
         self._gateway_mac = gateway_mac
         self._symptom     = symptom      # "slow" | "dropping" | "noconn" | ""
         self._focused_on  = focused_on   # category name → run only relevant steps
+        self._store       = store        # MetricStore — optional, for recent_alerts (V6 5.1)
         self._stop        = threading.Event()
 
     def stop(self) -> None:
@@ -135,6 +137,12 @@ class DiagnosisWorker(QThread):
 
         # ── Step 5: Correlate all findings ────────────────────────────────────
         self.progress.emit(95, "Putting it all together…")
+        recent_alerts: Optional[list] = None
+        if self._store is not None:
+            try:
+                recent_alerts = self._store.get_recent_alerts(hours=24.0, limit=200)
+            except Exception:
+                recent_alerts = None  # non-fatal — recent-alert correlation is best-effort
         try:
             result = correlate(
                 diag_result=diag_result,
@@ -142,6 +150,7 @@ class DiagnosisWorker(QThread):
                 stp_bpdus=stp_bpdus or None,
                 fingerprint_devices=fingerprint_devices or None,
                 gateway_mac=self._gateway_mac,
+                recent_alerts=recent_alerts,
             )
         except Exception:
             log.exception("diagnosis: correlate failed")

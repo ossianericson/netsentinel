@@ -991,6 +991,7 @@ class DiagnosisPage(QWidget):
             gateway_ip=self._gateway_ip,
             gateway_mac=self._gateway_mac,
             focused_on=category,
+            store=self._store,
             parent=self,
         )
         self._verify_workers.append(worker)
@@ -1036,6 +1037,7 @@ class DiagnosisPage(QWidget):
             gateway_ip=self._gateway_ip,
             gateway_mac=self._gateway_mac,
             symptom=effective_symptom,
+            store=self._store,
             parent=self,
         )
         self._worker.progress.connect(self._on_progress)

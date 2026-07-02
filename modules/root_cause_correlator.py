@@ -447,6 +447,7 @@ def correlate(
     log_summary=None,
     gateway_mac: Optional[str] = None,
     gateway_ip: Optional[str] = None,
+    recent_alerts: Optional[List[dict]] = None,
 ) -> CorrelationResult:
     """
     Run all correlation passes and return a CorrelationResult.
@@ -459,6 +460,9 @@ def correlate(
     fingerprint_devices : List[DeviceInfo] from rogue_device.scan()
     log_summary         : LogSummary from network_logger
     gateway_mac         : MAC of the default gateway (str)
+    recent_alerts       : List[dict] from store.get_recent_alerts() — folds in
+                           already-fired MESH_DEGRADED / MODEM_SIGNAL_DROP /
+                           IOT_BEHAVIOR / BASELINE_DROP alerts (V6 Sprint 5.1)
 
     Returns
     ──────
@@ -476,6 +480,9 @@ def correlate(
     _correlate_logger(log_summary, findings)
     if not isp_to_blame:
         _correlate_diagnostics(diag_result, findings, gateway_ip)
+
+    from modules.root_cause_correlator_alerts import correlate_recent_alerts
+    correlate_recent_alerts(recent_alerts or [], findings)
 
     # Sort by severity (highest first)
     findings.sort(key=lambda f: _severity_rank(f.severity), reverse=True)

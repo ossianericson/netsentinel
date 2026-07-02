@@ -201,6 +201,25 @@ class TestSettingsPersistence:
             qs.setValue(rule_settings_key(name), False)
         qs.sync()
 
+    def test_sensitivity_survives_save_restore(self):
+        """V6 Sprint 5.4 — global sensitivity combo persists across reload."""
+        from PyQt6.QtCore import QSettings
+
+        qs = QSettings("NetSentinel", "NetSentinel")
+        qs.remove("alerts/sensitivity")
+        qs.sync()
+
+        page_a = _make_page()
+        idx = page_a._combo_sensitivity.findData("aggressive")
+        page_a._combo_sensitivity.setCurrentIndex(idx)
+        page_a._save()
+
+        page_b = _make_page()
+        assert page_b._combo_sensitivity.currentData() == "aggressive"
+
+        qs.remove("alerts/sensitivity")
+        qs.sync()
+
 
 # ---------------------------------------------------------------------------
 # Service Down escalation sub-toggle (Sprint 1)

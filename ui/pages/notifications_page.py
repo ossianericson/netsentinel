@@ -197,6 +197,7 @@ class NotificationsPage(
             if chk.isChecked():
                 any_rule_on = True
         qs.setValue("notif/any_rule_enabled", any_rule_on)
+        qs.setValue("alerts/sensitivity", self._combo_sensitivity.currentData())
         self._update_rules_badge()
         self._apply_to_engine()
         self._apply_to_router()
@@ -247,6 +248,10 @@ class NotificationsPage(
             )
             for name, chk in self._rule_checkboxes.items():
                 chk.setChecked(qs.value(_rule_key(name), False, type=bool))
+            from modules.alert_sensitivity import DEFAULT_SENSITIVITY
+            level = qs.value("alerts/sensitivity", DEFAULT_SENSITIVITY, type=str)
+            idx = self._combo_sensitivity.findData(level)
+            self._combo_sensitivity.setCurrentIndex(idx if idx >= 0 else 1)
         finally:
             self._restoring = False
         self._apply_to_router()

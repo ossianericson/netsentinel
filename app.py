@@ -533,7 +533,10 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
     history to summarize in the Morning Briefing.
     """
     def _on_probe_done(result) -> None:
-        fired = alerts.evaluate_baseline_metrics(result.download_mbps, result.prior_downloads)
+        fired = alerts.evaluate_baseline_metrics(
+            result.download_mbps, result.prior_downloads,
+            current_sinr=result.current_sinr, prior_sinr=result.prior_sinr,
+        )
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
@@ -994,6 +997,14 @@ def main():
     _rules = alerts.get_rules()
     for _r in _rules:
         _r.enabled = _rule_qs.value(_rk(_r.name), False, type=bool)
+
+    # V6 Sprint 5.4 — global alert-fatigue guardrail. Scales every rule's
+    # noise-relevant thresholds by the user's chosen sensitivity; default
+    # "balanced" leaves the shipped defaults unchanged.
+    from modules.alert_sensitivity import apply_sensitivity, DEFAULT_SENSITIVITY
+    _sensitivity = _rule_qs.value("alerts/sensitivity", DEFAULT_SENSITIVITY, type=str)
+    apply_sensitivity(_rules, _sensitivity)
+
     alerts.set_rules(_rules)
 
     from modules.notification_router import NotificationRouter

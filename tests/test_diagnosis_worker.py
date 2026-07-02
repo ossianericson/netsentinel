@@ -43,6 +43,17 @@ def test_instantiation_with_args():
     _cleanup(w)
 
 
+def test_instantiation_with_store():
+    """V6 Sprint 5.1 — store is threaded through so run() can pull
+    recent_alerts for correlate()."""
+    from workers.diagnosis_worker import DiagnosisWorker
+    from unittest.mock import MagicMock
+    fake_store = MagicMock()
+    w = DiagnosisWorker(store=fake_store)
+    assert w._store is fake_store
+    _cleanup(w)
+
+
 def test_signals_exist():
     from workers.diagnosis_worker import DiagnosisWorker
     w = DiagnosisWorker()

@@ -321,6 +321,37 @@ class _NotifChannelsMixin:
         )
         bl.addWidget(info)
 
+        sens_row = QHBoxLayout()
+        sens_row.setSpacing(8)
+        sens_lbl = QLabel("Alert sensitivity:")
+        sens_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        sens_row.addWidget(sens_lbl)
+        self._combo_sensitivity = QComboBox()
+        self._combo_sensitivity.addItem("Conservative — fewer, higher-confidence alerts", "conservative")
+        self._combo_sensitivity.addItem("Balanced (default)", "balanced")
+        self._combo_sensitivity.addItem("Aggressive — more, earlier alerts", "aggressive")
+        self._combo_sensitivity.setFixedWidth(280)
+        self._combo_sensitivity.setStyleSheet(
+            f"QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
+            f"QComboBox::drop-down{{border:none;}}"
+            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            f"border:1px solid {BORDER};selection-background-color:{ACCENT};}}"
+        )
+        self._combo_sensitivity.currentIndexChanged.connect(self._save)
+        sens_row.addWidget(self._combo_sensitivity)
+        sens_row.addStretch()
+        bl.addLayout(sens_row)
+        sens_hint = QLabel(
+            "Scales the trigger thresholds and cooldowns of every rule above — "
+            "does not change which rules are enabled. Applies the next time NetSentinel starts."
+        )
+        sens_hint.setWordWrap(True)
+        sens_hint.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;"
+        )
+        bl.addWidget(sens_hint)
+
         self._zero_rules_banner = QFrame()
         self._zero_rules_banner.setStyleSheet(
             f"QFrame {{ background:{AMBER_BG}; border:1px solid {AMBER}; border-radius:4px; }}"

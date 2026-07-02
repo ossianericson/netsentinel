@@ -172,14 +172,26 @@ class _AlertChecksMixin:
         return fired
 
     def evaluate_baseline_metrics(
-        self, current_mbps: float, prior_downloads: List[float]
+        self,
+        current_mbps: float,
+        prior_downloads: List[float],
+        current_sinr: Optional[float] = None,
+        prior_sinr: Optional[List[float]] = None,
     ) -> List[AlertFired]:
         """
         Evaluate BASELINE_DROP rules — delegates the actual math/copy to
         speed_drop_detector.evaluate_speed_drop() (reuse, not reimplement;
         this is the same detector the manual Speed Test page uses).
+
+        V6 Sprint 5.2 — when the modem's SINR has also dropped below its own
+        learned baseline (reuses modules.alert_baseline.modem_sinr_dropped,
+        the same detector MODEM_SIGNAL_DROP uses), the message is reframed as
+        a radio-link problem rather than an ISP problem, since blaming the
+        ISP for a drop actually caused by weak cellular signal sends the user
+        down the wrong troubleshooting path.
         """
         from modules.speed_drop_detector import evaluate_speed_drop
+        from modules.alert_baseline import modem_sinr_dropped
 
         fired: List[AlertFired] = []
         now = int(time.time())
@@ -197,9 +209,15 @@ class _AlertChecksMixin:
             if not verdict.is_drop:
                 continue
             severity = "CRITICAL" if verdict.severity == "High" else "WARNING"
+            headline = verdict.headline
+            if modem_sinr_dropped(current_sinr, prior_sinr or [], min_samples=rule.min_samples):
+                headline = (
+                    "Likely your radio signal, not your ISP: " + headline +
+                    " Your modem's signal quality (SINR) has also dropped below its usual level."
+                )
             alert = self._fire_if_cooled(
                 rule, "speedtest", now,
-                message=self._append_action(verdict.headline, "BASELINE_DROP"),
+                message=self._append_action(headline, "BASELINE_DROP"),
                 severity=severity,
                 value=verdict.drop_pct,
             )
