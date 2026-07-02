@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from modules.config_baseline import build_snapshot_from_scan, store_snapshot
+from modules.config_baseline import build_snapshot_from_scan
 from modules.port_scanner import PortResult, PortScanResult
 
 

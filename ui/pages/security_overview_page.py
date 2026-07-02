@@ -174,8 +174,8 @@ class SecurityOverviewPage(QWidget):
 
     navigate_to             = pyqtSignal(str)
     scan_requested          = pyqtSignal()
-    # V6 Sprint 3 — (posture_key, enabled); posture_key is one of
-    # "port_sweep" | "cve_recheck" | "exposure_check"
+    # V6 Sprint 3/4 — (posture_key, enabled); posture_key is one of
+    # "port_sweep" | "cve_recheck" | "exposure_check" | "arp_watch" | "dhcp_watch"
     posture_scheduling_changed = pyqtSignal(str, bool)
 
     def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
@@ -299,7 +299,8 @@ class SecurityOverviewPage(QWidget):
     # ── V6 Sprint 3: scheduled posture scans ─────────────────────────────────
 
     def _build_posture_scans_card(self) -> QWidget:
-        """Opt-in toggles for the three scheduled posture scans (3.1/3.2/3.4).
+        """Opt-in toggles for scheduled posture scans (3.1/3.2/3.4) and passive
+        always-on guards (4.1/4.2).
 
         Each toggle persists to QSettings and emits posture_scheduling_changed
         so app.py can start/stop the matching ProactiveProbeWorker — same
@@ -310,8 +311,9 @@ class SecurityOverviewPage(QWidget):
         body.setSpacing(4)
 
         note = QLabel(
-            "Off by default. When enabled, these scans run automatically in the "
-            "background and alert you only on what changed since the last run."
+            "Off by default. When enabled, these run automatically in the "
+            "background and alert you only on what changed or was detected "
+            "since the last run — not just while their own page is open."
         )
         note.setWordWrap(True)
         note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
@@ -322,6 +324,8 @@ class SecurityOverviewPage(QWidget):
             ("port_sweep", "Nightly port-scan sweep of known devices — alerts on newly opened ports"),
             ("cve_recheck", "Twice-daily CVE re-check for already-tracked services"),
             ("exposure_check", "Weekly internet-exposure check — alerts on newly exposed ports"),
+            ("arp_watch", "Background ARP spoof watch — alerts on gateway hijack, IP takeover, or MAC clone"),
+            ("dhcp_watch", "Background rogue DHCP watch — alerts on offers from an unexpected server"),
         )
         for key, label in _toggles:
             chk = QCheckBox(label)

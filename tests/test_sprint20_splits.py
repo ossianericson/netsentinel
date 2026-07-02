@@ -100,7 +100,12 @@ def test_escalation_policy_defaults():
 def test_default_rules_count():
     from modules.alert_suppressor import _default_rules
     rules = _default_rules()
-    assert len(rules) == 18  # V6 Sprint 1: +5; V6 Sprint 2: +3 (RTT Anomaly, IoT Behavior Anomaly, Trend Forecast)
+    # V6 Sprint 1: +5; V6 Sprint 2: +3 (RTT Anomaly, IoT Behavior Anomaly,
+    # Trend Forecast); V6 Sprint 3: +3 (New Open Port, New CVE Found, New
+    # Internet Exposure — previously missing default rules, fixed alongside
+    # Sprint 4); V6 Sprint 4: +3 (ARP Spoof Detected, Rogue DHCP Server,
+    # Config Drift)
+    assert len(rules) == 24
     assert all(not r.enabled for r in rules)
 
 

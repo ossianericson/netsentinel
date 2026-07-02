@@ -638,6 +638,53 @@ def _wire_exposure_watch(window, worker, alerts, store):
     worker.error.connect(_on_probe_error)
 
 
+def _wire_arp_watch(window, worker, alerts, store):
+    """V6 Sprint 4.1 — background ARP spoof watch. ``worker`` is a
+    ProactiveProbeWorker running modules.arp_watch.run_arp_watch_cycle() on a
+    fixed interval, independent of whether the ARP Spoof Watch page is open."""
+    from ui.styles import GREEN, RED
+
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_arp_watch_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._set_flyout_dot("ARP Spoof Watch", RED if report.events else GREEN)
+
+    def _on_probe_error(msg: str) -> None:
+        window._set_flyout_dot("ARP Spoof Watch", "")
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_dhcp_watch(window, worker, alerts, store):
+    """V6 Sprint 4.2 — background rogue DHCP watch. ``worker`` is a
+    ProactiveProbeWorker running modules.dhcp_watch.run_dhcp_watch_cycle() on
+    a fixed interval, independent of whether the DHCP Rogue Monitor page is
+    open."""
+    from ui.styles import GREEN, RED
+
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_dhcp_watch_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._set_flyout_dot("DHCP Rogue Monitor", RED if report.rogue_offers else GREEN)
+
+    def _on_probe_error(msg: str) -> None:
+        window._set_flyout_dot("DHCP Rogue Monitor", "")
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
 def _wire_trend_forecast(window, worker, alerts, store):
     """V6 Sprint 2 — TREND_FORECAST.  ``worker`` is a ProactiveProbeWorker
     running modules.trend_analyser.run_full_trend_report() hourly.  Each
@@ -1045,6 +1092,8 @@ def main():
     from modules.port_sweep import run_nightly_port_sweep
     from modules.cve_recheck import run_cve_recheck
     from modules.exposure_watch import run_weekly_exposure_check
+    from modules.arp_watch import run_arp_watch_cycle
+    from modules.dhcp_watch import run_dhcp_watch_cycle
 
     _posture_qs = QSettings("NetSentinel", "NetSentinel")
     port_sweep_worker = ProactiveProbeWorker(
@@ -1068,10 +1117,37 @@ def main():
     exposure_watch_worker.set_maintenance_checker(
         lambda: maint_manager.is_suppressed("exposure_check") is not None
     )
+
+    # V6 Sprint 4.1/4.2 — passive always-on guards. Gateway IP is looked up
+    # fresh each cycle (cheap — a handful of syscalls) rather than cached,
+    # since the background worker outlives any one scan and the gateway can
+    # change (e.g. laptop moves networks).
+    def _run_arp_watch_cycle() -> object:
+        from modules.utils_net import get_network_info
+        gateway_ip = get_network_info().get("gateway")
+        return run_arp_watch_cycle(gateway_ip=gateway_ip, duration=20)
+
+    arp_watch_worker = ProactiveProbeWorker(
+        probe=_run_arp_watch_cycle,
+        interval_s=15 * 60,
+    )
+    arp_watch_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("arp_watch") is not None
+    )
+    dhcp_watch_worker = ProactiveProbeWorker(
+        probe=lambda: run_dhcp_watch_cycle(duration=8),
+        interval_s=30 * 60,
+    )
+    dhcp_watch_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("dhcp_watch") is not None
+    )
+
     _posture_workers = {
         "port_sweep": port_sweep_worker,
         "cve_recheck": cve_recheck_worker,
         "exposure_check": exposure_watch_worker,
+        "arp_watch": arp_watch_worker,
+        "dhcp_watch": dhcp_watch_worker,
     }
 
     # REST API worker — only starts when user has enabled it in Settings
@@ -1112,6 +1188,8 @@ def main():
     _wire_port_sweep(window, port_sweep_worker, alerts, store, cert_worker)
     _wire_cve_recheck(window, cve_recheck_worker, alerts, store)
     _wire_exposure_watch(window, exposure_watch_worker, alerts, store)
+    _wire_arp_watch(window, arp_watch_worker, alerts, store)
+    _wire_dhcp_watch(window, dhcp_watch_worker, alerts, store)
 
     def _on_posture_scheduling_changed(key: str, enabled: bool) -> None:
         posture_worker = _posture_workers.get(key)

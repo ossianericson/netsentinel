@@ -36,6 +36,9 @@ RULE_TYPES = frozenset({
     "NEW_OPEN_PORT",
     "NEW_CVE",
     "NEW_EXPOSURE",
+    "ARP_SPOOF",
+    "ROGUE_DHCP",
+    "CONFIG_DRIFT",
 })
 
 

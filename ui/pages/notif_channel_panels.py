@@ -225,6 +225,12 @@ _ALERT_RULE_DEFS = [
      "Fires when a tracked service gains a newly published CVE"),
     ("New Internet Exposure", "NEW_EXPOSURE",
      "Fires when a port becomes newly reachable from the internet"),
+    ("ARP Spoof Detected", "ARP_SPOOF",
+     "Fires when a background ARP watch cycle detects a gateway hijack, IP takeover, or MAC clone"),
+    ("Rogue DHCP Server", "ROGUE_DHCP",
+     "Fires when a background DHCP watch cycle sees an offer from an unexpected server"),
+    ("Config Drift", "CONFIG_DRIFT",
+     "Fires when a device is added, removed, or changes role versus your blessed baseline snapshot"),
 ]
 
 

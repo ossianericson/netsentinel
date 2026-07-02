@@ -52,7 +52,8 @@ from modules.alert_suppressor import (
 from modules.alert_engine_checks import _AlertChecksMixin
 from modules.alert_engine_checks2 import _AlertChecksMixin2
 from modules.alert_engine_checks3 import _AlertChecksMixin3
-from modules.speed_drop_detector import RESTART_CHECKLIST
+from modules.alert_engine_checks4 import _AlertChecksMixin4
+from modules.alert_engine_routing import cta_for_rule, append_action
 
 # Re-exported for backwards-compat callers (e.g. from modules.alert_engine import rule_settings_key)
 __all__ = [
@@ -61,45 +62,16 @@ __all__ = [
 ]
 
 
-# ── CTA routing — maps rule_type → (nav_label, filter_string) ────────────────
+# ── CTA routing + action-step text — see modules/alert_engine_routing.py ─────
+# (RULE-AH1 split: this was a self-contained lookup-table block with no
+# evaluate_* logic, so it moved out cleanly when alert_engine.py hit 600 lines.)
 
-_RULE_CTA: Dict[str, str] = {
-    "RTT_THRESHOLD":  "DNS & Stability",
-    "LOSS_THRESHOLD": "DNS & Stability",
-    "HOST_DOWN":      "Inventory",
-    "HOST_DEGRADED":  "Inventory",
-    "NEW_DEVICE":     "Devices",
-    "DEVICE_GONE":    "Inventory",
-    "CERT_EXPIRY":    "TLS & Cert Monitor",
-    "CERT_EXPIRED":   "TLS & Cert Monitor",
-    "FLAP":           "Trend Forecasts",
-    "SERVICE_DOWN":   "Service Heartbeat",
-    "BASELINE_DROP":  "Speed Test",
-    "JITTER_HIGH":        "Network Logger",
-    "MESH_DEGRADED":      "Hardware",
-    "MODEM_SIGNAL_DROP":  "Hardware",
-    "GRADE_REGRESSION":   "Network Grade",
-    "IP_CHURN":           "Devices",
-    "RTT_ANOMALY":        "DNS & Stability",
-    "IOT_BEHAVIOR":       "IoT Behaviour",
-    "TREND_FORECAST":     "Trend Forecasts",
-    "NEW_OPEN_PORT":      "Devices",
-    "NEW_CVE":            "CVE Lookup",
-    "NEW_EXPOSURE":       "Exposed to Internet",
-}
-
-
-def _cta_for_rule(rule_type: str, host: str) -> tuple[Optional[str], Optional[str]]:
-    """Return (cta_page, cta_filter) for an alert so the UI can deep-link to the right page."""
-    page = _RULE_CTA.get(rule_type)
-    if not page:
-        return None, None
-    return page, host
+_cta_for_rule = cta_for_rule
 
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
-class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _MaintenanceSuppressionMixin):
+class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _AlertChecksMixin4, _MaintenanceSuppressionMixin):
     """
     Stateless rule evaluator. Call the appropriate evaluate_* method after
     each monitoring cycle or scan result.
@@ -235,31 +207,10 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Ma
                     due.append({"alert_row": row, "policy": policy})
         return due
 
-    # ── S4-4: action steps appended to every alert message ───────────────────
+    # ── S4-4: action steps appended to every alert message — see
+    #    modules/alert_engine_routing.py for ACTION_STEPS (RULE-AH1 split) ───
 
-    _ACTION_STEPS: Dict[str, str] = {
-        "RTT_THRESHOLD":  "→ Run a speed test  → Check if other devices are also slow",
-        "LOSS_THRESHOLD": "→ Restart your router  → Check all cable connections",
-        "HOST_DOWN":      "→ Check the device is powered on  → Check network cable or Wi-Fi",
-        "HOST_DEGRADED":  "→ Check for congestion  → Run a speed test to confirm",
-        "NEW_DEVICE":     "→ Open Devices to identify it  → Block in your router if unexpected",
-        "DEVICE_GONE":    "→ Check if the device was intentionally disconnected",
-        "CERT_EXPIRY":    "→ Renew the certificate  → Check auto-renewal is enabled",
-        "CERT_EXPIRED":   "→ Renew the certificate now  → Visitors will see security warnings",
-        "FLAP":           "→ Check the cable or Wi-Fi signal  → Look for interference",
-        "SERVICE_DOWN":   "→ Restart the service  → Check firewall rules for this port",
-        "BASELINE_DROP":  "  ".join(f"→ {step}" for step in RESTART_CHECKLIST),
-        "NEW_OPEN_PORT":  "→ Confirm this was intentional  → If not, check the device for malware or a misconfigured service",
-        "NEW_CVE":        "→ Check for a firmware/software update for this service  → Restrict access if no patch exists yet",
-        "NEW_EXPOSURE":   "→ Check your router's port-forwarding rules  → Remove the forward if unintentional",
-    }
-
-    @staticmethod
-    def _append_action(message: str, rule_type: str) -> str:
-        step = AlertEngine._ACTION_STEPS.get(rule_type, "")
-        if step and step not in message:
-            return f"{message}  {step}"
-        return message
+    _append_action = staticmethod(append_action)
 
     def evaluate_cycle(self, cycle_result: dict) -> List[AlertFired]:
         """

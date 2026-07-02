@@ -437,6 +437,21 @@ def test_posture_toggles_default_off(page):
     assert page._posture_checks["port_sweep"].isChecked() is False
     assert page._posture_checks["cve_recheck"].isChecked() is False
     assert page._posture_checks["exposure_check"].isChecked() is False
+    assert page._posture_checks["arp_watch"].isChecked() is False
+    assert page._posture_checks["dhcp_watch"].isChecked() is False
+
+
+def test_toggling_arp_watch_checkbox_persists_and_emits(page):
+    from PyQt6.QtCore import QSettings
+    received = []
+    page.posture_scheduling_changed.connect(lambda key, enabled: received.append((key, enabled)))
+
+    page._posture_checks["arp_watch"].setChecked(True)
+
+    assert received == [("arp_watch", True)]
+    qs = QSettings("NetSentinel", "NetSentinel")
+    assert qs.value("posture/arp_watch_enabled", False, type=bool) is True
+    qs.remove("posture/arp_watch_enabled")
 
 
 def test_toggling_posture_checkbox_persists_and_emits(page):

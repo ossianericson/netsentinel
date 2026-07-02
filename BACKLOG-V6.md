@@ -140,15 +140,36 @@ routing to the relevant page — same discipline as Sprint 1.
 
 **Effort:** M | **Benefit:** The classic "real attack" detectors run continuously instead of only while their page is open.
 
-- [ ] **4.1 ARP spoof background watch** — `arp_monitor.py` is passive and
-      cheap; run continuously (opt-in), alert on gateway-MAC change / spoof
-      signature.
-- [ ] **4.2 DHCP rogue background listener** — passive rogue-DHCP-offer
-      detection alongside 4.1 (`dhcp_detector.py` exists).
-- [ ] **4.3 Config drift auto-snapshot** — snapshot after each scheduled
-      discovery scan, auto-diff against the last user-blessed baseline; alert
-      on added/removed devices or role changes (reuses existing snapshot +
-      diff viewer).
+- [x] **4.1 ARP spoof background watch** — new `modules/arp_watch.py` wraps
+      `arp_monitor.scan()` in a `ProactiveProbeWorker` cycle (15 min, opt-in,
+      quiet-hours aware) instead of only running while ARP Spoof Watch is
+      open. New **ARP_SPOOF** rule type (`alert_engine_checks4.py`) fires on
+      GATEWAY_HIJACK (CRITICAL) / IP_TAKEOVER / MAC_CLONE (WARNING) — no new
+      detection logic, arp_monitor.py's own classification is reused.
+- [x] **4.2 DHCP rogue background listener** — new `modules/dhcp_watch.py`
+      wraps `dhcp_detector.scan()` in a `ProactiveProbeWorker` cycle (30 min,
+      opt-in). New **ROGUE_DHCP** rule type fires CRITICAL on any offer from
+      an unexpected server. Both toggles live on the Security Overview
+      "Scheduled Posture Scans" card alongside the Sprint 3 toggles, reusing
+      `posture_scheduling_changed` end-to-end.
+- [x] **4.3 Config drift auto-snapshot** — `ui/scan_wiring.py`'s existing
+      DEVICE-5 auto-snapshot block (fires after every scheduled discovery
+      scan) now also diffs the new snapshot against a **user-blessed
+      baseline** (`★ Set as Baseline` context-menu action on Config
+      Snapshots, `ui/pages/baseline_page.py`) via the existing
+      `config_baseline.diff_snapshots()` engine. New **CONFIG_DRIFT** rule
+      type fires on added/removed devices and `device_type` (role) changes
+      versus that baseline — separate from the pre-existing rolling
+      auto-snapshot toast, which only compares consecutive auto-snapshots.
+
+  All three rules: opt-in/disabled by default, Notifications page toggle,
+  Morning Briefing digest bullet (`modules/digest_bullets.py`), CTA routing
+  to ARP Spoof Watch / DHCP Rogue Monitor / Config Snapshots. Fixed a
+  pre-existing gap found along the way: `NEW_OPEN_PORT`/`NEW_CVE`/
+  `NEW_EXPOSURE` (Sprint 3) had Notifications-page checkboxes but no
+  matching `AlertRule` in `_default_rules()`, so those toggles silently had
+  no effect — added the three missing default rules in
+  `modules/alert_suppressor.py`.
 
 ## Sprint 5 — Correlation & narrative
 

@@ -46,6 +46,11 @@ _NEW_OPEN_PORT_RULE_NAME = "New Open Port"
 _NEW_CVE_RULE_NAME = "New CVE Found"
 _NEW_EXPOSURE_RULE_NAME = "New Internet Exposure"
 
+# V6 Sprint 4 — passive always-on guards, same gating pattern.
+_ARP_SPOOF_RULE_NAME = "ARP Spoof Detected"
+_ROGUE_DHCP_RULE_NAME = "Rogue DHCP Server"
+_CONFIG_DRIFT_RULE_NAME = "Config Drift"
+
 
 def build_digest_bullets(
     store,
@@ -104,6 +109,18 @@ def build_digest_bullets(
     bullets += _simple_rule_bullets(
         store, settings_get, hours, _NEW_EXPOSURE_RULE_NAME,
         lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'a port became newly exposed overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _ARP_SPOOF_RULE_NAME,
+        lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'ARP spoofing detected overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _ROGUE_DHCP_RULE_NAME,
+        lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'a rogue DHCP server was seen overnight')}",
+    )
+    bullets += _simple_rule_bullets(
+        store, settings_get, hours, _CONFIG_DRIFT_RULE_NAME,
+        lambda a: f"{a.get('host', 'A device')}: {a.get('message', 'drifted from your blessed baseline overnight')}",
     )
     return _cap_bullets(bullets)
 

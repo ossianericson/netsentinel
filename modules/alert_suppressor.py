@@ -228,4 +228,47 @@ def _default_rules():
             cooldown_s=3600,
             enabled=False,
         ),
+        AlertRule(
+            name="New Open Port",
+            rule_type="NEW_OPEN_PORT",
+            host=None,
+            cooldown_s=300,
+            enabled=False,
+        ),
+        AlertRule(
+            name="New CVE Found",
+            rule_type="NEW_CVE",
+            host=None,
+            cooldown_s=300,
+            enabled=False,
+        ),
+        AlertRule(
+            name="New Internet Exposure",
+            rule_type="NEW_EXPOSURE",
+            host=None,
+            cooldown_s=300,
+            enabled=False,
+        ),
+        # ── V6 Sprint 4: passive always-on guards ───────────────────────────
+        AlertRule(
+            name="ARP Spoof Detected",
+            rule_type="ARP_SPOOF",
+            host=None,
+            cooldown_s=300,
+            enabled=False,
+        ),
+        AlertRule(
+            name="Rogue DHCP Server",
+            rule_type="ROGUE_DHCP",
+            host=None,
+            cooldown_s=300,
+            enabled=False,
+        ),
+        AlertRule(
+            name="Config Drift",
+            rule_type="CONFIG_DRIFT",
+            host=None,
+            cooldown_s=300,
+            enabled=False,
+        ),
     ]
