@@ -17,14 +17,13 @@ import os
 import platform
 import socket
 import subprocess
-import sys
 import threading
 from pathlib import Path
 from typing import List, Tuple
 
 # Backwards-compatible re-exports (do not remove — callers import from here)
 from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details  # noqa: F401
-from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6  # noqa: F401
+from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6, get_offenders_path  # noqa: F401
 
 # Canonical re-exports for lookup/resolver/classifier helpers (do not remove).
 from modules.mac_lookup import lookup_vendor  # noqa: F401
@@ -140,15 +139,6 @@ def _npcap_available() -> bool:
 
     _npcap_cache.append(result)
     return result
-
-
-def get_offenders_path() -> Path:
-    """Locate offenders.json whether running from source or as a PyInstaller bundle."""
-    if getattr(sys, "frozen", False):
-        base = Path(sys._MEIPASS)  # type: ignore[attr-defined]
-    else:
-        base = Path(__file__).parent.parent
-    return base / "offenders.json"
 
 
 def get_app_data_dir() -> Path:

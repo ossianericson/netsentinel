@@ -89,8 +89,8 @@ def test_cert_expiry_section_lists_soon_expiring_certs():
     far = MagicMock(host="other.com", port=443, days_remaining=200, is_expired=False)
     store = _base_store(query_cert_status=[soon, far])
     html = build_digest_html(store)
-    assert "example.com" in html
-    assert "other.com" not in html
+    assert "<td>example.com:443</td>" in html
+    assert "<td>other.com:443</td>" not in html
 
 
 def test_cert_expiry_section_empty_state():

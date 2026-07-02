@@ -5,7 +5,7 @@ import threading
 
 
 def test_import():
-    import modules.combined_discovery  # noqa: F401
+    from modules import combined_discovery  # noqa: F401
 
 
 def test_resolve_hostname_delegates_to_name_resolver(monkeypatch):

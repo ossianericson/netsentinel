@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from typing import List
 
-from modules.root_cause_correlator import CorrelatedFinding, HIGH, MEDIUM
+from modules.root_cause_types import CorrelatedFinding, HIGH, MEDIUM
 
 
 def correlate_recent_alerts(

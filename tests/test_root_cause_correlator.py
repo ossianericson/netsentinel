@@ -69,6 +69,47 @@ class TestReturnType:
         result = correlate()
         assert isinstance(result, CorrelationResult)
 
+    def test_metrics_field_defaults_empty_dict(self):
+        result = correlate()
+        assert result.metrics == {}
+
+
+# ── Metrics surfacing (forum export needs real numbers, not just findings) ────
+
+class TestMetrics:
+    def test_metrics_sourced_from_log_summary_when_available(self):
+        result = correlate(diag_result=_diag_result(), log_summary=_log_summary(
+            uptime=95.0, avg_rtt=22.5,
+        ))
+        assert result.metrics["ping_ms"] == 22.5
+        assert result.metrics["jitter_ms"] == 3.0
+        assert result.metrics["dns_ms"] == 30.0
+        assert result.metrics["loss_pct"] == 5.0
+
+    def test_metrics_derived_from_diag_result_when_no_log_summary(self):
+        diag = types.SimpleNamespace(
+            trace_hops=[],
+            download_mbps=42.0,
+            ping_results=[
+                types.SimpleNamespace(rtt_ms=10.0),
+                types.SimpleNamespace(rtt_ms=20.0),
+                types.SimpleNamespace(rtt_ms=-1.0),  # unreachable
+            ],
+            dns_results=[
+                types.SimpleNamespace(latency_ms=15.0),
+                types.SimpleNamespace(latency_ms=25.0),
+            ],
+        )
+        result = correlate(diag_result=diag)
+        assert result.metrics["ping_ms"] == 15.0
+        assert result.metrics["dns_ms"] == 20.0
+        assert round(result.metrics["loss_pct"], 1) == 33.3
+        assert result.metrics["download_mbps"] == 42.0
+
+    def test_metrics_empty_when_no_data_available(self):
+        result = correlate()
+        assert result.metrics == {}
+
     def test_no_data_no_findings(self):
         result = correlate()
         assert isinstance(result.findings, list)
