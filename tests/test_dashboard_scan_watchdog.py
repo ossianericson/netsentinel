@@ -13,11 +13,9 @@ from unittest.mock import MagicMock
 import pytest
 
 try:
-    from PyQt6.QtWidgets import QApplication  # noqa: F401
+    from ui.dashboard import Dashboard
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
-
-from ui.dashboard import Dashboard
 
 
 def _fake_dashboard(is_scanning: bool, active_count: int = 2) -> MagicMock:

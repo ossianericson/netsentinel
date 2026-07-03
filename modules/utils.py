@@ -35,7 +35,7 @@ from modules.device_classifier import (  # noqa: F401
 # Explicit re-export list so CodeQL recognises these as intentional re-exports.
 __all__ = [
     "get_network_info", "get_dhcp_info", "get_interface_details",
-    "get_ipv6_devices", "ping_sweep_ipv6",
+    "get_ipv6_devices", "ping_sweep_ipv6", "get_offenders_path",
     "lookup_vendor",
     "ResolvedName", "resolve", "resolve_batch", "rdns",
     "classify", "classify_device", "classify_with_evidence", "classify_registry_first",
