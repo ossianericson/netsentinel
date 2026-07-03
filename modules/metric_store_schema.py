@@ -371,11 +371,13 @@ def apply_sqlite_schema(conn: sqlite3.Connection, write_lock: threading.Lock) ->
             ("schema_version", str(_SCHEMA_VERSION)),
         )
         conn.commit()
-        # VACUUM after migration to reclaim space from any dropped/rebuilt tables
-        try:
-            conn.execute("PRAGMA VACUUM")
-        except Exception:
-            pass  # non-fatal
+        # Stability Sprint 1 (G2): a real VACUUM used to be attempted here on
+        # every schema apply (i.e. every app startup) via the invalid
+        # "PRAGMA VACUUM" — swallowed silently by the bare except, so it was
+        # always a no-op AND would have been the wrong place anyway: VACUUM
+        # rewrites the whole file and is only worthwhile right after a prune
+        # deletes a meaningful number of rows. See MetricStore.vacuum_if_needed(),
+        # called from prune_old_data().
 
 
 def apply_sqlalchemy_schema(engine) -> None:

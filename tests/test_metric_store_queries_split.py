@@ -24,6 +24,15 @@ def _make_mixin():
         def _execute_write(self, sql, params=()):
             pass
 
+        def _execute_write_counted(self, sql, params=()):
+            return 0
+
+        def vacuum_if_needed(self, rows_deleted, threshold=500):
+            return False
+
+        def prune_app_traffic_samples(self, retain_days=35):
+            return 0
+
     return _Stub()
 
 

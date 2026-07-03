@@ -1,4 +1,5 @@
 """Tests for modules/metric_store_queries.py — MetricStoreQueryMixin via MetricStore."""
+import datetime
 import pytest
 import time
 
@@ -169,6 +170,87 @@ def test_prune_old_data(store):
     assert len(store.query_rtt_history("old-host", hours=24 * 45)) == 1
     store.prune_old_data(retain_days=30)
     assert store.query_rtt_history("old-host", hours=24 * 45) == []
+
+
+def test_prune_old_data_returns_total_rows_deleted(store):
+    """Stability Sprint 1 (G2): prune_old_data() must return the total row
+    count deleted so callers can decide whether a VACUUM is worthwhile."""
+    old_ts = int(time.time()) - 40 * 86400
+    for i in range(3):
+        store.record_rtt(f"host{i}", 10.0, ts=old_ts)
+    deleted = store.prune_old_data(retain_days=30)
+    assert isinstance(deleted, int)
+    assert deleted >= 3
+
+
+def test_prune_old_data_prunes_app_traffic_samples(store):
+    """Stability Sprint 1 (G1): app_traffic_sample grew unbounded because
+    prune_app_traffic_samples() had zero runtime callers. prune_old_data()
+    must now invoke it."""
+    old_ts = int(time.time()) - 40 * 86400
+    store.record_app_traffic_sample(
+        mac="aa:bb:cc:dd:ee:ff", label="Test Device", category="web",
+        app="chrome", bytes_total=1000, window_s=10.0, ts=old_ts,
+    )
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM app_traffic_sample", ())
+    assert rows[0]["n"] == 1
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM app_traffic_sample", ())
+    assert rows[0]["n"] == 0
+
+
+def test_prune_old_data_prunes_alert_fired(store):
+    """Stability Sprint 1 (G9): alert_fired had no retention at all."""
+    old_ts = int(time.time()) - 400 * 86400
+    store.record_alert_fired("RULE_X", "192.168.1.1", "WARNING", "test alert", ts=old_ts)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM alert_fired", ())
+    assert rows[0]["n"] == 1
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM alert_fired", ())
+    assert rows[0]["n"] == 0
+
+
+def test_prune_old_data_keeps_recent_alert_fired(store):
+    store.record_alert_fired("RULE_X", "192.168.1.1", "WARNING", "recent alert")
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM alert_fired", ())
+    assert rows[0]["n"] == 1
+
+
+def test_prune_old_data_prunes_device_events_audit_table(store):
+    """Stability Sprint 1 (G9): device_events (plural, audit trail) stores a
+    TEXT datetime — must use a SQL-native datetime cutoff, not an epoch int."""
+    old_dt = (datetime.datetime.utcnow() - datetime.timedelta(days=400)).strftime("%Y-%m-%d %H:%M:%S")
+    store._execute_write(
+        "INSERT INTO device_events (mac, event_type, old_value, new_value, source, ts) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("aa:bb:cc:dd:ee:ff", "RENAMED", "old", "new", "test", old_dt),
+    )
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM device_events", ())
+    assert rows[0]["n"] == 1
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM device_events", ())
+    assert rows[0]["n"] == 0
+
+
+def test_prune_old_data_keeps_recent_device_events(store):
+    store.record_device_change_event("aa:bb:cc:dd:ee:ff", "RENAMED", "old", "new", "test")
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM device_events", ())
+    assert rows[0]["n"] == 1
+
+
+def test_vacuum_if_needed_runs_above_threshold(store):
+    """Stability Sprint 1 (G2): the old PRAGMA VACUUM call was invalid SQL and
+    silently swallowed — vacuum_if_needed() must issue a real VACUUM when
+    enough rows were deleted to make it worthwhile."""
+    ran = store.vacuum_if_needed(rows_deleted=1000, threshold=500)
+    assert ran is True
+
+
+def test_vacuum_if_needed_skips_below_threshold(store):
+    ran = store.vacuum_if_needed(rows_deleted=1, threshold=500)
+    assert ran is False
 
 
 def test_get_row_counts(store):

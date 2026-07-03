@@ -69,9 +69,10 @@ __all__ = [
 ]
 from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
 from modules.metric_store_writes_device import _DeviceWritesMixin
+from modules.metric_store_lifecycle import _LifecycleMixin
 
 
-class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
+class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin, _LifecycleMixin):
     """
     Thread-safe time-series store. Default backend is built-in sqlite3.
 
@@ -95,6 +96,10 @@ class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
         self._retain_days = retain_days
         self._backend_url = backend_url
         self._write_lock  = threading.Lock()
+        # Stability Sprint 1 (G8): set by _recover_from_corruption() when the
+        # on-disk file fails to open as a valid SQLite database.
+        self.recovered_from_corruption = False
+        self.corruption_backup_path: Optional[Path] = None
 
         if backend_url:
             self._backend   = "sqlalchemy"
@@ -109,26 +114,13 @@ class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
             # S6-1: checkpoint WAL if it has grown large before opening
             self._checkpoint_wal_if_needed()
 
-        self._init_schema()
-        self.prune_old_data()
-
-    # ── S6-1: WAL growth guard ────────────────────────────────────────────────
-
-    def _checkpoint_wal_if_needed(self, threshold_bytes: int = 50 * 1024 * 1024) -> None:
-        """Run PRAGMA wal_checkpoint(TRUNCATE) if the WAL file exceeds 50 MB."""
-        if self._db_path is None:
-            return
-        wal_path = self._db_path.with_suffix(".db-wal")
-        if not wal_path.exists():
-            wal_path = Path(str(self._db_path) + "-wal")
         try:
-            if wal_path.exists() and wal_path.stat().st_size > threshold_bytes:
-                conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=10)
-                conn.execute("PRAGMA busy_timeout = 5000")
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                conn.close()
-        except Exception:
-            pass  # non-fatal
+            self._init_schema()
+        except sqlite3.DatabaseError as exc:
+            if self._backend != "sqlite" or str(self._db_path) == ":memory:":
+                raise
+            self._recover_from_corruption(exc)
+        self.prune_old_data()
 
     # ── SQLAlchemy engine setup ───────────────────────────────────────────────
 
@@ -153,10 +145,18 @@ class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
                 check_same_thread=False,
                 timeout=10,
             )
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA synchronous = NORMAL;")
-            conn.execute("PRAGMA busy_timeout = 5000;")  # S6-3: prevent OperationalError on contention
+            try:
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA journal_mode = WAL;")
+                conn.execute("PRAGMA synchronous = NORMAL;")
+                conn.execute("PRAGMA busy_timeout = 5000;")  # S6-3: prevent OperationalError on contention
+            except Exception:
+                # G8: on a corrupt file, PRAGMA journal_mode itself raises
+                # sqlite3.DatabaseError before self._local.conn is ever
+                # assigned — close here or the open OS handle (Windows file
+                # lock) blocks _recover_from_corruption()'s rename.
+                conn.close()
+                raise
             self._local.conn = conn
         return self._local.conn
 
@@ -191,6 +191,21 @@ class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
             with self._write_lock:
                 self._conn.execute(sql, params)
                 self._conn.commit()
+
+    def _execute_write_counted(self, sql: str, params: tuple) -> int:
+        """Like _execute_write but returns the affected row count (DELETE/UPDATE
+        only). Used by prune_old_data() to decide whether a VACUUM is worthwhile."""
+        if self._backend == "sqlalchemy":
+            from sqlalchemy import text
+            with self._write_lock:
+                with self._sa_engine.begin() as conn:
+                    result = conn.execute(text(sql), dict(enumerate(params)))
+                    return result.rowcount if result.rowcount and result.rowcount > 0 else 0
+        else:
+            with self._write_lock:
+                cur = self._conn.execute(sql, params)
+                self._conn.commit()
+                return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
 
     def _execute_read(self, sql: str, params: tuple = ()) -> list:
         if self._backend == "sqlalchemy":
@@ -538,9 +553,11 @@ class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin):
             (now, mac, label, category, app, cdn, bytes_total, window_s),
         )
 
-    def prune_app_traffic_samples(self, retain_days: int = 35) -> None:
+    def prune_app_traffic_samples(self, retain_days: int = 35) -> int:
+        """Returns the number of rows deleted (used by prune_old_data()'s
+        VACUUM-worthiness accounting)."""
         cutoff = int(time.time()) - retain_days * 86400
-        self._execute_write(
+        return self._execute_write_counted(
             "DELETE FROM app_traffic_sample WHERE ts < ?", (cutoff,)
         )
 

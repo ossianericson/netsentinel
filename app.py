@@ -1077,6 +1077,16 @@ def main():
     )
     trend_worker.start()
 
+    # Stability Sprint 1 (G3): prune_old_data() previously only ran once, in
+    # MetricStore.__init__ — an always-on session (app left running for weeks)
+    # never pruned again. Runs daily, off the main thread, via the same
+    # ProactiveProbeWorker pattern as trend_worker above.
+    prune_worker = _ProactiveProbeWorker(
+        probe=lambda: store.prune_old_data(),
+        interval_s=24 * 3600,
+    )
+    prune_worker.start()
+
     # Sprint 3 — scheduled background speed tests. Opt-in, default off: bandwidth
     # consent is explicit and separate from notification consent (BASELINE_DROP
     # rule, enabled independently under Notifications).

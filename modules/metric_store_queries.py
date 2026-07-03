@@ -471,19 +471,46 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
 
     # ── Maintenance (read-dominant — safe to keep in query mixin) ─────────────
 
+    # Stability Sprint 1 (G9): audit-trail tables get a generous window — users
+    # may want a year of alert/change history, not the 30-day operational default.
+    _AUDIT_RETAIN_DAYS = 365
+
     def prune_old_data(self, retain_days: Optional[int] = None) -> int:
-        """Delete records older than `retain_days`. Returns number of tables pruned."""
+        """Delete records older than `retain_days`. Returns the total number of
+        rows deleted across all pruned tables (used to decide whether a VACUUM
+        is worthwhile — see vacuum_if_needed())."""
         days   = retain_days if retain_days is not None else self._retain_days
         cutoff = int(time.time()) - days * 86400
-        deleted = 0
+        total_deleted = 0
         for tbl in (
             "rtt_sample", "device_state", "device_event", "cert_check",
             "service_check", "speed_test", "ha_detected",
             "modem_signal_log", "mesh_signal_log", "plugin_log", "grade_result",
         ):
-            self._execute_write(f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,))
-            deleted += 1
-        return deleted
+            total_deleted += self._execute_write_counted(
+                f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,)
+            )
+
+        # G1 — app_traffic_sample previously had zero runtime prune callers and
+        # grew unbounded (~1 row/10s while App Traffic is on). Reuses its own
+        # existing (longer) retention default rather than the general `days`.
+        total_deleted += self.prune_app_traffic_samples()
+
+        # G9 — alert_fired (epoch ts) and device_events (TEXT datetime ts, the
+        # audit trail — distinct from the already-pruned `device_event` singular
+        # state-change table) had no retention at all.
+        audit_cutoff = int(time.time()) - self._AUDIT_RETAIN_DAYS * 86400
+        total_deleted += self._execute_write_counted(
+            "DELETE FROM alert_fired WHERE ts < ?", (audit_cutoff,)
+        )
+        total_deleted += self._execute_write_counted(
+            "DELETE FROM device_events WHERE ts < datetime('now', ?)",
+            (f"-{self._AUDIT_RETAIN_DAYS} days",),
+        )
+
+        # G2 — VACUUM only when meaningful; it rewrites the whole file.
+        self.vacuum_if_needed(total_deleted)
+        return total_deleted
 
     def get_db_size_bytes(self) -> int:
         """Return the current size of the database file in bytes."""

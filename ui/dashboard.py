@@ -598,6 +598,15 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 w.wait(2000)   # wait after terminate before object destruction
 
         super().closeEvent(event)
+        # Stability Sprint 1 (G7): os._exit(0) below bypasses Python's normal
+        # connection-close/atexit path entirely, so the WAL would otherwise
+        # never be truncated back into the main DB file. Flush it now, before
+        # the hard exit, while it's still safe to touch self._store.
+        if self._store is not None:
+            try:
+                self._store.checkpoint()
+            except Exception:
+                pass  # non-fatal — best-effort flush before hard exit
         # os._exit(0) bypasses Qt destructor cleanup entirely.
         # This is intentional: calling QApplication.quit() after terminate()
         # can still trigger QThread destructor crashes (STATUS_STACK_BUFFER_OVERRUN)
