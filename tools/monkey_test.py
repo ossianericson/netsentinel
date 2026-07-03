@@ -79,7 +79,7 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.6.6"
+_VERSION = "1.6.7"
 # Title STARTS with "NetSentinel" — never matches VS Code's
 # "monkey_test.py — NetSentinel — Visual Studio Code" title.
 _WINDOW_RE = r"^NetSentinel"
@@ -186,6 +186,17 @@ _BLACKLIST: List[str] = [
     # --- File open/save dialogs (Windows native) — must never be opened ---
     # A Windows file picker steals focus from the app and stalls the harness.
     "browse",           # any "Browse…" button for file/folder selection
+    "folder",           # "Open Plugins Folder" (tabs_recon.py, settings_cards.py),
+                        # "Open Folder ›" (reports_page.py) — spawns a real Windows
+                        # Explorer window (subprocess.Popen(["explorer", ...]) or
+                        # QDesktopServices.openUrl on a folder path) that steals
+                        # foreground focus.  Explorer is not a Win32 dialog (class
+                        # #32770) so _dismiss_blocking_dialogs() never catches it, and
+                        # it does not match _is_system_hwnd() either — once open, the
+                        # tester's coordinate-based click_input() calls can land on
+                        # the Explorer window instead of NetSentinel controls
+                        # (confirmed cause of "monkey clicking around in File
+                        # Explorer" after ~10 min of a chaos run).
     "floor plan",       # WiFi Heatmap — floor plan image import
     "choose file",      # generic file picker label
     "select file",      # generic file picker label
