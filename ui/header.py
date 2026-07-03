@@ -101,8 +101,8 @@ class AppHeaderMixin:
     def _build_header(self) -> QWidget:
         """Slim top bar: brand | stretch | verdict | actions."""
         from PyQt6.QtWidgets import QMenu, QToolButton
-        from ui.styles import ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER, BORDER, NAV_BAR, RED
-        from ui.styles import SIDEBAR_SECTION_BG, SIDEBAR_HOVER, TEXT_MUTED, TEXT_PRIMARY
+        from ui.styles import ACCENT, ACCENT_DARK, ACCENT_LITE, BG_CARD, BG_HOVER, BORDER, NAV_BAR, RED
+        from ui.styles import alpha, SIDEBAR_HOVER, TEXT_MUTED, TEXT_PRIMARY
         from ui.styles import WHITE
 
         w = self._DragHeader(self)
@@ -189,10 +189,13 @@ class AppHeaderMixin:
         _act_quit = _menu_s.addAction("✕  Quit NetSentinel")
         _act_quit.triggered.connect(self._quit_app)
 
-        # Transparent at rest — header dark bg shows through; border+accent on hover
+        # Transparent at rest — header dark bg shows through; border+accent on hover.
+        # The border is a faint WHITE-alpha hairline so it blends on the dark header
+        # bar in BOTH themes. (A plain-hex token like SIDEBAR_SECTION_BG is a light
+        # near-white value in Arctic → it drew a harsh white box on the dark bar.)
         _icon_btn_qss = (
             f"QToolButton {{ background:transparent; color:{TEXT_MUTED};"
-            f" border:1px solid {SIDEBAR_SECTION_BG}; border-radius:5px;"
+            f" border:1px solid {alpha(WHITE, 0x22)}; border-radius:5px;"
             f" font-family:'Segoe UI Symbol','Segoe UI',sans-serif;"
             f" font-size:12px; padding:0 8px;"
             f" min-height:26px; max-height:26px; }}"
@@ -211,7 +214,7 @@ class AppHeaderMixin:
         # ── Global time range picker (TIME-1) ────────────────────────────────
         _time_combo_qss = (
             f"QComboBox {{ background:transparent; color:{TEXT_MUTED};"
-            f" border:1px solid {SIDEBAR_SECTION_BG}; border-radius:5px;"
+            f" border:1px solid {alpha(WHITE, 0x22)}; border-radius:5px;"
             f" font-size:11px; padding:0 6px;"
             f" min-height:26px; max-height:26px; min-width:52px; }}"
             f"QComboBox:hover {{ border-color:{ACCENT}; color:{WHITE}; }}"
@@ -228,14 +231,27 @@ class AppHeaderMixin:
         lay.addSpacing(4)
         lay.addWidget(self._time_range_combo)
 
-        # ── Scan button — persistent trigger visible from every page ─────────
+        # ── Scan button — persistent PRIMARY action visible from every page ──
+        # Solid at rest (mirrors QPushButton#btnScan). It is the header's one
+        # primary CTA, so unlike the ghost icon buttons above it must read as a
+        # button without a hover; a transparent-at-rest style hid it (users saw
+        # only a faint outline until hover).
+        _scan_btn_qss = (
+            f"QToolButton {{ background:{ACCENT}; color:{WHITE};"
+            f" border:none; border-radius:5px; font-weight:bold;"
+            f" font-family:'Segoe UI Symbol','Segoe UI',sans-serif;"
+            f" font-size:12px; padding:0 14px;"
+            f" min-height:26px; max-height:26px; }}"
+            f"QToolButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
+            f"QToolButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
         self._header_scan_btn = QToolButton()
         self._header_scan_btn.setText("▶  Scan")
         self._header_scan_btn.setToolTip(
             "Run full network scan (ARP + WiFi + DNS + port discovery)\n"
             "Tip: Ctrl+K to search pages · Ctrl+F to filter sidebar · Ctrl+, for Settings"
         )
-        self._header_scan_btn.setStyleSheet(_icon_btn_qss)
+        self._header_scan_btn.setStyleSheet(_scan_btn_qss)
         self._header_scan_btn.clicked.connect(self._start_full_scan)
         lay.addWidget(self._header_scan_btn)
 

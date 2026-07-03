@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_HOVER, BORDER,
     CARD_RADIUS, GREEN, PRO_WARN_BG, RED, TEXT_MUTED, TEXT_PRIMARY,
     TEXT_SECONDARY, UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
@@ -356,10 +357,10 @@ class _HomeDataMixin:
             if active:
                 btn.setText(f"●  {label}")
                 btn.setStyleSheet(
-                    f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                    f"QPushButton {{ background:{alpha(GREEN, 0x22)}; color:{GREEN}; font-size:10px;"
                     f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
                     f" padding:1px 10px; }}"
-                    f"QPushButton:hover {{ background:{GREEN}44; }}"
+                    f"QPushButton:hover {{ background:{alpha(GREEN, 0x44)}; }}"
                     f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
             else:
@@ -400,10 +401,10 @@ class _HomeDataMixin:
             if active:
                 rbtn.setText(f"●  {rlabel}")
                 rbtn.setStyleSheet(
-                    f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                    f"QPushButton {{ background:{alpha(GREEN, 0x22)}; color:{GREEN}; font-size:10px;"
                     f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
                     f" padding:1px 10px; }}"
-                    f"QPushButton:hover {{ background:{GREEN}44; }}"
+                    f"QPushButton:hover {{ background:{alpha(GREEN, 0x44)}; }}"
                     f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
                 )
             else:
@@ -1028,7 +1029,7 @@ class _HomeDataMixin:
         """Swap the 'since last visit' card between routine and prominent styles (S9-6)."""
         if prominent:
             self._last_visit_card.setStyleSheet(
-                f"QFrame#lastVisitCard {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
+                f"QFrame#lastVisitCard {{ background:{BG_CARD}; border:1px solid {alpha(ACCENT, 0x44)};"
                 f" border-left:3px solid {ACCENT}; border-radius:{CARD_RADIUS}; }}"
             )
             self._lv_icon.setStyleSheet(
@@ -1151,18 +1152,20 @@ class _HomeDataMixin:
         dlg.exec()
 
     def on_live_challenge(self, scenario) -> None:
-        """Show persistent amber banner when Network Logger detects a network anomaly."""
+        """Show a persistent amber notice when Network Logger flags a network event.
+
+        The banner leads with the event's own framing (e.g. "New device detected")
+        rather than a hard-coded "Connectivity issue" — most Network Logger events
+        (new devices, inventory changes) are notices, not faults, so alarming
+        wording is reserved for events that describe an actual problem.
+        """
         if not hasattr(self, "_live_challenge_banner"):
             return
         import datetime as _dt
         time_str = _dt.datetime.now().strftime("%H:%M")
-        title = (
-            getattr(scenario, "title", "Network anomaly detected")
-            if scenario else "Network anomaly detected"
-        )
-        self._lc_text.setText(
-            f"Connectivity issue detected at {time_str} — {title.lower()}"
-        )
+        title = (getattr(scenario, "title", "") or "").strip() if scenario else ""
+        lead = title if title else "Network event detected"
+        self._lc_text.setText(f"{lead} at {time_str}")
         self._live_challenge_banner.setVisible(True)
 
     def on_hardware_added(self, path: str = "", label: str = "") -> None:

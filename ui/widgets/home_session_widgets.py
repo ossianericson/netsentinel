@@ -1,4 +1,4 @@
-﻿"""
+"""
 home_session_widgets.py — Session and onboarding widgets for the Home page.
 
 Extracted from ui/widgets/home_widgets.py (Sprint 17) to keep that file within budget.
@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_CARD, BG_DARK, BORDER,
     CARD_RADIUS, GRADE_B_COLOR, GREEN, NAV_BAR,
@@ -598,7 +599,7 @@ class _GradeBreakdownDialog:
                 tip_frame = QFrame()
                 tip_frame.setObjectName("breakdownTip")
                 tip_frame.setStyleSheet(
-                    f"QFrame#breakdownTip {{ background:{BG_CARD}; border:1px solid {AMBER}44;"
+                    f"QFrame#breakdownTip {{ background:{BG_CARD}; border:1px solid {alpha(AMBER, 0x44)};"
                     f" border-left:3px solid {AMBER}; border-radius:4px; }}"
                 )
                 tip_lay = QHBoxLayout(tip_frame)

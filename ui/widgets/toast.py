@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, BG_CARD, BORDER, GREEN, RED, TEXT_MUTED, TEXT_PRIMARY,
     BG_HOVER,
 )
@@ -101,7 +102,7 @@ class _Toast(QFrame):
                 f"QPushButton {{ background:transparent; color:{ACCENT};"
                 f" border:1px solid {ACCENT}; border-radius:3px;"
                 f" font-size:10px; padding:0 8px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}22; }}"
+                f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             act_btn.clicked.connect(action_callback)

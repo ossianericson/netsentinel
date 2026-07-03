@@ -24,10 +24,12 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT,
     ACCENT_DARK,
     ACCENT_LITE,
     AMBER,
+    AMBER_BG,
     BG_CARD,
     BG_DARK,
     BG_HOVER,
@@ -404,7 +406,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._setup_complete_card.setObjectName("setupCompleteCard")
         self._setup_complete_card.setStyleSheet(
             f"QFrame#setupCompleteCard {{ background:{GREEN_BG};"
-            f" border:1px solid {GREEN}44; border-left:3px solid {GREEN};"
+            f" border:1px solid {alpha(GREEN, 0x44)}; border-left:3px solid {GREEN};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         _sc_lay = QVBoxLayout(self._setup_complete_card)
@@ -500,7 +502,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._first_scan_banner.setObjectName("firstScanBanner")
         self._first_scan_banner.setStyleSheet(
             f"QFrame#firstScanBanner {{ background:{BG_CARD};"
-            f" border:1px solid {GREEN}44; border-left:3px solid {GREEN};"
+            f" border:1px solid {alpha(GREEN, 0x44)}; border-left:3px solid {GREEN};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._first_scan_banner.setVisible(False)
@@ -554,7 +556,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._action_card = QFrame()
         self._action_card.setObjectName("actionCard")
         self._action_card.setStyleSheet(
-            f"QFrame#actionCard {{ background:{BG_CARD}; border:1px solid {RED}44;"
+            f"QFrame#actionCard {{ background:{BG_CARD}; border:1px solid {alpha(RED, 0x44)};"
             f" border-left:3px solid {RED}; border-radius:{CARD_RADIUS}; }}"
         )
         self._action_card.setVisible(False)
@@ -744,9 +746,9 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._btn_rescan_compact.setFixedHeight(26)
         self._btn_rescan_compact.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_rescan_compact.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {alpha(ACCENT, 0x44)};"
             f" border-radius:4px; font-size:11px; font-weight:600; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}22; border-color:{ACCENT}; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; border-color:{ACCENT}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _rec_status_row.addWidget(self._rec_grade_lbl)
@@ -908,7 +910,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._live_challenge_banner = QFrame()
         self._live_challenge_banner.setObjectName("liveChallengeBar")
         self._live_challenge_banner.setStyleSheet(
-            f"QFrame#liveChallengeBar {{ background:{AMBER}22; border:1px solid {AMBER}88;"
+            f"QFrame#liveChallengeBar {{ background:{AMBER_BG}; border:1px solid {AMBER};"
             f" border-left:3px solid {AMBER}; border-radius:{CARD_RADIUS}; }}"
         )
         self._live_challenge_banner.setVisible(False)
@@ -930,8 +932,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _lc_diagnose.setCursor(Qt.CursorShape.PointingHandCursor)
         _lc_diagnose.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{AMBER}; font-size:11px;"
-            f" border:1px solid {AMBER}88; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{AMBER}22; color:{AMBER}; }}"
+            f" border:1px solid {alpha(AMBER, 0x88)}; border-radius:3px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{alpha(AMBER, 0x22)}; color:{AMBER}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )
         _lc_dismiss = QPushButton("×")
@@ -1116,7 +1118,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._post_scan_sheet = QFrame()
         self._post_scan_sheet.setObjectName("postScanSheet")
         self._post_scan_sheet.setStyleSheet(
-            f"QFrame#postScanSheet {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
+            f"QFrame#postScanSheet {{ background:{BG_CARD}; border:1px solid {alpha(ACCENT, 0x44)};"
             f" border-radius:{CARD_RADIUS}; }}"
         )
         self._post_scan_sheet.setVisible(False)

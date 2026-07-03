@@ -12,6 +12,12 @@ All notable changes to NetSentinel are documented here. The current version summ
 - `MetricStore.query_previous_grade()` — Network Grade tab now shows a "Your grade improved — share it" strip with "Copy as image"/"Copy as Markdown" buttons, but only on a genuine score improvement between the last two grade runs
 - "Copy as Reddit post" and "Copy as email to ISP" buttons on the ISP Accountability Report, reusing `report_isp.generate_isp_complaint_text()` and the new `forum_export.build_isp_forum_markdown()`
 
+**Fixed**
+- `ui/styles.py`: added an `alpha()` helper and swept ~60 QSS sites that appended hex alpha as `{COLOR}22` — Qt parses 8-digit hex as `#AARRGGBB` (alpha-first), which scrambled those colours (mostly rendering invisible hover tints, and the Home "live challenge" banner as an opaque dark red); guarded by new `tests/test_qss_hex_alpha.py` (RULE-QSS2)
+- `home_page.py`: the Home "live challenge" banner now renders as translucent amber via `AMBER_BG` instead of dark red
+- `header.py`: the top-bar "▶ Scan" button now reads as a solid primary button at rest instead of being invisible until hover; the gear and time-range controls use a faint `alpha(WHITE, …)` hairline border so they no longer draw a harsh white box on the dark header bar in Arctic Clean
+- `home_data_mixin.py`: the live-challenge banner now leads with the event's own wording (e.g. `New device detected`) instead of labelling every Network Logger event a "Connectivity issue"
+
 ---
 
 ### v2.1.22

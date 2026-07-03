@@ -179,6 +179,27 @@ class TestLiveChallengeBanner:
         home_page.on_live_challenge(None)
         assert not home_page._live_challenge_banner.isHidden()
 
+    def test_new_device_not_worded_as_connectivity_issue(self, home_page):
+        # Regression: a new-device notice must NOT be framed as a fault.
+        from unittest.mock import MagicMock
+        scenario = MagicMock()
+        scenario.title = "New Device Detected"
+        home_page.on_live_challenge(scenario)
+        text = home_page._lc_text.text().lower()
+        assert "connectivity issue" not in text
+        assert text.startswith("new device detected")
+
+    def test_banner_uses_amber_bg_not_scrambled_hex(self, home_page):
+        # Regression: {AMBER}22 -> "#F59E0B22" is parsed by Qt as #AARRGGBB
+        # (opaque dark red). The banner must use the AMBER_BG token, whose value
+        # differs per theme (opaque light tint in Arctic, rgba() in Midnight).
+        import re
+        from ui.styles import AMBER_BG
+        qss = home_page._live_challenge_banner.styleSheet()
+        assert AMBER_BG in qss
+        # No 8-digit hex colour (the scrambled-alpha antipattern) anywhere.
+        assert not re.search(r"#[0-9a-fA-F]{8}\b", qss)
+
 
 class TestFallbackSuggestion:
     """Verify _compute_suggestions always provides ≥1 suggestion after scan."""

@@ -218,6 +218,9 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 - Monitor resume and alert banners confined to the content area (no longer bleed over the nav rail)
 - Arctic Clean active nav text raised to WCAG AA+ contrast (~6.9:1)
 - Device inventory scan counts and IP-stability scores were quietly inflating (double-counted every scan) — fixed, and all direct database access from device tracking code now goes through the proper data layer
+- The top-bar **Scan** button now reads as a solid button at rest (previously it only appeared when hovered); the gear and time-range controls no longer draw a harsh white box on the dark header bar in Arctic Clean
+- The Home network-event banner now shows as amber and leads with the actual event (e.g. "New device detected") instead of appearing bright red and mislabelling every event a "Connectivity issue"
+- Corrected a colour-transparency bug (Qt reads 8-digit hex colours alpha-first) that made dozens of subtle hover/background tints render wrong or invisible; guarded by a new test so it can't return
 
 ---
 

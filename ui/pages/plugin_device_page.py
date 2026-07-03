@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
 from ui.widgets.empty_state_card import EmptyStateCard
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     AMBER_BG, BG_ALT_ROW, BG_CARD, BG_DARK,
     BORDER, GREEN,
@@ -189,7 +190,7 @@ _TBL_SS = (
 _TREE_SS = (
     f"QTreeWidget {{ border:none; background:{BG_CARD}; outline:none; }}"
     f"QTreeWidget::item {{ padding:3px 4px; color:{TEXT_PRIMARY}; }}"
-    f"QTreeWidget::item:selected {{ background:{ACCENT}22; color:{TEXT_PRIMARY}; }}"
+    f"QTreeWidget::item:selected {{ background:{alpha(ACCENT, 0x22)}; color:{TEXT_PRIMARY}; }}"
     f"QHeaderView::section {{ background:{BG_CARD}; color:{TEXT_SECONDARY}; border:none;"
     f" border-bottom:1px solid {BORDER}; padding:4px 8px; font-size:11px; }}"
 )

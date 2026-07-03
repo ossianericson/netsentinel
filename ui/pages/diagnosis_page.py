@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK, BORDER, BG_HOVER, GREEN, RED,
     PROGRESS_TRACK, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -633,7 +634,7 @@ class DiagnosisPage(QWidget):
         self._logger_warn = QFrame()
         self._logger_warn.setObjectName("loggerWarn")
         self._logger_warn.setStyleSheet(
-            f"QFrame#loggerWarn {{ background:{AMBER}18; border:1px solid {AMBER}66;"
+            f"QFrame#loggerWarn {{ background:{alpha(AMBER, 0x18)}; border:1px solid {alpha(AMBER, 0x66)};"
             f" border-radius:3px; }}"
         )
         _lw_lay = QHBoxLayout(self._logger_warn)

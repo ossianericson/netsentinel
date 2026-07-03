@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN,
     HTML_TEXT,
@@ -776,9 +777,9 @@ tr:nth-child(even){{background:{BG_ALT_ROW}}}
         self._sched_btn = QPushButton()
         self._sched_btn.setFixedHeight(24)
         self._sched_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {alpha(ACCENT, 0x44)};"
             f" border-radius:3px; padding:0 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}18; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x18)}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sched_btn.clicked.connect(self._toggle_schedule_edit)

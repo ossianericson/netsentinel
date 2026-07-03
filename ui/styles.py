@@ -341,6 +341,30 @@ def _compute_accent_variants(hex_color: str) -> "tuple[str, str, str]":
     return hex_color, lite, dark
 
 
+def alpha(hex_color: str, a) -> str:
+    """Return a Qt ``rgba(r,g,b,a)`` string for a ``#RRGGBB`` colour.
+
+    ``a`` is the opacity, given as either 0-255 (int, e.g. ``0x22``) or 0-1
+    (float, e.g. ``0.13``).
+
+    Use this ANYWHERE a translucent tint is wanted in a stylesheet. Never append
+    hex alpha to a colour (``f"{ACCENT}22"``): Qt QSS parses 8-digit hex as
+    ``#AARRGGBB`` (alpha-first), so ``#0078D422`` silently becomes fully
+    transparent and ``#F59E0B22`` becomes an opaque dark red — not the intended
+    translucent tint. Enforced by ``tests/test_qss_hex_alpha.py``.
+
+    Values that are not a plain ``#RRGGBB`` hex (e.g. ``BORDER``, which is already
+    an ``rgba(...)`` string) are returned unchanged, since alpha cannot be layered
+    on them here (see RULE-10).
+    """
+    if not isinstance(hex_color, str) or not hex_color.startswith("#") or len(hex_color) < 7:
+        return hex_color
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    frac = a / 255 if a > 1 else float(a)
+    return f"rgba({r},{g},{b},{frac:.3f})"
+
+
 # ── Apply active theme — injects all palette keys into this module's globals ──
 
 _ACTIVE_THEME: str = get_active_theme_name()

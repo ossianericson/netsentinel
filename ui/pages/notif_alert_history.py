@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER,
     BG_ALT_ROW, BG_CARD, BG_HOVER,
     BORDER, GREEN, RED,
@@ -251,7 +252,7 @@ class _NotifAlertHistoryMixin:
         self._storm_banner = QFrame()
         self._storm_banner.setVisible(False)
         self._storm_banner.setStyleSheet(
-            f"QFrame {{ background:{AMBER}22; border:1px solid {AMBER}; border-radius:4px; }}"
+            f"QFrame {{ background:{alpha(AMBER, 0x22)}; border:1px solid {AMBER}; border-radius:4px; }}"
         )
         _sb_lay = QHBoxLayout(self._storm_banner)
         _sb_lay.setContentsMargins(10, 6, 10, 6)
@@ -268,8 +269,8 @@ class _NotifAlertHistoryMixin:
         _sb_setup_btn.setStyleSheet(
             f"QPushButton{{background:{AMBER};color:{WHITE};font-size:10px;font-weight:600;"
             f"border:none;border-radius:3px;padding:0 10px;}}"
-            f"QPushButton:hover{{background:{AMBER}CC;}}"
-            f"QPushButton:pressed{{background:{AMBER}AA;color:{TEXT_PRIMARY};}}"
+            f"QPushButton:hover{{background:{alpha(AMBER, 0xCC)};}}"
+            f"QPushButton:pressed{{background:{alpha(AMBER, 0xAA)};color:{TEXT_PRIMARY};}}"
         )
         _sb_setup_btn.clicked.connect(self._storm_go_to_dep)
         _sb_dismiss_btn = QPushButton("×")

@@ -22,6 +22,7 @@ from modules.utils import is_npcap_available
 from ui.live_graph import LiveGraphWidget
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, BG_CARD, BG_DARK,
     BG_HOVER, BORDER, CHART_PURPLE,
     GREEN, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
@@ -119,7 +120,7 @@ class _ScanTabsMixin:
         _ib_lay.setContentsMargins(10, 5, 10, 5)
         _ib_lay.setSpacing(8)
         self._m1_int_banner.setStyleSheet(
-            f"QFrame {{ background:{ACCENT}18; border:1px solid {ACCENT}55;"
+            f"QFrame {{ background:{alpha(ACCENT, 0x18)}; border:1px solid {alpha(ACCENT, 0x55)};"
             " border-radius:4px; }"
         )
         self._m1_int_lbl = QLabel()

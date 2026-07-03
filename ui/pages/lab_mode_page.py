@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from modules.lab_scenarios import LabResult, LabScenario, SCENARIOS
 from modules.metric_store import MetricStore
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK,
     BG_HOVER, BORDER, GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
@@ -473,7 +474,7 @@ class LabModePage(QWidget):
         # hint panel (hidden until toggled) — above buttons so it doesn't push them off-screen
         self._hint_card = QFrame()
         self._hint_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {AMBER}40;"
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {alpha(AMBER, 0x40)};"
             f" border-left:4px solid {AMBER}; border-radius:6px; }}"
         )
         hint_lay = QVBoxLayout(self._hint_card)
@@ -490,7 +491,7 @@ class LabModePage(QWidget):
         # solution panel (hidden until revealed) — above buttons
         self._solution_card = QFrame()
         self._solution_card.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {GREEN}40;"
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {alpha(GREEN, 0x40)};"
             f" border-left:4px solid {GREEN}; border-radius:6px; }}"
         )
         sol_lay = QVBoxLayout(self._solution_card)
