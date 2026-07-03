@@ -183,7 +183,7 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.22 (current)
+### v2.1.23 (current)
 
 **Added**
 - "Copy for Reddit/Discord" button on the "What's Wrong?" diagnosis and Service Diagnostics pages — copies a sanitized, forum-ready Markdown summary (private IPs aliased, MACs/hostnames stripped, public IPs omitted)
