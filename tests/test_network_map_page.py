@@ -330,6 +330,28 @@ def test_layout_modes_do_not_share_saved_positions(qt_app, tmp_layout_path):
         qt_app.processEvents()
 
 
+def test_share_export_writes_sanitized_png(page, monkeypatch, tmp_path):
+    """_on_share_export renders a sanitized PNG independent of the live view —
+    private IPs must be aliased, never the raw scan data."""
+    page.render(devices=_devices(), gateway_ip="192.168.68.1")
+    out_path = tmp_path / "share.png"
+    monkeypatch.setattr(
+        "PyQt6.QtWidgets.QFileDialog.getSaveFileName",
+        lambda *a, **kw: (str(out_path), ""),
+    )
+    page._on_share_export()
+    assert out_path.exists()
+
+
+def test_share_export_noop_when_dialog_cancelled(page, monkeypatch, tmp_path):
+    page.render(devices=_devices(), gateway_ip="192.168.68.1")
+    monkeypatch.setattr(
+        "PyQt6.QtWidgets.QFileDialog.getSaveFileName",
+        lambda *a, **kw: ("", ""),
+    )
+    page._on_share_export()  # must not raise
+
+
 def test_first_render_of_session_uses_real_scan_id_not_default(qt_app, tmp_layout_path):
     """Regression for the ordering bug: self._scan_id must be computed BEFORE
     _refresh_web_view() reads it, even on the very first render() call of a

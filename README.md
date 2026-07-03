@@ -186,6 +186,8 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 ### v2.1.22 (current)
 
 **Added**
+- "Copy for Reddit/Discord" button on the "What's Wrong?" diagnosis and Service Diagnostics pages — copies a sanitized, forum-ready Markdown summary (private IPs aliased, MACs/hostnames stripped, public IPs omitted)
+- "Share (Sanitized PNG)" button on the Network Map — exports a shareable topology image with the same sanitization guarantees
 - Service unreachable? NetSentinel now diagnoses *why* in the background and tells you — filtered by a firewall/VPN/ISP, or a real outage — right in the notification
 - Opt-in automatic speed tests with a tray alert when your download speed drops sharply against your own history
 - Morning Briefing now summarizes overnight service outages and speed drops, when those features are enabled

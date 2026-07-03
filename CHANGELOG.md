@@ -7,6 +7,9 @@ All notable changes to NetSentinel are documented here. The current version summ
 ### v2.1.22
 
 **Added**
+- `modules/report_sanitizer.py` — shared sanitizer for public sharing: aliases private IPs to stable `192.168.1.N` placeholders, strips MAC addresses/hostnames, and omits public IPs entirely; makes no network calls
+- `modules/forum_export.py` — builds sanitized, forum-ready Markdown summaries for `DiagnosisPage` ("What's Wrong?") and `ServiceDiagnosticsPage` results; wired to new "Copy for Reddit/Discord" buttons on both pages
+- `modules/topology_share.py` — renders a sanitized Network Map PNG independently of the on-screen view, so a new "Share (Sanitized PNG)" toolbar button on `NetworkMapPage` can never leak real IPs/MACs/hostnames
 - `modules/service_escalation.py` — a `SERVICE_DOWN` heartbeat failure now triggers a background `DiagnosticEngine` probe and a follow-up notification classifying *why* the service is unreachable (filtered by a firewall/VPN/ISP vs. a genuine outage); new "Diagnose why (recommended)" sub-toggle under the `Service Down` alert rule
 - `modules/proactive_digest.py` / `workers/proactive_probe_worker.py` — reusable due-check/day-tracking base (used by Morning Briefing) and a generic interval-loop `QThread` for future background probes
 - `modules/scheduled_speed_test.py` and a new `BASELINE_DROP` `AlertRule` type — opt-in "Automatic Speed Tests" card on the Speed Test page (1h/3h/6h/12h/24h interval) fires a tray notification when download speed drops severely against your own rolling history, reusing `speed_drop_detector`'s verdict/copy

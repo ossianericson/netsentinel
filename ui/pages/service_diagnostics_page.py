@@ -14,8 +14,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFrame,
@@ -266,6 +267,17 @@ class ServiceDiagnosticsPage(QWidget):
         )
         badge_row.addWidget(self._sum_conf_lbl)
         badge_row.addStretch()
+
+        self._forum_btn = QPushButton("Copy for Reddit/Discord")
+        self._forum_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:4px 14px; font-size:11px;"
+            f" border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        self._forum_btn.clicked.connect(self._copy_forum_markdown)
+        badge_row.addWidget(self._forum_btn)
         lay.addLayout(badge_row)
 
         # Summary text
@@ -430,6 +442,19 @@ class ServiceDiagnosticsPage(QWidget):
         self._run_btn.setText("Run Diagnostics")
         self._run_btn.setEnabled(True)
         self.scan_complete.emit()
+
+    def _copy_forum_markdown(self) -> None:
+        """Copy a sanitized, forum-ready Markdown post to the clipboard."""
+        from modules.forum_export import build_service_diagnostics_markdown
+        if self._last_result is None:
+            return
+        md = build_service_diagnostics_markdown(self._last_result)
+        QApplication.clipboard().setText(md)
+        self._forum_btn.setText("Copied ✓")
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._forum_btn.setText("Copy for Reddit/Discord"))
+        _t.start(2000)
 
     def _on_error(self, msg: str) -> None:
         self._set_status(msg, is_error=True)

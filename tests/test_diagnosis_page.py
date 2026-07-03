@@ -138,3 +138,27 @@ def test_make_finding_card_no_verify_step_no_button(diag_page):
 def test_verify_workers_list_initialised(diag_page):
     assert hasattr(diag_page, "_verify_workers")
     assert diag_page._verify_workers == []
+
+
+def test_copy_forum_markdown_populates_clipboard(diag_page):
+    from modules.root_cause_correlator import CorrelationResult, CorrelatedFinding
+    result = CorrelationResult(
+        findings=[CorrelatedFinding(
+            source="Network Diagnostics", category="DNS Resolution Failure",
+            severity="HIGH", headline="DNS is slow", detail="",
+            remediation="Restart the router.",
+        )],
+        global_severity="HIGH", plain_summary="DNS is slow.",
+        metrics={"ping_ms": 22.5, "dns_ms": 30.0},
+    )
+    diag_page._last_result = result
+    diag_page._symptom = "slow"
+    diag_page._copy_forum_markdown()
+    clip = QApplication.clipboard().text()
+    assert "NetSentinel" in clip
+    assert "DNS is slow" in clip
+
+
+def test_copy_forum_markdown_noop_without_result(diag_page):
+    diag_page._last_result = None
+    diag_page._copy_forum_markdown()  # must not raise

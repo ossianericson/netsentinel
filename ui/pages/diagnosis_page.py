@@ -251,6 +251,7 @@ class DiagnosisPage(QWidget):
         self._symptom         = ""   # set by symptom tile before _start()
         self._prev_finding_headlines: set[str] = set()
         self._last_findings: list = []
+        self._last_result = None
         self._verify_workers: list = []  # keeps refs alive until verify completes
         self._setup_ui()
 
@@ -796,6 +797,12 @@ class DiagnosisPage(QWidget):
         self._export_btn.clicked.connect(self._export_report)
         btn_row.addWidget(self._export_btn)
 
+        self._forum_btn = QPushButton("Copy for Reddit/Discord")
+        self._forum_btn.setFixedWidth(170)
+        self._forum_btn.setStyleSheet(_btn_qss)
+        self._forum_btn.clicked.connect(self._copy_forum_markdown)
+        btn_row.addWidget(self._forum_btn)
+
         btn_row.addStretch()
         outer.addLayout(btn_row)
 
@@ -1088,6 +1095,20 @@ class DiagnosisPage(QWidget):
         _t.timeout.connect(lambda: self._copy_btn.setText("Copy report"))
         _t.start(2000)
 
+    def _copy_forum_markdown(self) -> None:
+        """Copy a sanitized, forum-ready Markdown post to the clipboard."""
+        from modules.forum_export import build_diagnosis_markdown
+        if self._last_result is None:
+            return
+        md = build_diagnosis_markdown(self._last_result, symptom=self._symptom)
+        QApplication.clipboard().setText(md)
+        self._forum_btn.setText("Copied ✓")
+        from PyQt6.QtCore import QTimer
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._forum_btn.setText("Copy for Reddit/Discord"))
+        _t.start(2000)
+
     def _export_report(self) -> None:
         from PyQt6.QtWidgets import QFileDialog
         from ui.widgets.toast import ToastManager
@@ -1141,6 +1162,7 @@ class DiagnosisPage(QWidget):
         summary  = getattr(result, "plain_summary",   "") or "No issues detected."
         findings = getattr(result, "findings",        [])
         self._last_findings = list(findings)
+        self._last_result = result
         _save_diag_history(result)
         self.diagnosis_saved.emit()
 

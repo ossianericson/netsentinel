@@ -87,3 +87,21 @@ def test_overlay_shown_when_healthy_and_devices_active(store):
     page._update_bandwidth_overlay(result)
     assert page._bandwidth_overlay_lbl.isVisible() is True
     assert "Netflix" in page._bandwidth_overlay_lbl.text()
+
+
+def test_copy_forum_markdown_populates_clipboard():
+    page = _make_page()
+    page._last_result = ServiceDiagnosticResult(
+        service_id="netflix", service_name="Netflix", failure_layer="none",
+        summary="Netflix is reachable and healthy.",
+    )
+    page._copy_forum_markdown()
+    clip = QApplication.clipboard().text()
+    assert "Netflix" in clip
+    assert "NetSentinel" in clip
+
+
+def test_copy_forum_markdown_noop_without_result():
+    page = _make_page()
+    page._last_result = None
+    page._copy_forum_markdown()  # must not raise
