@@ -377,7 +377,22 @@ class AppHeaderMixin:
     def showEvent(self, event):
         super().showEvent(event)
         if not getattr(self, "_snap_subclass_installed", False):
-            self._install_snap_subclass()
+            # RULE-EXP1 / docs/spikes/window-snap-subclass.md: this native
+            # WM_NCHITTEST hook was verified (2026-07-03) to trigger a Windows
+            # COM/RPC reentrancy fault (0x8001010d, RPC_E_CANTCALLOUT_ININPUTSYNCCALL)
+            # when Windows' Snap Layout hover-preview fires on the main thread
+            # while a background QThread is doing network I/O (e.g. Threat
+            # Intel's "Update Feeds"). A Python-level try/except cannot catch
+            # this — the fault occurs inside native DefSubclassProc/Shell code,
+            # not in Python bytecode. Gated off by default until a COM-apartment
+            # fix is designed; the maximize button still works, it just won't
+            # show the Windows 11 Snap flyout on hover.
+            from PyQt6.QtCore import QSettings as _QSettings
+            _snap_enabled = _QSettings("NetSentinel", "NetSentinel").value(
+                "experimental/snap_layout_hover", False, type=bool
+            )
+            if _snap_enabled:
+                self._install_snap_subclass()
             self._snap_subclass_installed = True
         # Attach toast manager once window is visible
         from ui.widgets.toast import ToastManager
@@ -420,35 +435,60 @@ class AppHeaderMixin:
             win = self
 
             def _over_maximize_btn():
-                btn = win._maximize_btn
-                if btn is None:
-                    return False
-                from PyQt6.QtGui import QCursor
-                p  = QCursor.pos()
-                tl = btn.mapToGlobal(btn.rect().topLeft())
-                return (tl.x() <= p.x() < tl.x() + btn.width() and
-                        tl.y() <= p.y() < tl.y() + btn.height())
+                # Never let an exception escape into the caller — this runs
+                # inside _proc's try/except, but keep a local guard too since
+                # Qt geometry calls (mapToGlobal walks the widget hierarchy)
+                # can raise if a widget is mid-teardown when this fires.
+                try:
+                    btn = win._maximize_btn
+                    if btn is None:
+                        return False
+                    from PyQt6.QtGui import QCursor
+                    p  = QCursor.pos()
+                    tl = btn.mapToGlobal(btn.rect().topLeft())
+                    return (tl.x() <= p.x() < tl.x() + btn.width() and
+                            tl.y() <= p.y() < tl.y() + btn.height())
+                except Exception:
+                    return False  # non-fatal — treat as "not over the button"
 
             def _proc(hwnd, msg, wparam, lparam, uid, ref):
-                if msg == WM_NCHITTEST and _over_maximize_btn():
-                    return HTMAXBUTTON
-                # Intercept non-client clicks on the maximize button so we drive
-                # the toggle ourselves instead of letting DefWindowProc do it.
-                if wparam == HTMAXBUTTON:
-                    if msg == WM_NCLBUTTONDOWN:
-                        return 0  # swallow — we act on release
-                    if msg == WM_NCLBUTTONUP:
-                        # Zero-delay parented QTimer queues _toggle_maximize() onto
-                        # the main-thread event loop. QMetaObject.invokeMethod fails
-                        # because mixin @pyqtSlot methods are not visible in Qt's C++
-                        # meta-object by string name (logs "No such method Dashboard::_toggle_maximize()").
-                        from PyQt6.QtCore import QTimer as _QTimer
-                        _t = _QTimer(win)
-                        _t.setSingleShot(True)
-                        _t.timeout.connect(win._toggle_maximize)
-                        _t.start(0)
-                        return 0
-                return _DefSubclassProc(hwnd, msg, wparam, lparam)
+                # RULE-WIN2: this callback is invoked directly by Windows as a C
+                # function pointer (ctypes WINFUNCTYPE), reentrantly, on every
+                # mouse move over the frame. An uncaught Python exception here
+                # does not propagate as a normal Python error — it corrupts the
+                # C-level return value ctypes hands back to DefSubclassProc's
+                # caller, which is how this previously surfaced as a Windows
+                # fatal exception (0x8001010d) under thread contention (e.g.
+                # while a background worker is busy and the main thread is
+                # simultaneously animating a page crossfade). Every path must
+                # return an int; never let anything raise past this point.
+                try:
+                    if msg == WM_NCHITTEST and _over_maximize_btn():
+                        return HTMAXBUTTON
+                    # Intercept non-client clicks on the maximize button so we drive
+                    # the toggle ourselves instead of letting DefWindowProc do it.
+                    if wparam == HTMAXBUTTON:
+                        if msg == WM_NCLBUTTONDOWN:
+                            return 0  # swallow — we act on release
+                        if msg == WM_NCLBUTTONUP:
+                            # Zero-delay parented QTimer queues _toggle_maximize() onto
+                            # the main-thread event loop. QMetaObject.invokeMethod fails
+                            # because mixin @pyqtSlot methods are not visible in Qt's C++
+                            # meta-object by string name (logs "No such method Dashboard::_toggle_maximize()").
+                            from PyQt6.QtCore import QTimer as _QTimer
+                            _t = _QTimer(win)
+                            _t.setSingleShot(True)
+                            _t.timeout.connect(win._toggle_maximize)
+                            _t.start(0)
+                            return 0
+                    return _DefSubclassProc(hwnd, msg, wparam, lparam)
+                except Exception:
+                    # Never let a Python exception escape a ctypes callback —
+                    # fall back to default handling for this message.
+                    try:
+                        return _DefSubclassProc(hwnd, msg, wparam, lparam)
+                    except Exception:
+                        return 0  # last-resort — must return an int, never raise
 
             self._snap_subclass_proc = SUBCLASSPROC(_proc)
             hwnd = int(self.winId())

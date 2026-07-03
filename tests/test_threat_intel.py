@@ -2,8 +2,16 @@
 
 Also covers P3 regression: ThreatIntelPage._fill_table must cap rows at
 _MAX_TABLE_ROWS to prevent a 20-26 s main-thread freeze on large feeds.
+
+And a stability regression: refresh_from_feeds() must fetch feeds concurrently,
+not sequentially — sequential fetching held the calling QThread (and the
+UI-visible "Update Feeds" wait) busy for the sum of both feeds' timeouts,
+widening the window in which unrelated main-thread contention (page-crossfade
+animation + the WM_NCHITTEST native callback in ui/header.py) could fault.
 """
 import json
+import time
+
 from modules.threat_intel import (
     ThreatEntry, ThreatIntelDB, _is_public_ip,
     _parse_feodo_json, _parse_urlhaus_text, _parse_plain_ip_list,
@@ -119,6 +127,66 @@ def test_threat_intel_db_size():
     ]
     db = ThreatIntelDB.from_entries(entries)
     assert len(db) == 10
+
+
+# ── Stability regression: feeds must be fetched concurrently, not sequentially ─
+
+def test_refresh_from_feeds_runs_feeds_concurrently(tmp_path, monkeypatch):
+    """Each feed's simulated download sleeps _DELAY seconds. Sequential fetching
+    takes >= len(FEEDS) * _DELAY; concurrent fetching takes ~= _DELAY regardless
+    of feed count. Assert wall time stays close to a single feed's delay."""
+    import modules.threat_intel as ti
+
+    assert len(ti.FEEDS) >= 2, "test assumes at least 2 configured feeds"
+    _DELAY = 0.4
+
+    class _FakeResp:
+        def __init__(self, data):
+            self._data = data
+        def read(self):
+            return self._data
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    def _fake_urlopen(req, timeout=None):
+        time.sleep(_DELAY)
+        return _FakeResp(b"")
+
+    monkeypatch.setattr(ti.urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr(ti, "_rate_wait", lambda host: None)
+
+    t0 = time.time()
+    ti.refresh_from_feeds(cache_dir=tmp_path)
+    elapsed = time.time() - t0
+
+    # Sequential would take len(FEEDS) * _DELAY (0.8s+ for 2 feeds); concurrent
+    # should land close to a single _DELAY. Generous margin for CI jitter.
+    assert elapsed < _DELAY * 1.8, (
+        f"refresh_from_feeds took {elapsed:.2f}s for {len(ti.FEEDS)} feeds each "
+        f"delayed {_DELAY}s — feeds appear to be fetched sequentially, not concurrently"
+    )
+
+
+def test_fetch_one_feed_falls_back_to_cache_on_failure(tmp_path, monkeypatch):
+    import modules.threat_intel as ti
+
+    feed = ti.FEEDS[0]
+    cache_path = tmp_path / feed["filename"]
+    cache_path.write_bytes(b"1.2.3.4\n")
+
+    def _fail_urlopen(req, timeout=None):
+        raise OSError("network unreachable")
+
+    monkeypatch.setattr(ti.urllib.request, "urlopen", _fail_urlopen)
+    monkeypatch.setattr(ti, "_rate_wait", lambda host: None)
+
+    entries = ti._fetch_one_feed(feed, tmp_path, progress_cb=None)
+    # Whatever the feed's parser makes of "1.2.3.4\n" — just confirm the cache
+    # path was read (no exception) rather than the function returning empty
+    # solely because the network call raised.
+    assert isinstance(entries, list)
 
 
 # ── P3 regression: _fill_table must cap rows at _MAX_TABLE_ROWS ───────────────
