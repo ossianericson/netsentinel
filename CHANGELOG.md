@@ -4,6 +4,16 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.23
+
+**Added**
+- `modules/lab_badge.py` — renders a Lab Mode completion badge PNG (hexagon/shield motif, scenario title, completion date); new "Download Badge (PNG)" button on the Lab Mode result panel alongside "Try Again"/"Export Report (HTML)"
+- `modules/diagnostic_card.py::build_card_data_from_diagnosis()` — quiet "Share this result" strip on the "What's Wrong?" result panel with "Copy as image"/"Copy as Markdown" buttons, shown on every completed run
+- `MetricStore.query_previous_grade()` — Network Grade tab now shows a "Your grade improved — share it" strip with "Copy as image"/"Copy as Markdown" buttons, but only on a genuine score improvement between the last two grade runs
+- "Copy as Reddit post" and "Copy as email to ISP" buttons on the ISP Accountability Report, reusing `report_isp.generate_isp_complaint_text()` and the new `forum_export.build_isp_forum_markdown()`
+
+---
+
 ### v2.1.22
 
 **Added**

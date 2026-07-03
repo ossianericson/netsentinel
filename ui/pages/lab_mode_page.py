@@ -618,6 +618,17 @@ class LabModePage(QWidget):
         )
         again_btn.clicked.connect(lambda: self._start_scenario(self._scenario) if self._scenario else None)
 
+        badge_btn = QPushButton("Download Badge (PNG)")
+        badge_btn.setFixedHeight(30)
+        badge_btn.setStyleSheet(
+            f"QPushButton {{ background:{BG_CARD}; color:{TEXT_SECONDARY};"
+            f" border:1px solid {BORDER}; border-radius:4px; font-size:11px; padding:0 14px; }}"
+            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+        )
+        badge_btn.clicked.connect(self._download_badge)
+        self._badge_btn = badge_btn
+
         back_btn = QPushButton("← Back to Exercises")
         back_btn.setFixedHeight(30)
         back_btn.setFlat(True)
@@ -630,6 +641,7 @@ class LabModePage(QWidget):
         btn_row.addWidget(back_btn)
         btn_row.addStretch()
         btn_row.addWidget(again_btn)
+        btn_row.addWidget(badge_btn)
         btn_row.addWidget(export_btn)
         outer.addLayout(btn_row)
 
@@ -894,6 +906,30 @@ class LabModePage(QWidget):
     # ------------------------------------------------------------------
     # Export
     # ------------------------------------------------------------------
+
+    def _download_badge(self) -> None:
+        if not self._result_data:
+            return
+        from modules.utils import get_app_data_dir
+        default_name = (
+            f"badge_{self._result_data['scenario_id']}_"
+            f"{self._result_data['completed_at'][:10]}.png"
+        )
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Lab Badge",
+            str(get_app_data_dir() / "reports" / default_name),
+            "PNG files (*.png)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+        from modules.lab_badge import render_lab_badge_png
+        render_lab_badge_png(
+            self._result_data["scenario_title"],
+            self._result_data["completed_at"],
+            Path(path),
+        )
 
     def _export_report(self) -> None:
         if not self._result_data:

@@ -188,6 +188,7 @@ hiddenimports: list = [
     "modules.forum_export",
     "modules.report_sanitizer",
     "modules.lab_scenarios",
+    "modules.lab_badge",
     "modules.root_cause_correlator",
     "modules.root_cause_types",
     "modules.topology_share",
