@@ -147,3 +147,76 @@ def test_store_exceptions_degrade_gracefully():
     store.get_recent_alerts.side_effect = RuntimeError("db error")
     get = _settings({_SVC_KEY: True, _SPEED_KEY: True})
     assert build_digest_bullets(store, get) == []
+
+
+# ── V6 Sprint 1 — five new rule-type bullets (1.6) ────────────────────────────
+
+_JITTER_KEY = rule_settings_key("Jitter High")
+_MESH_KEY = rule_settings_key("Mesh Degraded")
+_MODEM_KEY = rule_settings_key("Modem Signal Drop")
+_GRADE_KEY = rule_settings_key("Grade Regression")
+_CHURN_KEY = rule_settings_key("IP Churn")
+
+
+def test_jitter_high_bullet_appears_when_enabled():
+    from modules.digest_bullets import build_digest_bullets
+    alerts = [{"rule_name": "Jitter High", "host": "192.168.1.1", "message": "unstable jitter"}]
+    store = _make_store(alerts=alerts)
+    get = _settings({_JITTER_KEY: True})
+    bullets = build_digest_bullets(store, get)
+    assert any("192.168.1.1" in b for b in bullets)
+
+
+def test_jitter_high_bullet_absent_when_disabled():
+    from modules.digest_bullets import build_digest_bullets
+    alerts = [{"rule_name": "Jitter High", "host": "192.168.1.1", "message": "unstable jitter"}]
+    store = _make_store(alerts=alerts)
+    get = _settings({_JITTER_KEY: False})
+    assert build_digest_bullets(store, get) == []
+
+
+def test_mesh_degraded_bullet_appears_when_enabled():
+    from modules.digest_bullets import build_digest_bullets
+    alerts = [{"rule_name": "Mesh Degraded", "host": "mesh", "message": "node offline"}]
+    store = _make_store(alerts=alerts)
+    get = _settings({_MESH_KEY: True})
+    bullets = build_digest_bullets(store, get)
+    assert any("Mesh" in b for b in bullets)
+
+
+def test_modem_signal_drop_bullet_appears_when_enabled():
+    from modules.digest_bullets import build_digest_bullets
+    alerts = [{"rule_name": "Modem Signal Drop", "host": "modem", "message": "downgraded to LTE"}]
+    store = _make_store(alerts=alerts)
+    get = _settings({_MODEM_KEY: True})
+    bullets = build_digest_bullets(store, get)
+    assert any("Modem" in b or "modem" in b for b in bullets)
+
+
+def test_grade_regression_bullet_appears_when_enabled():
+    from modules.digest_bullets import build_digest_bullets
+    alerts = [{"rule_name": "Grade Regression", "host": "network-grade", "message": "A to C"}]
+    store = _make_store(alerts=alerts)
+    get = _settings({_GRADE_KEY: True})
+    bullets = build_digest_bullets(store, get)
+    assert any("A to C" in b for b in bullets)
+
+
+def test_ip_churn_bullet_appears_when_enabled_and_dedupes():
+    from modules.digest_bullets import build_digest_bullets
+    alerts = [
+        {"rule_name": "IP Churn", "host": "aa:bb:cc:00:00:01", "message": "4 IPs"},
+        {"rule_name": "IP Churn", "host": "aa:bb:cc:00:00:01", "message": "4 IPs again"},
+    ]
+    store = _make_store(alerts=alerts)
+    get = _settings({_CHURN_KEY: True})
+    bullets = build_digest_bullets(store, get)
+    assert len([b for b in bullets if "aa:bb:cc:00:00:01" in b]) == 1
+
+
+def test_ip_churn_bullet_absent_when_disabled():
+    from modules.digest_bullets import build_digest_bullets
+    alerts = [{"rule_name": "IP Churn", "host": "aa:bb:cc:00:00:01", "message": "4 IPs"}]
+    store = _make_store(alerts=alerts)
+    get = _settings({_CHURN_KEY: False})
+    assert build_digest_bullets(store, get) == []

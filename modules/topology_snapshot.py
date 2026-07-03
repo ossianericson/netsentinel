@@ -8,7 +8,8 @@ Network Map.
 
 Architecture:
   • Pure Python — no PyQt imports.
-  • MetricStore access via _execute_write / _execute_read (no direct SQL).
+  • MetricStore access via its public save_topology_snapshot()/get_last_topology_snapshot()
+    API only — no raw SQL in this module.
   • Keeps only the last 10 snapshots per store (pruned on every save).
 """
 from __future__ import annotations
@@ -103,16 +104,7 @@ def save_snapshot(snapshot: TopologySnapshot, store: "MetricStore") -> None:
         "edges": [list(e) for e in snapshot.edges],
     }
     try:
-        store._execute_write(
-            "INSERT INTO topology_snapshots (ts, data_json) VALUES (?, ?)",
-            (int(snapshot.timestamp.timestamp()), json.dumps(data)),
-        )
-        # Prune: keep only the 10 most recent rows
-        store._execute_write(
-            "DELETE FROM topology_snapshots WHERE id NOT IN "
-            "(SELECT id FROM topology_snapshots ORDER BY ts DESC LIMIT 10)",
-            (),
-        )
+        store.save_topology_snapshot(int(snapshot.timestamp.timestamp()), json.dumps(data))
     except Exception:
         log.debug("topology_snapshot.save_snapshot failed", exc_info=True)
 
@@ -120,14 +112,12 @@ def save_snapshot(snapshot: TopologySnapshot, store: "MetricStore") -> None:
 def load_last_snapshot(store: "MetricStore") -> TopologySnapshot | None:
     """Return the most recent snapshot from *store*, or None if none exists."""
     try:
-        rows = store._execute_read(
-            "SELECT ts, data_json FROM topology_snapshots ORDER BY ts DESC LIMIT 1",
-        )
+        row = store.get_last_topology_snapshot()
     except Exception:
         return None
-    if not rows:
+    if row is None:
         return None
-    ts_int, data_json = rows[0]
+    ts_int, data_json = row
     try:
         data = json.loads(data_json)
         return TopologySnapshot(

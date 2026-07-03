@@ -45,6 +45,33 @@ def test_has_scan_requested_signal(page):
     assert hasattr(page, "scan_requested")
 
 
+def test_rtt_headline_hidden_with_no_data(page):
+    """Stability Sprint 2 (G11): _update_rtt_headline() now reads a single
+    SQL aggregate (query_rtt_weekly_avg()) instead of scanning every host's
+    raw RTT history on the main thread."""
+    page._update_rtt_headline()
+    assert page._headline_lbl.isHidden() is True
+
+
+def test_rtt_headline_shows_this_week_average(tmp_path):
+    from modules.metric_store import MetricStore
+    from ui.pages.trend_page import TrendPage
+    store = MetricStore(db_path=tmp_path / "trend2.db")
+    now = int(time.time())
+    store.record_rtt("8.8.8.8", 10.0, ts=now - 3600)
+    store.record_rtt("8.8.8.8", 20.0, ts=now - 7200)
+    p = TrendPage(store=store)
+    p._update_rtt_headline()
+    assert p._headline_lbl.isHidden() is False
+    assert "15" in p._headline_lbl.text()
+    p.deleteLater()
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+    store.close()
+
+
 def test_refresh_with_rtt_data(tmp_path):
     """Trend page should render without error when RTT data is available."""
     from modules.metric_store import MetricStore

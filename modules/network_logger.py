@@ -40,6 +40,7 @@ from modules.network_log_writer import (
     load_log_file, list_log_files,
     _compute_summary, analyse_log,
 )
+from modules.utils_net import icmp_ping
 
 # Re-export all public names so existing callers continue to work.
 __all__ = [
@@ -59,30 +60,7 @@ SLOW_THRESHOLD_MS = 150.0
 
 def _ping_once(host: str) -> float:
     """Ping host once.  Returns RTT in ms or -1 on failure."""
-    system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
-    try:
-        if system == "Windows":
-            r = subprocess.run(
-                ["ping", "-n", "1", "-w", "2000", host],
-                capture_output=True, text=True, timeout=4, **extra,
-            )
-            m = re.search(r"time[=<](\d+)ms", r.stdout)
-            if m:
-                return float(m.group(1))
-            if "time<1ms" in r.stdout:
-                return 0.5
-        else:
-            r = subprocess.run(
-                ["ping", "-c", "1", "-W", "2", host],
-                capture_output=True, text=True, timeout=4,
-            )
-            m = re.search(r"time=([\d.]+)\s*ms", r.stdout)
-            if m:
-                return float(m.group(1))
-    except Exception:
-        pass  # non-fatal
-    return -1.0
+    return icmp_ping(host, timeout=2.0)
 
 
 def _ping_jitter(host: str, count: int = 3) -> Tuple[float, float]:

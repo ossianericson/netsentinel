@@ -515,3 +515,59 @@ class TestMeshSignalLog:
         store.record_mesh_snapshot(unit_count=1, online_count=1, ts=old_ts)
         store.prune_old_data(retain_days=30)
         assert store.query_mesh_signal_log(hours=24 * 365) == []
+
+
+# ── Stability Sprint 1 (G8): startup corruption recovery ─────────────────────
+
+class TestCorruptionRecovery:
+    def test_opens_fresh_when_file_is_corrupt(self, tmp_path):
+        """A garbage (non-sqlite) file must not crash startup — MetricStore
+        backs it up and recreates a fresh, usable DB at the same path."""
+        db_path = tmp_path / "test.db"
+        db_path.write_bytes(b"this is not a sqlite file" * 100)
+
+        s = MetricStore(db_path=db_path)
+        try:
+            assert s.recovered_from_corruption is True
+            # New DB at the original path is fully usable
+            s.record_rtt("8.8.8.8", 10.0)
+            assert len(s.query_rtt_history("8.8.8.8", hours=1)) == 1
+        finally:
+            s.close()
+
+    def test_corrupt_file_is_backed_up(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        db_path.write_bytes(b"garbage" * 200)
+
+        s = MetricStore(db_path=db_path)
+        try:
+            backups = list(tmp_path.glob("test.db.corrupt-*"))
+            assert len(backups) == 1
+            assert backups[0].read_bytes().startswith(b"garbage")
+        finally:
+            s.close()
+
+    def test_recovered_from_corruption_false_on_healthy_db(self, store):
+        assert store.recovered_from_corruption is False
+
+    def test_recovered_from_corruption_false_on_memory_db(self, mem_store):
+        assert mem_store.recovered_from_corruption is False
+
+
+# ── Stability Sprint 1 (G7): WAL checkpoint before hard process exit ─────────
+
+class TestCheckpoint:
+    def test_checkpoint_does_not_raise(self, store):
+        store.checkpoint()  # must not raise
+
+    def test_checkpoint_truncates_wal_file(self, store, tmp_path):
+        for i in range(200):
+            store.record_rtt(f"host{i}", 10.0)
+        wal_path = tmp_path / "test.db-wal"
+        assert wal_path.exists()
+        assert wal_path.stat().st_size > 0
+        store.checkpoint()
+        assert wal_path.stat().st_size == 0
+
+    def test_checkpoint_noop_on_memory_db(self, mem_store):
+        mem_store.checkpoint()  # must not raise on backend without a file

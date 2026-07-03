@@ -1,6 +1,7 @@
 """
 Tests for modules/device_tracker.py
 """
+import calendar
 import time
 import pytest
 
@@ -490,3 +491,69 @@ class TestVendorPreservation:
         assert kd.vendor == "Cisco Systems", (
             f"Expected 'Cisco Systems' to overwrite stored 'Unknown'; got '{kd.vendor}'"
         )
+
+
+# ── Double-count regression guard (Phase 3a) ──────────────────────────────────
+
+class TestNoDoubleCountPerScan:
+    """Regression guard: process_scan() must be the single write path for
+    device_ip_history. A prior bug had ui/scan_wiring.py call
+    record_ip_observation() directly AND rely on process_scan() calling it
+    again for the same device in the same scan, doubling seen_count/scan_count
+    per scan and skewing ip_stability.
+    """
+
+    def test_seen_count_matches_scan_count_after_n_scans(self, store):
+        mac = "aa:bb:cc:dd:ee:10"
+        tracker = DeviceTracker(store=store)
+        n = 5
+        for _ in range(n):
+            tracker.process_scan([_dev(mac=mac, ip="192.168.1.20")])
+        hist = get_ip_history(mac, store)
+        assert len(hist) == 1
+        assert hist[0]["seen_count"] == n, (
+            f"Expected seen_count == {n} after {n} scans of a stable device; "
+            f"got {hist[0]['seen_count']} — process_scan() must be the only "
+            "caller of record_ip_observation() per scan"
+        )
+        kd = store.get_known_devices()[mac]
+        assert kd.scan_count == n, (
+            f"Expected scan_count == {n}; got {kd.scan_count}"
+        )
+
+
+# ── last_seen invariant guard (Phase 3c) ──────────────────────────────────────
+
+def _parse_utc(ts_str: str) -> int:
+    return calendar.timegm(time.strptime(ts_str, "%Y-%m-%d %H:%M:%S"))
+
+
+class TestLastSeenInvariant:
+    """known_device.last_seen must equal MAX(device_ip_history.last_seen) for
+    that MAC after every scan-driven update (see metric_store.py module
+    docstring and DeviceTracker.process_scan docstring)."""
+
+    def test_last_seen_matches_max_ip_history_after_scan(self, store):
+        mac = "aa:bb:cc:dd:ee:20"
+        tracker = DeviceTracker(store=store)
+        tracker.process_scan([_dev(mac=mac, ip="10.0.0.30")])
+        kd = store.get_known_devices()[mac]
+        hist = get_ip_history(mac, store)
+        assert len(hist) == 1
+        assert _parse_utc(hist[0]["last_seen"]) == kd.last_seen
+
+    def test_ip_change_freezes_old_ip_row_and_accrues_new(self, store):
+        mac = "aa:bb:cc:dd:ee:21"
+        tracker = DeviceTracker(store=store)
+        tracker.process_scan([_dev(mac=mac, ip="10.0.0.40")])
+        tracker.process_scan([_dev(mac=mac, ip="10.0.0.40")])
+        tracker.process_scan([_dev(mac=mac, ip="10.0.0.41")])
+
+        hist = {h["ip"]: h for h in get_ip_history(mac, store)}
+        assert hist["10.0.0.40"]["seen_count"] == 2
+        assert hist["10.0.0.41"]["seen_count"] == 1
+
+        kd = store.get_known_devices()[mac]
+        max_last_seen = max(_parse_utc(h["last_seen"]) for h in hist.values())
+        assert kd.last_seen == max_last_seen
+        assert kd.ip == "10.0.0.41"

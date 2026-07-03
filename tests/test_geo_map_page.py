@@ -39,8 +39,10 @@ def test_instantiation(page):
     assert page is not None
 
 
-def test_has_scan_requested_signal(page):
-    assert hasattr(page, "scan_requested")
+def test_has_navigate_requested_signal(page):
+    """Geo Map's empty state routes to Threat Intel (its data source), not a
+    device scan — see commit 8a2e797. navigate_requested carries the CTA."""
+    assert hasattr(page, "navigate_requested")
 
 
 def test_on_geo_result_does_not_crash(page):

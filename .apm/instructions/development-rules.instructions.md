@@ -541,6 +541,66 @@ with `color:`, using `ui/styles.py` tokens (RULE-AH3).
 Enforced by `tests/test_interactive_states.py` (AST scan of `ui/**/*.py`) — its
 failure message gives the exact fix.
 
+### RULE-QSS1 (blocking): Never set a bare (selector-less) stylesheet on a container widget — scope with an objectName selector
+**Mechanism / trap:** a stylesheet with no selector — `w.setStyleSheet("background:transparent;")`
+— is interpreted by Qt as `* { ... }` and applies to the widget **and every descendant**.
+Widget stylesheets always override the application stylesheet regardless of specificity,
+so a bare declaration on a page/frame container silently wipes the app-QSS styling of
+every child. The canonical failure (the invisible "Run Speed Test" button, July 2026):
+`QPushButton#btnScan` gets `background:{ACCENT}; color:{WHITE}` from `ui/styles.py`; a
+bare `background:transparent;` on the scroll-content ancestor wiped the blue background
+while the white text survived → white-on-white, invisible in both themes. This same
+propagation is why the codebase historically needed `border:none; background:transparent`
+sprinkled on nearly every child label — each was cancelling declarations leaking from a
+bare container stylesheet above it.
+
+```python
+# WRONG — bare declarations propagate to the whole subtree
+content.setStyleSheet("background:transparent;")
+
+# CORRECT — objectName-scoped; matches only the container itself
+content.setObjectName("pageContent")
+content.setStyleSheet("QWidget#pageContent { background: transparent; }")
+```
+
+Type selectors are NOT safe either: `QWidget { ... }` on a container still matches every
+descendant (QPushButton is-a QWidget). Only `#name` / `QWidget#name` scoping is safe.
+Bare declarations remain acceptable on **leaf** widgets (a QLabel with no children).
+
+Enforced by `tests/test_qss_scoping.py`:
+- Tier 1 (zero tolerance): global-QSS buttons (`btnScan`, `btnScanHero`, `btnExport`,
+  `btnDiag`, `btnNetRefresh`, `btnRouterLink`) under a bare-styled container.
+- Tier 2 (ratchet): total bare-styled containers in `ui/` may only decrease.
+  Never raise `BARE_CONTAINER_BASELINE`; lower it when you fix sites.
+
+### RULE-QSS2 (blocking): Never append hex alpha to a colour in QSS — use `alpha()` or a `*_BG` token
+**Mechanism / trap:** Qt Style Sheets parse an 8-digit hex colour as **`#AARRGGBB`**
+(alpha **first**), NOT the CSS `#RRGGBBAA` (alpha last) that the syntax visually implies.
+So `f"background:{ACCENT}22"` — intended as "accent at ~13% opacity" — produces the literal
+`#0078D422`, which Qt reads as `alpha=0x00, rgb=(0x78,0xD4,0x22)` → a **fully transparent**
+green (nothing renders). A colour whose first byte is high renders opaque and wrong:
+`{AMBER}22` → `#F59E0B22` → `alpha=0xF5, rgb=(158,11,34)` = **opaque dark crimson**. This
+shipped the home "live challenge" banner bright red instead of translucent amber (July 2026),
+and left ~60 hover tints across `ui/` silently invisible.
+
+```python
+# WRONG — 8-digit hex; Qt reads it as #AARRGGBB and scrambles the colour
+w.setStyleSheet(f"background:{ACCENT}22;")
+
+# CORRECT — alpha() emits a proper rgba() string; or use a named *_BG token
+from ui.styles import alpha, AMBER_BG
+w.setStyleSheet(f"background:{alpha(ACCENT, 0x22)};")   # translucent accent
+w.setStyleSheet(f"background:{AMBER_BG};")              # named translucent amber
+```
+
+Note the sibling trap: a plain-hex token that is a **light** value in one theme
+(`SIDEBAR_SECTION_BG` is near-white in Arctic) drew a harsh white border on the dark
+header bar. Chrome that sits on the dark nav bar in both themes must use a WHITE-alpha
+hairline (`alpha(WHITE, 0x22)`), not a theme-swinging plain-hex token.
+
+Enforced by `tests/test_qss_hex_alpha.py` (zero tolerance across `ui/`, excluding
+`ui/styles.py` whose `alpha()` docstring shows the antipattern as a counter-example).
+
 ---
 
 ## Dual-Audience Rules
@@ -1371,6 +1431,8 @@ Currently tool-enforced (high reliability):
 - RULE-AH1 → `test_module_loc.py`
 - RULE-NAV1 → `test_nav_completeness.py`
 - RULE-AX1 → `test_interactive_states.py`
+- RULE-QSS1 → `test_qss_scoping.py`
+- RULE-QSS2 → `test_qss_hex_alpha.py`
 - RULE-ENC1 → `test_source_encoding.py`
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically
 

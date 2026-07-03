@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 
 from modules.metric_store import MetricStore
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_DARK, BORDER, BG_HOVER, GREEN, RED,
     PROGRESS_TRACK, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -251,6 +252,7 @@ class DiagnosisPage(QWidget):
         self._symptom         = ""   # set by symptom tile before _start()
         self._prev_finding_headlines: set[str] = set()
         self._last_findings: list = []
+        self._last_result = None
         self._verify_workers: list = []  # keeps refs alive until verify completes
         self._setup_ui()
 
@@ -632,7 +634,7 @@ class DiagnosisPage(QWidget):
         self._logger_warn = QFrame()
         self._logger_warn.setObjectName("loggerWarn")
         self._logger_warn.setStyleSheet(
-            f"QFrame#loggerWarn {{ background:{AMBER}18; border:1px solid {AMBER}66;"
+            f"QFrame#loggerWarn {{ background:{alpha(AMBER, 0x18)}; border:1px solid {alpha(AMBER, 0x66)};"
             f" border-radius:3px; }}"
         )
         _lw_lay = QHBoxLayout(self._logger_warn)
@@ -710,6 +712,45 @@ class DiagnosisPage(QWidget):
         )
         self._diff_lbl.hide()
         outer.addWidget(self._diff_lbl)
+
+        # Quiet inline "Share this result" strip (Feature 3a) — surfaced on every
+        # completed run so the shareable assets are one click away at the moment
+        # the user has a result worth sharing. No modal, no confetti.
+        self._share_card = QFrame()
+        self._share_card.setObjectName("shareCard")
+        self._share_card.setStyleSheet(
+            f"QFrame#shareCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            f" border-radius:4px; }}"
+        )
+        _sc_lay = QHBoxLayout(self._share_card)
+        _sc_lay.setContentsMargins(12, 6, 12, 6)
+        _sc_lay.setSpacing(8)
+        _share_lbl = QLabel("Share this result")
+        _share_lbl.setStyleSheet(
+            f"font-size:11px; font-weight:bold; color:{TEXT_SECONDARY};"
+            f" background:transparent; border:none;"
+        )
+        _sc_lay.addWidget(_share_lbl)
+        _sc_lay.addStretch()
+        _share_btn_qss = (
+            f"QPushButton {{ background:transparent; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:3px 10px; font-size:10px;"
+            f" border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        self._share_img_btn = QPushButton("Copy as image")
+        self._share_img_btn.setStyleSheet(_share_btn_qss)
+        self._share_img_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._share_img_btn.clicked.connect(self._copy_share_image)
+        _sc_lay.addWidget(self._share_img_btn)
+        self._share_md_btn = QPushButton("Copy as Markdown")
+        self._share_md_btn.setStyleSheet(_share_btn_qss)
+        self._share_md_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._share_md_btn.clicked.connect(self._copy_share_markdown)
+        _sc_lay.addWidget(self._share_md_btn)
+        self._share_card.hide()
+        outer.addWidget(self._share_card)
 
         # "Do this first" hero finding card (top priority, always visible)
         self._hero_card_container = QWidget()
@@ -795,6 +836,12 @@ class DiagnosisPage(QWidget):
         self._export_btn.setStyleSheet(_btn_qss)
         self._export_btn.clicked.connect(self._export_report)
         btn_row.addWidget(self._export_btn)
+
+        self._forum_btn = QPushButton("Copy for Reddit/Discord")
+        self._forum_btn.setFixedWidth(170)
+        self._forum_btn.setStyleSheet(_btn_qss)
+        self._forum_btn.clicked.connect(self._copy_forum_markdown)
+        btn_row.addWidget(self._forum_btn)
 
         btn_row.addStretch()
         outer.addLayout(btn_row)
@@ -991,6 +1038,7 @@ class DiagnosisPage(QWidget):
             gateway_ip=self._gateway_ip,
             gateway_mac=self._gateway_mac,
             focused_on=category,
+            store=self._store,
             parent=self,
         )
         self._verify_workers.append(worker)
@@ -1036,6 +1084,7 @@ class DiagnosisPage(QWidget):
             gateway_ip=self._gateway_ip,
             gateway_mac=self._gateway_mac,
             symptom=effective_symptom,
+            store=self._store,
             parent=self,
         )
         self._worker.progress.connect(self._on_progress)
@@ -1053,6 +1102,7 @@ class DiagnosisPage(QWidget):
             self._worker.quit()
             self._worker.wait(3000)
             self._worker = None
+        self._share_card.hide()
         self._stack.setCurrentIndex(_IDLE)
 
     def _copy_report(self) -> None:
@@ -1085,6 +1135,52 @@ class DiagnosisPage(QWidget):
         _t.setSingleShot(True)
         _t.timeout.connect(lambda: self._copy_btn.setText("Copy report"))
         _t.start(2000)
+
+    def _copy_forum_markdown(self) -> None:
+        """Copy a sanitized, forum-ready Markdown post to the clipboard."""
+        from modules.forum_export import build_diagnosis_markdown
+        if self._last_result is None:
+            return
+        md = build_diagnosis_markdown(self._last_result, symptom=self._symptom)
+        QApplication.clipboard().setText(md)
+        self._forum_btn.setText("Copied ✓")
+        from PyQt6.QtCore import QTimer
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(lambda: self._forum_btn.setText("Copy for Reddit/Discord"))
+        _t.start(2000)
+
+    def _copy_share_markdown(self) -> None:
+        """Inline share card: copy sanitized forum Markdown to the clipboard."""
+        from modules.forum_export import build_diagnosis_markdown
+        if self._last_result is None:
+            return
+        md = build_diagnosis_markdown(self._last_result, symptom=self._symptom)
+        QApplication.clipboard().setText(md)
+        self._share_md_btn.setText("Copied ✓")
+        _t2 = QTimer(self)
+        _t2.setSingleShot(True)
+        _t2.timeout.connect(lambda: self._share_md_btn.setText("Copy as Markdown"))
+        _t2.start(2000)
+
+    def _copy_share_image(self) -> None:
+        """Inline share card: render the diagnosis health card and copy it to
+        the clipboard as an image (sanitized findings, real last grade)."""
+        if self._last_result is None:
+            return
+        from modules.diagnostic_card import build_card_data_from_diagnosis
+        from ui.widgets.diagnostic_card_widget import render_card_widget
+        card_data = build_card_data_from_diagnosis(self._last_result, self._store)
+        widget = render_card_widget(card_data)
+        widget.show()          # must be visible for grab() to paint correctly
+        widget.hide()
+        QApplication.clipboard().setPixmap(widget.grab())
+        widget.deleteLater()
+        self._share_img_btn.setText("Copied ✓")
+        _t3 = QTimer(self)
+        _t3.setSingleShot(True)
+        _t3.timeout.connect(lambda: self._share_img_btn.setText("Copy as image"))
+        _t3.start(2000)
 
     def _export_report(self) -> None:
         from PyQt6.QtWidgets import QFileDialog
@@ -1139,6 +1235,7 @@ class DiagnosisPage(QWidget):
         summary  = getattr(result, "plain_summary",   "") or "No issues detected."
         findings = getattr(result, "findings",        [])
         self._last_findings = list(findings)
+        self._last_result = result
         _save_diag_history(result)
         self.diagnosis_saved.emit()
 
@@ -1252,6 +1349,7 @@ class DiagnosisPage(QWidget):
             self._diff_lbl.hide()
         self._prev_finding_headlines = current_headlines
 
+        self._share_card.show()
         self._stack.setCurrentIndex(_DONE)
 
     def _show_history_dialog(self) -> None:

@@ -6,25 +6,21 @@ Dashboard inherits _AnalysisTabsMixin.
 """
 from __future__ import annotations
 
-import datetime
-import webbrowser
-from pathlib import Path
-
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
-    QFileDialog, QHBoxLayout, QLabel,
+    QFrame, QHBoxLayout, QLabel,
     QPushButton, QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_CARD, BG_DARK, BG_HOVER, BORDER, BORDER_MED,
+    BG_CARD, BG_HOVER, BORDER, BORDER_MED,
     CARD_RADIUS, BLUE,
     GRADE_A_BG, GRADE_B_BG, GRADE_B_FG, GRADE_C_BG,
     GRADE_D_BG, GRADE_F_BG, GRADE_F_FG, GREEN,
-    RED, TEXT_PRIMARY, TEXT_SECONDARY,
+    RED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from ui.tabs_helpers import _page_header, _table
 
@@ -524,6 +520,20 @@ class _AnalysisTabsMixin:
                             self._monitor_overview_page.set_iot_anomaly_count(
                                 self._iot_alert_table.rowCount()
                             )
+                        # V6 Sprint 2 — IOT_BEHAVIOR: route the same signal through
+                        # AlertEngine so it becomes a real toast/digest alert instead
+                        # of a page-only table row.
+                        if self._alert_engine is not None:
+                            for a in self._alert_engine.evaluate_iot_behavior_checks([alert]):
+                                self._show_alert_toast(a)
+                                self._home_page.on_alert(a)
+                                if self._store is not None:
+                                    try:
+                                        self._store.record_alert_fired(
+                                            a.rule_name, a.host, a.severity, a.message, ts=a.ts,
+                                        )
+                                    except Exception:
+                                        pass  # non-fatal — persistence failure must not block the drain loop
                 except _q.Empty:
                     pass  # queue exhausted — all pending alerts processed this tick
 
@@ -674,10 +684,22 @@ class _AnalysisTabsMixin:
             "Uses NetSentinel's own measurements — no manual steps required."
         )
         btn_isp_copy.clicked.connect(self._copy_isp_complaint)
+        btn_isp_reddit = QPushButton("◇  Copy as Reddit post")
+        btn_isp_reddit.setObjectName("btnNetRefresh")
+        btn_isp_reddit.setToolTip(
+            "Copy a sanitized, forum-ready Markdown post for r/HomeNetworking. "
+            "Public IP omitted, private IPs masked — safe to paste publicly."
+        )
+        btn_isp_reddit.clicked.connect(self._copy_isp_reddit_post)
         ctrl.addWidget(btn_grade)
         ctrl.addWidget(btn_isp)
         ctrl.addWidget(btn_isp_copy)
+        ctrl.addWidget(btn_isp_reddit)
         ctrl.addStretch()
+
+        # Quiet "your grade improved — share it" strip (Feature 3b), hidden until
+        # a genuine improvement between the last two grade runs is detected.
+        self._grade_share_card = self._build_grade_share_card()
 
         # Dimension breakdown table
         self._bm_table = _table(["Dimension", "Grade", "Your Value", "Ideal", "Verdict", "Fix Tip"])
@@ -686,11 +708,81 @@ class _AnalysisTabsMixin:
         _cl.addLayout(grade_row)
         _cl.addSpacing(6)
         _cl.addLayout(ctrl)
+        _cl.addWidget(self._grade_share_card)
         _cl.addWidget(self._bm_table, 1)
         self._bm_stack.addWidget(_content_w)
 
         lay.addWidget(self._bm_stack, 1)
         return w
+
+    def _build_grade_share_card(self) -> QWidget:
+        """Quiet inline 'Share this result' strip for the benchmark tab.
+        Hidden by default; shown by _show_grade_share_card() only when the
+        network grade improves versus the previous run (Feature 3b)."""
+        card = QFrame()
+        card.setObjectName("gradeShareCard")
+        card.setStyleSheet(
+            f"QFrame#gradeShareCard {{ background:{BG_HOVER}; border:1px solid {ACCENT};"
+            f" border-radius:{CARD_RADIUS}; }}"
+        )
+        row = QHBoxLayout(card)
+        row.setContentsMargins(12, 6, 12, 6)
+        row.setSpacing(10)
+
+        self._grade_share_lbl = QLabel("Your grade improved — share it")
+        self._grade_share_lbl.setStyleSheet(
+            f"color:{TEXT_PRIMARY}; font-size:12px; font-weight:600; border:none;"
+            f" background:transparent;"
+        )
+        row.addWidget(self._grade_share_lbl)
+        row.addStretch()
+
+        _btn_qss = (
+            f"QPushButton {{ background:{BG_CARD}; color:{ACCENT};"
+            f" border:1px solid {ACCENT}; padding:4px 12px; font-size:11px;"
+            f" border-radius:4px; }}"
+            f"QPushButton:hover {{ background:{ACCENT}; color:{WHITE}; }}"
+            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+        )
+        self._grade_share_img_btn = QPushButton("Copy as image")
+        self._grade_share_img_btn.setStyleSheet(_btn_qss)
+        self._grade_share_img_btn.clicked.connect(self._copy_grade_image)
+        row.addWidget(self._grade_share_img_btn)
+
+        self._grade_share_md_btn = QPushButton("Copy as Markdown")
+        self._grade_share_md_btn.setStyleSheet(_btn_qss)
+        self._grade_share_md_btn.clicked.connect(self._copy_isp_reddit_post)
+        row.addWidget(self._grade_share_md_btn)
+
+        card.hide()
+        return card
+
+    def _show_grade_share_card(self, prev_grade: str, new_grade: str) -> None:
+        self._grade_share_lbl.setText(
+            f"Your grade improved {prev_grade} → {new_grade} — share it"
+        )
+        self._grade_share_card.show()
+
+    @pyqtSlot()
+    def _copy_grade_image(self):
+        """Copy the diagnostic grade card as an image to the clipboard."""
+        try:
+            from modules.diagnostic_card import build_card_data
+            from ui.widgets.diagnostic_card_widget import render_card_widget
+            from PyQt6.QtWidgets import QApplication
+            card_data = build_card_data(
+                self._last_benchmark_result, self._diag_result, self._store
+            )
+            widget = render_card_widget(card_data)
+            widget.show()          # must be visible for grab() to paint correctly
+            widget.hide()
+            QApplication.clipboard().setPixmap(widget.grab())
+            widget.deleteLater()
+            from ui.widgets.toast import ToastManager
+            ToastManager.show("Grade card copied as image", "success")
+        except Exception as exc:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Copy Failed", str(exc))
 
     @pyqtSlot()
     def _scan_and_grade(self):
@@ -722,10 +814,28 @@ class _AnalysisTabsMixin:
                 m3_result=self._m3_result,
             )
             self._last_benchmark_result = result
+            # V6 Sprint 1 — GRADE_REGRESSION: capture the prior grade before overwriting it.
+            _prior_grade = None
+            _prior_row = None
+            try:
+                _prior_row = self._store.query_last_grade()
+                _prior_grade = _prior_row.get("grade") if _prior_row else None
+            except Exception:
+                pass  # non-fatal
             try:
                 self._store.record_grade(result.overall_grade, result.overall_score, result.overall_verdict)
             except Exception:
                 pass  # non-fatal
+            if self._alert_engine is not None:
+                for a in self._alert_engine.evaluate_grade_check(
+                    result.overall_grade, result.overall_score, result.overall_verdict, _prior_grade,
+                ):
+                    self._show_alert_toast(a)
+                    self._home_page.on_alert(a)
+                    try:
+                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                    except Exception:
+                        pass  # non-fatal — persistence failure must not block grade display
 
             # Update grade circle
             grade_styles = {
@@ -762,6 +872,20 @@ class _AnalysisTabsMixin:
             self._overview_page.set_card_data(
                 build_card_data(result, self._diag_result, self._store)
             )
+
+            # Feature 3b — surface a quiet "share it" strip only on a genuine
+            # score improvement between the last two grade runs. query_previous_grade()
+            # runs AFTER record_grade above, so it returns the prior grade.
+            try:
+                _prev = self._store.query_previous_grade()
+                _prev_score = float(_prev.get("score", 0.0) or 0.0) if _prev else None
+                if _prev_score is not None and result.overall_score > _prev_score:
+                    self._show_grade_share_card(_prev.get("grade", "?"), result.overall_grade)
+                else:
+                    self._grade_share_card.hide()
+            except Exception:
+                self._grade_share_card.hide()  # non-fatal — share prompt is optional
+
             if hasattr(self, "_tray_manager") and self._tray_manager:
                 self._tray_manager.set_grade(result.overall_grade)
 
@@ -811,147 +935,3 @@ class _AnalysisTabsMixin:
 
         except Exception as exc:
             self._bm_verdict_label.setText(f"⚠ Grading failed: {exc}")
-
-    @pyqtSlot()
-    def _export_isp_report(self):
-        if self._m1_result is None and getattr(self, "_diag_result", None) is None:
-            self._bm_stack.setCurrentIndex(1)
-            self._bm_verdict_label.setText("Running diagnostics to build the ISP report…")
-            self._pending_isp_report = True
-            self._start_diagnostics()
-            return
-
-        try:
-            from modules.report_exporter import save_isp_report
-            from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit as _QLE
-
-            # Collect optional ISP name & account ref from user
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Network Health Report — Optional Details")
-            dlg.setMinimumWidth(380)
-            dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
-            form = QFormLayout(dlg)
-            isp_edit = _QLE()
-            isp_edit.setPlaceholderText("e.g. BT, Virgin Media, Comcast…")
-            isp_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
-            ref_edit = _QLE()
-            ref_edit.setPlaceholderText("e.g. REF-123456 (optional)")
-            ref_edit.setStyleSheet(f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; border-radius:4px; padding:4px;")
-            form.addRow("ISP Name:", isp_edit)
-            form.addRow("Account / Ticket Ref:", ref_edit)
-            btns = QDialogButtonBox(
-                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-            )
-            btns.accepted.connect(dlg.accept)
-            btns.rejected.connect(dlg.reject)
-            form.addRow(btns)
-            if dlg.exec() != QDialog.DialogCode.Accepted:
-                return
-
-            isp_name   = isp_edit.text().strip()
-            account_ref = ref_edit.text().strip()
-
-            # Gather data
-            log_summary = None
-            if self._logger_worker:
-                try:
-                    log_summary = self._logger_worker.get_summary()
-                except Exception:
-                    pass  # non-fatal — logger worker may be unavailable
-            bm_result = getattr(self, "_last_benchmark_result", None)
-
-            # Pick save path
-            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_name = f"ISP_Report_{ts}.html"
-            docs_dir = Path.home() / "Documents" / "NetSentinel" / "reports"
-            docs_dir.mkdir(parents=True, exist_ok=True)
-            path_str, _ = QFileDialog.getSaveFileName(
-                self, "Save Network Health Report", str(docs_dir / default_name),
-                "HTML Report (*.html);;All Files (*)",
-                options=QFileDialog.Option.DontUseNativeDialog,
-            )
-            if not path_str:
-                return
-
-            out = save_isp_report(
-                output_path=Path(path_str),
-                log_summary=log_summary,
-                diag_result=self._diag_result,
-                benchmark_result=bm_result,
-                m1_result=self._m1_result,
-                isp_name=isp_name,
-                account_ref=account_ref,
-            )
-            webbrowser.open(out.as_uri())
-        except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Network Health Report Error", str(exc))
-
-    @pyqtSlot()
-    def _copy_isp_complaint(self):
-        """Copy a ready-to-email ISP complaint script using NetSentinel's own measurements."""
-        try:
-            from PyQt6.QtWidgets import (
-                QCheckBox as _QCB, QDialog, QDialogButtonBox,
-                QFormLayout, QLineEdit as _QLE, QMessageBox,
-            )
-            from modules.report_isp import generate_isp_complaint_text
-
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Copy ISP Complaint — Details")
-            dlg.setMinimumWidth(400)
-            dlg.setStyleSheet(f"background:{BG_DARK}; color:{TEXT_PRIMARY};")
-            form = QFormLayout(dlg)
-
-            isp_edit = _QLE()
-            isp_edit.setPlaceholderText("e.g. BT, Virgin Media, Comcast…")
-            isp_edit.setStyleSheet(
-                f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-                f" border-radius:4px; padding:4px;"
-            )
-            ref_edit = _QLE()
-            ref_edit.setPlaceholderText("e.g. REF-123456 (optional)")
-            ref_edit.setStyleSheet(
-                f"background:{BG_CARD}; color:{TEXT_PRIMARY}; border:1px solid {BORDER};"
-                f" border-radius:4px; padding:4px;"
-            )
-            legal_chk = _QCB("Include UK/EU SLA legal statement (Ofcom / Consumer Rights Act)")
-            legal_chk.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:11px;")
-
-            form.addRow("ISP Name:", isp_edit)
-            form.addRow("Account / Ticket Ref:", ref_edit)
-            form.addRow("", legal_chk)
-
-            btns = QDialogButtonBox(
-                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-            )
-            btns.accepted.connect(dlg.accept)
-            btns.rejected.connect(dlg.reject)
-            form.addRow(btns)
-
-            if dlg.exec() != QDialog.DialogCode.Accepted:
-                return
-
-            log_summary = None
-            if self._logger_worker:
-                try:
-                    log_summary = self._logger_worker.get_summary()
-                except Exception:
-                    pass  # non-fatal — logger worker may be unavailable
-            bm_result = getattr(self, "_last_benchmark_result", None)
-
-            text = generate_isp_complaint_text(
-                log_summary=log_summary,
-                diag_result=getattr(self, "_diag_result", None),
-                benchmark_result=bm_result,
-                isp_name=isp_edit.text().strip(),
-                account_ref=ref_edit.text().strip(),
-                include_legal=legal_chk.isChecked(),
-            )
-            from PyQt6.QtWidgets import QApplication
-            QApplication.clipboard().setText(text)
-            from ui.widgets.toast import ToastManager
-            ToastManager.instance().show_toast("ISP complaint copied to clipboard", "info")
-        except Exception as exc:
-            from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Copy Failed", str(exc))

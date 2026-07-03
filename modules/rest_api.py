@@ -154,18 +154,12 @@ def create_app(store: MetricStore) -> "Flask":
         return jsonify({
             "status":     "ok",
             "uptime_s":   round(time.time() - _start_ts, 1),
-            "version":    "2.1.22",
+            "version":    "2.1.23",
         })
 
     @app.route("/devices")
     def devices():
-        rows = store._execute_read(
-            "SELECT mac, ip, hostname, vendor, device_type, "
-            "first_seen, last_seen, is_authorized, category, custom_name, room "
-            "FROM known_device ORDER BY last_seen DESC",
-            (),
-        )
-        return jsonify([dict(r) for r in rows])
+        return jsonify(store.query_known_devices_summary())
 
     @app.route("/alerts")
     def alerts():
@@ -183,11 +177,7 @@ def create_app(store: MetricStore) -> "Flask":
         except ValueError:
             return jsonify({"error": "'hours' must be a number"}), 400
         since = int(time.time()) - int(hours * 3600)
-        rows = store._execute_read(
-            "SELECT ts, state, rtt_ms FROM device_state "
-            "WHERE ip=? AND ts>=? ORDER BY ts ASC",
-            (ip, since),
-        )
+        rows = store.query_device_state_since(ip, since)
         if not rows:
             return jsonify({"ip": ip, "error": "No data found for this host."}), 404
         states = [dict(r) for r in rows]

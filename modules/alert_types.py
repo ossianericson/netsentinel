@@ -25,6 +25,20 @@ RULE_TYPES = frozenset({
     "FLAP",
     "SERVICE_DOWN",
     "BASELINE_DROP",
+    "JITTER_HIGH",
+    "MESH_DEGRADED",
+    "MODEM_SIGNAL_DROP",
+    "GRADE_REGRESSION",
+    "IP_CHURN",
+    "RTT_ANOMALY",
+    "IOT_BEHAVIOR",
+    "TREND_FORECAST",
+    "NEW_OPEN_PORT",
+    "NEW_CVE",
+    "NEW_EXPOSURE",
+    "ARP_SPOOF",
+    "ROGUE_DHCP",
+    "CONFIG_DRIFT",
 })
 
 
@@ -44,6 +58,7 @@ class AlertRule:
     warn_pct:       float         = 50.0      # BASELINE_DROP — % drop for Warning severity
     high_pct:       float         = 75.0      # BASELINE_DROP — % drop for High severity
     min_samples:    int           = 4         # BASELINE_DROP — min prior samples required
+    sigma:          float         = 2.0       # RTT_ANOMALY — std-devs above a host's own baseline mean
     cooldown_s:     int           = 300       # 5 min default
     enabled:        bool          = True
 

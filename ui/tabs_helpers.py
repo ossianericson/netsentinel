@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT_DARK, WHITE,
 )
 
@@ -157,7 +158,7 @@ def _error_state_widget(message: str, retry_fn: "callable") -> "QWidget":
         btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{_AM}; border:1px solid {_AM};"
             f" border-radius:4px; font-size:11px; padding:0 16px; }}"
-            f"QPushButton:hover {{ background:{_AM}22; }}"
+            f"QPushButton:hover {{ background:{alpha(_AM, 0x22)}; }}"
             f"QPushButton:pressed {{ background:{_BH}; color:{_AM}; }}"
         )
         btn.clicked.connect(retry_fn)

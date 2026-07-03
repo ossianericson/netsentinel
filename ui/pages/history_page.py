@@ -2,7 +2,9 @@
 HistoryPage — persistent time-series graphs page (T1#5).
 
 Displays RTT history, device availability, and state-change events read from
-MetricStore. Zoom controls: 1h / 12h / 24h / 7d.
+MetricStore. Zoom controls: 1h / 12h / 24h / 7d / 90d. The 90d window draws
+from the daily_rollup table (min/avg/max per day) instead of raw rtt_sample
+rows, which are pruned at 30 days — see _HistoryRefreshWorker._fetch().
 
 Architecture rules observed:
   • This file imports PyQt6 and ui/styles — it is a UI page.
@@ -174,6 +176,12 @@ class _HistoryRefreshWorker(QThread):
 
     _CHART_HOST_LIMIT = 6  # cap series plotted in RTT / availability charts
 
+    # Stability Sprint 2 (G4): rtt_sample raw rows are pruned at 30 days
+    # (MetricStore default retain_days). Beyond that, only daily_rollup has
+    # data — the worker switches sources rather than querying a table that
+    # has nothing left to return.
+    _RAW_RETENTION_HOURS = 30 * 24
+
     def __init__(
         self,
         store: "MetricStore",
@@ -204,8 +212,18 @@ class _HistoryRefreshWorker(QThread):
     def _fetch(self) -> dict:
         store = self._store
         h     = self._window_h
+        use_rollup = h > self._RAW_RETENTION_HOURS
 
-        all_hosts: List[str] = store.query_all_rtt_hosts(hours=h)
+        if use_rollup:
+            # query_all_rtt_hosts() only sees rtt_sample, which is pruned at
+            # the 30-day raw retention window — a host with no recent raw
+            # activity but real daily_rollup history would otherwise vanish
+            # from the long-term view entirely.
+            all_hosts: List[str] = store.query_rollup_hosts("rtt_ms")
+        else:
+            all_hosts = store.query_all_rtt_hosts(
+                hours=min(h, self._RAW_RETENTION_HOURS)
+            )
 
         # Determine which hosts to fetch detailed series data for
         if self._selected and self._selected not in ("", "(all hosts)"):
@@ -216,14 +234,19 @@ class _HistoryRefreshWorker(QThread):
         else:
             series_hosts = all_hosts[: self._CHART_HOST_LIMIT]
 
-        rtt_series: Dict[str, list]   = {}
-        state_series: Dict[str, list] = {}
+        rtt_series: Dict[str, list]    = {}
+        state_series: Dict[str, list]  = {}
         uptime: Dict[str, Optional[float]] = {}
+        rollup_series: Dict[str, list] = {}
 
-        for host in series_hosts:
-            rtt_series[host]   = store.query_rtt_history(host, hours=h)
-            state_series[host] = store.query_device_state_history(host, hours=h)
-            uptime[host]       = store.query_uptime_pct(host, hours=h)
+        if use_rollup:
+            for host in series_hosts:
+                rollup_series[host] = store.query_daily_rollup("rtt_ms", host=host)
+        else:
+            for host in series_hosts:
+                rtt_series[host]   = store.query_rtt_history(host, hours=h)
+                state_series[host] = store.query_device_state_history(host, hours=h)
+                uptime[host]       = store.query_uptime_pct(host, hours=h)
 
         return {
             "window_h": h,
@@ -233,6 +256,8 @@ class _HistoryRefreshWorker(QThread):
             "rtt_series": rtt_series,
             "state_series": state_series,
             "uptime": uptime,
+            "rollup_mode": use_rollup,
+            "rollup_series": rollup_series,
         }
 
 
@@ -243,6 +268,9 @@ _WINDOWS = {
     "12h": 12,
     "24h": 24,
     "7d":  168,
+    # Stability Sprint 2 (G4): beyond raw rtt_sample retention (30 days), the
+    # RTT chart switches to daily_rollup — see _HistoryRefreshWorker._fetch().
+    "90d": 2160,
 }
 
 
@@ -614,6 +642,9 @@ class HistoryPage(QWidget):
     # ── Draw (all accept pre-fetched data; no DB calls on main thread) ─────────
 
     def _draw_rtt(self, data: dict) -> None:
+        if data.get("rollup_mode"):
+            self._draw_rtt_rollup(data)
+            return
         import datetime
         ax = self._rtt_card.ax
         ax.cla()
@@ -655,6 +686,44 @@ class HistoryPage(QWidget):
 
         self._rtt_card.canvas.draw_idle()
         self._setup_rtt_hover(rtt_series)
+
+    def _draw_rtt_rollup(self, data: dict) -> None:
+        """Long-term view (90d): daily min/avg/max band from daily_rollup,
+        since raw rtt_sample rows this old have already been pruned (G4)."""
+        import datetime
+        self._disconnect_hover()  # no per-sample hover in rollup mode
+        ax = self._rtt_card.ax
+        ax.cla()
+        _style_ax(ax, "RTT History (ms) — daily rollup")
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+
+        series_hosts  = data.get("series_hosts", [])
+        rollup_series = data.get("rollup_series", {})
+
+        plotted = False
+        for i, host in enumerate(series_hosts):
+            pts = rollup_series.get(host, [])
+            if not pts:
+                continue
+            color = _SERIES_COLORS[i % len(_SERIES_COLORS)]
+            days  = [datetime.datetime.strptime(p.day, "%Y-%m-%d") for p in pts]
+            mins  = [p.min for p in pts]
+            avgs  = [p.avg for p in pts]
+            maxs  = [p.max for p in pts]
+            ax.plot(days, avgs, color=color, linewidth=1.5, label=host, alpha=0.9)
+            ax.fill_between(days, mins, maxs, alpha=0.12, color=color)
+            plotted = True
+
+        if not plotted:
+            ax.text(0.5, 0.5, "No long-term data yet — check back after 30+ days",
+                    ha="center", va="center", color=TEXT_SECONDARY,
+                    fontsize=10, transform=ax.transAxes)
+        else:
+            ax.set_ylabel("RTT (ms)", color=TEXT_SECONDARY, fontsize=9)
+            if len(series_hosts) > 1:
+                ax.legend(fontsize=8, framealpha=0.9, loc="upper right")
+
+        self._rtt_card.canvas.draw_idle()
 
     def _draw_availability(self, data: dict) -> None:
         import datetime
@@ -699,6 +768,10 @@ class HistoryPage(QWidget):
 
         self._kpi_hosts.set_value(str(len(hosts)))
 
+        if data.get("rollup_mode"):
+            self._update_kpis_rollup(data)
+            return
+
         if not rtt_series:
             for tile in (self._kpi_uptime, self._kpi_avg_rtt,
                          self._kpi_min_rtt, self._kpi_max_rtt):
@@ -721,6 +794,32 @@ class HistoryPage(QWidget):
             self._kpi_avg_rtt.set_value(f"{sum(all_rtts)/len(all_rtts):.0f} ms")
             self._kpi_min_rtt.set_value(f"{min(all_rtts):.0f} ms")
             self._kpi_max_rtt.set_value(f"{max(all_rtts):.0f} ms")
+        else:
+            for tile in (self._kpi_avg_rtt, self._kpi_min_rtt, self._kpi_max_rtt):
+                tile.set_value("—")
+
+    def _update_kpis_rollup(self, data: dict) -> None:
+        """KPI tiles for the 90d rollup view — weighted avg across daily
+        rows (weighted by sample count per day), plus overall min/max.
+        Uptime isn't tracked in daily_rollup, so that tile stays blank."""
+        rollup_series = data.get("rollup_series", {})
+        self._kpi_uptime.set_value("—")
+
+        weighted_sum = 0.0
+        total_n = 0
+        all_mins: list = []
+        all_maxs: list = []
+        for pts in rollup_series.values():
+            for p in pts:
+                weighted_sum += p.avg * p.n
+                total_n += p.n
+                all_mins.append(p.min)
+                all_maxs.append(p.max)
+
+        if total_n:
+            self._kpi_avg_rtt.set_value(f"{weighted_sum / total_n:.0f} ms")
+            self._kpi_min_rtt.set_value(f"{min(all_mins):.0f} ms")
+            self._kpi_max_rtt.set_value(f"{max(all_maxs):.0f} ms")
         else:
             for tile in (self._kpi_avg_rtt, self._kpi_min_rtt, self._kpi_max_rtt):
                 tile.set_value("—")

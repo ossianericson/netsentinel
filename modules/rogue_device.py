@@ -382,8 +382,9 @@ def scan(offenders_path: Path) -> dict:
             info.hostname = ""
         if not info.device_type or info.device_type == "Unknown Device":
             try:
-                from modules.device_classifier import classify
-                info.device_type = classify(
+                from modules.device_classifier import classify_registry_first
+                info.device_type = classify_registry_first(
+                    mac=mac,
                     vendor=info.vendor,
                     hostname=info.hostname,
                     os_family=info.os_family,

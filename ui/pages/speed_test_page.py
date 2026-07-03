@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
     QTableWidget,
@@ -618,6 +619,26 @@ class SpeedTestPage(QWidget):
         # ── Automatic speed tests card (Sprint 3) ──────────────────────────────
         root.addWidget(self._build_auto_speedtest_card())
 
+        # ── Scrollable content — prevents the gauge/results/history rows from
+        #    overlapping when the window is resized shorter than their combined
+        #    natural height (RULE-UX responsive layout) ──────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { background:transparent; border:none; }")
+
+        content = QWidget()
+        content.setObjectName("speedTestContent")
+        # RULE-QSS1: objectName-scoped — a bare "background:transparent;" here
+        # propagates to every descendant and wipes the Run button's app-QSS style
+        content.setStyleSheet("QWidget#speedTestContent { background: transparent; }")
+        cbox = QVBoxLayout(content)
+        cbox.setContentsMargins(0, 0, 0, 0)
+        cbox.setSpacing(8)
+        scroll.setWidget(content)
+        root.addWidget(scroll, 1)
+
         # ── Top row: server card + gauge card ─────────────────────────────────
         top_row = QHBoxLayout()
         top_row.setSpacing(10)
@@ -673,7 +694,7 @@ class SpeedTestPage(QWidget):
         gauge_body.setSpacing(6)
 
         self._gauge = SpeedGaugeWidget()
-        self._gauge.setMinimumHeight(220)
+        self._gauge.setMinimumHeight(140)
         gauge_body.addWidget(self._gauge, 1)
 
         # Stat tiles row: Ping | Download | Upload
@@ -706,7 +727,7 @@ class SpeedTestPage(QWidget):
 
         top_row.addWidget(gauge_card, 6)
 
-        root.addLayout(top_row, 3)
+        cbox.addLayout(top_row, 3)
 
         # ── Run button + status ───────────────────────────────────────────────
         action_row = QHBoxLayout()
@@ -741,7 +762,7 @@ class SpeedTestPage(QWidget):
         action_row.addWidget(self._btn_run)
         action_row.addWidget(self._engine_lbl)
         action_row.addWidget(self._status_lbl, 1)
-        root.addLayout(action_row)
+        cbox.addLayout(action_row)
 
         # ── S8-5: comparative context — "this is your Xth fastest test…" ──────
         self._comparison_lbl = QLabel("")
@@ -750,13 +771,13 @@ class SpeedTestPage(QWidget):
             f"color:{TEXT_SECONDARY}; font-size:11px; background:transparent; border:none;"
         )
         self._comparison_lbl.setVisible(False)
-        root.addWidget(self._comparison_lbl)
+        cbox.addWidget(self._comparison_lbl)
 
         # ── Speed-drop warning banner ──────────────────────────────────────────
         self._drop_banner = QLabel("")
         self._drop_banner.setWordWrap(True)
         self._drop_banner.setVisible(False)
-        root.addWidget(self._drop_banner)
+        cbox.addWidget(self._drop_banner)
 
         # ── History table ─────────────────────────────────────────────────────
         hist_card, hist_body = _card("Test History")
@@ -821,7 +842,7 @@ class SpeedTestPage(QWidget):
             ),
             btn_label="Run Speed Test →",
         )
-        _hist_empty.clicked.connect(self.scan_requested.emit)
+        _hist_empty.clicked.connect(self._run_test)
         # Date-range filter (FILTER-13)
         _date_row = QHBoxLayout()
         _date_row.setSpacing(6)
@@ -868,9 +889,9 @@ class SpeedTestPage(QWidget):
         # ── Modem signal snapshot panel (hidden until a test with modem data) ──
         self._signal_panel = self._build_signal_panel()
         self._signal_panel.setVisible(False)
-        root.addWidget(self._signal_panel)
+        cbox.addWidget(self._signal_panel)
 
-        root.addWidget(hist_card, 2)
+        cbox.addWidget(hist_card, 2)
 
     # ── Modem credentials (set by dashboard when modem connects/disconnects) ──
 

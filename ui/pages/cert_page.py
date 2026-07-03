@@ -43,6 +43,7 @@ from ui.styles import (
 )
 
 _QS_KEY = "cert_monitor/targets"
+_QS_EXCLUDED_KEY = "cert_monitor/auto_excluded"
 
 
 class CertPage(QWidget):
@@ -78,7 +79,10 @@ class CertPage(QWidget):
         QSettings("NetSentinel", "NetSentinel").setValue(_QS_KEY, json.dumps(self._configured))
 
     def _emit_targets(self) -> None:
-        targets = [CertTarget(host=t["host"], ports=t.get("ports", [443])) for t in self._configured]
+        targets = [
+            CertTarget(host=t["host"], ports=t.get("ports", [443]), label=t.get("label", ""))
+            for t in self._configured
+        ]
         self.certs_changed.emit(targets)
 
     def _add_host(self, host: str, port: int) -> None:
@@ -88,17 +92,58 @@ class CertPage(QWidget):
         for t in self._configured:
             if t["host"] == host and port in t.get("ports", [443]):
                 return
-        self._configured.append({"host": host, "ports": [port]})
+        self._configured.append({"host": host, "ports": [port], "label": ""})
         self._save_targets()
         self._emit_targets()
         self._content_stack.setCurrentIndex(1)
 
     def _remove_host(self, host: str) -> None:
+        removed = [t for t in self._configured if t["host"] == host]
         self._configured = [t for t in self._configured if t["host"] != host]
+        # A removed auto-enrolled target must not silently come back on the
+        # next port-sweep run (V6 Sprint 3.3) — record it so
+        # merge_auto_targets() skips it going forward.
+        if any(t.get("label") == "auto" for t in removed):
+            excluded = self._load_excluded()
+            excluded.add(host)
+            self._save_excluded(excluded)
         self._save_targets()
         self._emit_targets()
         if not self._configured:
             self._content_stack.setCurrentIndex(0)
+        self._refresh()
+
+    def _load_excluded(self) -> set:
+        raw = QSettings("NetSentinel", "NetSentinel").value(_QS_EXCLUDED_KEY, "[]")
+        try:
+            return set(json.loads(raw))
+        except Exception:
+            return set()
+
+    def _save_excluded(self, excluded: set) -> None:
+        QSettings("NetSentinel", "NetSentinel").setValue(_QS_EXCLUDED_KEY, json.dumps(sorted(excluded)))
+
+    def merge_auto_targets(self, auto_targets: list) -> None:
+        """
+        Merge auto-enrolled CertTarget objects (from
+        modules.cert_auto_enroll.auto_enroll_from_sweep) into the persisted
+        target list. Hosts the user previously removed (tracked via
+        _QS_EXCLUDED_KEY) are never re-added. No-op if nothing new.
+        """
+        existing_hosts = {t["host"] for t in self._configured}
+        excluded = self._load_excluded()
+        added = False
+        for target in auto_targets:
+            if target.host in existing_hosts or target.host in excluded:
+                continue
+            self._configured.append({"host": target.host, "ports": list(target.ports), "label": "auto"})
+            existing_hosts.add(target.host)
+            added = True
+        if not added:
+            return
+        self._save_targets()
+        self._emit_targets()
+        self._content_stack.setCurrentIndex(1)
         self._refresh()
 
     # ── UI construction ───────────────────────────────────────────────────────

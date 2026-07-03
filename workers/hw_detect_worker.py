@@ -24,6 +24,7 @@ class HwDetectWorker(QThread):
     """Probe *ip* once against the hardware catalogue, emit results."""
 
     detected = pyqtSignal(list)
+    error    = pyqtSignal(str)
 
     def __init__(
         self,
@@ -41,5 +42,5 @@ class HwDetectWorker(QThread):
             catalogue = load_catalogue(try_remote=False)
             matches   = detect(self._ip, self._gateway_mac, catalogue)
             self.detected.emit(matches)
-        except Exception:
-            self.detected.emit([])
+        except Exception as exc:
+            self.error.emit(str(exc))

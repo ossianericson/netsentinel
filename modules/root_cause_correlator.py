@@ -26,43 +26,15 @@ Logic
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import List, Optional
 
-
-# ── Score constants (re-used from risk_scorer semantics) ─────────────────────
-CRITICAL = "CRITICAL"
-HIGH     = "HIGH"
-MEDIUM   = "MEDIUM"
-LOW      = "LOW"
-INFO     = "INFO"
-
-
-# ── Data classes ──────────────────────────────────────────────────────────────
-
-@dataclass
-class CorrelatedFinding:
-    source: str          # e.g. "ISP Check", "Storm Analyser", "STP Detector"
-    category: str        # e.g. "External ISP Issue", "Rogue IoT Broadcaster", …
-    severity: str        # CRITICAL / HIGH / MEDIUM / LOW / INFO
-    headline: str        # one-line plain-English summary
-    detail: str          # longer explanation
-    remediation: str     # plain-English fix — written for a home user
-    verify_step: str = ""  # "To confirm this is fixed: [step]" — shown below remediation
-
-
-@dataclass
-class CorrelationResult:
-    findings: List[CorrelatedFinding] = field(default_factory=list)
-    global_severity: str = INFO
-    plain_summary: str = ""          # 1-2 sentences for the verdict panel
-    isp_issue_detected: bool = False
-    local_issue_detected: bool = False
-    suppress_local_alerts: bool = False  # True when ISP is clearly to blame
-
-    @property
-    def finding_count(self) -> int:
-        return len(self.findings)
+# Data types live in modules/root_cause_types.py (breaks the import cycle with
+# modules/root_cause_correlator_alerts.py, which also needs these types) and
+# are re-exported here for backwards compatibility.
+from modules.root_cause_types import (  # noqa: F401
+    CRITICAL, HIGH, MEDIUM, LOW, INFO,
+    CorrelatedFinding, CorrelationResult,
+)
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -437,6 +409,53 @@ def _correlate_diagnostics(
         ))
 
 
+def _build_metrics(diag_result, log_summary) -> dict:
+    """
+    Surface real ping/jitter/loss/dns/download numbers for share/export
+    features. Prefers log_summary (already-averaged, longer sample window);
+    falls back to a one-shot average from diag_result's raw probe lists.
+    """
+    metrics: dict = {}
+
+    if log_summary is not None:
+        rtt = getattr(log_summary, "avg_rtt_ms", None)
+        if rtt is not None:
+            metrics["ping_ms"] = rtt
+        jitter = getattr(log_summary, "avg_jitter_ms", None)
+        if jitter is not None:
+            metrics["jitter_ms"] = jitter
+        dns = getattr(log_summary, "avg_dns_ms", None)
+        if dns is not None:
+            metrics["dns_ms"] = dns
+        uptime = getattr(log_summary, "uptime_pct", None)
+        if uptime is not None:
+            metrics["loss_pct"] = 100.0 - uptime
+    elif diag_result is not None:
+        pings = [
+            getattr(p, "rtt_ms", -1.0)
+            for p in getattr(diag_result, "ping_results", []) or []
+        ]
+        if pings:
+            ok = [v for v in pings if v >= 0]
+            if ok:
+                metrics["ping_ms"] = sum(ok) / len(ok)
+            metrics["loss_pct"] = 100.0 * (len(pings) - len(ok)) / len(pings)
+        dns_lat = [
+            getattr(d, "latency_ms", -1.0)
+            for d in getattr(diag_result, "dns_results", []) or []
+            if getattr(d, "latency_ms", -1.0) >= 0
+        ]
+        if dns_lat:
+            metrics["dns_ms"] = sum(dns_lat) / len(dns_lat)
+
+    if diag_result is not None:
+        dl = getattr(diag_result, "download_mbps", -1.0)
+        if dl and dl > 0:
+            metrics["download_mbps"] = dl
+
+    return metrics
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def correlate(
@@ -447,6 +466,7 @@ def correlate(
     log_summary=None,
     gateway_mac: Optional[str] = None,
     gateway_ip: Optional[str] = None,
+    recent_alerts: Optional[List[dict]] = None,
 ) -> CorrelationResult:
     """
     Run all correlation passes and return a CorrelationResult.
@@ -459,6 +479,9 @@ def correlate(
     fingerprint_devices : List[DeviceInfo] from rogue_device.scan()
     log_summary         : LogSummary from network_logger
     gateway_mac         : MAC of the default gateway (str)
+    recent_alerts       : List[dict] from store.get_recent_alerts() — folds in
+                           already-fired MESH_DEGRADED / MODEM_SIGNAL_DROP /
+                           IOT_BEHAVIOR / BASELINE_DROP alerts (V6 Sprint 5.1)
 
     Returns
     ──────
@@ -476,6 +499,9 @@ def correlate(
     _correlate_logger(log_summary, findings)
     if not isp_to_blame:
         _correlate_diagnostics(diag_result, findings, gateway_ip)
+
+    from modules.root_cause_correlator_alerts import correlate_recent_alerts
+    correlate_recent_alerts(recent_alerts or [], findings)
 
     # Sort by severity (highest first)
     findings.sort(key=lambda f: _severity_rank(f.severity), reverse=True)
@@ -504,4 +530,5 @@ def correlate(
         isp_issue_detected=isp_to_blame,
         local_issue_detected=not isp_to_blame and bool(findings),
         suppress_local_alerts=isp_to_blame,
+        metrics=_build_metrics(diag_result, log_summary),
     )

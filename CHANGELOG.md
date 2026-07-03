@@ -4,9 +4,28 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.23
+
+**Added**
+- `modules/lab_badge.py` — renders a Lab Mode completion badge PNG (hexagon/shield motif, scenario title, completion date); new "Download Badge (PNG)" button on the Lab Mode result panel alongside "Try Again"/"Export Report (HTML)"
+- `modules/diagnostic_card.py::build_card_data_from_diagnosis()` — quiet "Share this result" strip on the "What's Wrong?" result panel with "Copy as image"/"Copy as Markdown" buttons, shown on every completed run
+- `MetricStore.query_previous_grade()` — Network Grade tab now shows a "Your grade improved — share it" strip with "Copy as image"/"Copy as Markdown" buttons, but only on a genuine score improvement between the last two grade runs
+- "Copy as Reddit post" and "Copy as email to ISP" buttons on the ISP Accountability Report, reusing `report_isp.generate_isp_complaint_text()` and the new `forum_export.build_isp_forum_markdown()`
+
+**Fixed**
+- `ui/styles.py`: added an `alpha()` helper and swept ~60 QSS sites that appended hex alpha as `{COLOR}22` — Qt parses 8-digit hex as `#AARRGGBB` (alpha-first), which scrambled those colours (mostly rendering invisible hover tints, and the Home "live challenge" banner as an opaque dark red); guarded by new `tests/test_qss_hex_alpha.py` (RULE-QSS2)
+- `home_page.py`: the Home "live challenge" banner now renders as translucent amber via `AMBER_BG` instead of dark red
+- `header.py`: the top-bar "▶ Scan" button now reads as a solid primary button at rest instead of being invisible until hover; the gear and time-range controls use a faint `alpha(WHITE, …)` hairline border so they no longer draw a harsh white box on the dark header bar in Arctic Clean
+- `home_data_mixin.py`: the live-challenge banner now leads with the event's own wording (e.g. `New device detected`) instead of labelling every Network Logger event a "Connectivity issue"
+
+---
+
 ### v2.1.22
 
 **Added**
+- `modules/report_sanitizer.py` — shared sanitizer for public sharing: aliases private IPs to stable `192.168.1.N` placeholders, strips MAC addresses/hostnames, and omits public IPs entirely; makes no network calls
+- `modules/forum_export.py` — builds sanitized, forum-ready Markdown summaries for `DiagnosisPage` ("What's Wrong?") and `ServiceDiagnosticsPage` results; wired to new "Copy for Reddit/Discord" buttons on both pages
+- `modules/topology_share.py` — renders a sanitized Network Map PNG independently of the on-screen view, so a new "Share (Sanitized PNG)" toolbar button on `NetworkMapPage` can never leak real IPs/MACs/hostnames
 - `modules/service_escalation.py` — a `SERVICE_DOWN` heartbeat failure now triggers a background `DiagnosticEngine` probe and a follow-up notification classifying *why* the service is unreachable (filtered by a firewall/VPN/ISP vs. a genuine outage); new "Diagnose why (recommended)" sub-toggle under the `Service Down` alert rule
 - `modules/proactive_digest.py` / `workers/proactive_probe_worker.py` — reusable due-check/day-tracking base (used by Morning Briefing) and a generic interval-loop `QThread` for future background probes
 - `modules/scheduled_speed_test.py` and a new `BASELINE_DROP` `AlertRule` type — opt-in "Automatic Speed Tests" card on the Speed Test page (1h/3h/6h/12h/24h interval) fires a tray notification when download speed drops severely against your own rolling history, reusing `speed_drop_detector`'s verdict/copy
@@ -16,9 +35,12 @@ All notable changes to NetSentinel are documented here. The current version summ
 **Changed**
 - `MaintenanceWindowManager.record_suppression()` is now wired into `AlertEngine` via a new `set_suppression_recorder()` hook, so suppressed alerts actually appear in the maintenance suppression log
 - `modules/alert_engine.py` maintenance-checker logic split into a new `_MaintenanceSuppressionMixin` (in `modules/alert_suppressor.py`) to stay under the 600-line module budget
+- `modules/device_stability.py` and `modules/device_tracker.py` no longer call `MetricStore._execute_write()`/`_execute_read()` directly — all device inventory writes/reads (IP history, annotations, change-event audit trail, stability scoring, topology snapshots) now go through new public `MetricStore` methods; same for `modules/topology_snapshot.py` and the `/devices`/`/uptime` routes in `modules/rest_api.py`
+- `modules/metric_store.py` split: device-inventory write methods (`record_ip_observation`, `upsert_known_device`, `record_device_state`, etc.) moved to new `modules/metric_store_writes_device.py` (`_DeviceWritesMixin`) to stay under the module LOC budget
 
 **Fixed**
 - Startup flash of a native OS-decorated window (title bar + min/max/close) for a fraction of a second: `ui/tabs_scan.py` (STP Capture / Broadcast Storm empty-state buttons), `ui/pages/home_page.py` (`setupCompleteCard`), and `ui/pages/log_source_panel.py` (Network Logger source-toggle buttons) were calling `.setVisible(...)` on a widget *before* it was added to its parent layout — Qt treats a still-parentless widget as an independent top-level window and gives it full native chrome. Fix: call `.setVisible(...)` only after `addWidget()`
+- `device_ip_history.seen_count` no longer double-increments per scan: `ui/scan_wiring.py` was calling `record_ip_observation()` directly in the same handler where `DeviceTracker.process_scan()` (the intended single write path) also calls it, doubling `seen_count`/`scan_count` and skewing `ip_stability` every scan
 
 ---
 

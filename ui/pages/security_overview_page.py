@@ -21,13 +21,13 @@ from typing import List, Optional
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
-    QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QFrame, QHBoxLayout, QHeaderView, QLabel, QPushButton,
+    QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
-    BG_ALT_ROW, BG_CARD, BORDER, CARD_HDR_BORDER,
+    BG_ALT_ROW, BG_CARD, BG_DARK, BORDER, CARD_HDR_BORDER,
     CARD_RADIUS, GREEN, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
     WHITE,
@@ -174,6 +174,9 @@ class SecurityOverviewPage(QWidget):
 
     navigate_to             = pyqtSignal(str)
     scan_requested          = pyqtSignal()
+    # V6 Sprint 3/4 — (posture_key, enabled); posture_key is one of
+    # "port_sweep" | "cve_recheck" | "exposure_check" | "arp_watch" | "dhcp_watch"
+    posture_scheduling_changed = pyqtSignal(str, bool)
 
     def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -209,7 +212,21 @@ class SecurityOverviewPage(QWidget):
     # ── UI construction ────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { border:none; background:transparent; }")
+
+        inner = QWidget()
+        inner.setStyleSheet(f"background:{BG_DARK};")
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+
+        root = QVBoxLayout(inner)
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(10)
 
@@ -233,6 +250,10 @@ class SecurityOverviewPage(QWidget):
 
         # C-3: Scan Status card at top — one row per audit scan type
         root.addWidget(self._build_scan_status_card())
+
+        # V6 Sprint 3: opt-in scheduled posture scans (nightly port sweep,
+        # CVE re-check, weekly exposure check) — off by default.
+        root.addWidget(self._build_posture_scans_card())
 
         scan_hdr = QLabel("Security Scan Findings")
         scan_hdr.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
@@ -262,6 +283,11 @@ class SecurityOverviewPage(QWidget):
         card, lay = _card("Scan Status")
         t = _make_table(["Scan", "Status", "Last Run", "Finding"])
         t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Status column holds a QSS-padded pill widget — ResizeToContents under-measures
+        # it (padding isn't reflected in sizeHint() before the widget is polished/shown),
+        # so pin a fixed width wide enough for the longest label ("Never run").
+        t.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        t.setColumnWidth(1, 90)
         self._scan_status_table = t
         lay.addWidget(t)
 
@@ -288,6 +314,55 @@ class SecurityOverviewPage(QWidget):
 
         self._rebuild_scan_status_table()
         return card
+
+    # ── V6 Sprint 3: scheduled posture scans ─────────────────────────────────
+
+    def _build_posture_scans_card(self) -> QWidget:
+        """Opt-in toggles for scheduled posture scans (3.1/3.2/3.4) and passive
+        always-on guards (4.1/4.2).
+
+        Each toggle persists to QSettings and emits posture_scheduling_changed
+        so app.py can start/stop the matching ProactiveProbeWorker — same
+        shape as SpeedTestPage.auto_speedtest_changed.
+        """
+        card, body = _card("Scheduled Posture Scans")
+        body.setContentsMargins(8, 8, 8, 8)
+        body.setSpacing(4)
+
+        note = QLabel(
+            "Off by default. When enabled, these run automatically in the "
+            "background and alert you only on what changed or was detected "
+            "since the last run — not just while their own page is open."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px;")
+        body.addWidget(note)
+
+        self._posture_checks: dict[str, QCheckBox] = {}
+        _toggles = (
+            ("port_sweep", "Nightly port-scan sweep of known devices — alerts on newly opened ports"),
+            ("cve_recheck", "Twice-daily CVE re-check for already-tracked services"),
+            ("exposure_check", "Weekly internet-exposure check — alerts on newly exposed ports"),
+            ("arp_watch", "Background ARP spoof watch — alerts on gateway hijack, IP takeover, or MAC clone"),
+            ("dhcp_watch", "Background rogue DHCP watch — alerts on offers from an unexpected server"),
+        )
+        for key, label in _toggles:
+            chk = QCheckBox(label)
+            chk.setStyleSheet(f"QCheckBox{{color:{TEXT_PRIMARY};font-size:11px;}}")
+            chk.setChecked(QSettings("NetSentinel", "NetSentinel").value(
+                f"posture/{key}_enabled", False, type=bool
+            ))
+            chk.stateChanged.connect(lambda _state, k=key: self._on_posture_toggle_changed(k))
+            self._posture_checks[key] = chk
+            body.addWidget(chk)
+
+        return card
+
+    def _on_posture_toggle_changed(self, key: str) -> None:
+        chk = self._posture_checks[key]
+        enabled = chk.isChecked()
+        QSettings("NetSentinel", "NetSentinel").setValue(f"posture/{key}_enabled", enabled)
+        self.posture_scheduling_changed.emit(key, enabled)
 
     def _copy_scan_status_md(self) -> None:
         """Copy the current scan registry as a Markdown table to the clipboard."""

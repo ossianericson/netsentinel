@@ -173,3 +173,35 @@ def test_evaluate_baseline_metrics_disabled_rule_does_not_fire():
     ])
     fired = engine.evaluate_baseline_metrics(94.0, [740.0, 735.0, 742.0, 745.0])
     assert fired == []
+
+
+# ── evaluate_baseline_metrics + modem SINR (V6 Sprint 5.2 — radio vs. ISP) ────
+
+def test_evaluate_baseline_metrics_blames_radio_when_sinr_also_dropped():
+    """A severe speed drop that coincides with a SINR baseline drop should be
+    attributed to the radio link, not the ISP."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="speed_test", rule_type="BASELINE_DROP", min_samples=4, cooldown_s=0)
+    ])
+    prior_sinr = [18.0, 19.0, 17.5, 18.5, 19.5, 18.0, 17.0, 18.2, 19.1, 18.8,
+                  17.9, 18.3, 19.0, 18.6, 17.7, 18.4, 19.2, 18.1, 17.6, 18.9]
+    fired = engine.evaluate_baseline_metrics(
+        94.0, [740.0, 735.0, 742.0, 745.0],
+        current_sinr=1.0, prior_sinr=prior_sinr,
+    )
+    assert len(fired) == 1
+    assert "radio" in fired[0].message.lower()
+    assert "not your isp" in fired[0].message.lower()
+
+
+def test_evaluate_baseline_metrics_blames_isp_when_sinr_is_normal():
+    """A severe speed drop with a healthy/absent SINR reading keeps the normal
+    ISP-oriented message unchanged."""
+    from modules.alert_engine import AlertEngine, AlertRule
+    engine = AlertEngine(rules=[
+        AlertRule(name="speed_test", rule_type="BASELINE_DROP", cooldown_s=0)
+    ])
+    fired = engine.evaluate_baseline_metrics(94.0, [740.0, 735.0, 742.0, 745.0])
+    assert len(fired) == 1
+    assert "radio" not in fired[0].message.lower()

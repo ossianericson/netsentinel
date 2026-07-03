@@ -40,6 +40,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
     BORDER, CARD_HDR_BORDER, CARD_RADIUS, GREEN,
     HTML_TEXT,
@@ -56,6 +57,24 @@ from modules.config_baseline import (
     delete_snapshot as _delete_snapshot,
     load_snapshot as _load_snapshot,
 )
+
+_BLESSED_KEY = "baseline/blessed_snapshot_id"
+
+
+def _blessed_snapshot_id() -> int:
+    """Return the id of the user-blessed baseline snapshot, or 0 if none set.
+
+    V6 Sprint 4.3 — the config-drift auto-diff (evaluate_config_drift_checks
+    in alert_engine_checks4.py) compares each scheduled discovery scan's
+    snapshot against whichever snapshot the user last marked with
+    ``★ Set as Baseline``. Public so ui/scan_wiring.py can read it without
+    importing the page widget.
+    """
+    return int(QSettings("NetSentinel", "NetSentinel").value(_BLESSED_KEY, 0, type=int) or 0)
+
+
+def _set_blessed_snapshot_id(snapshot_id: int) -> None:
+    QSettings("NetSentinel", "NetSentinel").setValue(_BLESSED_KEY, snapshot_id)
 
 
 # ── Port name helpers (V5: port/service diff enrichment) ─────────────────────
@@ -326,6 +345,7 @@ class BaselinePage(QWidget):
             ("separator",      None),
             ("Export row",     _snap_export_row),
             ("separator",      None),
+            ("★ Set as Baseline", self._bless_selected_snapshot),
             ("Reset baseline", _snap_reset_baseline),
         ])
         bl.addWidget(self._snap_table)
@@ -463,14 +483,18 @@ class BaselinePage(QWidget):
     def _refresh_table(self) -> None:
         self._snap_table.setRowCount(0)
         self._empty_lbl.setVisible(not self._snapshots)
+        blessed_id = _blessed_snapshot_id()
         for snap in self._snapshots:
             row = self._snap_table.rowCount()
             self._snap_table.insertRow(row)
             ts_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(snap.ts))
             total_ports = sum(len(d.open_ports) for d in snap.devices)
+            label = snap.label or "(no label)"
+            if snap.id == blessed_id:
+                label = f"★ {label}"
             for col, val in enumerate([
                 ts_str,
-                snap.label or "(no label)",
+                label,
                 str(len(snap.devices)),
                 str(total_ports),
                 str(snap.id),
@@ -478,6 +502,23 @@ class BaselinePage(QWidget):
                 item = QTableWidgetItem(val)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self._snap_table.setItem(row, col, item)
+
+    # ── V6 Sprint 4.3: blessed baseline (config drift auto-diff target) ────────
+
+    def _bless_selected_snapshot(self) -> None:
+        """Mark the selected snapshot as the trusted reference for config-drift
+        alerts (evaluate_config_drift_checks in alert_engine_checks4.py). The
+        next scheduled discovery scan diffs against this snapshot instead of
+        the previous auto-snapshot."""
+        row = self._snap_table.currentRow()
+        if row < 0 or row >= len(self._snapshots):
+            return
+        snap = self._snapshots[row]
+        _set_blessed_snapshot_id(snap.id)
+        self._status_lbl.setText(
+            f"★ {snap.label or '(no label)'} set as baseline for config-drift alerts."
+        )
+        self._refresh_table()
 
     def _update_kpis(self) -> None:
         count = len(self._snapshots)
@@ -736,9 +777,9 @@ tr:nth-child(even){{background:{BG_ALT_ROW}}}
         self._sched_btn = QPushButton()
         self._sched_btn.setFixedHeight(24)
         self._sched_btn.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+            f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {alpha(ACCENT, 0x44)};"
             f" border-radius:3px; padding:0 10px; font-size:11px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}18; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x18)}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._sched_btn.clicked.connect(self._toggle_schedule_edit)

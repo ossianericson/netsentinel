@@ -213,6 +213,44 @@ def _cache_dir() -> Path:
     return base
 
 
+def _fetch_one_feed(
+    feed: dict,
+    cache_dir: Path,
+    progress_cb: Optional[Callable[[str], None]],
+) -> List[ThreatEntry]:
+    """Download, cache, and parse a single feed. Falls back to the local
+    cache file on any download failure. Runs inside the shared ThreadPoolExecutor
+    in refresh_from_feeds() — one thread per feed, so a slow/unreachable host
+    doesn't add its full timeout to every other feed's wait."""
+    if progress_cb:
+        progress_cb(f"Downloading {feed['name']}…")
+    host = urllib.parse.urlparse(feed["url"]).hostname or feed["name"]
+    cache_path = cache_dir / feed["filename"]
+    try:
+        _rate_wait(host)
+        req = urllib.request.Request(feed["url"], headers={"User-Agent": _UA})
+        with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:
+            data = resp.read()
+        cache_path.write_bytes(data)
+        entries = feed["parser"](data)
+        if progress_cb:
+            progress_cb(f"  {feed['name']}: {len(entries)} indicators loaded.")
+        return entries
+    except Exception as exc:
+        if progress_cb:
+            progress_cb(f"  {feed['name']}: failed ({exc})")
+        if cache_path.exists():
+            try:
+                data = cache_path.read_bytes()
+                entries = feed["parser"](data)
+                if progress_cb:
+                    progress_cb(f"  {feed['name']}: loaded from cache ({len(entries)} indicators).")
+                return entries
+            except Exception:
+                pass  # non-fatal — cache file unreadable/corrupt; treat as empty
+        return []
+
+
 def refresh_from_feeds(
     cache_dir: Optional[Path] = None,
     progress_cb: Optional[Callable[[str], None]] = None,
@@ -221,44 +259,24 @@ def refresh_from_feeds(
     Download all configured threat feeds, cache them locally, and return
     the combined list of ThreatEntry records.
 
+    Feeds are fetched concurrently (one thread per feed) so total wall time
+    is bounded by the slowest single feed rather than their sum — with 2+
+    feeds each carrying a 15 s timeout, sequential fetching held the calling
+    thread busy long enough (and the UI-visible "Update Feeds" wait long
+    enough) to widen the window for unrelated main-thread contention.
+
     Safe to call in a background thread.  Returns an empty list on complete failure.
     """
     if cache_dir is None:
         cache_dir = _cache_dir()
 
+    from concurrent.futures import ThreadPoolExecutor
+
     all_entries: List[ThreatEntry] = []
-    for feed in FEEDS:
-        if progress_cb:
-            progress_cb(f"Downloading {feed['name']}…")
-        try:
-            _rate_wait("feodotracker.abuse.ch")
-            req = urllib.request.Request(
-                feed["url"],
-                headers={"User-Agent": _UA},
-            )
-            with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT) as resp:
-                data = resp.read()
-            # Cache locally
-            cache_path = cache_dir / feed["filename"]
-            cache_path.write_bytes(data)
-            entries = feed["parser"](data)
-            all_entries.extend(entries)
-            if progress_cb:
-                progress_cb(f"  {feed['name']}: {len(entries)} indicators loaded.")
-        except (urllib.error.URLError, OSError, Exception) as exc:
-            if progress_cb:
-                progress_cb(f"  {feed['name']}: failed ({exc})")
-            # Try to load from local cache
-            cache_path = cache_dir / feed["filename"]
-            if cache_path.exists():
-                try:
-                    data = cache_path.read_bytes()
-                    entries = feed["parser"](data)
-                    all_entries.extend(entries)
-                    if progress_cb:
-                        progress_cb(f"  {feed['name']}: loaded from cache ({len(entries)} indicators).")
-                except Exception:
-                    pass  # non-fatal
+    with ThreadPoolExecutor(max_workers=len(FEEDS)) as pool:
+        futures = [pool.submit(_fetch_one_feed, feed, cache_dir, progress_cb) for feed in FEEDS]
+        for future in futures:
+            all_entries.extend(future.result())
 
     if progress_cb:
         progress_cb(f"Done. {len(all_entries)} threat indicators loaded.")

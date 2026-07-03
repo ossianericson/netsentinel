@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT,
     ACCENT_DARK,
     ACCENT_LITE,
@@ -218,7 +219,7 @@ class _StatusTile(QFrame):
     def set_active(self, active: bool) -> None:
         if active:
             self.setStyleSheet(
-                f"QFrame {{ background:{ACCENT}1A; border:1px solid {ACCENT}44;"
+                f"QFrame {{ background:{alpha(ACCENT, 0x1A)}; border:1px solid {alpha(ACCENT, 0x44)};"
                 f" border-left:3px solid {ACCENT}; border-radius:{CARD_RADIUS}; }}"
                 f"QFrame:hover {{ border-color:{ACCENT}; border-left:3px solid {ACCENT}; }}"
             )
@@ -270,7 +271,7 @@ class _GradeTile(QFrame):
         super().__init__(parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {ACCENT}44;"
+            f"QFrame {{ background:{BG_CARD}; border:1px solid {alpha(ACCENT, 0x44)};"
             f" border-radius:{CARD_RADIUS}; }}"
             f"QFrame:hover {{ border-color:{ACCENT}; }}"
         )

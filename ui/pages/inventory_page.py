@@ -36,6 +36,7 @@ from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, BG_ALT_ROW, BG_CARD,
     BG_DARK, BG_HOVER, BORDER, BTN_DISABLED_BORDER,
     CARD_RADIUS, GREEN, RED,
@@ -839,10 +840,10 @@ class InventoryPage(QWidget):
         )
         self._hide_offline_btn.setStyleSheet(
             f"QPushButton {{ font-size:10px; color:{TH_TEXT}; background:transparent;"
-            f" border:1px solid {TH_TEXT}44; border-radius:3px; padding:0 7px; }}"
-            f"QPushButton:hover {{ background:{TH_TEXT}22; }}"
-            f"QPushButton:checked {{ background:{TH_TEXT}33; border-color:{TH_TEXT}; }}"
-            f"QPushButton:pressed {{ background:{TH_TEXT}22; color:{TH_TEXT}; }}"
+            f" border:1px solid {alpha(TH_TEXT, 0x44)}; border-radius:3px; padding:0 7px; }}"
+            f"QPushButton:hover {{ background:{alpha(TH_TEXT, 0x22)}; }}"
+            f"QPushButton:checked {{ background:{alpha(TH_TEXT, 0x33)}; border-color:{TH_TEXT}; }}"
+            f"QPushButton:pressed {{ background:{alpha(TH_TEXT, 0x22)}; color:{TH_TEXT}; }}"
         )
         self._hide_offline_btn.toggled.connect(self._on_hide_offline_toggled)
         snap_hdr_lay.addWidget(snap_title)
@@ -1000,7 +1001,7 @@ class InventoryPage(QWidget):
         self._compare_banner = QFrame()
         self._compare_banner.setVisible(False)
         self._compare_banner.setStyleSheet(
-            f"QFrame {{ background:{ACCENT}18; border:1px solid {ACCENT}44;"
+            f"QFrame {{ background:{alpha(ACCENT, 0x18)}; border:1px solid {alpha(ACCENT, 0x44)};"
             f" border-radius:3px; }}"
         )
         _cb_lay = QHBoxLayout(self._compare_banner)
@@ -1016,7 +1017,7 @@ class InventoryPage(QWidget):
         _back_btn.setStyleSheet(
             f"QPushButton {{ font-size:11px; color:{ACCENT}; background:transparent;"
             f" border:1px solid {ACCENT}; border-radius:3px; padding:0 10px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}22; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _back_btn.clicked.connect(self._exit_compare_mode)
@@ -1259,9 +1260,9 @@ class InventoryPage(QWidget):
             _b.setFixedHeight(24)
             _b.setCursor(Qt.CursorShape.PointingHandCursor)
             _b.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {ACCENT}44;"
+                f"QPushButton {{ background:transparent; color:{ACCENT}; border:1px solid {alpha(ACCENT, 0x44)};"
                 f" border-radius:3px; font-size:11px; padding:0 10px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}22; }}"
+                f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
                 f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
             )
             _b.clicked.connect(getattr(self, _slot))
@@ -1416,9 +1417,9 @@ class InventoryPage(QWidget):
         if active:
             return (
                 f"QPushButton {{ font-size:10px; font-weight:bold; color:{ACCENT};"
-                f" background:{ACCENT}18; border:1px solid {ACCENT}; border-radius:10px;"
+                f" background:{alpha(ACCENT, 0x18)}; border:1px solid {ACCENT}; border-radius:10px;"
                 f" padding:1px 8px; }}"
-                f"QPushButton:hover {{ background:{ACCENT}30; }}"
+                f"QPushButton:hover {{ background:{alpha(ACCENT, 0x30)}; }}"
             )
         return (
             f"QPushButton {{ font-size:10px; color:{TEXT_MUTED};"
@@ -2442,9 +2443,9 @@ class InventoryPage(QWidget):
         # Build table rows: (sort_key, mac, status, color, bg)
         table_rows = []
         for mac in new_macs:
-            table_rows.append((0, mac, "NEW", GREEN, f"{GREEN}18"))
+            table_rows.append((0, mac, "NEW", GREEN, f"{alpha(GREEN, 0x18)}"))
         for mac in gone_macs:
-            table_rows.append((1, mac, "GONE", RED, f"{RED}18"))
+            table_rows.append((1, mac, "GONE", RED, f"{alpha(RED, 0x18)}"))
         for mac in both_macs:
             table_rows.append((2, mac, "UNCHANGED", TEXT_MUTED, BG_CARD))
 

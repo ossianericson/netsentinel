@@ -42,6 +42,56 @@ def test_run_scheduled_speed_test_persists_and_returns_history():
     assert kwargs["upload_mbps"] == 40.0
 
 
+def _sinr_point(sinr):
+    p = MagicMock()
+    p.nr5g_sinr = sinr
+    return p
+
+
+def test_run_scheduled_speed_test_returns_modem_sinr_context():
+    """V6 Sprint 5.2 — current + prior SINR readings ride along so
+    evaluate_baseline_metrics() can distinguish a radio problem from an ISP
+    problem."""
+    from modules.scheduled_speed_test import run_scheduled_speed_test
+
+    store = MagicMock()
+    store.query_speed_test_history.return_value = []
+    store.query_modem_signal_log.return_value = [
+        _sinr_point(1.0), _sinr_point(18.0), _sinr_point(19.0), _sinr_point(17.5),
+    ]
+    fake_result = SpeedTestResult(
+        download_mbps=94.0, upload_mbps=40.0, ping_ms=12.0,
+        server_name="Test ISP", server_city="Testville", server_country="US",
+        backend="test",
+    )
+
+    with patch("modules.scheduled_speed_test.speed_tester.run_test", return_value=fake_result):
+        result = run_scheduled_speed_test(store)
+
+    assert result.current_sinr == 1.0
+    assert result.prior_sinr == [18.0, 19.0, 17.5]
+
+
+def test_run_scheduled_speed_test_handles_no_modem_data():
+    """No modem plugin installed → query_modem_signal_log() returns [] →
+    current_sinr is None and prior_sinr is empty (no crash)."""
+    from modules.scheduled_speed_test import run_scheduled_speed_test
+
+    store = MagicMock()
+    store.query_speed_test_history.return_value = []
+    store.query_modem_signal_log.return_value = []
+    fake_result = SpeedTestResult(
+        download_mbps=100.0, upload_mbps=10.0, ping_ms=5.0,
+        server_name="", server_city="", server_country="",
+        backend="test",
+    )
+    with patch("modules.scheduled_speed_test.speed_tester.run_test", return_value=fake_result):
+        result = run_scheduled_speed_test(store)
+
+    assert result.current_sinr is None
+    assert result.prior_sinr == []
+
+
 def test_prior_downloads_queried_before_persisting():
     """Prior history must not include the just-run test (order matters)."""
     from modules.scheduled_speed_test import run_scheduled_speed_test

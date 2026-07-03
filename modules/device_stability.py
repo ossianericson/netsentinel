@@ -42,10 +42,7 @@ def compute_ip_stability(mac: str, store: "MetricStore") -> float:
     Canonical IP = the IP with the highest seen_count in device_ip_history.
     Returns 0.0 for unknown MACs or when only one scan has been recorded.
     """
-    rows = store._execute_read(
-        "SELECT ip, seen_count FROM device_ip_history WHERE mac = ?",
-        (mac.lower(),),
-    )
+    rows = store.get_ip_history_stats(mac)
     if not rows:
         return 0.0
     total = sum(int(r[1] or 0) for r in rows)
@@ -147,12 +144,7 @@ def update_stability_for_device(
     Never overwrites inferred_role if the device has a custom_name (user label wins).
     """
     stability = compute_ip_stability(mac, store)
-
-    count_rows = store._execute_read(
-        "SELECT COALESCE(SUM(seen_count), 0) FROM device_ip_history WHERE mac = ?",
-        (mac.lower(),),
-    )
-    scan_count = int(count_rows[0][0]) if count_rows else 0
+    scan_count = store.get_total_seen_count(mac)
 
     role = infer_role(
         ip=ip,
@@ -164,24 +156,9 @@ def update_stability_for_device(
 
     # Only update inferred_role when we have a non-None result — never clear an
     # existing inference (e.g. if device_type is temporarily blank after a scan).
-    if role is not None:
-        store._execute_write(
-            """
-            UPDATE known_device
-            SET scan_count    = ?,
-                ip_stability  = ?,
-                inferred_role = ?
-            WHERE mac = ?
-            """,
-            (scan_count, stability, role, mac.lower()),
-        )
-    else:
-        store._execute_write(
-            """
-            UPDATE known_device
-            SET scan_count   = ?,
-                ip_stability = ?
-            WHERE mac = ?
-            """,
-            (scan_count, stability, mac.lower()),
-        )
+    store.update_device_stability(
+        mac=mac,
+        scan_count=scan_count,
+        ip_stability=stability,
+        inferred_role=role,
+    )

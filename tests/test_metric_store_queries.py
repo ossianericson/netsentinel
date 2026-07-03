@@ -1,4 +1,5 @@
 """Tests for modules/metric_store_queries.py — MetricStoreQueryMixin via MetricStore."""
+import datetime
 import pytest
 import time
 
@@ -98,8 +99,61 @@ def test_query_last_grade_after_record(store):
     assert g["score"] == 95.0
 
 
+def test_query_previous_grade_none_initially(store):
+    assert store.query_previous_grade() is None
+
+
+def test_query_previous_grade_none_with_single_grade(store):
+    """Only one grade recorded — there is no 'previous' row yet."""
+    store.record_grade("A", 95.0, "Excellent")
+    assert store.query_previous_grade() is None
+
+
+def test_query_previous_grade_returns_second_most_recent(store):
+    store.record_grade("C", 60.0, "Degraded")
+    store.record_grade("A", 95.0, "Excellent")
+    prev = store.query_previous_grade()
+    assert prev is not None
+    assert prev["grade"] == "C"
+    assert prev["score"] == 60.0
+    # and query_last_grade still returns the newest
+    assert store.query_last_grade()["grade"] == "A"
+
+
 def test_list_snapshots_empty(store):
     assert store.list_snapshots() == []
+
+
+def test_record_grade_retains_history_for_regression_detection(store):
+    """record_grade() must append, not replace — GRADE_REGRESSION needs the
+    prior grade to still be queryable after a new one is recorded (V6 Sprint 1)."""
+    store.record_grade("A", 95.0, "Excellent")
+    first = store.query_last_grade()
+    store.record_grade("C", 70.0, "Degraded")
+    second = store.query_last_grade()
+    assert first["grade"] == "A"
+    assert second["grade"] == "C"
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM grade_result", ())
+    assert rows[0]["n"] == 2
+
+
+def test_query_ip_churn_flags_devices_with_multiple_ips(store):
+    mac = "aa:bb:cc:00:00:01"
+    store.record_ip_observation(mac, "10.0.0.1")
+    store.record_ip_observation(mac, "10.0.0.2")
+    store.record_ip_observation(mac, "10.0.0.3")
+    stable_mac = "aa:bb:cc:00:00:02"
+    store.record_ip_observation(stable_mac, "10.0.0.9")
+    churn = store.query_ip_churn(hours=24.0, min_ips=3)
+    assert churn.get(mac) == 3
+    assert stable_mac not in churn
+
+
+def test_query_ip_churn_empty_when_below_threshold(store):
+    mac = "aa:bb:cc:00:00:03"
+    store.record_ip_observation(mac, "10.0.0.1")
+    store.record_ip_observation(mac, "10.0.0.2")
+    assert store.query_ip_churn(hours=24.0, min_ips=3) == {}
 
 
 def test_list_snapshots_after_store(store):
@@ -116,6 +170,169 @@ def test_prune_old_data(store):
     assert len(store.query_rtt_history("old-host", hours=24 * 45)) == 1
     store.prune_old_data(retain_days=30)
     assert store.query_rtt_history("old-host", hours=24 * 45) == []
+
+
+def test_prune_old_data_returns_total_rows_deleted(store):
+    """Stability Sprint 1 (G2): prune_old_data() must return the total row
+    count deleted so callers can decide whether a VACUUM is worthwhile."""
+    old_ts = int(time.time()) - 40 * 86400
+    for i in range(3):
+        store.record_rtt(f"host{i}", 10.0, ts=old_ts)
+    deleted = store.prune_old_data(retain_days=30)
+    assert isinstance(deleted, int)
+    assert deleted >= 3
+
+
+def test_prune_old_data_prunes_app_traffic_samples(store):
+    """Stability Sprint 1 (G1): app_traffic_sample grew unbounded because
+    prune_app_traffic_samples() had zero runtime callers. prune_old_data()
+    must now invoke it."""
+    old_ts = int(time.time()) - 40 * 86400
+    store.record_app_traffic_sample(
+        mac="aa:bb:cc:dd:ee:ff", label="Test Device", category="web",
+        app="chrome", bytes_total=1000, window_s=10.0, ts=old_ts,
+    )
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM app_traffic_sample", ())
+    assert rows[0]["n"] == 1
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM app_traffic_sample", ())
+    assert rows[0]["n"] == 0
+
+
+def test_prune_old_data_prunes_alert_fired(store):
+    """Stability Sprint 1 (G9): alert_fired had no retention at all."""
+    old_ts = int(time.time()) - 400 * 86400
+    store.record_alert_fired("RULE_X", "192.168.1.1", "WARNING", "test alert", ts=old_ts)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM alert_fired", ())
+    assert rows[0]["n"] == 1
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM alert_fired", ())
+    assert rows[0]["n"] == 0
+
+
+def test_prune_old_data_keeps_recent_alert_fired(store):
+    store.record_alert_fired("RULE_X", "192.168.1.1", "WARNING", "recent alert")
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM alert_fired", ())
+    assert rows[0]["n"] == 1
+
+
+def test_prune_old_data_prunes_device_events_audit_table(store):
+    """Stability Sprint 1 (G9): device_events (plural, audit trail) stores a
+    TEXT datetime — must use a SQL-native datetime cutoff, not an epoch int."""
+    old_dt = (datetime.datetime.utcnow() - datetime.timedelta(days=400)).strftime("%Y-%m-%d %H:%M:%S")
+    store._execute_write(
+        "INSERT INTO device_events (mac, event_type, old_value, new_value, source, ts) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("aa:bb:cc:dd:ee:ff", "RENAMED", "old", "new", "test", old_dt),
+    )
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM device_events", ())
+    assert rows[0]["n"] == 1
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM device_events", ())
+    assert rows[0]["n"] == 0
+
+
+def test_prune_old_data_keeps_recent_device_events(store):
+    store.record_device_change_event("aa:bb:cc:dd:ee:ff", "RENAMED", "old", "new", "test")
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM device_events", ())
+    assert rows[0]["n"] == 1
+
+
+def test_vacuum_if_needed_runs_above_threshold(store):
+    """Stability Sprint 1 (G2): the old PRAGMA VACUUM call was invalid SQL and
+    silently swallowed — vacuum_if_needed() must issue a real VACUUM when
+    enough rows were deleted to make it worthwhile."""
+    ran = store.vacuum_if_needed(rows_deleted=1000, threshold=500)
+    assert ran is True
+
+
+def test_vacuum_if_needed_skips_below_threshold(store):
+    ran = store.vacuum_if_needed(rows_deleted=1, threshold=500)
+    assert ran is False
+
+
+def test_prune_old_data_keeps_speed_test_forever(store):
+    """Stability Sprint 2 (G4): speed_test is low-volume (per-run) — long-term
+    speed trends require it to survive the 30-day operational prune window."""
+    old_ts = int(time.time()) - 400 * 86400
+    store.record_speed_test(100.0, 20.0, 10.0, ts=old_ts)
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM speed_test", ())
+    assert rows[0]["n"] == 1
+
+
+def test_prune_old_data_keeps_grade_result_forever(store):
+    """Stability Sprint 2 (G4): grade_result's own DDL comment says
+    'append-only' — pruning it at 30 days contradicted that contract."""
+    old_ts = int(time.time()) - 400 * 86400
+    store._execute_write(
+        "INSERT INTO grade_result(ts, grade, score, verdict) VALUES(?, ?, ?, ?)",
+        (old_ts, "B", 80.0, "old grade"),
+    )
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM grade_result", ())
+    assert rows[0]["n"] == 1
+
+
+def test_prune_old_data_rolls_up_rtt_samples_before_deleting(store):
+    """Stability Sprint 2 (G4): prune_old_data() must populate daily_rollup
+    from the rtt_sample rows it is about to delete, so long-term trend charts
+    survive the 30-day raw-row prune window."""
+    old_ts = int(time.time()) - 40 * 86400
+    store.record_rtt("host1", 10.0, ts=old_ts)
+    store.record_rtt("host1", 20.0, ts=old_ts + 60)
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM rtt_sample", ())
+    assert rows[0]["n"] == 0
+    rollup_rows = store.query_daily_rollup("rtt_ms", host="host1")
+    assert len(rollup_rows) == 1
+    assert rollup_rows[0].n == 2
+    assert rollup_rows[0].avg == 15.0
+
+
+def test_query_rtt_weekly_avg_none_when_no_data(store):
+    """Stability Sprint 2 (G11): trend_page._update_rtt_headline() ran a
+    per-host 14-day raw scan on the main thread on every showEvent — replaced
+    with a single SQL aggregate."""
+    assert store.query_rtt_weekly_avg() is None
+
+
+def test_query_rtt_weekly_avg_this_week_only(store):
+    now = int(time.time())
+    store.record_rtt("host1", 10.0, ts=now - 3600)
+    store.record_rtt("host1", 20.0, ts=now - 7200)
+    result = store.query_rtt_weekly_avg()
+    assert result is not None
+    assert result["this_avg"] == 15.0
+    assert result["this_n"] == 2
+    assert result["last_avg"] is None
+
+
+def test_query_rtt_weekly_avg_splits_this_and_last_week(store):
+    now = int(time.time())
+    store.record_rtt("host1", 10.0, ts=now - 3600)                 # this week
+    store.record_rtt("host1", 30.0, ts=now - 10 * 86400)           # last week
+    result = store.query_rtt_weekly_avg()
+    assert result["this_avg"] == 10.0
+    assert result["last_avg"] == 30.0
+
+
+def test_query_rtt_weekly_avg_excludes_unreachable_sentinel(store):
+    """rtt_ms == -1.0 means unreachable — must not pollute the average."""
+    now = int(time.time())
+    store.record_rtt("host1", 10.0, ts=now - 3600)
+    store.record_rtt("host1", -1.0, ts=now - 3600)
+    result = store.query_rtt_weekly_avg()
+    assert result["this_avg"] == 10.0
+    assert result["this_n"] == 1
+
+
+def test_query_rtt_weekly_avg_ignores_samples_older_than_14_days(store):
+    old_ts = int(time.time()) - 20 * 86400
+    store.record_rtt("host1", 999.0, ts=old_ts)
+    assert store.query_rtt_weekly_avg() is None
 
 
 def test_get_row_counts(store):

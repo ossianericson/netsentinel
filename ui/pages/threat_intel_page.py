@@ -581,12 +581,26 @@ class ThreatIntelPage(QWidget):
         self._refresh_btn.setText("Running…")
         self._cache_btn.setEnabled(False)
         self._status_lbl.setText("Downloading threat feeds…")
+        insert_skeleton_rows(self._table, count=8)
+        # QThread.start() is deferred to the next event-loop iteration rather
+        # than called synchronously inside this clicked-signal handler. On
+        # Windows, clicked fires while Qt is still inside the native
+        # WM_LBUTTONUP dispatch; starting a new native thread from within that
+        # synchronous input dispatch reproducibly triggered a Windows COM/RPC
+        # reentrancy fault (0x8001010d, RPC_E_CANTCALLOUT_ININPUTSYNCCALL) that
+        # froze the UI until the feed download finished. A zero-delay parented
+        # QTimer (RULE-WIN5) lets WM_LBUTTONUP return to Windows first.
+        _t = QTimer(self)
+        _t.setSingleShot(True)
+        _t.timeout.connect(self._start_refresh_worker)
+        _t.start(0)
+
+    def _start_refresh_worker(self) -> None:
         self._refresh_worker = ThreatFeedRefreshWorker()
         self._refresh_worker.progress.connect(self._status_lbl.setText)
         self._refresh_worker.result_ready.connect(self._on_refresh_done)
         self._refresh_worker.error.connect(self._on_refresh_error)
         self._refresh_worker.start()
-        insert_skeleton_rows(self._table, count=8)
 
     def _on_refresh_done(self, db: ThreatIntelDB) -> None:
         self._refresh_btn.setEnabled(True)

@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QProcess
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_ALT_ROW, BG_CARD, BG_DARK, BG_HOVER,
     BLACK, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
@@ -1042,7 +1043,7 @@ class HubCard(QFrame):
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; border-radius:3px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:checked {{ background:{ACCENT}22; border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:checked {{ background:{alpha(ACCENT, 0x22)}; border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._btn_logs.toggled.connect(self._toggle_logs)
@@ -1059,7 +1060,7 @@ class HubCard(QFrame):
             f"QPushButton {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
             f" border:1px solid {BORDER}; border-radius:3px; }}"
             f"QPushButton:hover {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:checked {{ background:{ACCENT}22; border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:checked {{ background:{alpha(ACCENT, 0x22)}; border-color:{ACCENT}; color:{TEXT_PRIMARY}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._btn_configure.toggled.connect(self._toggle_config_panel)

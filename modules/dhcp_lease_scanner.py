@@ -15,6 +15,10 @@ Returned list items are DhcpLease dataclasses:
   expires     — Unix timestamp of lease expiry (0 = unknown / infinite)
   server      — DHCP server IP that issued the lease (empty if unknown)
   source      — human label of where the record came from
+
+Not a name_resolver duplicate: this parses DHCP lease *files* for
+authoritative lease records (mac/ip/hostname/expiry/server), a different
+problem than name_resolver's live best-effort hostname lookup.
 """
 
 from __future__ import annotations

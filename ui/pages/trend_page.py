@@ -434,44 +434,26 @@ class TrendPage(QWidget):
         self._update_rtt_headline()
 
     def _update_rtt_headline(self) -> None:
-        """RECUR-4: compute this-week vs last-week RTT average and update headline label."""
+        """RECUR-4: compute this-week vs last-week RTT average and update headline label.
+
+        G11: single SQL aggregate (query_rtt_weekly_avg()) instead of a
+        per-host 14-day raw-row scan — this used to pull every RTT sample in
+        the window into Python on every showEvent, on the main thread.
+        """
         if self._store is None:
             return
         try:
-            hosts = self._store.query_all_rtt_hosts(hours=336)  # 14 days
+            result = self._store.query_rtt_weekly_avg()
         except Exception:
             return
-        if not hosts:
+        if not result:
             self._headline_lbl.setVisible(False)
             return
 
-        now = time.time()
-        week_boundary = now - 7 * 86400  # 7 days ago
+        this_avg = result["this_avg"]
+        last_avg = result["last_avg"]
 
-        this_week_vals: list[float] = []
-        last_week_vals: list[float] = []
-        for host in hosts:
-            try:
-                pts = self._store.query_rtt_history(host, hours=336)
-            except Exception:
-                continue
-            for pt in pts:
-                rtt = getattr(pt, "rtt_ms", None)
-                if rtt is None or rtt <= 0:
-                    continue
-                if pt.ts >= week_boundary:
-                    this_week_vals.append(rtt)
-                else:
-                    last_week_vals.append(rtt)
-
-        if not this_week_vals:
-            self._headline_lbl.setVisible(False)
-            return
-
-        this_avg = sum(this_week_vals) / len(this_week_vals)
-
-        if last_week_vals:
-            last_avg = sum(last_week_vals) / len(last_week_vals)
+        if last_avg is not None:
             delta = this_avg - last_avg
             if delta > 5:
                 arrow, color = "↑", AMBER if delta < 20 else RED

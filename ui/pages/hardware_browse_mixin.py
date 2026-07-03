@@ -345,6 +345,11 @@ class _HardwareBrowseMixin:
         self._tabs.setTabText(self._suggested_tab_idx, f"Suggested ({n})")
         self._tabs.setTabVisible(self._suggested_tab_idx, True)
 
+    def on_hardware_detect_error(self, msg: str) -> None:
+        """Auto-detection probe raised (G10) — surface a small note instead of
+        silently looking identical to 'no hardware matched'."""
+        self._set_status(f"Hardware detection failed: {msg}", error=True)
+
     def _build_detect_row(
         self, plugin: dict, confidence: float, signals: list,
         native_active: bool = False,

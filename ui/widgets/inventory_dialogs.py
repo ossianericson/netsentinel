@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, ACCENT_LITE, BG_CARD, BG_DARK, BG_HOVER, BORDER,
     RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
@@ -94,7 +95,7 @@ class _DeviceLabelDialog(QDialog):
         btns.button(QDialogButtonBox.StandardButton.Save).setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}dd; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0xdd)}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(
@@ -272,7 +273,7 @@ class _ScanCompareDialog(QDialog):
         btns.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(
             f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}dd; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0xdd)}; }}"
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         btns.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(

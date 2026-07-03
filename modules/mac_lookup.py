@@ -69,7 +69,7 @@ def lookup_vendor(
 
     # 2 — offenders.json OUI table
     try:
-        from modules.utils import get_offenders_path
+        from modules.utils_platform import get_offenders_path
         import json
         path = offenders_path or get_offenders_path()
         with open(path, encoding="utf-8") as fh:

@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT,
     ACCENT_DARK,
     AMBER,
@@ -622,7 +623,7 @@ class AlertDrawer(QFrame):
             f"QPushButton {{ background:transparent; color:{AMBER};"
             f" border:1px solid {AMBER}; border-radius:3px;"
             f" font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{AMBER}22; }}"
+            f"QPushButton:hover {{ background:{alpha(AMBER, 0x22)}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{AMBER}; }}"
         )
         self._snooze_btn.clicked.connect(self._on_snooze)
@@ -635,7 +636,7 @@ class AlertDrawer(QFrame):
             f"QPushButton {{ background:transparent; color:{ACCENT};"
             f" border:1px solid {ACCENT}; border-radius:3px;"
             f" font-size:10px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}22; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x22)}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         self._log_btn.clicked.connect(self._on_view_log_hub)

@@ -11,6 +11,7 @@ Or double-click the compiled executable.
 
 import sys
 import os
+import time
 
 # ── Suppress CMD flashes in windowed exe ─────────────────────────────────────
 # On Windows, scapy calls subprocess.Popen (for `route print`, `arp -a`, etc.)
@@ -362,7 +363,10 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
     _cert_targets = window._cert_page._load_targets()
     if _cert_targets:
         from modules.cert_monitor import CertTarget as _CertTarget
-        cert_worker.set_targets([_CertTarget(host=t["host"], ports=t.get("ports", [443])) for t in _cert_targets])
+        cert_worker.set_targets([
+            _CertTarget(host=t["host"], ports=t.get("ports", [443]), label=t.get("label", ""))
+            for t in _cert_targets
+        ])
     window._cert_page.certs_changed.connect(cert_worker.set_targets)
 
     svc_worker.check_done.connect(window._service_page.on_check_done)
@@ -466,8 +470,44 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
 
     cert_worker.check_done.connect(_on_cert_check)
 
+    # V6 Sprint 2 — RTT_ANOMALY: per-host mean+2sigma baseline, refreshed hourly
+    # (7-day history queries per host are too costly to redo every cycle).
+    from modules.alert_baseline import BaselineLearner
+    from PyQt6.QtCore import QTimer as _QTimer
+
+    _baseline_learner = BaselineLearner()
+
+    def _refresh_baselines() -> None:
+        try:
+            _baseline_learner.refresh(store)
+        except Exception:
+            pass  # non-fatal — anomaly checks just skip hosts with no baseline yet
+
+    _refresh_baselines()
+    _baseline_timer = _QTimer(window)
+    _baseline_timer.setInterval(3600_000)
+    _baseline_timer.timeout.connect(_refresh_baselines)
+    _baseline_timer.start()
+
     def _on_cycle(result_dict: dict) -> None:
         fired = alerts.evaluate_cycle(result_dict)
+
+        # V6 Sprint 1 — JITTER_HIGH: sustained jitter over the last 10 min per host.
+        jitter_by_host: dict = {}
+        for host in result_dict.get("states", {}):
+            try:
+                pts = store.query_rtt_history(host, hours=10.0 / 60.0)
+            except Exception:
+                pts = []
+            vals = [p.jitter_ms for p in pts if p.jitter_ms is not None and p.jitter_ms >= 0]
+            if vals:
+                jitter_by_host[host] = vals
+        fired += alerts.evaluate_jitter_checks(jitter_by_host)
+
+        # V6 Sprint 2 — RTT_ANOMALY: per-host baseline, gated on Baseline.is_mature.
+        rtts_by_host = {h: r for h, r in result_dict.get("rtts", {}).items() if r >= 0}
+        fired += alerts.evaluate_rtt_anomaly_checks(rtts_by_host, _baseline_learner)
+
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
@@ -493,7 +533,10 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
     history to summarize in the Morning Briefing.
     """
     def _on_probe_done(result) -> None:
-        fired = alerts.evaluate_baseline_metrics(result.download_mbps, result.prior_downloads)
+        fired = alerts.evaluate_baseline_metrics(
+            result.download_mbps, result.prior_downloads,
+            current_sinr=result.current_sinr, prior_sinr=result.prior_sinr,
+        )
         for a in fired:
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
@@ -517,6 +560,177 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
             worker.wait(3000)
 
     window._speed_test_page.auto_speedtest_changed.connect(_on_auto_speedtest_changed)
+
+
+def _wire_port_sweep(window, worker, alerts, store, cert_worker):
+    """V6 Sprint 3.1/3.3/3.5 — nightly port-scan sweep of known devices,
+    diffed against the prior sweep for NEW_OPEN_PORT alerts.  Also drives
+    3.3 auto-TLS enrolment (hosts with 443/8443 open feed the Cert page)
+    and 3.5 scan-registry freshness (reuses the "Port Scan (TCP)" label
+    already shown on the Security Overview Scan Status card)."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_port_sweep_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        try:
+            from modules.cert_auto_enroll import auto_enroll_from_sweep
+            window._cert_page.merge_auto_targets(
+                auto_enroll_from_sweep(report.all_devices, cert_worker.get_targets())
+            )
+        except Exception:
+            pass  # non-fatal — auto-enrolment failure must not block the sweep's own alerts
+        window._nav_set_scan_state(
+            "Port Scan (TCP)", "fresh", ts=time.time(),
+            verdict=f"{len(report.new_ports)} new open port(s) across {len(report.all_devices)} device(s)",
+        )
+
+    def _on_probe_error(msg: str) -> None:
+        window._nav_set_scan_state("Port Scan (TCP)", "error", error=msg)
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_cve_recheck(window, worker, alerts, store):
+    """V6 Sprint 3.2/3.5 — scheduled CVE re-check for already-fingerprinted
+    services, diffed against cve_lifecycle for NEW_CVE alerts."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_cve_recheck_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._nav_set_scan_state(
+            "CVE Lookup", "fresh", ts=time.time(),
+            verdict=f"{len(report.new_cves)} new CVE(s) found",
+        )
+
+    def _on_probe_error(msg: str) -> None:
+        window._nav_set_scan_state("CVE Lookup", "error", error=msg)
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_exposure_watch(window, worker, alerts, store):
+    """V6 Sprint 3.4/3.5 — weekly internet-exposure check, diffed against the
+    prior week's snapshot for NEW_EXPOSURE alerts."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_exposure_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._nav_set_scan_state(
+            "Exposed to Internet", "fresh", ts=time.time(),
+            verdict=f"{len(report.new_exposed)} newly exposed port(s)",
+        )
+
+    def _on_probe_error(msg: str) -> None:
+        window._nav_set_scan_state("Exposed to Internet", "error", error=msg)
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_arp_watch(window, worker, alerts, store):
+    """V6 Sprint 4.1 — background ARP spoof watch. ``worker`` is a
+    ProactiveProbeWorker running modules.arp_watch.run_arp_watch_cycle() on a
+    fixed interval, independent of whether the ARP Spoof Watch page is open."""
+    from ui.styles import GREEN, RED
+
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_arp_watch_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._set_flyout_dot("ARP Spoof Watch", RED if report.events else GREEN)
+
+    def _on_probe_error(msg: str) -> None:
+        window._set_flyout_dot("ARP Spoof Watch", "")
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_dhcp_watch(window, worker, alerts, store):
+    """V6 Sprint 4.2 — background rogue DHCP watch. ``worker`` is a
+    ProactiveProbeWorker running modules.dhcp_watch.run_dhcp_watch_cycle() on
+    a fixed interval, independent of whether the DHCP Rogue Monitor page is
+    open."""
+    from ui.styles import GREEN, RED
+
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_dhcp_watch_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+        window._set_flyout_dot("DHCP Rogue Monitor", RED if report.rogue_offers else GREEN)
+
+    def _on_probe_error(msg: str) -> None:
+        window._set_flyout_dot("DHCP Rogue Monitor", "")
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_trend_forecast(window, worker, alerts, store):
+    """V6 Sprint 2 — TREND_FORECAST.  ``worker`` is a ProactiveProbeWorker
+    running modules.trend_analyser.run_full_trend_report() hourly.  Each
+    completed report is evaluated against the TREND_FORECAST rule; fired
+    early-warning alerts flow through the same toast/home-page/persist path
+    every other evaluate_* caller uses."""
+    def _on_probe_done(report) -> None:
+        for a in alerts.evaluate_trend_checks(report):
+            window._show_alert_toast(a)
+            window._home_page.on_alert(a)
+            try:
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            except Exception:
+                pass  # non-fatal — persistence failure must not block notification delivery
+
+    def _on_probe_error(_msg: str) -> None:
+        pass  # non-fatal — the worker retries automatically on its next interval
+
+    worker.probe_done.connect(_on_probe_done)
+    worker.error.connect(_on_probe_error)
+
+
+def _wire_monitor_error_surface(window, workers_by_name: dict) -> None:
+    """G6 — avail/cert/svc/health/passive_observer/trend all define an
+    ``error`` signal but nothing connected it, so a persistent failure showed
+    stale data with zero indication. One shared quiet slot per worker: log
+    it, then surface a single one-time status-bar note (not a modal — these
+    workers retry automatically on their next interval, so repeating the
+    note every retry would just be noise)."""
+    import logging
+    log = logging.getLogger("netsentinel.monitors")
+    _notified: set = set()
+
+    def _make_handler(name: str):
+        def _on_error(msg: str) -> None:
+            log.warning("%s monitor error: %s", name, msg)
+            if name not in _notified:
+                _notified.add(name)
+                window._set_status(f"⚠ {name} monitor hit an error — see log for details.")
+        return _on_error
+
+    for _name, _worker in workers_by_name.items():
+        _worker.error.connect(_make_handler(_name))
 
 
 def _wire_cross_page(window):
@@ -569,7 +783,6 @@ def _wire_scan_ctas(window):
     window._trigger_page.scan_requested.connect(window._start_full_scan)
     window._diagnosis_page.scan_requested.connect(window._start_full_scan)
     window._cve_page.scan_requested.connect(window._start_full_scan)
-    window._geo_map_page.scan_requested.connect(window._start_full_scan)
     window._timeline_page.scan_requested.connect(window._start_full_scan)
     window._trend_page.scan_requested.connect(window._start_full_scan)
 
@@ -671,7 +884,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.22")
+    app.setApplicationVersion("2.1.23")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -707,7 +920,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.22")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.23")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -806,6 +1019,14 @@ def main():
     _rules = alerts.get_rules()
     for _r in _rules:
         _r.enabled = _rule_qs.value(_rk(_r.name), False, type=bool)
+
+    # V6 Sprint 5.4 — global alert-fatigue guardrail. Scales every rule's
+    # noise-relevant thresholds by the user's chosen sensitivity; default
+    # "balanced" leaves the shipped defaults unchanged.
+    from modules.alert_sensitivity import apply_sensitivity, DEFAULT_SENSITIVITY
+    _sensitivity = _rule_qs.value("alerts/sensitivity", DEFAULT_SENSITIVITY, type=str)
+    apply_sensitivity(_rules, _sensitivity)
+
     alerts.set_rules(_rules)
 
     from modules.notification_router import NotificationRouter
@@ -867,6 +1088,28 @@ def main():
     health_worker = HealthWorker(store=store)
     health_worker.start()
 
+    # V6 Sprint 2 — TREND_FORECAST: hourly OLS ETA-to-threshold sweep. Pure DB
+    # analysis (no new network probing), so it runs always-on like health_worker;
+    # the TREND_FORECAST alert rule itself stays opt-in/disabled by default.
+    from workers.proactive_probe_worker import ProactiveProbeWorker as _ProactiveProbeWorker
+    from modules.trend_analyser import run_full_trend_report as _run_full_trend_report
+
+    trend_worker = _ProactiveProbeWorker(
+        probe=lambda: _run_full_trend_report(store),
+        interval_s=3600,
+    )
+    trend_worker.start()
+
+    # Stability Sprint 1 (G3): prune_old_data() previously only ran once, in
+    # MetricStore.__init__ — an always-on session (app left running for weeks)
+    # never pruned again. Runs daily, off the main thread, via the same
+    # ProactiveProbeWorker pattern as trend_worker above.
+    prune_worker = _ProactiveProbeWorker(
+        probe=lambda: store.prune_old_data(),
+        interval_s=24 * 3600,
+    )
+    prune_worker.start()
+
     # Sprint 3 — scheduled background speed tests. Opt-in, default off: bandwidth
     # consent is explicit and separate from notification consent (BASELINE_DROP
     # rule, enabled independently under Notifications).
@@ -884,6 +1127,71 @@ def main():
     scheduled_speedtest_worker.set_maintenance_checker(
         lambda: maint_manager.is_suppressed("speedtest") is not None
     )
+
+    # V6 Sprint 3 — scheduled security posture scans. Opt-in, default off
+    # (BACKLOG-V6 guardrail: no new background network activity without an
+    # explicit toggle) — enabled/started from the Security Overview
+    # "Scheduled Posture Scans" card via posture_scheduling_changed below.
+    from modules.port_sweep import run_nightly_port_sweep
+    from modules.cve_recheck import run_cve_recheck
+    from modules.exposure_watch import run_weekly_exposure_check
+    from modules.arp_watch import run_arp_watch_cycle
+    from modules.dhcp_watch import run_dhcp_watch_cycle
+
+    _posture_qs = QSettings("NetSentinel", "NetSentinel")
+    port_sweep_worker = ProactiveProbeWorker(
+        probe=lambda: run_nightly_port_sweep(store),
+        interval_s=24 * 3600,
+    )
+    port_sweep_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("port_sweep") is not None
+    )
+    cve_recheck_worker = ProactiveProbeWorker(
+        probe=lambda: run_cve_recheck(store),
+        interval_s=12 * 3600,
+    )
+    cve_recheck_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("cve_recheck") is not None
+    )
+    exposure_watch_worker = ProactiveProbeWorker(
+        probe=lambda: run_weekly_exposure_check(store),
+        interval_s=7 * 24 * 3600,
+    )
+    exposure_watch_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("exposure_check") is not None
+    )
+
+    # V6 Sprint 4.1/4.2 — passive always-on guards. Gateway IP is looked up
+    # fresh each cycle (cheap — a handful of syscalls) rather than cached,
+    # since the background worker outlives any one scan and the gateway can
+    # change (e.g. laptop moves networks).
+    def _run_arp_watch_cycle() -> object:
+        from modules.utils_net import get_network_info
+        gateway_ip = get_network_info().get("gateway")
+        return run_arp_watch_cycle(gateway_ip=gateway_ip, duration=20)
+
+    arp_watch_worker = ProactiveProbeWorker(
+        probe=_run_arp_watch_cycle,
+        interval_s=15 * 60,
+    )
+    arp_watch_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("arp_watch") is not None
+    )
+    dhcp_watch_worker = ProactiveProbeWorker(
+        probe=lambda: run_dhcp_watch_cycle(duration=8),
+        interval_s=30 * 60,
+    )
+    dhcp_watch_worker.set_maintenance_checker(
+        lambda: maint_manager.is_suppressed("dhcp_watch") is not None
+    )
+
+    _posture_workers = {
+        "port_sweep": port_sweep_worker,
+        "cve_recheck": cve_recheck_worker,
+        "exposure_check": exposure_watch_worker,
+        "arp_watch": arp_watch_worker,
+        "dhcp_watch": dhcp_watch_worker,
+    }
 
     # REST API worker — only starts when user has enabled it in Settings
     _qs = QSettings("NetSentinel", "NetSentinel")
@@ -914,6 +1222,40 @@ def main():
     _wire_speedtest_scheduling(window, scheduled_speedtest_worker, alerts, store)
     if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
         scheduled_speedtest_worker.start()
+    _wire_trend_forecast(window, trend_worker, alerts, store)
+    _wire_monitor_error_surface(window, {
+        "Availability":     avail_worker,
+        "Certificate":      cert_worker,
+        "Service":          svc_worker,
+        "Health":           health_worker,
+        "Passive Observer": passive_observer_worker,
+        "Trend Forecast":   trend_worker,
+    })
+
+    # V6 Sprint 3.1/3.3/3.5, 3.2/3.5, 3.4/3.5 — scheduled posture scans.
+    # Each starts only if its Security Overview toggle was already on at
+    # launch; the toggle's posture_scheduling_changed signal starts/stops
+    # the matching worker for the rest of the session.
+    _wire_port_sweep(window, port_sweep_worker, alerts, store, cert_worker)
+    _wire_cve_recheck(window, cve_recheck_worker, alerts, store)
+    _wire_exposure_watch(window, exposure_watch_worker, alerts, store)
+    _wire_arp_watch(window, arp_watch_worker, alerts, store)
+    _wire_dhcp_watch(window, dhcp_watch_worker, alerts, store)
+
+    def _on_posture_scheduling_changed(key: str, enabled: bool) -> None:
+        posture_worker = _posture_workers.get(key)
+        if posture_worker is None:
+            return
+        if enabled and not posture_worker.isRunning():
+            posture_worker.start()
+        elif not enabled and posture_worker.isRunning():
+            posture_worker.stop()
+            posture_worker.wait(3000)
+
+    window._security_overview_page.posture_scheduling_changed.connect(_on_posture_scheduling_changed)
+    for _key, _posture_worker in _posture_workers.items():
+        if _posture_qs.value(f"posture/{_key}_enabled", False, type=bool):
+            _posture_worker.start()
 
     # S2-5: wire ambient health worker → home page card + system tray
     health_worker.result_ready.connect(window._home_page.on_health_update)

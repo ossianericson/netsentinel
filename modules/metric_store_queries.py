@@ -182,6 +182,167 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             for r in rows
         }
 
+    # ── Read: device IP history ───────────────────────────────────────────────
+
+    def get_ip_history(self, mac: str) -> List[Dict]:
+        """Return [{ip, first_seen, last_seen, seen_count}] sorted by last_seen desc."""
+        rows = self._execute_read(
+            """
+            SELECT ip, first_seen, last_seen, seen_count
+            FROM device_ip_history
+            WHERE mac = ?
+            ORDER BY last_seen DESC
+            """,
+            (mac.lower(),),
+        )
+        return [
+            {"ip": r[0], "first_seen": r[1], "last_seen": r[2], "seen_count": r[3]}
+            for r in rows
+        ]
+
+    def query_ip_churn(self, hours: float = 24.0, min_ips: int = 3) -> Dict[str, int]:
+        """Return {mac: distinct_ip_count} for devices seen at >= min_ips
+        distinct IPs within the last `hours` — signals missing DHCP
+        reservations (IP_CHURN rule, V6 Sprint 1)."""
+        import datetime as _dt
+        cutoff = (_dt.datetime.utcnow() - _dt.timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = self._execute_read(
+            """
+            SELECT mac, COUNT(DISTINCT ip) AS cnt
+            FROM device_ip_history
+            WHERE last_seen >= ?
+            GROUP BY mac
+            HAVING cnt >= ?
+            """,
+            (cutoff, min_ips),
+        )
+        return {r["mac"]: int(r["cnt"]) for r in rows}
+
+    # ── Read: device annotations ──────────────────────────────────────────────
+
+    def get_device_annotations(self, mac: str) -> Dict:
+        """Return annotation dict for a MAC; empty dict if not found."""
+        rows = self._execute_read(
+            "SELECT user_label, location, owner, notes, asset_tag, updated_at "
+            "FROM device_annotations WHERE mac = ?",
+            (mac.lower(),),
+        )
+        if not rows:
+            return {}
+        r = rows[0]
+        return {
+            "user_label": r[0] or "",
+            "location":   r[1] or "",
+            "owner":      r[2] or "",
+            "notes":      r[3] or "",
+            "asset_tag":  r[4] or "",
+            "updated_at": r[5] or "",
+        }
+
+    def get_all_device_annotations(self) -> Dict[str, Dict]:
+        """Return {mac: annotation_dict} for all annotated devices."""
+        rows = self._execute_read(
+            "SELECT mac, user_label, location, owner, notes, asset_tag, updated_at "
+            "FROM device_annotations",
+            (),
+        )
+        result: Dict[str, Dict] = {}
+        for r in rows:
+            result[r[0]] = {
+                "user_label": r[1] or "",
+                "location":   r[2] or "",
+                "owner":      r[3] or "",
+                "notes":      r[4] or "",
+                "asset_tag":  r[5] or "",
+                "updated_at": r[6] or "",
+            }
+        return result
+
+    # ── Read: device change audit trail (device_events table) ────────────────
+
+    def get_device_change_events(
+        self,
+        mac: str,
+        limit: int = 50,
+    ) -> List[Dict]:
+        """Return [{event_type, old_value, new_value, source, ts}] newest-first."""
+        rows = self._execute_read(
+            """
+            SELECT event_type, old_value, new_value, source, ts
+            FROM device_events
+            WHERE mac = ?
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (mac.lower(), limit),
+        )
+        return [
+            {
+                "event_type": r[0],
+                "old_value":  r[1] or "",
+                "new_value":  r[2] or "",
+                "source":     r[3] or "",
+                "ts":         r[4],
+            }
+            for r in rows
+        ]
+
+    def get_all_device_change_events(
+        self,
+        limit: int = 500,
+        hours: int = 168,
+    ) -> List[Dict]:
+        """Return recent device change events across all MACs, newest-first."""
+        rows = self._execute_read(
+            """
+            SELECT mac, event_type, old_value, new_value, source, ts
+            FROM device_events
+            WHERE ts >= datetime('now', ? || ' hours')
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (f"-{hours}", limit),
+        )
+        return [
+            {
+                "mac":        r[0],
+                "event_type": r[1],
+                "old_value":  r[2] or "",
+                "new_value":  r[3] or "",
+                "source":     r[4] or "",
+                "ts":         r[5],
+            }
+            for r in rows
+        ]
+
+    # ── Read: topology snapshots ──────────────────────────────────────────────
+
+    def get_last_topology_snapshot(self) -> Optional[tuple]:
+        """Return (ts, data_json) for the most recent topology snapshot, or None."""
+        rows = self._execute_read(
+            "SELECT ts, data_json FROM topology_snapshots ORDER BY ts DESC LIMIT 1",
+        )
+        return tuple(rows[0]) if rows else None
+
+    def query_known_devices_summary(self) -> List[Dict]:
+        """Return known_device rows as plain dicts (REST API /devices shape)."""
+        rows = self._execute_read(
+            "SELECT mac, ip, hostname, vendor, device_type, "
+            "first_seen, last_seen, is_authorized, category, custom_name, room "
+            "FROM known_device ORDER BY last_seen DESC",
+            (),
+        )
+        return [dict(r) for r in rows]
+
+    def query_device_state_since(self, ip: str, since: int) -> List[Dict]:
+        """Return device_state rows (ts, state, rtt_ms) for `ip` since `since` (REST API /uptime)."""
+        rows = self._execute_read(
+            "SELECT ts, state, rtt_ms FROM device_state "
+            "WHERE ip=? AND ts>=? ORDER BY ts ASC",
+            (ip, since),
+        )
+        return [dict(r) for r in rows]
+
     # ── Read: Classification overrides ───────────────────────────────────────
 
     def get_classification_override(self, mac: str) -> Optional[str]:
@@ -284,7 +445,22 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
     def query_last_grade(self) -> Optional[dict]:
         """Return {grade, score, verdict, ts} or None if no grade has been run."""
         rows = self._execute_read(
-            "SELECT ts, grade, score, verdict FROM grade_result ORDER BY ts DESC LIMIT 1",
+            "SELECT ts, grade, score, verdict FROM grade_result ORDER BY ts DESC, id DESC LIMIT 1",
+            (),
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        return {"grade": r["grade"], "score": r["score"],
+                "verdict": r["verdict"], "ts": r["ts"]}
+
+    def query_previous_grade(self) -> Optional[dict]:
+        """Return the second-most-recent grade row {grade, score, verdict, ts},
+        or None if fewer than two grades have been recorded. Used to detect a
+        grade improvement between the last two runs (share-at-the-moment-of-pride)."""
+        rows = self._execute_read(
+            "SELECT ts, grade, score, verdict FROM grade_result "
+            "ORDER BY ts DESC, id DESC LIMIT 1 OFFSET 1",
             (),
         )
         if not rows:
@@ -295,19 +471,56 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
 
     # ── Maintenance (read-dominant — safe to keep in query mixin) ─────────────
 
+    # Stability Sprint 1 (G9): audit-trail tables get a generous window — users
+    # may want a year of alert/change history, not the 30-day operational default.
+    _AUDIT_RETAIN_DAYS = 365
+
     def prune_old_data(self, retain_days: Optional[int] = None) -> int:
-        """Delete records older than `retain_days`. Returns number of tables pruned."""
+        """Delete records older than `retain_days`. Returns the total number of
+        rows deleted across all pruned tables (used to decide whether a VACUUM
+        is worthwhile — see vacuum_if_needed())."""
         days   = retain_days if retain_days is not None else self._retain_days
         cutoff = int(time.time()) - days * 86400
-        deleted = 0
+        total_deleted = 0
+        # Stability Sprint 2 (G4): speed_test and grade_result are exempt from
+        # the 30-day operational prune window. Both are low-volume
+        # (per-run / per-grade, not per-poll) so years of history is still
+        # tiny, and long-term trend charts need them to survive — pruning
+        # grade_result at 30 days also contradicted its own "append-only"
+        # DDL comment (see metric_store_schema.py).
+        # G4 — roll rtt_sample up into daily_rollup BEFORE the raw rows are
+        # deleted below, so long-term trend charts survive the 30-day window.
+        self.rollup_rtt_samples_before(cutoff)
+
         for tbl in (
             "rtt_sample", "device_state", "device_event", "cert_check",
-            "service_check", "speed_test", "ha_detected",
+            "service_check", "ha_detected",
             "modem_signal_log", "mesh_signal_log", "plugin_log",
         ):
-            self._execute_write(f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,))
-            deleted += 1
-        return deleted
+            total_deleted += self._execute_write_counted(
+                f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,)
+            )
+
+        # G1 — app_traffic_sample previously had zero runtime prune callers and
+        # grew unbounded (~1 row/10s while App Traffic is on). Reuses its own
+        # existing (longer) retention default rather than the general `days`.
+        total_deleted += self.prune_app_traffic_samples()
+
+        # G9 — alert_fired (epoch ts) and device_events (TEXT datetime ts, the
+        # audit trail — distinct from the already-pruned `device_event` singular
+        # state-change table) had no retention at all.
+        audit_cutoff = int(time.time()) - self._AUDIT_RETAIN_DAYS * 86400
+        total_deleted += self._execute_write_counted(
+            "DELETE FROM alert_fired WHERE ts < ?", (audit_cutoff,)
+        )
+        total_deleted += self._execute_write_counted(
+            "DELETE FROM device_events WHERE ts < datetime('now', ?)",
+            (f"-{self._AUDIT_RETAIN_DAYS} days",),
+        )
+
+        # G2 — VACUUM only when meaningful; it rewrites the whole file.
+        self.vacuum_if_needed(total_deleted)
+        return total_deleted
 
     def get_db_size_bytes(self) -> int:
         """Return the current size of the database file in bytes."""

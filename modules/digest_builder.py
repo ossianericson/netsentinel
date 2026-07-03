@@ -14,6 +14,8 @@ import datetime
 import html
 from typing import TYPE_CHECKING
 
+from modules.colours import TEXT_MUTED
+
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
 
@@ -62,6 +64,8 @@ def build_digest_html(store: "MetricStore") -> str:
     alert_tbl  = _top_alerts_table(store)
     device_tbl = _new_devices_table(store)
     uptime_tbl = _uptime_table(store)
+    open_ports_tbl = _new_open_ports_table(store)
+    cert_expiry_tbl = _cert_expiry_table(store)
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
@@ -98,6 +102,16 @@ def build_digest_html(store: "MetricStore") -> str:
   <div class="section">
     <h2>Device Uptime</h2>
     {uptime_tbl}
+  </div>
+
+  <div class="section">
+    <h2>New Open Ports</h2>
+    {open_ports_tbl}
+  </div>
+
+  <div class="section">
+    <h2>Certificates Expiring Soon</h2>
+    {cert_expiry_tbl}
   </div>
 
   <div class="footer">
@@ -213,6 +227,59 @@ def _new_devices_table(store: "MetricStore") -> str:
         )
     except Exception:
         return "<p style='color:#9BA8B4;font-size:12px'>Device data unavailable.</p>"
+
+
+def _new_open_ports_table(store: "MetricStore") -> str:
+    """V6 Sprint 5.3 — reuses the same NEW_OPEN_PORT alert history
+    digest_bullets.py summarizes for the daily briefing, here rendered as a
+    table for the weekly HTML digest."""
+    try:
+        alerts = [
+            a for a in store.get_recent_alerts(hours=168, limit=5000)
+            if a.get("rule_name") == "New Open Port"
+        ]
+        if not alerts:
+            return f"<p style='color:{TEXT_MUTED};font-size:12px'>No new open ports this week.</p>"
+        rows = ""
+        for a in alerts[:10]:
+            ts = datetime.datetime.fromtimestamp(a.get("ts", 0)).strftime("%a %H:%M")
+            rows += (
+                f"<tr><td>{html.escape(a.get('host', '—'))}</td>"
+                f"<td>{html.escape(a.get('message', '—'))}</td>"
+                f"<td>{ts}</td></tr>"
+            )
+        return (
+            "<table><thead><tr><th>Host</th><th>Detail</th><th>When</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+        )
+    except Exception:
+        return f"<p style='color:{TEXT_MUTED};font-size:12px'>Port data unavailable.</p>"
+
+
+def _cert_expiry_table(store: "MetricStore") -> str:
+    """V6 Sprint 5.3 — certificates within 14 days of expiry, from the same
+    query the TLS & Cert Monitor page reads."""
+    try:
+        certs = store.query_cert_status(hours=24.0 * 90)
+        soon = [
+            c for c in certs
+            if not c.is_expired and c.days_remaining is not None and 0 <= c.days_remaining <= 14
+        ]
+        if not soon:
+            return f"<p style='color:{TEXT_MUTED};font-size:12px'>No certificates expiring soon.</p>"
+        rows = ""
+        for c in sorted(soon, key=lambda c: c.days_remaining)[:10]:
+            cls = "down" if c.days_remaining <= 3 else "warn"
+            rows += (
+                f"<tr><td>{html.escape(c.host)}:{c.port}</td>"
+                f'<td class="{cls}">{c.days_remaining}d</td></tr>'
+            )
+        return (
+            "<table><thead><tr><th>Host</th><th>Expires In</th></tr></thead>"
+            f"<tbody>{rows}</tbody></table>"
+        )
+    except Exception:
+        return f"<p style='color:{TEXT_MUTED};font-size:12px'>Certificate data unavailable.</p>"
 
 
 def _uptime_table(store: "MetricStore") -> str:

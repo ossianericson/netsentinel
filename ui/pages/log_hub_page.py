@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_DARK, BG_HOVER, BORDER,
     CARD_RADIUS, RED, TABLE_SEL,
@@ -303,7 +304,7 @@ class LogHubPage(_LogSourcePanelMixin, QWidget):
         self._challenge_banner.setObjectName("challengeBanner")
         self._challenge_banner.setVisible(False)
         self._challenge_banner.setStyleSheet(
-            f"QFrame#challengeBanner {{ background:{AMBER}22; border-bottom:1px solid {AMBER}55;"
+            f"QFrame#challengeBanner {{ background:{alpha(AMBER, 0x22)}; border-bottom:1px solid {alpha(AMBER, 0x55)};"
             f" border-radius:0; padding:0; }}"
         )
         _cb_lay = QHBoxLayout(self._challenge_banner)

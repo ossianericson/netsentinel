@@ -91,6 +91,26 @@ def _mean_stddev(values: List[float]) -> tuple[float, float]:
     return mean, math.sqrt(variance)
 
 
+def modem_sinr_dropped(
+    current_sinr: Optional[float],
+    prior_sinr: List[float],
+    min_samples: int = 20,
+    sigma: float = 2.0,
+) -> bool:
+    """True if `current_sinr` is more than `sigma` std-devs below the mean of
+    `prior_sinr` — reuses the mean+2sigma baseline math (MODEM_SIGNAL_DROP,
+    V6 Sprint 1) rather than a fixed absolute threshold."""
+    if current_sinr is None or len(prior_sinr) < min_samples:
+        return False
+    mean, std = _mean_stddev(prior_sinr)
+    if std <= 0:
+        return False
+    metric = BaselineMetric(
+        mean=mean, stddev=std, sample_count=len(prior_sinr), days_covered=_BASELINE_DAYS,
+    )
+    return current_sinr < metric.low_threshold(sigma)
+
+
 # ── Core learner ──────────────────────────────────────────────────────────────
 
 class BaselineLearner:

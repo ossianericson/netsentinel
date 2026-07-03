@@ -48,6 +48,30 @@ class ScanEnrichmentMixin:
         self._m1_status.setText(
             f"{summary}  ·  {provider}: {matched} device{'s' if matched != 1 else ''} enriched"
         )
+
+        # Compute mesh health once — used by both alert evaluation and snapshot logging.
+        units        = self._mesh_units
+        unit_count   = len(units)
+        online_count = sum(1 for u in units if getattr(u, "online", True))
+        worst_name, worst_rssi = None, None
+        for u in units:
+            rssi = getattr(u, "rssi", None) or getattr(u, "signal_level", None)
+            if rssi is not None and (worst_rssi is None or rssi < worst_rssi):
+                worst_rssi = rssi
+                worst_name = getattr(u, "name", "") or getattr(u, "device_id", "")
+
+        # V6 Sprint 1 — MESH_DEGRADED: evaluated on every mesh result, independent
+        # of whether Monitor logging is enabled below.
+        if unit_count > 0 and self._alert_engine is not None:
+            for a in self._alert_engine.evaluate_mesh_checks(unit_count, online_count, worst_name, worst_rssi):
+                self._show_alert_toast(a)
+                self._home_page.on_alert(a)
+                if self._store is not None:
+                    try:
+                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                    except Exception:
+                        pass  # non-fatal — persistence failure must not block the scan handler
+
         # Monitor logging — live entry + throttled DB write
         if hasattr(self, "_log_hub_page"):
             from PyQt6.QtCore import QSettings
@@ -58,15 +82,6 @@ class ScanEnrichmentMixin:
                 interval_s = s.value("logging/mesh_interval_min", 5, type=int) * 60
                 now = _time.time()
                 if self._store and now - self._last_mesh_log_ts >= interval_s:
-                    units        = self._mesh_units
-                    unit_count   = len(units)
-                    online_count = sum(1 for u in units if getattr(u, "online", True))
-                    worst_name, worst_rssi = None, None
-                    for u in units:
-                        rssi = getattr(u, "rssi", None) or getattr(u, "signal_level", None)
-                        if rssi is not None and (worst_rssi is None or rssi < worst_rssi):
-                            worst_rssi = rssi
-                            worst_name = getattr(u, "name", "") or getattr(u, "device_id", "")
                     try:
                         self._store.record_mesh_snapshot(
                             unit_count=unit_count,
@@ -607,6 +622,7 @@ class ScanEnrichmentMixin:
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
         self._disc_status.setText(res.plain_verdict)
         self._nav_set_scan_state("Full Device Discovery", "fresh", ts=time.time(), verdict=res.plain_verdict)
+        _store_ref = getattr(self, "_store", None)
         for dev in res.devices:
             r = self._recon_disc_table.rowCount()
             self._recon_disc_table.insertRow(r)
@@ -614,6 +630,11 @@ class ScanEnrichmentMixin:
             for c, v in enumerate([dev.ip, dev.mac, dev.hostname,
                                     ", ".join(dev.discovery_methods), ms]):
                 self._recon_disc_table.setItem(r, c, _TWI(v))
+            if _store_ref and dev.response_ms > 0 and dev.ip:
+                try:
+                    _store_ref.record_rtt(dev.ip, dev.response_ms)
+                except Exception:
+                    pass  # non-fatal — table may not exist on schema upgrade
 
     def _on_smb_result(self, res):
         from PyQt6.QtWidgets import QTableWidgetItem as _TWI
@@ -858,7 +879,7 @@ class ScanEnrichmentMixin:
         # Re-classify any device still showing "Unknown Device" that now has
         # a usable hostname from mesh/plugin enrichment.
         try:
-            from modules.device_classifier import classify_device as _cd
+            from modules.device_classifier import classify_registry_first as _cd
             from PyQt6.QtGui import QColor as _QC
             from PyQt6.QtWidgets import QTableWidgetItem as _QTI
             _mac_to_row: dict = {}
@@ -870,7 +891,14 @@ class ScanEnrichmentMixin:
                 _cur_type = (_d.device_type if not isinstance(_d, dict) else _d.get("device_type", "")) or ""
                 if _cur_type and _cur_type != "Unknown Device":
                     continue
-                _new_type = _cd(_d)
+                _is_dict = isinstance(_d, dict)
+                _new_type = _cd(
+                    mac=_d.get("mac", "") if _is_dict else getattr(_d, "mac", ""),
+                    vendor=_d.get("vendor", "") if _is_dict else getattr(_d, "vendor", ""),
+                    hostname=_d.get("hostname", "") if _is_dict else getattr(_d, "hostname", ""),
+                    open_ports=set(_d.get("open_ports", []) if _is_dict else (getattr(_d, "open_ports", []) or [])),
+                    os_family=_d.get("os_family", "") if _is_dict else getattr(_d, "os_family", ""),
+                )
                 if not _new_type or _new_type == "Unknown Device":
                     continue
                 if isinstance(_d, dict):

@@ -203,6 +203,34 @@ _ALERT_RULE_DEFS = [
     ("Service Down",  "SERVICE_DOWN",   "Fires when a monitored TCP service stops responding"),
     ("Baseline Speed Drop", "BASELINE_DROP",
      "Fires when a scheduled speed test shows a severe drop vs. your recent typical speed"),
+    ("Jitter High", "JITTER_HIGH",
+     "Fires when a host's jitter stays above threshold for several minutes"),
+    ("Mesh Degraded", "MESH_DEGRADED",
+     "Fires when a mesh node drops offline or has a weak signal"),
+    ("Modem Signal Drop", "MODEM_SIGNAL_DROP",
+     "Fires when your modem's signal drops well below normal or downgrades from 5G to LTE"),
+    ("Grade Regression", "GRADE_REGRESSION",
+     "Fires when your network health grade declines vs. the previous run"),
+    ("IP Churn", "IP_CHURN",
+     "Fires when a device uses 3 or more different IP addresses within 24 hours"),
+    ("RTT Anomaly", "RTT_ANOMALY",
+     "Fires when a host's response time rises above its own learned normal (needs 7+ days of data)"),
+    ("IoT Behavior Anomaly", "IOT_BEHAVIOR",
+     "Fires when a device's traffic deviates from its learned baseline (new destination, port, or rate spike)"),
+    ("Trend Forecast", "TREND_FORECAST",
+     "Fires an early warning when a metric is projected to cross its threshold soon"),
+    ("New Open Port", "NEW_OPEN_PORT",
+     "Fires when a known device opens a port that wasn't open on the last nightly sweep"),
+    ("New CVE Found", "NEW_CVE",
+     "Fires when a tracked service gains a newly published CVE"),
+    ("New Internet Exposure", "NEW_EXPOSURE",
+     "Fires when a port becomes newly reachable from the internet"),
+    ("ARP Spoof Detected", "ARP_SPOOF",
+     "Fires when a background ARP watch cycle detects a gateway hijack, IP takeover, or MAC clone"),
+    ("Rogue DHCP Server", "ROGUE_DHCP",
+     "Fires when a background DHCP watch cycle sees an offer from an unexpected server"),
+    ("Config Drift", "CONFIG_DRIFT",
+     "Fires when a device is added, removed, or changes role versus your blessed baseline snapshot"),
 ]
 
 
@@ -292,6 +320,37 @@ class _NotifChannelsMixin:
             f"font-size:11px; color:{TEXT_SECONDARY}; border:none; padding-bottom:4px;"
         )
         bl.addWidget(info)
+
+        sens_row = QHBoxLayout()
+        sens_row.setSpacing(8)
+        sens_lbl = QLabel("Alert sensitivity:")
+        sens_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+        sens_row.addWidget(sens_lbl)
+        self._combo_sensitivity = QComboBox()
+        self._combo_sensitivity.addItem("Conservative — fewer, higher-confidence alerts", "conservative")
+        self._combo_sensitivity.addItem("Balanced (default)", "balanced")
+        self._combo_sensitivity.addItem("Aggressive — more, earlier alerts", "aggressive")
+        self._combo_sensitivity.setFixedWidth(280)
+        self._combo_sensitivity.setStyleSheet(
+            f"QComboBox{{background:{BG_CARD};color:{TEXT_PRIMARY};border:1px solid {BORDER};"
+            f"border-radius:2px;padding:0 6px;font-size:11px;}}"
+            f"QComboBox::drop-down{{border:none;}}"
+            f"QComboBox QAbstractItemView{{background:{BG_CARD};color:{TEXT_PRIMARY};"
+            f"border:1px solid {BORDER};selection-background-color:{ACCENT};}}"
+        )
+        self._combo_sensitivity.currentIndexChanged.connect(self._save)
+        sens_row.addWidget(self._combo_sensitivity)
+        sens_row.addStretch()
+        bl.addLayout(sens_row)
+        sens_hint = QLabel(
+            "Scales the trigger thresholds and cooldowns of every rule above — "
+            "does not change which rules are enabled. Applies the next time NetSentinel starts."
+        )
+        sens_hint.setWordWrap(True)
+        sens_hint.setStyleSheet(
+            f"font-size:10px; color:{TEXT_MUTED}; border:none; padding-bottom:4px;"
+        )
+        bl.addWidget(sens_hint)
 
         self._zero_rules_banner = QFrame()
         self._zero_rules_banner.setStyleSheet(

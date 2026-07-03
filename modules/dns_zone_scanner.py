@@ -14,6 +14,10 @@ Returns a DnsZoneResult with:
   services  — list of MdnsService (service_type, instance, host, ip, port)
   verdict   — plain-English summary
   level     — "CLEAN" | "LOW" | "HIGH"
+
+Not a name_resolver duplicate: this enumerates zone/service *records*
+(AXFR transfer, mDNS service-type discovery) rather than resolving a
+single IP's best-effort display name.
 """
 
 from __future__ import annotations

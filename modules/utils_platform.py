@@ -7,7 +7,18 @@ Both functions are re-exported from modules/utils for backwards compatibility.
 import platform
 import re
 import subprocess
+import sys
+from pathlib import Path
 from typing import List
+
+
+def get_offenders_path() -> Path:
+    """Locate offenders.json whether running from source or as a PyInstaller bundle."""
+    if getattr(sys, "frozen", False):
+        base = Path(sys._MEIPASS)  # type: ignore[attr-defined]
+    else:
+        base = Path(__file__).parent.parent
+    return base / "offenders.json"
 
 
 def get_ipv6_devices() -> List[dict]:

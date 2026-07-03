@@ -443,6 +443,38 @@ def get_interface_details() -> List[dict]:
     return [a for a in adapters if a.get("name")]
 
 
+def icmp_ping(host: str, timeout: float = 2.0) -> float:
+    """Ping host once via the OS ping command. Returns RTT in ms, or -1.0 on failure/timeout.
+
+    Shared by network_logger._ping_once and combined_discovery._ping_single so
+    both scanners report identical RTT semantics (S-Phase2b).
+    """
+    system = platform.system()
+    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+    try:
+        if system == "Windows":
+            r = subprocess.run(
+                ["ping", "-n", "1", "-w", str(int(timeout * 1000)), host],
+                capture_output=True, text=True, timeout=timeout + 2, **extra,
+            )
+            m = re.search(r"time[=<](\d+)ms", r.stdout)
+            if m:
+                return float(m.group(1))
+            if "time<1ms" in r.stdout:
+                return 0.5
+        else:
+            r = subprocess.run(
+                ["ping", "-c", "1", "-W", str(int(timeout)), host],
+                capture_output=True, text=True, timeout=timeout + 2,
+            )
+            m = re.search(r"time=([\d.]+)\s*ms", r.stdout)
+            if m:
+                return float(m.group(1))
+    except Exception:
+        pass  # non-fatal
+    return -1.0
+
+
 def get_local_mac_label_map() -> dict:
     """Return {mac (lowercase) -> "This PC (<hostname>)"} for this machine's own adapters.
 

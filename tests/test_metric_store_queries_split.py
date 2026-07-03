@@ -11,8 +11,9 @@ from unittest.mock import MagicMock
 def _make_mixin():
     """Create a MetricStoreQueryMixin with a mock _execute_read/_execute_write."""
     from modules.metric_store_queries import MetricStoreQueryMixin
+    from modules.metric_store_rollup import _RollupMixin
 
-    class _Stub(MetricStoreQueryMixin):
+    class _Stub(MetricStoreQueryMixin, _RollupMixin):
         def __init__(self):
             self._retain_days = 30
             self._db_path = MagicMock()
@@ -23,6 +24,15 @@ def _make_mixin():
 
         def _execute_write(self, sql, params=()):
             pass
+
+        def _execute_write_counted(self, sql, params=()):
+            return 0
+
+        def vacuum_if_needed(self, rows_deleted, threshold=500):
+            return False
+
+        def prune_app_traffic_samples(self, retain_days=35):
+            return 0
 
     return _Stub()
 

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 17
+_SCHEMA_VERSION = 18
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS alert_fired (
 CREATE INDEX IF NOT EXISTS idx_af_ts    ON alert_fired(ts);
 CREATE INDEX IF NOT EXISTS idx_af_acked ON alert_fired(acked_ts);
 
--- Last network grade result — only one row ever kept (schema v8)
+-- Network grade history — one row per grading run (schema v8; append-only since V6 Sprint 1)
 CREATE TABLE IF NOT EXISTS grade_result (
     id      INTEGER PRIMARY KEY,
     ts      INTEGER NOT NULL,
@@ -300,6 +300,9 @@ CREATE TABLE IF NOT EXISTS topology_snapshots (
 CREATE INDEX IF NOT EXISTS idx_topo_snap_ts ON topology_snapshots(ts DESC);
 
 -- App Traffic per-host/category bandwidth samples (schema v17)
+-- app/window_s (G12): written on every insert but not currently read by any
+-- query — reserved for a future per-app breakdown view. Additive-only
+-- migration framework means these stay; do not drop them to "clean up".
 CREATE TABLE IF NOT EXISTS app_traffic_sample (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     ts          INTEGER NOT NULL,
@@ -314,6 +317,21 @@ CREATE TABLE IF NOT EXISTS app_traffic_sample (
 CREATE INDEX IF NOT EXISTS idx_ats_ts       ON app_traffic_sample(ts);
 CREATE INDEX IF NOT EXISTS idx_ats_category ON app_traffic_sample(category, ts);
 CREATE INDEX IF NOT EXISTS idx_ats_mac      ON app_traffic_sample(mac, ts);
+
+-- Daily min/avg/max/n aggregates — survives raw-row pruning so long-term
+-- trend charts have data beyond the 30-day rtt_sample retention window
+-- (schema v18, Stability Sprint 2 / G4).
+CREATE TABLE IF NOT EXISTS daily_rollup (
+    day    TEXT    NOT NULL,   -- UTC calendar day, 'YYYY-MM-DD'
+    metric TEXT    NOT NULL,   -- e.g. 'rtt_ms', 'loss_pct', 'jitter_ms'
+    host   TEXT    NOT NULL,
+    min    REAL    NOT NULL,
+    avg    REAL    NOT NULL,
+    max    REAL    NOT NULL,
+    n      INTEGER NOT NULL,
+    PRIMARY KEY (day, metric, host)
+);
+CREATE INDEX IF NOT EXISTS idx_rollup_metric_host ON daily_rollup(metric, host, day);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────
@@ -371,11 +389,13 @@ def apply_sqlite_schema(conn: sqlite3.Connection, write_lock: threading.Lock) ->
             ("schema_version", str(_SCHEMA_VERSION)),
         )
         conn.commit()
-        # VACUUM after migration to reclaim space from any dropped/rebuilt tables
-        try:
-            conn.execute("PRAGMA VACUUM")
-        except Exception:
-            pass  # non-fatal
+        # Stability Sprint 1 (G2): a real VACUUM used to be attempted here on
+        # every schema apply (i.e. every app startup) via the invalid
+        # "PRAGMA VACUUM" — swallowed silently by the bare except, so it was
+        # always a no-op AND would have been the wrong place anyway: VACUUM
+        # rewrites the whole file and is only worthwhile right after a prune
+        # deletes a meaningful number of rows. See MetricStore.vacuum_if_needed(),
+        # called from prune_old_data().
 
 
 def apply_sqlalchemy_schema(engine) -> None:
@@ -546,6 +566,17 @@ class MeshSignalPoint:
     online_count: int
     worst_unit:   Optional[str]
     worst_rssi:   Optional[float]
+
+
+@dataclass
+class RollupPoint:
+    day:    str
+    metric: str
+    host:   str
+    min:    float
+    avg:    float
+    max:    float
+    n:      int
 
 
 @dataclass

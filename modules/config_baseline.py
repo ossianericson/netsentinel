@@ -208,6 +208,19 @@ def delete_snapshot(store: MetricStore, snapshot_id: int) -> None:
     store.delete_snapshot(snapshot_id)
 
 
+def latest_snapshot_with_label(store: MetricStore, label: str, search_limit: int = 50) -> Optional[ConfigSnapshot]:
+    """
+    Return the most recent stored snapshot whose label exactly matches
+    `label`, or None. Used by scheduled posture scans (V6 Sprint 3) to find
+    their own prior run without picking up unrelated user-triggered
+    baseline snapshots that share the generic snapshot table.
+    """
+    for row in store.list_snapshots(limit=search_limit):
+        if row.get("label") == label:
+            return ConfigSnapshot.from_row(row)
+    return None
+
+
 def diff_snapshots(old: ConfigSnapshot, new: ConfigSnapshot) -> SnapshotDiff:
     """
     Compute a SnapshotDiff between two ConfigSnapshot objects.

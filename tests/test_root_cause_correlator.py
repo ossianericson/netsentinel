@@ -69,6 +69,47 @@ class TestReturnType:
         result = correlate()
         assert isinstance(result, CorrelationResult)
 
+    def test_metrics_field_defaults_empty_dict(self):
+        result = correlate()
+        assert result.metrics == {}
+
+
+# ── Metrics surfacing (forum export needs real numbers, not just findings) ────
+
+class TestMetrics:
+    def test_metrics_sourced_from_log_summary_when_available(self):
+        result = correlate(diag_result=_diag_result(), log_summary=_log_summary(
+            uptime=95.0, avg_rtt=22.5,
+        ))
+        assert result.metrics["ping_ms"] == 22.5
+        assert result.metrics["jitter_ms"] == 3.0
+        assert result.metrics["dns_ms"] == 30.0
+        assert result.metrics["loss_pct"] == 5.0
+
+    def test_metrics_derived_from_diag_result_when_no_log_summary(self):
+        diag = types.SimpleNamespace(
+            trace_hops=[],
+            download_mbps=42.0,
+            ping_results=[
+                types.SimpleNamespace(rtt_ms=10.0),
+                types.SimpleNamespace(rtt_ms=20.0),
+                types.SimpleNamespace(rtt_ms=-1.0),  # unreachable
+            ],
+            dns_results=[
+                types.SimpleNamespace(latency_ms=15.0),
+                types.SimpleNamespace(latency_ms=25.0),
+            ],
+        )
+        result = correlate(diag_result=diag)
+        assert result.metrics["ping_ms"] == 15.0
+        assert result.metrics["dns_ms"] == 20.0
+        assert round(result.metrics["loss_pct"], 1) == 33.3
+        assert result.metrics["download_mbps"] == 42.0
+
+    def test_metrics_empty_when_no_data_available(self):
+        result = correlate()
+        assert result.metrics == {}
+
     def test_no_data_no_findings(self):
         result = correlate()
         assert isinstance(result.findings, list)
@@ -241,6 +282,77 @@ class TestGatewayIpThreading:
         assert any(urlparse(u).hostname == "192.168.0.1" for u in urls), (
             f"gateway_ip not present in DNS remediation: {remedy}"
         )
+
+
+# ── V6 Sprint 5.1: recent_alerts (mesh/modem/IoT/BASELINE_DROP) ───────────────
+
+class TestRecentAlertsCorrelation:
+    def test_no_recent_alerts_no_extra_findings(self):
+        result = correlate(recent_alerts=[])
+        assert isinstance(result, CorrelationResult)
+
+    def test_modem_signal_drop_alert_becomes_finding(self):
+        alerts = [{
+            "rule_name": "Modem Signal Drop", "host": "modem",
+            "message": "5G modem dropped to LTE", "severity": "WARNING",
+            "ts": 1700000000,
+        }]
+        result = correlate(recent_alerts=alerts)
+        matches = [f for f in result.findings if "Modem" in f.source or "modem" in f.category.lower()]
+        assert matches, "Expected a modem-signal finding"
+        assert matches[0].verify_step
+
+    def test_mesh_degraded_alert_becomes_finding(self):
+        alerts = [{
+            "rule_name": "Mesh Degraded", "host": "Living Room Node",
+            "message": "node offline", "severity": "WARNING", "ts": 1700000000,
+        }]
+        result = correlate(recent_alerts=alerts)
+        matches = [f for f in result.findings if "mesh" in f.category.lower()]
+        assert matches
+
+    def test_iot_behavior_alert_becomes_finding(self):
+        alerts = [{
+            "rule_name": "IoT Behavior Anomaly", "host": "Smart Plug",
+            "message": "unusual outbound traffic", "severity": "WARNING", "ts": 1700000000,
+        }]
+        result = correlate(recent_alerts=alerts)
+        matches = [f for f in result.findings if "iot" in f.category.lower()]
+        assert matches
+
+    def test_baseline_drop_with_radio_message_deprioritizes_isp_blame(self):
+        """When the alert engine already attributed a speed drop to the radio
+        link (V6 5.2 wording), the correlator should not also produce a
+        separate 'blame your ISP' finding for the same incident."""
+        alerts = [{
+            "rule_name": "Baseline Speed Drop", "host": "speedtest",
+            "message": "Likely your radio signal, not your ISP: download dropped 87%.",
+            "severity": "CRITICAL", "ts": 1700000000,
+        }]
+        result = correlate(recent_alerts=alerts)
+        radio_findings = [f for f in result.findings if "radio" in f.headline.lower()]
+        assert radio_findings
+        assert not any("your ISP" in f.remediation and "radio" not in f.headline.lower()
+                        for f in result.findings)
+
+    def test_unrelated_rule_name_ignored(self):
+        alerts = [{
+            "rule_name": "New Device", "host": "192.168.1.50",
+            "message": "new device joined", "severity": "INFO", "ts": 1700000000,
+        }]
+        result = correlate(recent_alerts=alerts)
+        assert result.findings == []
+
+    def test_duplicate_rule_alerts_dedup_to_one_finding(self):
+        alerts = [
+            {"rule_name": "Mesh Degraded", "host": "Node A", "message": "offline",
+             "severity": "WARNING", "ts": 1700000100},
+            {"rule_name": "Mesh Degraded", "host": "Node A", "message": "offline again",
+             "severity": "WARNING", "ts": 1700000000},
+        ]
+        result = correlate(recent_alerts=alerts)
+        mesh_findings = [f for f in result.findings if "mesh" in f.category.lower()]
+        assert len(mesh_findings) == 1
 
     def test_no_cli_commands_in_remediations(self):
         import types as _t

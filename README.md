@@ -4,7 +4,7 @@
 [![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-available-0078D4?style=flat-square&logo=microsoft)](https://apps.microsoft.com/detail/9NZ124C7HJWS)
 [![winget](https://img.shields.io/badge/winget-NetSentinel.NetSentinel-blue?style=flat-square)](https://winstall.app/apps/NetSentinel.NetSentinel)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?style=flat-square)](https://python.org)
-[![Tests](https://img.shields.io/badge/tests-4400%2B-brightgreen?style=flat-square)](tests/)
+[![Tests](https://img.shields.io/badge/tests-4700%2B-brightgreen?style=flat-square)](tests/)
 [![CI](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/ossianericson/netsentinel/actions/workflows/codeql.yml)
 
@@ -18,7 +18,23 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
-**4,400+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; MIT License**
+**62 tools in one app &nbsp;·&nbsp; ~125,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
+
+**4,700+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
+
+---
+
+## At a glance
+
+| | |
+|---|---|
+| **Discover** | Device inventory with vendor/model ID, topology map, Wi-Fi scan, DHCP/DNS-zone mapping |
+| **Monitor** | Live bandwidth, availability history, background stability logger, syslog + SNMP traps |
+| **Diagnose** | One-click "What's Wrong?" triage, Root Cause Correlator, Service Diagnostics |
+| **Report** | Network grade A–F, ISP Accountability Report, one-click network documentation export |
+| **Audit** | Port scan, CVE lookup, TLS monitor, credential testing, OS detection *(admin + Npcap)* |
+| **Automate** | Read-only REST API, MQTT / Home Assistant, shell hooks, scheduled scans |
+| **Learn** | Interactive protocol visualizer + guided Lab Mode, mapped to CompTIA Network+ / CCNA |
 
 ---
 
@@ -139,7 +155,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**4,400+ automated tests** across 287 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**4,700+ automated tests** across 320+ test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -183,9 +199,11 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.22 (current)
+### v2.1.23 (current)
 
 **Added**
+- "Copy for Reddit/Discord" button on the "What's Wrong?" diagnosis and Service Diagnostics pages — copies a sanitized, forum-ready Markdown summary (private IPs aliased, MACs/hostnames stripped, public IPs omitted)
+- "Share (Sanitized PNG)" button on the Network Map — exports a shareable topology image with the same sanitization guarantees
 - Service unreachable? NetSentinel now diagnoses *why* in the background and tells you — filtered by a firewall/VPN/ISP, or a real outage — right in the notification
 - Opt-in automatic speed tests with a tray alert when your download speed drops sharply against your own history
 - Morning Briefing now summarizes overnight service outages and speed drops, when those features are enabled
@@ -199,6 +217,10 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 - Dark-theme `BORDER` (`rgba(255,255,255,0.08)`) no longer crashes matplotlib or renders black in `QColor`; new `CHART_SPINE` plain-hex alias routes all non-QSS border colours safely
 - Monitor resume and alert banners confined to the content area (no longer bleed over the nav rail)
 - Arctic Clean active nav text raised to WCAG AA+ contrast (~6.9:1)
+- Device inventory scan counts and IP-stability scores were quietly inflating (double-counted every scan) — fixed, and all direct database access from device tracking code now goes through the proper data layer
+- The top-bar **Scan** button now reads as a solid button at rest (previously it only appeared when hovered); the gear and time-range controls no longer draw a harsh white box on the dark header bar in Arctic Clean
+- The Home network-event banner now shows as amber and leads with the actual event (e.g. "New device detected") instead of appearing bright red and mislabelling every event a "Connectivity issue"
+- Corrected a colour-transparency bug (Qt reads 8-digit hex colours alpha-first) that made dozens of subtle hover/background tints render wrong or invisible; guarded by a new test so it can't return
 
 ---
 

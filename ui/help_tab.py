@@ -186,12 +186,12 @@ def build_help_tab(window) -> QWidget:
         "<b>2. Click Run Scan</b> — the main scan button sweeps your subnet, "
         "flushes ARP/DNS caches, and populates all Standard tabs in parallel. "
         "Most scans finish in 10–30 seconds depending on network size.<br><br>"
-        "<b>3. Switch to Standard mode</b> — click the mode pill in the top bar "
-        "(shows Home ▾ by default) and choose Standard. This reveals MTR, Bandwidth, "
+        "<b>3. Use the activity rail</b> — click an icon on the left rail to open its "
+        "flyout of pages. The Monitor and Analysis sections hold MTR, Bandwidth, "
         "ARP Watch, DHCP, Network Map, Scheduled Scans, Trend Forecasts, and more.<br><br>"
-        "<b>4. Switch to Pro mode for Security Audit</b> — choose Pro from the same "
-        "mode pill to reveal SYN/UDP port scanners, OS detection, CVE lookup, credential "
-        "testing, and cloud metadata probe. "
+        "<b>4. Open Security Audit for active probes</b> — click the Security Audit "
+        "rail icon to reveal Security Overview (aggregate dashboard), SYN/UDP port "
+        "scanners, OS detection, CVE lookup, credential testing, and cloud metadata probe. "
         "Only use on networks you own or have explicit written authorisation to test.<br><br>"
         "<b>5. Right-click anything</b> — every table row has a context menu "
         "with Copy IP, Copy MAC, Port Scan, How to Fix, Wake-on-LAN, and more.<br><br>"
@@ -310,7 +310,7 @@ def build_help_tab(window) -> QWidget:
     ]))
 
     # ── Feature reference ────────────────────────────────────────────────
-    bl.addWidget(_section("Standard Features (no admin required for most)", [
+    bl.addWidget(_section("Core Features (no admin required for most)", [
         ("Devices on Network",   "ARP scan — every device with IP, MAC, vendor, model, type, risk"),
         ("Rogue Bridge (STP)",   "Captures BPDUs and flags devices stealing the Root Bridge role"),
         ("Broadcast Storm",      "Measures broadcast/multicast flood levels by source device"),
@@ -333,7 +333,7 @@ def build_help_tab(window) -> QWidget:
         ("Lab Mode",             "Hands-on sandbox exercises for learning networking protocols step by step"),
     ]))
 
-    bl.addWidget(_section("Advanced Features (Standard and Pro modes)", [
+    bl.addWidget(_section("Monitor, Analysis & Automation Features", [
         ("Hop-by-Hop Trace",     "Continuous MTR — live per-hop loss % and RTT, updating every cycle"),
         ("Tools & Wake-on-LAN",  "Wake-on-LAN sender and New Device Alerts baseline diff"),
         ("Port Scanner",         "TCP port scanner (Fast / Normal / Low) with service banners — no admin required"),
@@ -354,7 +354,7 @@ def build_help_tab(window) -> QWidget:
         ("MQTT / Home Assistant","Publish device/metric events to MQTT broker; HA Discovery payloads"),
     ]))
 
-    bl.addWidget(_section("Security Audit Features (Pro mode — admin required)", [
+    bl.addWidget(_section("Security Audit Features (admin required)", [
         ("Port Scan (TCP)",       "Raw SYN scanner — stealthy, fast, admin required"),
         ("Port Scan (UDP)",       "UDP service discovery"),
         ("OS Detection",          "OS fingerprinting via TTL + banner + SYN probe"),
@@ -444,21 +444,21 @@ def build_help_tab(window) -> QWidget:
         ("…prove to my ISP the problem is theirs","Stability Log for 30+ min → Network Grade → Network Health Report"),
         ("…check if a device is hacked",          "Device Risk Score + CVE Lookup (Security Audit section)"),
         ("…monitor uptime of my servers",         "Service Heartbeat → add hosts + ports to watch"),
-        ("…see all open ports on a device",       "Port Scanner → TCP Port Scan (Advanced section)"),
-        ("…detect ARP spoofing / MITM attack",    "ARP Spoof Watch (Advanced section)"),
-        ("…see who is using the most bandwidth",  "Bandwidth Usage (Advanced section)"),
+        ("…see all open ports on a device",       "Port Scanner → TCP Port Scan (Analysis section)"),
+        ("…detect ARP spoofing / MITM attack",    "ARP Spoof Watch (Analysis section)"),
+        ("…see who is using the most bandwidth",  "Bandwidth Usage (Monitor section)"),
         ("…check TLS certificate expiry",         "TLS & Exposure (Security Audit section)"),
-        ("…trace packet loss hop-by-hop",         "Hop-by-Hop Trace / MTR (Advanced section)"),
-        ("…map WiFi coverage in a room",          "WiFi Heatmap (Tools) — import floor plan, walk space, render heatmap"),
-        ("…see where threat IPs are located",     "Geolocation Map (Tools) — import from Threat Intel or add IPs manually"),
-        ("…alert on custom metric thresholds",    "Custom Triggers (Reports & Alerts) — write expressions like avg(rtt,5m)>80"),
-        ("…trigger automation when a host drops", "Automation Hooks (Advanced) — add webhook/script rule for device-down event"),
-        ("…send events to Home Assistant",        "MQTT / Home Assistant (Advanced) — configure broker, enable Discovery"),
+        ("…trace packet loss hop-by-hop",         "Hop-by-Hop Trace / MTR (Analysis section)"),
+        ("…map WiFi coverage in a room",          "WiFi Heatmap (Discover section) — import floor plan, walk space, render heatmap"),
+        ("…see where threat IPs are located",     "Geolocation Map (Analysis section) — import from Threat Intel or add IPs manually"),
+        ("…alert on custom metric thresholds",    "Custom Triggers (Automation section) — write expressions like avg(rtt,5m)>80"),
+        ("…trigger automation when a host drops", "Automation Hooks (Automation section) — add webhook/script rule for device-down event"),
+        ("…send events to Home Assistant",        "MQTT / Home Assistant (Automation section) — configure broker, enable Discovery"),
         ("…change the colour theme",              "⚙ Settings → Appearance — Colour Theme"),
         ("…see how ARP/DNS/TCP actually works",   "Protocol Visualizer (Education section) — animated diagrams using your real scan data"),
         ("…use NetSentinel from my phone",        "Web Dashboard — open http://localhost:8765/dashboard on any LAN device"),
         ("…get a weekly health summary",          "Automatic — weekly digest tray notification fires on startup once per 7 days"),
-        ("…forecast when my network will degrade","Trend Forecasts (Standard/Pro) — ML-based latency and uptime prediction"),
+        ("…forecast when my network will degrade","Trend Forecasts (Analysis section) — ML-based latency and uptime prediction"),
     ]))
 
     # ── Glossary ──────────────────────────────────────────────────────────

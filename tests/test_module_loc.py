@@ -20,10 +20,12 @@ DEFAULT_BUDGET = 600
 # Each entry documents WHY and WHAT the split should be.
 # Budgets are set to current actuals + a small margin; tighten as splits land.
 KNOWN_LARGE_MODULES: dict[str, int] = {
-    # Grew after adding upsert_segment() + delete_segment() (Sprint 4 network segments).
-    # Sprint 6: added record_app_traffic_sample()/prune_app_traffic_samples().
-    # Natural split: move segment + traffic-sample write methods to metric_store_schema.py.
-    "metric_store.py": 730,
+    # Phase 3 (device-tracker double-count fix + raw-SQL encapsulation): extracted
+    # device-inventory write methods to metric_store_writes_device.py
+    # (_DeviceWritesMixin), bringing this file from 856 down to 625 lines.
+    # Natural next split: move segment + traffic-sample write methods to
+    # metric_store_schema.py to get under the 600-line default budget.
+    "metric_store.py": 650,
 
     # Grew to ~694 lines after P1-2/P1-3 additions (Smart Plug, Smart Bulb,
     # Thermostat rules + device_types import).  Natural split: extract _RULES
@@ -51,7 +53,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
     # Sprint 19: _NavBuilderMixin → nav/builder.py; _MonitorStateMixin → monitor_state.py;
     # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines. FINAL GOAL ACHIEVED.
-    "dashboard.py": 2560,  # Security UX: +8 audit coordinator state; +10 silent audit dispatch; scan registry feed for Speed Test (+5)
+    "dashboard.py": 2610,  # V6 Sprint 1: +~30 lines MODEM_SIGNAL_DROP alert evaluation wiring
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
@@ -90,7 +92,7 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
     # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1530,  # Sprint A: +5 lines (_nav_set_scan_state wiring in result handlers)
+    "scan_wiring.py": 1580,  # V6 Sprint 4.3: +~19 lines CONFIG_DRIFT blessed-baseline diff wiring
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.

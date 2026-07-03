@@ -39,7 +39,7 @@ def test_every_module_has_a_test_file():
         if not p.stem.startswith("_")
     }
     tests = {
-        p.stem.replace("test_", "")
+        p.stem.removeprefix("test_")
         for p in TESTS_ROOT.glob("test_*.py")
     }
     missing = modules - tests - EXEMPT

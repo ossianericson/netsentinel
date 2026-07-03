@@ -41,6 +41,7 @@ def test_signal_exists():
     from workers.hw_detect_worker import HwDetectWorker
     w = HwDetectWorker(ip="192.168.1.1")
     assert hasattr(w, "detected")
+    assert hasattr(w, "error")
     _cleanup(w)
 
 
@@ -55,4 +56,34 @@ def test_start_stop_lifecycle():
     assert finished, "HwDetectWorker did not finish within 15 s"
     assert not w.isRunning()
     _cleanup(w)
-    # Errors are swallowed internally; detected([]) is always emitted.
+
+
+def test_emits_error_not_detected_on_failure(monkeypatch):
+    """G10 regression test: before the fix, any exception during detection
+    (e.g. the catalogue failing to load) was swallowed and reported as
+    detected([]) — identical to 'no hardware matched', with no way for the
+    Hardware page to distinguish a real probe failure from an empty result."""
+    from workers.hw_detect_worker import HwDetectWorker
+
+    def _raise(*_a, **_kw):
+        raise RuntimeError("catalogue.json is corrupt")
+
+    monkeypatch.setattr("modules.hw_detect.load_catalogue", _raise)
+
+    detected_calls = []
+    error_calls = []
+    w = HwDetectWorker(ip="192.168.1.1")
+    w.detected.connect(detected_calls.append)
+    w.error.connect(error_calls.append)
+    w.start()
+    finished = w.wait(15000)
+    assert finished, "HwDetectWorker did not finish within 15 s"
+    assert not w.isRunning()
+    # Cross-thread signals to plain Python callables are queued — pump the
+    # event loop so the connected slots actually run before asserting.
+    app = QApplication.instance()
+    for _ in range(5):
+        app.processEvents()
+    assert error_calls == ["catalogue.json is corrupt"]
+    assert detected_calls == []
+    _cleanup(w)

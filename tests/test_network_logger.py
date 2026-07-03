@@ -25,6 +25,7 @@ from modules.network_logger import (
     LogEntry,
     _compute_summary,
     load_log_file,
+    _ping_once,
 )
 
 
@@ -48,6 +49,21 @@ def _make_ping_run(rtt_line="time=12ms"):
         mock.stdout = rtt_line
         return mock
     return _run
+
+
+def test_ping_once_delegates_to_icmp_ping(monkeypatch):
+    """_ping_once must call the shared utils_net.icmp_ping (Phase 2b reroute)."""
+    from modules import network_logger
+
+    calls = []
+
+    def fake_icmp_ping(host, timeout=2.0):
+        calls.append((host, timeout))
+        return 7.0
+
+    monkeypatch.setattr(network_logger, "icmp_ping", fake_icmp_ping)
+    assert _ping_once("8.8.8.8") == 7.0
+    assert calls == [("8.8.8.8", 2.0)]
 
 
 # ── CSV format — header row ───────────────────────────────────────────────────

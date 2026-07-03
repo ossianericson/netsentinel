@@ -16,8 +16,9 @@ from modules.device_stability import (
 def _make_store(ip_history_rows):
     """Return a minimal mock MetricStore with a given device_ip_history dataset."""
     store = MagicMock()
-    store._execute_read.return_value = ip_history_rows
-    store._execute_write.return_value = None
+    store.get_ip_history_stats.return_value = ip_history_rows
+    store.get_total_seen_count.return_value = sum(int(r[1] or 0) for r in ip_history_rows)
+    store.update_device_stability.return_value = None
     store.get_known_devices.return_value = {}
     return store
 
@@ -127,11 +128,9 @@ def test_static_candidate_enough_scans_but_low_stability():
 def test_update_writes_to_store():
     store = MagicMock()
     # ip_history: 8 at .1, 2 at .50 (total 10)
-    store._execute_read.side_effect = [
-        [("192.168.1.1", 8), ("192.168.1.50", 2)],  # compute_ip_stability
-        [(10,)],                                       # SUM(seen_count)
-    ]
-    store._execute_write.return_value = None
+    store.get_ip_history_stats.return_value = [("192.168.1.1", 8), ("192.168.1.50", 2)]
+    store.get_total_seen_count.return_value = 10
+    store.update_device_stability.return_value = None
 
     update_stability_for_device(
         mac="aa:bb:cc:dd:ee:ff",
@@ -141,24 +140,21 @@ def test_update_writes_to_store():
         store=store,
     )
 
-    store._execute_write.assert_called_once()
-    call_args = store._execute_write.call_args
-    sql, params = call_args[0]
-    assert "scan_count" in sql
-    assert "ip_stability" in sql
-    # scan_count = 10, ip_stability = 0.8, role = "infrastructure" (router type)
-    assert params[0] == 10
-    assert abs(params[1] - 0.8) < 1e-9
+    store.update_device_stability.assert_called_once()
+    call_kwargs = store.update_device_stability.call_args.kwargs
+    # scan_count = 10, ip_stability = 0.8, role = "gateway" (IP ends in .1)
+    assert call_kwargs["scan_count"] == 10
+    assert abs(call_kwargs["ip_stability"] - 0.8) < 1e-9
+    assert call_kwargs["inferred_role"] == "gateway"
 
 
 def test_update_preserves_role_when_none_inferred():
-    """When role inference returns None, inferred_role column must NOT be updated."""
+    """When role inference returns None, inferred_role must be passed as None
+    so MetricStore.update_device_stability does not clear the existing value."""
     store = MagicMock()
-    store._execute_read.side_effect = [
-        [("192.168.1.200", 1)],  # single observation
-        [(1,)],
-    ]
-    store._execute_write.return_value = None
+    store.get_ip_history_stats.return_value = [("192.168.1.200", 1)]
+    store.get_total_seen_count.return_value = 1
+    store.update_device_stability.return_value = None
 
     update_stability_for_device(
         mac="aa:bb:cc:dd:ee:ff",
@@ -168,7 +164,5 @@ def test_update_preserves_role_when_none_inferred():
         store=store,
     )
 
-    call_args = store._execute_write.call_args
-    sql, _params = call_args[0]
-    # The UPDATE without role inference should NOT touch inferred_role
-    assert "inferred_role" not in sql
+    call_kwargs = store.update_device_stability.call_args.kwargs
+    assert call_kwargs["inferred_role"] is None

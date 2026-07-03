@@ -7,25 +7,38 @@ live in modules/utils_net.py and are re-exported here for backwards compatibilit
 
 IPv6 scanning functions (get_ipv6_devices, ping_sweep_ipv6) live in
 modules/utils_platform.py and are re-exported here for backwards compatibility.
+
+This module is also the canonical entry point for the vendor lookup, hostname
+resolver, and device classifier helpers (lookup_vendor, resolve, resolve_batch,
+classify, classify_device, classify_with_evidence) — re-exported below.
 """
 import concurrent.futures
 import os
 import platform
 import socket
 import subprocess
-import sys
 import threading
 from pathlib import Path
 from typing import List, Tuple
 
 # Backwards-compatible re-exports (do not remove — callers import from here)
 from modules.utils_net import get_network_info, get_dhcp_info, get_interface_details  # noqa: F401
-from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6  # noqa: F401
+from modules.utils_platform import get_ipv6_devices, ping_sweep_ipv6, get_offenders_path  # noqa: F401
+
+# Canonical re-exports for lookup/resolver/classifier helpers (do not remove).
+from modules.mac_lookup import lookup_vendor  # noqa: F401
+from modules.name_resolver import ResolvedName, resolve, resolve_batch, rdns  # noqa: F401
+from modules.device_classifier import (  # noqa: F401
+    classify, classify_device, classify_with_evidence, classify_registry_first,
+)
 
 # Explicit re-export list so CodeQL recognises these as intentional re-exports.
 __all__ = [
     "get_network_info", "get_dhcp_info", "get_interface_details",
-    "get_ipv6_devices", "ping_sweep_ipv6",
+    "get_ipv6_devices", "ping_sweep_ipv6", "get_offenders_path",
+    "lookup_vendor",
+    "ResolvedName", "resolve", "resolve_batch", "rdns",
+    "classify", "classify_device", "classify_with_evidence", "classify_registry_first",
 ]
 
 
@@ -126,15 +139,6 @@ def _npcap_available() -> bool:
 
     _npcap_cache.append(result)
     return result
-
-
-def get_offenders_path() -> Path:
-    """Locate offenders.json whether running from source or as a PyInstaller bundle."""
-    if getattr(sys, "frozen", False):
-        base = Path(sys._MEIPASS)  # type: ignore[attr-defined]
-    else:
-        base = Path(__file__).parent.parent
-    return base / "offenders.json"
 
 
 def get_app_data_dir() -> Path:

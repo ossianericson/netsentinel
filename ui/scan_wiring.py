@@ -580,11 +580,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
             host    = d.hostname if not isinstance(d, dict) else d.get("hostname", "")
             mac     = d.mac      if not isinstance(d, dict) else d.get("mac", "?")
             if _store_ref and mac and mac not in ("?", "00:00:00:00:00:00") and ip and ip != "?":
-                try:
-                    from modules.device_tracker import record_ip_observation as _rec_ip
-                    _rec_ip(mac, ip, _store_ref)
-                except Exception:
-                    pass  # non-fatal — table may not exist on schema upgrade
+                # record_ip_observation() is NOT called here — DeviceTracker.process_scan()
+                # (below, same handler) is the single write path for device_ip_history to
+                # avoid double-incrementing seen_count per scan (Phase 3a fix).
                 # ── Device change audit events ────────────────────────────────
                 _old_kd = _known_before.get(mac.lower())
                 if _old_kd:
@@ -788,6 +786,18 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         self._show_alert_toast(a)
                         self._home_page.on_alert(a)
                         self._mqtt_page.on_alert(a.severity, a.message, a.host)
+                    # V6 Sprint 1 — IP_CHURN: device_ip_history churn since last scan
+                    try:
+                        churn = self._store.query_ip_churn(hours=24.0, min_ips=3)
+                    except Exception:
+                        churn = {}
+                    for a in self._alert_engine.evaluate_ip_churn_checks(churn):
+                        self._show_alert_toast(a)
+                        self._home_page.on_alert(a)
+                        try:
+                            self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                        except Exception:
+                            pass  # non-fatal — persistence failure must not block the scan handler
                 # Forward device events to MQTT publisher
                 for _d in tr.new_devices:
                     self._mqtt_page.on_device_event("joined", {
@@ -989,6 +999,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         "ip":       (_d.ip       if not isinstance(_d, dict) else _d.get("ip", "")),
                         "hostname": (_d.hostname if not isinstance(_d, dict) else _d.get("hostname", "")),
                         "vendor":   (_d.vendor   if not isinstance(_d, dict) else _d.get("vendor", "")),
+                        "device_type": (getattr(_d, "device_type", "") if not isinstance(_d, dict) else _d.get("device_type", "")),
                         "open_ports": (list(getattr(_d, "open_ports", [])) if not isinstance(_d, dict) else _d.get("open_ports", [])),
                     })
                 _new_snap = build_snapshot_from_scan(_dev_dicts, label=_label)
@@ -1008,6 +1019,28 @@ class ScanResultMixin(ScanEnrichmentMixin):
                             f"Baseline drift: {_diff.summary()} — Config Snapshots",
                             "info",
                         )
+
+                # V6 Sprint 4.3 — diff this scheduled-scan snapshot against the
+                # user-blessed baseline (set via ★ Set as Baseline on Config
+                # Snapshots) and route added/removed/role-changed devices
+                # through the alert pipeline, not just a toast.
+                if self._alert_engine is not None:
+                    from modules.config_baseline import load_snapshot as _load_blessed
+                    from ui.pages.baseline_page import _blessed_snapshot_id
+                    _blessed_id = _blessed_snapshot_id()
+                    if _blessed_id:
+                        _blessed_snap = _load_blessed(self._store, _blessed_id)
+                        if _blessed_snap is not None:
+                            _drift_diff = diff_snapshots(_blessed_snap, _new_snap)
+                            for a in self._alert_engine.evaluate_config_drift_checks(_drift_diff):
+                                self._show_alert_toast(a)
+                                self._home_page.on_alert(a)
+                                try:
+                                    self._store.record_alert_fired(
+                                        a.rule_name, a.host, a.severity, a.message, ts=a.ts
+                                    )
+                                except Exception:
+                                    pass  # non-fatal — persistence failure must not block the scan handler
 
                 _ss(self._store, _new_snap)
 

@@ -393,6 +393,12 @@ class NetworkMapPage(QWidget):
         btn_export = _btn("Export PNG", "Export the interactive map as a PNG image", 90)
         btn_export.clicked.connect(self._on_export)
 
+        # Sanitized share button — safe to post publicly (private IPs aliased,
+        # MACs/hostnames stripped, public IPs omitted). Renders independently
+        # of the on-screen view so a screenshot can never leak real data.
+        btn_share = _btn("Share (Sanitized PNG)", "Export a sanitized PNG safe to post publicly", 150)
+        btn_share.clicked.connect(self._on_share_export)
+
         btn_fit.clicked.connect(self.fit_view)
         btn_rst.clicked.connect(self.reset_layout)
         btn_zin.clicked.connect(self.zoom_in)
@@ -423,6 +429,7 @@ class NetworkMapPage(QWidget):
         toolbar.addWidget(self._stale_label)
         toolbar.addStretch()
         toolbar.addWidget(btn_export)
+        toolbar.addWidget(btn_share)
         toolbar.addWidget(btn_rst)
 
         return toolbar
@@ -1118,6 +1125,36 @@ class NetworkMapPage(QWidget):
             ToastManager.instance().show_toast(f"Map exported to {path}", "info")
         except Exception as exc:
             log.warning("network_map_page: export failed: %s", exc)
+
+    def _on_share_export(self) -> None:
+        """Export a sanitized PNG (private IPs aliased, MACs/hostnames stripped,
+        public IPs omitted) — safe to post publicly. Renders independently of
+        the on-screen view via modules/topology_share.py."""
+        from PyQt6.QtWidgets import QFileDialog
+        from modules.utils import get_app_data_dir
+        from modules.topology_share import render_sanitized_topology_png
+        from ui.widgets.toast import ToastManager
+
+        kwargs = self._last_render_kwargs or {}
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Share Network Map", str(get_app_data_dir() / "network_map_share.png"),
+            "PNG Image (*.png)",
+            options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not path:
+            return
+        try:
+            render_sanitized_topology_png(
+                kwargs.get("devices") or [],
+                gateway_ip=kwargs.get("gateway_ip"),
+                gateway_mac=kwargs.get("gateway_mac"),
+                edges=kwargs.get("edges") or [],
+                output_path=path,
+            )
+            ToastManager.show(f"Sanitized map exported to {path}", "success")
+        except Exception as exc:
+            log.warning("network_map_page: sanitized share export failed: %s", exc)
+            ToastManager.show(f"Export failed: {exc}", "error")
 
     def _run_js(self, script: str) -> None:
         """Run a JavaScript snippet in the web view if available."""

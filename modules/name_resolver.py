@@ -63,6 +63,11 @@ def _rdns(ip: str, timeout: float = 1.0) -> str:
         return ""
 
 
+def rdns(ip: str, timeout: float = 1.0) -> str:
+    """Public reverse DNS lookup — canonical entry point for callers outside this module."""
+    return _rdns(ip, timeout)
+
+
 def _netbios(ip: str) -> str:
     """NetBIOS name via nbtstat (Windows) or nmblookup (Linux)."""
     system = platform.system()

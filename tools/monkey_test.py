@@ -79,7 +79,7 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.6.6"
+_VERSION = "1.6.8"
 # Title STARTS with "NetSentinel" — never matches VS Code's
 # "monkey_test.py — NetSentinel — Visual Studio Code" title.
 _WINDOW_RE = r"^NetSentinel"
@@ -186,6 +186,17 @@ _BLACKLIST: List[str] = [
     # --- File open/save dialogs (Windows native) — must never be opened ---
     # A Windows file picker steals focus from the app and stalls the harness.
     "browse",           # any "Browse…" button for file/folder selection
+    "folder",           # "Open Plugins Folder" (tabs_recon.py, settings_cards.py),
+                        # "Open Folder ›" (reports_page.py) — spawns a real Windows
+                        # Explorer window (subprocess.Popen(["explorer", ...]) or
+                        # QDesktopServices.openUrl on a folder path) that steals
+                        # foreground focus.  Explorer is not a Win32 dialog (class
+                        # #32770) so _dismiss_blocking_dialogs() never catches it, and
+                        # it does not match _is_system_hwnd() either — once open, the
+                        # tester's coordinate-based click_input() calls can land on
+                        # the Explorer window instead of NetSentinel controls
+                        # (confirmed cause of "monkey clicking around in File
+                        # Explorer" after ~10 min of a chaos run).
     "floor plan",       # WiFi Heatmap — floor plan image import
     "choose file",      # generic file picker label
     "select file",      # generic file picker label
@@ -216,7 +227,7 @@ _BLACKLIST: List[str] = [
     "run health check", # health check probe
     "check connection", # connectivity probe
     "run selected",     # Overview page Security Scan panel "Run Selected" → _advance_security_audit() fires selected tools sequentially
-    "run all",             # Scan Center card "▶  Run All" → rescan_requested signal → triggers full network scan
+    "rescan",           # Scan Center card "▶  Rescan" → rescan_requested signal → triggers full network scan
     "re-run",           # re-triggers any prior scan/probe
     "run again",        # re-triggers any prior scan/probe
     # --- Packet capture / active monitors (Scapy / Npcap) ---
@@ -458,6 +469,28 @@ _EXCLUDED_PROCESS_NAMES = frozenset({
     "notepad++.exe",
 })
 
+# Process names that must NEVER receive a dismiss/close message from
+# _is_system_hwnd(), regardless of *which* window handle they present.
+#
+# _OWN_FOREGROUND_HWND (captured once, at script-import time) only protects
+# the ONE specific hwnd that happened to be foreground at that instant. That
+# is not reliable: when the monkey test is launched from a background/detached
+# shell (no real interactive foreground yet), the captured hwnd may not be
+# the IDE window at all — and even when it is, the IDE can open new top-level
+# windows (a second workspace, a notification, a quick-pick popup) with a
+# different hwnd that the single captured value doesn't cover. VS Code's
+# window class ("Chrome_WidgetWin_1") is not in the system-class list either,
+# so once the hwnd check misses, _dismiss_native_window()'s escalation ends in
+# a real WM_CLOSE against the editor hosting the automation itself.
+# Checking by owning PROCESS name protects every window the IDE ever opens,
+# not just the one hwnd sampled at import time.
+_PROTECTED_APP_PROCESS_NAMES = frozenset({
+    "code.exe",       # VS Code
+    "code - insiders.exe",
+    "cursor.exe",     # Cursor (VS Code fork)
+    "devenv.exe",     # Visual Studio
+})
+
 
 def _is_netsentinel_window(win, expected_pid: Optional[int] = None) -> bool:
     """True when *win* is the NetSentinel main window, not an IDE or browser.
@@ -582,6 +615,9 @@ def _is_system_hwnd(hwnd: int) -> bool:
       class "ConsoleWindowClass"     — classic Win32 console (cmd, PowerShell)
       class "CASCADIA_HOSTING_WINDOW_CLASS" — Windows Terminal app
       class "PseudoConsoleWindow"    — conhost pseudo-console host
+      owning process in _PROTECTED_APP_PROCESS_NAMES — VS Code / Cursor / Visual
+        Studio, by PID rather than hwnd, so every window the IDE owns is safe
+        (not just the one captured at import time)
     """
     if not hwnd:
         return True
@@ -612,8 +648,19 @@ def _is_system_hwnd(hwnd: int) -> bool:
             "PseudoConsoleWindow",          # conhost pseudo-console wrapper
         ):
             return True
+        # Process-name check — protects EVERY window the IDE owns (any
+        # workspace window, notification, popup), not just the single hwnd
+        # _OWN_FOREGROUND_HWND happened to capture at import time. See the
+        # comment on _PROTECTED_APP_PROCESS_NAMES for why the hwnd-only
+        # check above is insufficient on its own.
+        pid = ctypes.c_ulong(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value:
+            proc_name = psutil.Process(pid.value).name().lower()
+            if proc_name in _PROTECTED_APP_PROCESS_NAMES:
+                return True
     except Exception:
-        pass  # non-fatal — ctypes call failed; treat hwnd as non-desktop
+        pass  # non-fatal — ctypes/psutil call failed; treat hwnd as non-desktop
     return False
 
 

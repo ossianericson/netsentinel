@@ -94,8 +94,12 @@ class _DiagExtraTabsMixin:
 
         # Port Scanner card
         ps_frame = QFrame()
+        ps_frame.setObjectName("portScanCard")
+        # RULE-QSS1: objectName-scoped so the card style does not propagate to
+        # the Scan Ports button (bare declarations wipe its app-QSS #btnDiag style)
         ps_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+            f"QFrame#portScanCard {{ background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
         )
         ps_l = QVBoxLayout(ps_frame)
         ps_l.setContentsMargins(16, 12, 16, 12)
@@ -159,8 +163,12 @@ class _DiagExtraTabsMixin:
 
         # Wake-on-LAN card
         wol_frame = QFrame()
+        wol_frame.setObjectName("wolCard")
+        # RULE-QSS1: objectName-scoped so the card style does not propagate to
+        # the Send WoL button (bare declarations wipe its app-QSS #btnNetRefresh style)
         wol_frame.setStyleSheet(
-            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:{CARD_RADIUS};"
+            f"QFrame#wolCard {{ background:{BG_CARD};"
+            f" border:1px solid {BORDER}; border-radius:{CARD_RADIUS}; }}"
         )
         wol_l = QVBoxLayout(wol_frame)
         wol_l.setContentsMargins(16, 12, 16, 12)

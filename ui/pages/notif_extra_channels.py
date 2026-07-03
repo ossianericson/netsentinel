@@ -299,7 +299,8 @@ class _NotifExtraChannelsMixin:
         bl.addLayout(row1)
 
         hint = QLabel(
-            "Includes: devices seen, new unknown devices, alerts fired, config drift, CVE matches."
+            "Includes: network grade, top alerts, new devices, new open ports, "
+            "CVE matches, certificates expiring soon, and device uptime."
         )
         hint.setStyleSheet(f"color:{TEXT_MUTED}; font-size:10px; border:none;")
         bl.addWidget(hint)

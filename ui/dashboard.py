@@ -165,9 +165,17 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         # Active workers
         self._workers = []
         self._active_count = 0
+        self._is_scanning = False
         self._prescan_worker = None
         self._diag_worker = None
         self._logger_worker = None
+
+        # Scan watchdog (G5): guards against a hung pre-scan/module worker
+        # leaving the UI stuck on "Scanning…" forever. Parented QTimer per
+        # RULE-WIN5 — never QTimer.singleShot bound to self.
+        self._scan_watchdog = QTimer(self)
+        self._scan_watchdog.setSingleShot(True)
+        self._scan_watchdog.timeout.connect(self._on_scan_watchdog_timeout)
 
         # Cached results
         self._net_info: dict = {}
@@ -598,6 +606,15 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 w.wait(2000)   # wait after terminate before object destruction
 
         super().closeEvent(event)
+        # Stability Sprint 1 (G7): os._exit(0) below bypasses Python's normal
+        # connection-close/atexit path entirely, so the WAL would otherwise
+        # never be truncated back into the main DB file. Flush it now, before
+        # the hard exit, while it's still safe to touch self._store.
+        if self._store is not None:
+            try:
+                self._store.checkpoint()
+            except Exception:
+                pass  # non-fatal — best-effort flush before hard exit
         # os._exit(0) bypasses Qt destructor cleanup entirely.
         # This is intentional: calling QApplication.quit() after terminate()
         # can still trigger QThread destructor crashes (STATUS_STACK_BUFFER_OVERRUN)
@@ -998,6 +1015,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         pass  # no-op; _maybe_start_onboarding drives the first-run flow
 
     def _set_scanning(self, scanning: bool):
+        self._is_scanning = scanning
         self._btn_scan.setEnabled(not scanning)
         if hasattr(self, "_header_scan_btn"):
             self._header_scan_btn.setEnabled(not scanning)
@@ -1924,7 +1942,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._prescan_worker = PreScanWorker(flush_caches=True)
         self._prescan_worker.status.connect(self._on_prescan_status)
         self._prescan_worker.done.connect(self._launch_modules)
+        self._prescan_worker.error.connect(self._on_prescan_error)
         self._prescan_worker.start()
+
+        # (Re)start the watchdog for this scan attempt — 120s covers pre-scan
+        # + module launch; _on_worker_done cancels it once modules complete.
+        self._scan_watchdog.start(120_000)
 
     @pyqtSlot(str)
     def _on_prescan_status(self, m: str):
@@ -1935,7 +1958,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             lbl.setText(m)
         if hasattr(self, "_home_page"):
             self._home_page.set_scan_progress(m)
-
 
     # ── Module result handlers ────────────────────────────────────────────────
 
@@ -2201,6 +2223,22 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 interval_s = s.value("logging/modem_interval_min", 5, type=int) * 60
                 now = _time.time()
                 if self._store and now - self._last_modem_log_ts >= interval_s:
+                    # V6 Sprint 1 — MODEM_SIGNAL_DROP: capture the prior 7-day SINR
+                    # history before this row is inserted, so it forms the baseline.
+                    _prior_type = None
+                    _prior_sinr: list = []
+                    if self._alert_engine is not None:
+                        try:
+                            _hist = self._store.query_modem_signal_log(hours=168.0, limit=500)
+                        except Exception:
+                            _hist = []
+                        if _hist:
+                            _prior_type = _hist[0].network_type
+                            _prior_sinr = [
+                                (p.nr5g_sinr if p.network_type and "5G" in p.network_type else p.lte_snr)
+                                for p in _hist
+                            ]
+                            _prior_sinr = [v for v in _prior_sinr if v is not None]
                     try:
                         self._store.record_modem_signal(
                             network_type=data.get("network_type"),
@@ -2226,6 +2264,23 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                         self._last_modem_log_ts = now
                     except Exception:
                         pass  # log_modem_entry is best-effort; DB write failure is non-fatal
+                    if self._alert_engine is not None:
+                        _cur_type = data.get("network_type")
+                        _cur_sinr = (
+                            data.get("nr5g_sinr_db") if _cur_type and "5G" in _cur_type
+                            else data.get("lte_snr_db")
+                        )
+                        for a in self._alert_engine.evaluate_modem_checks(
+                            _cur_type, _cur_sinr, _prior_sinr, _prior_type,
+                        ):
+                            self._show_alert_toast(a)
+                            self._home_page.on_alert(a)
+                            try:
+                                self._store.record_alert_fired(
+                                    a.rule_name, a.host, a.severity, a.message, ts=a.ts,
+                                )
+                            except Exception:
+                                pass  # non-fatal — persistence failure must not block modem UI updates
 
     @pyqtSlot(dict)
     def _on_avail_cycle_done(self, result: dict) -> None:
@@ -2287,6 +2342,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._active_count -= 1
         if self._active_count <= 0:
             self._active_count = 0
+            self._scan_watchdog.stop()
             self._set_scanning(False)
             self._set_status("Scan complete.")
             self._refresh_pulse_bar()

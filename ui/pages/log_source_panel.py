@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
+    alpha,
     ACCENT, AMBER, BG_CARD, BG_DARK,
     BG_HOVER, BORDER, CARD_RADIUS, GREEN,
     LOG_SOURCE_PLUGIN, RED, TEXT_MUTED, TEXT_PRIMARY,
@@ -362,8 +363,8 @@ class _LogSourcePanelMixin:
         _export_btn.setToolTip("Export currently visible (filtered) rows to CSV")
         _export_btn.setStyleSheet(
             f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:11px;"
-            f" font-weight:600; border:1px solid {ACCENT}44; border-radius:4px; padding:0 8px; }}"
-            f"QPushButton:hover {{ background:{ACCENT}11; border-color:{ACCENT}; }}"
+            f" font-weight:600; border:1px solid {alpha(ACCENT, 0x44)}; border-radius:4px; padding:0 8px; }}"
+            f"QPushButton:hover {{ background:{alpha(ACCENT, 0x11)}; border-color:{ACCENT}; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
         _export_btn.clicked.connect(self._export_visible)
@@ -407,7 +408,7 @@ class _LogSourcePanelMixin:
         menu.setStyleSheet(
             f"QMenu {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:4px; padding:2px; }}"
             f"QMenu::item {{ padding:5px 14px; color:{TEXT_PRIMARY}; font-size:11px; }}"
-            f"QMenu::item:selected {{ background:{ACCENT}22; color:{TEXT_PRIMARY}; }}"
+            f"QMenu::item:selected {{ background:{alpha(ACCENT, 0x22)}; color:{TEXT_PRIMARY}; }}"
         )
         has_hidden = False
         for key, (label, _color) in _SOURCES.items():
@@ -574,9 +575,9 @@ class _LogSourcePanelMixin:
     def _style_db_btn(self, btn: QPushButton, enabled: bool) -> None:
         if enabled:
             btn.setStyleSheet(
-                f"QPushButton {{ background:{GREEN}22; color:{GREEN}; font-size:10px;"
+                f"QPushButton {{ background:{alpha(GREEN, 0x22)}; color:{GREEN}; font-size:10px;"
                 f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px; padding:1px 10px; }}"
-                f"QPushButton:hover {{ background:{GREEN}44; }}"
+                f"QPushButton:hover {{ background:{alpha(GREEN, 0x44)}; }}"
                 f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
             )
         else:

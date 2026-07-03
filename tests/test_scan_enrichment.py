@@ -521,3 +521,33 @@ class TestM1TableSortingRegression:
         if app:
             for _ in range(3):
                 app.processEvents()
+
+
+# ---------------------------------------------------------------------------
+# Phase 2b — Full Device Discovery persists response_ms via MetricStore.record_rtt
+# ---------------------------------------------------------------------------
+
+def test_on_discovery_result_persists_positive_rtt(monkeypatch):
+    """_on_discovery_result must call store.record_rtt(ip, response_ms) for reachable devices."""
+    from unittest.mock import MagicMock
+    from ui.scan_enrichment import ScanEnrichmentMixin
+    from modules.combined_discovery import DiscoveredDevice, DiscoveryResult
+
+    class _Stub(ScanEnrichmentMixin):
+        pass
+
+    stub = _Stub()
+    stub._recon_disc_table = QTableWidget(0, 5)
+    stub._disc_status = MagicMock()
+    stub._nav_set_scan_state = MagicMock()
+    stub._store = MagicMock()
+
+    res = DiscoveryResult(devices=[
+        DiscoveredDevice(ip="192.168.1.30", response_ms=15.0, discovery_methods=["icmp-ping"]),
+        DiscoveredDevice(ip="192.168.1.31", response_ms=0.0, discovery_methods=["arp-sweep"]),
+    ])
+
+    stub._on_discovery_result(res)
+
+    stub._store.record_rtt.assert_called_once_with("192.168.1.30", 15.0)
+    _cleanup(stub._recon_disc_table)

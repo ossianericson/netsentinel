@@ -672,6 +672,33 @@ def get_all_device_types() -> list:
     return sorted(types)
 
 
+def classify_registry_first(
+    mac: str = "",
+    vendor: str = "",
+    hostname: str = "",
+    open_ports: Optional[set[int]] = None,
+    os_family: str = "",
+    is_gateway: bool = False,
+) -> str:
+    """
+    Unified registry-first classification entry point.
+
+    Consults modules.mac_registry.lookup(mac) first — its OUI database is
+    product-specific and more accurate when the MAC is present — and falls
+    back to the heuristic classify() otherwise. Codifies the precedence
+    modules.name_resolver.resolve() already applies for vendor/model lookups.
+    """
+    if mac:
+        from modules.mac_registry import lookup as _mac_lookup
+        device_type = _mac_lookup(mac).get("device_type", "")
+        if device_type:
+            return device_type
+    return classify(
+        vendor=vendor, hostname=hostname, open_ports=open_ports,
+        os_family=os_family, is_gateway=is_gateway,
+    )
+
+
 def classify_device(device, is_gateway: bool = False) -> str:
     """
     Convenience wrapper that accepts a DeviceInfo dataclass instance or a

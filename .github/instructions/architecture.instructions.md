@@ -84,6 +84,12 @@ MODULE LAYER   modules/*.py
                • Pure business logic — NO PyQt imports, NO direct DB writes
 ```
 
+`modules/utils.py` is the canonical entry point for vendor lookup, hostname resolution, and
+device classification — it re-exports `lookup_vendor` (from `mac_lookup`), `resolve`/
+`resolve_batch`/`rdns` (from `name_resolver`), and `classify`/`classify_device`/
+`classify_with_evidence`/`classify_registry_first` (from `device_classifier`). Prefer importing
+these from `modules.utils` in new code; the underlying modules remain valid for existing callers.
+
 ### File write locations (ARCH RULE 23)
 All file writes must use `get_app_data_dir()` from `modules/utils.py`:
 - Windows: `%LOCALAPPDATA%\NetSentinel\`
@@ -96,6 +102,19 @@ The only exception is `network_logger.py` which writes CSVs to `~/Documents/NetS
 ### MetricStore singleton (ARCH RULE 2)
 `MetricStore` is instantiated **once** in `app.py` or `svc.py` and injected as a dependency.
 Never construct it inside a page widget or module.
+
+**Raw SQL stays inside the MetricStore family.** `_execute_write()`/`_execute_read()` are
+private primitives — every other module or `ui/` file must call a public MetricStore method
+instead (add one in `metric_store.py` or `metric_store_writes_device.py` if missing). Enforced
+by `tests/test_metric_store_encapsulation.py`.
+
+**Single-writer rule for scan-driven `known_device` updates:** `DeviceTracker.process_scan()`
+(`modules/device_tracker.py`) is the only caller of `MetricStore.record_ip_observation()` for
+scan results — do not call it a second time for the same scan (a prior bug in
+`ui/scan_wiring.py` did this and double-incremented `device_ip_history.seen_count`, skewing
+`ip_stability`). `known_device.scan_count`/`ip_stability`/`inferred_role` are likewise derived
+only inside `process_scan()`. Full invariant documented in the `metric_store.py` module
+docstring.
 
 ### Speed tester cascade (ARCH RULE 24)
 `modules/speed_tester.py` tries backends in order:
