@@ -19,7 +19,7 @@ from modules.threat_intel import (
 
 
 def test_import():
-    import modules.threat_intel as m
+    from modules import threat_intel as m
     assert hasattr(m, "ThreatEntry")
     assert hasattr(m, "ThreatIntelDB")
     assert hasattr(m, "_is_public_ip")
@@ -135,7 +135,7 @@ def test_refresh_from_feeds_runs_feeds_concurrently(tmp_path, monkeypatch):
     """Each feed's simulated download sleeps _DELAY seconds. Sequential fetching
     takes >= len(FEEDS) * _DELAY; concurrent fetching takes ~= _DELAY regardless
     of feed count. Assert wall time stays close to a single feed's delay."""
-    import modules.threat_intel as ti
+    from modules import threat_intel as ti
 
     assert len(ti.FEEDS) >= 2, "test assumes at least 2 configured feeds"
     _DELAY = 0.4
@@ -170,7 +170,7 @@ def test_refresh_from_feeds_runs_feeds_concurrently(tmp_path, monkeypatch):
 
 
 def test_fetch_one_feed_falls_back_to_cache_on_failure(tmp_path, monkeypatch):
-    import modules.threat_intel as ti
+    from modules import threat_intel as ti
 
     feed = ti.FEEDS[0]
     cache_path = tmp_path / feed["filename"]

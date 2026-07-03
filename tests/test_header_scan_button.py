@@ -1,11 +1,12 @@
 """test_header_scan_button.py — regression guard for the top-bar Scan CTA.
 
-The header's "▶ Scan" button is the one PRIMARY action in the app chrome. It
-shipped sharing ``_icon_btn_qss`` (transparent at rest, solid ACCENT only on
-:hover), a style meant for the secondary icon buttons (gear, time picker), so
-it looked like a faint outline until hovered. It must read as a solid primary
-button at rest instead — a dedicated ``_scan_btn_qss`` with a solid ``{ACCENT}``
-background in the base ``QToolButton`` rule.
+The header's "▶ Scan" button uses a dedicated ``_scan_btn_qss`` (not the shared
+``_icon_btn_qss``) so it can be tuned independently of the other ghost chrome
+buttons (gear, time picker). At rest it matches those neighbours — transparent
+background with a faint WHITE-alpha hairline border — and fills solid
+``{ACCENT}`` only on ``:hover``/``:pressed``. A prior session pinned it solid at
+rest as a workaround for an unrelated colour bug; that was reverted so the
+button once again matches its neighbours' at-rest look.
 
 Source-level check: building the real button requires a full Dashboard, so this
 asserts on the header module source instead.
@@ -32,16 +33,25 @@ def test_scan_button_does_not_use_ghost_icon_style():
     )
 
 
-def test_scan_button_has_solid_accent_at_rest():
+def test_scan_button_matches_ghost_chrome_at_rest():
     src = _read()
     # Grab the _scan_btn_qss assignment (the f-string tuple) and confirm its base
-    # QToolButton rule sets a solid ACCENT background before any :hover pseudo.
+    # QToolButton rule is transparent at rest — matching the gear/time-picker
+    # ghost buttons — and only fills solid ACCENT on :hover.
     m = re.search(r"_scan_btn_qss\s*=\s*\((.*?)\)\n", src, re.S)
     assert m, "expected a _scan_btn_qss definition in header.py"
     body = m.group(1)
     base = body.split(":hover")[0]
-    assert "background:{ACCENT}" in base, (
-        "base QToolButton rule must set a solid {ACCENT} background at rest"
+    assert "background:transparent" in base, (
+        "base QToolButton rule must be transparent at rest, matching the "
+        "ghost chrome buttons beside it"
+    )
+    assert "alpha(WHITE" in base, (
+        "rest border must be a faint alpha(WHITE, ...) hairline like its neighbours"
+    )
+    hover = body.split(":hover", 1)[1]
+    assert "background:{ACCENT}" in hover, (
+        "hover rule must fill solid {ACCENT} background"
     )
 
 
