@@ -82,3 +82,62 @@ def test_build_card_data_returns_card_data():
         assert result.grade in ("A", "B", "C", "D", "F", "B")
     except Exception:
         pytest.skip("build_card_data interface mismatch with mock store")
+
+
+# ── build_card_data_from_diagnosis (Feature 3a) ──────────────────────────────
+
+def _fake_correlation_result(findings=None):
+    import types
+    fs = findings if findings is not None else [
+        types.SimpleNamespace(headline="DNS is slow at 192.168.1.50", severity="HIGH"),
+        types.SimpleNamespace(headline="Gateway latency high", severity="MEDIUM"),
+        types.SimpleNamespace(headline="Rogue device aa:bb:cc:dd:ee:ff seen", severity="LOW"),
+        types.SimpleNamespace(headline="A fourth finding", severity="INFO"),
+    ]
+    return types.SimpleNamespace(
+        findings=fs,
+        global_severity="HIGH",
+        plain_summary="Something is wrong.",
+    )
+
+
+def test_build_card_data_from_diagnosis_exists():
+    from modules.diagnostic_card import build_card_data_from_diagnosis
+    assert callable(build_card_data_from_diagnosis)
+
+
+def test_build_card_data_from_diagnosis_uses_findings_headlines():
+    from modules.diagnostic_card import build_card_data_from_diagnosis, CardData
+    store = MagicMock()
+    store.query_last_grade.return_value = {"grade": "B", "score": 78.0}
+    store.get_known_devices.return_value = {"a": 1, "b": 2}
+    card = build_card_data_from_diagnosis(_fake_correlation_result(), store)
+    assert isinstance(card, CardData)
+    # exactly 3 findings, top of the list first
+    assert len(card.findings) == 3
+    assert "DNS is slow" in card.findings[0]
+    # real grade pulled from the store
+    assert card.grade == "B"
+    assert card.score == 78.0
+    assert card.device_count == 2
+
+
+def test_build_card_data_from_diagnosis_sanitizes_findings():
+    from modules.diagnostic_card import build_card_data_from_diagnosis
+    store = MagicMock()
+    store.query_last_grade.return_value = None
+    store.get_known_devices.return_value = {}
+    card = build_card_data_from_diagnosis(_fake_correlation_result(), store)
+    joined = " ".join(card.findings)
+    assert "192.168.1.50" not in joined
+    assert "aa:bb:cc:dd:ee:ff" not in joined.lower()
+
+
+def test_build_card_data_from_diagnosis_no_findings_is_healthy():
+    from modules.diagnostic_card import build_card_data_from_diagnosis
+    store = MagicMock()
+    store.query_last_grade.return_value = None
+    store.get_known_devices.return_value = {}
+    card = build_card_data_from_diagnosis(_fake_correlation_result(findings=[]), store)
+    assert len(card.findings) == 3
+    assert any("No issues" in f or "healthy" in f.lower() for f in card.findings)

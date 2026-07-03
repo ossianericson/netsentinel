@@ -88,3 +88,55 @@ def build_card_data(
         device_count=device_count,
         generated_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
+
+
+def build_card_data_from_diagnosis(result, store=None) -> CardData:
+    """
+    Assemble CardData from a CorrelationResult (the "What's Wrong?" output).
+
+    Findings come from ``result.findings`` (sanitized headlines) rather than
+    benchmark dimensions. The grade/score are the user's real most-recent
+    Network Grade (from the store) so the card never fabricates a grade — it is
+    "N/A"/0 when the network has never been graded. All text is scrubbed of IPs
+    and MACs via report_sanitizer before it can be shared (Copy as image).
+    """
+    from modules.report_sanitizer import sanitize_text
+
+    ip_map: dict = {}
+
+    grade = "N/A"
+    score = 0.0
+    if store is not None:
+        try:
+            last = store.query_last_grade()
+            if last:
+                grade = last.get("grade", "N/A") or "N/A"
+                score = float(last.get("score", 0.0) or 0.0)
+        except Exception:
+            pass  # non-fatal — card falls back to N/A
+
+    findings: List[str] = []
+    for f in (getattr(result, "findings", None) or [])[:3]:
+        headline = sanitize_text(getattr(f, "headline", "") or "", ip_map).strip()
+        if headline:
+            findings.append(headline)
+    if not findings:
+        findings.append("No issues detected — your network looks healthy")
+    while len(findings) < 3:
+        findings.append("No issues detected")
+
+    device_count = 0
+    if store:
+        try:
+            device_count = len(store.get_known_devices())
+        except Exception:
+            pass  # non-fatal
+
+    return CardData(
+        grade=grade,
+        score=score,
+        isp="–",
+        findings=findings[:3],
+        device_count=device_count,
+        generated_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+    )

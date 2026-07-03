@@ -88,3 +88,51 @@ def test_build_service_diagnostics_markdown_has_footer_attribution():
     md = build_service_diagnostics_markdown(_service_result())
     assert "NetSentinel" in md
     assert "Microsoft Store" in md
+
+
+# ── build_isp_forum_markdown (Feature 3c) ────────────────────────────────────
+
+def _isp_inputs():
+    log_summary = types.SimpleNamespace(
+        uptime_pct=97.5, avg_rtt_ms=42.0, avg_jitter_ms=8.0,
+        outages=[types.SimpleNamespace(), types.SimpleNamespace()],
+    )
+    diag_result = types.SimpleNamespace(download_mbps=85.0, public_ip="203.0.113.7")
+    benchmark_result = types.SimpleNamespace(overall_grade="D", overall_score=48.0)
+    return log_summary, diag_result, benchmark_result
+
+
+def test_build_isp_forum_markdown_contains_metrics():
+    from modules.forum_export import build_isp_forum_markdown
+    ls, dr, br = _isp_inputs()
+    md = build_isp_forum_markdown(log_summary=ls, diag_result=dr,
+                                  benchmark_result=br, isp_name="Comcast")
+    assert "97.5" in md
+    assert "42.0" in md
+    assert "8.0" in md
+    assert "85.0" in md
+
+
+def test_build_isp_forum_markdown_has_footer_and_isp():
+    from modules.forum_export import build_isp_forum_markdown
+    ls, dr, br = _isp_inputs()
+    md = build_isp_forum_markdown(log_summary=ls, diag_result=dr,
+                                  benchmark_result=br, isp_name="Comcast")
+    assert "Comcast" in md
+    assert "NetSentinel" in md
+    assert "Microsoft Store" in md
+
+
+def test_build_isp_forum_markdown_omits_public_ip():
+    """Public WAN IP must never appear in a shareable forum post."""
+    from modules.forum_export import build_isp_forum_markdown
+    ls, dr, br = _isp_inputs()
+    md = build_isp_forum_markdown(log_summary=ls, diag_result=dr,
+                                  benchmark_result=br, isp_name="Comcast")
+    assert "203.0.113.7" not in md
+
+
+def test_build_isp_forum_markdown_handles_missing_data():
+    from modules.forum_export import build_isp_forum_markdown
+    md = build_isp_forum_markdown()
+    assert "NetSentinel" in md

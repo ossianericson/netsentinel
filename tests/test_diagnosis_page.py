@@ -162,3 +162,48 @@ def test_copy_forum_markdown_populates_clipboard(diag_page):
 def test_copy_forum_markdown_noop_without_result(diag_page):
     diag_page._last_result = None
     diag_page._copy_forum_markdown()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Feature 3a — inline "Share this result" card
+# ---------------------------------------------------------------------------
+
+def _corr_result():
+    from modules.root_cause_correlator import CorrelationResult, CorrelatedFinding
+    return CorrelationResult(
+        findings=[CorrelatedFinding(
+            source="Network Diagnostics", category="DNS Resolution Failure",
+            severity="HIGH", headline="DNS is slow at 192.168.1.50", detail="",
+            remediation="Restart the router.",
+        )],
+        global_severity="HIGH", plain_summary="DNS is slow.",
+        metrics={"ping_ms": 22.5, "dns_ms": 30.0},
+    )
+
+
+def test_share_card_hidden_by_default(diag_page):
+    assert diag_page._share_card.isHidden()
+
+
+def test_share_card_shown_after_result(diag_page):
+    diag_page._symptom = "slow"
+    diag_page._show_result(_corr_result())
+    assert not diag_page._share_card.isHidden()
+
+
+def test_copy_share_markdown_populates_clipboard(diag_page):
+    diag_page._last_result = _corr_result()
+    diag_page._symptom = "slow"
+    diag_page._copy_share_markdown()
+    clip = QApplication.clipboard().text()
+    assert "NetSentinel" in clip
+    # sanitized — no raw private IP leaks into the shareable text
+    assert "192.168.1.50" not in clip
+
+
+def test_copy_share_image_sets_pixmap(diag_page):
+    diag_page._last_result = _corr_result()
+    diag_page._symptom = "slow"
+    QApplication.clipboard().clear()
+    diag_page._copy_share_image()  # must not raise
+    assert not QApplication.clipboard().pixmap().isNull()

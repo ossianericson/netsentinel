@@ -66,6 +66,57 @@ def build_diagnosis_markdown(result, symptom: str = "") -> str:
     return "\n".join(parts)
 
 
+def build_isp_forum_markdown(log_summary=None, diag_result=None,
+                             benchmark_result=None, isp_name: str = "") -> str:
+    """Build a forum-ready Markdown post presenting the evidence a user would
+    take to r/HomeNetworking when complaining about their ISP.
+
+    Sourced from the same measurements as the ISP complaint email
+    (report_isp.generate_isp_complaint_text) but formatted as a Markdown post.
+    The public WAN IP is never included; all free text is scrubbed via
+    report_sanitizer.
+    """
+    ip_map: dict = {}
+
+    uptime  = getattr(log_summary, "uptime_pct",    None) if log_summary else None
+    avg_rtt = getattr(log_summary, "avg_rtt_ms",    -1.0) if log_summary else -1.0
+    jitter  = getattr(log_summary, "avg_jitter_ms", -1.0) if log_summary else -1.0
+    dl_mbps = getattr(diag_result, "download_mbps", -1.0) if diag_result else -1.0
+    outages = getattr(log_summary, "outages",       [])   if log_summary else []
+
+    rows = []
+    if uptime is not None:
+        rows.append(("Uptime", f"{uptime:.1f}%"))
+    if avg_rtt and avg_rtt > 0:
+        rows.append(("Average latency", f"{avg_rtt:.1f} ms"))
+    if jitter and jitter > 0:
+        rows.append(("Average jitter", f"{jitter:.1f} ms"))
+    if dl_mbps and dl_mbps > 0:
+        rows.append(("Download speed", f"{dl_mbps:.1f} Mbps"))
+    rows.append(("Recorded outages", str(len(outages)) if outages else "0"))
+
+    title = f"My ISP ({isp_name}) — measured evidence" if isp_name else "My ISP — measured evidence"
+    parts = [f"## {title}\n"]
+
+    if benchmark_result is not None:
+        grade = getattr(benchmark_result, "overall_grade", "")
+        bscore = getattr(benchmark_result, "overall_score", None)
+        if grade:
+            score_txt = f"{bscore:.0f}/100" if isinstance(bscore, (int, float)) else ""
+            parts.append(f"**NetSentinel network health grade:** {grade} ({score_txt})\n")
+
+    parts.append(
+        "I measured my connection locally with NetSentinel and recorded the "
+        "following. Sharing in case anyone has seen the same pattern:\n"
+    )
+    parts.append(_metrics_table(rows))
+    parts.append(sanitize_text(
+        "Packet loss first appearing at hop 2 or later is inside the ISP network, "
+        "not my home wiring.\n", ip_map))
+    parts.append(_FOOTER)
+    return "\n".join(parts)
+
+
 def build_service_diagnostics_markdown(result) -> str:
     """Build a forum-ready Markdown post from a ServiceDiagnosticResult."""
     ip_map: dict = {}

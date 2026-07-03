@@ -98,6 +98,27 @@ def test_query_last_grade_after_record(store):
     assert g["score"] == 95.0
 
 
+def test_query_previous_grade_none_initially(store):
+    assert store.query_previous_grade() is None
+
+
+def test_query_previous_grade_none_with_single_grade(store):
+    """Only one grade recorded — there is no 'previous' row yet."""
+    store.record_grade("A", 95.0, "Excellent")
+    assert store.query_previous_grade() is None
+
+
+def test_query_previous_grade_returns_second_most_recent(store):
+    store.record_grade("C", 60.0, "Degraded")
+    store.record_grade("A", 95.0, "Excellent")
+    prev = store.query_previous_grade()
+    assert prev is not None
+    assert prev["grade"] == "C"
+    assert prev["score"] == 60.0
+    # and query_last_grade still returns the newest
+    assert store.query_last_grade()["grade"] == "A"
+
+
 def test_list_snapshots_empty(store):
     assert store.list_snapshots() == []
 

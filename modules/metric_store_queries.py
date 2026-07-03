@@ -454,6 +454,21 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
         return {"grade": r["grade"], "score": r["score"],
                 "verdict": r["verdict"], "ts": r["ts"]}
 
+    def query_previous_grade(self) -> Optional[dict]:
+        """Return the second-most-recent grade row {grade, score, verdict, ts},
+        or None if fewer than two grades have been recorded. Used to detect a
+        grade improvement between the last two runs (share-at-the-moment-of-pride)."""
+        rows = self._execute_read(
+            "SELECT ts, grade, score, verdict FROM grade_result "
+            "ORDER BY ts DESC, id DESC LIMIT 1 OFFSET 1",
+            (),
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        return {"grade": r["grade"], "score": r["score"],
+                "verdict": r["verdict"], "ts": r["ts"]}
+
     # ── Maintenance (read-dominant — safe to keep in query mixin) ─────────────
 
     def prune_old_data(self, retain_days: Optional[int] = None) -> int:

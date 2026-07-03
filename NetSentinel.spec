@@ -234,6 +234,7 @@ hiddenimports: list = [
     "ui.tabs_diag",
     "ui.tabs_logger",
     "ui.tabs_analysis",
+    "ui.tabs_analysis_isp",
     "ui.tabs_recon",
     "ui.tabs_diag_extra",
     "ui.nav",
