@@ -180,6 +180,124 @@ def test_history_refresh_worker_error_still_emits_result(qt_app):
             qt_app.processEvents()
 
 
+# ── Long-term rollup mode (Stability Sprint 2 / G4) ─────────────────────────
+# Beyond the raw rtt_sample retention window, the worker must switch to
+# daily_rollup so long-term trend views still have data.
+
+def test_history_refresh_worker_raw_mode_below_retention_threshold():
+    from ui.pages.history_page import _HistoryRefreshWorker
+
+    store = MagicMock()
+    store.query_all_rtt_hosts.return_value = ["192.168.1.1"]
+    store.query_rtt_history.return_value = []
+    store.query_device_state_history.return_value = []
+    store.query_uptime_pct.return_value = None
+
+    w = _HistoryRefreshWorker(store, window_h=168, selected="")  # 7d
+    data = w._fetch()
+
+    assert data["rollup_mode"] is False
+    assert data["rollup_series"] == {}
+    store.query_daily_rollup.assert_not_called()
+
+
+def test_history_refresh_worker_switches_to_rollup_beyond_retention():
+    from ui.pages.history_page import _HistoryRefreshWorker
+
+    store = MagicMock()
+    store.query_rollup_hosts.return_value = ["192.168.1.1"]
+    store.query_daily_rollup.return_value = ["fake-rollup-point"]
+
+    w = _HistoryRefreshWorker(store, window_h=2160, selected="")  # 90d
+    data = w._fetch()
+
+    assert data["rollup_mode"] is True
+    assert data["rollup_series"] == {"192.168.1.1": ["fake-rollup-point"]}
+    store.query_daily_rollup.assert_called_once_with("rtt_ms", host="192.168.1.1")
+    # Raw per-sample queries must not run in rollup mode — they'd return
+    # nothing useful past the raw retention window anyway.
+    store.query_rtt_history.assert_not_called()
+
+
+def test_history_refresh_worker_rollup_mode_finds_hosts_with_no_recent_raw_data():
+    """A host whose raw rtt_sample rows have all aged past retention (so
+    query_all_rtt_hosts finds nothing) must still surface in the 90d rollup
+    view if it has daily_rollup history — this was a real bug caught by
+    manual end-to-end verification: query_all_rtt_hosts()-only discovery
+    silently dropped exactly this host."""
+    from ui.pages.history_page import _HistoryRefreshWorker
+
+    store = MagicMock()
+    store.query_all_rtt_hosts.return_value = []  # no recent raw activity
+    store.query_rollup_hosts.return_value = ["192.168.1.1"]
+    store.query_daily_rollup.return_value = ["fake-rollup-point"]
+
+    w = _HistoryRefreshWorker(store, window_h=2160, selected="")
+    data = w._fetch()
+
+    assert data["hosts"] == ["192.168.1.1"]
+    assert data["rollup_series"] == {"192.168.1.1": ["fake-rollup-point"]}
+
+
+def test_history_refresh_worker_rollup_mode_uses_rollup_host_discovery():
+    """Host discovery in rollup mode must come from query_rollup_hosts(), not
+    query_all_rtt_hosts() — the latter only sees rtt_sample, which is pruned
+    at 30 days and would miss hosts with rollup-only history (see
+    test_history_refresh_worker_rollup_mode_finds_hosts_with_no_recent_raw_data)."""
+    from ui.pages.history_page import _HistoryRefreshWorker
+
+    store = MagicMock()
+    store.query_rollup_hosts.return_value = []
+    store.query_daily_rollup.return_value = []
+
+    w = _HistoryRefreshWorker(store, window_h=2160, selected="")
+    w._fetch()
+
+    store.query_rollup_hosts.assert_called_once_with("rtt_ms")
+    store.query_all_rtt_hosts.assert_not_called()
+
+
+def test_history_page_renders_rollup_data_without_error(qt_app):
+    """RULE-T7 behavioral test: feeding rollup-mode data through the real
+    _on_history_data -> _draw_rtt -> _draw_rtt_rollup / _update_kpis path
+    must not raise, and the avg RTT KPI tile must reflect the weighted
+    average across the fed-in daily_rollup points."""
+    if qt_app is None:
+        pytest.skip("No QApplication")
+
+    from modules.metric_store_schema import RollupPoint
+    from ui.pages.history_page import HistoryPage
+
+    page = HistoryPage(store=None)
+    data = {
+        "window_h": 2160,
+        "selected": "",
+        "hosts": ["192.168.1.1"],
+        "series_hosts": ["192.168.1.1"],
+        "rtt_series": {},
+        "state_series": {},
+        "uptime": {},
+        "rollup_mode": True,
+        "rollup_series": {
+            "192.168.1.1": [
+                RollupPoint(day="2026-01-01", metric="rtt_ms", host="192.168.1.1",
+                            min=10.0, avg=20.0, max=30.0, n=5),
+                RollupPoint(day="2026-01-02", metric="rtt_ms", host="192.168.1.1",
+                            min=15.0, avg=25.0, max=35.0, n=5),
+            ]
+        },
+    }
+    page._on_history_data(data)
+    assert page._kpi_avg_rtt._val.text() == "22 ms"
+
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal
+    for _ in range(3):
+        qt_app.processEvents()
+
+
 # ── HistoryPage smoke ─────────────────────────────────────────────────────────
 
 def test_history_page_no_blocking_refresh_attribute(qt_app):

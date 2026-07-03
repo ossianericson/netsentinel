@@ -55,7 +55,7 @@ from modules.metric_store_schema import (
     apply_sqlite_schema, apply_sqlalchemy_schema,
     AppTrafficSamplePoint, CertCheckPoint, DeviceEvent, DeviceStatePoint,  # noqa: F401
     HaDetectedPoint, KnownDevice, MeshSignalPoint, ModemSignalPoint,  # noqa: F401
-    RttPoint, ServiceCheckPoint, SpeedTestPoint,  # noqa: F401
+    RollupPoint, RttPoint, ServiceCheckPoint, SpeedTestPoint,  # noqa: F401
 )
 
 # Explicit re-export list so CodeQL recognises these as intentional re-exports.
@@ -65,14 +65,15 @@ __all__ = [
     "apply_sqlite_schema", "apply_sqlalchemy_schema",
     "AppTrafficSamplePoint", "CertCheckPoint", "DeviceEvent", "DeviceStatePoint",
     "HaDetectedPoint", "KnownDevice", "MeshSignalPoint", "ModemSignalPoint",
-    "RttPoint", "ServiceCheckPoint", "SpeedTestPoint",
+    "RollupPoint", "RttPoint", "ServiceCheckPoint", "SpeedTestPoint",
 ]
 from modules.metric_store_queries import MetricStoreQueryMixin, _default_db_path
 from modules.metric_store_writes_device import _DeviceWritesMixin
 from modules.metric_store_lifecycle import _LifecycleMixin
+from modules.metric_store_rollup import _RollupMixin
 
 
-class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin, _LifecycleMixin):
+class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin, _LifecycleMixin, _RollupMixin):
     """
     Thread-safe time-series store. Default backend is built-in sqlite3.
 

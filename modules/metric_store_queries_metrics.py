@@ -32,6 +32,39 @@ class _MetricsQueriesMixin:
         return [RttPoint(r["ts"], r["host"], r["rtt_ms"], r["loss_pct"], r["jitter_ms"])
                 for r in rows]
 
+    def query_rtt_weekly_avg(self) -> Optional[Dict[str, object]]:
+        """Return {"this_avg", "this_n", "last_avg", "last_n"} across ALL
+        hosts for the trailing 14-day window, split at the 7-day boundary.
+        Returns None if there is no data in the window at all.
+
+        G11: replaces trend_page._update_rtt_headline()'s main-thread
+        per-host query_rtt_history() loop (14 days x every host, pulling
+        every raw sample into Python) with a single indexed SQL aggregate.
+        rtt_ms == -1.0 (unreachable sentinel) is excluded, matching the old
+        Python loop's `if rtt is None or rtt <= 0: continue` filter.
+        """
+        now = int(time.time())
+        window_start = now - 14 * 86400
+        week_boundary = now - 7 * 86400
+        rows = self._execute_read(
+            "SELECT "
+            "  AVG(CASE WHEN ts >= ? THEN rtt_ms END) AS this_avg, "
+            "  COUNT(CASE WHEN ts >= ? THEN 1 END) AS this_n, "
+            "  AVG(CASE WHEN ts < ? THEN rtt_ms END) AS last_avg, "
+            "  COUNT(CASE WHEN ts < ? THEN 1 END) AS last_n "
+            "FROM rtt_sample WHERE ts >= ? AND rtt_ms > 0",
+            (week_boundary, week_boundary, week_boundary, week_boundary, window_start),
+        )
+        r = rows[0] if rows else None
+        if not r or not r["this_n"]:
+            return None
+        return {
+            "this_avg": float(r["this_avg"]),
+            "this_n": int(r["this_n"]),
+            "last_avg": float(r["last_avg"]) if r["last_avg"] is not None else None,
+            "last_n": int(r["last_n"] or 0),
+        }
+
     def query_all_rtt_hosts(self, hours: float = 24.0) -> List[str]:
         """Return distinct host names with RTT samples in the window."""
         since = int(time.time()) - int(hours * 3600)
@@ -261,24 +294,30 @@ class _MetricsQueriesMixin:
     def query_app_traffic_hourly_distribution(
         self, category: Optional[str] = None, hours: float = 168.0,
     ) -> Dict[int, int]:
-        """Return {hour_of_day(0-23): total_bytes} for the last `hours` (S6-5)."""
+        """Return {hour_of_day(0-23): total_bytes} for the last `hours` (S6-5).
+
+        G11: SQL GROUP BY bucketing instead of pulling every row into Python —
+        this table is unbounded-until-pruned (G1), so the old per-row loop
+        scaled with total rows collected, not with the requested window.
+        `strftime('%H', ts, 'unixepoch', 'localtime')` buckets by the same
+        local hour-of-day that `time.localtime(ts).tm_hour` used to.
+        """
         since = int(time.time()) - int(hours * 3600)
         if category:
             rows = self._execute_read(
-                "SELECT ts, bytes_total FROM app_traffic_sample "
-                "WHERE ts >= ? AND category = ?",
+                "SELECT CAST(strftime('%H', ts, 'unixepoch', 'localtime') AS INTEGER) AS hr, "
+                "SUM(bytes_total) AS total FROM app_traffic_sample "
+                "WHERE ts >= ? AND category = ? GROUP BY hr",
                 (since, category),
             )
         else:
             rows = self._execute_read(
-                "SELECT ts, bytes_total FROM app_traffic_sample WHERE ts >= ?",
+                "SELECT CAST(strftime('%H', ts, 'unixepoch', 'localtime') AS INTEGER) AS hr, "
+                "SUM(bytes_total) AS total FROM app_traffic_sample "
+                "WHERE ts >= ? GROUP BY hr",
                 (since,),
             )
-        out: Dict[int, int] = {}
-        for r in rows:
-            hr = time.localtime(r["ts"]).tm_hour
-            out[hr] = out.get(hr, 0) + int(r["bytes_total"] or 0)
-        return out
+        return {int(r["hr"]): int(r["total"] or 0) for r in rows}
 
     def query_app_traffic_category_totals_range(
         self, hours_ago_start: float, hours_ago_end: float,
@@ -299,17 +338,26 @@ class _MetricsQueriesMixin:
         return {r["category"]: int(r["total"] or 0) for r in rows}
 
     def query_app_traffic_weekly_totals(self) -> Dict[str, int]:
-        """Return {"this_week": bytes, "last_week": bytes} (S6-3/S6-5)."""
+        """Return {"this_week": bytes, "last_week": bytes} (S6-3/S6-5).
+
+        G11: single SQL aggregate instead of pulling every row in the 14-day
+        window into Python and summing there.
+        """
         now = int(time.time())
         this_week_start = now - 7 * 86400
         last_week_start = now - 14 * 86400
         rows = self._execute_read(
-            "SELECT ts, bytes_total FROM app_traffic_sample WHERE ts >= ?",
-            (last_week_start,),
+            "SELECT "
+            "  SUM(CASE WHEN ts >= ? THEN bytes_total ELSE 0 END) AS this_week, "
+            "  SUM(CASE WHEN ts < ? THEN bytes_total ELSE 0 END) AS last_week "
+            "FROM app_traffic_sample WHERE ts >= ?",
+            (this_week_start, this_week_start, last_week_start),
         )
-        this_week = sum(int(r["bytes_total"] or 0) for r in rows if r["ts"] >= this_week_start)
-        last_week = sum(int(r["bytes_total"] or 0) for r in rows if r["ts"] < this_week_start)
-        return {"this_week": this_week, "last_week": last_week}
+        r = rows[0] if rows else {}
+        return {
+            "this_week": int(r["this_week"] or 0) if r else 0,
+            "last_week": int(r["last_week"] or 0) if r else 0,
+        }
 
     def query_app_traffic_active_device_count(
         self, category: Optional[str] = None, seconds: float = 60.0,

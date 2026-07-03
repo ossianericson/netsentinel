@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 17
+_SCHEMA_VERSION = 18
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -314,6 +314,21 @@ CREATE TABLE IF NOT EXISTS app_traffic_sample (
 CREATE INDEX IF NOT EXISTS idx_ats_ts       ON app_traffic_sample(ts);
 CREATE INDEX IF NOT EXISTS idx_ats_category ON app_traffic_sample(category, ts);
 CREATE INDEX IF NOT EXISTS idx_ats_mac      ON app_traffic_sample(mac, ts);
+
+-- Daily min/avg/max/n aggregates — survives raw-row pruning so long-term
+-- trend charts have data beyond the 30-day rtt_sample retention window
+-- (schema v18, Stability Sprint 2 / G4).
+CREATE TABLE IF NOT EXISTS daily_rollup (
+    day    TEXT    NOT NULL,   -- UTC calendar day, 'YYYY-MM-DD'
+    metric TEXT    NOT NULL,   -- e.g. 'rtt_ms', 'loss_pct', 'jitter_ms'
+    host   TEXT    NOT NULL,
+    min    REAL    NOT NULL,
+    avg    REAL    NOT NULL,
+    max    REAL    NOT NULL,
+    n      INTEGER NOT NULL,
+    PRIMARY KEY (day, metric, host)
+);
+CREATE INDEX IF NOT EXISTS idx_rollup_metric_host ON daily_rollup(metric, host, day);
 """
 
 # ── Column migrations (applied idempotently on every open) ───────────────────
@@ -548,6 +563,17 @@ class MeshSignalPoint:
     online_count: int
     worst_unit:   Optional[str]
     worst_rssi:   Optional[float]
+
+
+@dataclass
+class RollupPoint:
+    day:    str
+    metric: str
+    host:   str
+    min:    float
+    avg:    float
+    max:    float
+    n:      int
 
 
 @dataclass

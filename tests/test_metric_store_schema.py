@@ -27,8 +27,41 @@ def test_ddl_creates_core_tables():
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
     for expected in ("meta", "rtt_sample", "device_state", "device_event", "known_device",
                      "cert_check", "service_check", "speed_test", "cve_lifecycle",
-                     "modem_signal_log", "mesh_signal_log", "plugin_log", "alert_fired"):
+                     "modem_signal_log", "mesh_signal_log", "plugin_log", "alert_fired",
+                     "daily_rollup"):
         assert expected in tables, f"Table '{expected}' not created"
+
+
+def test_daily_rollup_table_has_expected_columns():
+    """Stability Sprint 2 (G4): daily_rollup is the long-term trend survivor —
+    raw rtt_sample rows die at 30 days, this table doesn't."""
+    conn = _make_conn()
+    lock = threading.Lock()
+    apply_sqlite_schema(conn, lock)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(daily_rollup)").fetchall()}
+    assert cols == {"day", "metric", "host", "min", "avg", "max", "n"}
+
+
+def test_daily_rollup_primary_key_prevents_duplicate_day_metric_host():
+    conn = _make_conn()
+    lock = threading.Lock()
+    apply_sqlite_schema(conn, lock)
+    conn.execute(
+        "INSERT INTO daily_rollup (day, metric, host, min, avg, max, n) "
+        "VALUES ('2026-01-01', 'rtt_ms', 'host1', 1.0, 2.0, 3.0, 5)"
+    )
+    conn.commit()
+    import sqlite3 as _sqlite3
+    try:
+        conn.execute(
+            "INSERT INTO daily_rollup (day, metric, host, min, avg, max, n) "
+            "VALUES ('2026-01-01', 'rtt_ms', 'host1', 9.0, 9.0, 9.0, 1)"
+        )
+        conn.commit()
+        raised = False
+    except _sqlite3.IntegrityError:
+        raised = True
+    assert raised
 
 
 def test_apply_schema_sets_version():

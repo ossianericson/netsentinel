@@ -253,6 +253,88 @@ def test_vacuum_if_needed_skips_below_threshold(store):
     assert ran is False
 
 
+def test_prune_old_data_keeps_speed_test_forever(store):
+    """Stability Sprint 2 (G4): speed_test is low-volume (per-run) — long-term
+    speed trends require it to survive the 30-day operational prune window."""
+    old_ts = int(time.time()) - 400 * 86400
+    store.record_speed_test(100.0, 20.0, 10.0, ts=old_ts)
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM speed_test", ())
+    assert rows[0]["n"] == 1
+
+
+def test_prune_old_data_keeps_grade_result_forever(store):
+    """Stability Sprint 2 (G4): grade_result's own DDL comment says
+    'append-only' — pruning it at 30 days contradicted that contract."""
+    old_ts = int(time.time()) - 400 * 86400
+    store._execute_write(
+        "INSERT INTO grade_result(ts, grade, score, verdict) VALUES(?, ?, ?, ?)",
+        (old_ts, "B", 80.0, "old grade"),
+    )
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM grade_result", ())
+    assert rows[0]["n"] == 1
+
+
+def test_prune_old_data_rolls_up_rtt_samples_before_deleting(store):
+    """Stability Sprint 2 (G4): prune_old_data() must populate daily_rollup
+    from the rtt_sample rows it is about to delete, so long-term trend charts
+    survive the 30-day raw-row prune window."""
+    old_ts = int(time.time()) - 40 * 86400
+    store.record_rtt("host1", 10.0, ts=old_ts)
+    store.record_rtt("host1", 20.0, ts=old_ts + 60)
+    store.prune_old_data(retain_days=30)
+    rows = store._execute_read("SELECT COUNT(*) AS n FROM rtt_sample", ())
+    assert rows[0]["n"] == 0
+    rollup_rows = store.query_daily_rollup("rtt_ms", host="host1")
+    assert len(rollup_rows) == 1
+    assert rollup_rows[0].n == 2
+    assert rollup_rows[0].avg == 15.0
+
+
+def test_query_rtt_weekly_avg_none_when_no_data(store):
+    """Stability Sprint 2 (G11): trend_page._update_rtt_headline() ran a
+    per-host 14-day raw scan on the main thread on every showEvent — replaced
+    with a single SQL aggregate."""
+    assert store.query_rtt_weekly_avg() is None
+
+
+def test_query_rtt_weekly_avg_this_week_only(store):
+    now = int(time.time())
+    store.record_rtt("host1", 10.0, ts=now - 3600)
+    store.record_rtt("host1", 20.0, ts=now - 7200)
+    result = store.query_rtt_weekly_avg()
+    assert result is not None
+    assert result["this_avg"] == 15.0
+    assert result["this_n"] == 2
+    assert result["last_avg"] is None
+
+
+def test_query_rtt_weekly_avg_splits_this_and_last_week(store):
+    now = int(time.time())
+    store.record_rtt("host1", 10.0, ts=now - 3600)                 # this week
+    store.record_rtt("host1", 30.0, ts=now - 10 * 86400)           # last week
+    result = store.query_rtt_weekly_avg()
+    assert result["this_avg"] == 10.0
+    assert result["last_avg"] == 30.0
+
+
+def test_query_rtt_weekly_avg_excludes_unreachable_sentinel(store):
+    """rtt_ms == -1.0 means unreachable — must not pollute the average."""
+    now = int(time.time())
+    store.record_rtt("host1", 10.0, ts=now - 3600)
+    store.record_rtt("host1", -1.0, ts=now - 3600)
+    result = store.query_rtt_weekly_avg()
+    assert result["this_avg"] == 10.0
+    assert result["this_n"] == 1
+
+
+def test_query_rtt_weekly_avg_ignores_samples_older_than_14_days(store):
+    old_ts = int(time.time()) - 20 * 86400
+    store.record_rtt("host1", 999.0, ts=old_ts)
+    assert store.query_rtt_weekly_avg() is None
+
+
 def test_get_row_counts(store):
     store.record_rtt("8.8.8.8", 10.0)
     counts = store.get_row_counts()

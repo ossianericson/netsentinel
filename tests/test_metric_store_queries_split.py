@@ -11,8 +11,9 @@ from unittest.mock import MagicMock
 def _make_mixin():
     """Create a MetricStoreQueryMixin with a mock _execute_read/_execute_write."""
     from modules.metric_store_queries import MetricStoreQueryMixin
+    from modules.metric_store_rollup import _RollupMixin
 
-    class _Stub(MetricStoreQueryMixin):
+    class _Stub(MetricStoreQueryMixin, _RollupMixin):
         def __init__(self):
             self._retain_days = 30
             self._db_path = MagicMock()

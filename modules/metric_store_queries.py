@@ -482,10 +482,20 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
         days   = retain_days if retain_days is not None else self._retain_days
         cutoff = int(time.time()) - days * 86400
         total_deleted = 0
+        # Stability Sprint 2 (G4): speed_test and grade_result are exempt from
+        # the 30-day operational prune window. Both are low-volume
+        # (per-run / per-grade, not per-poll) so years of history is still
+        # tiny, and long-term trend charts need them to survive — pruning
+        # grade_result at 30 days also contradicted its own "append-only"
+        # DDL comment (see metric_store_schema.py).
+        # G4 — roll rtt_sample up into daily_rollup BEFORE the raw rows are
+        # deleted below, so long-term trend charts survive the 30-day window.
+        self.rollup_rtt_samples_before(cutoff)
+
         for tbl in (
             "rtt_sample", "device_state", "device_event", "cert_check",
-            "service_check", "speed_test", "ha_detected",
-            "modem_signal_log", "mesh_signal_log", "plugin_log", "grade_result",
+            "service_check", "ha_detected",
+            "modem_signal_log", "mesh_signal_log", "plugin_log",
         ):
             total_deleted += self._execute_write_counted(
                 f"DELETE FROM {tbl} WHERE ts < ?", (cutoff,)
