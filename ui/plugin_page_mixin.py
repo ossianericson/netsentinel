@@ -33,6 +33,7 @@ class _PluginPageMixin:
         from workers.hw_detect_worker import HwDetectWorker
         worker = HwDetectWorker(ip=gw_ip, gateway_mac=gw_mac or None, parent=self)
         worker.detected.connect(self._on_hw_detected)
+        worker.error.connect(self._on_hw_detect_error)
         self._hw_detect_worker = worker
         worker.start()
 
@@ -42,6 +43,11 @@ class _PluginPageMixin:
             self._hardware_integration_page.on_hardware_detected(matches)
         if hasattr(self, "_home_page") and matches:
             self._home_page.on_hw_detected(matches)
+
+    @pyqtSlot(str)
+    def _on_hw_detect_error(self, msg: str) -> None:
+        if hasattr(self, "_hardware_integration_page"):
+            self._hardware_integration_page.on_hardware_detect_error(msg)
 
     def _plugin_gateway_map(self) -> dict:
         """Return {ip: plugin_name} for all bundled plugins. Cached per session."""
@@ -288,9 +294,29 @@ class _PluginPageMixin:
         try:
             self._launch_modules_impl()
         except Exception as exc:
+            self._scan_watchdog.stop()
             self._set_status(f"Scan startup failed: {exc}")
             self._set_scanning(False)
             self._verdict.update(f"Scan failed to start: {exc}", "HIGH")
+
+    @pyqtSlot(str)
+    def _on_prescan_error(self, msg: str):
+        """Pre-scan failed (G5) — clear the scanning state instead of hanging forever."""
+        self._scan_watchdog.stop()
+        self._set_scanning(False)
+        self._set_status(f"Pre-scan failed: {msg}")
+        self._verdict.update(f"Pre-scan failed: {msg}", "UNKNOWN")
+
+    def _on_scan_watchdog_timeout(self) -> None:
+        """Scan took too long (G5) — clear the scanning state so the UI never
+        shows a permanent spinner. Does not attempt to kill the underlying
+        worker thread; it simply stops waiting on it."""
+        if not self._is_scanning:
+            return  # scan already finished normally; stale timer, ignore
+        self._active_count = 0
+        self._set_scanning(False)
+        self._set_status("Scan took too long and was stopped.")
+        self._verdict.update("Scan took too long and was stopped.", "UNKNOWN")
 
     def _launch_modules_impl(self):
         from workers.scan_worker import (

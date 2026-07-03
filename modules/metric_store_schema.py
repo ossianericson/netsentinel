@@ -300,6 +300,9 @@ CREATE TABLE IF NOT EXISTS topology_snapshots (
 CREATE INDEX IF NOT EXISTS idx_topo_snap_ts ON topology_snapshots(ts DESC);
 
 -- App Traffic per-host/category bandwidth samples (schema v17)
+-- app/window_s (G12): written on every insert but not currently read by any
+-- query — reserved for a future per-app breakdown view. Additive-only
+-- migration framework means these stay; do not drop them to "clean up".
 CREATE TABLE IF NOT EXISTS app_traffic_sample (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     ts          INTEGER NOT NULL,

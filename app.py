@@ -710,6 +710,29 @@ def _wire_trend_forecast(window, worker, alerts, store):
     worker.error.connect(_on_probe_error)
 
 
+def _wire_monitor_error_surface(window, workers_by_name: dict) -> None:
+    """G6 — avail/cert/svc/health/passive_observer/trend all define an
+    ``error`` signal but nothing connected it, so a persistent failure showed
+    stale data with zero indication. One shared quiet slot per worker: log
+    it, then surface a single one-time status-bar note (not a modal — these
+    workers retry automatically on their next interval, so repeating the
+    note every retry would just be noise)."""
+    import logging
+    log = logging.getLogger("netsentinel.monitors")
+    _notified: set = set()
+
+    def _make_handler(name: str):
+        def _on_error(msg: str) -> None:
+            log.warning("%s monitor error: %s", name, msg)
+            if name not in _notified:
+                _notified.add(name)
+                window._set_status(f"⚠ {name} monitor hit an error — see log for details.")
+        return _on_error
+
+    for _name, _worker in workers_by_name.items():
+        _worker.error.connect(_make_handler(_name))
+
+
 def _wire_cross_page(window):
     window._threat_intel_page.entries_updated.connect(window._geo_map_page.set_threat_entries)
     # ThreatIntelPage loads its local cache synchronously in __init__, which runs
@@ -1200,6 +1223,14 @@ def main():
     if _speedtest_qs.value("speedtest/scheduled_enabled", False, type=bool):
         scheduled_speedtest_worker.start()
     _wire_trend_forecast(window, trend_worker, alerts, store)
+    _wire_monitor_error_surface(window, {
+        "Availability":     avail_worker,
+        "Certificate":      cert_worker,
+        "Service":          svc_worker,
+        "Health":           health_worker,
+        "Passive Observer": passive_observer_worker,
+        "Trend Forecast":   trend_worker,
+    })
 
     # V6 Sprint 3.1/3.3/3.5, 3.2/3.5, 3.4/3.5 — scheduled posture scans.
     # Each starts only if its Security Overview toggle was already on at

@@ -428,21 +428,25 @@ class PreScanWorker(QThread):
     """
     status = pyqtSignal(str)
     done   = pyqtSignal()
+    error  = pyqtSignal(str)
 
     def __init__(self, flush_caches: bool = True, parent=None):
         super().__init__(parent)
         self.flush_caches = flush_caches
 
     def run(self):
-        from modules.utils import flush_network_caches, get_local_ip, ping_sweep_subnet
-        if self.flush_caches:
-            self.status.emit("Flushing DNS / ARP / IPv6 neighbour caches…")
-            flush_network_caches()
-        self.status.emit("Discovering devices — pinging subnet…")
-        local_ip = get_local_ip()
-        ping_sweep_subnet(local_ip, progress_cb=lambda m: self.status.emit(m))
-        self.status.emit("Pre-scan complete.  Starting module analysis…")
-        self.done.emit()
+        try:
+            from modules.utils import flush_network_caches, get_local_ip, ping_sweep_subnet
+            if self.flush_caches:
+                self.status.emit("Flushing DNS / ARP / IPv6 neighbour caches…")
+                flush_network_caches()
+            self.status.emit("Discovering devices — pinging subnet…")
+            local_ip = get_local_ip()
+            ping_sweep_subnet(local_ip, progress_cb=lambda m: self.status.emit(m))
+            self.status.emit("Pre-scan complete.  Starting module analysis…")
+            self.done.emit()
+        except Exception as exc:
+            self.error.emit(str(exc))
 
 
 # ── Network-info worker ───────────────────────────────────────────────────────

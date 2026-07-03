@@ -165,9 +165,17 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         # Active workers
         self._workers = []
         self._active_count = 0
+        self._is_scanning = False
         self._prescan_worker = None
         self._diag_worker = None
         self._logger_worker = None
+
+        # Scan watchdog (G5): guards against a hung pre-scan/module worker
+        # leaving the UI stuck on "Scanning…" forever. Parented QTimer per
+        # RULE-WIN5 — never QTimer.singleShot bound to self.
+        self._scan_watchdog = QTimer(self)
+        self._scan_watchdog.setSingleShot(True)
+        self._scan_watchdog.timeout.connect(self._on_scan_watchdog_timeout)
 
         # Cached results
         self._net_info: dict = {}
@@ -1007,6 +1015,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         pass  # no-op; _maybe_start_onboarding drives the first-run flow
 
     def _set_scanning(self, scanning: bool):
+        self._is_scanning = scanning
         self._btn_scan.setEnabled(not scanning)
         if hasattr(self, "_header_scan_btn"):
             self._header_scan_btn.setEnabled(not scanning)
@@ -1933,7 +1942,12 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._prescan_worker = PreScanWorker(flush_caches=True)
         self._prescan_worker.status.connect(self._on_prescan_status)
         self._prescan_worker.done.connect(self._launch_modules)
+        self._prescan_worker.error.connect(self._on_prescan_error)
         self._prescan_worker.start()
+
+        # (Re)start the watchdog for this scan attempt — 120s covers pre-scan
+        # + module launch; _on_worker_done cancels it once modules complete.
+        self._scan_watchdog.start(120_000)
 
     @pyqtSlot(str)
     def _on_prescan_status(self, m: str):
@@ -1944,7 +1958,6 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             lbl.setText(m)
         if hasattr(self, "_home_page"):
             self._home_page.set_scan_progress(m)
-
 
     # ── Module result handlers ────────────────────────────────────────────────
 
@@ -2329,6 +2342,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
         self._active_count -= 1
         if self._active_count <= 0:
             self._active_count = 0
+            self._scan_watchdog.stop()
             self._set_scanning(False)
             self._set_status("Scan complete.")
             self._refresh_pulse_bar()

@@ -89,6 +89,37 @@ def test_prescan_lifecycle():
     _cleanup(w)
 
 
+def test_prescan_emits_error_not_done_on_failure(monkeypatch):
+    """G5 regression test: before the fix, an exception inside run() (e.g.
+    get_local_ip() raising) left done() never fired — the dashboard's
+    'Pre-scan in progress…' verdict hung forever with no recovery. run()
+    must now catch the exception and emit error(), never done()."""
+    from workers.scan_worker import PreScanWorker
+
+    def _raise(*_a, **_kw):
+        raise RuntimeError("no network adapter found")
+
+    monkeypatch.setattr("modules.utils.get_local_ip", _raise)
+
+    done_calls = []
+    error_calls = []
+    w = PreScanWorker(flush_caches=False)
+    w.done.connect(lambda: done_calls.append(True))
+    w.error.connect(error_calls.append)
+    w.start()
+    finished = w.wait(10000)
+    assert finished, "PreScanWorker did not finish within 10 s"
+    assert not w.isRunning()
+    # Cross-thread signals to plain Python callables are queued — pump the
+    # event loop so the connected slots actually run before asserting.
+    app = QApplication.instance()
+    for _ in range(5):
+        app.processEvents()
+    assert error_calls == ["no network adapter found"]
+    assert done_calls == []
+    _cleanup(w)
+
+
 # ── NetworkInfoWorker ─────────────────────────────────────────────────────────
 
 def test_network_info_lifecycle():
