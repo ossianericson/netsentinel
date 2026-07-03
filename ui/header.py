@@ -101,7 +101,7 @@ class AppHeaderMixin:
     def _build_header(self) -> QWidget:
         """Slim top bar: brand | stretch | verdict | actions."""
         from PyQt6.QtWidgets import QMenu, QToolButton
-        from ui.styles import ACCENT, ACCENT_DARK, ACCENT_LITE, BG_CARD, BG_HOVER, BORDER, NAV_BAR, RED
+        from ui.styles import ACCENT, ACCENT_DARK, BG_CARD, BG_HOVER, BORDER, NAV_BAR, RED
         from ui.styles import alpha, SIDEBAR_HOVER, TEXT_MUTED, TEXT_PRIMARY
         from ui.styles import WHITE
 
@@ -232,18 +232,19 @@ class AppHeaderMixin:
         lay.addWidget(self._time_range_combo)
 
         # ── Scan button — persistent PRIMARY action visible from every page ──
-        # Solid at rest (mirrors QPushButton#btnScan). It is the header's one
-        # primary CTA, so unlike the ghost icon buttons above it must read as a
-        # button without a hover; a transparent-at-rest style hid it (users saw
-        # only a faint outline until hover).
+        # At rest it matches the ghost chrome buttons beside it (⚙ / time range):
+        # transparent bg + faint WHITE-alpha hairline on the dark header, accent
+        # fill on hover. (A previous session made it solid accent at rest — its
+        # hover look — to work around an unrelated colour bug; that made it stop
+        # matching its neighbours. This restores the shared at-rest style.)
         _scan_btn_qss = (
-            f"QToolButton {{ background:{ACCENT}; color:{WHITE};"
-            f" border:none; border-radius:5px; font-weight:bold;"
+            f"QToolButton {{ background:transparent; color:{TEXT_MUTED};"
+            f" border:1px solid {alpha(WHITE, 0x22)}; border-radius:5px; font-weight:bold;"
             f" font-family:'Segoe UI Symbol','Segoe UI',sans-serif;"
             f" font-size:12px; padding:0 14px;"
             f" min-height:26px; max-height:26px; }}"
-            f"QToolButton:hover {{ background:{ACCENT_LITE}; color:{WHITE}; }}"
-            f"QToolButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QToolButton:hover {{ background:{ACCENT}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
+            f"QToolButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; border-color:{ACCENT_DARK}; }}"
         )
         self._header_scan_btn = QToolButton()
         self._header_scan_btn.setText("▶  Scan")
