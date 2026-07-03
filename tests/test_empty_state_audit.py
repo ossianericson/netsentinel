@@ -35,7 +35,10 @@ def _has_signal(tree: ast.Module, signal_name: str) -> bool:
     return False
 
 
-# Pages that expose scan_requested per RULE-UX5
+# Pages that expose scan_requested per RULE-UX5.
+# geo_map_page.py is intentionally excluded: its empty-state CTA navigates to
+# Threat Intel (its actual data source) via navigate_requested, not a device
+# scan — see commit 8a2e797.
 _SCAN_REQUESTED_PAGES = [
     "uptime_page.py",
     "cert_page.py",
@@ -47,7 +50,6 @@ _SCAN_REQUESTED_PAGES = [
     "baseline_page.py",
     "trend_page.py",
     "network_doc_page.py",
-    "geo_map_page.py",
     "security_overview_page.py",
 ]
 
