@@ -4,6 +4,21 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.24
+
+**Changed**
+- Refreshed the line-count and test-count figures in `README.md` and `docs/architecture.md` (~135,000 lines of Python, 4,800+ tests across 330+ files)
+
+**Fixed**
+- `speed_tester.py`: the speed-test server-list fetch now retries with backoff and falls back to a last-good cache on failure
+- Eliminated a parentless-widget startup flash in `hub_card.py` (Configure button) and `rest_api_page.py` (external-access warning) — widgets are added to their layout before visibility is toggled (RULE-WIN7); guarded by new `tests/test_widget_visibility_order.py`
+- Resolved 7 open CodeQL alerts (unused imports/globals, mixed returns)
+
+**Security**
+- Hardened the hardware-plugin AI prompts, the plugin template wizard, and 8 bundled plugins against prompt injection
+
+---
+
 ### v2.1.23
 
 **Added**
