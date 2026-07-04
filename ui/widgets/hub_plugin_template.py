@@ -10,6 +10,8 @@ plugin_wizard_mixin.py) — do not rename this constant.
 """
 from __future__ import annotations
 
+__all__ = ["_TEMPLATE"]
+
 _TEMPLATE = '''\
 """
 NetSentinel Hardware Integration Script

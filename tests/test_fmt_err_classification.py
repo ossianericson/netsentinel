@@ -65,7 +65,7 @@ def _connection_error_with_login_url() -> requests.exceptions.ConnectionError:
     except requests.exceptions.ConnectionError as exc:
         assert "login" in str(exc).lower(), "test setup assumption failed: URL not in message"
         return exc
-    pytest.fail("expected a ConnectionError connecting to a closed port")
+    raise AssertionError("expected a ConnectionError connecting to a closed port")
 
 
 _FMT_ERR_SOURCES = {
@@ -134,7 +134,7 @@ def _urlerror_connecting_to_closed_port():
         urllib.request.urlopen("http://127.0.0.1:1/api/login", timeout=2)
     except urllib.error.URLError as exc:
         return exc
-    pytest.fail("expected a URLError connecting to a closed port")
+    raise AssertionError("expected a URLError connecting to a closed port")
 
 
 @pytest.mark.parametrize("name", sorted(_URLLIB_FMT_ERR_SOURCES), ids=sorted(_URLLIB_FMT_ERR_SOURCES))

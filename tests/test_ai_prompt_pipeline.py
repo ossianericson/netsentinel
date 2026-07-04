@@ -52,8 +52,6 @@ PROMPT_A = str(FIXTURES / "prompt_a_plugin.py")
 PROMPT_B = str(FIXTURES / "prompt_b_plugin.py")
 TEMPLATE_COMPLETED = str(FIXTURES / "template_completed_plugin.py")
 
-_CLASSIFIED_PREFIXES = ("DEPS:", "NET:", "AUTH:", "ERR:", "FILE:")
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

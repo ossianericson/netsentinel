@@ -16,7 +16,13 @@ from typing import Optional
 from PyQt6.QtCore import QSettings
 
 from ui.styles import AMBER, GREEN, RED, TEXT_MUTED
-from ui.widgets.hub_plugin_template import _TEMPLATE  # noqa: F401 — re-exported for hub_card.py etc.
+from ui.widgets.hub_plugin_template import _TEMPLATE
+
+# _TEMPLATE is re-exported here for hub_card.py / plugin_guide.py / plugin_wizard_mixin.py
+# and the plugin tests. Declaring it in __all__ marks the re-export as intentional so
+# CodeQL/ruff don't flag the import as unused. hub_helpers is never used with
+# `from hub_helpers import *`; all other helpers are imported explicitly by name.
+__all__ = ["_TEMPLATE"]
 
 _SETTINGS_KEY      = "hardware/custom_scripts"
 _SETTINGS_RESULT   = "hardware/last_result/{}"   # .format(path_hash)

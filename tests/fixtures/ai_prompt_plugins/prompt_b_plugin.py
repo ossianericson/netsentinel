@@ -18,7 +18,6 @@ pre-fix fixture, which hard-coded the captured password and silently broke
 multi-instance + error classification.
 """
 import json
-import sys
 
 import requests
 
