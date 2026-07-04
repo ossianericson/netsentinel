@@ -73,25 +73,57 @@ class PluginGuide(QScrollArea):
         ))
         lay.addWidget(_prompt_block(
             "PROMPT A — General (start here)",
-            "I want to write a Python script that reads live data from my [Brand] [Model] "
-            "router/modem. The admin panel is at http://192.168.1.1. "
+            "I want to write a NetSentinel hardware plugin that reads live data from my "
+            "[Brand] [Model] router/modem. The admin panel is at http://192.168.1.1. "
             "Login: username 'admin', password 'admin'.\n\n"
             "Please:\n"
             "1. Find if this router has a local JSON REST API or requires HTML scraping\n"
-            "2. Write a Python script using requests that logs in and returns:\n"
-            "   - WAN IP, Uptime, Connected clients (name, IP, MAC)\n"
-            "3. Add a main block at the bottom that prints all results as JSON\n"
-            "4. Tell me which packages to install with pip",
+            "2. Write a Python script using requests (with timeout=10 on every call) that "
+            "logs in and returns WAN IP, Uptime, Connected clients (name, IP, MAC)\n"
+            "3. Wrap it in the NetSentinel plugin format:\n"
+            "   - Constants: HARDWARE_NAME (str), HARDWARE_TYPE (must be exactly one of: "
+            "router, modem, ap, switch, other)\n"
+            "   - Functions: get_info(), get_status(), and optionally get_clients() — none "
+            "may take required positional arguments\n"
+            "   - Read the password from the OS keychain via the `keyring` package "
+            "(NetSentinel/hardware/<ip>), never hard-code it\n"
+            "   - Catch every exception inside get_status()/get_clients() and return it as "
+            "{\"extra\": {\"error\": \"PREFIX: message\"}} where PREFIX is AUTH: (wrong "
+            "credentials), NET: (unreachable/timeout), DEPS: (missing pip package), or ERR: "
+            "(anything else) — never let an exception propagate out of these functions\n"
+            "4. Add a main block at the bottom that prints get_info()/get_status()/"
+            "get_clients() as JSON\n"
+            "5. Tell me which packages to install with pip",
         ))
         lay.addWidget(_prompt_block(
             "PROMPT B — From a cURL command (best results)",
             "I captured this API call from my router admin panel using browser dev tools "
             "(F12 → Network → right-click request → Copy as cURL). "
-            "Convert it to a Python function using requests.\n\n"
+            "Convert it to a Python function using requests, with timeout=10 on every call.\n\n"
             "[Paste your cURL command here]\n\n"
             "Then wrap the result in the NetSentinel plugin format:\n"
-            "- HARDWARE_NAME, HARDWARE_TYPE, get_info(), get_status(), get_clients()\n"
+            "- Constants: HARDWARE_NAME (str), HARDWARE_TYPE (exactly one of: router, modem, "
+            "ap, switch, other)\n"
+            "- Functions: get_info(), get_status(), optionally get_clients()\n"
+            "- If the cURL command contains a password, move it to the OS keychain via the "
+            "`keyring` package (NetSentinel/hardware/<ip>) instead of leaving it in the "
+            "script — do not hard-code the captured credential\n"
+            "- Read the device address from a `_NETSENTINEL_INSTANCE_IP` global if present, "
+            "falling back to a HARDWARE_IP constant, so the plugin still works if I add a "
+            "second device of the same type at a different IP\n"
+            "- Catch every exception in get_status()/get_clients() and return it as "
+            "{\"extra\": {\"error\": \"PREFIX: message\"}} — AUTH:/NET:/DEPS:/ERR: — never "
+            "let an exception escape these functions\n"
             "- if __name__ == '__main__': print all results as JSON",
+        ))
+        lay.addWidget(_prompt_block(
+            "PROMPT C — Debug an error",
+            "This NetSentinel hardware plugin raises the following error:\n\n"
+            "[Paste your plugin script here]\n\n"
+            "[Paste the error message here]\n\n"
+            "Fix it. Do not change the HARDWARE_NAME, HARDWARE_TYPE, get_info(), or "
+            "get_status() signatures, and keep every exception classified with the "
+            "AUTH:/NET:/DEPS:/ERR: prefix convention already used in the script.",
         ))
 
         lay.addWidget(_sub_header("1c  Spy on your own router with browser dev tools"))
@@ -137,7 +169,11 @@ class PluginGuide(QScrollArea):
             "I have a Python plugin template. Hardware details:\n"
             "- Admin panel URL: http://192.168.1.1\n"
             "- Username: admin  Password: admin\n\n"
-            "Please complete get_info() and get_status() using the real API for my hardware.\n"
+            "Please complete get_info() and get_status() (and get_clients() if the API "
+            "supports it) using the real API for my hardware. Keep every other part of the "
+            "template exactly as-is: _load_password(), the _fmt_err() error-prefix helper, "
+            "the try/except structure in get_status(), and the standalone-test / shim blocks "
+            "at the bottom. Use requests with timeout=10 on every call.\n"
             "[Paste the template here]",
         ))
         return frame

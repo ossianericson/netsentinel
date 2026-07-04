@@ -32,9 +32,12 @@ CREDENTIAL_LABEL = "Password"
 def _check_deps():
     try:
         import pynetgear  # noqa: F401
-    except ImportError:
-        print("Missing dependency — run:  pip install pynetgear", file=sys.stderr)
-        sys.exit(1)
+    except ImportError as exc:
+        # Raise (never sys.exit) so get_status()/get_clients() catch this like any
+        # other failure and classify it DEPS: via _fmt_err. PluginPollingWorker
+        # treats a plugin's sys.exit() as a silent no-op poll (see its SystemExit
+        # handler) — exiting here would report NO error at all to the user.
+        raise ImportError("Missing dependency — run: pip install pynetgear") from exc
 
 
 def _host() -> str:
@@ -68,15 +71,28 @@ def _load_password() -> str:
 
 
 def _fmt_err(exc: Exception) -> str:
-    """Return a structured error string with a machine-readable prefix."""
+    """Return a structured error string with a machine-readable prefix.
+
+    Checked in order: DEPS (missing package) -> HTTP 401/403 status -> a
+    Connection/Timeout exception type -> message keywords (network before
+    auth) -> ERR. Type/status-code checks come first because a raw
+    connection-library exception's message can include the request URL —
+    if that URL's path contains a word like "login", keyword-only matching
+    would misclassify a plain connection failure as AUTH.
+    """
     msg = str(exc)
     if isinstance(exc, ImportError) or 'pip install' in msg:
         return 'DEPS: ' + msg
-    lm = msg.lower()
-    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+    if status in (401, 403):
         return 'AUTH: ' + msg
+    if any(w in type(exc).__name__ for w in ('Connection', 'Timeout')):
+        return 'NET: ' + msg
+    lm = msg.lower()
     if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network')):
         return 'NET: ' + msg
+    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+        return 'AUTH: ' + msg
     return 'ERR: ' + msg
 
 def get_info() -> dict:
@@ -101,34 +117,44 @@ def _make_client():
 
 
 def get_status() -> dict:
-    _check_deps()
-    ng = _make_client()
-    info = ng.get_info() or {}
-    return {
-        "wan_ip":            info.get("ExternalIPAddress"),
-        "uptime_sec":        None,
-        "connected_clients": None,
-        "extra": {
-            "firmware": info.get("Firmwareversion", ""),
-            "model":    info.get("ModelName", ""),
-        },
-    }
+    try:
+        _check_deps()
+        ng = _make_client()
+        info = ng.get_info() or {}
+        return {
+            "wan_ip":            info.get("ExternalIPAddress"),
+            "uptime_sec":        None,
+            "connected_clients": None,
+            "extra": {
+                "firmware": info.get("Firmwareversion", ""),
+                "model":    info.get("ModelName", ""),
+            },
+        }
+    except Exception as exc:
+        return {
+            "wan_ip": None, "uptime_sec": None, "download_mbps": None,
+            "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
+            "extra": {"error": _fmt_err(exc)},
+        }
 
 
 def get_clients() -> list:
-    _check_deps()
-    ng = _make_client()
-    _BAND = {"1": "Wired", "2": "2.4G", "3": "5G", "4": "5G-2"}
-    devices = ng.get_attached_devices_v2() or []
-    return [
-        {
-            "ip":       getattr(d, "ip",   "") or "",
-            "mac":      getattr(d, "mac",  "") or "",
-            "hostname": getattr(d, "name", "") or "",
-            "band":     _BAND.get(str(getattr(d, "connection_type", "")), ""),
-        }
-        for d in devices
-    ]
+    try:
+        _check_deps()
+        ng = _make_client()
+        _BAND = {"1": "Wired", "2": "2.4G", "3": "5G", "4": "5G-2"}
+        devices = ng.get_attached_devices_v2() or []
+        return [
+            {
+                "ip":       getattr(d, "ip",   "") or "",
+                "mac":      getattr(d, "mac",  "") or "",
+                "hostname": getattr(d, "name", "") or "",
+                "band":     _BAND.get(str(getattr(d, "connection_type", "")), ""),
+            }
+            for d in devices
+        ]
+    except Exception:
+        return []  # get_clients() failures are non-fatal — return empty, not an error
 
 
 # ── Standalone test ───────────────────────────────────────────────────────────

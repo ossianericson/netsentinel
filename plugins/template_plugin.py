@@ -4,10 +4,12 @@ NetSentinel Hardware Plugin — TEMPLATE (router / mesh / AP)
 Copy this file, rename it, and replace every  # TODO  line with your
 hardware's real API calls.  The structure below is identical to the
 verified deco_plugin.py — do not change function signatures, return
-shapes, or the shim at the bottom.
+shapes, the _fmt_err() error-prefix contract, or the shim at the bottom.
+Always pass timeout=10 (or similar) on outbound requests.
 
 Standalone test (run before importing into the app):
     python plugins/my_router_plugin.py
+    python plugins/my_router_plugin.py --netsentinel
 
 Then import via Hardware Hub and enter your password.
 
@@ -70,6 +72,55 @@ def _get_client():
     return _cached_client
 
 
+# ── Error classification (required — do not skip) ─────────────────────────────
+# get_status()/get_clients() must catch every exception and return it through
+# extra.error via _fmt_err(), never let it propagate. An uncaught exception is
+# reported as an UNCLASSIFIED error and wrongly counts toward the auto-disable
+# circuit breaker even for a simple wrong password.
+
+def _fmt_err(exc: Exception) -> str:
+    """Return a structured error string with a machine-readable prefix.
+
+    DEPS: — missing pip package (ImportError, or message contains "pip install")
+    NET:  — device unreachable / connection refused / timed out
+    AUTH: — wrong credentials
+    ERR:  — anything else
+
+    Classified by exception type / HTTP status code FIRST, falling back to
+    message keywords only when neither is available: a raw requests
+    ConnectionError's message includes the request URL, so if that URL's path
+    happens to contain a word like "login", naive keyword-only matching
+    misclassifies a plain connection failure as AUTH:. Checking the exception
+    type name (Connection/Timeout) and, for requests' HTTPError,
+    response.status_code (401/403) avoids that trap. If you use urllib
+    instead: urllib.error.HTTPError has .code, and urllib.error.URLError
+    wraps the real socket exception in .reason — both checked too.
+
+    AUTH: errors do NOT count toward the auto-disable circuit breaker (a wrong
+    password won't fix itself by retrying); NET:/ERR: do.
+    """
+    msg = str(exc)
+    if isinstance(exc, ImportError) or "pip install" in msg:
+        return "DEPS: " + msg
+    type_name = type(exc).__name__
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status in (401, 403):
+        return "AUTH: " + msg
+    if getattr(exc, "code", None) in (401, 403):  # urllib.error.HTTPError
+        return "AUTH: " + msg
+    if any(w in type_name for w in ("Connection", "Timeout")):
+        return "NET: " + msg
+    reason = getattr(exc, "reason", None)  # urllib.error.URLError wraps the real cause
+    if reason is not None and any(w in type(reason).__name__ for w in ("Connection", "Timeout")):
+        return "NET: " + msg
+    lm = msg.lower()
+    if any(w in lm for w in ("refused", "timed out", "unreachable", "no route", "network is")):
+        return "NET: " + msg
+    if any(w in lm for w in ("auth", "password", "login", "401", "forbidden", "wrong credential")):
+        return "AUTH: " + msg
+    return "ERR: " + msg
+
+
 # ── Required interface ────────────────────────────────────────────────────────
 
 def get_info() -> dict:
@@ -126,7 +177,7 @@ def get_status() -> dict:
             "wan_ip": None, "uptime_sec": None,
             "download_mbps": None, "upload_mbps": None,
             "signal_dbm": None, "connected_clients": None,
-            "extra": {"error": str(exc)},
+            "extra": {"error": _fmt_err(exc)},
         }
 
 
@@ -179,7 +230,7 @@ if "--netsentinel" in _sys.argv:
     except Exception as _exc:
         _sys.stdout.write(_json.dumps({
             "info":    {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP},
-            "status":  {"extra": {"error": str(_exc)}},
+            "status":  {"extra": {"error": _fmt_err(_exc)}},
             "clients": [],
         }, default=str) + "\n")
         _sys.exit(0)
@@ -190,7 +241,7 @@ if "--netsentinel" in _sys.argv:
     except Exception as _exc:
         _status  = {"wan_ip": None, "uptime_sec": None, "download_mbps": None,
                     "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
-                    "extra": {"error": str(_exc)}}
+                    "extra": {"error": _fmt_err(_exc)}}
         _clients = []
         _info    = {"name": HARDWARE_NAME, "type": HARDWARE_TYPE, "ip": HARDWARE_IP,
                     "manufacturer": "TODO", "model": "TODO", "firmware": None}
