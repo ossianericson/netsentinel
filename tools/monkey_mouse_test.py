@@ -49,6 +49,22 @@ Options (in addition to every monkey_test.py option — see its --help):
                           sort-click or column-resize drag instead of a random
                           point (default 0.25) — this is the setting that
                           targets the bug class UIA-driven testing misses.
+    --start-page NAME     Page to force-navigate to (via Ctrl+K, keyboard —
+                          not mouse) right after startup/restart, so every
+                          run begins from the same known state instead of
+                          whatever page QSettings restored (default "Home").
+    --page-switch-every N Force a keyboard-driven page navigation every N
+                          iterations so the run doesn't spend its whole
+                          duration randomly clicking a single page
+                          (default 12).
+
+A pure random-point clicker would otherwise happily sit on whatever page the
+app opened to (last-open section restored from QSettings) and click blind
+points on that one page for the entire run — real coverage of the other ~60
+pages requires forcing navigation, which is done via the same keyboard/
+command-palette mechanism monkey_test.py already uses for its own nav
+actions (never via mouse, since a mouse click on the flyout is exactly the
+kind of UIA-tree-shaped action this tool intentionally avoids).
 
 Requirements: same as monkey_test.py — pip install pywinauto psutil Pillow
 
@@ -185,6 +201,43 @@ def _rect_contains(rect, x: int, y: int, pad: int = 0) -> bool:
             and rect.top - pad <= y <= rect.bottom + pad)
 
 
+# Pages safe to force-navigate to for page-cycling coverage. Reuses
+# monkey_test.py's already-vetted read-only page list and adds "Devices" —
+# the primary sortable-table page (large QHeaderView, many rows) that
+# monkey_test.py's own list omits because it also contains blacklisted
+# buttons ("Remove Device"); those buttons stay protected by the same
+# exclusion-zone logic used for random-point selection.
+_PAGE_POOL: List[str] = list(_mt._SAFE_PAGES) + ["Devices"]
+
+
+def _navigate_to_page(win, label: str, log) -> bool:
+    """Force navigation to *label* via the Ctrl+K command palette.
+
+    Keyboard-driven, not mouse — this is deliberate. The random-point mouse
+    fuzzing in this tool must never be relied on to reach a specific page;
+    it wanders. Anchoring the run to a known page (at startup) and moving it
+    on a schedule (during the run) needs a deterministic mechanism, and the
+    palette is the same one monkey_test.py already uses for its own nav
+    actions, so it doesn't introduce a second, less-tested code path.
+    """
+    try:
+        win.type_keys("^k")
+        time.sleep(0.45)
+        win.type_keys(label[:6], with_spaces=True, pause=0.04)
+        time.sleep(0.30)
+        win.type_keys("{ENTER}")
+        time.sleep(0.50)
+        log.info("[nav] Forced navigation to %r via command palette", label)
+        return True
+    except Exception as exc:
+        log.warning("[nav] Forced navigation to %r failed: %s", label, exc)
+        try:
+            win.type_keys("{ESC}")
+        except Exception:
+            pass  # non-fatal — next iteration's dialog/focus guards recover
+        return False
+
+
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 @dataclasses.dataclass
@@ -199,6 +252,12 @@ class MouseConfig(_mt.Config):
     # cannot: QHeaderView sort/resize is not in its control dispatch table.
     header_bias: float = 0.25
     zone_refresh_every: int = 5   # iterations between UIA rescans for zones/headers
+    # Deterministic start page (forced via keyboard, not mouse) so every run
+    # begins from the same known state instead of whatever QSettings restored.
+    start_page: str = "Home"
+    # Force a keyboard-driven page navigation every N iterations so the run
+    # doesn't spend its whole duration randomly clicking a single page.
+    page_switch_every: int = 12
 
 
 # ── Tester ─────────────────────────────────────────────────────────────────────
@@ -217,6 +276,19 @@ class MouseMonkeyTester(_mt.MonkeyTester):
         self._exclusion_rects: List = []
         self._header_rects: List = []
         self._last_zone_scan = -999
+        self._start_page_done = False
+        self._last_page_switch = 0
+
+    def _dismiss_startup_overlays(self) -> None:
+        # Called by the base class at both initial startup AND after every
+        # auto-restart (_restart_app). Re-arming the flag here — rather than
+        # navigating immediately — means the actual palette navigation runs
+        # inside _run_one() after _assert_focus() has already succeeded, so
+        # the window is guaranteed foreground before we send Ctrl+K. Doing
+        # it here directly would race the explicit foreground claim that
+        # happens later in run()/_restart_app().
+        super()._dismiss_startup_overlays()
+        self._start_page_done = False
 
     # ── Zone discovery (read-only UIA — used only to pick safe/interesting
     #    coordinates; the actual interaction is raw input, not UIA) ─────────
@@ -274,6 +346,19 @@ class MouseMonkeyTester(_mt.MonkeyTester):
         return None
 
     # ── Action selection ────────────────────────────────────────────────────
+
+    def _do_page_switch(self, n: int, forced_page: Optional[str] = None) -> "_mt.Action":
+        """Force a keyboard-driven palette navigation. Used both for the
+        one-time deterministic start-page anchor and the recurring
+        page_switch_every cycling — see _run_one()."""
+        ts = datetime.now().strftime("%H:%M:%S")
+        page = forced_page or random.choice(_PAGE_POOL)
+        ok = _navigate_to_page(self._win, page, self.log)
+        self._last_page_switch = n
+        self._last_zone_scan = -999   # force a fresh zone/header scan on the new page
+        return _mt.Action(n=n, ts=ts, ctype="Navigation", name="<win>",
+                           auto_id="", action=f"forced_page:{page}",
+                           result="ok" if ok else "err")
 
     def _act_header(self, n: int, ts: str) -> "_mt.Action":
         rect = random.choice(self._header_rects)
@@ -379,7 +464,12 @@ class MouseMonkeyTester(_mt.MonkeyTester):
 
         self._refresh_zones(n)
 
-        if random.random() < self.cfg.nav_prob:
+        if not self._start_page_done:
+            rec = self._do_page_switch(n, forced_page=self.cfg.start_page)
+            self._start_page_done = True
+        elif n - self._last_page_switch >= self.cfg.page_switch_every:
+            rec = self._do_page_switch(n)
+        elif random.random() < self.cfg.nav_prob:
             rec = self._do_nav(n)   # inherited: Ctrl+F/Ctrl+K/Esc keyboard shortcuts
         else:
             rec = self._do_mouse_action(n)
@@ -411,6 +501,12 @@ def _build_parser():
     p.add_argument("--header-bias", type=float, default=0.25, metavar="F",
                    help="Probability of targeting a table header (sort click or "
                         "column-resize drag) instead of a random point (default 0.25)")
+    p.add_argument("--start-page", default="Home", metavar="NAME",
+                   help="Page to force-navigate to via keyboard at startup/restart, "
+                        "so every run begins from the same known state (default Home)")
+    p.add_argument("--page-switch-every", type=int, default=12, metavar="N",
+                   help="Force a keyboard-driven page navigation every N iterations "
+                        "(default 12) so the run isn't stuck clicking one page")
     return p
 
 
@@ -451,6 +547,8 @@ def main() -> None:
         right_click_prob=args.right_click_prob,
         double_click_prob=args.double_click_prob,
         header_bias=args.header_bias,
+        start_page=args.start_page,
+        page_switch_every=args.page_switch_every,
     )
 
     sys.exit(MouseMonkeyTester(cfg).run())

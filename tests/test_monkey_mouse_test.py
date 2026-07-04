@@ -59,6 +59,8 @@ def test_config_defaults():
     assert cfg.right_click_prob == 0.08
     assert cfg.double_click_prob == 0.08
     assert cfg.header_bias == 0.25
+    assert cfg.start_page == "Home"
+    assert cfg.page_switch_every == 12
 
 
 def test_config_custom():
@@ -86,6 +88,38 @@ def test_header_types_excludes_generic_button():
     assert "Button" not in mod._HEADER_TYPES
 
 
+def test_page_pool_includes_devices_and_safe_pages():
+    mod = _import_monkey_mouse()
+    assert "Devices" in mod._PAGE_POOL
+    assert "Home" in mod._PAGE_POOL
+    assert "Overview" in mod._PAGE_POOL
+    # every entry from monkey_test's vetted read-only list must carry over
+    assert set(mod._mt._SAFE_PAGES).issubset(set(mod._PAGE_POOL))
+
+
+def test_tester_init_arms_start_page_flag(tmp_path):
+    """__init__ never launches anything (that's run()'s job), so it's safe
+    to instantiate directly and check the deterministic-start-page state."""
+    mod = _import_monkey_mouse()
+    cfg = mod.MouseConfig(seed=1, output_dir=str(tmp_path))
+    tester = mod.MouseMonkeyTester(cfg)
+    assert tester._start_page_done is False
+    assert tester._last_page_switch == 0
+
+
+def test_dismiss_startup_overlays_rearms_start_page_flag(tmp_path, monkeypatch):
+    """_dismiss_startup_overlays runs on both initial startup AND every
+    auto-restart (inherited from MonkeyTester) — it must re-arm the flag
+    both times so a restarted app also gets navigated back to start_page."""
+    mod = _import_monkey_mouse()
+    cfg = mod.MouseConfig(seed=1, output_dir=str(tmp_path))
+    tester = mod.MouseMonkeyTester(cfg)
+    tester._start_page_done = True
+    monkeypatch.setattr(mod._mt.MonkeyTester, "_dismiss_startup_overlays", lambda self: None)
+    tester._dismiss_startup_overlays()
+    assert tester._start_page_done is False
+
+
 def test_cli_help():
     result = subprocess.run(
         [sys.executable, str(TOOLS_ROOT / "monkey_mouse_test.py"), "--help"],
@@ -95,3 +129,5 @@ def test_cli_help():
     combined = result.stdout + result.stderr
     assert "--header-bias" in combined
     assert "--drag-prob" in combined
+    assert "--start-page" in combined
+    assert "--page-switch-every" in combined
