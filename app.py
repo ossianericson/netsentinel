@@ -904,7 +904,9 @@ def main():
 
         _trace_path = os.path.join(str(_gad_trace()), "window_trace.log")
         try:
-            _trace_fh = open(_trace_path, "a", encoding="utf-8")
+            import atexit
+            _trace_fh = open(_trace_path, "a", encoding="utf-8")  # lgtm[py/file-not-closed] — kept open for process lifetime; atexit closes it
+            atexit.register(_trace_fh.close)
         except Exception:
             _trace_fh = sys.stderr
 

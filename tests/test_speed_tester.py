@@ -1,6 +1,7 @@
 """Tests for modules/speed_tester.py — SpeedTestResult dataclass and helpers."""
 from __future__ import annotations
 
+import importlib
 import sys
 
 import pytest
@@ -85,7 +86,7 @@ def test_find_ookla_cli_returns_path_or_none():
 def test_fetch_servers_retries_on_transient_failure(monkeypatch):
     """A single transient failure must not raise — fetch_servers() should retry
     and succeed once the underlying fetch recovers."""
-    import modules.speed_tester as st
+    st = importlib.import_module("modules.speed_tester")
     from modules.speed_tester_backends import SpeedServer
 
     # Force ImportError on `import speedtest` so the cascade exercises only
@@ -116,8 +117,8 @@ def test_fetch_servers_retries_on_transient_failure(monkeypatch):
 def test_fetch_servers_falls_back_to_cache_when_all_attempts_fail(monkeypatch, tmp_path):
     """If every retry fails, fetch_servers() must return the last cached list
     rather than raising, when a cache exists."""
-    import modules.speed_tester as st
-    import modules.speed_tester_servers as sts
+    st = importlib.import_module("modules.speed_tester")
+    sts = importlib.import_module("modules.speed_tester_servers")
     from modules.speed_tester_backends import SpeedServer
 
     monkeypatch.setitem(sys.modules, "speedtest", None)
@@ -140,8 +141,8 @@ def test_fetch_servers_falls_back_to_cache_when_all_attempts_fail(monkeypatch, t
 
 def test_fetch_servers_raises_after_exhausting_retries_with_no_cache(monkeypatch, tmp_path):
     """No cache and every attempt fails → RuntimeError, not a silent empty list."""
-    import modules.speed_tester as st
-    import modules.speed_tester_servers as sts
+    st = importlib.import_module("modules.speed_tester")
+    sts = importlib.import_module("modules.speed_tester_servers")
 
     monkeypatch.setitem(sys.modules, "speedtest", None)
     monkeypatch.setattr(sts, "get_app_data_dir", lambda: tmp_path)  # empty dir — no cache

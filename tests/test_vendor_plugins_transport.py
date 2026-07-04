@@ -3,8 +3,7 @@
 Unlike deco_plugin.py/zte_plugin.py (the author's own hardware, already covered
 by tests/test_bundled_plugins_behavior.py), these 6 plugins wrap third-party
 libraries that are not installed in CI: asusrouter, routeros-api, pyunifi,
-pynetgear, openwrt-luci-rpc (fritzconnection happens to be installed here, but
-is still faked the same way for portability). Each library's exact class/
+pynetgear, openwrt-luci-rpc, fritzconnection. Each library's exact class/
 method surface is faked via ``monkeypatch.setitem(sys.modules, ...)``, mirroring
 the pattern in test_bundled_plugins_behavior.py, and each plugin is exec'd in a
 fresh namespace exactly like PluginPollingWorker._run_once() does.
@@ -237,12 +236,23 @@ class _FakeFritzHosts:
 
 
 def _install_fake_fritzconnection(monkeypatch, *, raise_exc=None):
-    import fritzconnection.lib.fritzstatus as fs_mod
-    import fritzconnection.lib.fritzhosts as fh_mod
     status_cls = type("FakeFritzStatus", (_FakeFritzStatus,), {"_raise": raise_exc})
     hosts_cls = type("FakeFritzHosts", (_FakeFritzHosts,), {"_raise": raise_exc})
-    monkeypatch.setattr(fs_mod, "FritzStatus", status_cls)
-    monkeypatch.setattr(fh_mod, "FritzHosts", hosts_cls)
+
+    pkg = types.ModuleType("fritzconnection")
+    lib_pkg = types.ModuleType("fritzconnection.lib")
+    fs_mod = types.ModuleType("fritzconnection.lib.fritzstatus")
+    fh_mod = types.ModuleType("fritzconnection.lib.fritzhosts")
+    fs_mod.FritzStatus = status_cls
+    fh_mod.FritzHosts = hosts_cls
+    lib_pkg.fritzstatus = fs_mod
+    lib_pkg.fritzhosts = fh_mod
+    pkg.lib = lib_pkg
+
+    monkeypatch.setitem(sys.modules, "fritzconnection", pkg)
+    monkeypatch.setitem(sys.modules, "fritzconnection.lib", lib_pkg)
+    monkeypatch.setitem(sys.modules, "fritzconnection.lib.fritzstatus", fs_mod)
+    monkeypatch.setitem(sys.modules, "fritzconnection.lib.fritzhosts", fh_mod)
 
 
 def test_fritzbox_happy_path(monkeypatch):
