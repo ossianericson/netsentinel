@@ -604,8 +604,9 @@ class GeoMapPage(QWidget):
         self._ip_table = _table(
             ["IP", "Country", "City", "Lat", "Lon", "Category", "Linked"])
         self._ip_table.setFixedHeight(160)
+        # Interactive, not ResizeToContents (RULE-PERF1) — see threat_intel_page.py
         self._ip_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
+            QHeaderView.ResizeMode.Interactive)
         self._ip_table.horizontalHeader().setStretchLastSection(True)
         self._ip_table.itemSelectionChanged.connect(self._on_table_selection)
 

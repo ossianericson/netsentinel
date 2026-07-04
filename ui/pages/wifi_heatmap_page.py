@@ -315,8 +315,9 @@ class WifiHeatmapPage(QWidget):
         # Samples table card
         samp_card, samp_layout = _card("Samples  (click a row to highlight on map)")
         self._sample_table = _table(["#", "dBm (avg)", "Quality", "APs seen"])
+        # Interactive, not ResizeToContents (RULE-PERF1) — see threat_intel_page.py
         self._sample_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.ResizeToContents)
+            QHeaderView.ResizeMode.Interactive)
         self._sample_table.horizontalHeader().setStretchLastSection(True)
         self._sample_table.setMinimumHeight(200)
         self._sample_table.itemSelectionChanged.connect(self._on_sample_selected)

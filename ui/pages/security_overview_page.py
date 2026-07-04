@@ -103,7 +103,8 @@ def _make_table(headers: list[str]) -> QTableWidget:
     t = QTableWidget(0, len(headers))
     t.setHorizontalHeaderLabels(headers)
     t.horizontalHeader().setStretchLastSection(True)
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    # Interactive, not ResizeToContents (RULE-PERF1) — see threat_intel_page.py
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
     t.verticalHeader().setVisible(False)
     t.verticalHeader().setDefaultSectionSize(24)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
