@@ -71,13 +71,25 @@ except ImportError:
 # "buttons" lists fallback candidates tried in order — Home shows "Rescan"
 # only after a scan has already run once; before that, "Scan Network" is the
 # visible button.
+#
+# "prefill": three of these buttons are wired to handlers that silently
+# return without starting anything if their one QLineEdit is empty —
+# _start_syn_scan()/_start_udp_scan() do `if not host: return`, and
+# _start_cve_lookup() needs either manual text or rows in a *different*
+# page's port-scan table that this whitelist never populates. Clicking the
+# button alone looks identical to a successful click (no error, no dialog)
+# but never starts a worker — this is exactly what silently made "the script
+# just navigates, does not start the scans" true. "<gateway>" is a sentinel
+# resolved to a real IP guess at run time (see _discover_gateway_ip); OS
+# Detection is deliberately left without a prefill because it falls back to
+# the last full-scan results when its field is blank.
 _SCAN_TARGETS = [
     {"page": "Home", "buttons": ["▶  Rescan", "▶  Scan Network"]},
     {"page": "Full Device Discovery", "buttons": ["🚀  Start Discovery"]},
-    {"page": "Port Scan (TCP)", "buttons": ["⚡  SYN Scan"]},
-    {"page": "Port Scan (UDP)", "buttons": ["📻  UDP Scan"]},
+    {"page": "Port Scan (TCP)", "buttons": ["⚡  SYN Scan"], "prefill": "<gateway>"},
+    {"page": "Port Scan (UDP)", "buttons": ["📻  UDP Scan"], "prefill": "<gateway>"},
     {"page": "OS Detection", "buttons": ["🖥  Fingerprint"]},
-    {"page": "CVE Lookup", "buttons": ["🛡  Lookup CVEs"]},
+    {"page": "CVE Lookup", "buttons": ["🛡  Lookup CVEs"], "prefill": "OpenSSH 8.9p1"},
     {"page": "Threat Intel", "buttons": ["Update Feeds"]},
     {"page": "Exposed to Internet", "buttons": ["🌐  Check Exposure"]},
 ]
@@ -106,6 +118,53 @@ def _navigate_to_page(win, label: str, log) -> bool:
         except Exception:
             pass  # non-fatal — next iteration's dialog/focus guards recover
         return False
+
+
+def _discover_gateway_ip() -> str:
+    """Best-effort local gateway guess for filling scan-target host fields.
+
+    Not security-sensitive — this only needs to be a plausible, likely-live
+    LAN host so a probe-only scan (SYN/UDP against your own gateway) actually
+    starts instead of silently no-op'ing on an empty host field. Opening a
+    UDP socket to a public IP never sends a packet (no connect handshake for
+    UDP) — it only asks the OS to pick a local source address/route, which is
+    how we learn this machine's own LAN IP without any network traffic.
+    """
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+        finally:
+            s.close()
+        octets = local_ip.split(".")
+        return ".".join(octets[:3] + ["1"])   # .1 is the overwhelming default for home routers
+    except Exception:
+        return "192.168.1.1"
+
+
+def _fill_edit_field(win, text: str, log) -> bool:
+    """Type *text* into the first visible, enabled Edit control on the
+    current page. Manual descendants() walk + type filter, mirroring
+    monkey_test.py's own pattern, rather than trusting an unverified
+    descendants(control_type=...) kwarg."""
+    try:
+        descendants = win.descendants()
+    except Exception:
+        descendants = []
+    for ctrl in descendants:
+        try:
+            if _mt._safe_type(ctrl) != "Edit":
+                continue
+            if not ctrl.is_visible() or not ctrl.is_enabled():
+                continue
+            ctrl.set_edit_text(text)
+            log.info("[scan] Filled input field with %r", text)
+            return True
+        except Exception:
+            continue
+    return False
 
 
 def _find_and_click_button(win, candidates, log):
@@ -147,6 +206,7 @@ class ScanNavigateTester(_mt.MonkeyTester):
         super().__init__(cfg)
         self.cfg: ScanNavConfig = cfg
         self._target_idx = 0
+        self._gateway_ip = _discover_gateway_ip()
 
     def _pick_away_page(self, exclude_label: str) -> str:
         pool = [p for p in _AWAY_PAGES if p != exclude_label]
@@ -161,6 +221,12 @@ class ScanNavigateTester(_mt.MonkeyTester):
         if not _navigate_to_page(self._win, page, self.log):
             return _mt.Action(n=n, ts=ts, ctype="ScanNav", name=page,
                                auto_id="", action="nav_failed", result="err")
+
+        prefill = target.get("prefill")
+        if prefill == "<gateway>":
+            prefill = self._gateway_ip
+        if prefill:
+            _fill_edit_field(self._win, prefill, self.log)
 
         clicked = _find_and_click_button(self._win, target["buttons"], self.log)
         if clicked is None:
@@ -184,7 +250,7 @@ class ScanNavigateTester(_mt.MonkeyTester):
         self.stats.record("ScanNav", f"{page}:{clicked}")
         return _mt.Action(
             n=n, ts=ts, ctype="ScanNav", name=page, auto_id="",
-            action=(f"clicked={clicked!r} interrupt={interrupt_delay:.1f}s "
+            action=(f"prefill={prefill!r} clicked={clicked!r} interrupt={interrupt_delay:.1f}s "
                     f"away={away!r} settle={settle_delay:.1f}s"),
             result="ok",
         )

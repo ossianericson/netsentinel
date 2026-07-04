@@ -52,6 +52,35 @@ def test_scan_targets_well_formed():
         assert isinstance(target["buttons"], list) and target["buttons"]
         for label in target["buttons"]:
             assert isinstance(label, str) and label
+        if "prefill" in target:
+            assert isinstance(target["prefill"], str) and target["prefill"]
+
+
+def test_syn_and_udp_scan_targets_have_prefill():
+    """_start_syn_scan()/_start_udp_scan() silently `return` on an empty host
+    field — without a prefill entry, clicking the button is a no-op that
+    looks identical to a successful click (no error surfaces)."""
+    mod = _import_scan_navigate()
+    by_page = {t["page"]: t for t in mod._SCAN_TARGETS}
+    assert by_page["Port Scan (TCP)"]["prefill"] == "<gateway>"
+    assert by_page["Port Scan (UDP)"]["prefill"] == "<gateway>"
+
+
+def test_cve_lookup_target_has_prefill():
+    """_start_cve_lookup() needs manual text or rows in a different page's
+    port-scan table that this whitelist never populates."""
+    mod = _import_scan_navigate()
+    by_page = {t["page"]: t for t in mod._SCAN_TARGETS}
+    assert by_page["CVE Lookup"].get("prefill")
+
+
+def test_discover_gateway_ip_returns_ipv4_shape():
+    mod = _import_scan_navigate()
+    ip = mod._discover_gateway_ip()
+    parts = ip.split(".")
+    assert len(parts) == 4
+    assert all(p.isdigit() and 0 <= int(p) <= 255 for p in parts)
+    assert parts[3] == "1"
 
 
 def test_scan_targets_exclude_credentialed_and_lockout_risk():
