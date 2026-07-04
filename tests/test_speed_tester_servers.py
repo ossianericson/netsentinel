@@ -133,3 +133,36 @@ def test_fetch_servers_python_calls_on_status(monkeypatch):
     m._fetch_servers_python(limit=1, on_status=messages.append)
 
     assert any("location" in msg.lower() or "server" in msg.lower() for msg in messages)
+
+
+# ── Last-good server list cache (RULE 23 app-data storage) ─────────────────────
+
+def test_servers_cache_round_trip(tmp_path, monkeypatch):
+    import modules.speed_tester_servers as m
+    from modules.speed_tester_backends import SpeedServer
+
+    monkeypatch.setattr(m, "get_app_data_dir", lambda: tmp_path)
+
+    servers = [SpeedServer(id="1", name="A", city="B", country="US",
+                           host="h:8080", latency_ms=3.0)]
+    m._save_servers_cache(servers)
+
+    loaded = m._load_servers_cache()
+    assert len(loaded) == 1
+    assert loaded[0].id == "1"
+    assert loaded[0].name == "A"
+
+
+def test_servers_cache_missing_returns_empty(tmp_path, monkeypatch):
+    import modules.speed_tester_servers as m
+
+    monkeypatch.setattr(m, "get_app_data_dir", lambda: tmp_path)
+    assert m._load_servers_cache() == []
+
+
+def test_servers_cache_corrupt_returns_empty(tmp_path, monkeypatch):
+    import modules.speed_tester_servers as m
+
+    monkeypatch.setattr(m, "get_app_data_dir", lambda: tmp_path)
+    (tmp_path / "speedtest_servers_cache.json").write_text("not valid json", encoding="utf-8")
+    assert m._load_servers_cache() == []
