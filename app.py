@@ -891,6 +891,99 @@ def main():
     if _startup_logger:
         _start_minimised = True
 
+    # ── Window-flash trace (diagnostic) ───────────────────────────────────────
+    # Run with `python app.py --trace-windows` to log every top-level widget that
+    # becomes visible. A parentless widget briefly shown before it is added to a
+    # layout appears here as its own top-level window with native chrome — that is
+    # the "small second window flashing at startup" symptom (RULE-WIN7). The log
+    # is written to %LOCALAPPDATA%\NetSentinel\window_trace.log and echoed to
+    # stderr. This filter is inert unless the flag is present.
+    if "--trace-windows" in sys.argv:
+        from PyQt6.QtCore import QObject, QEvent
+        from modules.utils import get_app_data_dir as _gad_trace
+
+        _trace_path = os.path.join(str(_gad_trace()), "window_trace.log")
+        try:
+            _trace_fh = open(_trace_path, "a", encoding="utf-8")
+        except Exception:
+            _trace_fh = sys.stderr
+
+        def _trace(line: str) -> None:
+            try:
+                _trace_fh.write(line + "\n")
+                _trace_fh.flush()
+            except Exception:
+                pass  # tracing must never crash the app
+            try:
+                sys.stderr.write(line + "\n")
+            except Exception:
+                pass  # stderr may be unavailable in a frozen build
+
+        class _WindowShowTracer(QObject):
+            def eventFilter(self, obj, event):
+                try:
+                    if event.type() == QEvent.Type.Show:
+                        from PyQt6.QtWidgets import QWidget
+                        if isinstance(obj, QWidget) and obj.isWindow():
+                            cls = type(obj).__name__
+                            name = obj.objectName() or "<no objectName>"
+                            sz = obj.size()
+                            flags = int(obj.windowFlags())
+                            parent = obj.parent()
+                            pcls = type(parent).__name__ if parent is not None else "None"
+                            import time as _t
+                            _trace(
+                                f"[{_t.strftime('%H:%M:%S')}] TOP-LEVEL SHOW  "
+                                f"class={cls}  objectName={name!r}  "
+                                f"size={sz.width()}x{sz.height()}  "
+                                f"parent={pcls}  flags=0x{flags:08x}  "
+                                f"title={obj.windowTitle()!r}"
+                            )
+                except Exception:
+                    pass  # tracing must never crash the app
+                return False
+
+        _win_tracer = _WindowShowTracer()
+        app.installEventFilter(_win_tracer)
+        app._win_tracer = _win_tracer  # keep a ref alive for the app lifetime
+
+        # Synchronous hook: capture the exact construction/callsite where a
+        # still-parentless top-level widget is made visible. The event filter
+        # above sees the Show *event* (dispatched later inside the event loop,
+        # so its Python stack is just processEvents). Wrapping setVisible/show
+        # gives the real callsite — the file:line that must be reordered.
+        import traceback as _tb
+        from PyQt6.QtWidgets import QWidget as _QWidgetT
+
+        _orig_set_visible = _QWidgetT.setVisible
+        _orig_show = _QWidgetT.show
+
+        def _log_parentless(w, how):
+            try:
+                if w.isWindow() and w.parent() is None:
+                    cls = type(w).__name__
+                    stack = "".join(_tb.format_stack(limit=12)[:-1])
+                    _trace(
+                        f"--- parentless {how} on top-level {cls} "
+                        f"(objectName={w.objectName()!r}) ---\n{stack}"
+                    )
+            except Exception:
+                pass  # tracing must never crash the app
+
+        def _traced_set_visible(self, visible):
+            if visible:
+                _log_parentless(self, "setVisible(True)")
+            return _orig_set_visible(self, visible)
+
+        def _traced_show(self):
+            _log_parentless(self, "show()")
+            return _orig_show(self)
+
+        _QWidgetT.setVisible = _traced_set_visible
+        _QWidgetT.show = _traced_show
+
+        _trace(f"=== window trace started (pid={os.getpid()}) → {_trace_path} ===")
+
     # ── Splash screen ─────────────────────────────────────────────────────────
     # PERF-1: splash screen with progress messages.
     # 800×500 canvas with the 480×280 design centred inside it — covers the

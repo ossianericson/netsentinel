@@ -1064,8 +1064,8 @@ class HubCard(QFrame):
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
         )
         self._btn_configure.toggled.connect(self._toggle_config_panel)
-        self._btn_configure.setVisible(bool(self._config_schema))
         hdr_lay.addWidget(self._btn_configure)
+        self._btn_configure.setVisible(bool(self._config_schema))
 
         # Rename button — inline display-name edit (P3-4)
         btn_rename = _btn("✎")

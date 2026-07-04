@@ -211,8 +211,8 @@ class RestApiPage(QWidget):
             f"font-size:11px; color:{AMBER}; background:{AMBER_BG};"
             f" border:1px solid {AMBER}; padding:6px 8px;"
         )
-        self._lbl_warning.setVisible(self._chk_external.isChecked())
         bl.addWidget(self._lbl_warning)
+        self._lbl_warning.setVisible(self._chk_external.isChecked())
 
         port_val = int(qs.value("rest_api/port", 8765))
         self._lbl_other_devices = QLabel(
@@ -225,8 +225,8 @@ class RestApiPage(QWidget):
         self._lbl_other_devices.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
         )
-        self._lbl_other_devices.setVisible(self._chk_external.isChecked())
         bl.addWidget(self._lbl_other_devices)
+        self._lbl_other_devices.setVisible(self._chk_external.isChecked())
 
         key_row = QHBoxLayout()
         key_row.setSpacing(8)

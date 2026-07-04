@@ -937,6 +937,30 @@ QObject subclasses that are **not** QWidget (e.g. `QThread`, `GuidedTour`) are i
 `topLevelWidgets()` and therefore escape `conftest._flush_qt_events`. Track them explicitly
 and call `deleteLater()` + 3× `processEvents()` in `teardown_method` or fixture finaliser.
 
+### RULE-WIN7 (blocking): Never call `.setVisible(...)` / `.show()` on a freshly-constructed widget before it is added to its layout
+A widget built with no `parent=` argument has no parent until `addWidget()`/`insertWidget()`
+runs — until then Qt treats it as an independent top-level window. Calling `.setVisible(True)`
+(or any expression that can be truthy) on it first makes that still-parentless widget flash on
+screen with full native OS chrome (title bar + min/max/close) for a fraction of a second. This
+shipped in v2.1.22 (commit `e83eb86`, three sites fixed by manual audit) and reappeared
+independently in `ui/widgets/hub_card.py` (Configure button, any plugin with `CONFIG_SCHEMA`)
+and `ui/pages/rest_api_page.py` (external-access warning label) because that audit was a
+one-time sweep, not a structural guard.
+
+```python
+# WRONG — btn is parentless and toggled visible before addWidget; flashes as its own window
+btn = QPushButton("...")
+btn.setVisible(condition)
+layout.addWidget(btn)
+
+# CORRECT — addWidget first, so the widget is already parented when setVisible runs
+btn = QPushButton("...")
+layout.addWidget(btn)
+btn.setVisible(condition)
+```
+`setVisible(False)` before `addWidget` is harmless (nothing paints) — the risk is only a
+non-`False` argument. Enforced by `tests/test_widget_visibility_order.py` (AST guard over `ui/`).
+
 ---
 
 ## QSettings State Hygiene
@@ -1435,6 +1459,7 @@ Currently tool-enforced (high reliability):
 - RULE-QSS2 → `test_qss_hex_alpha.py`
 - RULE-ENC1 → `test_source_encoding.py`
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically
+- RULE-WIN7 → `test_widget_visibility_order.py`
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry
