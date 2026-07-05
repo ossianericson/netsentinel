@@ -6,7 +6,7 @@ Covers RTT, speed test, CVE, alerts, modem, mesh, and plugin logs.
 Included in MetricStoreQueryMixin via multiple inheritance.
 """
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 from modules.metric_store_schema import (
     MeshSignalPoint, ModemSignalPoint, RttPoint, SpeedTestPoint,
@@ -133,16 +133,30 @@ class _MetricsQueriesMixin:
 
     # ── Alert tracking ────────────────────────────────────────────────────────
 
-    def get_unacked_alerts(self, older_than_s: int = 0) -> List[dict]:
-        """Return alerts that have not been acknowledged."""
+    def get_unacked_alerts(
+        self,
+        older_than_s: int = 0,
+        rule_types: Optional[Sequence[str]] = None,
+    ) -> List[dict]:
+        """Return alerts that have not been acknowledged.
+
+        `rule_types`, when given, restricts the result to those stable rule-type
+        enum values (see `modules/alert_types.py`) — used to scope the Security
+        badge/list to security-relevant alerts only.
+        """
         cutoff = int(time.time()) - older_than_s
-        rows = self._execute_read(
+        sql = (
             "SELECT id, ts, rule_name, host, severity, message, "
-            "acked_ts, acked_by, acked_comment, escalated "
-            "FROM alert_fired WHERE acked_ts IS NULL AND ts <= ? "
-            "ORDER BY ts ASC",
-            (cutoff,),
+            "acked_ts, acked_by, acked_comment, escalated, rule_type "
+            "FROM alert_fired WHERE acked_ts IS NULL AND ts <= ?"
         )
+        params: List = [cutoff]
+        if rule_types:
+            placeholders = ", ".join("?" for _ in rule_types)
+            sql += f" AND rule_type IN ({placeholders})"
+            params.extend(rule_types)
+        sql += " ORDER BY ts ASC"
+        rows = self._execute_read(sql, tuple(params))
         return [dict(r) for r in rows]
 
     def get_recent_alerts(self, hours: float = 24.0, limit: int = 200) -> List[dict]:

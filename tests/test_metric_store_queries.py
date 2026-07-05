@@ -72,6 +72,46 @@ def test_get_known_devices_after_upsert(store):
     assert devices["aa:bb:cc:dd:ee:ff"].ip == "192.168.1.5"
 
 
+def test_set_device_alert_opt_in(store):
+    store.upsert_known_device("aa:bb:cc:dd:ee:ff", ip="192.168.1.5", hostname="router")
+    assert store.get_known_devices()["aa:bb:cc:dd:ee:ff"].alert_opt_in is False
+    store.set_device_alert_opt_in("aa:bb:cc:dd:ee:ff", True)
+    assert store.get_known_devices()["aa:bb:cc:dd:ee:ff"].alert_opt_in is True
+    store.set_device_alert_opt_in("aa:bb:cc:dd:ee:ff", False)
+    assert store.get_known_devices()["aa:bb:cc:dd:ee:ff"].alert_opt_in is False
+
+
+def test_is_device_alert_in_scope_unknown_device_false(store):
+    assert store.is_device_alert_in_scope("192.168.1.99") is False
+
+
+def test_is_device_alert_in_scope_opted_in_by_ip(store):
+    store.upsert_known_device("aa:bb:cc:dd:ee:ff", ip="192.168.1.5", hostname="phone")
+    store.set_device_alert_opt_in("aa:bb:cc:dd:ee:ff", True)
+    assert store.is_device_alert_in_scope("192.168.1.5") is True
+
+
+def test_is_device_alert_in_scope_opted_in_by_mac(store):
+    """IP_CHURN passes a MAC, not an IP — must resolve either identifier."""
+    store.upsert_known_device("aa:bb:cc:dd:ee:ff", ip="192.168.1.5", hostname="phone")
+    store.set_device_alert_opt_in("aa:bb:cc:dd:ee:ff", True)
+    assert store.is_device_alert_in_scope("aa:bb:cc:dd:ee:ff") is True
+
+
+def test_is_device_alert_in_scope_infra_role_true_without_opt_in(store):
+    store.upsert_known_device("aa:bb:cc:dd:ee:ff", ip="192.168.1.1", hostname="gateway")
+    store._execute_write(
+        "UPDATE known_device SET inferred_role=? WHERE mac=?",
+        ("gateway", "aa:bb:cc:dd:ee:ff"),
+    )
+    assert store.is_device_alert_in_scope("192.168.1.1") is True
+
+
+def test_is_device_alert_in_scope_not_opted_in_false(store):
+    store.upsert_known_device("aa:bb:cc:dd:ee:ff", ip="192.168.1.5", hostname="phone")
+    assert store.is_device_alert_in_scope("192.168.1.5") is False
+
+
 def test_query_cert_status_empty(store):
     assert store.query_cert_status() == []
 
@@ -215,6 +255,29 @@ def test_prune_old_data_keeps_recent_alert_fired(store):
     store.prune_old_data(retain_days=30)
     rows = store._execute_read("SELECT COUNT(*) AS n FROM alert_fired", ())
     assert rows[0]["n"] == 1
+
+
+def test_record_alert_fired_rule_type_defaults_empty(store):
+    store.record_alert_fired("Host Down", "192.168.1.1", "WARNING", "host is down")
+    rows = store.get_unacked_alerts()
+    assert rows[0]["rule_type"] == ""
+
+
+def test_record_alert_fired_stores_rule_type(store):
+    store.record_alert_fired(
+        "New Open Port", "192.168.1.1", "HIGH", "port 22 opened",
+        rule_type="NEW_OPEN_PORT",
+    )
+    rows = store.get_unacked_alerts()
+    assert rows[0]["rule_type"] == "NEW_OPEN_PORT"
+
+
+def test_get_unacked_alerts_filters_by_rule_types(store):
+    store.record_alert_fired("Host Down", "192.168.1.1", "WARNING", "down", rule_type="HOST_DOWN")
+    store.record_alert_fired("New CVE", "192.168.1.1", "HIGH", "cve found", rule_type="NEW_CVE")
+    rows = store.get_unacked_alerts(rule_types=["NEW_CVE"])
+    assert len(rows) == 1
+    assert rows[0]["rule_type"] == "NEW_CVE"
 
 
 def test_prune_old_data_prunes_device_events_audit_table(store):

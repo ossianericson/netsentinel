@@ -11,7 +11,40 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
-from modules.alert_types import AlertRule
+from modules.alert_types import AlertRule, DEVICE_SCOPED_RULE_TYPES
+
+
+# ── Per-device opt-in scope (device-health alert noise reduction) ─────────────
+
+class _DeviceScopeMixin:
+    """Mixin for AlertEngine: gate device-health rules by a per-device opt-in.
+
+    Device-scoped rules (DEVICE_SCOPED_RULE_TYPES) fire against auto-discovered
+    LAN devices. Without a filter, that means every transient device seen in a
+    scan (guest phones, IoT bulbs) can raise a HOST_DOWN / RTT alert nobody asked
+    for. When a scope checker is injected, such a rule fires only for a host the
+    checker approves (infrastructure role or explicit user opt-in). Rules outside
+    DEVICE_SCOPED_RULE_TYPES — security events, singleton network metrics — are
+    never gated. A None checker (the default) disables filtering entirely, so
+    existing behaviour and tests are unchanged until app.py wires a checker in.
+    """
+
+    def set_alert_scope_checker(self, checker: Optional[Callable[[str], bool]]) -> None:
+        """Inject callable(host) -> bool: True if alerts are in scope for host.
+        None disables the filter (all hosts allowed)."""
+        self._scope_checker = checker
+
+    def _out_of_scope(self, host: str, rule_type: str) -> bool:
+        """True when a device-scoped rule should be suppressed for this host."""
+        if rule_type not in DEVICE_SCOPED_RULE_TYPES:
+            return False
+        checker = getattr(self, "_scope_checker", None)
+        if checker is None:
+            return False
+        try:
+            return not checker(host)
+        except Exception:
+            return False  # never let a checker error suppress a real alert
 
 
 # ── Maintenance-window suppression (Sprint 5 file-budget split) ───────────────

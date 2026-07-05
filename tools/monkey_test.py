@@ -335,6 +335,7 @@ class Stats:
     blacklisted: int = 0
     peak_rss_mb: float = 0.0
     focus_stolen: int = 0   # how many times another window grabbed foreground
+    off_window: int = 0     # raw-mouse actions skipped: target point outside live window rect
     restarts: int = 0       # app restart count (auto-restart on unexpected exit)
     by_type: Dict[str, int] = dataclasses.field(default_factory=dict)
     by_action: Dict[str, int] = dataclasses.field(default_factory=dict)
@@ -358,6 +359,7 @@ class Stats:
             "blacklisted_skipped": self.blacklisted,
             "peak_rss_mb": round(self.peak_rss_mb, 1),
             "focus_stolen_count": self.focus_stolen,
+            "off_window_skips": self.off_window,
             "restarts": self.restarts,
             "by_control_type": self.by_type,
             "by_action": self.by_action,

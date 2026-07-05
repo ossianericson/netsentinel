@@ -42,6 +42,57 @@ RULE_TYPES = frozenset({
 })
 
 
+# ── Alert scoping sets ────────────────────────────────────────────────────────
+# Two orthogonal groupings of RULE_TYPES used by the opt-in alert model:
+#
+#   DEVICE_SCOPED_RULE_TYPES  — per-device health/behaviour rules. These only
+#       fire for a host the AlertEngine's injected scope checker approves
+#       (infrastructure role + user opt-in). Without this gate they would fire
+#       for every transient device seen in a scan — guest phones, IoT bulbs —
+#       which no home-network tool should alert on by default.
+#
+#   SECURITY_RELEVANT_RULE_TYPES — genuine security events. NEVER device-scoped
+#       (a rogue DHCP server or ARP spoofer must alert regardless of opt-in).
+#       This set also drives the Security Audit rail badge count so the badge
+#       reflects only security-meaningful unacked alerts, not device-health noise.
+#
+# The two sets are deliberately disjoint. Rules absent from both (MESH_DEGRADED,
+# MODEM_SIGNAL_DROP, GRADE_REGRESSION, BASELINE_DROP) are singleton/network-wide
+# metrics keyed by a literal string, not an arbitrary device — neither gated nor
+# counted toward the security badge.
+
+# Gated set = rules that fire against auto-discovered LAN devices from the scan /
+# availability pipeline (the ones that flood when "every device in the scan" is
+# evaluated). SERVICE_DOWN and CERT_* are intentionally NOT here: those fire
+# against user-configured host:port targets (often external hosts with no
+# known_device row), so they are already opt-in by virtue of the user adding the
+# target — gating them by the device checker would silently suppress a monitor
+# the user explicitly asked for.
+DEVICE_SCOPED_RULE_TYPES = frozenset({
+    "RTT_THRESHOLD",
+    "LOSS_THRESHOLD",
+    "HOST_DOWN",
+    "HOST_DEGRADED",
+    "FLAP",
+    "JITTER_HIGH",
+    "RTT_ANOMALY",
+    "IOT_BEHAVIOR",
+    "TREND_FORECAST",
+    "IP_CHURN",
+})
+
+SECURITY_RELEVANT_RULE_TYPES = frozenset({
+    "ARP_SPOOF",
+    "ROGUE_DHCP",
+    "NEW_OPEN_PORT",
+    "NEW_CVE",
+    "NEW_EXPOSURE",
+    "CONFIG_DRIFT",
+    "CERT_EXPIRY",
+    "CERT_EXPIRED",
+})
+
+
 # ── Data types ────────────────────────────────────────────────────────────────
 
 @dataclass

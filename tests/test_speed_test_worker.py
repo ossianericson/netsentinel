@@ -48,15 +48,19 @@ def test_fetch_servers_signals_exist():
     _cleanup(w)
 
 
+@pytest.mark.live
 def test_fetch_servers_lifecycle():
-    """One-shot worker; must finish within 10 s (errors expected in CI)."""
+    """One-shot worker hitting the real network; retry+backoff can extend this
+    past 10 s under transient failures, so it is excluded from default CI runs
+    (see tests.instructions.md — network-dependent tests use the `live` marker).
+    Mocked-backend variants below cover the lifecycle without real network I/O."""
     from workers.speed_test_worker import FetchServersWorker
     errors = []
     w = FetchServersWorker(limit=3)
     w.error.connect(errors.append)
     w.start()
-    finished = w.wait(10000)
-    assert finished, "FetchServersWorker did not finish within 10 s"
+    finished = w.wait(30000)
+    assert finished, "FetchServersWorker did not finish within 30 s"
     assert not w.isRunning()
     _cleanup(w)
 

@@ -348,6 +348,7 @@ hiddenimports: list = [
     "ui.widgets.jargon_tooltip",
     "ui.widgets.hub_card",
     "ui.widgets.hub_helpers",
+    "ui.widgets.hub_plugin_template",
     "ui.widgets.kpi_bar",
     "ui.widgets.modem_signal_panel",
     "ui.widgets.overview_tile",

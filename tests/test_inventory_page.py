@@ -518,6 +518,45 @@ def test_update_device_vendor_updates_snap_table_cell(store):
     )
 
 
+# ── Context menu — "Alert me if this device goes down" opt-in toggle ─────────
+
+def test_context_menu_alert_toggle_calls_set_device_alert_opt_in(store, monkeypatch):
+    """RULE-T7: right-click 'Alert me if this device goes down' must round-trip
+    through MetricStore.set_device_alert_opt_in with the row's mac and the
+    flipped opt-in value."""
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtWidgets import QMenu
+
+    mac = "aa:bb:cc:00:00:42"
+    store.upsert_known_device(mac, ip="192.168.1.42", hostname="phone")
+    page = _make_page(store)
+    page.set_scan_devices([_rich_dev(mac, "192.168.1.42", vendor="Apple", device_type="Phone")])
+
+    monkeypatch.setattr(
+        page._snap_table, "indexAt",
+        lambda pos: page._snap_table.model().index(0, 0),
+    )
+
+    def fake_exec(self, *a, **kw):
+        for act in self.actions():
+            if act.text() == "Alert me if this device goes down":
+                return act
+        return None
+    monkeypatch.setattr(QMenu, "exec", fake_exec)
+
+    calls = []
+    monkeypatch.setattr(
+        store, "set_device_alert_opt_in",
+        lambda m, v: calls.append((m, v)),
+    )
+
+    page._snap_table_context_menu(QPoint(0, 0))
+
+    assert calls == [(mac, True)], (
+        f"Expected set_device_alert_opt_in('{mac}', True); got {calls}"
+    )
+
+
 def test_update_device_vendor_only_updates_matching_mac(store):
     """update_device_vendor must only update the row for the specified MAC."""
     page = _make_page(store)

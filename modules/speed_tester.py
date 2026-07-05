@@ -24,6 +24,7 @@ from __future__ import annotations
 import io
 import math
 import sys
+import time
 from typing import Callable, List, Optional
 
 # ── Windowed-exe stdout/stderr guard ─────────────────────────────────────────
@@ -38,13 +39,21 @@ from modules.speed_tester_backends import (
     _patch_ssl_for_312, _run_speedtest_cli,
     _run_python_test,
 )
-from modules.speed_tester_servers import _fetch_servers_python
+from modules.speed_tester_servers import (
+    _fetch_servers_python, _load_servers_cache, _save_servers_cache,
+)
 
 # Re-export all public names so existing callers continue to work.
 __all__ = [
     "SpeedServer", "SpeedTestResult",
     "fetch_servers", "run_test", "speed_to_fraction",
 ]
+
+# Retry policy for fetch_servers(): both backends in the cascade are transient
+# network calls, so a single blip (DNS hiccup, slow API, rate-limit) shouldn't
+# surface as a hard failure to the user.
+_FETCH_MAX_ATTEMPTS = 3
+_FETCH_BACKOFF_SECONDS = (0.5, 1.0, 2.0)
 
 
 # ── Gauge helper ──────────────────────────────────────────────────────────────
@@ -67,7 +76,9 @@ def fetch_servers(
     """
     Fetch nearby Ookla-compatible servers sorted by latency.
     Tries speedtest-cli first (5 s timeout), then pure-Python HTTP fallback.
-    Raises RuntimeError only if both backends fail.
+    The whole cascade is retried up to _FETCH_MAX_ATTEMPTS times with backoff
+    before falling back to the last-known-good cached list. Raises RuntimeError
+    only if every attempt fails and no cache exists.
     on_status: optional callback(msg) for progress messages.
     """
     from modules.firewall_rules import ensure_app_rules
@@ -80,6 +91,32 @@ def fetch_servers(
             except Exception:
                 pass  # non-fatal — UI callback may have been destroyed
 
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, _FETCH_MAX_ATTEMPTS + 1):
+        if attempt > 1:
+            _status(f"Retrying server list (attempt {attempt}/{_FETCH_MAX_ATTEMPTS})…")
+            time.sleep(_FETCH_BACKOFF_SECONDS[attempt - 2])
+        try:
+            servers = _fetch_servers_cascade(limit, _status)
+        except Exception as exc:
+            last_exc = exc
+            continue
+        _save_servers_cache(servers)
+        return servers
+
+    cached = _load_servers_cache()
+    if cached:
+        _status("Network unreachable — showing last known server list")
+        return cached
+
+    raise RuntimeError(f"Cannot fetch server list: {last_exc}") from last_exc
+
+
+def _fetch_servers_cascade(
+    limit: int,
+    _status: Callable[[str], None],
+) -> List[SpeedServer]:
+    """One attempt through the CLI-then-Python backend cascade (RULE 24 order)."""
     try:
         import speedtest as _st  # noqa: F401
         _patch_ssl_for_312()

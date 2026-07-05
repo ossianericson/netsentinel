@@ -68,7 +68,7 @@ class ScanEnrichmentMixin:
                 self._home_page.on_alert(a)
                 if self._store is not None:
                     try:
-                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
                     except Exception:
                         pass  # non-fatal — persistence failure must not block the scan handler
 

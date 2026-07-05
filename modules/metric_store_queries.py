@@ -158,7 +158,8 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
             "services, mac_randomized, confidence, "
             "COALESCE(scan_count, 0) AS scan_count, "
             "COALESCE(ip_stability, 0.0) AS ip_stability, "
-            "inferred_role "
+            "inferred_role, "
+            "COALESCE(alert_opt_in, 0) AS alert_opt_in "
             "FROM known_device",
             (),
         )
@@ -178,6 +179,7 @@ class MetricStoreQueryMixin(_UptimeQueriesMixin, _MetricsQueriesMixin):
                 scan_count=int(r["scan_count"] or 0),
                 ip_stability=float(r["ip_stability"] or 0.0),
                 inferred_role=r["inferred_role"],
+                alert_opt_in=bool(r["alert_opt_in"]),
             )
             for r in rows
         }

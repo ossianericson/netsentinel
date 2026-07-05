@@ -442,12 +442,13 @@ class MetricStore(MetricStoreQueryMixin, _DeviceWritesMixin, _LifecycleMixin, _R
         severity: str,
         message: str,
         ts: Optional[int] = None,
+        rule_type: str = "",
     ) -> int:
         now = ts or int(time.time())
         self._execute_write(
-            "INSERT INTO alert_fired (ts, rule_name, host, severity, message) "
-            "VALUES(?,?,?,?,?)",
-            (now, rule_name, host, severity, message),
+            "INSERT INTO alert_fired (ts, rule_name, host, severity, message, rule_type) "
+            "VALUES(?,?,?,?,?,?)",
+            (now, rule_name, host, severity, message, rule_type),
         )
         rows = self._execute_read(
             "SELECT id FROM alert_fired WHERE ts=? AND rule_name=? AND host=? ORDER BY id DESC LIMIT 1",

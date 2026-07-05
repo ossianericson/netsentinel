@@ -4,6 +4,32 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.25
+
+**Added**
+- Per-device "Alert me if this device goes down" / "Stop alerting on this device" toggle in the Devices/Inventory context menu (`MetricStore.set_device_alert_opt_in()`, `known_device.alert_opt_in` — schema v19)
+- "Unresolved Security Alerts" card on Security Overview — lists unacknowledged security-relevant alerts with an inline "✓ Acknowledge" button per row, reusing `MetricStore.acknowledge_alert()`
+
+**Changed**
+- Device-health alerts (`HOST_DOWN`, `RTT_THRESHOLD`, `FLAP`, `JITTER_HIGH`, `RTT_ANOMALY`, `IOT_BEHAVIOR`, `TREND_FORECAST`, `IP_CHURN`, `LOSS_THRESHOLD`, `HOST_DEGRADED`) now fire only for infrastructure-role devices or devices the user has explicitly opted in — previously every device seen in a scan (including guest phones and transient IoT devices) could trigger these; genuine security events (`NEW_DEVICE`, `ARP_SPOOF`, `ROGUE_DHCP`, `NEW_OPEN_PORT`, `NEW_CVE`, `NEW_EXPOSURE`, `CONFIG_DRIFT`, `CERT_EXPIRY`, `CERT_EXPIRED`) remain unaffected by opt-in
+- Security Audit rail badge now counts only security-relevant unacked alerts (`SECURITY_RELEVANT_RULE_TYPES`) instead of every unacked alert, so the badge number matches the new Unresolved Security Alerts list on Security Overview
+- `MetricStore.record_alert_fired()` now persists a stable `rule_type` column (schema v19); `get_unacked_alerts()` accepts a `rule_types` filter
+
+### v2.1.24
+
+**Changed**
+- Refreshed the line-count and test-count figures in `README.md` and `docs/architecture.md` (~135,000 lines of Python, 4,800+ tests across 330+ files)
+
+**Fixed**
+- `speed_tester.py`: the speed-test server-list fetch now retries with backoff and falls back to a last-good cache on failure
+- Eliminated a parentless-widget startup flash in `hub_card.py` (Configure button) and `rest_api_page.py` (external-access warning) — widgets are added to their layout before visibility is toggled (RULE-WIN7); guarded by new `tests/test_widget_visibility_order.py`
+- Resolved 7 open CodeQL alerts (unused imports/globals, mixed returns)
+
+**Security**
+- Hardened the hardware-plugin AI prompts, the plugin template wizard, and 8 bundled plugins against prompt injection
+
+---
+
 ### v2.1.23
 
 **Added**

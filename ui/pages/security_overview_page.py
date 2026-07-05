@@ -39,6 +39,7 @@ try:
 except Exception:
     _THREAT_OK = False  # non-fatal — threat intel module may not be available
 
+from modules.alert_types import SECURITY_RELEVANT_RULE_TYPES
 from ui.widgets.context_menu import install_copy_menu
 
 
@@ -103,7 +104,8 @@ def _make_table(headers: list[str]) -> QTableWidget:
     t = QTableWidget(0, len(headers))
     t.setHorizontalHeaderLabels(headers)
     t.horizontalHeader().setStretchLastSection(True)
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    # Interactive, not ResizeToContents (RULE-PERF1) — see threat_intel_page.py
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
     t.verticalHeader().setVisible(False)
     t.verticalHeader().setDefaultSectionSize(24)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -177,6 +179,9 @@ class SecurityOverviewPage(QWidget):
     # V6 Sprint 3/4 — (posture_key, enabled); posture_key is one of
     # "port_sweep" | "cve_recheck" | "exposure_check" | "arp_watch" | "dhcp_watch"
     posture_scheduling_changed = pyqtSignal(str, bool)
+    # Emitted after an inline Acknowledge — lets app.py refresh the rail badge
+    # immediately instead of waiting for the 30s fallback timer.
+    alert_acknowledged = pyqtSignal()
 
     def __init__(self, store=None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -200,6 +205,10 @@ class SecurityOverviewPage(QWidget):
         # C-3: Scan Status card state (populated by _build_scan_status_card)
         self._scan_registry_data: dict = {}
         self._scan_status_table: Optional[QTableWidget] = None
+
+        # Unresolved Security Alerts card state
+        self._unacked_alerts: List[dict] = []
+        self._unacked_alerts_table: Optional[QTableWidget] = None
 
         self._build_ui()
 
@@ -250,6 +259,11 @@ class SecurityOverviewPage(QWidget):
 
         # C-3: Scan Status card at top — one row per audit scan type
         root.addWidget(self._build_scan_status_card())
+
+        # Unresolved Security Alerts — the same filtered query that drives the
+        # Security Audit rail badge, with an inline Acknowledge per row so the
+        # badge is explainable and actionable from this page.
+        root.addWidget(self._build_unacked_alerts_card())
 
         # V6 Sprint 3: opt-in scheduled posture scans (nightly port sweep,
         # CVE re-check, weekly exposure check) — off by default.
@@ -314,6 +328,91 @@ class SecurityOverviewPage(QWidget):
 
         self._rebuild_scan_status_table()
         return card
+
+    # ── Unresolved Security Alerts ────────────────────────────────────────────
+
+    def _build_unacked_alerts_card(self) -> QWidget:
+        """Build the card showing unacknowledged security-relevant alerts.
+
+        Runs the identical filtered query that drives the Security Audit rail
+        badge (SECURITY_RELEVANT_RULE_TYPES), so the count on this page always
+        matches the badge — this is what makes the badge explainable.
+        """
+        card, lay = _card("Unresolved Security Alerts")
+        t = _make_table(["Rule", "Host", "Severity", "Time", ""])
+        t.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        t.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        t.setColumnWidth(4, 110)
+        self._unacked_alerts_table = t
+        lay.addWidget(t)
+
+        self._unacked_alerts_empty_lbl = QLabel("No unresolved security alerts.")
+        self._unacked_alerts_empty_lbl.setStyleSheet(
+            f"color:{TEXT_SECONDARY}; font-size:10px; padding:4px 0;"
+        )
+        lay.addWidget(self._unacked_alerts_empty_lbl)
+
+        self._rebuild_unacked_alerts_table()
+        return card
+
+    def _load_unacked_alerts(self) -> None:
+        if self._store is None:
+            self._unacked_alerts = []
+            return
+        try:
+            self._unacked_alerts = self._store.get_unacked_alerts(
+                rule_types=SECURITY_RELEVANT_RULE_TYPES
+            )
+        except Exception:
+            self._unacked_alerts = []
+
+    def _rebuild_unacked_alerts_table(self) -> None:
+        t = self._unacked_alerts_table
+        if t is None:
+            return
+        t.setRowCount(0)
+        for row in self._unacked_alerts:
+            r = t.rowCount()
+            t.insertRow(r)
+            t.setItem(r, 0, QTableWidgetItem(row.get("rule_name", "")))
+            t.setItem(r, 1, QTableWidgetItem(row.get("host", "")))
+            sev = row.get("severity", "")
+            sev_item = QTableWidgetItem(sev)
+            sev_item.setForeground(QColor(_severity_color(sev)))
+            t.setItem(r, 2, sev_item)
+            ts = row.get("ts") or 0
+            from ui.tabs_helpers import _scan_age_str
+            t.setItem(r, 3, QTableWidgetItem(_scan_age_str(ts) if ts else "—"))
+
+            ack_btn = QPushButton("✓ Acknowledge")
+            ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            ack_btn.setStyleSheet(
+                f"QPushButton {{ color:{ACCENT}; font-size:10px; background:transparent;"
+                f" border:1px solid {BORDER}; border-radius:3px; padding:2px 6px; }}"
+                f"QPushButton:hover {{ background:{BG_ALT_ROW}; color:{ACCENT_LITE}; }}"
+                f"QPushButton:pressed {{ background:{BG_ALT_ROW}; color:{ACCENT_DARK}; }}"
+            )
+            alert_id = row.get("id")
+            ack_btn.clicked.connect(lambda _c=False, aid=alert_id: self._on_ack_unacked_alert(aid))
+            t.setCellWidget(r, 4, ack_btn)
+            t.setRowHeight(r, 24)
+
+        has_rows = t.rowCount() > 0
+        t.setVisible(has_rows)
+        self._unacked_alerts_empty_lbl.setVisible(not has_rows)
+        if has_rows:
+            t.setFixedHeight(t.horizontalHeader().height() + t.verticalHeader().length() + 2)
+
+    def _on_ack_unacked_alert(self, alert_id: Optional[int]) -> None:
+        if alert_id is None or self._store is None:
+            return
+        try:
+            self._store.acknowledge_alert(int(alert_id))
+        except Exception:
+            return  # non-fatal — leave the row in place if the write failed
+        self._unacked_alerts = [a for a in self._unacked_alerts if a.get("id") != alert_id]
+        self._rebuild_unacked_alerts_table()
+        self.alert_acknowledged.emit()
 
     # ── V6 Sprint 3: scheduled posture scans ─────────────────────────────────
 
@@ -618,10 +717,12 @@ class SecurityOverviewPage(QWidget):
             self._last_loaded = time.time()
 
         self._load_metricstore_data()
+        self._load_unacked_alerts()
         self._update_scan_kpis()
         self._update_threat_kpis()
         self._update_scan_table()
         self._update_threat_table()
+        self._rebuild_unacked_alerts_table()
 
     def _load_metricstore_data(self) -> None:
         if self._store is None:

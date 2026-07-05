@@ -531,6 +531,7 @@ class _AnalysisTabsMixin:
                                     try:
                                         self._store.record_alert_fired(
                                             a.rule_name, a.host, a.severity, a.message, ts=a.ts,
+                                            rule_type=a.rule_type,
                                         )
                                     except Exception:
                                         pass  # non-fatal — persistence failure must not block the drain loop
@@ -833,7 +834,7 @@ class _AnalysisTabsMixin:
                     self._show_alert_toast(a)
                     self._home_page.on_alert(a)
                     try:
-                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
                     except Exception:
                         pass  # non-fatal — persistence failure must not block grade display
 

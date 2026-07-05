@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # ── Schema version — bump when adding columns ────────────────────────────────
-_SCHEMA_VERSION = 18
+_SCHEMA_VERSION = 19
 
 # ── DDL ──────────────────────────────────────────────────────────────────────
 _DDL = """
@@ -77,7 +77,9 @@ CREATE TABLE IF NOT EXISTS known_device (
     -- Persistent device map fields (schema v16)
     scan_count    INTEGER NOT NULL DEFAULT 0,
     ip_stability  REAL    NOT NULL DEFAULT 0.0,
-    inferred_role TEXT
+    inferred_role TEXT,
+    -- Per-device alert opt-in (schema v19)
+    alert_opt_in  INTEGER NOT NULL DEFAULT 0
 );
 
 -- Home Automation detected protocol signatures (schema v6)
@@ -223,7 +225,9 @@ CREATE TABLE IF NOT EXISTS alert_fired (
     acked_ts      INTEGER,
     acked_by      TEXT,
     acked_comment TEXT,
-    escalated     INTEGER NOT NULL DEFAULT 0
+    escalated     INTEGER NOT NULL DEFAULT 0,
+    -- Stable rule-type enum for badge/query filtering (schema v19)
+    rule_type     TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_af_ts    ON alert_fired(ts);
 CREATE INDEX IF NOT EXISTS idx_af_acked ON alert_fired(acked_ts);
@@ -371,6 +375,9 @@ _MIGRATIONS = [
     "ALTER TABLE known_device ADD COLUMN scan_count INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE known_device ADD COLUMN ip_stability REAL NOT NULL DEFAULT 0.0",
     "ALTER TABLE known_device ADD COLUMN inferred_role TEXT",
+    # schema v19 — opt-in device alert scope + stable rule_type on fired alerts
+    "ALTER TABLE known_device ADD COLUMN alert_opt_in INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE alert_fired ADD COLUMN rule_type TEXT NOT NULL DEFAULT ''",
 ]
 
 
@@ -522,6 +529,7 @@ class KnownDevice:
     scan_count: int = 0
     ip_stability: float = 0.0
     inferred_role: Optional[str] = None
+    alert_opt_in: bool = False
 
 
 @dataclass

@@ -50,7 +50,11 @@ def _make_scroll_area(inner: QWidget) -> QScrollArea:
 def _table(headers: list) -> QTableWidget:
     t = QTableWidget(0, len(headers))
     t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    # Interactive, not ResizeToContents: ResizeToContents recomputes every
+    # column's ideal width (a per-cell sizeHint() / font-metrics pass) on
+    # every model change, which freezes the main thread for seconds on
+    # tables with hundreds-to-thousands of rows (RULE-PERF1).
+    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
     t.horizontalHeader().setStretchLastSection(True)
     t.setAlternatingRowColors(True)
     t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)

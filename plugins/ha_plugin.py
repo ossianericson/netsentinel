@@ -92,15 +92,36 @@ def _get_states() -> list:
 
 
 def _fmt_err(exc: Exception) -> str:
-    """Return a structured error string with a machine-readable prefix."""
+    """Return a structured error string with a machine-readable prefix.
+
+    Checked in order: DEPS (missing package) -> HTTP 401/403 status -> a
+    Connection/Timeout exception type -> message keywords (network before
+    auth) -> ERR. Type/status-code checks come first because a raw
+    connection-library exception's message can include the request URL —
+    if that URL's path contains a word like "login", keyword-only matching
+    would misclassify a plain connection failure as AUTH. It would also fail
+    outright on a non-English-locale OS, where the OS's connection-refused
+    message isn't in English — urllib.error.URLError wraps the real socket
+    exception in .reason, so that inner type is checked too.
+    """
     msg = str(exc)
     if isinstance(exc, ImportError) or 'pip install' in msg:
         return 'DEPS: ' + msg
-    lm = msg.lower()
-    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+    if status in (401, 403):
         return 'AUTH: ' + msg
+    if getattr(exc, 'code', None) in (401, 403):  # urllib.error.HTTPError
+        return 'AUTH: ' + msg
+    if any(w in type(exc).__name__ for w in ('Connection', 'Timeout')):
+        return 'NET: ' + msg
+    reason = getattr(exc, 'reason', None)  # urllib.error.URLError wraps the real cause
+    if reason is not None and any(w in type(reason).__name__ for w in ('Connection', 'Timeout')):
+        return 'NET: ' + msg
+    lm = msg.lower()
     if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network')):
         return 'NET: ' + msg
+    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+        return 'AUTH: ' + msg
     return 'ERR: ' + msg
 
 def get_info() -> dict:
@@ -114,37 +135,47 @@ def get_info() -> dict:
 
 
 def get_status() -> dict:
-    ha_config = _ha_get("config")
-    states    = _get_states()
-    trackers  = [s for s in states if s["entity_id"].startswith("device_tracker.")]
-    home_count = sum(1 for t in trackers if t.get("state") == "home")
-    return {
-        "wan_ip":            None,
-        "connected_clients": home_count,
-        "extra": {
-            "ha_version":    ha_config.get("version", ""),
-            "location_name": ha_config.get("location_name", ""),
-            "total_tracked": len(trackers),
-        },
-    }
+    try:
+        ha_config = _ha_get("config")
+        states    = _get_states()
+        trackers  = [s for s in states if s["entity_id"].startswith("device_tracker.")]
+        home_count = sum(1 for t in trackers if t.get("state") == "home")
+        return {
+            "wan_ip":            None,
+            "connected_clients": home_count,
+            "extra": {
+                "ha_version":    ha_config.get("version", ""),
+                "location_name": ha_config.get("location_name", ""),
+                "total_tracked": len(trackers),
+            },
+        }
+    except Exception as exc:
+        return {
+            "wan_ip": None, "uptime_sec": None, "download_mbps": None,
+            "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
+            "extra": {"error": _fmt_err(exc)},
+        }
 
 
 def get_clients() -> list:
-    states   = _get_states()
-    trackers = [s for s in states if s["entity_id"].startswith("device_tracker.")]
-    result   = []
-    for t in trackers:
-        if t.get("state") != "home":
-            continue
-        attrs = t.get("attributes", {})
-        result.append({
-            "ip":       attrs.get("ip", ""),
-            "mac":      attrs.get("mac", ""),
-            "hostname": attrs.get("friendly_name", "") or t["entity_id"].replace("device_tracker.", ""),
-            "band":     attrs.get("ssid", ""),
-            "unit":     attrs.get("source_type", ""),
-        })
-    return result
+    try:
+        states   = _get_states()
+        trackers = [s for s in states if s["entity_id"].startswith("device_tracker.")]
+        result   = []
+        for t in trackers:
+            if t.get("state") != "home":
+                continue
+            attrs = t.get("attributes", {})
+            result.append({
+                "ip":       attrs.get("ip", ""),
+                "mac":      attrs.get("mac", ""),
+                "hostname": attrs.get("friendly_name", "") or t["entity_id"].replace("device_tracker.", ""),
+                "band":     attrs.get("ssid", ""),
+                "unit":     attrs.get("source_type", ""),
+            })
+        return result
+    except Exception:
+        return []  # get_clients() failures are non-fatal — return empty, not an error
 
 
 # ── Standalone test ───────────────────────────────────────────────────────────

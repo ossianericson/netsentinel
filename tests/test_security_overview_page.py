@@ -12,6 +12,8 @@ try:
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
 
+from modules.alert_types import SECURITY_RELEVANT_RULE_TYPES
+
 
 # ── Stub data-classes (mirror modules/port_scanner.py + modules/syn_scanner.py) ─
 
@@ -121,6 +123,7 @@ def page_with_store(monkeypatch):
     mock_store = MagicMock()
     mock_store.list_cve_lifecycles.return_value = []
     mock_store.query_cert_status.return_value = []
+    mock_store.get_unacked_alerts.return_value = []
 
     from ui.pages.security_overview_page import SecurityOverviewPage
     w = SecurityOverviewPage(store=mock_store, parent=None)
@@ -479,6 +482,51 @@ def test_toggling_posture_checkbox_persists_and_emits(page):
     assert received == [("port_sweep", True)]
     qs = QSettings("NetSentinel", "NetSentinel")
     assert qs.value("posture/port_sweep_enabled", False, type=bool) is True
+
+
+# ── Unresolved Security Alerts card ──────────────────────────────────────────
+
+def test_unacked_alerts_table_empty_with_no_store(page):
+    assert page._unacked_alerts_table.rowCount() == 0
+    assert page._unacked_alerts_table.isHidden()
+    assert not page._unacked_alerts_empty_lbl.isHidden()
+
+
+def test_unacked_alerts_table_populates_from_store(page_with_store):
+    page, store = page_with_store
+    store.get_unacked_alerts.return_value = [
+        {"id": 1, "rule_name": "Rogue DHCP Server", "host": "192.168.1.50",
+         "severity": "CRITICAL", "ts": 1000, "rule_type": "ROGUE_DHCP"},
+    ]
+    page._load_unacked_alerts()
+    page._rebuild_unacked_alerts_table()
+    assert page._unacked_alerts_table.rowCount() == 1
+    assert page._unacked_alerts_table.item(0, 0).text() == "Rogue DHCP Server"
+    assert page._unacked_alerts_table.item(0, 1).text() == "192.168.1.50"
+    store.get_unacked_alerts.assert_called_with(rule_types=SECURITY_RELEVANT_RULE_TYPES)
+
+
+def test_ack_button_calls_acknowledge_alert_and_removes_row(page_with_store):
+    """RULE-T7: clicking Acknowledge must round-trip to MetricStore.acknowledge_alert,
+    remove the row locally, and emit alert_acknowledged so app.py can refresh the badge."""
+    page, store = page_with_store
+    store.get_unacked_alerts.return_value = [
+        {"id": 42, "rule_name": "New Open Port", "host": "192.168.1.5",
+         "severity": "HIGH", "ts": 1000, "rule_type": "NEW_OPEN_PORT"},
+    ]
+    page._load_unacked_alerts()
+    page._rebuild_unacked_alerts_table()
+    assert page._unacked_alerts_table.rowCount() == 1
+
+    received = []
+    page.alert_acknowledged.connect(lambda: received.append(True))
+
+    btn = page._unacked_alerts_table.cellWidget(0, 4)
+    btn.click()
+
+    store.acknowledge_alert.assert_called_once_with(42)
+    assert page._unacked_alerts_table.rowCount() == 0
+    assert received == [True]
 
 
 def test_posture_toggle_restores_from_qsettings(monkeypatch):

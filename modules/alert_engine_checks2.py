@@ -125,6 +125,7 @@ class _AlertChecksMixin2:
                     ),
                     severity=severity,
                     value=None,
+                    scope_host=host,
                 )
                 if alert:
                     alert.host = host
@@ -165,6 +166,7 @@ class _AlertChecksMixin2:
                     message=self._append_action(result.summary, "TREND_FORECAST"),
                     severity=result.severity,
                     value=result.current_value,
+                    scope_host=result.host,
                 )
                 if alert:
                     alert.host = result.host

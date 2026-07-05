@@ -71,10 +71,23 @@ def _load_credentials() -> tuple[str, str]:
 
 
 def _fmt_err(exc: Exception) -> str:
-    """Return a structured error string with a machine-readable prefix."""
+    """Return a structured error string with a machine-readable prefix.
+
+    Checked in order: DEPS (missing package) -> HTTP 401/403 status -> a
+    Connection/Timeout exception type -> message keywords -> ERR. Type/
+    status-code checks come before message keywords because a raw requests
+    ConnectionError's message includes the request URL — if that URL's path
+    contains a word like "login", keyword-only matching would misclassify a
+    plain connection failure as AUTH.
+    """
     msg = str(exc)
     if isinstance(exc, ImportError) or 'pip install' in msg:
         return 'DEPS: ' + msg
+    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+    if status in (401, 403):
+        return 'AUTH: ' + msg
+    if any(w in type(exc).__name__ for w in ('Connection', 'Timeout')):
+        return 'NET: ' + msg
     lm = msg.lower()
     if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
         return 'AUTH: ' + msg

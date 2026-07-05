@@ -33,9 +33,12 @@ CREDENTIAL_LABEL    = "Password"
 def _check_deps():
     try:
         import pyunifi  # noqa: F401
-    except ImportError:
-        print("Missing dependency — run:  pip install pyunifi", file=sys.stderr)
-        sys.exit(1)
+    except ImportError as exc:
+        # Raise (never sys.exit) so get_status()/get_clients() catch this like any
+        # other failure and classify it DEPS: via _fmt_err. PluginPollingWorker
+        # treats a plugin's sys.exit() as a silent no-op poll (see its SystemExit
+        # handler) — exiting here would report NO error at all to the user.
+        raise ImportError("Missing dependency — run: pip install pyunifi") from exc
 
 
 def _host() -> str:
@@ -69,15 +72,28 @@ def _load_password() -> str:
 
 
 def _fmt_err(exc: Exception) -> str:
-    """Return a structured error string with a machine-readable prefix."""
+    """Return a structured error string with a machine-readable prefix.
+
+    Checked in order: DEPS (missing package) -> HTTP 401/403 status -> a
+    Connection/Timeout exception type -> message keywords (network before
+    auth) -> ERR. Type/status-code checks come first because a raw
+    connection-library exception's message can include the request URL —
+    if that URL's path contains a word like "login", keyword-only matching
+    would misclassify a plain connection failure as AUTH.
+    """
     msg = str(exc)
     if isinstance(exc, ImportError) or 'pip install' in msg:
         return 'DEPS: ' + msg
-    lm = msg.lower()
-    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+    if status in (401, 403):
         return 'AUTH: ' + msg
+    if any(w in type(exc).__name__ for w in ('Connection', 'Timeout')):
+        return 'NET: ' + msg
+    lm = msg.lower()
     if any(w in lm for w in ('refused', 'timed out', 'unreachable', 'no route', 'network')):
         return 'NET: ' + msg
+    if any(w in lm for w in ('auth', 'password', 'login', '401', 'forbidden', 'wrong credential')):
+        return 'AUTH: ' + msg
     return 'ERR: ' + msg
 
 def get_info() -> dict:
@@ -107,33 +123,43 @@ def _make_controller():
 
 
 def get_status() -> dict:
-    _check_deps()
-    c = _make_controller()
-    sites = c.get_sites()
-    n_clients = len(c.get_clients())
-    return {
-        "wan_ip":            None,
-        "connected_clients": n_clients,
-        "extra": {
-            "sites": [s.get("desc", s.get("name", "")) for s in sites],
-        },
-    }
+    try:
+        _check_deps()
+        c = _make_controller()
+        sites = c.get_sites()
+        n_clients = len(c.get_clients())
+        return {
+            "wan_ip":            None,
+            "connected_clients": n_clients,
+            "extra": {
+                "sites": [s.get("desc", s.get("name", "")) for s in sites],
+            },
+        }
+    except Exception as exc:
+        return {
+            "wan_ip": None, "uptime_sec": None, "download_mbps": None,
+            "upload_mbps": None, "signal_dbm": None, "connected_clients": None,
+            "extra": {"error": _fmt_err(exc)},
+        }
 
 
 def get_clients() -> list:
-    _check_deps()
-    c = _make_controller()
-    _BAND = {"ng": "2.4G", "na": "5G", "6e": "6G"}
-    return [
-        {
-            "ip":       cl.get("ip", ""),
-            "mac":      cl.get("mac", ""),
-            "hostname": cl.get("hostname", "") or cl.get("name", ""),
-            "band":     _BAND.get(cl.get("radio", ""), cl.get("radio", "")),
-            "unit":     cl.get("ap_mac", ""),
-        }
-        for cl in c.get_clients()
-    ]
+    try:
+        _check_deps()
+        c = _make_controller()
+        _BAND = {"ng": "2.4G", "na": "5G", "6e": "6G"}
+        return [
+            {
+                "ip":       cl.get("ip", ""),
+                "mac":      cl.get("mac", ""),
+                "hostname": cl.get("hostname", "") or cl.get("name", ""),
+                "band":     _BAND.get(cl.get("radio", ""), cl.get("radio", "")),
+                "unit":     cl.get("ap_mac", ""),
+            }
+            for cl in c.get_clients()
+        ]
+    except Exception:
+        return []  # get_clients() failures are non-fatal — return empty, not an error
 
 
 # ── Standalone test ───────────────────────────────────────────────────────────

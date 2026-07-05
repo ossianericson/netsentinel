@@ -45,7 +45,7 @@ def test_config_defaults():
     assert cfg.iterations == 200
     assert cfg.chaos == "moderate"
     assert cfg.seed is None
-    assert cfg.mem_limit_mb == 800
+    assert cfg.mem_limit_mb == 1500
 
 
 def test_config_custom():

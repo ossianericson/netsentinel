@@ -13,11 +13,15 @@ Download/upload/ping test backends stay in speed_tester_backends.py.
 from __future__ import annotations
 
 import concurrent.futures
+import dataclasses
 import json
 import time
 from typing import List
 
 from modules.speed_tester_backends import SpeedServer, _http_get, _HTTP_UA
+from modules.utils import get_app_data_dir
+
+_SERVERS_CACHE_FILENAME = "speedtest_servers_cache.json"
 
 
 # Session-level cache: public IP rarely changes; avoid repeated network lookups.
@@ -174,3 +178,25 @@ def _fetch_servers_python(
         list(ex.map(_ping, servers))
 
     return sorted(servers, key=lambda s: s.latency_ms)
+
+
+def _save_servers_cache(servers: List[SpeedServer]) -> None:
+    """Persist the last-good server list so a future fetch outage can fall back to it."""
+    try:
+        path = get_app_data_dir() / _SERVERS_CACHE_FILENAME
+        data = [dataclasses.asdict(s) for s in servers]
+        path.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:
+        pass  # non-fatal — cache is a best-effort convenience
+
+
+def _load_servers_cache() -> List[SpeedServer]:
+    """Return the last cached server list, or [] if none exists or it is unreadable."""
+    try:
+        path = get_app_data_dir() / _SERVERS_CACHE_FILENAME
+        if not path.exists():
+            return []
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return [SpeedServer(**d) for d in data]
+    except Exception:
+        return []  # non-fatal — corrupt or missing cache treated as no cache

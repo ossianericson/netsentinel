@@ -795,7 +795,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         self._show_alert_toast(a)
                         self._home_page.on_alert(a)
                         try:
-                            self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                            self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
                         except Exception:
                             pass  # non-fatal — persistence failure must not block the scan handler
                 # Forward device events to MQTT publisher
@@ -1037,7 +1037,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
                                 self._home_page.on_alert(a)
                                 try:
                                     self._store.record_alert_fired(
-                                        a.rule_name, a.host, a.severity, a.message, ts=a.ts
+                                        a.rule_name, a.host, a.severity, a.message, ts=a.ts,
+                                        rule_type=a.rule_type,
                                     )
                                 except Exception:
                                     pass  # non-fatal — persistence failure must not block the scan handler

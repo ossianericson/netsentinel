@@ -1845,9 +1845,15 @@ class InventoryPage(QWidget):
                 break
 
         current_override: Optional[str] = None
+        alert_opt_in = False
         if self._store:
             try:
                 current_override = self._store.get_classification_override(mac)
+            except Exception:
+                pass  # non-fatal
+            try:
+                known = self._store.get_known_devices()
+                alert_opt_in = bool(known[mac].alert_opt_in) if mac in known else False
             except Exception:
                 pass  # non-fatal
 
@@ -1857,6 +1863,11 @@ class InventoryPage(QWidget):
         act_override = menu.addAction("Override Device Type…")
         act_clear    = menu.addAction("Clear Type Override")
         act_clear.setEnabled(bool(current_override))
+        menu.addSeparator()
+        act_alert_toggle = menu.addAction(
+            "Stop alerting on this device" if alert_opt_in
+            else "Alert me if this device goes down"
+        )
 
         action = menu.exec(self._snap_table.viewport().mapToGlobal(pos))
         if action == act_drawer and self._store:
@@ -1871,6 +1882,11 @@ class InventoryPage(QWidget):
             except Exception:
                 pass  # non-fatal
             self.set_scan_devices(self._scan_devices)
+        elif action == act_alert_toggle and self._store:
+            try:
+                self._store.set_device_alert_opt_in(mac, not alert_opt_in)
+            except Exception:
+                pass  # non-fatal
 
     @pyqtSlot(list)
     def set_segments(self, segments: list) -> None:

@@ -245,6 +245,29 @@ class _DeviceWritesMixin:
             (int(authorized), mac),
         )
 
+    # ── Write/read: per-device alert opt-in scope ────────────────────────────
+
+    def set_device_alert_opt_in(self, mac: str, opt_in: bool) -> None:
+        self._execute_write(
+            "UPDATE known_device SET alert_opt_in = ? WHERE mac = ?",
+            (int(opt_in), mac),
+        )
+
+    def is_device_alert_in_scope(self, identifier: str) -> bool:
+        """True if device-scoped alerts are allowed for `identifier` (an IP or a MAC).
+
+        Infrastructure-role devices are always in scope; everything else requires
+        explicit opt-in. A device with no matching row is out of scope by default.
+        """
+        rows = self._execute_read(
+            "SELECT inferred_role, alert_opt_in FROM known_device WHERE ip = ? OR mac = ?",
+            (identifier, identifier),
+        )
+        if not rows:
+            return False
+        row = rows[0]
+        return row["inferred_role"] in ("gateway", "infrastructure") or bool(row["alert_opt_in"])
+
     # ── Write: Classification overrides ──────────────────────────────────────
 
     def set_classification_override(self, mac: str, device_type: str) -> None:

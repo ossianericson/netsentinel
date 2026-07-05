@@ -401,7 +401,7 @@ def _wire_monitoring(window, avail_worker, cert_worker, svc_worker, alerts, noti
         # this sprint, so get_recent_alerts()-backed digest bullets would
         # otherwise always report "nothing happened" in the live app.
         try:
-            store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+            store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
         except Exception:
             pass  # non-fatal — persistence failure must not block notification delivery
 
@@ -541,7 +541,7 @@ def _wire_speedtest_scheduling(window, worker, alerts, store):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
 
@@ -573,7 +573,7 @@ def _wire_port_sweep(window, worker, alerts, store, cert_worker):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         try:
@@ -603,7 +603,7 @@ def _wire_cve_recheck(window, worker, alerts, store):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._nav_set_scan_state(
@@ -626,7 +626,7 @@ def _wire_exposure_watch(window, worker, alerts, store):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._nav_set_scan_state(
@@ -652,7 +652,7 @@ def _wire_arp_watch(window, worker, alerts, store):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._set_flyout_dot("ARP Spoof Watch", RED if report.events else GREEN)
@@ -676,7 +676,7 @@ def _wire_dhcp_watch(window, worker, alerts, store):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
         window._set_flyout_dot("DHCP Rogue Monitor", RED if report.rogue_offers else GREEN)
@@ -699,7 +699,7 @@ def _wire_trend_forecast(window, worker, alerts, store):
             window._show_alert_toast(a)
             window._home_page.on_alert(a)
             try:
-                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts)
+                store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
             except Exception:
                 pass  # non-fatal — persistence failure must not block notification delivery
 
@@ -884,12 +884,118 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.23")
+    app.setApplicationVersion("2.1.24")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
     if _startup_logger:
         _start_minimised = True
+
+    # ── Window-flash trace (diagnostic) ───────────────────────────────────────
+    # Run with `python app.py --trace-windows` to log every top-level widget that
+    # becomes visible. A parentless widget briefly shown before it is added to a
+    # layout appears here as its own top-level window with native chrome — that is
+    # the "small second window flashing at startup" symptom (RULE-WIN7). The log
+    # is written to %LOCALAPPDATA%\NetSentinel\window_trace.log and echoed to
+    # stderr. This filter is inert unless the flag is present.
+    if "--trace-windows" in sys.argv:
+        from PyQt6.QtCore import QObject, QEvent
+        from modules.utils import get_app_data_dir as _gad_trace
+
+        # Route the trace to a logging.FileHandler rather than a bare open() kept
+        # alive for the process lifetime: the handler owns the file object and
+        # closes it via logging.shutdown() at interpreter exit, so there is no
+        # dangling never-closed file descriptor (CodeQL py/file-not-closed).
+        import logging as _trace_logging
+
+        _trace_path = os.path.join(str(_gad_trace()), "window_trace.log")
+        _trace_logger = _trace_logging.getLogger("netsentinel.window_trace")
+        _trace_logger.setLevel(_trace_logging.INFO)
+        _trace_logger.propagate = False
+        if not _trace_logger.handlers:
+            try:
+                _trace_h = _trace_logging.FileHandler(
+                    _trace_path, mode="a", encoding="utf-8"
+                )
+                _trace_h.setFormatter(_trace_logging.Formatter("%(message)s"))
+                _trace_logger.addHandler(_trace_h)
+            except Exception:
+                pass  # file handler is optional — stderr echo below still works
+
+        def _trace(line: str) -> None:
+            try:
+                _trace_logger.info(line)
+            except Exception:
+                pass  # tracing must never crash the app
+            try:
+                sys.stderr.write(line + "\n")
+            except Exception:
+                pass  # stderr may be unavailable in a frozen build
+
+        class _WindowShowTracer(QObject):
+            def eventFilter(self, obj, event):
+                try:
+                    if event.type() == QEvent.Type.Show:
+                        from PyQt6.QtWidgets import QWidget
+                        if isinstance(obj, QWidget) and obj.isWindow():
+                            cls = type(obj).__name__
+                            name = obj.objectName() or "<no objectName>"
+                            sz = obj.size()
+                            flags = int(obj.windowFlags())
+                            parent = obj.parent()
+                            pcls = type(parent).__name__ if parent is not None else "None"
+                            import time as _t
+                            _trace(
+                                f"[{_t.strftime('%H:%M:%S')}] TOP-LEVEL SHOW  "
+                                f"class={cls}  objectName={name!r}  "
+                                f"size={sz.width()}x{sz.height()}  "
+                                f"parent={pcls}  flags=0x{flags:08x}  "
+                                f"title={obj.windowTitle()!r}"
+                            )
+                except Exception:
+                    pass  # tracing must never crash the app
+                return False
+
+        _win_tracer = _WindowShowTracer()
+        app.installEventFilter(_win_tracer)
+        app._win_tracer = _win_tracer  # keep a ref alive for the app lifetime
+
+        # Synchronous hook: capture the exact construction/callsite where a
+        # still-parentless top-level widget is made visible. The event filter
+        # above sees the Show *event* (dispatched later inside the event loop,
+        # so its Python stack is just processEvents). Wrapping setVisible/show
+        # gives the real callsite — the file:line that must be reordered.
+        import traceback as _tb
+        from PyQt6.QtWidgets import QWidget as _QWidgetT
+
+        _orig_set_visible = _QWidgetT.setVisible
+        _orig_show = _QWidgetT.show
+
+        def _log_parentless(w, how):
+            try:
+                if w.isWindow() and w.parent() is None:
+                    cls = type(w).__name__
+                    stack = "".join(_tb.format_stack(limit=12)[:-1])
+                    _trace(
+                        f"--- parentless {how} on top-level {cls} "
+                        f"(objectName={w.objectName()!r}) ---\n{stack}"
+                    )
+            except Exception:
+                pass  # tracing must never crash the app
+
+        def _traced_set_visible(self, visible):
+            if visible:
+                _log_parentless(self, "setVisible(True)")
+            return _orig_set_visible(self, visible)
+
+        def _traced_show(self):
+            _log_parentless(self, "show()")
+            return _orig_show(self)
+
+        _QWidgetT.setVisible = _traced_set_visible
+        _QWidgetT.show = _traced_show
+
+        _trace(f"=== window trace started (pid={os.getpid()}) → {_trace_path} ===")
 
     # ── Splash screen ─────────────────────────────────────────────────────────
     # PERF-1: splash screen with progress messages.
@@ -920,7 +1026,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.23")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.24")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1036,6 +1142,7 @@ def main():
     from modules.maintenance_window import MaintenanceWindowManager
     maint_manager = MaintenanceWindowManager()
     alerts.set_maintenance_checker(maint_manager.is_suppressed)
+    alerts.set_alert_scope_checker(store.is_device_alert_in_scope)
 
     # Sprint 5 — wire the previously-dead record_suppression() plumbing so
     # suppressed alerts actually appear in the maintenance suppression log.
@@ -1253,6 +1360,7 @@ def main():
             posture_worker.wait(3000)
 
     window._security_overview_page.posture_scheduling_changed.connect(_on_posture_scheduling_changed)
+    window._security_overview_page.alert_acknowledged.connect(window._refresh_section_badges)
     for _key, _posture_worker in _posture_workers.items():
         if _posture_qs.value(f"posture/{_key}_enabled", False, type=bool):
             _posture_worker.start()

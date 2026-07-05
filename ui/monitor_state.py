@@ -18,6 +18,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from modules.alert_types import SECURITY_RELEVANT_RULE_TYPES
+
 from ui.styles import (
     ACCENT,
     AMBER,
@@ -456,7 +458,10 @@ class _MonitorStateMixin:
         sec_btn = self._nav_rail_buttons.get("Security Audit")
         if sec_btn:
             try:
-                alert_count = len(self._store.get_unacked_alerts()) if self._store else 0
+                alert_count = (
+                    len(self._store.get_unacked_alerts(rule_types=SECURITY_RELEVANT_RULE_TYPES))
+                    if self._store else 0
+                )
             except Exception:
                 alert_count = 0
             if alert_count > 0:

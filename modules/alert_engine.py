@@ -47,7 +47,8 @@ from typing import Callable, Dict, List, Optional
 from modules.alert_types import AlertFired, AlertRule, RULE_TYPES  # noqa: F401 — re-exported
 from modules.metric_store import MetricStore
 from modules.alert_suppressor import (
-    EscalationPolicy, _default_rules, rule_settings_key, _MaintenanceSuppressionMixin,
+    EscalationPolicy, _default_rules, rule_settings_key,
+    _MaintenanceSuppressionMixin, _DeviceScopeMixin,
 )
 from modules.alert_engine_checks import _AlertChecksMixin
 from modules.alert_engine_checks2 import _AlertChecksMixin2
@@ -71,7 +72,7 @@ _cta_for_rule = cta_for_rule
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
-class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _AlertChecksMixin4, _MaintenanceSuppressionMixin):
+class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _AlertChecksMixin4, _MaintenanceSuppressionMixin, _DeviceScopeMixin):
     """
     Stateless rule evaluator. Call the appropriate evaluate_* method after
     each monitoring cycle or scan result.
@@ -107,6 +108,8 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         self._dependency_map: Dict[str, List[str]] = {}
         # optional callable(host) → window_label|None — for maintenance suppression
         self._maintenance_checker: Optional[Callable[[str], Optional[str]]] = None
+        # optional callable(host) → bool — per-device alert opt-in scope (None = allow all)
+        self._scope_checker: Optional[Callable[[str], bool]] = None
         # optional callable(label, host, rule_name, severity, msg) — logs drops (record_suppression)
         self._suppression_recorder: Optional[Callable[[str, str, str, str, str], None]] = None
         # escalation policies
@@ -464,13 +467,23 @@ class AlertEngine(_AlertChecksMixin, _AlertChecksMixin2, _AlertChecksMixin3, _Al
         message: str,
         severity: str,
         value: Optional[float],
+        scope_host: Optional[str] = None,
     ) -> Optional[AlertFired]:
-        """Return an AlertFired only if cooldown has expired and host is not under maintenance."""
+        """Return an AlertFired only if cooldown has expired and host is not under maintenance.
+
+        `host` doubles as the cooldown dedup key for some rule types (e.g. a
+        composite f"{host}::{alert_type}" for IOT_BEHAVIOR) and is not always a
+        real device identifier. `scope_host`, when given, is used for the
+        per-device scope check instead — defaults to `host` when omitted.
+        """
         # Boot warmup — suppress all firings during the initial quiet period
         if time.time() < self._suppress_until:
             return None
         # Maintenance suppression — drop when the host is in a window, but log it
         if self._maintenance_suppresses(host, rule.name, severity, message):
+            return None
+        # Per-device opt-in scope — drop device-health alerts for out-of-scope hosts
+        if self._out_of_scope(scope_host if scope_host is not None else host, rule.rule_type):
             return None
         key = f"{rule.name}::{host}"
         last = self._last_fired.get(key)

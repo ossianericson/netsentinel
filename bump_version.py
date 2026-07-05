@@ -195,9 +195,35 @@ def bump(ver: str) -> None:
     print(f"  git push origin v{ver}")
 
 
+_USAGE = f"""\
+{Path(__file__).name} — bump the NetSentinel version string across all tracked files.
+
+Usage:
+    python {Path(__file__).name} <version>
+
+Arguments:
+    <version>   New version, plain semver: X.Y or X.Y.Z (digits and dots only).
+                Examples: 1.60, 2.0.0, 2.1.24
+
+Options:
+    -h, --help  Show this message and exit.
+
+After running, verify with:
+    python -m pytest tests/test_version_consistency.py -v
+"""
+
+# Plain semver only — guards against an option string (e.g. "--help") being
+# mistaken for a version and rewritten into every file. See RULE-R1.
+_SEMVER = re.compile(r"^[0-9]+\.[0-9]+(?:\.[0-9]+)?$")
+
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(f"Usage: python {Path(__file__).name} <version>")
-        print("Example: python bump_version.py 1.60")
-        sys.exit(1)
-    bump(sys.argv[1])
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(_USAGE)
+        # Exit 0 for an explicit help request; exit 2 when no version was given.
+        sys.exit(0 if args else 2)
+    if len(args) != 1 or not _SEMVER.match(args[0]):
+        print(f"error: invalid version {args[0]!r} — expected plain semver X.Y or X.Y.Z\n")
+        print(_USAGE)
+        sys.exit(2)
+    bump(args[0])
