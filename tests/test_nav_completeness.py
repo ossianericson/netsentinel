@@ -25,6 +25,9 @@ SRC  = (ROOT / "ui" / "dashboard.py").read_text(encoding="utf-8")
 _NAV_BUILDER_SRC = (ROOT / "ui" / "nav" / "builder.py").read_text(encoding="utf-8")
 _COMBINED_SRC = SRC + "\n" + _NAV_BUILDER_SRC
 
+sys.path.insert(0, str(ROOT))
+from ui.nav.labels import NavLabel as L, NavSection as S  # noqa: E402 — needs ROOT on path
+
 
 def _static_nav_labels() -> list[str]:
     """Return the ordered list of static string labels from _build_pro_nav()."""
@@ -125,40 +128,40 @@ def test_features_page_refs_are_valid_nav_labels():
 #: non-obvious or was previously wrong).  Labels not in this dict are not checked.
 _EXPECTED_SECTIONS: dict[str, str] = {
     # Monitor section
-    "Monitor Status":     "Monitor",
-    "Network Logger":     "Monitor",
-    "Network Timeline":   "Monitor",
-    "Live Bandwidth":     "Monitor",
-    "App Traffic":        "Monitor",
-    "Active Connections": "Monitor",
-    "Availability History": "Monitor",
-    "Inventory Changes":  "Monitor",
-    "Bandwidth Usage":    "Monitor",
-    "Service Heartbeat":  "Monitor",
-    "IPv6 Devices":       "Monitor",
-    "Uptime & SLA":       "Monitor",
-    "Syslog Viewer":      "Monitor",
-    "SNMP Trap Receiver": "Monitor",
+    L.MONITOR_STATUS:       S.MONITOR,
+    L.NETWORK_LOGGER:       S.MONITOR,
+    L.NETWORK_TIMELINE:     S.MONITOR,
+    L.LIVE_BANDWIDTH:       S.MONITOR,
+    L.APP_TRAFFIC:          S.MONITOR,
+    L.ACTIVE_CONNECTIONS:   S.MONITOR,
+    L.AVAILABILITY_HISTORY: S.MONITOR,
+    L.INVENTORY_CHANGES:    S.MONITOR,
+    L.BANDWIDTH_USAGE:      S.MONITOR,
+    L.SERVICE_HEARTBEAT:    S.MONITOR,
+    L.IPV6_DEVICES:         S.MONITOR,
+    L.UPTIME_SLA:           S.MONITOR,
+    L.SYSLOG_VIEWER:        S.MONITOR,
+    L.SNMP_TRAP_RECEIVER:   S.MONITOR,
     # Discover section
-    "Devices":            "Discover",
-    "Network Map":        "Discover",
-    "WiFi Networks":      "Discover",
-    "WiFi Heatmap":       "Discover",
-    "DHCP Leases":        "Discover",
-    "DNS Zone Map":       "Discover",
-    "Home Automation":    "Discover",
+    L.DEVICES:              S.DISCOVER,
+    L.NETWORK_MAP:          S.DISCOVER,
+    L.WIFI_NETWORKS:        S.DISCOVER,
+    L.WIFI_HEATMAP:         S.DISCOVER,
+    L.DHCP_LEASES:          S.DISCOVER,
+    L.DNS_ZONE_MAP:         S.DISCOVER,
+    L.HOME_AUTOMATION:      S.DISCOVER,
     # Analysis section
-    "Root Cause Correlator": "Analysis",
-    "Trend Forecasts":       "Analysis",
-    "Service Diagnostics":   "Analysis",
-    "Geolocation Map":       "Analysis",
+    L.ROOT_CAUSE_CORRELATOR: S.ANALYSIS,
+    L.TREND_FORECASTS:       S.ANALYSIS,
+    L.SERVICE_DIAGNOSTICS:   S.ANALYSIS,
+    L.GEOLOCATION_MAP:       S.ANALYSIS,
     # Security Audit section
-    "Security Overview":  "Security Audit",
-    "Port Scan (TCP)":    "Security Audit",
+    L.SECURITY_OVERVIEW:    S.SECURITY_AUDIT,
+    L.PORT_SCAN_TCP:        S.SECURITY_AUDIT,
     # Education section
-    "Protocol Visualizer": "Education",
-    "Lab Mode":            "Education",
-    "Feature Guide":       "Education",
+    L.PROTOCOL_VISUALIZER:  S.EDUCATION,
+    L.LAB_MODE:             S.EDUCATION,
+    L.FEATURE_GUIDE:        S.EDUCATION,
 }
 
 

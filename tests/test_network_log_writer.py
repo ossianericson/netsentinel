@@ -2,7 +2,7 @@
 
 
 def test_import():
-    import modules.network_log_writer as m
+    from modules import network_log_writer as m
     assert hasattr(m, "LogEntry")
     assert hasattr(m, "LogSummary")
     assert hasattr(m, "OutageSummary")

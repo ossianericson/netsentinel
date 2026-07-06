@@ -17,14 +17,15 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
+
+from workers.base_worker import BaseWorker
 
 
-class HwDetectWorker(QThread):
+class HwDetectWorker(BaseWorker):
     """Probe *ip* once against the hardware catalogue, emit results."""
 
     detected = pyqtSignal(list)
-    error    = pyqtSignal(str)
 
     def __init__(
         self,
@@ -36,11 +37,8 @@ class HwDetectWorker(QThread):
         self._ip          = ip
         self._gateway_mac = gateway_mac
 
-    def run(self) -> None:
-        try:
-            from modules.hw_detect import detect, load_catalogue
-            catalogue = load_catalogue(try_remote=False)
-            matches   = detect(self._ip, self._gateway_mac, catalogue)
-            self.detected.emit(matches)
-        except Exception as exc:
-            self.error.emit(str(exc))
+    def work(self) -> None:
+        from modules.hw_detect import detect, load_catalogue
+        catalogue = load_catalogue(try_remote=False)
+        matches   = detect(self._ip, self._gateway_mac, catalogue)
+        self.detected.emit(matches)

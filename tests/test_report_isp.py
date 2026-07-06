@@ -2,7 +2,7 @@
 
 
 def test_import():
-    import modules.report_isp as m
+    from modules import report_isp as m
     assert hasattr(m, "generate_isp_report")
     assert hasattr(m, "save_isp_report")
     assert hasattr(m, "_ISP_CSS")

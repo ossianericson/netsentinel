@@ -12,7 +12,6 @@ Download/upload/ping test backends stay in speed_tester_backends.py.
 
 from __future__ import annotations
 
-import concurrent.futures
 import dataclasses
 import json
 import time
@@ -20,6 +19,7 @@ from typing import List
 
 from modules.speed_tester_backends import SpeedServer, _http_get, _HTTP_UA
 from modules.utils import get_app_data_dir
+from modules.utils_net import parallel_map, tcp_probe
 
 _SERVERS_CACHE_FILENAME = "speedtest_servers_cache.json"
 
@@ -159,23 +159,17 @@ def _fetch_servers_python(
     _s("Measuring server latency…")
 
     def _ping(server: SpeedServer) -> None:
-        try:
-            import socket as _sock
-            hostname = server.host.split(":")[0]
-            port = int(server.host.split(":")[1]) if ":" in server.host else 8080
-            times: list = []
-            for _ in range(2):  # 2 attempts at 2 s each; parallel across servers
-                t0 = time.perf_counter()
-                s = _sock.create_connection((hostname, port), timeout=2)
-                s.close()
-                times.append((time.perf_counter() - t0) * 1000)
-                time.sleep(0.02)
-            server.latency_ms = round(sum(times) / len(times), 1)
-        except Exception:
-            server.latency_ms = 9999.0
+        hostname = server.host.split(":")[0]
+        port = int(server.host.split(":")[1]) if ":" in server.host else 8080
+        times: list = []
+        for _ in range(2):  # 2 attempts at 2 s each; parallel across servers
+            ok, rtt, _ = tcp_probe(hostname, port, timeout=2)
+            if ok:
+                times.append(rtt)
+            time.sleep(0.02)
+        server.latency_ms = round(sum(times) / len(times), 1) if times else 9999.0
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        list(ex.map(_ping, servers))
+    parallel_map(_ping, servers, workers=10)
 
     return sorted(servers, key=lambda s: s.latency_ms)
 

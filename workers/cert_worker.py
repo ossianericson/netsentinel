@@ -6,7 +6,7 @@ Runs cert checks immediately on start, then every interval_s seconds.
 Signals
 -------
 check_done(list)   — emitted after each run: list of CertInfo-style dicts
-error(str)         — human-readable error message
+error(str)         — inherited from BaseWorker
 
 Usage
 -----
@@ -23,17 +23,17 @@ from __future__ import annotations
 import time
 from typing import List, Optional
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
 
 from modules.cert_monitor import CertMonitor, CertTarget
 from modules.metric_store import MetricStore
+from workers.base_worker import BaseWorker
 
 
-class CertWorker(QThread):
+class CertWorker(BaseWorker):
     """Background QThread that runs TLS certificate checks on a fixed interval."""
 
     check_done = pyqtSignal(list)   # list of CertInfo-style dicts
-    error      = pyqtSignal(str)
 
     def __init__(
         self,
@@ -43,23 +43,18 @@ class CertWorker(QThread):
         parent=None,
     ):
         super().__init__(parent)
-        self._stop_requested = False
-        self._interval_s     = interval_s
-        self._monitor        = CertMonitor(store=store, targets=targets or [])
+        self._interval_s = interval_s
+        self._monitor    = CertMonitor(store=store, targets=targets or [])
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_targets(self, targets: List[CertTarget]) -> None:
         self._monitor.set_targets(targets)
 
-    def stop(self) -> None:
-        self._stop_requested = True
-
     # ── Thread body ───────────────────────────────────────────────────────────
 
-    def run(self) -> None:
-        self._stop_requested = False
-        while not self._stop_requested:
+    def work(self) -> None:
+        while not self._should_stop():
             try:
                 results = self._monitor.run_check()
                 self.check_done.emit([
@@ -77,11 +72,11 @@ class CertWorker(QThread):
                     }
                     for r in results
                 ])
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 — one failed check must not kill the monitor loop
                 self.error.emit(str(exc))
 
             # Interruptible sleep — checks stop flag every second
             elapsed = 0
-            while elapsed < self._interval_s and not self._stop_requested:
+            while elapsed < self._interval_s and not self._should_stop():
                 time.sleep(1)
                 elapsed += 1

@@ -320,7 +320,7 @@ class TestWizardTemplateValidation:
 class TestPluginsDirCache:
     def test_plugins_dir_returns_same_object_on_repeated_calls(self, monkeypatch):
         """plugins_dir() must return the same Path object on consecutive calls (PB-10 cache)."""
-        import modules.plugin_system as ps
+        from modules import plugin_system as ps
         monkeypatch.setattr(ps, "_plugins_dir_cache", None)
 
         d1 = ps.plugins_dir()
@@ -332,7 +332,7 @@ class TestPluginsDirCache:
 
     def test_plugins_dir_cache_attribute_is_set_after_first_call(self, monkeypatch):
         """_plugins_dir_cache must be non-None after the first plugins_dir() call."""
-        import modules.plugin_system as ps
+        from modules import plugin_system as ps
         monkeypatch.setattr(ps, "_plugins_dir_cache", None)
 
         d = ps.plugins_dir()

@@ -23,7 +23,7 @@ Workflow
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 import matplotlib
 matplotlib.use("QtAgg")
@@ -43,7 +43,6 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QStackedWidget,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -62,12 +61,13 @@ from modules.wifi_heatmap import (
 )
 from modules.wifi_scanner import scan as wifi_scan
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    ACCENT, ACCENT_DARK, AMBER,
     BG_CARD, BG_HOVER, BORDER,
     CARD_HDR_BORDER, CARD_RADIUS, CHART_PLOT_BG, CHART_SPINE, GREEN, INPUT_PLACEHOLDER, RED,
-    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
-    TH_TEXT, WHITE,
+    TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
+    WHITE,
 )
+from ui.tabs_helpers import _table
 from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.empty_state_card import EmptyStateCard
 
@@ -144,25 +144,6 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     return b
-
-
-def _table(headers: List[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)  # RULE 3
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.setStyleSheet(
-        f"QTableWidget {{ border:none; font-size:11px; background:{BG_CARD};"
-        f"  alternate-background-color:{BG_ALT_ROW}; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT};"
-        f"  font-size:10px; font-weight:600; border:none; padding:0 8px; height:24px; }}"
-    )
-    return t
 
 
 # ── Main page ─────────────────────────────────────────────────────────────────

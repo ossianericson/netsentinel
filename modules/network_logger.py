@@ -19,18 +19,12 @@ modules/network_log_writer.py (S20-6 sprint split).
 """
 
 import csv
-import logging
-import platform
-import re
 import socket
-import subprocess
 import threading
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-
-_log = logging.getLogger(__name__)
 from typing import Callable, Dict, List, Optional, Tuple
 
 from modules.network_log_writer import (
@@ -40,7 +34,7 @@ from modules.network_log_writer import (
     load_log_file, list_log_files,
     _compute_summary, analyse_log,
 )
-from modules.utils_net import icmp_ping
+from modules.utils_net import get_arp_snapshot, icmp_ping
 
 # Re-export all public names so existing callers continue to work.
 __all__ = [
@@ -113,28 +107,7 @@ def _http_check_204() -> Tuple[int, float]:
 
 def _get_arp_snapshot() -> Dict[str, str]:
     """Return {ip: mac} from the current ARP table."""
-    system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
-    result: Dict[str, str] = {}
-    try:
-        if system == "Windows":
-            raw = subprocess.check_output(["arp", "-a"], text=True, timeout=6, **extra)
-            for line in raw.splitlines():
-                m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F-]{17})", line)
-                if m:
-                    ip = m.group(1)
-                    mac = m.group(2).replace("-", ":").lower()
-                    if mac != "ff:ff:ff:ff:ff:ff":
-                        result[ip] = mac
-        else:
-            raw = subprocess.check_output(["arp", "-n"], text=True, timeout=6)
-            for line in raw.splitlines():
-                m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+\S+\s+([\da-fA-F:]{17})", line)
-                if m:
-                    result[m.group(1)] = m.group(2).lower()
-    except Exception as exc:
-        _log.debug("ARP table read failed: %s", exc)
-    return result
+    return get_arp_snapshot()
 
 
 class NetworkLogger:

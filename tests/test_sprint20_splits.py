@@ -23,7 +23,7 @@ def test_default_db_path_returns_path():
 # ── S20-2: credentialed_scan_helpers ─────────────────────────────────────────
 
 def test_import_credentialed_scan_helpers():
-    import modules.credentialed_scan_helpers as h
+    from modules import credentialed_scan_helpers as h
     assert hasattr(h, "CredScanResult")
     assert hasattr(h, "_parse_linux")
     assert hasattr(h, "_parse_windows")
@@ -59,7 +59,7 @@ def test_cred_scan_re_exports():
 # ── S20-3: notification_channels ─────────────────────────────────────────────
 
 def test_import_notification_channels():
-    import modules.notification_channels as nc
+    from modules import notification_channels as nc
     assert hasattr(nc, "_build_payload")
     assert hasattr(nc, "_deliver_webhook")
     assert hasattr(nc, "_deliver_email")
@@ -84,7 +84,7 @@ def test_build_payload_shape():
 # ── S20-4: alert_suppressor ───────────────────────────────────────────────────
 
 def test_import_alert_suppressor():
-    import modules.alert_suppressor as sup
+    from modules import alert_suppressor as sup
     assert hasattr(sup, "EscalationPolicy")
     assert hasattr(sup, "_default_rules")
     assert hasattr(sup, "rule_settings_key")
@@ -125,7 +125,7 @@ def test_alert_engine_re_exports():
 # ── S20-5: report_isp ────────────────────────────────────────────────────────
 
 def test_import_report_isp():
-    import modules.report_isp as ri
+    from modules import report_isp as ri
     assert hasattr(ri, "generate_isp_report")
     assert hasattr(ri, "save_isp_report")
     assert hasattr(ri, "_ISP_CSS")
@@ -149,7 +149,7 @@ def test_report_exporter_re_exports():
 # ── S20-6: network_log_writer ─────────────────────────────────────────────────
 
 def test_import_network_log_writer():
-    import modules.network_log_writer as nlw
+    from modules import network_log_writer as nlw
     assert hasattr(nlw, "LogEntry")
     assert hasattr(nlw, "LogSummary")
     assert hasattr(nlw, "OutageSummary")
@@ -187,7 +187,7 @@ def test_network_logger_re_exports():
 # ── S20-7: speed_tester_backends ─────────────────────────────────────────────
 
 def test_import_speed_tester_backends():
-    import modules.speed_tester_backends as stb
+    from modules import speed_tester_backends as stb
     assert hasattr(stb, "SpeedServer")
     assert hasattr(stb, "SpeedTestResult")
     assert hasattr(stb, "_find_ookla_cli")

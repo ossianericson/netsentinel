@@ -33,7 +33,10 @@ class _FakeStore:
 def test_module_imports_without_flask(monkeypatch):
     """rest_api must import cleanly even when Flask is not installed."""
     import sys
-    import modules as _modules_pkg
+    import importlib
+    _modules_pkg = importlib.import_module("modules")  # not `import modules as _` --
+    # that form collides with `from modules import rest_api` elsewhere in this
+    # file (CodeQL py/import-and-import-from, RULE-LINT5).
     # Stash and restore both flask and modules.rest_api to avoid poisoning
     # subsequent tests in the same process.
     orig_flask     = sys.modules.get("flask",        ...)
@@ -45,7 +48,12 @@ def test_module_imports_without_flask(monkeypatch):
         sys.modules["flask"] = None  # type: ignore
         if "modules.rest_api" in sys.modules:
             del sys.modules["modules.rest_api"]
-        import modules.rest_api as m
+        # importlib.import_module() -- not `import`/`from ... import` -- so this
+        # always re-executes the module by checking sys.modules directly. A plain
+        # `from modules import rest_api` would short-circuit on the stale
+        # `_modules_pkg.rest_api` attribute left by an earlier test and skip the
+        # reimport entirely, silently keeping the old FLASK_AVAILABLE value.
+        m = importlib.import_module("modules.rest_api")
         assert m.FLASK_AVAILABLE is False
     finally:
         # Full cleanup — remove the tainted module and restore originals.
@@ -78,7 +86,7 @@ def test_flask_available_flag():
 def test_get_or_create_api_key_returns_string(monkeypatch):
     """get_or_create_api_key always returns a non-empty string."""
     # Monkeypatch keyring to avoid touching the real OS keychain in CI
-    import modules.rest_api as m
+    from modules import rest_api as m
 
     monkeypatch.setattr(m, "_KEYRING_OK", True)
     calls = {}
@@ -98,7 +106,7 @@ def test_get_or_create_api_key_returns_string(monkeypatch):
 
 def test_get_or_create_api_key_stable(monkeypatch):
     """Second call returns the same key without regenerating."""
-    import modules.rest_api as m
+    from modules import rest_api as m
 
     stored = {}
     monkeypatch.setattr(m, "_KEYRING_OK", True)
@@ -112,7 +120,7 @@ def test_get_or_create_api_key_stable(monkeypatch):
 
 def test_regenerate_api_key_changes_key(monkeypatch):
     """regenerate_api_key produces a different key each time."""
-    import modules.rest_api as m
+    from modules import rest_api as m
 
     stored = {}
     monkeypatch.setattr(m, "_KEYRING_OK", True)
@@ -125,7 +133,7 @@ def test_regenerate_api_key_changes_key(monkeypatch):
 
 
 def test_get_stored_api_key_empty_when_keyring_unavailable(monkeypatch):
-    import modules.rest_api as m
+    from modules import rest_api as m
     monkeypatch.setattr(m, "_KEYRING_OK", False)
     assert m.get_stored_api_key() == ""
 
@@ -138,7 +146,7 @@ pytest.importorskip("flask", reason="Flask not installed — skipping Flask endp
 @pytest.fixture()
 def api_client(monkeypatch):
     """Return a Flask test client with a known API key injected."""
-    import modules.rest_api as m
+    from modules import rest_api as m
 
     _key = "testkey" + "a" * 57  # 64 char key
 

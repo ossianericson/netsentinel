@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox,
     QFormLayout, QHBoxLayout, QLabel, QLineEdit,
     QMenu, QPlainTextEdit, QPushButton, QSizePolicy,
-    QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QStackedWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from modules.metric_store import MetricStore
@@ -57,26 +57,6 @@ _SEVERITY_COLORS = {
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _table(cols: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(cols))
-    t.setHorizontalHeaderLabels(cols)
-    t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.setStyleSheet(
-        f"QTableWidget {{ font-size:11px; color:{TEXT_PRIMARY}; gridline-color:{TABLE_ROW_BORDER};"
-        f" alternate-background-color:{BG_ALT_ROW}; background:{BG_CARD}; border:none; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-        f" font-weight:bold; padding:4px 5px; border:none; }}"
-    )
-    return t
-
 
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     outer = QWidget()

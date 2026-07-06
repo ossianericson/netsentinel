@@ -6,6 +6,31 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ### v2.1.25
 
+Internal maintainability release — an 8-part tech-debt backlog (P1–P8) drawn from a commit-history audit, closing the recurring bug classes the previous 90 commits kept re-fixing. No user-facing features or settings changed and behaviour is unchanged; all 4,875 tests pass (8 skipped). Each sprint shipped with its own ratchet test so the debt cannot silently regrow.
+
+**Added**
+- `ui/nav/labels.py` — a `NavLabel` registry giving every nav page label a single typed constant, replacing the raw string literals that were scattered across 23 files; `_nav_rail_go_to()` now logs a loud warning on an unknown label instead of silently doing nothing; guarded by `tests/test_nav_label_registry.py` (P1)
+- `workers/base_worker.py` — a `BaseWorker(QThread)` base class with standard `result_ready`/`error`/`progress` signals, a templated `run()` that wraps an overridable `work()` in try/except, and a uniform `request_stop()`; 9 workers migrated onto it; guarded by `tests/test_base_worker.py` and `tests/test_worker_base_class.py` (P3)
+- `tools/check_import_lint.py` — an import-hygiene gate (RULE-LINT5) catching CodeQL `py/import-and-import-from` and `py/cyclic-import`, neither of which ruff can detect; wired into `ci.yml` and the RULE-CI1 pre-push hook and guarded by `tests/test_import_lint.py` (P8)
+
+**Changed**
+- Converged all nav routing onto the `NavLabel` registry — migrated the four hand-maintained label copies (`_AUDIT_SCAN_LABELS`, `test_nav_completeness`, `discover_data.py`, and the nav builder) and the `navigate_to` wirings in `ui/tabs.py` onto the shared constants, so a page rename can no longer create a silent dead link (P1)
+- De-forked `tools/systematic_test.py` — it now imports the blacklist / window-attach / click-guard machinery from `tools/monkey_test.py` (as the other chaos tools already did) instead of re-implementing it, so a safety fix lands once rather than needing to be applied in two places (P2)
+- Consolidated shared network primitives into `modules/utils_net.py` — `tcp_probe()`, `get_arp_snapshot()`, and `parallel_map()` replace 14 hand-rolled socket probes, 5 ARP-table reads, 3 rogue subprocess pings, and 14 inline `ThreadPoolExecutor` fan-outs; guarded by `tests/test_utils_net_ratchet.py` (P4)
+- Converged 11 duplicated private `_table()` factories onto `ui.tabs_helpers._table()`, resolving their drift (grid lines, resize mode, edit triggers) once so every page's tables behave identically; guarded by `tests/test_table_factory_consolidation.py` (P5)
+- Added a QSS recipe layer to `ui/styles.py` (`qss_label`, `qss_muted_label`, `qss_frame`, `qss_chip`, `qss_dismiss_button`) and migrated the three heaviest inline-style files (`home_page.py`, `overview_tile.py`, `settings_cards.py`) onto it; RULE-QSS3, guarded by `tests/test_qss_recipe_adoption.py` (P6)
+- Trimmed `ui/dashboard.py` by extracting its self-contained tab builders into `ui/tabs_monitors.py`, `ui/tabs_help.py`, and `ui/export_mixin.py`, and decomposed the ~300-line `_on_m1_result` in `ui/scan_wiring.py` into named single-responsibility steps (P7)
+- Extended `tools/check_import_lint.py` with a cross-file unused-global-variable check (RULE-LINT6) and tightened ruff's `dummy-variable-rgx` in `pyproject.toml` to match CodeQL's narrower exemption — closing two blind spots where a dead module-level global or an underscore-prefixed dead local slipped past local linting
+- Refreshed the line-count and test-count figures in `README.md` and `docs/architecture.md` (~136,000 lines of Python, 4,875 tests across 343 files)
+
+**Fixed**
+- Resolved 46 pre-existing CodeQL `py/import-and-import-from` alerts across ~40 test files, 3 bundled plugins (`asus_plugin.py`, `netgear_plugin.py`, `openwrt_plugin.py`), and `geo_map_page.py` (P8)
+- Resolved 4 more open CodeQL alerts — a dead `_log` global (`network_logger.py`), a dead `_cb` local (`snmp_poller.py`), and two unused-public-export false-negatives (`dashboard.py` `_color_for_level`, `nav/labels.py` `KNOWN_LABELS`) — plus 4 additional dead locals surfaced by the tightened lint config (`app.py`, `ui/tabs.py`, `ui/widgets/overview_tile.py`, `tests/test_coach_marks.py`)
+
+---
+
+### v2.1.24
+
 **Added**
 - Per-device "Alert me if this device goes down" / "Stop alerting on this device" toggle in the Devices/Inventory context menu (`MetricStore.set_device_alert_opt_in()`, `known_device.alert_opt_in` — schema v19)
 - "Unresolved Security Alerts" card on Security Overview — lists unacknowledged security-relevant alerts with an inline "✓ Acknowledge" button per row, reusing `MetricStore.acknowledge_alert()`
@@ -14,10 +39,6 @@ All notable changes to NetSentinel are documented here. The current version summ
 - Device-health alerts (`HOST_DOWN`, `RTT_THRESHOLD`, `FLAP`, `JITTER_HIGH`, `RTT_ANOMALY`, `IOT_BEHAVIOR`, `TREND_FORECAST`, `IP_CHURN`, `LOSS_THRESHOLD`, `HOST_DEGRADED`) now fire only for infrastructure-role devices or devices the user has explicitly opted in — previously every device seen in a scan (including guest phones and transient IoT devices) could trigger these; genuine security events (`NEW_DEVICE`, `ARP_SPOOF`, `ROGUE_DHCP`, `NEW_OPEN_PORT`, `NEW_CVE`, `NEW_EXPOSURE`, `CONFIG_DRIFT`, `CERT_EXPIRY`, `CERT_EXPIRED`) remain unaffected by opt-in
 - Security Audit rail badge now counts only security-relevant unacked alerts (`SECURITY_RELEVANT_RULE_TYPES`) instead of every unacked alert, so the badge number matches the new Unresolved Security Alerts list on Security Overview
 - `MetricStore.record_alert_fired()` now persists a stable `rule_type` column (schema v19); `get_unacked_alerts()` accepts a `rule_types` filter
-
-### v2.1.24
-
-**Changed**
 - Refreshed the line-count and test-count figures in `README.md` and `docs/architecture.md` (~135,000 lines of Python, 4,800+ tests across 330+ files)
 
 **Fixed**

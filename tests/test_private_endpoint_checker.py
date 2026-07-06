@@ -5,7 +5,7 @@ import pytest
 
 
 def test_import():
-    import modules.private_endpoint_checker  # noqa: F401
+    from modules import private_endpoint_checker  # noqa: F401
 
 
 def test_endpoint_spec_dataclass():

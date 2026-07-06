@@ -24,6 +24,11 @@ jobs:
       - name: Check unused imports and variables
         run: ruff check . --select=F401,F811,F841 --output-format=github
 
+      - name: Check import-and-import-from and cyclic imports (RULE-LINT4)
+        # Ruff has no rule for these two CodeQL alert classes (verified against
+        # `ruff rule --all` and a `--select=ALL` probe) -- see tools/check_import_lint.py.
+        run: python tools/check_import_lint.py
+
   # ── GAP-2: mypy type check (modules/ only) ────────────────────────────────
   typecheck:
     name: Type check (mypy)

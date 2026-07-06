@@ -52,13 +52,16 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
     # Sprint 18: _AnalysisTabsMixin + ScanEnrichmentMixin wired; recon tabs → tabs_recon.py;
     # mesh methods → scan_enrichment.py.  6,472 → 4,092 lines.
     # Sprint 19: _NavBuilderMixin → nav/builder.py; _MonitorStateMixin → monitor_state.py;
-    # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines. FINAL GOAL ACHIEVED.
-    "dashboard.py": 2610,  # V6 Sprint 1: +~30 lines MODEM_SIGNAL_DROP alert evaluation wiring
+    # _PluginPageMixin → plugin_page_mixin.py.  4,092 → 1,967 lines.
+    # P7: Topology/ARP/DHCP/Bandwidth/Scheduler/SNMP tab builders → tabs_monitors.py;
+    # Help tab + About dialog → tabs_help.py; Export handlers → export_mixin.py.
+    # 2,609 → 1,754 lines.
+    "dashboard.py": 1954,  # actual 1,754 + 200 margin (P7 dashboard.py diet)
 
     # TabBuilderMixin shell: _build_tabs() page factory + sidebar assembly only.
     # Sprint 8: sub-mixins extracted to tabs_scan.py, tabs_network.py, tabs_diag.py.
-    # tabs.py now 949 lines — tighten further as _build_tabs() is decomposed.
-    "tabs.py": 1149,  # actual 949 + 200 margin (Sprint 8 sub-mixin extraction)
+    # P7: _MonitorTabsMixin + _HelpTabsMixin added to the composition.
+    "tabs.py": 1149,  # actual 1,062 + margin (Sprint 8 sub-mixin extraction)
 
     # _DiagTabsMixin — diagnostics tab only; MTR/tools inherited from _DiagExtraTabsMixin,
     # logger inherited from _LoggerTabMixin. Sprint 16: inheritance wired, duplicates removed.
@@ -91,8 +94,12 @@ KNOWN_LARGE_UI_FILES: dict[str, int] = {
 
     # ScanResultMixin — all _on_*_result handlers (extracted from dashboard.py).
     # Sprint 18: ScanEnrichmentMixin inherited; 12 duplicate methods removed.
+    # P7: _on_m1_result (~600-line, 13-responsibility method) decomposed into 13 named
+    # _m1_* private step methods + a slim orchestrator; zero net logic change, +~47 lines
+    # of method defs/docstrings (verified via `git diff` — every changed line is an
+    # inserted def/docstring, nothing else in the body was altered).
     # If new scan types are added, split by domain: security_wiring.py, monitor_wiring.py.
-    "scan_wiring.py": 1580,  # V6 Sprint 4.3: +~19 lines CONFIG_DRIFT blessed-baseline diff wiring
+    "scan_wiring.py": 1811,  # actual 1,611 + 200 margin (P7 _on_m1_result decomposition)
 
     # Notification channel config panels.  Sprint 17: duplicates removed, log panel
     # extracted to notif_alert_history.py; notif_extra_channels.py now fully wired.

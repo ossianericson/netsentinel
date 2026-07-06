@@ -47,7 +47,7 @@ from ui.styles import (
     CARD_HDR_BORDER, CARD_RADIUS, DEEP_ORANGE, GREEN,
     INLINE_WARN_BG, INLINE_WARN_FG, NAV_BAR, PRO_WARN_BG,
     RED, RED_BG, TEAL, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, WHITE,
+    TEXT_SECONDARY, WHITE, qss_chip, qss_frame, qss_label, qss_muted_label,
 )
 from ui.widgets.context_menu import install_copy_menu as _install_copy_menu
 
@@ -245,10 +245,7 @@ def _page_header(title: str, subtitle: str = "") -> QFrame:
 def _card(title: str) -> "tuple[QFrame, QVBoxLayout]":
     card = QFrame()
     card.setObjectName("card")
-    card.setStyleSheet(
-        f"QFrame#card{{background:{BG_CARD};border:1px solid {BORDER};"
-        f"border-radius:{CARD_RADIUS};}}"
-    )
+    card.setStyleSheet(qss_frame("card", radius=CARD_RADIUS))
     cl = QVBoxLayout(card)
     cl.setContentsMargins(0, 0, 0, 0)
     cl.setSpacing(0)
@@ -389,7 +386,7 @@ class _SettingsCardsMixin:
             "Click a chip to jump to the relevant settings."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        intro.setStyleSheet(qss_muted_label(11))
         bl.addWidget(intro)
 
         chips_row = QHBoxLayout()
@@ -417,22 +414,10 @@ class _SettingsCardsMixin:
 
     def _chip_style(self, state: str) -> str:
         if state == "green":
-            return (
-                f"font-size:10px; font-weight:bold; color:{BADGE_OK_FG};"
-                f" background:{BADGE_OK_BG}; border:1px solid {BADGE_OK_BORDER}; border-radius:10px;"
-                " padding:0 10px;"
-            )
+            return qss_chip(BADGE_OK_FG, BADGE_OK_BG, BADGE_OK_BORDER)
         if state == "amber":
-            return (
-                f"font-size:10px; font-weight:bold; color:{INLINE_WARN_FG};"
-                f" background:{INLINE_WARN_BG}; border:1px solid {AMBER}; border-radius:10px;"
-                " padding:0 10px;"
-            )
-        return (
-            f"font-size:10px; font-weight:bold; color:{BADGE_OFF_FG};"
-            f" background:{BADGE_OFF_BG}; border:1px solid {BADGE_OFF_BORDER}; border-radius:10px;"
-            " padding:0 10px;"
-        )
+            return qss_chip(INLINE_WARN_FG, INLINE_WARN_BG, AMBER)
+        return qss_chip(BADGE_OFF_FG, BADGE_OFF_BG, BADGE_OFF_BORDER)
 
     def refresh_config_completeness(self, cve_count: int = 0, rule_count: int = 0) -> None:
         if not hasattr(self, "_cfg_chips"):
@@ -471,7 +456,7 @@ class _SettingsCardsMixin:
             row.setSpacing(8)
             lbl = QLabel(label)
             lbl.setFixedWidth(190)
-            lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;")
+            lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
             status_val = status_fn()
             ok = status_val[0]
             status_txt = status_val[1]
@@ -498,7 +483,7 @@ class _SettingsCardsMixin:
             row.setSpacing(8)
             lbl = QLabel(label)
             lbl.setFixedWidth(190)
-            lbl.setStyleSheet(f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;")
+            lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
             status_val = status_fn()
             ok = status_val[0]
             status_txt = status_val[1]
@@ -600,7 +585,7 @@ class _SettingsCardsMixin:
             "Auto-snapshot after every scan (keeps last 10) — Config Snapshots"
         )
         self._chk_auto_snap.setStyleSheet(
-            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_auto_snap.setChecked(qs.value("baseline/auto_snapshot", False, type=bool))
         self._chk_auto_snap.toggled.connect(self._on_auto_snap_toggled)
@@ -611,7 +596,7 @@ class _SettingsCardsMixin:
             "badge appear on Config Snapshots."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"font-size:10px;color:{TEXT_SECONDARY};background:transparent;")
+        note.setStyleSheet(qss_muted_label(10))
         bl.addWidget(note)
         return card
 
@@ -626,7 +611,7 @@ class _SettingsCardsMixin:
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_sched_scan = QCheckBox("Enable scheduled full network scan")
         self._chk_sched_scan.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_sched_scan.setChecked(qs.value("sched_scan/enabled", False, bool))
         bl.addWidget(self._chk_sched_scan)
@@ -634,7 +619,7 @@ class _SettingsCardsMixin:
         rec_row = QHBoxLayout()
         rec_row.setSpacing(8)
         rec_lbl = QLabel("Run every")
-        rec_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        rec_lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
         self._sched_scan_combo = QComboBox()
         self._sched_scan_combo.addItems(["24 hours (daily)", "12 hours", "6 hours", "1 hour"])
         _interval_map = {"24 hours (daily)": 24, "12 hours": 12, "6 hours": 6, "1 hour": 1}
@@ -652,7 +637,7 @@ class _SettingsCardsMixin:
         time_row = QHBoxLayout()
         time_row.setSpacing(8)
         time_lbl = QLabel("Start time (today)")
-        time_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        time_lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
         self._sched_hour_spin = QSpinBox()
         self._sched_hour_spin.setRange(0, 23)
         self._sched_hour_spin.setValue(qs.value("sched_scan/hour", 2, int))
@@ -661,7 +646,7 @@ class _SettingsCardsMixin:
             f"font-size:11px; color:{TEXT_PRIMARY}; border:1px solid {BORDER}; padding:2px 4px;"
         )
         colon = QLabel(":")
-        colon.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;")
+        colon.setStyleSheet(qss_label(TEXT_PRIMARY, 11))
         self._sched_min_spin = QSpinBox()
         self._sched_min_spin.setRange(0, 59)
         self._sched_min_spin.setValue(qs.value("sched_scan/minute", 0, int))
@@ -744,7 +729,7 @@ class _SettingsCardsMixin:
             "Minimize to system tray on close  (app keeps running in the background)"
         )
         self._chk_tray.setStyleSheet(
-            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_tray.setChecked(qs.value("tray/minimize_to_tray", True, type=bool))
         self._chk_tray.toggled.connect(self._on_tray_toggled)
@@ -753,7 +738,7 @@ class _SettingsCardsMixin:
             "Minimize button also hides to tray  (default is minimize to taskbar)"
         )
         self._chk_minimize_tray.setStyleSheet(
-            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_minimize_tray.setChecked(
             qs.value("tray/minimize_window_to_tray", False, type=bool)
@@ -764,7 +749,7 @@ class _SettingsCardsMixin:
             "Start NetSentinel automatically when Windows starts  (runs in tray, starts background logger)"
         )
         self._chk_startup.setStyleSheet(
-            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         if sys.platform != "win32":
             self._chk_startup.setEnabled(False)
@@ -786,7 +771,7 @@ class _SettingsCardsMixin:
             "Notify when a new device joins the network"
         )
         self._chk_notify_new_device.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_notify_new_device.setChecked(
             qs.value("tray/notify_new_device", False, type=bool)
@@ -802,7 +787,7 @@ class _SettingsCardsMixin:
             "Notify when a known device leaves the network"
         )
         self._chk_notify_gone.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_notify_gone.setChecked(
             qs.value("tray/notify_device_gone", False, type=bool)
@@ -819,7 +804,7 @@ class _SettingsCardsMixin:
             "are configured per-rule in the Alerts tab."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent;")
+        note.setStyleSheet(qss_muted_label(10))
         bl.addWidget(note)
         return card
 
@@ -858,7 +843,7 @@ class _SettingsCardsMixin:
             "Click Install to download a plugin to your local plugins folder."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
+        desc.setStyleSheet(qss_muted_label(11))
         bl.addWidget(desc)
         url_row = QHBoxLayout()
         url_row.setSpacing(6)
@@ -944,7 +929,7 @@ class _SettingsCardsMixin:
         bl.addWidget(self._pm_table)
         self._pm_status = QLabel("Click ↻ Refresh to load the community plugin registry.")
         self._pm_status.setStyleSheet(
-            f"font-size:10px;color:{TEXT_SECONDARY};background:transparent;"
+            qss_muted_label(10)
         )
         bl.addWidget(self._pm_status)
         self._pm_entries: list = []
@@ -1089,7 +1074,7 @@ class _SettingsCardsMixin:
             )
             d = QLabel(desc)
             d.setStyleSheet(
-                f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+                qss_label(TEXT_PRIMARY, 11)
             )
             row_l.addWidget(k)
             row_l.addWidget(d, 1)
@@ -1105,7 +1090,7 @@ class _SettingsCardsMixin:
             "Use this after updating offenders.json or installing a new vendor list."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;")
+        desc.setStyleSheet(qss_muted_label(11))
         bl.addWidget(desc)
 
         for label, signal_name, color in [
@@ -1170,7 +1155,7 @@ class _SettingsCardsMixin:
         )
         settings_desc.setWordWrap(True)
         settings_desc.setStyleSheet(
-            f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;"
+            qss_muted_label(11)
         )
         bl.addWidget(settings_desc)
 
@@ -1239,7 +1224,7 @@ class _SettingsCardsMixin:
         )
         reset_desc.setWordWrap(True)
         reset_desc.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent;"
+            qss_muted_label(11)
         )
         bl.addWidget(reset_desc)
 
@@ -1428,7 +1413,7 @@ class _SettingsCardsMixin:
             "Choose a colour theme. Takes effect after restarting the app."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet(f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;")
+        desc.setStyleSheet(qss_muted_label(11))
         bl.addWidget(desc)
         self._theme_status_lbl = QLabel("")
         self._theme_status_lbl.setStyleSheet(
@@ -1457,7 +1442,7 @@ class _SettingsCardsMixin:
         )
         accent_desc.setWordWrap(True)
         accent_desc.setStyleSheet(
-            f"font-size:11px;color:{TEXT_SECONDARY};background:transparent;"
+            qss_muted_label(11)
         )
         bl.addWidget(accent_desc)
         _ACCENT_PRESETS = [
@@ -1552,14 +1537,14 @@ class _SettingsCardsMixin:
         qs = QSettings("NetSentinel", "NetSentinel")
         self._chk_compact = QCheckBox("Compact table rows (24 px — more devices visible)")
         self._chk_compact.setStyleSheet(
-            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_compact.setChecked(qs.value("display/compact_rows", True, type=bool))
         self._chk_compact.toggled.connect(self._on_compact_toggled)
         bl.addWidget(self._chk_compact)
         self._chk_tooltips = QCheckBox("Show extended tooltips on hover (400 ms delay)")
         self._chk_tooltips.setStyleSheet(
-            f"font-size:11px;color:{TEXT_PRIMARY};background:transparent;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         self._chk_tooltips.setChecked(qs.value("display/tooltips_enabled", True, type=bool))
         self._chk_tooltips.toggled.connect(self._on_tooltip_toggled)
@@ -1568,7 +1553,7 @@ class _SettingsCardsMixin:
             "Row height and tooltip settings take effect the next time a table is populated."
         )
         note.setWordWrap(True)
-        note.setStyleSheet(f"font-size:10px;color:{TEXT_SECONDARY};background:transparent;")
+        note.setStyleSheet(qss_muted_label(10))
         bl.addWidget(note)
         return card
 

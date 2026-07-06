@@ -354,22 +354,19 @@ def resolve_batch(
 
     Returns {ip: ResolvedName} dict.
     """
-    results: dict = {}
+    from modules.utils_net import parallel_map
 
     def _get(obj, key):
         if isinstance(obj, dict):
             return obj.get(key, "")
         return getattr(obj, key, "")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as pool:
-        fmap = {
-            pool.submit(resolve, _get(d, ip_key), _get(d, mac_key), **kwargs): _get(d, ip_key)
-            for d in devices
-        }
-        for fut in concurrent.futures.as_completed(fmap):
-            ip = fmap[fut]
-            try:
-                results[ip] = fut.result()
-            except Exception:
-                results[ip] = ResolvedName(ip=ip)
-    return results
+    def _resolve_safe(d):
+        ip = _get(d, ip_key)
+        try:
+            return ip, resolve(ip, _get(d, mac_key), **kwargs)
+        except Exception:
+            return ip, ResolvedName(ip=ip)
+
+    pairs = parallel_map(_resolve_safe, devices, workers=30)
+    return dict(pairs)

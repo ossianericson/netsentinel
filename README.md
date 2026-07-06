@@ -18,7 +18,7 @@ Free, open-source, and 100% local. No account, no telemetry, no cloud.
   <img src="assets/screenshots/hero.gif" alt="NetSentinel dashboard overview" width="860"/>
 </p>
 
-**62 tools in one app &nbsp;·&nbsp; ~135,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
+**62 tools in one app &nbsp;·&nbsp; ~136,000 lines of Python** — discovery, monitoring, diagnostics, security audit, automation, and education, in a single local desktop app.
 
 **4,800+ tests &nbsp;·&nbsp; 9-hour chaos-tested &nbsp;·&nbsp; 100% local &nbsp;·&nbsp; MIT License**
 
@@ -155,7 +155,7 @@ Every result maps directly to a protocol covered in CompTIA Network+ and CCNA cu
 
 ## Quality
 
-**4,800+ automated tests** across 330+ test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
+**4,875 automated tests** across 343 test files — detection logic, metric storage, version consistency, UI wiring, encoding hygiene, and CodeQL-prevention gates. All tests are offline; no real network traffic or live devices required.
 
 ```bash
 python -m pytest tests/ -v --tb=short
@@ -201,6 +201,15 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 ### v2.1.25 (current)
 
+Internal maintainability release — an 8-part refactor of the codebase's internal plumbing (a tech-debt backlog from a commit-history audit). No features changed, no settings moved, and the app behaves exactly as before; every change shipped with a test that keeps the cleanup from regressing.
+
+- Navigation now routes through a single typed label registry, so renaming a page can no longer create a silent dead link
+- Background scan workers share one base class, and network probes (TCP, ARP, ping, parallel fan-out) share one set of primitives — cancel, error handling, and timeouts now behave the same everywhere
+- Every data table and every common styled label/badge is drawn from one shared implementation, so behaviour and appearance are consistent on every page
+- A new import-hygiene gate catches two CodeQL alert classes (`py/import-and-import-from`, `py/cyclic-import`) locally and in CI, ending a recurring post-push cleanup cycle
+
+### v2.1.24
+
 **Added**
 - Per-device "Alert me if this device goes down" opt-in toggle, right-click any device in Devices/Inventory
 - "Unresolved Security Alerts" list on Security Overview with one-click Acknowledge, right where the Security Audit badge count now comes from
@@ -208,8 +217,6 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 **Changed**
 - Device-health alerts (host down, high RTT, flapping, etc.) now only fire for your router/infrastructure or devices you've explicitly opted in — no more surprise alerts for a guest's phone or a smart bulb
 - The Security Audit badge now only counts genuine security events (rogue DHCP, ARP spoofing, new open ports, new CVEs, expiring certs), not routine device-health noise
-
-### v2.1.24
 
 **Fixed**
 - Speed test now retries the server-list fetch and falls back to a cached list when the network hiccups

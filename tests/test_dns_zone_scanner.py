@@ -5,7 +5,7 @@ from modules.dns_zone_scanner import (
 
 
 def test_import():
-    import modules.dns_zone_scanner as m
+    from modules import dns_zone_scanner as m
     assert hasattr(m, "DnsZoneResult")
     assert hasattr(m, "_parse_dns_response")
 

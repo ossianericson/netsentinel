@@ -5,7 +5,7 @@ import pytest
 
 
 def test_import():
-    import modules.dhcp_detector  # noqa: F401
+    from modules import dhcp_detector  # noqa: F401
 
 
 def test_dhcp_offer_dataclass():

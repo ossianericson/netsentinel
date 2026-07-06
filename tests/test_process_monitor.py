@@ -3,7 +3,7 @@ from modules.process_monitor import Connection, _is_private, is_available
 
 
 def test_import():
-    import modules.process_monitor as m
+    from modules import process_monitor as m
     assert hasattr(m, "snapshot")
     assert hasattr(m, "Connection")
     assert hasattr(m, "is_available")

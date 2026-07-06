@@ -6,9 +6,12 @@ All three functions are re-exported from modules/utils for backwards compatibili
 """
 import platform
 import re
+import socket
 import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List
+from typing import Callable, Dict, Iterable, List, Tuple, TypeVar
 
 
 def get_network_info() -> dict:
@@ -473,6 +476,85 @@ def icmp_ping(host: str, timeout: float = 2.0) -> float:
     except Exception:
         pass  # non-fatal
     return -1.0
+
+
+def tcp_probe(host: str, port: int, timeout: float = 3.0) -> Tuple[bool, float, str]:
+    """Attempt a TCP connect to host:port. Returns (ok, rtt_ms, error).
+
+    rtt_ms is -1.0 on failure; error is "" on success, str(exception) otherwise.
+    Shared by ha_detector, cloud_metadata, isp_vs_router_test, private_endpoint_checker,
+    service_monitor, and service_diagnostics_probes so every TCP reachability check
+    reports identical connect-timing semantics (P4).
+    """
+    t0 = time.monotonic()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True, (time.monotonic() - t0) * 1000, ""
+    except OSError as exc:
+        return False, -1.0, str(exc)
+
+
+def get_arp_snapshot() -> Dict[str, str]:
+    """Return {ip: mac (lowercase, colon-separated)} from the OS ARP cache.
+
+    POSIX tries `arp -n` first (no reverse-DNS lookups), falling back to `arp -a`
+    if that fails. The broadcast MAC (ff:ff:ff:ff:ff:ff) and multicast/broadcast
+    IPs (224.0.0.0/4, x.x.x.255) are filtered out — neither represents a real
+    device. Shared by combined_discovery, network_logger, passive_observer,
+    rogue_device, and dhcp_lease_scanner so all ARP-cache reads use identical
+    parsing (P4).
+    """
+    system = platform.system()
+    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+    result: Dict[str, str] = {}
+
+    def _add(ip: str, mac: str) -> None:
+        mac = mac.replace("-", ":").lower()
+        if mac == "ff:ff:ff:ff:ff:ff" or ip.startswith("224.") or ip.endswith(".255"):
+            return
+        result[ip] = mac
+
+    try:
+        if system == "Windows":
+            raw = subprocess.check_output(["arp", "-a"], text=True, timeout=10, **extra)
+            for line in raw.splitlines():
+                m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F-]{17})", line)
+                if m:
+                    _add(m.group(1), m.group(2))
+        else:
+            try:
+                raw = subprocess.check_output(["arp", "-n"], text=True, timeout=10)
+            except subprocess.CalledProcessError:
+                raw = subprocess.check_output(["arp", "-a"], text=True, timeout=10)
+            for line in raw.splitlines():
+                m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+\S+\s+([\da-fA-F:]{17})", line)
+                if not m:
+                    m = re.search(r"(\d+\.\d+\.\d+\.\d+).*?([\da-fA-F:]{17})", line)
+                if m:
+                    _add(m.group(1), m.group(2))
+    except Exception:
+        pass  # non-fatal — ARP table read is best-effort
+    return result
+
+
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
+
+def parallel_map(fn: Callable[[_T], _R], items: Iterable[_T], workers: int = 8) -> List[_R]:
+    """Run fn(item) across items on a bounded thread pool; returns results in input order.
+
+    Thin wrapper around ThreadPoolExecutor.map so scan-worker fan-outs (host discovery,
+    hostname resolution, TCP/SNMP polling) share one pool-sizing and iteration idiom (P4).
+    An exception raised by fn propagates to the caller exactly as ThreadPoolExecutor.map
+    does — wrap fn yourself if you need a per-item fallback value instead of a raised
+    exception, or need incremental per-item progress reporting.
+    """
+    items = list(items)
+    if not items:
+        return []
+    with ThreadPoolExecutor(max_workers=min(workers, len(items))) as ex:
+        return list(ex.map(fn, items))
 
 
 def get_local_mac_label_map() -> dict:

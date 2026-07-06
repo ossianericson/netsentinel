@@ -1,4 +1,4 @@
-﻿"""Page help content for the tip bar and Help & Reference panel.
+"""Page help content for the tip bar and Help & Reference panel.
 
 Each key is the exact nav label passed to _nav_add_rail_item().
 Each value is a dict with:

@@ -40,7 +40,6 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSplitter,
     QStackedWidget,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -56,12 +55,13 @@ from modules.trigger_expression import (
     save_rules,
 )
 from ui.widgets.context_menu import install_copy_menu
+from ui.tabs_helpers import _table
 from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
     BG_CARD, BG_HOVER, BORDER, CARD_HDR_BORDER,
     CARD_RADIUS, GREEN, INPUT_PLACEHOLDER,
     RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
-    TH_BG, TH_TEXT, WHITE,
+    WHITE,
 )
 
 
@@ -129,25 +129,6 @@ def _btn(label: str, accent: bool = False) -> QPushButton:
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
     return b
-
-
-def _table(headers: List[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)   # RULE 3
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.setStyleSheet(
-        f"QTableWidget {{ border:none; font-size:11px; background:{BG_CARD};"
-        f"  alternate-background-color:{BG_ALT_ROW}; gridline-color:{BORDER}; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT};"
-        f"  font-size:10px; font-weight:600; border:none; padding:0 8px; height:24px; }}"
-    )
-    return t
 
 
 _SEV_COLOR = {"INFO": ACCENT, "WARNING": AMBER, "CRITICAL": RED}

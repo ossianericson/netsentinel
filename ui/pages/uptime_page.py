@@ -249,9 +249,10 @@ class UptimePage(QWidget):
 
         def _upt_show_timeline():
             from PyQt6.QtWidgets import QApplication as _QA
+            from ui.nav.labels import NavLabel as _L
             win = _QA.instance().activeWindow()
             if hasattr(win, "_nav_rail_go_to"):
-                win._nav_rail_go_to("Network Timeline")
+                win._nav_rail_go_to(_L.NETWORK_TIMELINE)
 
         install_copy_menu(self._table, [
             ("separator",       None),

@@ -8,10 +8,11 @@ Common ports covered include all services typical on home devices:
 routers, NAS boxes, cameras, printers, smart home hubs, and PCs.
 """
 
-import concurrent.futures
 import socket
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+from modules.utils_net import parallel_map
 
 
 # ── Port directory ─────────────────────────────────────────────────────────────
@@ -309,10 +310,9 @@ def scan(
         except Exception:
             return PortResult(port=port, name=name, open=False, risk=risk)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=_workers) as ex:
-        for pr in ex.map(_check, ports):
-            if pr.open:
-                result.open_ports.append(pr)
+    for pr in parallel_map(_check, ports, workers=_workers):
+        if pr.open:
+            result.open_ports.append(pr)
 
     result.open_ports.sort(key=lambda p: p.port)
 

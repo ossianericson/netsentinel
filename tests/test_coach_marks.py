@@ -7,7 +7,6 @@ exist and behave correctly based on the flag state.
 import pytest
 
 try:
-    from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import QSettings
 except ImportError:
     pytest.skip("PyQt6 not available", allow_module_level=True)
@@ -68,7 +67,6 @@ class TestCoachMarkChainOnDone:
     def test_on_done_is_callable_and_fires_on_cleanup(self):
         from ui.widgets.coach_mark import CoachMarkChain
         fired = []
-        _app = QApplication.instance()
         chain = CoachMarkChain(None, [], on_done=lambda: fired.append(True))
         chain._cleanup()
         assert fired == [True]

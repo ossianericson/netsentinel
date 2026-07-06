@@ -365,6 +365,133 @@ def alpha(hex_color: str, a) -> str:
     return f"rgba({r},{g},{b},{frac:.3f})"
 
 
+# ── QSS recipe functions ──────────────────────────────────────────────────────
+# The same few inline-QSS shapes (muted label, card wrapper, chip/badge, "X"
+# dismiss button) get re-typed by hand at hundreds of call sites across ui/,
+# each needing a parallel edit if the recipe ever changes. New code should call
+# one of these instead of composing the f-string from scratch. Colour
+# arguments default to `None` and are resolved to a theme constant *inside*
+# the function body (not as a default-argument value) so each call always
+# picks up the currently active theme, not whatever theme was active when
+# ui/styles.py was first imported.
+
+def qss_label(
+    color: "str | None" = None,
+    size: int = 11,
+    *,
+    weight: "str | None" = None,
+    transparent: bool = True,
+    border: str = "none",
+) -> str:
+    """QSS for a plain-text QLabel: colour + font-size, transparent background
+    and no border by default. ``color`` defaults to TEXT_SECONDARY (the
+    common "muted" case) — use :func:`qss_muted_label` for that shorthand.
+    Pass ``weight="bold"`` for emphasis or ``border="1px solid ..."`` to keep
+    a border instead of the default ``none``.
+    """
+    if color is None:
+        color = TEXT_SECONDARY
+    bits = [f"color:{color}", f"font-size:{size}px"]
+    if weight:
+        bits.append(f"font-weight:{weight}")
+    if transparent:
+        bits.append("background:transparent")
+    bits.append(f"border:{border}")
+    return "; ".join(bits) + ";"
+
+
+def qss_muted_label(size: int = 11) -> str:
+    """Shorthand for the extremely common muted secondary-text label recipe."""
+    return qss_label(TEXT_SECONDARY, size)
+
+
+def qss_frame(
+    object_name: str,
+    bg: "str | None" = None,
+    border: "str | None" = None,
+    *,
+    radius: "int | str | None" = 4,
+    border_left: "str | None" = None,
+    hover_border: "str | None" = None,
+) -> str:
+    """QSS for a card/banner QFrame wrapper, always scoped to
+    ``#object_name`` (RULE-QSS1-safe — never a bare selector). ``bg``/
+    ``border`` default to BG_CARD/BORDER. ``radius`` accepts either a plain
+    int (rendered as ``Npx``), a pre-unit string like ``CARD_RADIUS``
+    (``"8px"``), or ``None`` to omit ``border-radius`` entirely (square
+    corners). Pass ``border_left`` (a colour) to add a 3px accent stripe,
+    e.g. for a success/warning banner. Pass ``hover_border`` (a colour) to
+    add a ``:hover { border-color: ... }`` rule.
+    """
+    if bg is None:
+        bg = BG_CARD
+    if border is None:
+        border = BORDER
+    decl = [f"background:{bg}", f"border:1px solid {border}"]
+    if radius is not None:
+        r = radius if isinstance(radius, str) else f"{radius}px"
+        decl.append(f"border-radius:{r}")
+    if border_left:
+        decl.append(f"border-left:3px solid {border_left}")
+    qss = f"QFrame#{object_name} {{ {'; '.join(decl)}; }}"
+    if hover_border:
+        qss += f"QFrame#{object_name}:hover {{ border-color:{hover_border}; }}"
+    return qss
+
+
+def qss_chip(fg: str, bg: str, border: str, *, radius: int = 10, size: int = 10,
+             bold: bool = True, padding: str = "0 10px") -> str:
+    """QSS for a small pill/badge label — the chip/badge recipe duplicated as
+    local ``_chip_style()``/``_tag_chip_style()`` helpers in several pages.
+    New chip styling should call this instead of reinventing the same
+    font-size / border-radius / padding block.
+    """
+    weight = "font-weight:bold; " if bold else ""
+    return (
+        f"font-size:{size}px; {weight}color:{fg}; background:{bg};"
+        f" border:1px solid {border}; border-radius:{radius}px; padding:{padding};"
+    )
+
+
+def qss_dismiss_button(
+    size: int = 10,
+    fg: "str | None" = None,
+    hover_fg: "str | None" = None,
+    *,
+    padding: "str | None" = None,
+    press_bg: "str | None" = None,
+) -> str:
+    """QSS for the small flat "X" dismiss/close QPushButton recipe: background
+    stays transparent in the base and hover states, text lightens from
+    secondary to primary on hover/press. Only ``font-size`` (and occasionally
+    the colour pair) varies across the dozens of dismiss buttons this was
+    copy-pasted from. Pass ``padding="0"`` for the fixed-size variants that
+    need it explicit.
+
+    Pass ``press_bg`` for the sibling variant used by several banner-dismiss
+    buttons, where the pressed state shows a highlighted background (and
+    hover does not force ``background:transparent``) instead of staying
+    fully transparent throughout.
+    """
+    if fg is None:
+        fg = TEXT_SECONDARY
+    if hover_fg is None:
+        hover_fg = TEXT_PRIMARY
+    pad = f" padding:{padding};" if padding is not None else ""
+    base = f"QPushButton {{ color:{fg}; background:transparent; border:none; font-size:{size}px;{pad} }}"
+    if press_bg is not None:
+        return (
+            base
+            + f"QPushButton:hover {{ color:{hover_fg}; }}"
+            + f"QPushButton:pressed {{ background:{press_bg}; color:{fg}; }}"
+        )
+    return (
+        base
+        + f"QPushButton:hover {{ color:{hover_fg}; background:transparent; }}"
+        + f"QPushButton:pressed {{ color:{hover_fg}; background:transparent; }}"
+    )
+
+
 # ── Apply active theme — injects all palette keys into this module's globals ──
 
 _ACTIVE_THEME: str = get_active_theme_name()

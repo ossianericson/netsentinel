@@ -5,7 +5,7 @@ import pytest
 
 
 def test_import():
-    import modules.dhcp_lease_scanner  # noqa: F401
+    from modules import dhcp_lease_scanner  # noqa: F401
 
 
 def test_dhcp_lease_dataclass_fields():

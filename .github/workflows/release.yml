@@ -439,4 +439,23 @@ jobs:
           # ArchitecturesInstallIn64BitMode, so the architecture must be forced
           # to match the existing x64 manifest entry (wingetcreate won't guess
           # across a mismatch).
-          wingetcreate update NetSentinel.NetSentinel --version $ver --urls "$url|x64|inno|machine" --submit --token $env:WINGET_PAT
+          #
+          # wingetcreate's first call reads the current manifest straight from
+          # the GitHub REST API (not a git clone), which occasionally gets
+          # bounced by GitHub's secondary rate limiting ("gitmon refuses to
+          # schedule us: fail-fast:network", HTTP 429). That's transient, so
+          # retry a few times with backoff before failing the job.
+          $maxAttempts = 5
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            wingetcreate update NetSentinel.NetSentinel --version $ver --urls "$url|x64|inno|machine" --submit --token $env:WINGET_PAT
+            if ($LASTEXITCODE -eq 0) {
+              break
+            }
+            if ($attempt -eq $maxAttempts) {
+              Write-Error "wingetcreate failed after $maxAttempts attempts"
+              exit $LASTEXITCODE
+            }
+            $delay = 30 * $attempt
+            Write-Warning "wingetcreate failed (attempt $attempt/$maxAttempts, exit $LASTEXITCODE) - retrying in ${delay}s"
+            Start-Sleep -Seconds $delay
+          }

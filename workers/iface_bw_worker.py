@@ -20,7 +20,7 @@ Usage
     worker.stats_ready.connect(my_slot)
     worker.start()
     ...
-    worker.stop()   # non-blocking; thread will exit after ≤1 s
+    worker.stop()   # non-blocking; thread checks the flag every ~0.1 s
 """
 
 from __future__ import annotations
@@ -49,6 +49,17 @@ class IfaceBwPoller(QThread):
     def stop(self) -> None:
         self._running = False
 
+    def _sleep_interruptible(self, seconds: float) -> None:
+        """Sleep in ~100 ms chunks so stop() is honoured promptly.
+
+        The tiles that own this poller detach it without wait()-ing on the UI
+        thread; sleeping in small chunks lets the detached thread exit within
+        ~100 ms instead of lingering for the full interval.
+        """
+        deadline = time.monotonic() + seconds
+        while self._running and time.monotonic() < deadline:
+            time.sleep(0.1)
+
     def run(self) -> None:
         try:
             import psutil
@@ -66,7 +77,7 @@ class IfaceBwPoller(QThread):
                 current = psutil.net_io_counters(pernic=True)
             except Exception as exc:
                 self.error.emit(str(exc))
-                time.sleep(self._interval)
+                self._sleep_interruptible(self._interval)
                 continue
 
             if prev is not None:
@@ -91,4 +102,4 @@ class IfaceBwPoller(QThread):
 
             prev      = current
             prev_time = now
-            time.sleep(self._interval)
+            self._sleep_interruptible(self._interval)

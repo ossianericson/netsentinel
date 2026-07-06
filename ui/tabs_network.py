@@ -25,6 +25,7 @@ from ui.styles import (
     GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY,
 )
+from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table
 
 
@@ -59,7 +60,7 @@ class _NetworkTabsMixin:
             self._show_ip_on_geo_map(ip)
         elif chosen == act_abuse:
             self._threat_intel_page.check_ip(ip)
-            self._nav_rail_go_to("Threat Intel")
+            self._nav_rail_go_to(L.THREAT_INTEL)
         elif chosen == act_copy_ip:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(ip)

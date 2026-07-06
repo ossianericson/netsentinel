@@ -396,7 +396,7 @@ class TestScanWorkerImport:
     cleanly and key worker classes are present."""
 
     def test_import(self):
-        import workers.scan_worker as sw
+        from workers import scan_worker as sw
         assert sw is not None
 
     def test_key_classes_present(self):

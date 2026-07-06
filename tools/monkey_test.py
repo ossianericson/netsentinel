@@ -265,6 +265,13 @@ _BLACKLIST: List[str] = [
     "re-import",        # HubCard "⤵ Re-import" → QFileDialog.getOpenFileName via _on_browse()
     "re-enter",         # HubCard "🔑 Re-enter Password" → show_credential_dialog() modal
     "install dep",      # HubCard "⬇ Install dependency" → PipInstallDialog modal
+    # --- Opens external browser/app on a real file or URL (confirmed by a real-mouse
+    # chaos run, 2026-07-05: monkey_mouse_test.py launched Edge + Explorer windows
+    # mid-run by real-clicking these) ---
+    "open log file",    # Network Logger "Open Log File" (tabs_logger.py) → webbrowser.open()
+    "open dashboard",   # Home "Open Dashboard" (home_data_mixin.py) → QDesktopServices.openUrl()
+    "open in browser",  # Lab Mode / Overview / Network Doc post-export → webbrowser.open()
+    "view on nvd",      # CVE Lookup row context menu → webbrowser.open(nvd.nist.gov/...)
 ]
 
 # Safe pages to navigate to via the Ctrl+K command palette.
@@ -527,6 +534,12 @@ def _window_title_ok(win) -> bool:
 
 def _is_blacklisted(name: str, auto_id: str) -> bool:
     combined = (name + " " + auto_id).lower()
+    if combined.strip().startswith(("http://", "https://")):
+        # Router quick-link buttons (tabs_network.py "btnRouterLink") use the
+        # target URL itself as the accessible name — e.g. "http://192.168.1.1/" —
+        # and fire webbrowser.open() on click. No fixed string can match every
+        # gateway IP, so match on the URL prefix instead.
+        return True
     return any(pat in combined for pat in _BLACKLIST)
 
 

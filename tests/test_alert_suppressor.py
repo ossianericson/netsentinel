@@ -2,7 +2,7 @@
 
 
 def test_import():
-    import modules.alert_suppressor as m
+    from modules import alert_suppressor as m
     assert hasattr(m, "EscalationPolicy")
     assert hasattr(m, "_default_rules")
     assert hasattr(m, "rule_settings_key")

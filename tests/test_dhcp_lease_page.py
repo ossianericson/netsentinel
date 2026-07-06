@@ -14,6 +14,11 @@ def page():
     from ui.pages.dhcp_lease_page import DhcpLeasePage
     p = DhcpLeasePage()
     yield p
+    # __init__ fires a real DhcpLeaseWorker QThread (RULE-WIN4): it must finish
+    # before the page is torn down, or Qt aborts the whole process with
+    # "QThread: Destroyed while thread '' is still running".
+    if p._worker is not None:
+        p._worker.wait(5000)
     try:
         p.deleteLater()
     except RuntimeError:

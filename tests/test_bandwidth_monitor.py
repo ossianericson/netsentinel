@@ -5,7 +5,7 @@ from modules.bandwidth_monitor import (
 
 
 def test_import():
-    import modules.bandwidth_monitor as m
+    from modules import bandwidth_monitor as m
     assert hasattr(m, "SCAPY_AVAILABLE")
     assert hasattr(m, "BandwidthMonitor")
     assert hasattr(m, "BandwidthSniffer")

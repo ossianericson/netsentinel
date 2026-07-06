@@ -6,7 +6,7 @@ from modules.cloud_metadata import (
 
 
 def test_import():
-    import modules.cloud_metadata as m
+    from modules import cloud_metadata as m
     assert hasattr(m, "check_local_imds")
     assert hasattr(m, "check_network_imds_exposure")
     assert hasattr(m, "CloudMetadataResult")

@@ -18,12 +18,10 @@ from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMenu,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -31,11 +29,11 @@ from PyQt6.QtWidgets import (
 
 from modules.dhcp_lease_scanner import DhcpLease
 from workers.dhcp_lease_worker import DhcpLeaseWorker
+from ui.tabs_helpers import _table as _make_table
 from ui.styles import (
     ACCENT,
     ACCENT_DARK,
     AMBER,
-    BG_ALT_ROW,
     BG_CARD,
     BG_HOVER,
     BORDER,
@@ -44,11 +42,8 @@ from ui.styles import (
     GREEN,
     INPUT_PLACEHOLDER,
     RED,
-    TABLE_SEL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
     WHITE,
 )
 from ui.table_utils import kpi_tile as _shared_kpi_tile, restore_column_widths, save_column_widths
@@ -56,29 +51,6 @@ from ui.widgets.empty_state_card import EmptyStateCard
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
-
-def _make_table(headers: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setStretchLastSection(True)
-    # Interactive, not ResizeToContents (RULE-PERF1) — see threat_intel_page.py
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.setShowGrid(False)
-    t.setStyleSheet(
-        f"QTableWidget {{ background:{BG_CARD}; border:none; font-size:11px;"
-        f" color:{TEXT_PRIMARY}; alternate-background-color:{BG_ALT_ROW}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-        f" font-weight:bold; padding:4px 8px; border:none; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-    )
-    return t
-
 
 def _cell(text: str, align: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft) -> QTableWidgetItem:
     item = QTableWidgetItem(text)

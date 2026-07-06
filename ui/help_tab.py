@@ -1,4 +1,4 @@
-﻿"""
+"""
 help_tab.py — build_help_tab() and helper functions for the Help & Reference panel.
 
 Extracted from ui/help.py (Sprint 17) to keep help.py within a manageable size.
@@ -371,10 +371,10 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("IoT device-type constants", "New modules/device_types.py defines canonical labels (TYPE_SMART_PLUG, TYPE_SMART_THERMOSTAT, TYPE_SMART_BULB, Matter) — device classifier and rules now import from one place instead of hardcoding strings."),
-        ("Nest vendor fix", "Nest vendor regex no longer collides with unrelated devices; wearable dead-code path removed."),
-        ("Monitor resume bar", "The bar shown when background monitors restart is now blue (informational) instead of amber — resuming is expected, not a warning."),
-        ("Action needed card", "The 'Action needed' card on the Home page now only appears for genuine unacknowledged alerts you configured."),
+        ("Under-the-hood cleanup", "This is a maintainability release — an 8-part refactor of the app's internal plumbing. No features changed and no settings moved; the app behaves exactly as before."),
+        ("Steadier navigation", "Every page link now routes through a single label registry, eliminating a class of silent 'dead link' bugs that could appear when pages were renamed."),
+        ("Consistent tables everywhere", "All data tables now share one implementation, so sorting, row height, and column behaviour are identical on every page."),
+        ("Uniform background scans", "Network scan workers share one base class and one set of network primitives, so cancel, error handling, and timeouts behave the same across every tool."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

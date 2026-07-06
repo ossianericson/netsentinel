@@ -429,7 +429,10 @@ class SystemTrayManager:
     def _open_alerts(self) -> None:
         self._show_window()
         if hasattr(self._window, "_nav_go_to"):
-            self._window._nav_go_to("Alerts & Activity")
+            # "Alerts & Activity" was renamed to the Notifications page long ago;
+            # the stale literal silently no-oped this tray action (RULE-NAV3).
+            from ui.nav.labels import NavLabel as _L
+            self._window._nav_go_to(_L.NOTIFICATIONS)
 
     def _quit(self) -> None:
         # Allow the normal close path to stop workers first

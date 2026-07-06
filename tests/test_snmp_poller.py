@@ -6,7 +6,7 @@ from modules.snmp_poller import (
 
 
 def test_import():
-    import modules.snmp_poller as m
+    from modules import snmp_poller as m
     assert hasattr(m, "poll")
     assert hasattr(m, "SNMPResult")
     assert hasattr(m, "_encode_oid")

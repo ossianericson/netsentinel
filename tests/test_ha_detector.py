@@ -3,7 +3,7 @@ from modules.ha_detector import HaMatch, ha_category, scan
 
 
 def test_import():
-    import modules.ha_detector as m
+    from modules import ha_detector as m
     assert hasattr(m, "scan")
     assert hasattr(m, "HaMatch")
     assert hasattr(m, "ha_category")

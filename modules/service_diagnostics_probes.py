@@ -19,6 +19,8 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from modules.utils_net import tcp_probe as _shared_tcp_probe
+
 
 # ── DNS probe ─────────────────────────────────────────────────────────────────
 
@@ -96,13 +98,9 @@ class TcpProbeResult:
 def tcp_probe(host: str, port: int, timeout: float = 5.0) -> TcpProbeResult:
     """Attempt a TCP connection and measure connect latency."""
     result = TcpProbeResult(host=host, port=port)
-    try:
-        t0 = time.monotonic()
-        with socket.create_connection((host, port), timeout=timeout):
-            result.rtt_ms = (time.monotonic() - t0) * 1000
-        result.up = True
-    except OSError as exc:
-        result.error = str(exc)
+    result.up, rtt, result.error = _shared_tcp_probe(host, port, timeout)
+    if result.up:
+        result.rtt_ms = rtt
     return result
 
 

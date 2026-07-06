@@ -7,7 +7,7 @@ from modules.wifi_scanner import (
 
 
 def test_import():
-    import modules.wifi_scanner as m
+    from modules import wifi_scanner as m
     assert hasattr(m, "scan")
     assert hasattr(m, "NetworkInfo")
     assert hasattr(m, "WifiScanResult")

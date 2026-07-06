@@ -23,6 +23,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
+from modules.utils_net import icmp_ping
+
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
@@ -111,33 +113,24 @@ _SPEED_URL = "https://speed.cloudflare.com/__down?bytes=2097152"  # 2 MB
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-def _ping_host(host: str) -> Tuple[float, str]:
-    """Return (avg_rtt_ms, resolved_ip).  rtt_ms = -1 on failure."""
-    system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
+def _ping_host(host: str, stop_event=None) -> Tuple[float, str]:
+    """Return (avg_rtt_ms, resolved_ip).  rtt_ms = -1 on failure.
+
+    Checks stop_event between each of the 3 pings so a mid-host cancellation
+    doesn't have to wait out the full 3-ping sequence (~6s worst case).
+    """
     try:
         resolved = socket.gethostbyname(host)
     except Exception:
         resolved = host
-    try:
-        if system == "Windows":
-            r = subprocess.run(
-                ["ping", "-n", "3", "-w", "1000", host],
-                capture_output=True, text=True, timeout=6, **extra,
-            )
-            m = re.search(r"Average\s*=\s*(\d+)ms", r.stdout)
-            if m:
-                return float(m.group(1)), resolved
-        else:
-            r = subprocess.run(
-                ["ping", "-c", "3", "-W", "2", host],
-                capture_output=True, text=True, timeout=10,
-            )
-            m = re.search(r"min/avg/max.*?=.*?/([\d.]+)/", r.stdout)
-            if m:
-                return float(m.group(1)), resolved
-    except Exception:
-        pass  # non-fatal
+    rtts = []
+    for _ in range(3):
+        if stop_event is not None and stop_event.is_set():
+            break
+        rtts.append(icmp_ping(host, timeout=2.0))  # matches prior "ping -n/-c 3" behavior
+    ok = [r for r in rtts if r >= 0]
+    if ok:
+        return sum(ok) / len(ok), resolved
     return -1.0, resolved
 
 
@@ -379,7 +372,7 @@ def scan(
     for name, host in targets:
         if _stopped():
             break
-        rtt, resolved = _ping_host(host)
+        rtt, resolved = _ping_host(host, stop_event=stop_event)
         status = "FAIL" if rtt < 0 else ("SLOW" if rtt > 100 else "OK")
         result.ping_results.append(
             PingResult(host=name, ip=resolved, rtt_ms=rtt, status=status)

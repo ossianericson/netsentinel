@@ -242,9 +242,10 @@ class LiveBandwidthPage(QWidget):
         )
         def _bw_show_inventory():
             from PyQt6.QtWidgets import QApplication as _QA
+            from ui.nav.labels import NavLabel as _L
             win = _QA.instance().activeWindow()
             if hasattr(win, "_nav_rail_go_to"):
-                win._nav_rail_go_to("Devices")
+                win._nav_rail_go_to(_L.DEVICES)
 
         install_copy_menu(self._tbl, [
             ("separator",         None),

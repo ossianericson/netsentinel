@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 
 def test_import():
-    import modules.notification_channels as m
+    from modules import notification_channels as m
     assert hasattr(m, "_build_payload")
     assert hasattr(m, "_deliver_webhook")
     assert hasattr(m, "_deliver_email")
@@ -32,7 +32,7 @@ def test_build_payload_all_fields():
 
 
 def test_deliver_functions_callable():
-    import modules.notification_channels as nc
+    from modules import notification_channels as nc
     for fn_name in ["_deliver_webhook", "_deliver_email", "_deliver_pushover",
                     "_deliver_ntfy", "_deliver_telegram",
                     "_deliver_pushover_tracked", "_deliver_ntfy_tracked",

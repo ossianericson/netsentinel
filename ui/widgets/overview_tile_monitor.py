@@ -26,6 +26,7 @@ from ui.styles import (
 )
 
 # Base class and animation helper live in overview_tile.py
+from ui.nav.labels import NavLabel as L
 from ui.widgets.overview_tile import _BaseTile
 
 class LiveBandwidthTile(_BaseTile):
@@ -494,7 +495,7 @@ class RecentEventsTile(_BaseTile):
             f"QPushButton:hover {{ text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
-        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Network Timeline"))
+        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit(L.NETWORK_TIMELINE))
         self._link_btn.hide()
         self._body_layout.addWidget(self._link_btn)
 
@@ -502,7 +503,7 @@ class RecentEventsTile(_BaseTile):
         if (not self._edit_mode
                 and event.button() == Qt.MouseButton.LeftButton
                 and self._row_labels):
-            self.navigate_requested.emit("Network Timeline")
+            self.navigate_requested.emit(L.NETWORK_TIMELINE)
         else:
             super().mousePressEvent(event)
 

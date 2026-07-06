@@ -25,20 +25,21 @@ import subprocess
 import sys
 from typing import Optional
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
+
+from workers.base_worker import BaseWorker
 
 
-class PluginWorker(QThread):
+class PluginWorker(BaseWorker):
     """Run a plugin script with --netsentinel, parse its stdout as JSON.
 
     Signals
     -------
     result(dict)  — parsed {info, status, clients} on success
-    error(str)    — human-readable error message on failure
+    error(str)    — inherited from BaseWorker (human-readable, translated below)
     """
 
     result = pyqtSignal(dict)
-    error  = pyqtSignal(str)
 
     def __init__(self, script_path: str, timeout: int = 60,
                  parent=None) -> None:
@@ -46,7 +47,7 @@ class PluginWorker(QThread):
         self._path    = script_path
         self._timeout = timeout
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             proc = subprocess.run(
                 [sys.executable, self._path, "--netsentinel"],

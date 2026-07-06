@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSlot
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 from ui.help import _PAGE_HELP
+from ui.nav.labels import NavLabel as L, SPECIAL_LABELS
 from ui.nav.rail import _NavEntry, _RailButton, _make_nav_icon
 from ui.perf_audit import warn_if_nav_slow
 from ui.styles import (
@@ -33,11 +34,11 @@ from ui.styles import (
 
 # Pages that auto-expand the tip bar on first visit (non-obvious interactions)
 _AUTO_HELP_PAGES: frozenset[str] = frozenset({
-    "Network Logger", "Lab Mode", "Protocol Visualizer",
-    "Automation Hooks", "MQTT / Home Assistant", "TLS & Exposure",
-    "Service Heartbeat", "IoT Behaviour", "Scheduled Scans",
-    "Trend Forecasts", "Bandwidth Usage", "App Traffic",
-    "ARP Spoof Watch", "Monitor Status",
+    L.NETWORK_LOGGER, L.LAB_MODE, L.PROTOCOL_VISUALIZER,
+    L.AUTOMATION_HOOKS, L.MQTT_HOME_ASSISTANT, L.TLS_EXPOSURE,
+    L.SERVICE_HEARTBEAT, L.IOT_BEHAVIOUR, L.SCHEDULED_SCANS,
+    L.TREND_FORECASTS, L.BANDWIDTH_USAGE, L.APP_TRAFFIC,
+    L.ARP_SPOOF_WATCH, L.MONITOR_STATUS,
 })
 
 
@@ -74,17 +75,17 @@ class _NavBuilderMixin:
 
     # C-2: freshness thresholds (seconds from scan timestamp before dot turns amber)
     _FRESH_SECONDS: dict[str, int] = {
-        "Devices":                30 * 60,
-        "Port Scan (TCP)":         2 * 3600,
-        "Port Scan (UDP)":         2 * 3600,
-        "CVE Lookup":              6 * 3600,
-        "Threat Intel":            1 * 3600,
-        "TLS & Exposure":          2 * 3600,
-        "Login Test":              6 * 3600,
-        "OS Detection":            6 * 3600,
-        "Exposed to Internet":     2 * 3600,
-        "Full Device Discovery":   2 * 3600,
-        "Service Diagnostics":    30 * 60,
+        L.DEVICES:                30 * 60,
+        L.PORT_SCAN_TCP:           2 * 3600,
+        L.PORT_SCAN_UDP:           2 * 3600,
+        L.CVE_LOOKUP:              6 * 3600,
+        L.THREAT_INTEL:            1 * 3600,
+        L.TLS_EXPOSURE:            2 * 3600,
+        L.LOGIN_TEST:              6 * 3600,
+        L.OS_DETECTION:            6 * 3600,
+        L.EXPOSED_TO_INTERNET:     2 * 3600,
+        L.FULL_DEVICE_DISCOVERY:   2 * 3600,
+        L.SERVICE_DIAGNOSTICS:    30 * 60,
     }
     _DEFAULT_FRESH_SECONDS: int = 3600
 
@@ -381,7 +382,7 @@ class _NavBuilderMixin:
         self._nav_rail_go_to(label)
 
     def _open_isp_from_home(self) -> None:
-        self._nav_rail_go_to("Network Health Report")
+        self._nav_rail_go_to(L.NETWORK_HEALTH_REPORT)
 
     def _rebuild_nav_for_mode(self) -> None:
         """Clear all nav state and rebuild the full Pro rail."""
@@ -699,6 +700,27 @@ class _NavBuilderMixin:
         _nav_go_to_t0 = time.perf_counter()
         widget = self._nav_label_to_widget.get(label)
         if widget is None:
+            # RULE-NAV3 / P1 guard: a label with no registered page is dead
+            # navigation. Silently no-oping here is the biggest recurring nav bug
+            # class (a typo'd or renamed label routes nowhere, with no error).
+            # SPECIAL_LABELS (e.g. "Settings" → modal dialog) legitimately have no
+            # page and are left to no-op quietly; anything else is logged loudly
+            # and hard-fails under pytest so a dead link can never ship silently.
+            # The running app always degrades to a no-op — never crash a user's
+            # session over a bad nav label. Static enforcement (compile-time typo
+            # catching for all literals) lives in tests/test_nav_label_registry.py.
+            if label not in SPECIAL_LABELS:
+                import logging as _logging
+                _logging.getLogger("nav").error(
+                    "dead navigation: no page registered for label %r — pass a "
+                    "ui.nav.labels.NavLabel member and confirm _build_pro_nav()", label,
+                )
+                import os as _os
+                if _os.environ.get("PYTEST_CURRENT_TEST"):
+                    raise AssertionError(
+                        f"unknown nav label {label!r} passed to _nav_rail_go_to() "
+                        f"— not a NavLabel member registered in _build_pro_nav()"
+                    )
             return
         if (
             label != "Settings"
@@ -932,12 +954,12 @@ class _NavBuilderMixin:
         if label:
             self._nav_rail_go_to(label)
         else:
-            self._nav_rail_go_to("Hardware")
+            self._nav_rail_go_to(L.HARDWARE)
 
     @pyqtSlot(str)
     def _on_inventory_device_selected(self, mac: str) -> None:
         """Navigate to Devices and scroll/select the row matching this MAC."""
-        self._nav_rail_go_to("Devices")
+        self._nav_rail_go_to(L.DEVICES)
         self._m1_highlight_mac(mac)
 
     @pyqtSlot(str)
@@ -1028,13 +1050,13 @@ class _NavBuilderMixin:
     # ── Visited-feature tracking ──────────────────────────────────────────────
 
     _DISCOVERY_PAGES = [
-        ("Network Logger",      "Start logging your network — captures RTT, DNS latency, and outages automatically in the background"),
-        ("What's Wrong?",       "Pick a symptom and get a plain-English verdict with a prioritised fix list"),
-        ("Network Grade",       "Get an A–F score for your network health across 8 dimensions"),
-        ("Feature Guide",       "See everything this app can do — including features most users never find"),
-        ("Protocol Visualizer", "See animated diagrams of ARP, DNS, TCP and more — using your real devices"),
-        ("Lab Mode",            "Try a guided exercise: find a rogue device or diagnose slow DNS on your live network"),
-        ("Network Health Report", "Generate a network health report — great for ISP support tickets"),
+        (L.NETWORK_LOGGER,      "Start logging your network — captures RTT, DNS latency, and outages automatically in the background"),
+        (L.WHATS_WRONG,         "Pick a symptom and get a plain-English verdict with a prioritised fix list"),
+        (L.NETWORK_GRADE,       "Get an A–F score for your network health across 8 dimensions"),
+        (L.FEATURE_GUIDE,       "See everything this app can do — including features most users never find"),
+        (L.PROTOCOL_VISUALIZER, "See animated diagrams of ARP, DNS, TCP and more — using your real devices"),
+        (L.LAB_MODE,            "Try a guided exercise: find a rogue device or diagnose slow DNS on your live network"),
+        (L.NETWORK_HEALTH_REPORT, "Generate a network health report — great for ISP support tickets"),
     ]
 
     def _track_page_visit(self, label: str) -> None:
@@ -1386,9 +1408,9 @@ class _NavBuilderMixin:
     # ── Monitoring state helpers (NAV-2) ──────────────────────────────────────
 
     _MONITOR_PAGES: dict = {
-        "ARP Spoof Watch":     "_arp_worker",
-        "DHCP Rogue Monitor":  "_dhcp_worker",
-        "Live Bandwidth":      "_bw_worker",
+        L.ARP_SPOOF_WATCH:     "_arp_worker",
+        L.DHCP_ROGUE_MONITOR:  "_dhcp_worker",
+        L.LIVE_BANDWIDTH:      "_bw_worker",
     }
 
     def _is_monitor_running(self, worker_attr: str) -> bool:
@@ -1592,7 +1614,7 @@ class _NavBuilderMixin:
     def _on_palette_action(self, action: str) -> None:
         if action.startswith("__device__"):
             ip_or_mac = action[len("__device__"):]
-            self._nav_rail_go_to("Inventory Changes")
+            self._nav_rail_go_to(L.INVENTORY_CHANGES)
             if hasattr(self, "_inventory_page"):
                 self._inventory_page.select_device(ip_or_mac)
         elif action.startswith("__alert__"):
@@ -1600,7 +1622,7 @@ class _NavBuilderMixin:
             try:
                 alert_dict = _json.loads(action[len("__alert__"):])
                 if hasattr(self, "_notifications_page"):
-                    self._nav_rail_go_to("Notifications")
+                    self._nav_rail_go_to(L.NOTIFICATIONS)
                     self._notifications_page._alert_drawer.open(alert_dict)
             except Exception:
                 pass  # non-fatal
@@ -1609,7 +1631,7 @@ class _NavBuilderMixin:
         elif action == "Run Full Scan":
             self._start_full_scan()
         elif action in ("Start Speed Test", "Run Speed Test"):
-            self._nav_rail_go_to("Speed Test")
+            self._nav_rail_go_to(L.SPEED_TEST)
             if hasattr(self, "_speed_test_page"):
                 self._speed_test_page.scan_requested.emit()
         elif action in ("Run Diagnosis", "Diagnose Network"):
@@ -1617,9 +1639,9 @@ class _NavBuilderMixin:
         elif action == "Export Report":
             self._export_report()
         elif action == "Add Monitored Service":
-            self._nav_rail_go_to("Service Heartbeat")
+            self._nav_rail_go_to(L.SERVICE_HEARTBEAT)
         elif action == "View Alert History":
-            self._nav_rail_go_to("Notifications")
+            self._nav_rail_go_to(L.NOTIFICATIONS)
             if hasattr(self, "_notifications_page"):
                 self._notifications_page.switch_to_history_tab()
         elif action == "Copy API Key":
@@ -1632,7 +1654,7 @@ class _NavBuilderMixin:
             except Exception:
                 pass  # non-fatal — REST API may be disabled
         elif action == "Open Network Doc":
-            self._nav_rail_go_to("Network Doc")
+            self._nav_rail_go_to(L.NETWORK_DOC)
             if hasattr(self, "_network_doc_page"):
                 self._network_doc_page._generate()
         elif action == "Open Settings":
@@ -1643,13 +1665,13 @@ class _NavBuilderMixin:
             from ui.widgets.feedback_dialog import show_feedback_dialog
             show_feedback_dialog(self)
         elif action == "Start ARP Spoof Watch":
-            self._nav_rail_go_to("ARP Spoof Watch")
+            self._nav_rail_go_to(L.ARP_SPOOF_WATCH)
             self._start_arp_monitor()
         elif action == "Start DHCP Rogue Monitor":
-            self._nav_rail_go_to("DHCP Rogue Monitor")
+            self._nav_rail_go_to(L.DHCP_ROGUE_MONITOR)
             self._start_dhcp_scan()
         elif action == "Start Bandwidth Monitor":
-            self._nav_rail_go_to("Live Bandwidth")
+            self._nav_rail_go_to(L.LIVE_BANDWIDTH)
             self._start_bandwidth_monitor()
 
     def _replay_recent_action(self, action_id: str) -> None:
@@ -1679,4 +1701,4 @@ class _NavBuilderMixin:
             self._nav_rail_go_to(label)
 
     def _open_diagnosis(self) -> None:
-        self._nav_rail_go_to("What's Wrong?")
+        self._nav_rail_go_to(L.WHATS_WRONG)

@@ -71,9 +71,9 @@ Under `## Changelog` in `README.md`, update the topmost `### vX.Y.Z (current)` b
 3–5 bullet plain-English summary of the most important changes. This is the public-facing
 highlights; full history lives in CHANGELOG.md.
 
-### Step 4 — Update "What's New" in ui/dashboard.py
+### Step 4 — Update "What's New" in ui/help_tab.py
 
-Find the `_section(f"What's New in v{app_ver}", [...])` call in `ui/dashboard.py` and update
+Find the `_section(f"What's New in v{app_ver}", [...])` call in `ui/help_tab.py` and update
 it to match the CHANGELOG entry for this version.
 
 ### Step 5 — Run bump_version.py
@@ -137,7 +137,7 @@ Before presenting the result to the user, confirm every box:
 
 - [ ] CHANGELOG.md has a `### vX.Y.Z` entry with full detail
 - [ ] README.md `## Changelog` block updated with 3–5 bullet summary
-- [ ] "What's New" in `ui/dashboard.py` matches the changelog
+- [ ] "What's New" in `ui/help_tab.py` matches the changelog
 - [ ] `bump_version.py X.Y.Z` exited 0; consistency test passed
 - [ ] Monkey test ran clean (30 min, seed 99)
 - [ ] `git push origin main` completed before tag push

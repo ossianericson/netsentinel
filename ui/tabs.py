@@ -34,6 +34,7 @@ from ui.styles import (
     SIDEBAR_SECTION_FG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE,
 )
+from ui.nav.labels import NavLabel as L
 from ui.nav.rail import _RailButton, _FlyoutPanel, _CanvasClickFilter, _make_nav_icon
 from ui.widgets.alert_drawer import AlertDrawer
 
@@ -56,16 +57,22 @@ from ui.tabs_diag import _DiagTabsMixin
 from ui.tabs_analysis import _AnalysisTabsMixin
 from ui.tabs_analysis_isp import _AnalysisIspMixin
 from ui.tabs_recon import _ReconTabsMixin
+from ui.tabs_monitors import _MonitorTabsMixin
+from ui.tabs_help import _HelpTabsMixin
 
 
 class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
-                      _AnalysisTabsMixin, _AnalysisIspMixin, _ReconTabsMixin):
+                      _AnalysisTabsMixin, _AnalysisIspMixin, _ReconTabsMixin,
+                      _MonitorTabsMixin, _HelpTabsMixin):
     """Mixin providing all tab/page content builders for Dashboard.
 
     Extracted from ui/dashboard.py (Sprint 6, S13-1).
     Sprint 8: decomposed into sub-mixins for scan (M1–M5), network info,
-    and diagnostics/logger/tools.  This class retains only _build_tabs()
-    (the page factory + sidebar assembly method).
+    and diagnostics/logger/tools.
+    P7: Topology/ARP/DHCP/Bandwidth/Scheduler/SNMP tab builders extracted to
+    ui/tabs_monitors.py; Help tab + About dialog extracted to ui/tabs_help.py.
+    This class retains only _build_tabs() (the page factory + sidebar
+    assembly method).
     """
 
     def _build_tabs(self) -> QWidget:
@@ -180,12 +187,12 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._connections_page = ConnectionsPage(parent=None)
         self._connections_page.show_on_map.connect(self._show_ip_on_geo_map)
         self._connections_page.focus_host_in_inventory.connect(
-            lambda ip: (self._nav_rail_go_to("Inventory Changes"),
+            lambda ip: (self._nav_rail_go_to(L.INVENTORY_CHANGES),
                         self._inventory_page.select_device(ip))
         )
         self._inventory_page.show_connections_for.connect(
             lambda ip: (self._connections_page.focus_on_ip(ip),
-                        self._nav_rail_go_to("Active Connections"))
+                        self._nav_rail_go_to(L.ACTIVE_CONNECTIONS))
         )
 
         from ui.pages.live_bandwidth_page import LiveBandwidthPage
@@ -209,11 +216,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._threat_intel_page.show_on_map.connect(self._show_ip_on_geo_map)
         self._threat_intel_page.show_in_connections.connect(
             lambda ip: (self._connections_page.focus_on_ip(ip),
-                        self._nav_rail_go_to("Active Connections"))
+                        self._nav_rail_go_to(L.ACTIVE_CONNECTIONS))
         )
         self._connections_page.lookup_threat_intel.connect(
             lambda ip: (self._threat_intel_page.check_ip(ip),
-                        self._nav_rail_go_to("Threat Intel"))
+                        self._nav_rail_go_to(L.THREAT_INTEL))
         )
 
         from ui.pages.security_overview_page import SecurityOverviewPage
@@ -224,16 +231,16 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         from ui.pages.cve_page import CvePage
         self._cve_page = CvePage(self._store, parent=None)
         self._cve_page.navigate_to_inventory.connect(
-            lambda ip: (self._nav_rail_go_to("Inventory Changes"), self._inventory_page.select_device(ip))
+            lambda ip: (self._nav_rail_go_to(L.INVENTORY_CHANGES), self._inventory_page.select_device(ip))
         )
         self._cve_page.navigate_to.connect(self._nav_rail_go_to)
         self._cve_page.lookup_threat_intel_for.connect(
             lambda ip: (self._threat_intel_page.focus_on_host(ip),
-                        self._nav_rail_go_to("Threat Intel"))
+                        self._nav_rail_go_to(L.THREAT_INTEL))
         )
         self._inventory_page.check_cves_for.connect(
             lambda ip: (self._cve_page.focus_on_host(ip),
-                        self._nav_rail_go_to("CVE Tracker"))
+                        self._nav_rail_go_to(L.CVE_TRACKER))
         )
         self._inventory_page.navigate_to.connect(self._nav_rail_go_to)
 
@@ -298,10 +305,10 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._hardware_integration_page.navigate_to.connect(self._nav_rail_go_to)
         self._hardware_integration_page.geo_map_ip.connect(self._show_ip_on_geo_map)
         self._hardware_integration_page.port_scan_ip.connect(
-            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to("Port Scan (TCP)"))
+            lambda ip: (self._syn_host.setText(ip), self._nav_rail_go_to(L.PORT_SCAN_TCP))
         )
         self._hardware_integration_page.check_abuse_ip.connect(
-            lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to("Threat Intel"))
+            lambda ip: (self._threat_intel_page.check_ip(ip), self._nav_rail_go_to(L.THREAT_INTEL))
         )
 
         # Pre-populate enrichment from cached QSettings so the first scan has
@@ -618,7 +625,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._nav_add_subgroup("Tools", icon="⚡")
         self._nav_add_page ("⌂", "Home Automation",     self._ha_page)
         _tools_heatmap_row = self._nav_add_page("◈", "WiFi Heatmap",       self._wifi_heatmap_page)
-        _tools_geomap_row  = self._nav_add_page("⊕", "Geolocation Map",    self._geo_map_page)
+        self._nav_add_page("⊕", "Geolocation Map",    self._geo_map_page)
         self._nav_current_subgroup = -1
 
         # ── ADVANCED (collapsed by default) ────────────────────────────────────
@@ -1011,7 +1018,7 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
     def _on_dns_zone_complete(self, verdict: str) -> None:
         """Feed DNS Zone scan completion into the scan registry."""
         import time as _time
-        self._nav_set_scan_state("DNS Zone Map", "fresh", ts=_time.time(), verdict=verdict)
+        self._nav_set_scan_state(L.DNS_ZONE_MAP, "fresh", ts=_time.time(), verdict=verdict)
 
     def _on_service_diag_complete(self) -> None:
         """Feed Service Diagnostics completion into the scan registry."""
@@ -1022,18 +1029,18 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             svc = getattr(result, "service_name", "")
             layer = getattr(result, "failure_layer", "none")
             verdict = f"{svc}: {layer}" if layer != "none" else f"{svc}: OK"
-        self._nav_set_scan_state("Service Diagnostics", "fresh", ts=_time.time(), verdict=verdict or "Diagnostics complete")
+        self._nav_set_scan_state(L.SERVICE_DIAGNOSTICS, "fresh", ts=_time.time(), verdict=verdict or "Diagnostics complete")
 
     def _on_service_page_diagnose(self, service_id: str) -> None:
         """Navigate to Service Diagnostics, pre-selecting service_id if provided."""
         if service_id:
             self._service_diagnostics_page.set_service(service_id)
-        self._nav_rail_go_to("Service Diagnostics")
+        self._nav_rail_go_to(L.SERVICE_DIAGNOSTICS)
 
     def _on_diagnose_symptom(self, symptom_key: str) -> None:
         """Pre-select a symptom on DiagnosisPage and navigate to it."""
         self._diagnosis_page.preset_symptom(symptom_key)
-        self._nav_rail_go_to("What's Wrong?")
+        self._nav_rail_go_to(L.WHATS_WRONG)
 
     def _on_app_traffic_sample(self, samples: list) -> None:
         """Persist App Traffic per-flow samples to MetricStore (S6-1, RULE-DW1).

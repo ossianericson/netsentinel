@@ -21,4 +21,4 @@
 - [ ] No Qt imports in `modules/` files
 - [ ] New module has a corresponding `tests/test_<name>.py`
 - [ ] No raw exceptions shown in the UI — all errors translated to user-friendly messages
-- [ ] If new page added: registered in `dashboard._build_tabs()` and reachable via a nav mode
+- [ ] If new page added: registered in `_build_pro_nav()` via `_nav_add_rail_item()` and reachable via the activity rail (RULE-NAV1)

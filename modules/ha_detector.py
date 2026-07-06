@@ -26,10 +26,11 @@ Usage::
 
 from __future__ import annotations
 
-import socket
 import urllib.request
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
+
+from modules.utils_net import tcp_probe
 
 
 # ── Detection result ─────────────────────────────────────────────────────────
@@ -148,11 +149,8 @@ def _oui_match(mac: Optional[str]) -> Optional[dict]:
 # ── TCP port probe ────────────────────────────────────────────────────────────
 
 def _tcp_open(ip: str, port: int, timeout: float = 1.5) -> bool:
-    try:
-        with socket.create_connection((ip, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
+    ok, _, _ = tcp_probe(ip, port, timeout)
+    return ok
 
 
 def _http_probe(ip: str, port: int, path: str, timeout: float = 2.5) -> Optional[str]:

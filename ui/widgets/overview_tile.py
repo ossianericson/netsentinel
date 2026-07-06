@@ -17,12 +17,14 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.metric_store import MetricStore
+from ui.nav.labels import NavLabel as L
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER, AUDIT_RED,
     BG_CARD, BG_HOVER, BORDER,
     CARD_HDR_BORDER, CHART_DOWN, CHART_UP,
     GREEN, PRO_WARN_BG, RED, TEXT_MUTED,
     TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
+    qss_frame, qss_label, qss_muted_label,
 )
 
 _MIME_TYPE    = "application/x-netsentinel-tile"
@@ -121,8 +123,7 @@ class _BaseTile(QFrame):
 
     def _setup_frame(self) -> None:
         self.setStyleSheet(
-            f"QFrame#overviewTile {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-            f"QFrame#overviewTile:hover {{ border-color:{ACCENT}; }}"
+            qss_frame("overviewTile", BG_CARD, BORDER, radius=None, hover_border=ACCENT)
         )
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -285,8 +286,7 @@ class _BaseTile(QFrame):
 
     def _reset_style(self) -> None:
         self.setStyleSheet(
-            f"QFrame#overviewTile {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
-            f"QFrame#overviewTile:hover {{ border-color:{ACCENT}; }}"
+            qss_frame("overviewTile", BG_CARD, BORDER, radius=None, hover_border=ACCENT)
         )
 
     # ── ANIM-7: hover lift ────────────────────────────────────────────────────
@@ -448,7 +448,7 @@ class DeviceCountTile(_BaseTile):
         )
         self._sub_lbl = QLabel("Waiting for scan…")
         self._sub_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 11, transparent=False)
         )
         self._body_layout.addWidget(self._count_lbl)
         self._body_layout.addWidget(self._sub_lbl)
@@ -477,7 +477,7 @@ class DeviceCountTile(_BaseTile):
         items = list(self._last_states.items())[:5]
         if not items:
             lbl = QLabel("No devices monitored yet")
-            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none;")
+            lbl.setStyleSheet(qss_label(TEXT_SECONDARY, 10, transparent=False))
             lay.addWidget(lbl)
         else:
             for ip, state in items:
@@ -489,7 +489,7 @@ class DeviceCountTile(_BaseTile):
                 dot.setStyleSheet(f"color:{color}; font-size:9px; border:none;")
                 ip_lbl = QLabel(ip)
                 ip_lbl.setStyleSheet(
-                    f"color:{TEXT_PRIMARY}; font-size:10px; border:none;"
+                    qss_label(TEXT_PRIMARY, 10, transparent=False)
                 )
                 st_lbl = QLabel(state)
                 st_lbl.setStyleSheet(
@@ -573,7 +573,7 @@ class TlsStatusTile(_BaseTile):
             )
             sub = QLabel(text)
             sub.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+                qss_label(TEXT_SECONDARY, 10, transparent=False)
             )
             grid.addWidget(num_lbl, row_idx, 0)
             grid.addWidget(sub,     row_idx, 1)
@@ -623,7 +623,7 @@ class RttSummaryTile(_BaseTile):
             f"font-size:30px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;"
         )
         rtt_sub = QLabel("Avg RTT")
-        rtt_sub.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; border:none;")
+        rtt_sub.setStyleSheet(qss_label(TEXT_SECONDARY, 10, transparent=False))
         rtt_sub.setToolTip("RTT — Round-Trip Time: how long a ping takes to travel to a host and back, in milliseconds. Under 20 ms is excellent.")
         rtt_col.addWidget(self._rtt_lbl)
         rtt_col.addWidget(rtt_sub)
@@ -634,7 +634,7 @@ class RttSummaryTile(_BaseTile):
             f"font-size:30px; font-weight:bold; color:{TEXT_PRIMARY}; border:none;"
         )
         loss_sub = QLabel("Packet loss")
-        loss_sub.setStyleSheet(f"font-size:10px; color:{TEXT_SECONDARY}; border:none;")
+        loss_sub.setStyleSheet(qss_label(TEXT_SECONDARY, 10, transparent=False))
         loss_col.addWidget(self._loss_lbl)
         loss_col.addWidget(loss_sub)
 
@@ -677,7 +677,7 @@ class RttSummaryTile(_BaseTile):
         top3 = sorted(valid.items(), key=lambda x: x[1], reverse=True)[:3]
         if not top3:
             lbl = QLabel("No RTT data yet")
-            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none;")
+            lbl.setStyleSheet(qss_label(TEXT_SECONDARY, 10, transparent=False))
             lay.addWidget(lbl)
         else:
             mx = max(v for _, v in top3)
@@ -687,7 +687,7 @@ class RttSummaryTile(_BaseTile):
                 row.setSpacing(6)
                 ip_lbl = QLabel(ip)
                 ip_lbl.setStyleSheet(
-                    f"color:{TEXT_PRIMARY}; font-size:10px; border:none;"
+                    qss_label(TEXT_PRIMARY, 10, transparent=False)
                 )
                 ip_lbl.setMinimumWidth(110)
                 bar = QFrame()
@@ -790,9 +790,9 @@ class _AlertRow(QFrame):
         row.setContentsMargins(4, 1, 4, 1)
         self.bar = QLabel("▌")
         self.bar.setFixedWidth(10)
-        self.bar.setStyleSheet(f"font-size:14px; color:{TEXT_SECONDARY}; border:none;")
+        self.bar.setStyleSheet(qss_label(TEXT_SECONDARY, 14, transparent=False))
         self.msg = QLabel("–")
-        self.msg.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+        self.msg.setStyleSheet(qss_label(TEXT_SECONDARY, 11, transparent=False))
         row.addWidget(self.bar)
         row.addWidget(self.msg, 1)
 
@@ -865,12 +865,12 @@ class AlertFeedTile(_BaseTile):
                 text   = a.get("message", "")
                 row.bar.setStyleSheet(f"font-size:14px; color:{colour}; border:none;")
                 row.msg.setText(text[:55] + "…" if len(text) > 55 else text)
-                row.msg.setStyleSheet(f"font-size:11px; color:{TEXT_PRIMARY}; border:none;")
+                row.msg.setStyleSheet(qss_label(TEXT_PRIMARY, 11, transparent=False))
                 row.set_active(True)
             else:
-                row.bar.setStyleSheet(f"font-size:14px; color:{TEXT_SECONDARY}; border:none;")
+                row.bar.setStyleSheet(qss_label(TEXT_SECONDARY, 14, transparent=False))
                 row.msg.setText("–")
-                row.msg.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+                row.msg.setStyleSheet(qss_label(TEXT_SECONDARY, 11, transparent=False))
                 row.set_active(False)
 
     def _build_detail(self) -> Optional[QWidget]:
@@ -881,7 +881,7 @@ class AlertFeedTile(_BaseTile):
         lay.setSpacing(2)
         if not self._alerts:
             lbl = QLabel("No recent alerts")
-            lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; font-size:10px; border:none;")
+            lbl.setStyleSheet(qss_label(TEXT_SECONDARY, 10, transparent=False))
             lay.addWidget(lbl)
         else:
             import datetime as _dt
@@ -895,7 +895,7 @@ class AlertFeedTile(_BaseTile):
                 ts_lbl = QLabel(ts_str)
                 ts_lbl.setFixedWidth(54)
                 ts_lbl.setStyleSheet(
-                    f"color:{TEXT_SECONDARY}; font-size:9px; border:none;"
+                    qss_label(TEXT_SECONDARY, 9, transparent=False)
                 )
                 msg_lbl = QLabel(a.get("message", "")[:45])
                 msg_lbl.setStyleSheet(f"color:{color}; font-size:9px; border:none;")
@@ -1007,7 +1007,7 @@ class EventFeedTile(_BaseTile):
 
         if not unified:
             lbl = QLabel("No events in the last 48 hours.")
-            lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY}; border:none;")
+            lbl.setStyleSheet(qss_label(TEXT_SECONDARY, 11, transparent=False))
             self._inner_lay.insertWidget(0, lbl)
             self._event_labels.append(lbl)
             return
@@ -1036,7 +1036,7 @@ class HaDevicesTile(_BaseTile):
         self._rows: List[QLabel] = []
         self._placeholder = QLabel("No pinned HA devices yet")
         self._placeholder.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 11, transparent=False)
         )
         self._body_layout.addWidget(self._placeholder)
         self._body_layout.addStretch()
@@ -1061,7 +1061,7 @@ class HaDevicesTile(_BaseTile):
                 name  = kd.custom_name or kd.hostname or kd.mac
                 label = QLabel(f"● {name[:28]}")
                 label.setStyleSheet(
-                    f"font-size:11px; color:{TEXT_PRIMARY}; border:none;"
+                    qss_label(TEXT_PRIMARY, 11, transparent=False)
                 )
                 label.setToolTip(
                     f"IP: {kd.ip or '?'}  |  "
@@ -1077,10 +1077,10 @@ class HaDevicesTile(_BaseTile):
             pass  # non-fatal
 
     def update_ha_states(self, states: dict) -> None:
-        """states: {ip: UP/DOWN/DEGRADED/UNKNOWN} — called from dashboard."""
-        from ui.styles import GREEN, RED, AMBER, TEXT_MUTED
-        _colors = {"UP": GREEN, "DOWN": RED, "DEGRADED": AMBER, "UNKNOWN": TEXT_MUTED}
-        # We refresh on next store poll; live update done through normal refresh cycle
+        """states: {ip: UP/DOWN/DEGRADED/UNKNOWN} — called from dashboard.
+
+        We refresh on next store poll; live update done through normal refresh cycle.
+        """
 
 
 class LiveBandwidthTile(_BaseTile):
@@ -1110,7 +1110,7 @@ class LiveBandwidthTile(_BaseTile):
         )
         self._up_unit = QLabel("Mbps")
         self._up_unit.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 10, transparent=False)
         )
         up_col.addWidget(up_lbl)
         up_col.addWidget(self._up_val)
@@ -1129,7 +1129,7 @@ class LiveBandwidthTile(_BaseTile):
         )
         self._dn_unit = QLabel("Mbps")
         self._dn_unit.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 10, transparent=False)
         )
         dn_col.addWidget(dn_lbl)
         dn_col.addWidget(self._dn_val)
@@ -1162,14 +1162,8 @@ class LiveBandwidthTile(_BaseTile):
 
     def _stop_worker(self) -> None:
         w = getattr(self, "_worker", None)
-        if w is not None:
-            try:
-                w.stop()
-                w.quit()
-                w.wait(2000)
-            except Exception:
-                pass  # non-fatal
-            self._worker = None
+        self._worker = None            # null first so a re-entrant showEvent starts one worker
+        _detach_poller(w)
 
     def _on_stats(self, stats: dict) -> None:
         up   = sum(d["up_mbps"]   for d in stats.values())
@@ -1179,6 +1173,41 @@ class LiveBandwidthTile(_BaseTile):
 
     def refresh(self, store=None) -> None:
         pass  # live data — no store needed
+
+
+# ── Non-blocking poller teardown ───────────────────────────────────────────────
+
+def _detach_poller(worker) -> None:
+    """Non-blocking teardown for a tile's background poller (RULE-4).
+
+    Stop it, drop its data-signal connections so a late emission can't touch the
+    (persistent) tile, and schedule self-deletion once run() returns. Returns
+    immediately — never wait() on the UI thread. This is what keeps navigating
+    to/from the Dashboard from freezing: the page switch delivers hideEvent to
+    each live tile, and a blocking wait() here would stall the crossfade.
+
+    The tile KEEPS the worker's Qt parent on purpose: with a parent the C++
+    object outlives the nulled Python attribute, so PyQt won't garbage-collect
+    the wrapper and destroy a still-running QThread ("QThread: Destroyed while
+    thread is still running" -> abort).
+    """
+    if worker is None:
+        return
+    try:
+        worker.stop()
+    except Exception:
+        pass  # non-fatal — worker may already be stopping
+    try:
+        worker.disconnect()            # drop stats_ready/result -> tile slot
+    except (TypeError, RuntimeError):
+        pass  # non-fatal — nothing was connected
+    try:
+        if worker.isRunning():
+            worker.finished.connect(worker.deleteLater)  # frees after run() returns
+        else:
+            worker.deleteLater()
+    except Exception:
+        pass  # non-fatal — worker already gone
 
 
 # ── DNS poller ────────────────────────────────────────────────────────────────
@@ -1205,10 +1234,12 @@ class _DnsPoller(QThread):
                 self.result.emit((time.monotonic() - t0) * 1000.0)
             except Exception:
                 self.result.emit(-1.0)
-            for _ in range(self._interval):
-                if self._stop:
-                    return
-                time.sleep(1)
+            # Sleep the interval in ~100 ms chunks so stop() is honoured promptly
+            # (an in-flight getaddrinfo can't be interrupted, but teardown no
+            # longer wait()s on this thread, so that no longer matters).
+            deadline = time.monotonic() + self._interval
+            while not self._stop and time.monotonic() < deadline:
+                time.sleep(0.1)
 
 
 class DnsStabilityTile(_BaseTile):
@@ -1224,7 +1255,7 @@ class DnsStabilityTile(_BaseTile):
         )
         self._status_lbl = QLabel("Measuring…")
         self._status_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 11, transparent=False)
         )
         self._body_layout.addWidget(self._lat_lbl)
         self._body_layout.addWidget(self._status_lbl)
@@ -1242,11 +1273,8 @@ class DnsStabilityTile(_BaseTile):
 
     def hideEvent(self, event) -> None:
         w = self._worker
-        if w is not None:
-            w.stop()
-            w.quit()
-            w.wait(2000)
-            self._worker = None
+        self._worker = None            # null first so a re-entrant showEvent starts one worker
+        _detach_poller(w)
         super().hideEvent(event)
 
     def _on_result(self, ms: float) -> None:
@@ -1271,12 +1299,12 @@ class DnsStabilityTile(_BaseTile):
         if self._fail_count:
             self._status_lbl.setText(f"{self._fail_count} failure(s) — resolver unreachable")
             self._status_lbl.setStyleSheet(
-                f"font-size:11px; color:{RED}; border:none;"
+                qss_label(RED, 11, transparent=False)
             )
         elif self._readings:
             self._status_lbl.setText(f"Avg {avg:.0f} ms over last {len(self._readings)} probe(s)")
             self._status_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+                qss_label(TEXT_SECONDARY, 11, transparent=False)
             )
 
     def refresh(self, store=None) -> None:
@@ -1321,7 +1349,7 @@ class ModemSignalTile(_BaseTile):
 
         self._qual_lbl = QLabel("")
         self._qual_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 11, transparent=False)
         )
 
         top.addWidget(self._type_lbl)
@@ -1334,11 +1362,11 @@ class ModemSignalTile(_BaseTile):
 
         self._band_lbl = QLabel("—")
         self._band_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 11, transparent=False)
         )
         self._bars_lbl = QLabel("")
         self._bars_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; border:none;"
+            qss_label(TEXT_SECONDARY, 11, transparent=False)
         )
         bot.addWidget(self._band_lbl)
         bot.addWidget(self._bars_lbl)
@@ -1460,12 +1488,8 @@ class TopTalkersTile(_BaseTile):
 
     def _stop_worker(self) -> None:
         w = getattr(self, "_worker", None)
-        if w is not None:
-            try:
-                w.stop(); w.quit(); w.wait(2000)
-            except Exception:
-                pass  # non-fatal
-            self._worker = None
+        self._worker = None            # null first so a re-entrant showEvent starts one worker
+        _detach_poller(w)
 
     def _on_stats(self, stats: dict) -> None:
         for iface, d in stats.items():
@@ -1549,7 +1573,7 @@ class RecentEventsTile(_BaseTile):
             f"QPushButton:hover {{ text-decoration:underline; }}"
             f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
         )
-        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit("Network Timeline"))
+        self._link_btn.clicked.connect(lambda: self.navigate_requested.emit(L.NETWORK_TIMELINE))
         self._link_btn.hide()
         self._body_layout.addWidget(self._link_btn)
 
@@ -1557,7 +1581,7 @@ class RecentEventsTile(_BaseTile):
         if (not self._edit_mode
                 and event.button() == Qt.MouseButton.LeftButton
                 and self._row_labels):
-            self.navigate_requested.emit("Network Timeline")
+            self.navigate_requested.emit(L.NETWORK_TIMELINE)
         else:
             super().mousePressEvent(event)
 
@@ -1602,9 +1626,9 @@ class RecentEventsTile(_BaseTile):
             icon_lbl.setFixedWidth(12)
             icon_lbl.setStyleSheet(f"color:{color}; font-size:10px; border:none;")
             desc_lbl = QLabel(f"{ip_short}  {evt.event_type}")
-            desc_lbl.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY}; border:none;")
+            desc_lbl.setStyleSheet(qss_label(TEXT_PRIMARY, 10, transparent=False))
             time_lbl = QLabel(elapsed)
-            time_lbl.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED}; border:none;")
+            time_lbl.setStyleSheet(qss_label(TEXT_MUTED, 9, transparent=False))
             row.addWidget(icon_lbl)
             row.addWidget(desc_lbl, 1)
             row.addWidget(time_lbl)
@@ -1836,9 +1860,7 @@ class _SecurityScanPanel(QWidget):
         run_row = QHBoxLayout()
         run_row.setSpacing(8)
         self._status_lbl = QLabel("")
-        self._status_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
-        )
+        self._status_lbl.setStyleSheet(qss_muted_label(10))
         self._run_btn = QPushButton("Run Selected")
         self._run_btn.setFixedHeight(28)
         self._run_btn.setMinimumWidth(110)
@@ -1914,14 +1936,14 @@ class _ScanStatusTile(_BaseTile):
 
             dot = QLabel("●")
             dot.setFixedWidth(12)
-            dot.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED}; border:none;")
+            dot.setStyleSheet(qss_label(TEXT_MUTED, 9, transparent=False))
 
             nm = QLabel(display)
             nm.setFixedWidth(102)
-            nm.setStyleSheet(f"font-size:10px; color:{TEXT_PRIMARY}; border:none;")
+            nm.setStyleSheet(qss_label(TEXT_PRIMARY, 10, transparent=False))
 
             age = QLabel("Never")
-            age.setStyleSheet(f"font-size:9px; color:{TEXT_MUTED}; border:none;")
+            age.setStyleSheet(qss_label(TEXT_MUTED, 9, transparent=False))
 
             row.addWidget(dot)
             row.addWidget(nm)

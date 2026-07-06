@@ -2,7 +2,7 @@
 
 
 def test_import():
-    import modules.credentialed_scan_helpers as m
+    from modules import credentialed_scan_helpers as m
     assert hasattr(m, "CredScanResult")
     assert hasattr(m, "_LINUX_CMDS")
     assert hasattr(m, "_WINDOWS_CMDS")

@@ -13,10 +13,11 @@ Usage:
 """
 from __future__ import annotations
 
-import concurrent.futures
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+
+from modules.utils_net import parallel_map
 
 from modules.service_diagnostics_probes import (
     DnsProbeResult,
@@ -309,26 +310,22 @@ class DiagnosticEngine:
     ) -> BatchDiagnosticResult:
         """Run diagnostics for multiple services concurrently."""
         batch = BatchDiagnosticResult(total=len(service_ids))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {
-                pool.submit(self.run, sid, traceroute=traceroute): sid
-                for sid in service_ids
-            }
-            for fut in concurrent.futures.as_completed(futures):
-                try:
-                    batch.results.append(fut.result())
-                except Exception as exc:
-                    sid = futures[fut]
-                    entry = SERVICE_CATALOG.get(sid)
-                    name = entry.name if entry else sid
-                    err_result = ServiceDiagnosticResult(
-                        service_id=sid,
-                        service_name=name,
-                        failure_layer="none",
-                        summary=f"Diagnostic failed: {exc}",
-                        confidence=0,
-                    )
-                    batch.results.append(err_result)
+
+        def _run_safe(sid: str) -> ServiceDiagnosticResult:
+            try:
+                return self.run(sid, traceroute=traceroute)
+            except Exception as exc:
+                entry = SERVICE_CATALOG.get(sid)
+                name = entry.name if entry else sid
+                return ServiceDiagnosticResult(
+                    service_id=sid,
+                    service_name=name,
+                    failure_layer="none",
+                    summary=f"Diagnostic failed: {exc}",
+                    confidence=0,
+                )
+
+        batch.results = parallel_map(_run_safe, service_ids, workers=max_workers)
 
         batch.dns_failure_count = sum(
             1 for r in batch.results if not r.dns.passed

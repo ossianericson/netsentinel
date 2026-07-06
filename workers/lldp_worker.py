@@ -12,17 +12,18 @@ from __future__ import annotations
 
 import logging
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
+
+from workers.base_worker import BaseWorker
 
 log = logging.getLogger(__name__)
 
 
-class LldpWorker(QThread):
+class LldpWorker(BaseWorker):
     """Background LLDP neighbor discovery worker."""
 
     result_ready = pyqtSignal(list)   # list[LldpNeighbor]
-    error        = pyqtSignal(str)
-    progress     = pyqtSignal(str)
+    # error(str) and progress(str) are inherited from BaseWorker.
 
     # total sniff duration; worker emits progress every _SLICE_S seconds
     _TOTAL_S = 15
@@ -38,7 +39,7 @@ class LldpWorker(QThread):
         self._iface   = iface
         self._passive = passive
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             from modules.utils import is_admin
         except ImportError:

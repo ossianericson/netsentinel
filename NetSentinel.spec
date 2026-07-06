@@ -370,6 +370,7 @@ hiddenimports: list = [
     "waitress.server",
     "waitress.task",
     # ── workers/ — all QThread workers ────────────────────────────────────────
+    "workers.base_worker",
     "workers.availability_worker",
     "workers.cert_worker",
     "workers.dhcp_lease_worker",

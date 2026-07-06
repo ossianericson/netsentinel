@@ -117,22 +117,8 @@ _threads: list[threading.Thread] = []
 
 def _mac_from_arp_cache(ip: str) -> str:
     """Return MAC for *ip* from the OS ARP cache, or '' if not found."""
-    try:
-        import subprocess
-        out = subprocess.check_output(
-            ["arp", "-a", ip], timeout=2, stderr=subprocess.DEVNULL
-        ).decode(errors="replace")
-        for line in out.splitlines():
-            if ip in line:
-                parts = line.split()
-                for p in parts:
-                    # Look for MAC-like tokens: xx-xx-xx-xx-xx-xx or xx:xx:xx:xx:xx:xx
-                    if len(p) in (17, 14) and (("-" in p and p.count("-") == 5) or
-                                                (":" in p and p.count(":") == 5)):
-                        return p.replace("-", ":").upper()
-    except Exception:
-        pass  # non-fatal — MAC lookup is best-effort
-    return ""
+    from modules.utils_net import get_arp_snapshot
+    return get_arp_snapshot().get(ip, "").upper()
 
 
 # ── SSDP listener ──────────────────────────────────────────────────────────────

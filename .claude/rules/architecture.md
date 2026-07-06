@@ -51,8 +51,8 @@ netsentinel/
 │
 ├── ui/                     # PyQt6 UI — reads MetricStore for display, never writes it (the UI layer)
 │   ├── styles.py               # SINGLE SOURCE OF TRUTH for all colours and QSS (RULE 1 / RULE-AH3)
-│   ├── dashboard.py            # Main window shell (~1,967 lines) — inherits the mixins below
-│   ├── scan_wiring.py / scan_enrichment.py / header.py / monitor_state.py / plugin_page_mixin.py  # Dashboard mixins
+│   ├── dashboard.py            # Main window shell (~1,754 lines) — inherits the mixins below
+│   ├── scan_wiring.py / scan_enrichment.py / header.py / monitor_state.py / plugin_page_mixin.py / export_mixin.py  # Dashboard mixins
 │   ├── tabs*.py                # TabBuilderMixin + _*TabsMixin sub-mixins (page factory / sidebar assembly)
 │   ├── nav/                    # Activity-rail nav package — rail.py (widgets) + builder.py (_NavBuilderMixin, scan registry)
 │   ├── pages/                  # One widget per nav page (Devices, Speed Test, Security Overview, …)

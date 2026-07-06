@@ -298,15 +298,14 @@ def poll_hosts(
     progress_cb=None,
 ) -> List[SNMPResult]:
     """Poll multiple hosts and return a list of results."""
-    import concurrent.futures
-    _cb = progress_cb or (lambda m: None)
-    results: List[SNMPResult] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
-        futures = {pool.submit(poll, h, community, timeout): h for h in hosts}
-        for fut in concurrent.futures.as_completed(futures):
-            try:
-                results.append(fut.result())
-            except Exception as exc:
-                results.append(SNMPResult(host=futures[fut], error=str(exc)))
+    from modules.utils_net import parallel_map
+
+    def _poll_safe(host: str) -> SNMPResult:
+        try:
+            return poll(host, community, timeout)
+        except Exception as exc:
+            return SNMPResult(host=host, error=str(exc))
+
+    results = parallel_map(_poll_safe, hosts, workers=20)
     results.sort(key=lambda r: r.host)
     return results

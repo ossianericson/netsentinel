@@ -5,7 +5,7 @@ from modules.syn_scanner import SYNPortResult, SYNScanResult, syn_scan, udp_scan
 
 
 def test_import():
-    import modules.syn_scanner as m
+    from modules import syn_scanner as m
     assert hasattr(m, "SYNPortResult")
     assert hasattr(m, "SYNScanResult")
     assert hasattr(m, "syn_scan")

@@ -12,12 +12,12 @@ Architecture rules observed:
 
 from __future__ import annotations
 
-import socket
 import time
 from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
 from modules.metric_store import MetricStore
+from modules.utils_net import tcp_probe
 
 
 # ── Data types ────────────────────────────────────────────────────────────────
@@ -60,13 +60,8 @@ def check_tcp(host: str, port: int, timeout: float = 3.0) -> tuple[bool, Optiona
         rtt_ms  — connect latency in ms; None if unreachable
         error   — empty string on success; error message otherwise
     """
-    t0 = time.monotonic()
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            rtt = (time.monotonic() - t0) * 1000.0
-            return True, round(rtt, 2), ""
-    except (ConnectionRefusedError, socket.timeout, OSError) as exc:
-        return False, None, str(exc)
+    ok, rtt, error = tcp_probe(host, port, timeout)
+    return ok, (round(rtt, 2) if ok else None), error
 
 
 # ── ServiceMonitor ────────────────────────────────────────────────────────────

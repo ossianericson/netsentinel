@@ -39,7 +39,7 @@ def test_storm_result_custom():
 
 def test_scan_no_scapy_returns_result(monkeypatch):
     monkeypatch.setattr("modules.storm_analyser.SCAPY_AVAILABLE", False)
-    import modules.storm_analyser as m
+    from modules import storm_analyser as m
     result = m.scan(duration=1)
     assert isinstance(result, StormResult)
     assert result.storm_level == "UNKNOWN"

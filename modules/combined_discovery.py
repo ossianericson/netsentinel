@@ -27,10 +27,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import ipaddress
-import platform
-import re
 import socket
-import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -105,20 +102,10 @@ def _resolve_hostname(ip: str, timeout: float = 0.5) -> str:
 # ── Method 1: ARP cache (passive, instant) ────────────────────────────────────
 
 def _arp_cache_scan() -> Dict[str, DiscoveredDevice]:
+    from modules.utils_net import get_arp_snapshot
     devices: Dict[str, DiscoveredDevice] = {}
-    system = platform.system()
-    extra: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if system == "Windows" else {}
-    try:
-        raw = subprocess.check_output(["arp", "-a"], text=True, timeout=10, **extra)
-        for line in raw.splitlines():
-            m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F:–-]{17})", line)
-            if m:
-                ip  = m.group(1)
-                mac = m.group(2).replace("-", ":").lower()
-                if mac != "ff:ff:ff:ff:ff:ff" and not ip.startswith("224.") and not ip.endswith(".255"):
-                    devices[ip] = DiscoveredDevice(ip=ip, mac=mac, discovery_methods=["arp-cache"])
-    except Exception:
-        pass  # non-fatal
+    for ip, mac in get_arp_snapshot().items():
+        devices[ip] = DiscoveredDevice(ip=ip, mac=mac, discovery_methods=["arp-cache"])
     return devices
 
 
@@ -158,13 +145,11 @@ def _ping_single(ip: str, timeout: float) -> Optional[DiscoveredDevice]:
 
 
 def _icmp_sweep(hosts: List[str], timeout: float = 1.0, max_workers: int = 64) -> Dict[str, DiscoveredDevice]:
+    from modules.utils_net import parallel_map
     devices: Dict[str, DiscoveredDevice] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_ping_single, ip, timeout): ip for ip in hosts}
-        for fut in concurrent.futures.as_completed(futures):
-            dev = fut.result()
-            if dev:
-                devices[dev.ip] = dev
+    for dev in parallel_map(lambda ip: _ping_single(ip, timeout), hosts, workers=max_workers):
+        if dev:
+            devices[dev.ip] = dev
     return devices
 
 
@@ -189,13 +174,11 @@ def _tcp_sweep(hosts: List[str], ports: List[int] = None, timeout: float = 1.0, 
         return {}
     if ports is None:
         ports = [80, 443, 22, 8080]
+    from modules.utils_net import parallel_map
     devices: Dict[str, DiscoveredDevice] = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_tcp_probe_host, ip, ports, timeout): ip for ip in hosts}
-        for fut in concurrent.futures.as_completed(futures):
-            dev = fut.result()
-            if dev:
-                devices[dev.ip] = dev
+    for dev in parallel_map(lambda ip: _tcp_probe_host(ip, ports, timeout), hosts, workers=max_workers):
+        if dev:
+            devices[dev.ip] = dev
     return devices
 
 

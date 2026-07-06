@@ -8,7 +8,7 @@ import pytest
 
 
 def test_import():
-    import modules.speed_tester  # noqa: F401
+    from modules import speed_tester  # noqa: F401
 
 
 def test_speed_test_result_dataclass():

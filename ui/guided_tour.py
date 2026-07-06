@@ -16,6 +16,8 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QMainWindow
 
+from ui.nav.labels import NavLabel as L
+
 _SETTINGS_KEY = "tour/v2_done"
 
 
@@ -95,7 +97,7 @@ class GuidedTour:
                     "prefer_side": "bottom",
                 },
                 {
-                    "on_show":  lambda: dash._nav_rail_go_to("Devices"),
+                    "on_show":  lambda: dash._nav_rail_go_to(L.DEVICES),
                     "delay_ms": 200,
                     "target":   _devices_target,
                     "title":    "Step 3 of 5 — Understand your results",

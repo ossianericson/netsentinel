@@ -5,7 +5,7 @@ from modules.port_scanner import (
 
 
 def test_import():
-    import modules.port_scanner as m
+    from modules import port_scanner as m
     assert hasattr(m, "scan")
     assert hasattr(m, "PORT_NAMES")
     assert hasattr(m, "PortResult")

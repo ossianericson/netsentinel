@@ -4,7 +4,7 @@ from modules.rogue_device import DeviceInfo, _get_default_gateway, _get_arp_tabl
 
 
 def test_import():
-    import modules.rogue_device as m
+    from modules import rogue_device as m
     assert hasattr(m, "scan")
     assert hasattr(m, "DeviceInfo")
     assert hasattr(m, "_get_arp_table")

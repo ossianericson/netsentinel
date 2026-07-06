@@ -55,3 +55,24 @@ def test_start_stop_lifecycle():
     assert not w.isRunning()
     _cleanup(w)
     # Errors are allowed (psutil unavailable); thread must still stop.
+
+
+def test_stop_is_prompt():
+    """stop() must interrupt the poll sleep promptly (~100 ms), not after the
+    full interval.
+
+    Regression guard for the Dashboard nav freeze: the tile teardown detaches
+    the poller without wait()-ing, so the poller must exit quickly on its own
+    rather than lingering for a full 1-2 s interval. Uses interval_s=2.0 so the
+    old (unchunked) time.sleep(interval) would keep the thread alive well past
+    the 700 ms wait window.
+    """
+    from workers.iface_bw_worker import IfaceBwPoller
+    w = IfaceBwPoller(interval_s=2.0)
+    w.error.connect(lambda _m: None)
+    w.start()
+    time.sleep(0.3)          # let it enter the interval sleep
+    w.stop()
+    assert w.wait(700), "stop() did not interrupt the sleep within 700 ms"
+    assert not w.isRunning()
+    _cleanup(w)

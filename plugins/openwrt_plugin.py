@@ -31,7 +31,10 @@ CREDENTIAL_LABEL = "Password"
 
 def _check_deps():
     try:
-        import openwrt_luci_rpc  # noqa: F401
+        # Same `from ... import` spelling used later for the real client --
+        # a plain `import openwrt_luci_rpc` here would collide with that
+        # (CodeQL py/import-and-import-from, RULE-LINT5).
+        from openwrt_luci_rpc import OpenWrtRpc  # noqa: F401
     except ImportError as exc:
         # Raise (never sys.exit) so get_status()/get_clients() catch this like any
         # other failure and classify it DEPS: via _fmt_err. PluginPollingWorker

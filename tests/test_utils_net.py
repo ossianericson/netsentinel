@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from modules.utils_net import (
     get_network_info, get_dhcp_info, get_interface_details, icmp_ping,
+    tcp_probe, get_arp_snapshot, parallel_map,
 )
 
 
@@ -110,3 +111,121 @@ def test_get_network_info_dns_deduplicated():
 def test_get_network_info_importable_from_utils():
     from modules.utils import get_network_info as gni
     assert gni is get_network_info
+
+
+# ── tcp_probe ─────────────────────────────────────────────────────────────────
+
+def test_tcp_probe_returns_true_rtt_on_success():
+    with patch("modules.utils_net.socket.create_connection") as mock_conn:
+        mock_conn.return_value.__enter__ = lambda s: s
+        mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        ok, rtt, error = tcp_probe("example.com", 80)
+    assert ok is True
+    assert rtt >= 0
+    assert error == ""
+
+
+def test_tcp_probe_returns_false_on_connection_refused():
+    with patch("modules.utils_net.socket.create_connection",
+               side_effect=ConnectionRefusedError("refused")):
+        ok, rtt, error = tcp_probe("localhost", 9)
+    assert ok is False
+    assert rtt == -1.0
+    assert "refused" in error
+
+
+def test_tcp_probe_returns_false_on_timeout():
+    with patch("modules.utils_net.socket.create_connection",
+               side_effect=TimeoutError("timed out")):
+        ok, rtt, error = tcp_probe("10.0.0.254", 80, timeout=0.01)
+    assert ok is False
+    assert rtt == -1.0
+
+
+# ── get_arp_snapshot ──────────────────────────────────────────────────────────
+
+def test_get_arp_snapshot_returns_dict():
+    snapshot = get_arp_snapshot()
+    assert isinstance(snapshot, dict)
+
+
+def test_get_arp_snapshot_parses_windows_output():
+    windows_arp = (
+        "Interface: 192.168.1.10 --- 0xe\n"
+        "  Internet Address      Physical Address      Type\n"
+        "  192.168.1.1            aa-bb-cc-dd-ee-ff     dynamic\n"
+        "  192.168.1.255          ff-ff-ff-ff-ff-ff     static\n"
+        "  224.0.0.251            01-00-5e-00-00-fb     static\n"
+    )
+    with patch("modules.utils_net.platform.system", return_value="Windows"), \
+         patch("modules.utils_net.subprocess.check_output", return_value=windows_arp), \
+         patch.object(subprocess, "CREATE_NO_WINDOW", 0, create=True):
+        snapshot = get_arp_snapshot()
+    assert snapshot == {"192.168.1.1": "aa:bb:cc:dd:ee:ff"}
+
+
+def test_get_arp_snapshot_parses_posix_output():
+    posix_arp = (
+        "? (192.168.1.1) at aa:bb:cc:dd:ee:ff [ether] on eth0\n"
+        "? (192.168.1.255) at ff:ff:ff:ff:ff:ff [ether] on eth0\n"
+    )
+    with patch("modules.utils_net.platform.system", return_value="Linux"), \
+         patch("modules.utils_net.subprocess.check_output", return_value=posix_arp):
+        snapshot = get_arp_snapshot()
+    assert snapshot == {"192.168.1.1": "aa:bb:cc:dd:ee:ff"}
+
+
+def test_get_arp_snapshot_falls_back_to_arp_a_on_posix():
+    posix_arp_a = "192.168.1.1 (192.168.1.1) at aa:bb:cc:dd:ee:ff [ether] on eth0\n"
+
+    def _fake_check_output(cmd, **kwargs):
+        if cmd == ["arp", "-n"]:
+            raise subprocess.CalledProcessError(1, cmd)
+        return posix_arp_a
+
+    with patch("modules.utils_net.platform.system", return_value="Linux"), \
+         patch("modules.utils_net.subprocess.check_output", side_effect=_fake_check_output):
+        snapshot = get_arp_snapshot()
+    assert snapshot == {"192.168.1.1": "aa:bb:cc:dd:ee:ff"}
+
+
+def test_get_arp_snapshot_returns_empty_dict_on_failure():
+    with patch("modules.utils_net.subprocess.check_output", side_effect=OSError("no arp")):
+        snapshot = get_arp_snapshot()
+    assert snapshot == {}
+
+
+# ── parallel_map ──────────────────────────────────────────────────────────────
+
+def test_parallel_map_preserves_input_order():
+    results = parallel_map(lambda n: n * 2, [1, 2, 3, 4, 5], workers=3)
+    assert results == [2, 4, 6, 8, 10]
+
+
+def test_parallel_map_empty_items_returns_empty_list():
+    assert parallel_map(lambda n: n, [], workers=4) == []
+
+
+def test_parallel_map_propagates_exceptions():
+    import pytest
+
+    def _boom(n):
+        if n == 2:
+            raise ValueError("boom")
+        return n
+
+    with pytest.raises(ValueError):
+        parallel_map(_boom, [1, 2, 3], workers=2)
+
+
+def test_parallel_map_runs_concurrently_not_serially():
+    import time as _time
+
+    def _slow(n):
+        _time.sleep(0.1)
+        return n
+
+    t0 = _time.perf_counter()
+    parallel_map(_slow, list(range(5)), workers=5)
+    elapsed = _time.perf_counter() - t0
+    assert elapsed < 0.4, "expected concurrent execution, looks serial"

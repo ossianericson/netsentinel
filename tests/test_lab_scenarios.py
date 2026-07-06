@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def test_import():
-    import modules.lab_scenarios  # noqa: F401
+    from modules import lab_scenarios  # noqa: F401
 
 
 def test_scenarios_list_non_empty():

@@ -30,7 +30,6 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -39,11 +38,11 @@ from PyQt6.QtWidgets import (
 from modules.threat_intel import AbuseIpDbResult, ThreatEntry, ThreatIntelDB
 from workers.threat_intel_worker import AbuseIpDbWorker, ThreatFeedRefreshWorker
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
+from ui.tabs_helpers import _table as _make_table
 from ui.styles import (
     ACCENT,
     ACCENT_DARK,
     AMBER,
-    BG_ALT_ROW,
     BG_CARD,
     BG_DARK,
     BG_HOVER,
@@ -55,8 +54,6 @@ from ui.styles import (
     RED,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
     WHITE,
 )
 
@@ -92,32 +89,6 @@ def _load_secret(key: str) -> str:
 
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
-
-def _make_table(headers: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setStretchLastSection(True)
-    # Interactive, not ResizeToContents (RULE-PERF1): ResizeToContents
-    # recomputes every column's ideal width via per-cell sizeHint() on every
-    # model change, which freezes the main thread for seconds+ on a table
-    # that can hold up to _MAX_TABLE_ROWS rows.
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.setShowGrid(False)
-    t.setStyleSheet(
-        f"QTableWidget {{ background:{BG_CARD}; border:none; font-size:11px;"
-        f" color:{TEXT_PRIMARY}; alternate-background-color:{BG_ALT_ROW}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-        f" font-weight:bold; padding:4px 8px; border:none; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:{ACCENT}; color:{WHITE}; }}"
-    )
-    return t
-
 
 def _cell(text: str, align=Qt.AlignmentFlag.AlignLeft) -> QTableWidgetItem:
     item = QTableWidgetItem(text)

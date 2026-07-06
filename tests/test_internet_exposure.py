@@ -3,7 +3,7 @@ from modules.internet_exposure import UPnPMapping, ExposureResult, check_exposur
 
 
 def test_import():
-    import modules.internet_exposure as m
+    from modules import internet_exposure as m
     assert hasattr(m, "check_exposure")
     assert hasattr(m, "UPnPMapping")
     assert hasattr(m, "ExposureResult")

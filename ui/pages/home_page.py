@@ -46,6 +46,10 @@ from ui.styles import (
     UPDATE_BAR_BORDER,
     UPDATE_BAR_FG,
     WHITE,
+    qss_dismiss_button,
+    qss_frame,
+    qss_label,
+    qss_muted_label,
 )
 
 from ui.widgets.home_widgets import (
@@ -152,13 +156,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _icon = QLabel("⬡")
         _icon.setFixedWidth(18)
         _icon.setStyleSheet(
-            f"font-size:12px; color:{ACCENT}; background:transparent; border:none;"
+            qss_label(ACCENT, 12)
         )
         _text = QLabel(
             "Optional: connect your router or modem to see real device names and signal data — works without it."
         )
         _text.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         _btn = QPushButton("Set up Hardware →")
         _btn.setFixedHeight(24)
@@ -174,11 +178,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _dismiss.setFixedSize(20, 20)
         _dismiss.setFlat(True)
         _dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
-        _dismiss.setStyleSheet(
-            f"QPushButton {{ color:{TEXT_SECONDARY}; background:transparent; border:none; font-size:10px; }}"
-            f"QPushButton:hover   {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _dismiss.setStyleSheet(qss_dismiss_button(10))
         _dismiss.setToolTip("Dismiss")
         _dismiss.clicked.connect(self._dismiss_hw_nudge)
         lay.addWidget(_icon)
@@ -227,8 +227,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         bar = QFrame()
         bar.setObjectName("tipCard")
         bar.setStyleSheet(
-            f"QFrame#tipCard {{ background:{BG_HOVER}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
+            qss_frame("tipCard", BG_HOVER, BORDER, radius=4)
         )
         _lay = QHBoxLayout(bar)
         _lay.setContentsMargins(10, 4, 8, 4)
@@ -236,7 +235,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _icon_lbl = QLabel(icon)
         _icon_lbl.setFixedWidth(16)
         _icon_lbl.setStyleSheet(
-            f"font-size:11px; color:{ACCENT}; background:transparent; border:none;"
+            qss_label(ACCENT, 11)
         )
         _hdr = QLabel("Did you know?")
         _hdr.setStyleSheet(
@@ -245,7 +244,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         _txt = QLabel(f"{name} — {desc_first}")
         _txt.setStyleSheet(
-            f"font-size:10px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            qss_label(TEXT_PRIMARY, 10)
         )
         _lay.addWidget(_icon_lbl)
         _lay.addWidget(_hdr)
@@ -267,11 +266,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _dismiss.setFixedSize(18, 18)
         _dismiss.setFlat(True)
         _dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
-        _dismiss.setStyleSheet(
-            f"QPushButton {{ color:{TEXT_SECONDARY}; background:transparent; border:none; font-size:9px; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _dismiss.setStyleSheet(qss_dismiss_button(9))
 
         def _on_dismiss(_bar=bar) -> None:
             from datetime import datetime
@@ -344,8 +339,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._dashboard_strip = QFrame()
         self._dashboard_strip.setObjectName("dashboardStrip")
         self._dashboard_strip.setStyleSheet(
-            f"QFrame#dashboardStrip {{ background:{UPDATE_BAR_BG}; border:1px solid {UPDATE_BAR_BORDER};"
-            f" border-radius:4px; }}"
+            qss_frame("dashboardStrip", UPDATE_BAR_BG, UPDATE_BAR_BORDER, radius=4)
         )
         self._dashboard_strip.setVisible(False)
         _ds_lay = QHBoxLayout(self._dashboard_strip)
@@ -354,11 +348,11 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ds_icon = QLabel("�")
         _ds_icon.setFixedWidth(18)
         _ds_icon.setStyleSheet(
-            f"font-size:12px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+            qss_label(UPDATE_BAR_FG, 12)
         )
         self._ds_text = QLabel("")
         self._ds_text.setStyleSheet(
-            f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+            qss_label(UPDATE_BAR_FG, 11)
         )
         _ds_open = QPushButton("Open ↗")
         _ds_open.setFixedHeight(24)
@@ -374,10 +368,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ds_dismiss.setFixedSize(20, 20)
         _ds_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _ds_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{UPDATE_BAR_FG}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{UPDATE_BAR_FG}; }}"
+            qss_dismiss_button(14, fg=UPDATE_BAR_FG, padding="0", press_bg=BG_HOVER)
         )
         _ds_dismiss.clicked.connect(self._dismiss_dashboard_strip)
         _ds_lay.addWidget(_ds_icon)
@@ -405,9 +396,8 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._setup_complete_card = QFrame()
         self._setup_complete_card.setObjectName("setupCompleteCard")
         self._setup_complete_card.setStyleSheet(
-            f"QFrame#setupCompleteCard {{ background:{GREEN_BG};"
-            f" border:1px solid {alpha(GREEN, 0x44)}; border-left:3px solid {GREEN};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("setupCompleteCard", GREEN_BG, alpha(GREEN, 0x44),
+                      radius=CARD_RADIUS, border_left=GREEN)
         )
         _sc_lay = QVBoxLayout(self._setup_complete_card)
         _sc_lay.setContentsMargins(14, 12, 14, 12)
@@ -423,7 +413,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         _sc_sub.setWordWrap(True)
         _sc_sub.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            qss_muted_label(11)
         )
         _sc_btn_row = QHBoxLayout()
         _sc_btn_row.setSpacing(16)
@@ -520,12 +510,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _fsb_dismiss.setFixedSize(20, 20)
         _fsb_dismiss.setFlat(True)
         _fsb_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
-        _fsb_dismiss.setStyleSheet(
-            f"QPushButton {{ color:{TEXT_MUTED}; background:transparent; border:none;"
-            f" font-size:10px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _fsb_dismiss.setStyleSheet(qss_dismiss_button(10, fg=TEXT_MUTED, padding="0"))
         _fsb_dismiss.clicked.connect(self._dismiss_first_scan_banner)
         _fsb_top.addWidget(self._first_scan_lbl, 1)
         _fsb_top.addWidget(_fsb_dismiss)
@@ -601,8 +586,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._delta_banner = QFrame()
         self._delta_banner.setObjectName("deltaBanner")
         self._delta_banner.setStyleSheet(
-            f"QFrame#deltaBanner {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("deltaBanner", radius=CARD_RADIUS)
         )
         self._delta_banner.setVisible(False)
         _db_lay = QHBoxLayout(self._delta_banner)
@@ -610,16 +594,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _db_lay.setSpacing(10)
         self._delta_chips_lbl = QLabel("")
         self._delta_chips_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         _db_dismiss = QPushButton("�")
         _db_dismiss.setFixedSize(20, 20)
         _db_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _db_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            qss_dismiss_button(14, fg=TEXT_MUTED, padding="0", press_bg=BG_HOVER)
         )
         _db_dismiss.clicked.connect(
             lambda: (self._delta_banner.setVisible(False), self.window().activateWindow())
@@ -643,16 +624,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._milestone_lbl = QLabel("")
         self._milestone_lbl.setWordWrap(True)
         self._milestone_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         _mb_dismiss = QPushButton("×")
         _mb_dismiss.setFixedSize(20, 20)
         _mb_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _mb_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            qss_dismiss_button(14, fg=TEXT_MUTED, padding="0", press_bg=BG_HOVER)
         )
         _mb_dismiss.clicked.connect(
             lambda: (self._milestone_banner.setVisible(False), self.window().activateWindow())
@@ -665,8 +643,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._recurring_section = QFrame()
         self._recurring_section.setObjectName("recurringSection")
         self._recurring_section.setStyleSheet(
-            f"QFrame#recurringSection {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("recurringSection", radius=CARD_RADIUS)
         )
         self._recurring_section.setVisible(False)
         _rec_outer = QVBoxLayout(self._recurring_section)
@@ -740,7 +717,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._grade_sparkline = _GradeSparkline()
         self._rec_scan_time_lbl = QLabel("Last scan: �")
         self._rec_scan_time_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            qss_label(TEXT_MUTED, 11)
         )
         self._btn_rescan_compact = QPushButton("▶  Rescan")
         self._btn_rescan_compact.setFixedHeight(26)
@@ -763,7 +740,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _diag_row.setSpacing(8)
         self._rec_diag_lbl = QLabel("Last diagnosis:  none yet")
         self._rec_diag_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+            qss_label(TEXT_MUTED, 11)
         )
         _diag_open = QPushButton("What's Wrong? →")
         _diag_open.setFlat(True)
@@ -789,8 +766,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._this_week_card = QFrame()
         self._this_week_card.setObjectName("thisWeekCard")
         self._this_week_card.setStyleSheet(
-            f"QFrame#thisWeekCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("thisWeekCard", radius=CARD_RADIUS)
         )
         self._this_week_card.setVisible(False)
         _tw_outer = QVBoxLayout(self._this_week_card)
@@ -810,10 +786,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         def _tw_chip(color: str) -> tuple[QFrame, QLabel, QLabel]:
             chip = QFrame()
             chip.setObjectName("weekChip")
-            chip.setStyleSheet(
-                f"QFrame#weekChip {{ background:{BG_DARK}; border:1px solid {BORDER};"
-                f" border-radius:6px; }}"
-            )
+            chip.setStyleSheet(qss_frame("weekChip", BG_DARK, BORDER, radius=6))
             chip_lay = QVBoxLayout(chip)
             chip_lay.setContentsMargins(10, 6, 10, 6)
             chip_lay.setSpacing(2)
@@ -824,7 +797,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             )
             name_lbl = QLabel()
             name_lbl.setStyleSheet(
-                f"font-size:9px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                qss_label(TEXT_MUTED, 9)
             )
             chip_lay.addWidget(val_lbl)
             chip_lay.addWidget(name_lbl)
@@ -860,7 +833,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _ri_icon = QLabel("⬡")
         _ri_icon.setFixedWidth(20)
         _ri_icon.setStyleSheet(
-            f"font-size:14px; color:{ACCENT}; background:transparent; border:none;"
+            qss_label(ACCENT, 14)
         )
         _ri_text_col = QVBoxLayout()
         _ri_text_col.setSpacing(2)
@@ -876,19 +849,14 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         )
         _ri_body.setWordWrap(True)
         _ri_body.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            qss_muted_label(11)
         )
         _ri_text_col.addWidget(_ri_title)
         _ri_text_col.addWidget(_ri_body)
         _ri_x = QPushButton("×")
         _ri_x.setFixedSize(20, 20)
         _ri_x.setCursor(Qt.CursorShape.PointingHandCursor)
-        _ri_x.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; background:transparent; }}"
-        )
+        _ri_x.setStyleSheet(qss_dismiss_button(14, fg=TEXT_MUTED, padding="0"))
         _ri_x.clicked.connect(self._dismiss_recurring_intro)
         _ri_outer.addWidget(_ri_icon)
         _ri_outer.addLayout(_ri_text_col, 1)
@@ -910,8 +878,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._live_challenge_banner = QFrame()
         self._live_challenge_banner.setObjectName("liveChallengeBar")
         self._live_challenge_banner.setStyleSheet(
-            f"QFrame#liveChallengeBar {{ background:{AMBER_BG}; border:1px solid {AMBER};"
-            f" border-left:3px solid {AMBER}; border-radius:{CARD_RADIUS}; }}"
+            qss_frame("liveChallengeBar", AMBER_BG, AMBER, radius=CARD_RADIUS, border_left=AMBER)
         )
         self._live_challenge_banner.setVisible(False)
         _lc_lay = QHBoxLayout(self._live_challenge_banner)
@@ -920,12 +887,12 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _lc_icon = QLabel("▲")
         _lc_icon.setFixedWidth(16)
         _lc_icon.setStyleSheet(
-            f"font-size:11px; color:{AMBER}; background:transparent; border:none;"
+            qss_label(AMBER, 11)
         )
         self._lc_text = QLabel("")
         self._lc_text.setWordWrap(True)
         self._lc_text.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+            qss_label(TEXT_PRIMARY, 11)
         )
         _lc_diagnose = QPushButton("Diagnose now →")
         _lc_diagnose.setFixedHeight(24)
@@ -940,10 +907,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _lc_dismiss.setFixedSize(20, 20)
         _lc_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
         _lc_dismiss.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            qss_dismiss_button(14, fg=TEXT_MUTED, padding="0", press_bg=BG_HOVER)
         )
         _lc_diagnose.clicked.connect(lambda: self.navigate_to.emit("What's Wrong?"))
         _lc_dismiss.clicked.connect(lambda: self._live_challenge_banner.setVisible(False))
@@ -957,8 +921,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         hero = QFrame()
         hero.setObjectName("heroCard")
         hero.setStyleSheet(
-            f"QFrame#heroCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("heroCard", radius=CARD_RADIUS)
         )
         hero_lay = QHBoxLayout(hero)
         hero_lay.setContentsMargins(16, 16, 16, 16)
@@ -988,7 +951,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._grade_delta_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._grade_delta_lbl.setVisible(False)
         self._grade_delta_lbl.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            qss_muted_label(10)
         )
 
         _grade_col = QVBoxLayout()
@@ -1083,8 +1046,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         search_card = QFrame()
         search_card.setObjectName("searchCard")
         search_card.setStyleSheet(
-            f"QFrame#searchCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("searchCard", radius=CARD_RADIUS)
         )
         search_outer = QVBoxLayout(search_card)
         search_outer.setContentsMargins(10, 8, 10, 8)
@@ -1139,10 +1101,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         _sheet_x.setFixedSize(20, 20)
         _sheet_x.setCursor(Qt.CursorShape.PointingHandCursor)
         _sheet_x.setStyleSheet(
-            f"QPushButton {{ background:transparent; color:{TEXT_MUTED}; border:none;"
-            f" font-size:14px; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+            qss_dismiss_button(14, fg=TEXT_MUTED, padding="0", press_bg=BG_HOVER)
         )
         _sheet_x.clicked.connect(self._dismiss_post_scan_sheet)
         _sheet_hdr.addWidget(_sheet_x)
@@ -1150,7 +1109,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
 
         self._sheet_stats_lbl = QLabel("")
         self._sheet_stats_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            qss_muted_label(11)
         )
         _sheet_lay.addWidget(self._sheet_stats_lbl)
 
@@ -1273,7 +1232,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
             "Continuous monitors — click any pill to configure"
         )
         self._monitoring_pills_hint.setStyleSheet(
-            f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            qss_muted_label(10)
         )
         lay.addWidget(self._monitoring_pills_hint)
 
@@ -1354,8 +1313,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._mon_card = QFrame()
         self._mon_card.setObjectName("monCard")
         self._mon_card.setStyleSheet(
-            f"QFrame#monCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("monCard", radius=CARD_RADIUS)
         )
         mon_lay = QHBoxLayout(self._mon_card)
         mon_lay.setContentsMargins(14, 10, 14, 10)
@@ -1364,13 +1322,13 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._mon_dot = QLabel("●")
         self._mon_dot.setFixedWidth(12)
         self._mon_dot.setStyleSheet(
-            f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            qss_muted_label(9)
         )
         self._mon_status_lbl = QLabel(
             "Not running � start to log connection stability over time."
         )
         self._mon_status_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            qss_muted_label(11)
         )
         self._mon_status_lbl.setWordWrap(True)
 
@@ -1405,7 +1363,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._results_strip = QFrame()
         self._results_strip.setObjectName("resultsStrip")
         self._results_strip.setStyleSheet(
-            f"QFrame#resultsStrip {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            qss_frame("resultsStrip", radius=None)
         )
         self._results_strip.setVisible(False)
         _strip_lay = QVBoxLayout(self._results_strip)
@@ -1475,8 +1433,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._suggestions_card = QFrame()
         self._suggestions_card.setObjectName("suggestionsCard")
         self._suggestions_card.setStyleSheet(
-            f"QFrame#suggestionsCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("suggestionsCard", radius=CARD_RADIUS)
         )
         self._suggestions_card.setVisible(False)
         self._suggestions_inner = QVBoxLayout(self._suggestions_card)
@@ -1517,8 +1474,7 @@ class HomePage(_HomeDataMixin, _HomeSuggestionsMixin, QWidget):
         self._alert_card = QFrame()
         self._alert_card.setObjectName("alertCard")
         self._alert_card.setStyleSheet(
-            f"QFrame#alertCard {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:{CARD_RADIUS}; }}"
+            qss_frame("alertCard", radius=CARD_RADIUS)
         )
         self._alert_inner = QVBoxLayout(self._alert_card)
         self._alert_inner.setContentsMargins(12, 8, 12, 8)

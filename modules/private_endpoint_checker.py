@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from modules.utils_net import tcp_probe
+
 
 # ── Cloud provider patterns ───────────────────────────────────────────────────
 
@@ -241,12 +243,8 @@ def _resolve(host: str) -> tuple[List[str], float]:
 
 
 def _tcp_probe(host: str, port: int, timeout: float = 4.0) -> tuple[bool, float]:
-    t0 = time.monotonic()
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True, (time.monotonic() - t0) * 1000
-    except Exception:
-        return False, (time.monotonic() - t0) * 1000
+    ok, rtt, _ = tcp_probe(host, port, timeout)
+    return ok, rtt
 
 
 def _tls_inspect(host: str, port: int, timeout: float = 6.0) -> CertInfo:

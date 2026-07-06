@@ -3,7 +3,7 @@ from modules.stp_detector import SCAPY_AVAILABLE, BPDUInfo, _parse_bpdu
 
 
 def test_import():
-    import modules.stp_detector as m
+    from modules import stp_detector as m
     assert hasattr(m, "SCAPY_AVAILABLE")
     assert hasattr(m, "BPDUInfo")
     assert hasattr(m, "STPSniffer")
@@ -43,7 +43,7 @@ def test_parse_bpdu_config_bpdu():
 
 def test_scan_no_scapy_calls_error(monkeypatch):
     monkeypatch.setattr("modules.stp_detector.SCAPY_AVAILABLE", False)
-    import modules.stp_detector as m
+    from modules import stp_detector as m
     errors = []
     result = m.scan(gateway_mac=None, on_bpdu=lambda b: None, on_error=errors.append, duration=0)
     assert isinstance(result, dict)

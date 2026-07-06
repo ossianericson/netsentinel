@@ -36,6 +36,8 @@ from matplotlib.figure import Figure
 from matplotlib.patches import FancyArrowPatch, Polygon as MplPolygon
 from matplotlib.collections import PatchCollection
 
+from ui.nav.labels import NavLabel as L
+
 
 def _geojson_path() -> Path:
     base = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).parent.parent.parent
@@ -92,7 +94,6 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QStackedWidget,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -108,13 +109,14 @@ from modules.geo_locator import (
     download_db_permalink,
     get_locator,
 )
+from ui.tabs_helpers import _table
 from ui.styles import (
-    ACCENT, ACCENT_DARK, AMBER, BG_ALT_ROW,
+    ACCENT, ACCENT_DARK, AMBER,
     BG_CARD, BG_HOVER, BORDER,
     CARD_HDR_BORDER, CARD_RADIUS, CHART_GRID,
     CHART_PLOT_BG, GREEN, INPUT_PLACEHOLDER,
     MAP_LAND_BG, MAP_LAND_BORDER, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG,
     WHITE,
 )
 
@@ -206,25 +208,6 @@ def _card(title: str) -> Tuple[QWidget, QVBoxLayout]:
     inner.setSpacing(5)
     outer.addWidget(inner_w)
     return card, inner
-
-
-def _table(headers: List[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)   # RULE 3
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.setStyleSheet(
-        f"QTableWidget {{ border:none; font-size:11px; background:{BG_CARD};"
-        f"  alternate-background-color:{BG_ALT_ROW}; gridline-color:{BORDER}; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT};"
-        f"  font-size:10px; font-weight:600; border:none; padding:0 8px; height:24px; }}"
-    )
-    return t
 
 
 def _dot(color: str) -> QLabel:
@@ -364,7 +347,7 @@ class GeoMapPage(QWidget):
             ),
             btn_label="Go to Threat Intel →",
         )
-        _empty.clicked.connect(lambda: self.navigate_requested.emit("Threat Intel"))
+        _empty.clicked.connect(lambda: self.navigate_requested.emit(L.THREAT_INTEL))
         self._map_stack.addWidget(_empty)
 
         # Page 1 — map + IP table
@@ -570,7 +553,7 @@ class GeoMapPage(QWidget):
         )
         self._detail_view_ti.setCursor(Qt.CursorShape.PointingHandCursor)
         self._detail_view_ti.clicked.connect(
-            lambda: self.navigate_requested.emit("Threat Intel"))
+            lambda: self.navigate_requested.emit(L.THREAT_INTEL))
         self._detail_view_ti.setVisible(False)
 
         self._detail_alerts = QLabel("")
@@ -614,7 +597,7 @@ class GeoMapPage(QWidget):
             from PyQt6.QtWidgets import QApplication as _QA
             win = _QA.instance().activeWindow()
             if hasattr(win, "_nav_rail_go_to"):
-                win._nav_rail_go_to("Devices")
+                win._nav_rail_go_to(L.DEVICES)
 
         from ui.widgets.context_menu import install_copy_menu as _icm
         _icm(self._ip_table, [
@@ -736,7 +719,7 @@ class GeoMapPage(QWidget):
             # Risk heatmap glow (VIZ-8) — radial patches behind dots
             show_heatmap = hasattr(self, "_chk_heatmap") and self._chk_heatmap.isChecked()
             if show_heatmap:
-                import matplotlib.patches as _mpatches
+                from matplotlib.patches import Circle
                 _glow_cfg = {
                     _CAT_THREAT:  (RED,   0.09, 8.0),
                     _CAT_EXPOSED: (AMBER, 0.06, 6.0),
@@ -746,7 +729,7 @@ class GeoMapPage(QWidget):
                         continue
                     glow_color, glow_alpha, glow_r = _glow_cfg[cat]
                     for r_mult in (1.0, 0.6, 0.3):
-                        circle = _mpatches.Circle(
+                        circle = Circle(
                             (result.longitude, result.latitude),
                             radius=glow_r * r_mult,
                             color=glow_color,

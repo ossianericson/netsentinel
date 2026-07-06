@@ -902,3 +902,127 @@ class TestShareCard:
             page = _make_overview()
         page.set_card_data(MagicMock())
         assert page._share_btn.isEnabled()
+
+
+# ---------------------------------------------------------------------------
+# Tile worker teardown — non-blocking hideEvent (RULE-4)
+# ---------------------------------------------------------------------------
+def _cleanup_widget(w):
+    """deleteLater + drain events (RULE-WIN4)."""
+    from PyQt6.QtWidgets import QApplication
+    try:
+        w.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal — already deleted
+    app = QApplication.instance()
+    if app:
+        for _ in range(3):
+            app.processEvents()
+
+
+class TestTileWorkerTeardown:
+    """Regression: Dashboard tile hideEvent must not block the UI thread.
+
+    Root cause of the pre-fix Dashboard navigation freeze — each of these tiles
+    called worker.wait(2000) on the UI thread inside hideEvent, and that runs
+    inside the QStackedWidget page switch. The fix detaches the poller
+    (stop + finished->deleteLater) without waiting. See _detach_poller in
+    ui/widgets/overview_tile.py.
+    """
+
+    def _drain(self, worker):
+        if worker is not None:
+            try:
+                worker.wait(3000)
+            except Exception:
+                pass  # non-fatal — worker may already be gone
+
+    def test_live_bandwidth_hide_nonblocking(self):
+        import time as _t
+        from PyQt6.QtGui import QHideEvent
+        from ui.widgets.overview_tile import LiveBandwidthTile
+        t = LiveBandwidthTile()
+        t._start_worker()
+        old = t._worker
+        assert old is not None
+        _t.sleep(0.15)                       # let the poller enter its sleep loop
+        t0 = _t.perf_counter()
+        t.hideEvent(QHideEvent())
+        elapsed = _t.perf_counter() - t0
+        assert t._worker is None
+        assert elapsed < 0.2, f"hideEvent blocked {elapsed:.2f}s (must detach, not wait)"
+        self._drain(old)
+        _cleanup_widget(t)
+
+    def test_top_talkers_hide_nonblocking(self):
+        import time as _t
+        from PyQt6.QtGui import QHideEvent
+        from ui.widgets.overview_tile import TopTalkersTile
+        t = TopTalkersTile()
+        t._start_worker()
+        old = t._worker
+        assert old is not None
+        _t.sleep(0.15)
+        t0 = _t.perf_counter()
+        t.hideEvent(QHideEvent())
+        elapsed = _t.perf_counter() - t0
+        assert t._worker is None
+        assert elapsed < 0.2, f"hideEvent blocked {elapsed:.2f}s (must detach, not wait)"
+        self._drain(old)
+        _cleanup_widget(t)
+
+    def test_dns_stability_hide_nonblocking(self, monkeypatch):
+        import socket, time as _t
+        from PyQt6.QtGui import QHideEvent, QShowEvent
+        from ui.widgets.overview_tile import DnsStabilityTile
+        monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [])   # no network
+        t = DnsStabilityTile()
+        t.showEvent(QShowEvent())
+        old = t._worker
+        assert old is not None
+        _t.sleep(0.15)
+        t0 = _t.perf_counter()
+        t.hideEvent(QHideEvent())
+        elapsed = _t.perf_counter() - t0
+        assert t._worker is None
+        assert elapsed < 0.2, f"hideEvent blocked {elapsed:.2f}s (must detach, not wait)"
+        self._drain(old)
+        _cleanup_widget(t)
+
+    def test_worker_recreated_on_reshow(self, monkeypatch):
+        import socket
+        from PyQt6.QtGui import QHideEvent, QShowEvent
+        from ui.widgets.overview_tile import DnsStabilityTile
+        monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: [])
+        t = DnsStabilityTile()
+        t.showEvent(QShowEvent())
+        first = t._worker
+        assert first is not None
+        t.hideEvent(QHideEvent())            # detach first
+        assert t._worker is None
+        t.showEvent(QShowEvent())            # fresh worker
+        second = t._worker
+        assert second is not None
+        assert second is not first
+        t.hideEvent(QHideEvent())            # detach second
+        self._drain(first)
+        self._drain(second)
+        _cleanup_widget(t)
+
+    def test_top_talkers_no_double_count_after_detach(self):
+        from workers.iface_bw_worker import IfaceBwPoller
+        from ui.widgets.overview_tile import TopTalkersTile
+        t = TopTalkersTile()
+        # Wire a worker exactly as _start_worker does, but don't start it — keeps
+        # the emit synchronous and deterministic for the disconnect assertion.
+        w = IfaceBwPoller(interval_s=2.0, parent=t)
+        w.stats_ready.connect(t._on_stats)
+        t._worker = w
+        sample = {"eth0": {"down_mbps": 8.0, "up_mbps": 8.0}}
+        w.stats_ready.emit(sample)                     # connected -> accumulates
+        before = dict(t._totals["eth0"])
+        t._stop_worker()                               # detach: must disconnect signal
+        assert t._worker is None
+        w.stats_ready.emit(sample)                     # disconnected -> no-op
+        assert t._totals["eth0"] == before, "detach must disconnect the data signal"
+        _cleanup_widget(t)

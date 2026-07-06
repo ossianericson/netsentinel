@@ -13,3 +13,15 @@ markers = [
 
 # Do NOT set fail_under here — headless CI coverage for a GUI app is ~35%.
 # Coverage discipline is managed via the ratchet rule in .claude/rules/tests.instructions.md.
+
+[tool.ruff.lint]
+# Default ruff/pyflakes treats ANY name with a leading underscore as an
+# intentionally-unused "dummy" variable, so F841 silently skips it. CodeQL's
+# py/unused-local-variable exemption is narrower (name is entirely
+# underscores, contains "unused", or is "dummy"/"empty" — see its rule help
+# text) and has caught genuine dead code hiding behind a leading underscore
+# (e.g. `_cb = progress_cb or (lambda m: None)` in modules/snmp_poller.py,
+# CodeQL alert #1587) that ruff's default regex let through. Narrowing this
+# to match CodeQL's exemption closes that gap locally instead of waiting for
+# the next CodeQL scan to catch it.
+dummy-variable-rgx = "^(_+|.*[Uu]nused.*|dummy|empty)$"

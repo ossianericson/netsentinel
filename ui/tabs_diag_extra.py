@@ -25,6 +25,7 @@ from ui.styles import (
     GREEN, RED,
     TEXT_PRIMARY, TEXT_SECONDARY,
 )
+from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table
 
 
@@ -304,7 +305,7 @@ class _DiagExtraTabsMixin:
         from workers.scan_worker import PortScanWorker
         if hasattr(self, "_ps_host"):
             self._ps_host.setText(host)
-        self._nav_rail_go_to("Port Scanner")
+        self._nav_rail_go_to(L.PORT_SCANNER)
         self._ps_table.setRowCount(0)
         mode = self._ps_mode.currentText().lower() if hasattr(self, "_ps_mode") else "normal"
         if hasattr(self, "_ps_status"):
@@ -350,16 +351,16 @@ class _DiagExtraTabsMixin:
         if rule_type == "PORT_SCAN" and host:
             if hasattr(self, "_syn_host"):
                 self._syn_host.setText(host)
-            self._nav_rail_go_to("Port Scan (TCP)")
+            self._nav_rail_go_to(L.PORT_SCAN_TCP)
         elif rule_type in ("THREAT_INTEL", "CVE") and host:
             if hasattr(self, "_threat_intel_page"):
                 self._threat_intel_page.check_ip(host)
-            self._nav_rail_go_to("Threat Intel")
+            self._nav_rail_go_to(L.THREAT_INTEL)
         elif rule_type == "RATE_SPIKE" and host:
             if hasattr(self, "_live_bandwidth_page"):
                 self._live_bandwidth_page.annotate_event("Rate spike", RED)
-            self._nav_rail_go_to("Live Bandwidth")
+            self._nav_rail_go_to(L.LIVE_BANDWIDTH)
         elif host:
             self._on_inventory_device_selected(host)
         else:
-            self._nav_rail_go_to("Notifications")
+            self._nav_rail_go_to(L.NOTIFICATIONS)

@@ -19,6 +19,7 @@ from ui.styles import (
     ACCENT_LITE, AMBER, AMBER_BG, BLUE, CHART_GRID, CHART_PLOT_BG, CHART_SPINE,
     GREEN, RED, RED_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED,
 )
+from ui.nav.labels import NavLabel as L
 from ui.scan_enrichment import ScanEnrichmentMixin
 
 if TYPE_CHECKING:
@@ -301,7 +302,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         _ts_syn = time.time()
         _syn_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
         self._syn_status.setText(format_scan_status(_syn_verdict, _ts_syn))
-        self._nav_set_scan_state("Port Scan (TCP)", "fresh", ts=_ts_syn, verdict=_syn_verdict)
+        self._nav_set_scan_state(L.PORT_SCAN_TCP, "fresh", ts=_ts_syn, verdict=_syn_verdict)
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.on_port_scan_result(result)
         # ── Update NetworkDocPage with accumulated port data ──────────────────
@@ -347,7 +348,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         _ts_udp = time.time()
         _udp_verdict = result.plain_verdict if not result.error else f"⚠ {result.error}"
         self._udp_status.setText(format_scan_status(_udp_verdict, _ts_udp))
-        self._nav_set_scan_state("Port Scan (UDP)", "fresh", ts=_ts_udp, verdict=_udp_verdict)
+        self._nav_set_scan_state(L.PORT_SCAN_UDP, "fresh", ts=_ts_udp, verdict=_udp_verdict)
         if hasattr(self, "_security_overview_page"):
             self._security_overview_page.on_port_scan_result(result)
 
@@ -368,7 +369,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         _ts_os = time.time()
         _os_verdict = f"Fingerprinted {len(data.get('guesses', []))} host(s)."
         self._os_status.setText(format_scan_status(_os_verdict, _ts_os))
-        self._nav_set_scan_state("OS Detection", "fresh", ts=_ts_os, verdict=_os_verdict)
+        self._nav_set_scan_state(L.OS_DETECTION, "fresh", ts=_ts_os, verdict=_os_verdict)
 
     def _on_cve_result(self, service_version: str, result):
         from PyQt6.QtGui import QColor
@@ -392,7 +393,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._monitor_overview_page.set_cve_count(self._recon_cve_table.rowCount())
         _cve_n = self._recon_cve_table.rowCount()
         _cve_verdict = f"{_cve_n} CVE{'s' if _cve_n != 1 else ''} found" if _cve_n else "No CVEs found"
-        self._nav_set_scan_state("CVE Lookup", "fresh", ts=time.time(), verdict=_cve_verdict)
+        self._nav_set_scan_state(L.CVE_LOOKUP, "fresh", ts=time.time(), verdict=_cve_verdict)
 
     def _on_exposure_result(self, result):
         from PyQt6.QtGui import QColor
@@ -424,7 +425,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
             f"UPnP mappings: {len(result.upnp_mappings)}"
         )
         self._exposure_status.setText(format_scan_status(_exp_verdict, _ts_exp))
-        self._nav_set_scan_state("Exposed to Internet", "fresh", ts=_ts_exp, verdict=_exp_verdict)
+        self._nav_set_scan_state(L.EXPOSED_TO_INTERNET, "fresh", ts=_ts_exp, verdict=_exp_verdict)
         if getattr(self, "_pending_security_tools", []):
             self._advance_security_audit()
 
@@ -515,8 +516,24 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # non-fatal — table update is best-effort
 
     def _on_m1_result(self, data: dict):
+        self._m1_update_scan_registries(data)
+        self._m1_refresh_segments_and_inventory(data)
+        self._m1_populate_device_table(data)
+        self._m1_check_baseline_diff(data)
+        self._m1_feed_network_doc(data)
+        self._m1_track_devices(data)
+        self._m1_feed_geo_map(data)
+        self._m1_restart_availability_worker(data)
+        self._m1_update_verdict_and_kpis(data)
+        self._m1_refresh_topology(data)
+        self._m1_reapply_search_and_suggestions()
+        self._m1_auto_snapshot_baseline(data)
+        self._m1_run_post_scan_followups(data)
+
+    def _m1_update_scan_registries(self, data: dict) -> None:
+        """Stamp scan state + notify overview/security/monitor/home pages of the M1 result."""
         self._last_scan_time = time.time()
-        self._nav_set_scan_state("Devices", "fresh", ts=self._last_scan_time)
+        self._nav_set_scan_state(L.DEVICES, "fresh", ts=self._last_scan_time)
         self._m1_result = data
         devices = data.get("devices", [])
         if hasattr(self, "_overview_page") and devices:
@@ -529,6 +546,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._monitor_overview_page.set_last_scan_time(_dt.datetime.now())
         if hasattr(self, "_home_page") and devices:
             self._home_page._device_count = max(self._home_page._device_count, len(devices))
+
+    def _m1_refresh_segments_and_inventory(self, data: dict) -> None:
+        """Auto-detect network segments and merge live devices into the Inventory page."""
+        devices = data.get("devices", [])
         if hasattr(self, "_inventory_page"):
             # Auto-detect segments before populating the snapshot table
             _inv_store = getattr(self, "_store", None)
@@ -563,6 +584,10 @@ class ScanResultMixin(ScanEnrichmentMixin):
             self._inventory_page.set_scan_devices(
                 self._merge_scan_with_persistent(devices)
             )
+
+    def _m1_populate_device_table(self, data: dict) -> None:
+        """Populate the M1 devices table (+ device-change audit + tooltips); mirror into Network Info."""
+        devices = data.get("devices", [])
         # Disable sorting while inserting rows: with setSortingEnabled(True) and an
         # active sort indicator (set by a prior sortByColumn call), each setItem()
         # immediately re-sorts the row to its sorted position. The static `row`
@@ -660,6 +685,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
             vendor  = d.vendor   if not isinstance(d, dict) else d.get("vendor", "Unknown")
             _add_row(self._net_devices_table, [ip, host or "—", mac, vendor, level], level)
 
+
+    def _m1_check_baseline_diff(self, data: dict) -> None:
+        """Diff scanned devices against the saved device baseline and update the banner."""
         # ── Baseline diff ────────────────────────────────────────────────────
         try:
             from modules.utils import load_device_baseline, save_device_baseline, diff_devices_against_baseline
@@ -691,6 +719,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except Exception as _exc:
             self._bl_new_lbl.setText(f"Baseline check failed: {_exc}")
 
+    def _m1_feed_network_doc(self, data: dict) -> None:
+        """Feed the latest scan devices + cert status into the Network Doc page."""
         # ── Feed Network Doc page ─────────────────────────────────────────────
         self._last_scan_devices = data.get("devices", [])
         _cert_data: list = []
@@ -713,6 +743,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
             topo_widget=getattr(self, "_topology_widget", None),
         )
 
+    def _m1_track_devices(self, data: dict) -> None:
+        """Persist scan results via DeviceTracker; raise join/leave notices, alerts, and MQTT events."""
         # ── Persistent device tracking (MetricStore) ──────────────────────────
         if self._store is not None:
             try:
@@ -763,7 +795,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                             _mac = first.mac
 
                             def _name_it(_checked=False, _mac=_mac, _name=suggested):
-                                self._nav_rail_go_to("Inventory Changes")
+                                self._nav_rail_go_to(L.INVENTORY_CHANGES)
                                 if hasattr(self, "_inventory_page"):
                                     self._inventory_page.open_device_drawer(_mac, _name)
 
@@ -812,6 +844,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
             except Exception:
                 pass   # tracker errors must never break the scan result handler
 
+    def _m1_feed_geo_map(self, data: dict) -> None:
+        """Feed discovered device IPs to the Geolocation Map (public IPs auto-filtered)."""
         # ── Feed Geolocation Map with discovered device IPs (public ones auto-filtered) ─
         try:
             _ips = [
@@ -822,6 +856,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except Exception:
             pass  # non-fatal
 
+    def _m1_restart_availability_worker(self, data: dict) -> None:
+        """Start or retarget the AvailabilityWorker after each scan."""
         # ── Start / refresh AvailabilityWorker after each scan ────────────────
         try:
             if self._store is not None and data.get("devices"):
@@ -849,6 +885,8 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except Exception:
             pass  # non-fatal
 
+    def _m1_update_verdict_and_kpis(self, data: dict) -> None:
+        """Refresh the overall verdict banner + KPI tiles, and reveal the M1 table."""
         self._update_overall_verdict()
         self._update_kpi_tiles(data)
         # Show the table (hide the empty-state placeholder)
@@ -856,6 +894,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
         # Show benchmark content pane (user can now grade without being sent elsewhere)
         if hasattr(self, "_bm_stack"):
             self._bm_stack.setCurrentIndex(1)
+
+    def _m1_refresh_topology(self, data: dict) -> None:
+        """Rebuild edge health overlays, compute the topology diff, and re-render the map."""
         # Refresh topology widget with new device list + segment colours + health
         try:
             gw_ip  = self._net_info.get("gateway") if self._net_info else None
@@ -973,12 +1014,17 @@ class ScanResultMixin(ScanEnrichmentMixin):
             pass  # network_map_page not yet initialised
         except Exception as _topo_exc:
             self._set_status(f"Topology render error: {_topo_exc}")
+
+    def _m1_reapply_search_and_suggestions(self) -> None:
+        """Re-apply any active NL search filter, then recompute suggestion cards."""
         # Re-apply any active NL search now that new data is loaded
         if hasattr(self, "_m1_search") and self._m1_search.text().strip():
             self._filter_m1_by_nl(self._m1_search.text())
 
         self._compute_suggestions()
 
+    def _m1_auto_snapshot_baseline(self, data: dict) -> None:
+        """DEVICE-5: take an auto config-baseline snapshot and evaluate drift, when enabled."""
         # DEVICE-5: auto-snapshot when setting is on
         try:
             _qs_d5 = QSettings("NetSentinel", "NetSentinel")
@@ -1056,7 +1102,9 @@ class ScanResultMixin(ScanEnrichmentMixin):
         except Exception:
             pass  # auto-snapshot errors must never break the scan result handler
 
-
+    def _m1_run_post_scan_followups(self, data: dict) -> None:
+        """Coach marks, enrichment, vendor lookups, plugin wake, WAN IP, and LLDP follow-ups."""
+        devices = data.get("devices", [])
         # After scan from home: show post-scan coach marks on first scan only.
         if getattr(self, "_scan_from_home", False) and len(devices) > 0:
             self._scan_from_home = False

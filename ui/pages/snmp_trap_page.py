@@ -21,7 +21,7 @@ from typing import Optional
 from PyQt6.QtCore    import Qt, pyqtSlot
 from PyQt6.QtWidgets import (
     QDialog, QHBoxLayout, QLabel, QSizePolicy,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget, QPushButton,
+    QTableWidgetItem, QVBoxLayout, QWidget, QPushButton,
     QFrame, QTextEdit,
 )
 
@@ -29,36 +29,16 @@ from ui.widgets.empty_state_card import EmptyStateCard
 from ui.widgets.context_menu import install_copy_menu
 
 from modules.metric_store import MetricStore
+from ui.tabs_helpers import _table
 from ui.styles import (
-    ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
-    BG_DARK, BG_HOVER, BORDER, CARD_HDR_BORDER,
-    CARD_RADIUS, GREEN, RED, TABLE_SEL,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    ACCENT, AMBER, BG_CARD,
+    BG_DARK, BORDER, CARD_HDR_BORDER,
+    CARD_RADIUS, GREEN, RED,
+    TEXT_PRIMARY, TEXT_SECONDARY,
 )
 
 
 # ── Helpers (mirrors dashboard helpers, no dependency on dashboard) ───────────
-
-def _table(headers: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setStretchLastSection(True)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.setShowGrid(False)
-    t.setStyleSheet(
-        f"QTableWidget {{ background:{BG_CARD}; border:none; font-size:11px; color:{TEXT_PRIMARY}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-        f" font-weight:bold; padding:4px 8px; border:none; }}"
-        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-    )
-    return t
-
 
 def _card(title: str) -> tuple[QWidget, QVBoxLayout]:
     outer = QFrame()

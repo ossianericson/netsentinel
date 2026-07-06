@@ -5,7 +5,7 @@ from modules.smb_enumerator import (
 
 
 def test_import():
-    import modules.smb_enumerator as m
+    from modules import smb_enumerator as m
     assert hasattr(m, "enumerate_smb")
     assert hasattr(m, "SMBEnumResult")
     assert hasattr(m, "NetBIOSInfo")

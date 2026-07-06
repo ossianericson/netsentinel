@@ -21,6 +21,7 @@ from ui.styles import (
     ACCENT, ACCENT_DARK, AMBER, AMBER_BG,
     BG_CARD, BORDER, CARD_RADIUS, GREEN, GREEN_BG, RED, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
+from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _table, _empty_state_widget, risk_to_label
 
 if TYPE_CHECKING:
@@ -156,7 +157,7 @@ class _ReconTabsMixin:
         )
         self._recon_syn_table.setRowCount(0)
         self._syn_status.setText("⏳  Scanning ports…  this may take up to 30 seconds")
-        self._nav_set_scan_state("Port Scan (TCP)", "running")
+        self._nav_set_scan_state(L.PORT_SCAN_TCP, "running")
         mode_text = self._syn_ports_combo.currentText()
         if "Full range" in mode_text:
             ports = list(range(1, 65536))
@@ -184,7 +185,7 @@ class _ReconTabsMixin:
             return
         svc_item = self._recon_syn_table.item(row, 3)
         if svc_item and svc_item.text():
-            self._nav_rail_go_to("CVE Tracker")
+            self._nav_rail_go_to(L.CVE_TRACKER)
 
     def _syn_table_context_menu(self, pos) -> None:
         from PyQt6.QtWidgets import QMenu
@@ -211,7 +212,7 @@ class _ReconTabsMixin:
             self._show_ip_on_geo_map(host)
         elif chosen == act_abuse:
             self._threat_intel_page.check_ip(host)
-            self._nav_rail_go_to("Threat Intel")
+            self._nav_rail_go_to(L.THREAT_INTEL)
         elif chosen == act_copy_host:
             from PyQt6.QtWidgets import QApplication
             QApplication.clipboard().setText(host)
@@ -272,7 +273,7 @@ class _ReconTabsMixin:
             return
         self._recon_udp_table.setRowCount(0)
         self._udp_status.setText("⏳  Scanning UDP ports…  this may take 1–2 minutes")
-        self._nav_set_scan_state("Port Scan (UDP)", "running")
+        self._nav_set_scan_state(L.PORT_SCAN_UDP, "running")
         self._udp_worker = UDPScanWorker(host=host)
         self._udp_worker.result.connect(self._on_udp_result)
         self._udp_worker.status.connect(self._udp_status.setText)
@@ -332,7 +333,7 @@ class _ReconTabsMixin:
         if self._os_worker and self._os_worker.isRunning():
             return
         self._recon_os_table.setRowCount(0)
-        self._nav_set_scan_state("OS Detection", "running")
+        self._nav_set_scan_state(L.OS_DETECTION, "running")
         self._os_worker = OSFingerprintWorker(ips=ips)
         self._os_worker.result.connect(self._on_os_result)
         self._os_worker.status.connect(self._os_status.setText)
@@ -462,7 +463,7 @@ class _ReconTabsMixin:
             return
 
         self._recon_cve_table.setRowCount(0)
-        self._nav_set_scan_state("CVE Lookup", "running")
+        self._nav_set_scan_state(L.CVE_LOOKUP, "running")
         self._cve_worker = CVELookupWorker(service_versions=list(set(versions)))
         self._cve_worker.cve_result.connect(self._on_cve_result)
         self._cve_worker.status.connect(self._cve_status.setText)
@@ -527,7 +528,7 @@ class _ReconTabsMixin:
             return
         self._recon_exposure_table.setRowCount(0)
         self._exposure_verdict.hide()
-        self._nav_set_scan_state("Exposed to Internet", "running")
+        self._nav_set_scan_state(L.EXPOSED_TO_INTERNET, "running")
         self._exposure_worker = InternetExposureWorker()
         self._exposure_worker.result.connect(self._on_exposure_result)
         self._exposure_worker.status.connect(self._exposure_status.setText)
@@ -646,7 +647,7 @@ class _ReconTabsMixin:
         self._cred_worker.result.connect(self._on_cred_result)
         self._cred_worker.status.connect(self._cred_status.setText)
         self._cred_worker.error.connect(lambda e: self._cred_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
-        self._nav_set_scan_state("Login Test", "running")
+        self._nav_set_scan_state(L.LOGIN_TEST, "running")
         self._cred_worker.start()
 
     def _build_recon_discovery_tab(self) -> QWidget:
@@ -712,7 +713,7 @@ class _ReconTabsMixin:
         self._discovery_worker.result.connect(self._on_discovery_result)
         self._discovery_worker.status.connect(self._disc_status.setText)
         self._discovery_worker.error.connect(lambda e: self._disc_status.setText(f"⚠ {e}"), Qt.ConnectionType.QueuedConnection)
-        self._nav_set_scan_state("Full Device Discovery", "running")
+        self._nav_set_scan_state(L.FULL_DEVICE_DISCOVERY, "running")
         self._discovery_worker.start()
 
     def _build_recon_smb_tab(self) -> QWidget:

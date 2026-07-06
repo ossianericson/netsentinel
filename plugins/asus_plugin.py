@@ -33,7 +33,10 @@ CREDENTIAL_LABEL = "Password"
 
 def _check_deps():
     try:
-        import asusrouter  # noqa: F401
+        # Same `from ... import` spelling used in _fetch_all_async() below --
+        # a plain `import asusrouter` here would collide with that (CodeQL
+        # py/import-and-import-from, RULE-LINT5).
+        from asusrouter import AsusRouter  # noqa: F401
     except ImportError as exc:
         # Raise (never sys.exit) so get_status()/get_clients() catch this like any
         # other failure and classify it DEPS: via _fmt_err. PluginPollingWorker

@@ -63,6 +63,60 @@ def refresh_theme(self):
     from ui import styles as _s   # imports from the ui package; no conflict
 ```
 
+### RULE-LINT5 (blocking): No CodeQL py/import-and-import-from or py/cyclic-import anywhere in the repo
+
+Ruff's F401/F811/F841 selection (RULE-LINT1) does not catch either of these two
+CodeQL alert classes (verified: neither has a rule in `ruff rule --all`, nor
+does a `ruff check --select=ALL` probe flag them) — they recurred across
+several `fix: resolve N CodeQL alerts` commits before this gate existed.
+Enforced by `tools/check_import_lint.py` (plain `ast` parsing, no CodeQL
+dependency) via `tests/test_import_lint.py` and the RULE-CI1 pre-push hook.
+
+- `py/import-and-import-from` — RULE-LINT4 is the specific ui/styles case;
+  this is the general form for any module imported both as `import X` and
+  `from X import Y` in the same file.
+- `py/cyclic-import` — two or more first-party `modules/`, `ui/`, or
+  `workers/` modules whose *module-level* imports mutually depend on each
+  other (deferred imports inside function bodies or `if TYPE_CHECKING:`
+  don't count — they can't cause a load-time cycle).
+
+Pre-existing debt at the time this gate was added is grandfathered in
+`BASELINE_IMPORT_AND_IMPORT_FROM` in `tools/check_import_lint.py` — do not add
+new entries there; fix new violations instead (rename the plain `import X` to
+`from <parent-package> import <leaf>`, same pattern as RULE-LINT4).
+
+### RULE-LINT6 (blocking): No CodeQL py/unused-global-variable in modules/, ui/, or workers/
+
+Ruff's F841 only checks *local* (function-scope) variables — a module-level
+assignment that is never read anywhere is invisible to it. Two real instances
+of this reached open CodeQL alerts (`modules/network_logger.py`'s `_log`,
+`ui/nav/labels.py`'s `KNOWN_LABELS`) before this check existed, alongside a
+sibling gap: ruff's default `dummy-variable-rgx` treats *any* leading
+underscore as "intentionally unused," so a genuinely dead **local** variable
+named like `_cb` (CodeQL alert #1587, `modules/snmp_poller.py`) also slipped
+through — closed by tightening `dummy-variable-rgx` in `pyproject.toml` to
+match CodeQL's own (narrower) exemption list: entirely underscores, containing
+"unused", or literally `dummy`/`empty`.
+
+Enforced by `find_unused_global_violations()` in `tools/check_import_lint.py`
+(cross-file aware — a name is "used" if read anywhere in its own file, listed
+in that module's `__all__`, or imported/attribute-accessed by any other
+tracked file) via `tests/test_import_lint.py` and the RULE-CI1 pre-push hook.
+
+Pre-existing debt is grandfathered in `BASELINE_UNUSED_GLOBALS` in
+`tools/check_import_lint.py` — every entry there was cross-checked against
+this repo's CodeQL alert history and is either already dismissed there
+("used in tests" — real usage is a string-based `monkeypatch.setattr(...)`
+that no AST tool can see) or a plausible half-wired feature stub left for a
+deliberate decision. Do not add new entries; fix new violations instead (use
+the name, delete it, or add it to `__all__` if it's a deliberate export).
+
+**Known blind spot:** like CodeQL itself, this check cannot see a reference
+made only through a string literal (`monkeypatch.setattr("mod.NAME", ...)`,
+`getattr(mod, "NAME")`). If a new global is flagged but is genuinely
+consumed that way, verify with a real grep for the literal name before
+adding it to the baseline — don't assume "the checker must be wrong."
+
 ### RULE 1: Single colour source
 Never hardcode a hex colour string in any UI file. Every colour must be imported from `ui/styles.py`.
 If a colour you need does not exist there, add it to `styles.py` first.
@@ -600,6 +654,17 @@ hairline (`alpha(WHITE, 0x22)`), not a theme-swinging plain-hex token.
 
 Enforced by `tests/test_qss_hex_alpha.py` (zero tolerance across `ui/`, excluding
 `ui/styles.py` whose `alpha()` docstring shows the antipattern as a counter-example).
+
+### RULE-QSS3 (required): Use the `qss_*` recipe functions instead of hand-typing common inline QSS shapes
+`ui/styles.py` exposes `qss_label()`/`qss_muted_label()` (text label), `qss_frame()`
+(card/banner QFrame wrapper), `qss_chip()` (pill badge), and `qss_dismiss_button()`
+(flat "X" close button) — each covers a shape that was re-typed by hand at hundreds
+of call sites (P6). New code should call these instead of composing the f-string
+from scratch; do not reintroduce the raw literal shape in a file that already
+migrated onto them.
+
+Enforced by `tests/test_qss_recipe_adoption.py` (ratchet, scoped to the three
+migrated files — `home_page.py`, `overview_tile.py`, `settings_cards.py`).
 
 ### RULE-PERF1 (blocking): Never set `QHeaderView.ResizeMode.ResizeToContents` as a table's default column resize mode
 **Mechanism / trap:** `setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)`
@@ -1420,12 +1485,17 @@ unreachable — no type error, no crash, just a dead link.
 
 ### RULE-CI1 (blocking): Install a git pre-push hook that runs the commit gate
 
-The commit gate (Step 1: ruff + mypy) must run before code reaches GitHub CI — not after.
-Install a pre-push hook once per clone by running this in PowerShell at the repo root:
+The commit gate (Step 1: ruff + import-lint + mypy) must run before code reaches
+GitHub CI — not after. Install a pre-push hook once per clone by running this
+in PowerShell at the repo root:
 
 ```powershell
-$content = "#!/bin/sh`nruff check . --select=F401,F811,F841 || exit 1`npython -m mypy modules/ || exit 1`necho '[pre-push] gate passed.'"
-[System.IO.File]::WriteAllText(".git/hooks/pre-push", $content, [System.Text.Encoding]::UTF8)
+# UTF8Encoding($false) = no BOM. A BOM before the `#!/bin/sh` shebang breaks
+# the OS's ability to recognize the shebang at all (RULE-ENC3 is the same
+# gotcha for .py files -- [System.Text.Encoding]::UTF8 always writes a BOM).
+$content = "#!/bin/sh`nruff check . --select=F401,F811,F841 || exit 1`npython tools/check_import_lint.py || exit 1`npython -m mypy modules/ || exit 1`necho '[pre-push] gate passed.'"
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText(".git/hooks/pre-push", $content, $utf8NoBom)
 ```
 
 If the hook blocks a push: fix the violations — never use `git push --no-verify`.
@@ -1536,11 +1606,14 @@ documentation, not a gate.
 
 Currently tool-enforced (high reliability):
 - RULE-LINT1 → `ruff` in commit gate
+- RULE-LINT5 → `tools/check_import_lint.py` + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook
+- RULE-LINT6 → `tools/check_import_lint.py` (`find_unused_global_violations`) + `tests/test_import_lint.py`, CI and RULE-CI1 pre-push hook; local-variable half via tightened `dummy-variable-rgx` in `pyproject.toml`
 - RULE-AH1 → `test_module_loc.py`
 - RULE-NAV1 → `test_nav_completeness.py`
 - RULE-AX1 → `test_interactive_states.py`
 - RULE-QSS1 → `test_qss_scoping.py`
 - RULE-QSS2 → `test_qss_hex_alpha.py`
+- RULE-QSS3 → `test_qss_recipe_adoption.py`
 - RULE-ENC1 → `test_source_encoding.py`
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically
 - RULE-WIN7 → `test_widget_visibility_order.py`

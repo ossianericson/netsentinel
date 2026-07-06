@@ -21,6 +21,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from modules.utils_net import icmp_ping
+from modules.utils_net import tcp_probe as _shared_tcp_probe
+
 # ── Public hop targets ────────────────────────────────────────────────────────
 
 _EXTERNAL_HOPS: list[tuple[str, str, str]] = [
@@ -57,42 +60,14 @@ class IspVsRouterResult:
 
 def _ping_once(ip: str, timeout: float = _PING_TIMEOUT) -> Optional[float]:
     """Return round-trip time in ms, or None if unreachable / permission denied."""
-    try:
-        import platform
-        import subprocess  # noqa: S404 — controlled invocation; no shell=True; no user input
-        flag = "-n" if platform.system().lower() == "windows" else "-c"
-        result = subprocess.run(  # noqa: S603 — no shell; fixed args only
-            ["ping", flag, "1", "-W", "2", ip] if platform.system().lower() != "windows"
-            else ["ping", flag, "1", "-w", "2000", ip],
-            capture_output=True,
-            text=True,
-            timeout=timeout + 1,
-        )
-        output = result.stdout + result.stderr
-        if result.returncode != 0:
-            return None
-        # Parse RTT from ping output (works on Windows and Linux/macOS)
-        for token in output.split():
-            t = token.strip("ms").replace("time=", "").replace("time<", "")
-            try:
-                return float(t)
-            except ValueError:
-                continue
-        return None  # reachable but RTT not parseable
-    except Exception:
-        return None
+    rtt = icmp_ping(ip, timeout=timeout)
+    return rtt if rtt >= 0 else None
 
 
 def _tcp_probe(ip: str, port: int = 53, timeout: float = _PING_TIMEOUT) -> Optional[float]:
     """TCP connect probe as fallback when ICMP is blocked.  Returns RTT in ms."""
-    try:
-        t0 = time.monotonic()
-        sock = socket.create_connection((ip, port), timeout=timeout)
-        rtt = (time.monotonic() - t0) * 1000
-        sock.close()
-        return rtt
-    except Exception:
-        return None
+    ok, rtt, _ = _shared_tcp_probe(ip, port, timeout)
+    return rtt if ok else None
 
 
 def _check_hop(key: str, label: str, ip: str) -> HopResult:

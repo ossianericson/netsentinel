@@ -25,11 +25,13 @@ from PyQt6.QtWidgets import (
     QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
+from ui.nav.labels import NavLabel as L
+from ui.tabs_helpers import _table as _make_table
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, AMBER,
     BG_ALT_ROW, BG_CARD, BG_DARK, BORDER, CARD_HDR_BORDER,
     CARD_RADIUS, GREEN, RED, TEXT_MUTED,
-    TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_TEXT,
+    TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE,
 )
 
@@ -100,29 +102,6 @@ def _kpi_tile(label: str, value: str, color: str) -> QWidget:
     return frame
 
 
-def _make_table(headers: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setStretchLastSection(True)
-    # Interactive, not ResizeToContents (RULE-PERF1) — see threat_intel_page.py
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.setShowGrid(False)
-    t.setStyleSheet(
-        f"QTableWidget {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-        f" border:none; font-size:11px; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT};"
-        f" font-size:10px; font-weight:600; border:none; padding:3px 6px; }}"
-        f"QTableWidget::item:alternate {{ background:{BG_ALT_ROW}; }}"
-        f"QTableWidget::item:selected {{ background:{ACCENT}; color:{WHITE}; }}"
-    )
-    return t
-
-
 def _severity_color(sev: str) -> str:
     s = sev.lower()
     if s == "critical":
@@ -142,15 +121,15 @@ def _confidence_color(conf: int) -> str:
 
 # C-3: Scan types shown in the Scan Status overview card
 _AUDIT_SCAN_LABELS: tuple[str, ...] = (
-    "Port Scan (TCP)",
-    "Port Scan (UDP)",
-    "CVE Lookup",
-    "Threat Intel",
-    "TLS & Exposure",
-    "Login Test",
-    "OS Detection",
-    "Exposed to Internet",
-    "Full Device Discovery",
+    L.PORT_SCAN_TCP,
+    L.PORT_SCAN_UDP,
+    L.CVE_LOOKUP,
+    L.THREAT_INTEL,
+    L.TLS_EXPOSURE,
+    L.LOGIN_TEST,
+    L.OS_DETECTION,
+    L.EXPOSED_TO_INTERNET,
+    L.FULL_DEVICE_DISCOVERY,
 )
 
 _STATE_COLORS: dict[str, str] = {

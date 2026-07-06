@@ -14,7 +14,7 @@ from unittest.mock import patch
 pytest.importorskip("PyQt6", reason="PyQt6 not installed")
 pytest.importorskip("matplotlib", reason="matplotlib not installed")
 
-import ui.topology_widget as tw
+from ui import topology_widget as tw
 from ui.topology_widget import TopologyWidget
 
 

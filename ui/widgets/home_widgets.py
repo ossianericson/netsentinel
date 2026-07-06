@@ -1,4 +1,4 @@
-﻿"""
+"""
 home_widgets.py — Reusable helper widgets for the Home page.
 
 Extracted from ui/pages/home_page.py (Sprint 4, S3-3).

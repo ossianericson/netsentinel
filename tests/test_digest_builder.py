@@ -7,7 +7,7 @@ import pytest
 
 
 def test_import():
-    import modules.digest_builder  # noqa: F401
+    from modules import digest_builder  # noqa: F401
 
 
 def test_build_digest_html_returns_string():

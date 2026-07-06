@@ -9,6 +9,18 @@ Unlike monkey_test.py (chaos/random), this script is deterministic:
 it visits pages in a fixed order and exercises every visible control exactly
 once per page visit.
 
+De-forked (P2): this tool no longer carries its own copy of the launch /
+connect / attach / dialog-guard / focus / blacklist machinery.  It subclasses
+`monkey_test.MonkeyTester` (and its `Config`) — exactly as
+`monkey_mouse_test.py` and `scan_navigate_test.py` already do — and reuses that
+one battle-tested implementation.  The blacklist (`_mt._BLACKLIST` /
+`_mt._is_blacklisted`), window attach/connect loop, and file-dialog / shutdown
+guard therefore have a single source of truth: fix them once in monkey_test.py
+and every tester inherits the fix (this is what ends the recurring per-tool
+"whack-a-mole" of duplicated fixes).  Only the deterministic page-by-page
+sweep — navigation, per-page control collection, and the click dispatcher —
+lives here.
+
 Usage (source — recommended for dev):
     python tools/systematic_test.py --source
 
@@ -20,7 +32,7 @@ Options:
     --connect             Attach to an already-running NetSentinel window
     --pages PAGE ...      Only test these pages (default: all)
     --pause N             Seconds between clicks (default 0.35)
-    --log FILE            Log file (default: systematic_test.log)
+    --log FILE            Log file (default: <output-dir>/systematic.log)
     --no-screenshots      Skip failure screenshots
 
 Exit codes:
@@ -33,50 +45,29 @@ Requirements:
 """
 
 import argparse
-import ctypes
 import dataclasses
 import json
-import logging
-import os
 import re
-import subprocess
 import sys
 import time
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
+sys.path.insert(0, str(Path(__file__).parent))
 try:
-    import psutil
+    import monkey_test as _mt
 except ImportError:
-    sys.exit("ERROR: psutil required.  pip install psutil")
-
-try:
-    from pywinauto import Desktop
-    from pywinauto.base_wrapper import ElementNotEnabled, ElementNotVisible
-    from pywinauto.findwindows import ElementNotFoundError
-except ImportError:
-    sys.exit("ERROR: pywinauto required.  pip install pywinauto")
-
-try:
-    from PIL import ImageGrab
-    _HAS_PIL = True
-except ImportError:
-    _HAS_PIL = False
+    if __name__ == "__main__":
+        sys.exit("ERROR: pywinauto/psutil required.  pip install pywinauto psutil")
+    raise
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-_VERSION = "1.1.0"
-_WINDOW_RE = ".*NetSentinel.*"
-_CONNECT_TIMEOUT = 60
-_CONNECT_POLL = 1.0
+_VERSION = "1.3.0"
 
-# ── Windows power management ───────────────────────────────────────────────────
-_ES_CONTINUOUS       = 0x80000000
-_ES_SYSTEM_REQUIRED  = 0x00000001
-_ES_DISPLAY_REQUIRED = 0x00000002
 
 def _discover_pages(skip_admin: bool = True) -> List[str]:
     """Parse ui/nav/builder.py at runtime to get the live registered page list.
@@ -110,156 +101,15 @@ _SKIP_PAGES: List[str] = []   # e.g. pages that require hardware not present in 
 
 _ALL_PAGES: List[str] = [p for p in _discover_pages() if p not in _SKIP_PAGES]
 
-# Shared blacklist — same rules as monkey_test.py: never click destructive controls
-_BLACKLIST: List[str] = [
-    "send test", "test email", "test webhook", "test push", "test ntfy",
-    "test telegram", "send email", "publish",
-    "run login test", "start scan", "launch scan", "full discovery",
-    "syn scan", "port scan", "run diagnostics",
-    "delete", "remove device", "clear all", "wipe", "purge",
-    "reset to default", "install speedtest", "install ookla", "install npcap",
-    "_chromebutton",
-    "close/x",          # accessible-name variant seen in seed=1 crash at iter 268
-    "quit", "exit application",
-    # --- File open/save dialogs (Windows native) — must never be opened ---
-    # A Windows file picker steals focus and stalls the test run permanently.
-    "browse",           # any "Browse…" button for file/folder selection
-    "floor plan",       # WiFi Heatmap — floor plan image import
-    "choose file",
-    "select file",
-    "load plugin",
-    "import plugin",
-    "save as",
-    "generate report",
-    # --- Export / file creation ---
-    "export pdf", "export csv", "export json", "export report",
-    "save pdf", "save report",
-    "sign in", "authenticate",
-    "factory reset", "restore defaults",
-]
-
-# Hyperlink is intentionally excluded — clicking UIA Hyperlink controls
-# activates their default action (follows the link), which opens Chrome,
-# IE, Spotify, or any registered URI-scheme handler outside the app.
+# Control types this deterministic sweep interacts with.  Intentionally a subset
+# of monkey_test._SUPPORTED_TYPES: TreeItem/MenuItem are excluded so a page sweep
+# never expands a tree or fires a menu command while walking controls in order.
+# Hyperlink is excluded for the same reason monkey_test excludes it — clicking a
+# UIA Hyperlink follows the link out of the app (Chrome/IE/URI handler).
 _SUPPORTED_TYPES = frozenset({
     "Button", "CheckBox", "RadioButton", "ComboBox", "Edit",
     "ListItem", "TabItem", "Slider", "SplitButton",
 })
-
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _safe_name(ctrl) -> str:
-    try:
-        return (ctrl.window_text() or "").strip()[:80]
-    except Exception:
-        return ""
-
-
-def _safe_id(ctrl) -> str:
-    try:
-        return (ctrl.element_info.automation_id or "").strip()[:80]
-    except Exception:
-        return ""
-
-
-def _safe_type(ctrl) -> str:
-    try:
-        return ctrl.element_info.control_type or "Unknown"
-    except Exception:
-        return "Unknown"
-
-
-def _is_blacklisted(name: str, auto_id: str) -> bool:
-    combined = (name + " " + auto_id).lower()
-    return any(pat in combined for pat in _BLACKLIST)
-
-
-def _is_main_window(win) -> bool:
-    """True when win looks like the main app window (not a toast/popup)."""
-    try:
-        r = win.rectangle()
-        return (r.right - r.left) >= 600 and (r.bottom - r.top) >= 400
-    except Exception:
-        return False
-
-
-def _screenshot(label: str, log: logging.Logger, output_dir: str = ".") -> Optional[str]:
-    if not _HAS_PIL:
-        return None
-    try:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = os.path.join(output_dir, f"systematic_{label}_{ts}.png")
-        ImageGrab.grab().save(path)
-        log.info("Screenshot: %s", path)
-        return path
-    except Exception as exc:
-        log.debug("Screenshot failed: %s", exc)
-        return None
-
-
-def _setup_log(log_file: str) -> logging.Logger:
-    log = logging.getLogger("systematic")
-    log.setLevel(logging.DEBUG)
-    fmt = logging.Formatter("%(asctime)s [%(levelname)-5s] %(message)s", "%H:%M:%S")
-    import io as _io
-    ch = logging.StreamHandler(_io.TextIOWrapper(
-        sys.stdout.buffer, encoding=sys.stdout.encoding or "utf-8", errors="replace"
-    ))
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(fmt)
-    log.addHandler(ch)
-    fh = logging.FileHandler(log_file, encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-    log.addHandler(fh)
-    return log
-
-
-def _force_foreground(hwnd: int) -> None:
-    """Force a window to the foreground using the AttachThreadInput trick.
-
-    Plain SetForegroundWindow silently fails from background processes after
-    Windows engages focus-theft protection.  Attaching to the target thread's
-    input queue grants the permission needed before the call.
-    """
-    try:
-        user32   = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        cur_tid  = kernel32.GetCurrentThreadId()
-        tgt_tid  = user32.GetWindowThreadProcessId(hwnd, None)
-        attached = (tgt_tid and cur_tid != tgt_tid and
-                    bool(user32.AttachThreadInput(cur_tid, tgt_tid, True)))
-        try:
-            user32.ShowWindow(hwnd, 9)        # SW_RESTORE (un-minimise if needed)
-            user32.BringWindowToTop(hwnd)
-            user32.SetForegroundWindow(hwnd)
-        finally:
-            if attached:
-                user32.AttachThreadInput(cur_tid, tgt_tid, False)
-    except Exception:
-        pass  # non-fatal — best-effort; window check in main loop catches real loss
-
-
-def _prevent_sleep_begin(log: logging.Logger) -> None:
-    """Prevent Windows sleep and screensaver while tests run."""
-    try:
-        ctypes.windll.kernel32.SetThreadExecutionState(
-            _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED | _ES_DISPLAY_REQUIRED
-        )
-        log.info("[power] Sleep and screensaver suppressed")
-    except Exception as exc:
-        log.warning("[power] Could not suppress sleep: %s", exc)
-
-
-def _prevent_sleep_end(log: logging.Logger) -> None:
-    """Restore default Windows sleep/screensaver behaviour."""
-    try:
-        ctypes.windll.kernel32.SetThreadExecutionState(_ES_CONTINUOUS)
-        log.info("[power] Sleep and screensaver restored")
-    except Exception:
-        pass  # non-fatal
 
 
 # ── Page result dataclass ──────────────────────────────────────────────────────
@@ -284,132 +134,39 @@ class PageResult:
                 + (f"  ({self.note})" if self.note else ""))
 
 
+# ── Config ─────────────────────────────────────────────────────────────────────
+
+@dataclasses.dataclass
+class SystematicConfig(_mt.Config):
+    """Extends monkey_test.Config with the two page-sweep-only knobs.
+
+    Every launch / connect / focus / screenshot / sleep-suppression field is
+    inherited unchanged, so MonkeyTester's __init__ and reused methods work
+    without modification.
+    """
+    pages: List[str] = dataclasses.field(default_factory=lambda: list(_ALL_PAGES))
+    pause: float = 0.35              # seconds between clicks
+    focus_interval: float = 5.0     # slower heartbeat than chaos (page sweep is calm)
+
+    def resolved_log_file(self) -> str:
+        if self.log_file:
+            return self.log_file
+        return str(Path(self.output_dir) / "systematic.log")
+
+
 # ── Tester class ───────────────────────────────────────────────────────────────
 
-class SystematicTester:
-    def __init__(self, cfg: "Config"):
-        self.cfg = cfg
-        Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
-        self.log = _setup_log(cfg.resolved_log_file())
-        self._proc: Optional[psutil.Process] = None
-        self._win = None
+class SystematicTester(_mt.MonkeyTester):
+    """Reuses MonkeyTester's launch/connect/attach/dialog-guard/focus-heartbeat
+    machinery unchanged; overrides only the run loop — a deterministic
+    page-by-page control sweep instead of random chaos iterations."""
+
+    def __init__(self, cfg: SystematicConfig):
+        super().__init__(cfg)
+        self.cfg: SystematicConfig = cfg
         self._results: List[PageResult] = []
-        self._stop = threading.Event()
 
-    def _focus_heartbeat(self) -> None:
-        """Background thread: re-asserts window focus every focus_interval seconds.
-
-        Windows blocks SetForegroundWindow from background processes after a while.
-        The AttachThreadInput trick in _force_foreground bypasses this restriction
-        so the app stays in the foreground even during long waits between pages.
-        """
-        while not self._stop.is_set():
-            self._stop.wait(self.cfg.focus_interval)
-            try:
-                if self._win is not None and self._win.exists():
-                    hwnd = getattr(self._win, "handle", 0) or 0
-                    if hwnd:
-                        _force_foreground(hwnd)
-                    else:
-                        self._win.set_focus()
-            except Exception:
-                pass  # non-fatal — main loop checks window liveness independently
-
-    # ── Launch & connect ──────────────────────────────────────────────────
-
-    def _launch_source(self) -> bool:
-        repo = Path(__file__).parent.parent
-        entry = repo / "app.py"
-        self.log.info("Launching: python %s", entry)
-        try:
-            raw = subprocess.Popen([sys.executable, str(entry)], cwd=str(repo))
-            self._proc = psutil.Process(raw.pid)
-            self.log.info("PID: %d", raw.pid)
-            return True
-        except Exception as exc:
-            self.log.error("Launch failed: %s", exc)
-            return False
-
-    def _connect(self) -> bool:
-        self.log.info("Waiting for main window (up to %ds)…", _CONNECT_TIMEOUT)
-        deadline = time.time() + _CONNECT_TIMEOUT
-        while time.time() < deadline:
-            try:
-                wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
-                main = next((w for w in wins if _is_main_window(w)), None)
-                if main:
-                    try:
-                        pid = main.element_info.process_id
-                        self._proc = psutil.Process(pid)
-                    except Exception:
-                        self.log.debug("PID lookup failed")
-                    self._win = main
-                    self.log.info("Connected: %r", main.window_text())
-                    return True
-            except Exception:
-                self.log.debug("UIA scan error; retrying")
-            time.sleep(_CONNECT_POLL)
-        self.log.error("Timed out waiting for window")
-        return False
-
-    def _attach(self) -> bool:
-        self.log.info("Attaching to running NetSentinel…")
-        try:
-            wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
-            main = next((w for w in wins if _is_main_window(w)), None)
-            if not main:
-                self.log.error("No NetSentinel main window found")
-                return False
-            try:
-                pid = main.element_info.process_id
-                self._proc = psutil.Process(pid)
-                self.log.info("PID: %d", pid)
-            except Exception:
-                self.log.debug("PID lookup failed")
-            self._win = main
-            self.log.info("Attached: %r", main.window_text())
-            return True
-        except Exception as exc:
-            self.log.error("Attach failed: %s", exc)
-            return False
-
-    def _alive(self) -> bool:
-        if self._proc is None:
-            return self._win_ok()
-        try:
-            return self._proc.is_running() and self._proc.status() != psutil.STATUS_ZOMBIE
-        except psutil.NoSuchProcess:
-            return False
-
-    def _win_ok(self) -> bool:
-        try:
-            if self._win and self._win.exists() and _is_main_window(self._win):
-                return True
-        except Exception:
-            self.log.debug("cached window reference stale")
-        try:
-            wins = Desktop(backend="uia").windows(title_re=_WINDOW_RE)
-            main = next((w for w in wins if _is_main_window(w)), None)
-            if main:
-                self._win = main
-                return True
-        except Exception:
-            self.log.debug("UIA desktop scan failed")
-        return False
-
-    def _dismiss_startup_overlays(self) -> None:
-        self.log.info("Checking for startup overlays…")
-        time.sleep(2.5)
-        for label in ["Get Started", "Close", "Skip", "Continue", "OK", "No Thanks", "Later"]:
-            try:
-                btn = self._win.child_window(title=label, control_type="Button")
-                if btn.exists(timeout=0.5):
-                    btn.click_input()
-                    time.sleep(0.4)
-                    self.log.info("Dismissed overlay: %r", label)
-                    break
-            except Exception:
-                continue
+    # ── Overlay handling ──────────────────────────────────────────────────
 
     def _dismiss_any_overlay(self) -> None:
         """Press ESC to close command palette / flyout / dialogs."""
@@ -418,52 +175,6 @@ class SystematicTester:
             time.sleep(0.15)
         except Exception:
             self.log.debug("ESC dismiss failed")
-
-    def _dismiss_blocking_dialogs(self) -> None:
-        """Close any Windows file-picker or modal error dialog that escaped the blacklist.
-
-        This is a backstop: the _BLACKLIST should prevent file dialogs from
-        ever opening.  This method catches anything that slips through so the
-        harness doesn't stall waiting for a dialog that will never auto-close.
-        """
-        _FILE_DLG_CANCEL = ["Cancel", "Avbryt", "Annullera", "Close"]
-        try:
-            for win in Desktop(backend="uia").windows():
-                try:
-                    title = (win.window_text() or "").lower()
-                    cls   = (win.element_info.class_name or "")
-                except Exception:
-                    continue
-                if not title or "netsentinel" in title:
-                    continue
-
-                # Windows common file dialog (Open / Save As) — class #32770.
-                is_file_dialog = cls == "#32770"
-
-                is_blocking = any(kw in title for kw in [
-                    "error", "exception", "unhandled", "crash",
-                    "warning", "confirm", "are you sure",
-                ])
-
-                if not (is_file_dialog or is_blocking):
-                    continue
-
-                kind = "file dialog" if is_file_dialog else "blocking dialog"
-                self.log.warning("Dismissing %s: %r (class=%r)", kind, title, cls)
-                btn_names = _FILE_DLG_CANCEL if is_file_dialog else ["OK", "Close", "Cancel", "No"]
-                for btn_name in btn_names:
-                    try:
-                        win.child_window(title=btn_name, control_type="Button").click()
-                        time.sleep(0.3)
-                        return
-                    except Exception:
-                        continue
-                try:
-                    win.type_keys("%{F4}")
-                except Exception:
-                    self.log.debug("Alt+F4 on %s failed", kind)
-        except Exception as exc:
-            self.log.debug("Dialog scan: %s", exc)
 
     # ── Navigation ────────────────────────────────────────────────────────
 
@@ -474,7 +185,7 @@ class SystematicTester:
         try:
             hwnd = getattr(self._win, "handle", 0) or 0
             if hwnd:
-                _force_foreground(hwnd)
+                _mt._force_foreground(hwnd)
             else:
                 self._win.set_focus()
             time.sleep(0.1)
@@ -502,7 +213,7 @@ class SystematicTester:
         try:
             hwnd = getattr(self._win, "handle", 0) or 0
             if hwnd:
-                _force_foreground(hwnd)
+                _mt._force_foreground(hwnd)
             else:
                 self._win.set_focus()
             time.sleep(0.5)
@@ -519,7 +230,7 @@ class SystematicTester:
         result = []
         for ctrl in all_ctrl:
             try:
-                ctype = _safe_type(ctrl)
+                ctype = _mt._safe_type(ctrl)
                 if ctype not in _SUPPORTED_TYPES:
                     continue
                 try:
@@ -532,9 +243,9 @@ class SystematicTester:
                         continue
                 except Exception:
                     self.log.debug("is_visible() failed")
-                name = _safe_name(ctrl)
-                auto_id = _safe_id(ctrl)
-                if _is_blacklisted(name, auto_id):
+                name = _mt._safe_name(ctrl)
+                auto_id = _mt._safe_id(ctrl)
+                if _mt._is_blacklisted(name, auto_id):
                     continue
                 # Bounds guard: must be within the main window
                 if win_rect is not None:
@@ -564,7 +275,7 @@ class SystematicTester:
 
     def _click_control(self, ctrl) -> Tuple[str, str]:
         """Interact with a control.  Returns (action, result)."""
-        ctype = _safe_type(ctrl)
+        ctype = _mt._safe_type(ctrl)
         try:
             if ctype in ("Button", "SplitButton"):
                 ctrl.click_input()
@@ -604,9 +315,9 @@ class SystematicTester:
             else:
                 ctrl.click_input()
                 return "click_fallback", "ok"
-        except (ElementNotEnabled, ElementNotVisible):
+        except (_mt.ElementNotEnabled, _mt.ElementNotVisible):
             return "skip", "not_interactable"
-        except ElementNotFoundError:
+        except _mt.ElementNotFoundError:
             return "skip", "gone"
         except Exception as exc:
             return "error", f"{exc.__class__.__name__}:{str(exc)[:60]}"
@@ -648,9 +359,9 @@ class SystematicTester:
                 res.note = "crashed mid-page"
                 break
 
-            name = _safe_name(ctrl)
-            ctype = _safe_type(ctrl)
-            auto_id = _safe_id(ctrl)
+            name = _mt._safe_name(ctrl)
+            ctype = _mt._safe_type(ctrl)
+            auto_id = _mt._safe_id(ctrl)
             action, result = self._click_control(ctrl)
 
             if result == "ok":
@@ -680,7 +391,7 @@ class SystematicTester:
         self.log.info("pages=%d  pause=%.2fs  output=%s",
                       len(self.cfg.pages), self.cfg.pause, self.cfg.output_dir)
 
-        # Launch or attach
+        # Launch or attach — inherited from MonkeyTester.
         if self.cfg.connect_only:
             if not self._attach():
                 return 2
@@ -695,7 +406,7 @@ class SystematicTester:
 
         # Suppress sleep and start focus heartbeat
         if self.cfg.prevent_sleep:
-            _prevent_sleep_begin(self.log)
+            _mt._prevent_sleep_begin(self.log)
         self._stop.clear()
         hb = threading.Thread(target=self._focus_heartbeat, daemon=True, name="sys_focus")
         hb.start()
@@ -713,8 +424,8 @@ class SystematicTester:
 
                 if res.crashed:
                     if self.cfg.screenshots:
-                        _screenshot(f"crash_{page.replace(' ', '_')}", self.log,
-                                    self.cfg.output_dir)
+                        _mt._screenshot(f"crash_{page.replace(' ', '_')}", self.log,
+                                        self.cfg.output_dir)
                     crashed = True
                     break
 
@@ -723,7 +434,7 @@ class SystematicTester:
         finally:
             self._stop.set()
             if self.cfg.prevent_sleep:
-                _prevent_sleep_end(self.log)
+                _mt._prevent_sleep_end(self.log)
 
         # Print coverage report
         sep = "=" * 70
@@ -796,24 +507,7 @@ class SystematicTester:
         return 1 if crashed else 0
 
 
-# ── Config & CLI ───────────────────────────────────────────────────────────────
-
-@dataclasses.dataclass
-class Config:
-    connect_only: bool = False
-    pages: List[str] = dataclasses.field(default_factory=lambda: list(_ALL_PAGES))
-    pause: float = 0.35
-    output_dir: str = "test_output"
-    log_file: str = ""               # empty = auto-derive from output_dir
-    screenshots: bool = True
-    prevent_sleep: bool = True       # suppress Windows sleep/screensaver
-    focus_interval: float = 5.0     # seconds between focus-heartbeat pulses
-
-    def resolved_log_file(self) -> str:
-        if self.log_file:
-            return self.log_file
-        return str(Path(self.output_dir) / "systematic.log")
-
+# ── CLI ─────────────────────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -850,7 +544,8 @@ def main() -> None:
 
     pages = args.pages if args.pages else list(_ALL_PAGES)
 
-    cfg = Config(
+    cfg = SystematicConfig(
+        use_source=args.source,
         connect_only=args.connect,
         pages=pages,
         pause=args.pause,

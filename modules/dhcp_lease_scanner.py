@@ -31,6 +31,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
+from modules.utils_net import get_arp_snapshot
+
 
 @dataclass
 class DhcpLease:
@@ -122,9 +124,6 @@ def _windows_arp_leases() -> List[DhcpLease]:
     leases: List[DhcpLease] = []
     extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
     try:
-        arp_out = subprocess.check_output(
-            ["arp", "-a"], text=True, timeout=8, **extra
-        )
         server   = ""
         expires  = 0
         # Try to get DHCP server + lease expiry from ipconfig /all
@@ -153,22 +152,12 @@ def _windows_arp_leases() -> List[DhcpLease]:
             pass  # non-fatal
 
         # Parse ARP table
-        for line in arp_out.splitlines():
-            parts = line.split()
-            if len(parts) >= 2:
-                ip_m  = re.match(r"(\d+\.\d+\.\d+\.\d+)", parts[0])
-                mac_m = re.search(
-                    r"([\da-f]{2}[-:][\da-f]{2}[-:][\da-f]{2}"
-                    r"[-:][\da-f]{2}[-:][\da-f]{2}[-:][\da-f]{2})",
-                    " ".join(parts[1:]), re.I,
-                )
-                if ip_m and mac_m:
-                    mac = mac_m.group(1).replace("-", ":").lower()
-                    leases.append(DhcpLease(
-                        mac=mac, ip=ip_m.group(1),
-                        expires=expires, server=server,
-                        source="ARP cache (Windows)",
-                    ))
+        for ip, mac in get_arp_snapshot().items():
+            leases.append(DhcpLease(
+                mac=mac, ip=ip,
+                expires=expires, server=server,
+                source="ARP cache (Windows)",
+            ))
     except Exception:
         pass  # non-fatal
     return leases

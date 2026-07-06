@@ -5,7 +5,7 @@ import pytest
 
 
 def test_import():
-    import modules.network_diagnostics  # noqa: F401
+    from modules import network_diagnostics  # noqa: F401
 
 
 def test_ping_result_dataclass():

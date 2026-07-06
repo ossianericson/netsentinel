@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 
 from modules.utils import is_npcap_available
 from ui.live_graph import LiveGraphWidget
+from ui.nav.labels import NavLabel as L
 from ui.npcap_banner import NpcapMissingBanner
 from ui.styles import (
     alpha,
@@ -138,7 +139,7 @@ class _ScanTabsMixin:
             f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
         )
         _int_cfg_btn.clicked.connect(
-            lambda: self._nav_rail_go_to("Hardware")
+            lambda: self._nav_rail_go_to(L.HARDWARE)
         )
         _ib_lay.addWidget(_int_cfg_btn)
 
@@ -265,7 +266,7 @@ class _ScanTabsMixin:
             ip = ip_item.text().strip()
             if ip and hasattr(self, "_syn_host"):
                 self._syn_host.setText(ip)
-                self._nav_rail_go_to("Port Scan (TCP)")
+                self._nav_rail_go_to(L.PORT_SCAN_TCP)
 
     def _m1_set_chip(self, key: str) -> None:
         self._m1_chip = key
@@ -340,9 +341,9 @@ class _ScanTabsMixin:
             self._show_ip_on_geo_map(ip)
         elif chosen == act_abuseipdb:
             self._threat_intel_page.check_ip(ip)
-            self._nav_rail_go_to("Threat Intel")
+            self._nav_rail_go_to(L.THREAT_INTEL)
         elif act_cve and chosen == act_cve:
-            self._nav_rail_go_to("CVE Tracker")
+            self._nav_rail_go_to(L.CVE_TRACKER)
         elif chosen == act_wol:
             self._send_wol(mac)
         elif chosen == act_fix:

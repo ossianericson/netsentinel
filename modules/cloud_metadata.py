@@ -24,11 +24,12 @@ connection errors gracefully.
 from __future__ import annotations
 
 import json
-import socket
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+from modules.utils_net import tcp_probe
 
 _IMDS_IP   = "169.254.169.254"
 _IMDS_TIMEOUT = 1.0   # seconds — fast fail if not in cloud
@@ -87,11 +88,8 @@ def _http_put(url: str, headers: dict = None, timeout: float = _IMDS_TIMEOUT) ->
 
 def _tcp_connect(ip: str, port: int, timeout: float = 0.8) -> bool:
     """Return True if a TCP connection to ip:port succeeds within timeout."""
-    try:
-        with socket.create_connection((ip, port), timeout=timeout):
-            return True
-    except Exception:
-        return False
+    ok, _, _ = tcp_probe(ip, port, timeout)
+    return ok
 
 
 # ── Local IMDS probe ───────────────────────────────────────────────────────────

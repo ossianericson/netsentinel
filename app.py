@@ -1,4 +1,4 @@
-﻿"""
+"""
 NetSentinel — entry point.
 
 Network Security Scanner & Long-Term Connectivity Monitor.
@@ -121,6 +121,7 @@ def _smoke_test() -> None:
         "modules.threat_intel",
         "modules.cert_monitor",
         "modules.availability_monitor",
+        "workers.base_worker",
         "workers.scan_worker",
         "workers.speed_test_worker",
         "workers.availability_worker",
@@ -271,7 +272,7 @@ def _fatal(title: str, message: str) -> None:
     """Show an error in a way that is visible even when --windowed hides the console."""
     try:
         from PyQt6.QtWidgets import QApplication, QMessageBox
-        _app = QApplication.instance() or QApplication(sys.argv)
+        QApplication.instance() or QApplication(sys.argv)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
         msg.setWindowTitle(title)
@@ -884,7 +885,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.24")
+    app.setApplicationVersion("2.1.25")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1026,7 +1027,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.24")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.25")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)

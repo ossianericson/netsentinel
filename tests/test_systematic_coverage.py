@@ -67,7 +67,10 @@ def test_systematic_all_pages_matches_builder():
     mod = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(mod)
-    except SystemExit as e:
+    except (SystemExit, ImportError) as e:
+        # systematic_test now imports monkey_test (which raises ImportError when
+        # pywinauto/psutil are absent, e.g. in CI); older standalone versions
+        # called sys.exit (SystemExit). Skip in either case.
         pytest.skip(f"systematic_test deps not installed: {e}")
     except RuntimeError as e:
         pytest.fail(str(e))

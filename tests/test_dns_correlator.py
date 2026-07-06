@@ -5,7 +5,7 @@ from modules.dns_correlator import (
 
 
 def test_import():
-    import modules.dns_correlator as m
+    from modules import dns_correlator as m
     assert hasattr(m, "scan")
     assert hasattr(m, "PingPoint")
     assert hasattr(m, "CorrelatorResult")

@@ -58,7 +58,7 @@ def test_config_defaults():
     assert cfg.scroll_prob == 0.20
     assert cfg.right_click_prob == 0.08
     assert cfg.double_click_prob == 0.08
-    assert cfg.header_bias == 0.25
+    assert cfg.header_bias == 0.15
     assert cfg.start_page == "Home"
     assert cfg.page_switch_every == 12
 

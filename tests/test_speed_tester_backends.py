@@ -2,7 +2,7 @@
 
 
 def test_import():
-    import modules.speed_tester_backends as m
+    from modules import speed_tester_backends as m
     assert hasattr(m, "SpeedServer")
     assert hasattr(m, "SpeedTestResult")
     assert hasattr(m, "_find_ookla_cli")

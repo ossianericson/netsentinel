@@ -1,4 +1,4 @@
-﻿"""
+"""
 topology_cytoscape.py — Cytoscape.js element and HTML builder for the Network Map page.
 
 Converts the unified topology data model (devices, TopologyEdges, TopologyDiff,

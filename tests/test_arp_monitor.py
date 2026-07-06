@@ -3,7 +3,7 @@ from modules.arp_monitor import SCAPY_AVAILABLE, SpoofEvent, ARPScanResult, _bui
 
 
 def test_import():
-    import modules.arp_monitor as m
+    from modules import arp_monitor as m
     assert hasattr(m, "SCAPY_AVAILABLE")
     assert hasattr(m, "SpoofEvent")
     assert hasattr(m, "ARPScanResult")

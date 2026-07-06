@@ -21,13 +21,11 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
     QSplitter,
     QStackedWidget,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -38,11 +36,11 @@ from ui.widgets.empty_state_card import EmptyStateCard
 from modules.dns_zone_scanner import DnsZoneResult
 from workers.dns_zone_worker import DnsZoneWorker
 from ui.widgets.context_menu import install_copy_menu
+from ui.tabs_helpers import _table as _make_table
 from ui.styles import (
     ACCENT,
     ACCENT_DARK,
     AMBER,
-    BG_ALT_ROW,
     BG_CARD,
     BG_DARK,
     BG_HOVER,
@@ -52,39 +50,13 @@ from ui.styles import (
     GREEN,
     INPUT_PLACEHOLDER,
     PROGRESS_TRACK,
-    TABLE_SEL,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
-    TH_BG,
-    TH_TEXT,
     WHITE,
 )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _make_table(headers: list[str]) -> QTableWidget:
-    t = QTableWidget(0, len(headers))
-    t.setHorizontalHeaderLabels(headers)
-    t.horizontalHeader().setStretchLastSection(True)
-    # Interactive, not ResizeToContents (RULE-PERF1) — see threat_intel_page.py
-    t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-    t.verticalHeader().setVisible(False)
-    t.verticalHeader().setDefaultSectionSize(24)
-    t.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-    t.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-    t.setAlternatingRowColors(True)
-    t.setShowGrid(False)
-    t.setStyleSheet(
-        f"QTableWidget {{ background:{BG_CARD}; border:none; font-size:11px;"
-        f" color:{TEXT_PRIMARY}; alternate-background-color:{BG_ALT_ROW}; }}"
-        f"QHeaderView::section {{ background:{TH_BG}; color:{TH_TEXT}; font-size:11px;"
-        f" font-weight:bold; padding:4px 8px; border:none; }}"
-        f"QTableWidget::item:hover {{ background:{BG_HOVER}; }}"
-        f"QTableWidget::item:selected {{ background:{TABLE_SEL}; color:{TEXT_PRIMARY}; }}"
-    )
-    return t
-
 
 def _cell(text: str, align=Qt.AlignmentFlag.AlignLeft) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
@@ -333,9 +305,10 @@ class DnsZonePage(QWidget):
 
         def _rec_lookup_threat():
             from PyQt6.QtWidgets import QApplication as _QA
+            from ui.nav.labels import NavLabel as _L
             win = _QA.instance().activeWindow()
             if hasattr(win, "_nav_rail_go_to"):
-                win._nav_rail_go_to("Threat Intel")
+                win._nav_rail_go_to(_L.THREAT_INTEL)
 
         install_copy_menu(self._rec_table, [
             ("separator",              None),

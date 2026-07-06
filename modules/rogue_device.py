@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
+from modules.utils_net import get_arp_snapshot, parallel_map
+
 try:
     from modules.mac_registry import lookup as _mac_registry_lookup
 except Exception:
@@ -86,42 +88,7 @@ def _load_offenders(path: Path) -> list:
 
 def _get_arp_table() -> List[tuple]:
     """Return (ip, mac) pairs from the system ARP cache."""
-    system = platform.system()
-    pairs: List[tuple] = []
-    extra = {}
-    if system == "Windows":
-        extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
-
-    try:
-        if system == "Windows":
-            raw = subprocess.check_output(["arp", "-a"], text=True, timeout=10, **extra)
-            for line in raw.splitlines():
-                m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+([\da-fA-F-]{17})", line)
-                if m:
-                    ip = m.group(1)
-                    mac = m.group(2).replace("-", ":").lower()
-                    if (mac != "ff:ff:ff:ff:ff:ff"
-                            and not ip.startswith("224.")
-                            and not ip.endswith(".255")):
-                        pairs.append((ip, mac))
-        else:
-            try:
-                raw = subprocess.check_output(["arp", "-n"], text=True, timeout=10)
-            except subprocess.CalledProcessError:
-                raw = subprocess.check_output(["arp", "-a"], text=True, timeout=10)
-            for line in raw.splitlines():
-                m = re.search(r"(\d+\.\d+\.\d+\.\d+)\s+\S+\s+([\da-fA-F:]{17})", line)
-                if not m:
-                    m = re.search(r"(\d+\.\d+\.\d+\.\d+).*?([\da-fA-F:]{17})", line)
-                if m:
-                    ip = m.group(1)
-                    mac = m.group(2).lower()
-                    if (mac != "ff:ff:ff:ff:ff:ff"
-                            and not ip.startswith("224.")
-                            and not ip.endswith(".255")):
-                        pairs.append((ip, mac))
-    except Exception:
-        pass  # non-fatal
+    pairs: List[tuple] = list(get_arp_snapshot().items())
     return pairs
 
 
@@ -278,10 +245,9 @@ def scan(offenders_path: Path) -> dict:
             use_netbios=True, use_mdns=True, use_snmp=False, use_dhcp=True,
         )
     else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
-            hostname_futures = {ip: ex.submit(_resolve_hostname, ip) for ip, _ in _resolve_entries}
-        resolved = {ip: type("_N", (), {"hostname": fut.result(), "vendor": "", "model": "", "device_type": ""})()
-                    for ip, fut in hostname_futures.items()}
+        hostnames = parallel_map(lambda t: _resolve_hostname(t[0]), _resolve_entries, workers=20)
+        resolved = {ip: type("_N", (), {"hostname": h, "vendor": "", "model": "", "device_type": ""})()
+                    for (ip, _), h in zip(_resolve_entries, hostnames)}
 
     for ip, mac in arp_entries:
         if ip in proxy_arp_ips:

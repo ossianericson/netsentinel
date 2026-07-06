@@ -25,43 +25,41 @@ from __future__ import annotations
 import dataclasses
 from typing import Optional
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import pyqtSignal
+
+from workers.base_worker import BaseWorker
 
 
-class FetchServersWorker(QThread):
+class FetchServersWorker(BaseWorker):
     """Fetches nearby Ookla servers and their latencies."""
 
     servers_ready  = pyqtSignal(list)   # list[dict] — serialised SpeedServer
     status_changed = pyqtSignal(str)    # progress message for the UI
-    error          = pyqtSignal(str)
 
     def __init__(self, limit: int = 20, parent=None):
         super().__init__(parent)
         self._limit = limit
 
-    def run(self) -> None:
-        try:
-            from modules.speed_tester import fetch_servers
-            servers = fetch_servers(
-                self._limit,
-                on_status=lambda msg: self.status_changed.emit(msg),
-            )
-            self.servers_ready.emit([
-                {
-                    "id":         s.id,
-                    "name":       s.name,
-                    "city":       s.city,
-                    "country":    s.country,
-                    "host":       s.host,
-                    "latency_ms": s.latency_ms,
-                }
-                for s in servers
-            ])
-        except Exception as exc:
-            self.error.emit(str(exc))
+    def work(self) -> None:
+        from modules.speed_tester import fetch_servers
+        servers = fetch_servers(
+            self._limit,
+            on_status=lambda msg: self.status_changed.emit(msg),
+        )
+        self.servers_ready.emit([
+            {
+                "id":         s.id,
+                "name":       s.name,
+                "city":       s.city,
+                "country":    s.country,
+                "host":       s.host,
+                "latency_ms": s.latency_ms,
+            }
+            for s in servers
+        ])
 
 
-class SpeedTestWorker(QThread):
+class SpeedTestWorker(BaseWorker):
     """Runs a full speed test against the chosen server (or auto-best)."""
 
     # (phase, message)  phase ∈ {"connecting", "ping", "download", "upload", "done"}
@@ -69,7 +67,6 @@ class SpeedTestWorker(QThread):
     # Live throughput sample: (mbps, phase) — emitted during download and upload
     speed_sample  = pyqtSignal(float, str)
     result_ready  = pyqtSignal(object)   # SpeedTestResult
-    error         = pyqtSignal(str)
 
     def __init__(
         self,
@@ -85,7 +82,7 @@ class SpeedTestWorker(QThread):
         self._zte_password   = zte_password
         self._modem_snapshot = modem_snapshot
 
-    def run(self) -> None:
+    def work(self) -> None:
         # ── 1. Capture modem signal snapshot before the test stresses the link ─
         modem_snapshot: Optional[dict] = None
 
@@ -107,15 +104,12 @@ class SpeedTestWorker(QThread):
             # Plugin path: use the last known snapshot from hw_state
             modem_snapshot = self._modem_snapshot
 
-        # ── 2. Run the speed test ─────────────────────────────────────────────
-        try:
-            from modules.speed_tester import run_test
-            result = run_test(
-                server_id=self._server_id,
-                on_progress=lambda phase, msg: self.phase_changed.emit(phase, msg),
-                on_sample=lambda mbps, phase: self.speed_sample.emit(mbps, phase),
-            )
-            result.modem_signal = modem_snapshot
-            self.result_ready.emit(result)
-        except Exception as exc:
-            self.error.emit(str(exc))
+        # ── 2. Run the speed test (errors → BaseWorker.run() → error signal) ───
+        from modules.speed_tester import run_test
+        result = run_test(
+            server_id=self._server_id,
+            on_progress=lambda phase, msg: self.phase_changed.emit(phase, msg),
+            on_sample=lambda mbps, phase: self.speed_sample.emit(mbps, phase),
+        )
+        result.modem_signal = modem_snapshot
+        self.result_ready.emit(result)

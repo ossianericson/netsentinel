@@ -13,14 +13,13 @@ Detects:
 Emits data points as they arrive so the UI can draw a live graph.
 """
 
-import platform
-import re
 import socket
-import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
+
+from modules.utils_net import icmp_ping
 
 PING_TARGETS = ["1.1.1.1", "8.8.8.8"]  # gateway added dynamically
 DNS_DOMAINS = [
@@ -71,30 +70,8 @@ class CorrelatorResult:
 
 def _ping_once(target: str, timeout_sec: int = 2) -> Optional[float]:
     """Return RTT in ms, or None on timeout/failure."""
-    system = platform.system()
-    extra: dict = {}
-    if system == "Windows":
-        cmd = ["ping", "-n", "1", "-w", str(timeout_sec * 1000), target]
-        extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
-    elif system == "Darwin":
-        cmd = ["ping", "-c", "1", "-W", str(timeout_sec * 1000), target]
-    else:
-        cmd = ["ping", "-c", "1", "-W", str(timeout_sec), target]
-    try:
-        out = subprocess.check_output(
-            cmd, text=True, timeout=timeout_sec + 1, stderr=subprocess.DEVNULL, **extra
-        )
-        # Try to extract RTT value
-        m = re.search(r"time[<=]([\d.]+)\s*ms", out, re.IGNORECASE)
-        if m:
-            return float(m.group(1))
-        # Windows: "Average = Xms"
-        m = re.search(r"Average\s*=\s*([\d.]+)ms", out, re.IGNORECASE)
-        if m:
-            return float(m.group(1))
-        return 1.0  # Succeeded but couldn't parse RTT
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-        return None
+    rtt = icmp_ping(target, timeout=float(timeout_sec))
+    return rtt if rtt >= 0 else None
 
 
 def _dns_resolve(domain: str) -> Optional[float]:

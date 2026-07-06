@@ -29,6 +29,7 @@ from ui.styles import (
     GREEN, RED,
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
 )
+from ui.nav.labels import NavLabel as L
 from ui.tabs_helpers import _make_card, _table
 
 
@@ -453,14 +454,14 @@ class _LoggerTabMixin:
         self._pending_live_scenario = None
         if scenario is None:
             return
-        self._nav_rail_go_to("Lab Mode")
+        self._nav_rail_go_to(L.LAB_MODE)
         if hasattr(self, "_lab_mode_page"):
             self._lab_mode_page.inject_live_challenge(scenario)
 
     @pyqtSlot(object)
     def _on_animate_log_entry(self, entry) -> None:
         """Navigate to Protocol Visualizer and pre-load the protocol for this log entry."""
-        self._nav_rail_go_to("Protocol Visualizer")
+        self._nav_rail_go_to(L.PROTOCOL_VISUALIZER)
         if hasattr(self, "_protocol_viz_page"):
             self._protocol_viz_page.load_from_event(entry)
         from PyQt6.QtGui import QColor

@@ -27,7 +27,7 @@ def store(tmp_path):
 
 class TestCheckTcp:
     def test_returns_up_true_rtt_on_success(self):
-        with patch("modules.service_monitor.socket.create_connection") as mock_conn:
+        with patch("modules.utils_net.socket.create_connection") as mock_conn:
             mock_conn.return_value.__enter__ = lambda s: s
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
             up, rtt, error = check_tcp("example.com", 80)
@@ -37,7 +37,7 @@ class TestCheckTcp:
         assert error == ""
 
     def test_returns_down_on_connection_refused(self):
-        with patch("modules.service_monitor.socket.create_connection",
+        with patch("modules.utils_net.socket.create_connection",
                    side_effect=ConnectionRefusedError("refused")):
             up, rtt, error = check_tcp("localhost", 9)
         assert up is False
@@ -45,14 +45,14 @@ class TestCheckTcp:
         assert "refused" in error
 
     def test_returns_down_on_timeout(self):
-        with patch("modules.service_monitor.socket.create_connection",
+        with patch("modules.utils_net.socket.create_connection",
                    side_effect=TimeoutError("timed out")):
             up, rtt, error = check_tcp("10.0.0.254", 80, timeout=0.01)
         assert up is False
         assert rtt is None
 
     def test_returns_down_on_oserror(self):
-        with patch("modules.service_monitor.socket.create_connection",
+        with patch("modules.utils_net.socket.create_connection",
                    side_effect=OSError("network unreachable")):
             up, rtt, error = check_tcp("10.0.0.254", 443)
         assert up is False

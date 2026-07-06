@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 
 def test_import():
-    import modules.hw_detect  # noqa: F401
+    from modules import hw_detect  # noqa: F401
 
 
 def test_already_installed_false():
@@ -29,8 +29,8 @@ def test_already_installed_finds_match():
 def test_already_installed_no_ui_import():
     """already_installed() must not import from ui/ or PyQt6."""
     import inspect
-    import modules.hw_detect
-    src = inspect.getsource(modules.hw_detect.already_installed)
+    from modules import hw_detect
+    src = inspect.getsource(hw_detect.already_installed)
     assert "PyQt6" not in src
     assert "ui.pages" not in src
 

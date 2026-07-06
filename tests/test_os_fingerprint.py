@@ -3,7 +3,7 @@ from modules.os_fingerprint import OSGuess, _ttl_to_os, _banner_to_os, _window_t
 
 
 def test_import():
-    import modules.os_fingerprint as m
+    from modules import os_fingerprint as m
     assert hasattr(m, "fingerprint_host")
     assert hasattr(m, "OSGuess")
     assert hasattr(m, "_ttl_to_os")

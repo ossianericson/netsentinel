@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 
 def test_import():
-    import modules.diagnostic_card  # noqa: F401
+    from modules import diagnostic_card  # noqa: F401
 
 
 def test_card_data_dataclass():
