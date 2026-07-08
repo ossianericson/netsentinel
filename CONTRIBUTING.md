@@ -84,6 +84,8 @@ python cli.py scan         # Headless
 python -m pytest tests/ -v --tb=short   # Run all tests
 ```
 
+**UI chaos testing (Windows):** to shake out crashes and memory leaks by driving the real app through thousands of random interactions, see the [Chaos / Monkey Testing guide](docs/chaos-testing.md) — one command (`.\test.ps1`) produces a paste-ready `AI_REPORT.md`.
+
 **Platform setup:**
 
 - **Windows:** install [Npcap](https://npcap.com) for packet-capture features (STP, storm detection, ARP monitor, DHCP detector). Run as Administrator for those tabs.

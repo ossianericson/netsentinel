@@ -3,13 +3,25 @@ generated_at: '2026-04-30T00:00:00.000000+00:00'
 dependencies: []
 local_deployed_files:
 - .claude/rules/architecture.md
+- .claude/rules/changelog.md
 - .claude/rules/development-rules.md
 - .claude/rules/project-vision.md
+- .claude/rules/session-workflow.md
+- .claude/rules/tests.md
 - .github/instructions/architecture.instructions.md
+- .github/instructions/changelog.instructions.md
 - .github/instructions/project-vision.instructions.md
+- .github/instructions/session-workflow.instructions.md
+- .github/instructions/tests.instructions.md
 local_deployed_file_hashes:
   .claude/rules/architecture.md: sha256:276f43556786a26c9241540f142928389e7550c925026f163782b7385e9b8db7
-  .claude/rules/development-rules.md: sha256:f3cf9541309d9236153655d8fe797af9e44da72f604c77b1066b5351aeab032f
-  .claude/rules/project-vision.md: sha256:2236d89b9d300b2e8e6bf005aa4bcd464fad0d5410e826e9d9e4b9a666351f56
+  .claude/rules/changelog.md: sha256:a3223ba6da72d0faa0a43b7cd898362b985776f534fac0a83ba96e30dc71c496
+  .claude/rules/development-rules.md: sha256:a028848cbfe175b5e5e1d89c764304a1db2ab7328f9ed45856768679ffff4bf0
+  .claude/rules/project-vision.md: sha256:9c17605823863507d379f4b552d1ced6f4b79df41888748668831373f660ef9b
+  .claude/rules/session-workflow.md: sha256:b767fc662ac6ae516f8e0aae3b9a021fb1c2c8cf67531ca3256eabe7c76e1922
+  .claude/rules/tests.md: sha256:25d829b1e177cbac92318634ea4e8ad91b66451e65a63f683a30b388044f9090
   .github/instructions/architecture.instructions.md: sha256:dac4c8117dca0f454e19496ab47de22fb22af35b0f515832100f26f32d2e8dc6
-  .github/instructions/project-vision.instructions.md: sha256:1c6775f329f2047673edf9b07b578a2b00b2f87496ef5626dfd8cc9b2caa15b5
+  .github/instructions/changelog.instructions.md: sha256:99467e7d716c7c9e1a77c02fd93c0747a5d2e3dd5169a4d8c98260dea45439a9
+  .github/instructions/project-vision.instructions.md: sha256:9ffbef96f519b7cdf535f383b0cb4bf78e4983e7c893976ba6437b5f5aca7a07
+  .github/instructions/session-workflow.instructions.md: sha256:0c6142533f77d398d5a74af666ed5456754d67474a4774c64f1d43e7d3e7e83b
+  .github/instructions/tests.instructions.md: sha256:3e3b91c001932a6ce259d4a316d8b9b4fa706a79d2b3aa8899e7361d70cd8a66

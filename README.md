@@ -199,16 +199,17 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.25 (current)
+### v2.1.26 (current)
 
-Internal maintainability release — an 8-part refactor of the codebase's internal plumbing (a tech-debt backlog from a commit-history audit). No features changed, no settings moved, and the app behaves exactly as before; every change shipped with a test that keeps the cleanup from regressing.
+Internal tooling and dev-process release — no user-facing feature changes.
 
-- Navigation now routes through a single typed label registry, so renaming a page can no longer create a silent dead link
-- Background scan workers share one base class, and network probes (TCP, ARP, ping, parallel fan-out) share one set of primitives — cancel, error handling, and timeouts now behave the same everywhere
-- Every data table and every common styled label/badge is drawn from one shared implementation, so behaviour and appearance are consistent on every page
-- A new import-hygiene gate catches two CodeQL alert classes (`py/import-and-import-from`, `py/cyclic-import`) locally and in CI, ending a recurring post-push cleanup cycle
+- Monkey-test tooling consolidated into one budget-driven runner (`test.ps1`), replacing 7 redundant scripts, plus a new long-haul memory-soak mode for multi-hour leak hunting
+- Chaos-test runs no longer die if the machine sleeps mid-run — the orchestrator now holds the system awake for the entire run, not just each phase
+- The `?` page-help popover no longer gets stuck open after navigating to another page
+- APM instruction pipeline repaired so plan-first/stability rules actually compile into the generated rule files
+- Added a design spec for a headless Raspberry Pi remote sensor logger (no code yet — spec only)
 
-### v2.1.24
+### v2.1.25
 
 **Added**
 - Per-device "Alert me if this device goes down" opt-in toggle, right-click any device in Devices/Inventory

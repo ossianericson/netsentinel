@@ -4,6 +4,26 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.26
+
+Internal tooling and dev-process release — consolidates monkey-test tooling into one budget-driven runner, closes a sleep/screensaver gap that could kill unattended chaos runs, repairs the APM instruction-compilation pipeline, and fixes a page-help popover that could get stuck open. No user-facing feature changes.
+
+**Added**
+- `logger/SPEC.md`, `logger/PLAN.md` — normative spec and phased build plan for a headless Raspberry Pi remote sensor logger feeding NetSentinel over MQTT (design-only, no code yet)
+- `docs/chaos-testing.md` — documents the consolidated monkey-test workflow, linked from `docs/index.md` and `CONTRIBUTING.md`
+- Memory-soak mode in `tools/run_all_monkey_tests.ps1` (`test.ps1 <hours> -Soak`) — after the first coverage cycle, runs one long-lived mild/moderate/wild process with `--tracemalloc` instead of restarting every few minutes, so slow memory leaks compound instead of resetting each cycle; `AI_REPORT.md` gains a Peak RSS column and embedded first/last tracemalloc snapshots
+
+**Changed**
+- Replaced 7 redundant `run_tests_*.bat`/smoke-test scripts with one budget-driven runner (`test.ps1 [1h|20h|blank]`) that cycles a coverage sweep plus 5 weighted chaos phases with rotating seeds and rewrites `AI_REPORT.md` after every phase
+- Re-audited `docs/internal/future-features.md` against the current tree — moved 4 shipped items into a "Recently shipped" section, added Status notes to 10 partial items, corrected 2 factual errors
+
+**Fixed**
+- Page-help popover (`?` button) no longer gets stuck open after navigating to another page — `PageHeaderBar.hideEvent()` now auto-dismisses it; removed the unused "What can I do here?" tooltip-overlay feature (`ui/widgets/help_mode_overlay.py`)
+- Chaos-test orchestrator no longer stalls indefinitely if the machine sleeps mid-run — `tools/test_setup.ps1` now holds `SetThreadExecutionState` for the entire run instead of relying on per-phase, admin-only `powercfg` calls that left every inter-phase gap unprotected
+- APM governance pipeline: `netsentinel-apm.md` had the wrong filename suffix so its plan-first/stability rules silently produced zero generated output; restored as `session-workflow.instructions.md` and migrated 3 orphaned rule files (changelog, tests, pr-description) into the compiled pipeline
+
+---
+
 ### v2.1.25
 
 Internal maintainability release — an 8-part tech-debt backlog (P1–P8) drawn from a commit-history audit, closing the recurring bug classes the previous 90 commits kept re-fixing. No user-facing features or settings changed and behaviour is unchanged; all 4,875 tests pass (8 skipped). Each sprint shipped with its own ratchet test so the debt cannot silently regrow.

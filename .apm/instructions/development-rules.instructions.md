@@ -65,57 +65,34 @@ def refresh_theme(self):
 
 ### RULE-LINT5 (blocking): No CodeQL py/import-and-import-from or py/cyclic-import anywhere in the repo
 
-Ruff's F401/F811/F841 selection (RULE-LINT1) does not catch either of these two
-CodeQL alert classes (verified: neither has a rule in `ruff rule --all`, nor
-does a `ruff check --select=ALL` probe flag them) — they recurred across
-several `fix: resolve N CodeQL alerts` commits before this gate existed.
-Enforced by `tools/check_import_lint.py` (plain `ast` parsing, no CodeQL
-dependency) via `tests/test_import_lint.py` and the RULE-CI1 pre-push hook.
+Ruff's F401/F811/F841 (RULE-LINT1) does not catch either alert class. Enforced by
+`tools/check_import_lint.py` (plain `ast`, no CodeQL dep) via `tests/test_import_lint.py`
+and the RULE-CI1 pre-push hook.
 
-- `py/import-and-import-from` — RULE-LINT4 is the specific ui/styles case;
-  this is the general form for any module imported both as `import X` and
-  `from X import Y` in the same file.
-- `py/cyclic-import` — two or more first-party `modules/`, `ui/`, or
-  `workers/` modules whose *module-level* imports mutually depend on each
-  other (deferred imports inside function bodies or `if TYPE_CHECKING:`
+- `py/import-and-import-from` — any module imported both as `import X` and `from X import Y`
+  in the same file (RULE-LINT4 is the specific ui/styles case).
+- `py/cyclic-import` — two or more first-party `modules/`/`ui/`/`workers/` modules whose
+  *module-level* imports mutually depend on each other (deferred/`TYPE_CHECKING` imports
   don't count — they can't cause a load-time cycle).
 
-Pre-existing debt at the time this gate was added is grandfathered in
-`BASELINE_IMPORT_AND_IMPORT_FROM` in `tools/check_import_lint.py` — do not add
-new entries there; fix new violations instead (rename the plain `import X` to
-`from <parent-package> import <leaf>`, same pattern as RULE-LINT4).
+Pre-existing debt is grandfathered in `BASELINE_IMPORT_AND_IMPORT_FROM` — do not add new
+entries; fix new violations instead (rename to `from <parent-package> import <leaf>`).
 
 ### RULE-LINT6 (blocking): No CodeQL py/unused-global-variable in modules/, ui/, or workers/
 
-Ruff's F841 only checks *local* (function-scope) variables — a module-level
-assignment that is never read anywhere is invisible to it. Two real instances
-of this reached open CodeQL alerts (`modules/network_logger.py`'s `_log`,
-`ui/nav/labels.py`'s `KNOWN_LABELS`) before this check existed, alongside a
-sibling gap: ruff's default `dummy-variable-rgx` treats *any* leading
-underscore as "intentionally unused," so a genuinely dead **local** variable
-named like `_cb` (CodeQL alert #1587, `modules/snmp_poller.py`) also slipped
-through — closed by tightening `dummy-variable-rgx` in `pyproject.toml` to
-match CodeQL's own (narrower) exemption list: entirely underscores, containing
-"unused", or literally `dummy`/`empty`.
+Ruff's F841 only checks *local* (function-scope) variables — a module-level assignment
+never read anywhere is invisible to it. Enforced by `find_unused_global_violations()` in
+`tools/check_import_lint.py` (cross-file aware — a name is "used" if read anywhere in its
+own file, listed in `__all__`, or imported/attribute-accessed elsewhere) via
+`tests/test_import_lint.py` and the RULE-CI1 pre-push hook.
 
-Enforced by `find_unused_global_violations()` in `tools/check_import_lint.py`
-(cross-file aware — a name is "used" if read anywhere in its own file, listed
-in that module's `__all__`, or imported/attribute-accessed by any other
-tracked file) via `tests/test_import_lint.py` and the RULE-CI1 pre-push hook.
+Pre-existing debt is grandfathered in `BASELINE_UNUSED_GLOBALS` — do not add new entries;
+fix new violations instead (use the name, delete it, or add it to `__all__`).
 
-Pre-existing debt is grandfathered in `BASELINE_UNUSED_GLOBALS` in
-`tools/check_import_lint.py` — every entry there was cross-checked against
-this repo's CodeQL alert history and is either already dismissed there
-("used in tests" — real usage is a string-based `monkeypatch.setattr(...)`
-that no AST tool can see) or a plausible half-wired feature stub left for a
-deliberate decision. Do not add new entries; fix new violations instead (use
-the name, delete it, or add it to `__all__` if it's a deliberate export).
-
-**Known blind spot:** like CodeQL itself, this check cannot see a reference
-made only through a string literal (`monkeypatch.setattr("mod.NAME", ...)`,
-`getattr(mod, "NAME")`). If a new global is flagged but is genuinely
-consumed that way, verify with a real grep for the literal name before
-adding it to the baseline — don't assume "the checker must be wrong."
+**Known blind spot:** like CodeQL itself, this check cannot see a reference made only
+through a string literal (`monkeypatch.setattr("mod.NAME", ...)`, `getattr(mod, "NAME")`).
+If a new global is flagged but is genuinely consumed that way, verify with a real grep for
+the literal name before adding it to the baseline — don't assume "the checker must be wrong."
 
 ### RULE 1: Single colour source
 Never hardcode a hex colour string in any UI file. Every colour must be imported from `ui/styles.py`.
@@ -186,24 +163,11 @@ ax.grid(True, color=CHART_GRID, linewidth=0.8, linestyle="-")
 ```
 
 ### RULE 11: Version bump checklist
-When bumping the application version, update **ALL** of the following:
-
-| File | What to change |
-|---|---|
-| `app.py` | `app.setApplicationVersion("X.Y.Z")` |
-| `cli.py` | `_VERSION = "X.Y.Z"` |
-| `apm.yml` | `version: X.Y.Z` |
-| `installer.iss` | `#define MyAppVersion "X.Y.Z"` |
-| `build.bat` | echo version string |
-| `build.sh` | echo version string |
-| `README.md` | badge/link + `### vX.Y.Z (current)` changelog entry |
-| `modules/rest_api.py` | `"version"` in `/health` endpoint |
-| `tools/debug_launch.py` | `app.setApplicationVersion("X.Y.Z")` |
-| `.github/winget/NetSentinel.NetSentinel.yaml` | `PackageVersion: X.Y.Z` |
-| `.github/winget/NetSentinel.NetSentinel.installer.yaml` | `PackageVersion:` + installer URL |
-| `.github/winget/NetSentinel.NetSentinel.locale.en-US.yaml` | `PackageVersion: X.Y.Z` |
-
-`tests/test_version_consistency.py` enforces this. Never bypass it.
+Every version bump touches `app.py`, `cli.py`, `apm.yml`, `installer.iss`, `build.bat`/`build.sh`,
+`README.md`, `modules/rest_api.py`, `tools/debug_launch.py`, and all 3 winget manifests.
+`bump_version.py` updates all of them automatically — never hand-edit. Invoke `/bump`
+(RULE-BUMP1); `tests/test_version_consistency.py` enforces consistency and must never be
+bypassed.
 
 ### RULE 12: No Unicode replacement characters in README
 Never paste text containing `?` (U+FFFD). Use actual Unicode: `—` not `-`, `→` not `->`.
@@ -222,16 +186,6 @@ if latest and _ver(latest) > _ver(current):
 
 ### RULE 20: Winget CI job structure
 The winget submission job must live in `release.yml` as `needs: [release]`. Never use a separate workflow triggered by `workflow_run`.
-
-### RULE 21: Release checklist — invoke /bump
-All release checklist items (21-A through 21-I) are handled by the `/bump` skill.
-Invoke `/bump X.Y.Z` whenever shipping a feature or fix. Never do this manually.
-
-Key constraints the skill enforces:
-- CHANGELOG.md entry must precede `bump_version.py` (the script promotes the topmost header)
-- Branch push (`git push origin main`) must precede the tag push — CI won't run on tag-only
-- Plain semver only — non-semver tags (e.g. `v1.9.52-codeql`) break `AppxManifest.xml`
-- 30-minute monkey test is required before every version bump (RULE-CHAOS1)
 
 ### RULE 22-A: Secrets in OS keychain
 API keys, passwords, SMTP credentials, SNMP community strings, and tokens must be stored via `keyring`. Never write secrets to `QSettings`, `NetSentinel.ini`, or any file.
@@ -310,7 +264,7 @@ evl.addLayout(center)
 
 Rule: after **any** UI change — including single-line layout tweaks — run
 `python tools/debug_launch.py` and verify `window.show() called OK` before
-declaring the work done. This is COMMIT GATE Step 2 and is a hard gate.
+declaring the work done. This is COMMIT GATE Step 3 and is a hard gate.
 
 ### RULE 25: Rail section icon standard
 Rail section icons (the 48 px icon on the permanent left rail, set via `_nav_begin_section()`) must be **Lucide SVG names** from the `_LUCIDE` dict in `dashboard.py` — not Unicode symbols or photo-emoji.
@@ -434,11 +388,17 @@ substitute "tests pass" or "screenshots show" for an actual walk-through of user
 ## Release Integrity
 
 ### RULE-BUMP1 (blocking): "version bump" always means invoke /bump
-When the user says "version bump", "bump version", "bump to X.Y.Z", or any variation,
-invoke `/bump X.Y.Z`. The skill handles the full workflow: CHANGELOG → README → What's New →
-`bump_version.py` → monkey test → `git push origin main` → tag → `git push origin vX.Y.Z`.
+When the user says "version bump", "bump version", "bump to X.Y.Z", "ship it", "release", or
+any variation, invoke `/bump X.Y.Z`. Never edit version strings across files by hand —
+`bump_version.py` handles all of them. The skill handles the full workflow: CHANGELOG →
+README → What's New → `bump_version.py` → monkey test (user-run, RULE-CHAOS1) →
+`git push origin main` → tag → `git push origin vX.Y.Z`.
 
-Do NOT manually edit version strings across files — `bump_version.py` handles all of them.
+Key constraints the skill enforces:
+- CHANGELOG.md entry must precede `bump_version.py` (the script promotes the topmost header)
+- Branch push must precede the tag push — CI won't run on tag-only push
+- Plain semver only — non-semver tags (e.g. `v1.9.52-codeql`) break `AppxManifest.xml`
+- A clean monkey-test run is required before every version bump
 
 ### RULE-R1b (blocking): Every version bump needs a CHANGELOG.md entry and a README.md summary update
 Before running `bump_version.py`:
@@ -455,6 +415,12 @@ Using `PackageDependencies` blocks install when the package is not in the offici
 `AppxManifest.xml` Version must be `X.Y.Z.0`. `bump_version.py` generates this automatically. `test_version_consistency.py::test_appxmanifest_msix_version_format()` validates it.
 
 ### RULE-R5 (blocking): MSIX staging must copy the onefile exe — never glob a directory
+```powershell
+# CORRECT
+Copy-Item "dist\NetSentinel.exe" "$stage\NetSentinel\NetSentinel.exe"
+# WRONG — dist\NetSentinel\ does not exist
+Copy-Item -Recurse "dist\NetSentinel\*" "$stage\NetSentinel\"
+```
 
 ### RULE-R6 (blocking): AppxManifest.xml Version= patch must be line-anchored — never unanchored
 The PowerShell `-replace` in `release.yml` and the regex in `bump_version.py` **must** anchor to the
@@ -486,43 +452,14 @@ _sub(ROOT / "packaging" / "AppxManifest.xml",
 ```
 
 Validated by `tests/test_version_consistency.py::test_appxmanifest_target_device_family_minversion`.
-```powershell
-# CORRECT
-Copy-Item "dist\NetSentinel.exe" "$stage\NetSentinel\NetSentinel.exe"
-# WRONG — dist\NetSentinel\ does not exist
-Copy-Item -Recurse "dist\NetSentinel\*" "$stage\NetSentinel\"
-```
 
 ### RULE-TAG1 (blocking): Before re-pushing a tag, always move it to HEAD first
-When the user says "send tags again", "retrigger CI", "re-push the tag", or any variation
-**without** bumping the version, the mandatory sequence is:
-
-```powershell
-# CORRECT — moves the tag to the current HEAD so CI runs the latest workflow and code
-git push origin --delete vX.Y.Z   # remove from remote
-git tag -d vX.Y.Z                  # remove locally
-git tag vX.Y.Z HEAD                # re-create at HEAD
-git push origin vX.Y.Z             # push (triggers CI)
-```
-
-**WHY this matters:** GitHub Actions uses the workflow file from the commit the tag points to.
-If the tag still points to an older commit (e.g. before a `release.yml` fix was merged), CI
-runs the old, unfixed workflow — silently, with no error about which workflow version was used.
-
-**The trap:** simply doing `git push origin --delete vX.Y.Z && git push origin vX.Y.Z` without
-`git tag -d / git tag vX.Y.Z HEAD` re-pushes the tag to the SAME old commit. The local tag
-object is unchanged; the delete-and-push is a no-op in terms of what commit CI checks out.
-
-**Verification before pushing:**
-```powershell
-# Confirm tag will point to HEAD before pushing
-$tagCommit  = git rev-parse vX.Y.Z
-$headCommit = git rev-parse HEAD
-if ($tagCommit -ne $headCommit) { Write-Warning "Tag is behind HEAD — move it first" }
-```
-
-This rule does NOT apply to normal version bumps (RULE-21-I): a bump always creates a brand-new
-tag at the just-committed HEAD, so the tag is already at HEAD by definition.
+"Re-push the tag" / "retrigger CI" / "send tags again" (without a version bump) means `/bump`
+Mode B, not a manual `git push origin --delete` + `git push`. GitHub Actions uses the workflow
+file from the commit the tag points to — deleting and re-pushing without first moving the
+local tag to HEAD (`git tag -d` + `git tag vX.Y.Z HEAD`) silently re-runs CI against the OLD
+commit. Does not apply to normal version bumps (RULE-BUMP1) — those always tag the
+just-committed HEAD. Full sequence: `/bump` Mode B.
 
 ---
 
@@ -597,16 +534,13 @@ failure message gives the exact fix.
 
 ### RULE-QSS1 (blocking): Never set a bare (selector-less) stylesheet on a container widget — scope with an objectName selector
 **Mechanism / trap:** a stylesheet with no selector — `w.setStyleSheet("background:transparent;")`
-— is interpreted by Qt as `* { ... }` and applies to the widget **and every descendant**.
-Widget stylesheets always override the application stylesheet regardless of specificity,
-so a bare declaration on a page/frame container silently wipes the app-QSS styling of
-every child. The canonical failure (the invisible "Run Speed Test" button, July 2026):
-`QPushButton#btnScan` gets `background:{ACCENT}; color:{WHITE}` from `ui/styles.py`; a
-bare `background:transparent;` on the scroll-content ancestor wiped the blue background
-while the white text survived → white-on-white, invisible in both themes. This same
-propagation is why the codebase historically needed `border:none; background:transparent`
-sprinkled on nearly every child label — each was cancelling declarations leaking from a
-bare container stylesheet above it.
+— is interpreted by Qt as `* { ... }` and applies to the widget **and every descendant**. Widget
+stylesheets always override the application stylesheet regardless of specificity, so a bare
+declaration on a page/frame container silently wipes the app-QSS styling of every child (this
+shipped the invisible "Run Speed Test" button, July 2026 — a bare `background:transparent;` on
+a scroll-content ancestor wiped `btnScan`'s blue background while its white text survived,
+leaving white-on-white). This propagation is also why the codebase historically needed
+`border:none; background:transparent` sprinkled on nearly every child label.
 
 ```python
 # WRONG — bare declarations propagate to the whole subtree
@@ -618,8 +552,8 @@ content.setStyleSheet("QWidget#pageContent { background: transparent; }")
 ```
 
 Type selectors are NOT safe either: `QWidget { ... }` on a container still matches every
-descendant (QPushButton is-a QWidget). Only `#name` / `QWidget#name` scoping is safe.
-Bare declarations remain acceptable on **leaf** widgets (a QLabel with no children).
+descendant. Only `#name`/`QWidget#name` scoping is safe. Bare declarations remain acceptable
+on **leaf** widgets (a QLabel with no children).
 
 Enforced by `tests/test_qss_scoping.py`:
 - Tier 1 (zero tolerance): global-QSS buttons (`btnScan`, `btnScanHero`, `btnExport`,
@@ -628,14 +562,13 @@ Enforced by `tests/test_qss_scoping.py`:
   Never raise `BARE_CONTAINER_BASELINE`; lower it when you fix sites.
 
 ### RULE-QSS2 (blocking): Never append hex alpha to a colour in QSS — use `alpha()` or a `*_BG` token
-**Mechanism / trap:** Qt Style Sheets parse an 8-digit hex colour as **`#AARRGGBB`**
-(alpha **first**), NOT the CSS `#RRGGBBAA` (alpha last) that the syntax visually implies.
-So `f"background:{ACCENT}22"` — intended as "accent at ~13% opacity" — produces the literal
-`#0078D422`, which Qt reads as `alpha=0x00, rgb=(0x78,0xD4,0x22)` → a **fully transparent**
-green (nothing renders). A colour whose first byte is high renders opaque and wrong:
-`{AMBER}22` → `#F59E0B22` → `alpha=0xF5, rgb=(158,11,34)` = **opaque dark crimson**. This
-shipped the home "live challenge" banner bright red instead of translucent amber (July 2026),
-and left ~60 hover tints across `ui/` silently invisible.
+**Mechanism / trap:** Qt Style Sheets parse an 8-digit hex colour as **`#AARRGGBB`** (alpha
+first), NOT the CSS `#RRGGBBAA` (alpha last) the syntax visually implies. So
+`f"background:{ACCENT}22"` — intended as "~13% opacity" — produces `#0078D422`, which Qt
+reads as `alpha=0x00, rgb=(0x78,0xD4,0x22)` → fully transparent (nothing renders). A colour
+whose first byte is high renders opaque and wrong: `{AMBER}22` → `alpha=0xF5, rgb=(158,11,34)`
+= opaque dark crimson (shipped the home "live challenge" banner bright red instead of
+translucent amber, July 2026, and left ~60 hover tints silently invisible).
 
 ```python
 # WRONG — 8-digit hex; Qt reads it as #AARRGGBB and scrambles the colour
@@ -647,47 +580,32 @@ w.setStyleSheet(f"background:{alpha(ACCENT, 0x22)};")   # translucent accent
 w.setStyleSheet(f"background:{AMBER_BG};")              # named translucent amber
 ```
 
-Note the sibling trap: a plain-hex token that is a **light** value in one theme
-(`SIDEBAR_SECTION_BG` is near-white in Arctic) drew a harsh white border on the dark
-header bar. Chrome that sits on the dark nav bar in both themes must use a WHITE-alpha
-hairline (`alpha(WHITE, 0x22)`), not a theme-swinging plain-hex token.
+Sibling trap: a plain-hex token that is **light** in one theme (`SIDEBAR_SECTION_BG` is
+near-white in Arctic) draws a harsh white border on the dark header bar — chrome on the dark
+nav bar in both themes must use a WHITE-alpha hairline (`alpha(WHITE, 0x22)`), not a
+theme-swinging plain-hex token.
 
-Enforced by `tests/test_qss_hex_alpha.py` (zero tolerance across `ui/`, excluding
-`ui/styles.py` whose `alpha()` docstring shows the antipattern as a counter-example).
+Enforced by `tests/test_qss_hex_alpha.py` (zero tolerance across `ui/`, excluding `ui/styles.py`
+whose `alpha()` docstring shows the antipattern as a counter-example).
 
 ### RULE-QSS3 (required): Use the `qss_*` recipe functions instead of hand-typing common inline QSS shapes
-`ui/styles.py` exposes `qss_label()`/`qss_muted_label()` (text label), `qss_frame()`
-(card/banner QFrame wrapper), `qss_chip()` (pill badge), and `qss_dismiss_button()`
-(flat "X" close button) — each covers a shape that was re-typed by hand at hundreds
-of call sites (P6). New code should call these instead of composing the f-string
-from scratch; do not reintroduce the raw literal shape in a file that already
-migrated onto them.
+`ui/styles.py` exposes `qss_label()`/`qss_muted_label()`, `qss_frame()` (card/banner wrapper),
+`qss_chip()` (pill badge), and `qss_dismiss_button()` (flat "X" close). Use these instead of
+composing the f-string from scratch; don't reintroduce the raw literal shape in a file that
+already migrated onto them.
 
-Enforced by `tests/test_qss_recipe_adoption.py` (ratchet, scoped to the three
-migrated files — `home_page.py`, `overview_tile.py`, `settings_cards.py`).
+Enforced by `tests/test_qss_recipe_adoption.py` (ratchet, scoped to `home_page.py`,
+`overview_tile.py`, `settings_cards.py`).
 
 ### RULE-PERF1 (blocking): Never set `QHeaderView.ResizeMode.ResizeToContents` as a table's default column resize mode
-**Mechanism / trap:** `setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)`
-(the single-argument overload, applied to *all* columns) tells Qt to recompute every
-column's ideal width — a full `sizeHintForColumn()` pass, which calls
-`QStyledItemDelegate::sizeHint()` per cell, which for text cells calls into DirectWrite
-font-metrics/glyph-layout — on **every** relevant model change: row insert, `dataChanged`,
-and critically `sortByColumn()`. For a table with hundreds-to-thousands of rows this pass
-takes multiple seconds of **synchronous main-thread work**, during which Qt's event loop
-cannot process input or repaint. Windows reports the whole app as "Not Responding"
-(`IsHungAppWindow` true) for the duration — indistinguishable from a real crash/deadlock
-to the user, but it always recovers on its own once the recalculation finishes.
-
-This was the actual root cause of a long-standing intermittent "the whole app freezes for
-a few seconds, always recovers" bug (reported against Threat Intel's "Update Feeds" button,
-but the freeze trigger was any row-insert/sort on a `ResizeToContents` table, not the
-network call) that a 2026-07-03 investigation spent two sessions chasing as a Windows
-COM/RPC reentrancy fault (`RPC_E_CANTCALLOUT_ININPUTSYNCCALL`) before it was correctly
-diagnosed on 2026-07-04 via a **live memory dump captured mid-freeze** with
-`procdump -h` — the main thread's stack showed it stuck inside
-`QHeaderView::resizeSections` → `sizeHintForColumn` → `QStyledItemDelegate::sizeHint` →
-DirectWrite glyph metrics, called from `QAbstractItemModel::dataChanged`, all inside one
-synchronous Qt event dispatch. No COM call was involved anywhere in the stack.
+**Mechanism:** the single-argument `setSectionResizeMode(ResizeToContents)` (applied to all
+columns) tells Qt to recompute every column's ideal width — a full `sizeHintForColumn()` pass,
+calling `QStyledItemDelegate::sizeHint()` per cell, which for text cells calls into DirectWrite
+font-metrics/glyph-layout — on **every** relevant model change: row insert, `dataChanged`, and
+critically `sortByColumn()`. For a table with hundreds-to-thousands of rows this is multiple
+seconds of synchronous main-thread work during which Qt's event loop cannot process input or
+repaint — Windows reports the app as "Not Responding" (`IsHungAppWindow` true), indistinguishable
+from a real crash to the user, though it always recovers once the recalculation finishes.
 
 ```python
 # WRONG — recomputes every column's width via per-cell sizeHint() on every model change
@@ -697,13 +615,13 @@ t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContent
 t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
 ```
 
-`Interactive` still gives Qt's normal default column width and lets the user drag-resize;
-it just stops recomputing that width from cell contents on every data change. If a
-content-fitted initial width is wanted, call `resizeColumnsToContents()` **once** right
-after populating the table — never leave `ResizeToContents` active as the ongoing mode.
+`Interactive` still gives Qt's normal default column width and lets the user drag-resize; it
+just stops recomputing width from cell contents on every data change. For a content-fitted
+initial width, call `resizeColumnsToContents()` **once** right after populating the table —
+never leave `ResizeToContents` active as the ongoing mode.
 
-Found via `grep -rn "ResizeMode.ResizeToContents" ui/` — check this pattern before adding
-any new table, especially ones that can hold more than ~50 rows or are ever re-sorted.
+Check with `grep -rn "ResizeMode.ResizeToContents" ui/` before adding any table that can hold
+more than ~50 rows or is ever re-sorted.
 
 ---
 
@@ -909,26 +827,21 @@ installed):
 ```powershell
 cdb.exe -z <dump_file> -c "~*kb;q"     # stack trace for every thread
 ```
-Even without Python-level debug symbols (PyQt6/CPython frames resolve to nearest exported
-C symbol + offset, which can be approximate for private/internal functions), the **native
-call chain is usually enough to identify the actual blocking mechanism** — e.g. distinguishing
-"stuck in a kernel wait / socket read" from "stuck doing expensive synchronous Qt layout
-work" from "stuck in a COM call." Compare the stack across 2+ captured dumps: an identical
-repeating pattern across independent occurrences is strong confirmation you've found the
-real mechanism, not a one-off artifact.
+Even without Python-level debug symbols, the native call chain is usually enough to identify
+the real blocking mechanism — e.g. distinguishing a kernel wait/socket read from expensive
+synchronous Qt layout work from a COM call. Compare the stack across 2+ dumps: an identical
+repeating pattern is strong confirmation you've found the real mechanism, not a one-off artifact.
 
-**Why this beats a custom watcher+signal approach**: a session (2026-07-04) first tried a
-hand-rolled watcher polling `IsHungAppWindow` that fired `GenerateConsoleCtrlEvent`
-(`CTRL_BREAK`) to force a `KeyboardInterrupt` traceback — this does **not** work reliably for
-PyQt6 apps, because Qt's native C++ event loop (`QCoreApplication::exec()`) doesn't
-regularly yield back to Python's signal-checking mechanism, so the interrupt never lands on
-a catchable frame. Switching to `procdump -h` immediately succeeded on the first real
-reproduction and found the actual root cause (RULE-PERF1) in one pass. **Lead with the
-well-tested system tool; don't reinvent the diagnostic every time a new hang is reported.**
+**Why this beats a custom watcher+signal approach:** a hand-rolled watcher polling
+`IsHungAppWindow` that fires `GenerateConsoleCtrlEvent` to force a `KeyboardInterrupt` does
+**not** work reliably for PyQt6 apps — Qt's native C++ event loop (`QCoreApplication::exec()`)
+doesn't regularly yield back to Python's signal-checking mechanism, so the interrupt never
+lands on a catchable frame. Lead with the well-tested system tool; don't reinvent the
+diagnostic every time a new hang is reported.
 
 This generalizes beyond hangs: for crash-type bugs, `procdump -e` (dump on unhandled
-exception/first-chance exception) or the app's own `faulthandler` output is the equivalent
-"use the standard flag" move instead of custom exception-hook instrumentation.
+exception) or the app's own `faulthandler` output is the equivalent move instead of custom
+exception-hook instrumentation.
 
 ---
 
@@ -964,9 +877,9 @@ except ImportError:
 `conftest.py` provides a session-scoped `qt_app` fixture (autouse=True). All test files that need `QApplication` must use `QApplication.instance()` at call time, not store it at module level.
 
 ### RULE-WIN4 (blocking): Qt widgets in tests must use deleteLater() — never rely on Python GC
-When a Qt widget goes out of scope at the end of a test function, Python's reference counting calls the C++ destructor *immediately and synchronously*. On Windows, this can corrupt the Qt event loop's internal state, causing `STATUS_STACK_BUFFER_OVERRUN` 400+ tests later.
-
-Required pattern for ALL test fixtures that create Qt widgets:
+When a Qt widget goes out of scope at test end, Python's refcounting calls the C++ destructor
+*immediately and synchronously*. On Windows this can corrupt the Qt event loop's internal
+state, causing `STATUS_STACK_BUFFER_OVERRUN` 400+ tests later.
 
 ```python
 @pytest.fixture
@@ -983,54 +896,28 @@ def my_widget():
             app.processEvents()
 ```
 
-For widgets with `QFileSystemWatcher`, `QTimer`, or OS-level background threads: stop those resources BEFORE `deleteLater()`:
+For widgets with `QFileSystemWatcher`, `QTimer`, or OS-level background threads: stop those
+resources BEFORE `deleteLater()` (e.g. `w._tick_timer.stop()`; mock `QFileSystemWatcher` in
+test setup to prevent real file-watching threads).
 
-```python
-# Stop timer to prevent it firing after deletion
-if hasattr(w, "_tick_timer"):
-    w._tick_timer.stop()
-# Mock QFileSystemWatcher in test setup to prevent OS file-watching threads
-monkeypatch.setattr(
-    "ui.pages.some_page.QFileSystemWatcher",
-    lambda *a, **kw: MagicMock(),
-)
-```
-
-**Never** delete Qt widgets by letting them go out of scope or by calling the C++ destructor directly. **Always** use `deleteLater()` followed by `processEvents()`.
+**Never** delete Qt widgets by letting them go out of scope or calling the C++ destructor
+directly. **Always** `deleteLater()` followed by `processEvents()`.
 
 ### RULE-WIN5 (blocking): Never use unparented QTimer.singleShot(n, self.method) anywhere in a widget — use a parented QTimer
 `QTimer.singleShot(n, slot)` creates a standalone timer with **no Qt parent**. If the widget is
 deleted before the timer fires (fixture teardown, rapid navigation, or test cleanup faster than
 `n` ms), the timer fires on a zombie C++ object, raises uncaught `RuntimeError` through the
 Qt C++ timer callback machinery, and corrupts the heap. The crash surfaces as
-`STATUS_STACK_BUFFER_OVERRUN` hundreds of tests later — not at the callsite.
-
-**This rule applies to every method in a widget class, not only `__init__`.**
-The crash that motivated this rule was in `hardware_integration_page.py`'s `_set_status`
-method, which used a 5000 ms `QTimer.singleShot` to clear a status label. During test
-teardown the page was deleted within 5 s; the timer fired on the zombie object and silently
-corrupted the heap, crashing the suite ~400 tests later with `STATUS_STACK_BUFFER_OVERRUN`.
+`STATUS_STACK_BUFFER_OVERRUN` hundreds of tests later — not at the callsite. This rule applies
+to every method in a widget class, not only `__init__`.
 
 ```python
 # WRONG — unparented; fires on zombie if widget is deleted within n ms
-def __init__(self):
-    self._setup_ui()
-    QTimer.singleShot(300, self._load_history)
-
-# WRONG — same problem in any other method
 def _set_status(self, msg):
     self._status_label.setText(msg)
     QTimer.singleShot(5000, lambda: self._status_label.setText(""))  # fires on zombie!
 
 # CORRECT — parented QTimer is auto-destroyed when the widget is deleted
-def __init__(self):
-    self._setup_ui()
-    _t = QTimer(self)
-    _t.setSingleShot(True)
-    _t.timeout.connect(self._load_history)
-    _t.start(300)
-
-# CORRECT — parented one-shot in a regular method
 def _set_status(self, msg):
     self._status_label.setText(msg)
     _t = QTimer(self)
@@ -1056,21 +943,15 @@ Select-String -Path ui -Include "*.py" -Recurse -Pattern "QTimer\.singleShot\(.*
 Any hit outside a `showEvent`/`closeEvent` body must be converted to a parented `QTimer(self)`.
 
 ### RULE-WIN6 (blocking): Test fixtures must patch ALL persistent-storage readers for the page under test
-When monkeypatching a page's storage functions in a test fixture, identify and patch **every**
-function that reads from QSettings, the filesystem, or any other persistent store — not only
-the ones that are obviously exercised by the test body.
+When monkeypatching a page's storage functions, patch **every** function that reads from
+QSettings, the filesystem, or any other persistent store — not only the ones the test body
+obviously exercises. A missed reader can silently pull in real device data from the developer's
+machine, causing `__init__` to spawn timers/workers that outlive fixture teardown and corrupt
+the heap during unrelated tests.
 
-A missed reader can silently pull in real device data from the developer's machine, causing
-the page's `__init__` to spawn timers or workers for those devices. Those objects outlive
-fixture teardown and corrupt the heap during unrelated tests.
-
-**Checklist when writing a `_reset_qsettings` (or equivalent) fixture:**
-
-1. Search the page's `__init__` and every method it calls at construction time for any
-   function whose name starts with `_load_`, `_read_`, `_fetch_`, or `get_` that touches
-   QSettings or the filesystem.
-2. Patch each one to return a safe empty value (`[]`, `{}`, `None`).
-3. Also patch `QFileSystemWatcher` and any `QThread`/worker that the page auto-starts.
+**Checklist:** search `__init__` and everything it calls at construction time for any
+`_load_`/`_read_`/`_fetch_`/`get_` function touching QSettings or the filesystem; patch each
+to a safe empty value; also patch `QFileSystemWatcher` and any auto-started `QThread`/worker.
 
 ```python
 # WRONG — _load_instances not patched; real QSettings data spawns 3-second timers
@@ -1083,18 +964,14 @@ monkeypatch.setattr("ui.pages.hardware_integration_page._load_last_result", lamb
 ```
 
 QObject subclasses that are **not** QWidget (e.g. `QThread`, `GuidedTour`) are invisible to
-`topLevelWidgets()` and therefore escape `conftest._flush_qt_events`. Track them explicitly
-and call `deleteLater()` + 3× `processEvents()` in `teardown_method` or fixture finaliser.
+`topLevelWidgets()` and escape `conftest._flush_qt_events` — track them explicitly and call
+`deleteLater()` + 3× `processEvents()` in `teardown_method` or the fixture finaliser.
 
 ### RULE-WIN7 (blocking): Never call `.setVisible(...)` / `.show()` on a freshly-constructed widget before it is added to its layout
-A widget built with no `parent=` argument has no parent until `addWidget()`/`insertWidget()`
-runs — until then Qt treats it as an independent top-level window. Calling `.setVisible(True)`
-(or any expression that can be truthy) on it first makes that still-parentless widget flash on
-screen with full native OS chrome (title bar + min/max/close) for a fraction of a second. This
-shipped in v2.1.22 (commit `e83eb86`, three sites fixed by manual audit) and reappeared
-independently in `ui/widgets/hub_card.py` (Configure button, any plugin with `CONFIG_SCHEMA`)
-and `ui/pages/rest_api_page.py` (external-access warning label) because that audit was a
-one-time sweep, not a structural guard.
+A widget built with no `parent=` has no parent until `addWidget()`/`insertWidget()` runs —
+until then Qt treats it as an independent top-level window, so calling `.setVisible(True)`
+(or any truthy expression) on it first flashes it on screen with full native OS chrome
+(title bar + min/max/close) for a fraction of a second.
 
 ```python
 # WRONG — btn is parentless and toggled visible before addWidget; flashes as its own window
@@ -1167,49 +1044,23 @@ This rule covers **flyout item labels only**. Rail section icons (the 48 px perm
 ## Source File Encoding
 
 ### RULE-ENC1 (blocking): Python source files must be saved as UTF-8 — never open and resave in Windows-1252
-Mojibake occurs when a file correctly encoded as UTF-8 is opened by a Windows text editor
-that defaults to Windows-1252 / Latin-1, misreads the multi-byte sequences as individual
-characters, and resaves. The result: characters like —, →, ·, ☀, ×, ⚠, ⚙, ⌨ are
-replaced by garbled sequences such as â€", â†', Â·, â˜€, Ãƒâ€", âš .
-
-**Canonical symptoms:**
-- Close buttons show as garbled sequences instead of ×
-- Em dashes show as â€" or Ã—
-- Arrows show as â†' instead of →
-- Icons show as multi-char garbage instead of ☀, ⚠, 🌙
-- Emoji (4-byte UTF-8) show as 4-char garbage: 🌙→ðŸŒ™, 📌→ðŸ"Œ
-
-**Two classes of mojibake:**
-
-*2–3-byte (BMP characters):* `â€"` for `—`, `â†'` for `→`, `Â·` for `·`, etc.
-*4-byte (emoji / supplementary plane):* Byte F0 9F... becomes `ðŸ` prefix + 2 more chars.
-  - `🌙` (U+1F319) → `ðŸŒ™` — the moon emoji in theme buttons
-  - `📌` (U+1F4CC) → `ðŸ"Œ` — pin emoji in Quick Tips
+Mojibake occurs when a UTF-8 file is opened by an editor that defaults to Windows-1252/Latin-1,
+misreads the multi-byte sequences as individual characters, and resaves — turning —, →, ·, ⚠,
+emoji, etc. into garbled sequences (`â€"`, `â†'`, `ðŸŒ™`...).
 
 **Prevention:**
-- Always save .py files with UTF-8 encoding in your editor
-- VS Code: set `"files.encoding": "utf8"` in settings (this is the default)
-- Never open NetSentinel source files in Notepad (Windows 10 and earlier uses ANSI/cp1252)
-- Git: `git config core.autocrlf` should be `true` (Windows) or `input` (macOS/Linux)
-- **AI agents: always re-read a file with the Read tool before calling Edit if any external**
-  **process (fix_encoding.py, another chat session, git operation) may have modified it.**
-  **The Edit tool writes based on the agent's cached content — a stale cache silently**
-  **overwrites external repairs.** (See RULE-ENC2.)
+- Always save `.py` files as UTF-8 (VS Code default `"files.encoding": "utf8"`)
+- Never open source files in Notepad on Windows 10 and earlier (ANSI/cp1252 default)
+- `git config core.autocrlf` should be `true` (Windows) or `input` (macOS/Linux)
+- Re-read a file with the Read tool before Edit if any external process may have touched it
+  since the last Read — a stale cache silently overwrites external repairs (RULE-ENC2)
 
-**Detection:** `test_source_encoding.py` automatically detects both classes of mojibake in
-string literals, including the 4-byte emoji prefix `ðŸ` (U+00F0 + U+0178).
-Run before committing:
-```powershell
-python -m pytest tests/test_source_encoding.py -v
-```
+**Detection:** `python -m pytest tests/test_source_encoding.py -v` before committing.
 
-**Fix:** Re-encode the garbled characters back to their correct Unicode equivalents.
-The decode procedure: encode each garbled char as cp1252, decode the resulting bytes as
-UTF-8. Example:
+**Fix:** re-encode the garbled characters as cp1252 bytes, then decode as UTF-8:
 ```python
-# Quick repair of a garbled string — run once, not in production code
-garbled = 'â€"'           # garbled em dash
-fixed   = garbled.encode('cp1252').decode('utf-8')  # → '—'
+garbled = 'â€"'                                      # garbled em dash
+fixed   = garbled.encode('cp1252').decode('utf-8')   # -> '—'
 ```
 
 ### RULE-ENC2 (blocking): Re-read any file before editing it if an external process may have modified it
@@ -1242,15 +1093,13 @@ After any repair tool runs, also verify with `python -m pytest tests/test_source
 before proceeding to ensure the repair is intact.
 
 ### RULE-ENC3 (blocking): PowerShell must never write Python source files with a UTF-8 BOM
-Windows PowerShell 5.1 (the default shell in this project) writes UTF-8 with BOM (`EF BB BF`)
-when you use `Set-Content`, `Out-File`, or `[System.IO.File]::WriteAllText` without explicit
-encoding. A BOM at the start of a `.py` file causes `ast.parse` to raise
-`SyntaxError: invalid non-printable character U+FEFF`, which silently empties the import
-set in `test_style_token_imports.py` — making every used token appear as "not imported".
+Windows PowerShell 5.1 writes UTF-8 with BOM (`EF BB BF`) when you use `Set-Content`,
+`Out-File`, or `[System.IO.File]::WriteAllText` without explicit encoding. A BOM at the start
+of a `.py` file causes `ast.parse` to raise `SyntaxError: invalid non-printable character
+U+FEFF`, which silently empties the import set in `test_style_token_imports.py`.
 
-**Never use PowerShell to write Python source files in general.** When you are forced to
-(e.g. regex-replacing a problematic character), strip any BOM that PowerShell added immediately
-afterward:
+**Never use PowerShell to write Python source files in general.** When forced to (e.g.
+regex-replacing a problematic character), strip any BOM immediately afterward:
 
 ```powershell
 # Strip UTF-8 BOM from a Python source file written by PowerShell
@@ -1289,6 +1138,9 @@ duplicate the rules into context twice.
 .apm/instructions/architecture.instructions.md        ← architecture rules, file layout, nav patterns
 .apm/instructions/development-rules.instructions.md   ← RULE-*, commit gate, testing, Windows rules
 .apm/instructions/project-vision.instructions.md      ← product goals, features, backlog
+.apm/instructions/session-workflow.instructions.md    ← plan-first, stability covenant, source precedence
+.apm/instructions/changelog.instructions.md           ← CHANGELOG.md / README.md entry format
+.apm/instructions/tests.instructions.md               ← URL-assertion, scaling-guard, LOC-budget, coverage-ratchet conventions
 ```
 
 To regenerate manually: `apm install --target all && apm compile --all`.
@@ -1314,7 +1166,6 @@ Done when:
   2. <second outcome>
   3. Verified in live app with [QSettings key / flag / condition] reset to simulate clean state.
 ```
-
 
 ### RULE-REQ2 (blocking): Do not start a replacement/redesign of an existing feature without a written failure report
 
@@ -1370,7 +1221,6 @@ type error, no test failure, just a broken link.
 Never skip step 1 — the two-entry temporary state is what makes step 2 safe to verify
 before step 3 removes the safety net.
 
-
 ### RULE-T7 (blocking): Every UI page feature must have one behavioral integration test
 
 Unit tests on module functions and worker lifecycle tests do not catch behavioral regressions
@@ -1389,7 +1239,6 @@ def test_network_map_shows_nodes_after_scan(qt_app, monkeypatch):
     page.on_scan_result({"devices": devices})
     assert page._node_count() == 1  # the page must expose a testable accessor
 ```
-
 
 ### RULE-STAB1 (required): Budget 20% of every sprint for stabilization of the previous sprint
 
@@ -1422,26 +1271,17 @@ else:
 Only remove the flag and delete the old implementation after the new one passes RULE-REQ1
 acceptance criteria verified in the live app.
 
+### RULE-CHAOS1 (required): A clean 30-minute monkey session is required before every version bump
 
-### RULE-CHAOS1 (required): Run a 30-minute monkey session before every version bump
+Random UI interaction at scale finds bugs unit tests cannot: cross-thread timing, focus-steal
+edge cases, unexpected widget-lifecycle interactions. This is a required step, not optional —
+Step 0 for version bumps specifically (not required for individual fix commits).
 
-Random UI interaction at scale finds bugs that unit tests cannot: cross-thread timing,
-focus-steal edge cases, and unexpected widget-lifecycle interactions.
-
-**Protocol before every version bump:**
-```powershell
-# 30-minute wild-chaos run (seed 99 = maximum randomness)
-python tools/monkey_test.py --source --seed 99 --duration 1800
-```
-
-If the monkey test finds crashes or hangs: fix them before bumping the version.
-If the monkey test runs clean: proceed with `bump_version.py`.
-
-This is a **required step**, not optional. The commit gate already requires Steps 1–4;
-this is Step 0 for version bumps specifically (not required for individual fix commits).
-
-The `--duration 1800` (30 min) covers all 62 pages at wild chaos level at least twice.
-A full 9-hour run is for pre-submission milestones only.
+**Agent does not launch the session.** Ask the user to run it themselves and paste the
+results: `tools/run_all_monkey_tests.ps1`, or `python tools/monkey_test.py --source --seed 99
+--duration 1800` (covers all 62 pages at wild chaos level at least twice). Clean run → proceed
+with `bump_version.py`. Crashes/hangs in the pasted results → fix them first, then ask for a
+re-run before bumping.
 
 ### RULE-PACE1 (required): No more than 8 commits in a single day without a stabilization pause
 
@@ -1481,7 +1321,6 @@ Both must pass. These tests confirm:
 
 Failing to do this produces orphaned pages that appear in the nav but are silently
 unreachable — no type error, no crash, just a dead link.
-
 
 ### RULE-CI1 (blocking): Install a git pre-push hook that runs the commit gate
 

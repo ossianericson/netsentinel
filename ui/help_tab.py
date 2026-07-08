@@ -371,10 +371,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Under-the-hood cleanup", "This is a maintainability release — an 8-part refactor of the app's internal plumbing. No features changed and no settings moved; the app behaves exactly as before."),
-        ("Steadier navigation", "Every page link now routes through a single label registry, eliminating a class of silent 'dead link' bugs that could appear when pages were renamed."),
-        ("Consistent tables everywhere", "All data tables now share one implementation, so sorting, row height, and column behaviour are identical on every page."),
-        ("Uniform background scans", "Network scan workers share one base class and one set of network primitives, so cancel, error handling, and timeouts behave the same across every tool."),
+        ("Internal tooling release", "This release is dev-process and tooling work — no user-facing features or settings changed."),
+        ("Steadier page help", "The '?' page-help popover no longer gets stuck open after navigating to another page."),
+        ("More reliable chaos testing", "The overnight chaos-test tooling was consolidated into one runner and no longer stalls if the machine sleeps mid-run."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

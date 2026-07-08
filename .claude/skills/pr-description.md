@@ -1,25 +1,14 @@
 ---
 name: pr-description
-description: >-
-  Use this skill to write the PR description (PR body) for any pull
-  request opened against NetSentinel. Produces one self-sufficient
-  GitHub-Flavored Markdown artifact: TL;DR, Problem (WHY), Approach
-  (WHAT), Implementation (HOW), optional mermaid diagrams, explicit
-  trade-offs, validation evidence, and a How-to-test section.
-  Activate when the user asks to "write a PR description", "draft a
-  PR body", "open a PR", "fill in the PR template", or any equivalent.
+description: >
+  Draft a structured, concise PR body. Invoke when the user says "write a PR description",
+  "draft a PR body", "open a PR" / "open this PR" / "let's open the PR", "fill in the PR
+  template", "summarize this branch as a PR", or "create the PR write-up".
+role: worker
+user-invocable: true
 ---
 
-# PR Description Skill — Structured, Concise PR Bodies
-
-## When to activate
-
-- "write a PR description"
-- "draft a PR body"
-- "open a PR" / "open this PR" / "let's open the PR"
-- "fill in the PR template"
-- "summarize this branch as a PR"
-- "create the PR write-up"
+# PR Description — Structured, Concise PR Bodies
 
 ## Concision targets
 

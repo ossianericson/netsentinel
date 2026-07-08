@@ -79,7 +79,7 @@ tools/fix_ax1.py
 # Test/chaos tester output - screenshots, crash reports, logs
 test_output/
 
-# Test runner output files (monkey test, run_tests_*.bat, ad-hoc manual runs)
+# Test runner output files (monkey test, test.ps1 / run_all_monkey_tests.ps1, ad-hoc manual runs)
 inventory_events.csv
 last_run.txt
 test_results*.txt

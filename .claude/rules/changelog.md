@@ -1,14 +1,16 @@
 ---
-applyTo: "README.md"
-description: "Changelog entry format for NetSentinel's README-based changelog."
+paths:
+  - "CHANGELOG.md"
+  - "README.md"
 ---
 
 # Changelog Entry Format
 
-NetSentinel's changelog lives in `README.md` under `## Changelog`.
-Each version gets a `### vX.Y.Z` header (added by `bump_version.py`).
+Full detail lives in `CHANGELOG.md`; `README.md` carries only a 3–5 bullet plain-English
+summary of the current release under `## Changelog` (RULE-R1b). Each version gets a
+`### vX.Y.Z` header, added by `bump_version.py` promoting the topmost header in each file.
 
-## Entry structure
+## CHANGELOG.md entry structure
 
 Group changes under these type headers (omit empty groups):
 
@@ -36,6 +38,11 @@ Group changes under these type headers (omit empty groups):
 - Do NOT pad with filler ("various improvements", "minor fixes").
 - Security entries go last within a version block, always under `**Security**`.
 - Every new module, page, or worker gets an `**Added**` entry — no exceptions.
+
+## README.md summary block
+
+Update the topmost `### vX.Y.Z (current)` block under `## Changelog` to 3–5 bullets in
+plain English — the public-facing highlights, not a restatement of every CHANGELOG line.
 
 ## Examples
 

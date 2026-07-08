@@ -885,7 +885,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.25")
+    app.setApplicationVersion("2.1.26")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1027,7 +1027,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.25")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.26")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1529,14 +1529,27 @@ def main():
 
     # ── Tracemalloc profiling (activated by NETSENTINEL_TRACEMALLOC=1 env var) ──
     # Set by tools/monkey_test.py --tracemalloc to identify retained object types
-    # during long chaos runs.  Logs the top-20 allocation sites every 60 s to the
-    # standard Python logger so the output appears in netsentinel_debug.log.
+    # during long chaos runs. Logs the top-20 allocation sites every 60 s to
+    # get_app_data_dir()/tracemalloc_snapshots.log via a dedicated FileHandler —
+    # "netsentinel.tracemalloc" has no other handler attached anywhere, so
+    # without this the snapshots were previously logged into the void.
     if os.environ.get("NETSENTINEL_TRACEMALLOC") == "1":
         import tracemalloc as _tm
         import logging as _logging
         import threading as _threading
+        from modules.utils import get_app_data_dir as _gad_tracemalloc
         _tm.start(25)  # keep 25 frames of traceback per allocation
         _tm_log = _logging.getLogger("netsentinel.tracemalloc")
+        _tm_log.setLevel(_logging.DEBUG)
+        _tm_log.propagate = False
+        if not _tm_log.handlers:
+            try:
+                _tm_path = os.path.join(str(_gad_tracemalloc()), "tracemalloc_snapshots.log")
+                _tm_handler = _logging.FileHandler(_tm_path, mode="w", encoding="utf-8")
+                _tm_handler.setFormatter(_logging.Formatter("%(asctime)s %(message)s"))
+                _tm_log.addHandler(_tm_handler)
+            except Exception:
+                pass  # file handler is optional — snapshot loop still runs, just logs nowhere
         _tm_baseline: list = []
 
         def _tm_snapshot_loop() -> None:
@@ -1562,8 +1575,6 @@ def main():
         _tm_thread = _threading.Thread(target=_tm_snapshot_loop, daemon=True,
                                        name="tracemalloc-sampler")
         _tm_thread.start()
-        import logging as _llog
-        _llog.getLogger("netsentinel.tracemalloc").setLevel(_llog.DEBUG)
     # ─────────────────────────────────────────────────────────────────────────
 
     ret = app.exec()

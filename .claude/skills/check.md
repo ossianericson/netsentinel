@@ -48,7 +48,7 @@ This is advisory — violations are shown but do not stop the check.
 Run only the three structure-enforcement tests. Do not run the full suite.
 
 ```powershell
-python -m pytest tests/test_module_loc.py tests/test_nav_completeness.py tests/test_source_encoding.py -q 2>&1 | tail -5
+python -m pytest tests/test_module_loc.py tests/test_nav_completeness.py tests/test_source_encoding.py -q 2>&1 | Select-Object -Last 5
 ```
 
 Record each as: `✓ passed` or `⚠ N failed` with the first failure message.

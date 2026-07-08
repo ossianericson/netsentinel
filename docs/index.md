@@ -63,6 +63,7 @@ chmod +x NetSentinel && sudo ./NetSentinel
 - [Hardware Integrations](hardware-plugins.md) — bundled plugins, writing your own, `.nspkg` format
 - [Scan Plugin Authoring](plugin-authoring.md) — custom security checks against the device list
 - [Contributing](../CONTRIBUTING.md) — dev setup, PR checklist, three contribution tracks
+- [Chaos / Monkey Testing](chaos-testing.md) — `.\test.ps1` UI chaos runner, memory soak mode, and the `AI_REPORT.md` triage file
 - [Networking Guide](networking-guide.md) — plain-English explanations of ARP, STP, DNS, TCP, DHCP
 - [Incident Patterns](incident-patterns.md) — real-world faults behind the speed-drop and filtered-layer detectors; on-demand vs. tray coverage
 

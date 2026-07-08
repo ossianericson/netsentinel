@@ -88,32 +88,23 @@ files. Do NOT manually edit `app.py`, `cli.py`, `apm.yml`, `installer.iss`, wing
 
 If `bump_version.py` exits non-zero: fix the reported failures before continuing.
 
-Files updated automatically (RULE-11):
-| File | What changes |
-|---|---|
-| `app.py` | `app.setApplicationVersion("X.Y.Z")` |
-| `cli.py` | `_VERSION = "X.Y.Z"` |
-| `apm.yml` | `version: X.Y.Z` |
-| `installer.iss` | `#define MyAppVersion "X.Y.Z"` |
-| `build.bat` / `build.sh` | version echo |
-| `README.md` | badge/link |
-| `modules/rest_api.py` | `/health` endpoint |
-| `tools/debug_launch.py` | `setApplicationVersion` |
-| All 3 winget manifests | `PackageVersion:` |
+`bump_version.py` handles every tracked version file (RULE 11) — don't hand-edit any of them.
 
-### Step 6 — Run the 30-minute monkey test (RULE-CHAOS1)
+### Step 6 — Get a clean 30-minute monkey test from the user (RULE-CHAOS1)
 
-Version bumps require a monkey session before the tag push.
+Version bumps require a clean monkey session before the tag push. **The agent does not launch
+the session** — ask the user to run it themselves and paste the results:
 
 ```powershell
+tools/run_all_monkey_tests.ps1
+# or:
 python tools/monkey_test.py --source --seed 99 --duration 1800
 ```
 
-If the monkey test finds crashes or hangs: fix them, re-run Steps 1–5, then re-run monkey.
-If clean: proceed to Step 7.
+If the pasted results show crashes or hangs: fix them, re-run Steps 1–5, then ask the user to
+re-run the monkey test. If clean: proceed to Step 7.
 
-Tell the user the monkey test is running and that it takes ~30 minutes.
-Do NOT skip this step and do NOT proceed to Step 7 while it is running.
+Do NOT skip this step and do NOT proceed to Step 7 until the user has pasted a clean result.
 
 ### Step 7 — Push branch and tag
 
@@ -139,7 +130,7 @@ Before presenting the result to the user, confirm every box:
 - [ ] README.md `## Changelog` block updated with 3–5 bullet summary
 - [ ] "What's New" in `ui/help_tab.py` matches the changelog
 - [ ] `bump_version.py X.Y.Z` exited 0; consistency test passed
-- [ ] Monkey test ran clean (30 min, seed 99)
+- [ ] User pasted a clean 30-minute monkey test result (seed 99)
 - [ ] `git push origin main` completed before tag push
 - [ ] `git tag vX.Y.Z` and `git push origin vX.Y.Z` completed
 

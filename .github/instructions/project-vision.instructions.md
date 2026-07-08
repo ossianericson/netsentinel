@@ -21,7 +21,7 @@ Both goals are served by the same core property: zero prior knowledge required.
 
 NetSentinel is a **professional-grade network security scanner and monitor** for Windows, macOS, and Linux. It is a desktop GUI application (PyQt6) targeting IT administrators, network engineers, security-aware home lab users, and students/educators who need an enterprise-quality tool — not a toy.
 
-Current version: **v2.1.25**
+Current version: **v2.1.26**
 
 **Production status: Microsoft Store ready.** A 9-hour overnight chaos run (June 2026) completed 10,001 UIA interactions across mild / moderate / wild chaos levels (seeds 1, 42, 99). Result: zero application crashes, all 62 pages functional before and after (confirmed by identical systematic pre/post runs). The app is considered production-stable for Microsoft Store submission.
 
@@ -36,122 +36,112 @@ polish, discoverability, and bug fixes.
 
 ## Implemented Features
 
+One line per feature — full behavioural detail lives in the module's own docstring, not here.
+
 ### Core Scanning & Detection
 - **Layer 2 rogue device detection** — ARP scanning, MAC/OUI classification, rogue bridge (STP) detection
 - **Broadcast storm analysis** — real-time packet capture and storm level measurement
 - **WiFi network enumeration** — rogue SSIDs, co-channel interference
 - **DNS & connectivity monitoring** — latency graphing, outage detection, DNS leak testing
-- **Active security audit** — SYN/UDP port scanning, OS fingerprinting, CVE lookup, credential testing (requires admin)
+- **Active security audit** — SYN/UDP port scanning, OS fingerprinting, CVE lookup, credential testing (admin)
 - **Background network logging** — continuous ping/RTT/jitter/DNS logging with file rotation
-- **Network topology visualisation** — live matplotlib graph showing device relationships
-- **IoT behaviour baselining** — detect devices going outside their normal behaviour
-- **Internet speed test** — Ookla CLI (1 Gbps+) → speedtest-cli (8 threads) → pure-Python (16 TCP streams)
-- **SMB/Windows Share enumeration** — `modules/smb_enumerator.py`; discovers exposed shares
-- **Private endpoint exposure checker** — `modules/private_endpoint_checker.py`; RFC 1918 boundary tests
-- **Cloud metadata probe** — `modules/cloud_metadata.py`; detects AWS/Azure/GCP IMDS exposure
-- **Device identification improvements** — async OUI vendor lookup for Unknown devices; vendor/type enrichment populates on first scan without requiring a re-scan (`modules/device_classifier.py`, `ui/scan_enrichment.py`)
-- **Service mapper** — `modules/service_mapper.py`; maps device_type/vendor to a list of relevant `ServiceInfo` objects (hostname, display name, protocol, expected port); feeds Service Diagnostics and Service Heartbeat
-- **Network segment/zone grouping** — devices automatically grouped into colour-coded /24 subnets; pill filter bar above the Devices table with multi-select; user-editable segment names and colours via right-click editor; stored user-defined segments win over auto-detected ones on CIDR conflict (`modules/network_segments.py`, schema v11)
-- **Persistent device map** — after each live scan, pinned and static-candidate devices (infrastructure roles, IP-stable devices seen 3+ times) that were not in the scan are appended to the Inventory snapshot with freshness states: `pinned` (always shown), `cached` (<24 h), or `stale` (<7 d); implemented in `ScanResultMixin._merge_scan_with_persistent()` in `ui/scan_wiring.py`
-- **"Hide offline" Inventory filter** — toggle button in the Current Devices card header hides `cached`/`stale` rows without losing the persistent map; state is not persisted (resets on each navigation); implemented in `InventoryPage._on_hide_offline_toggled()` + `_apply_segment_filter()`
+- **Network topology visualisation** — live matplotlib graph of device relationships
+- **IoT behaviour baselining** — detects devices going outside their normal behaviour
+- **Internet speed test** — Ookla CLI → speedtest-cli → pure-Python cascade (`modules/speed_tester.py`)
+- **SMB/Windows Share enumeration** — discovers exposed shares (`modules/smb_enumerator.py`)
+- **Private endpoint exposure checker** — RFC 1918 boundary tests (`modules/private_endpoint_checker.py`)
+- **Cloud metadata probe** — detects AWS/Azure/GCP IMDS exposure (`modules/cloud_metadata.py`)
+- **Device identification** — async OUI vendor lookup and enrichment on first scan (`modules/device_classifier.py`)
+- **Service mapper** — maps device type/vendor to relevant monitored services (`modules/service_mapper.py`)
+- **Network segment/zone grouping** — colour-coded /24 subnets with user-editable names (`modules/network_segments.py`)
+- **Persistent device map** — pinned/cached/stale freshness states carried across scans (`ui/scan_wiring.py`)
+- **"Hide offline" Inventory filter** — hides cached/stale rows without losing the persistent map
 
 ### Monitoring & Alerting
-- **Network Logger** — unified chronological monitor combining Network RTT, 5G Modem, Mesh, Syslog, and SNMP Traps; source toggle bar; per-source intervals; emits `live_challenge_detected` → Lab Mode
+- **Network Logger** — unified chronological monitor across RTT/modem/mesh/syslog/SNMP sources
 - **Active Connections** — process-to-socket map with firewall block/unblock
 - **Live Bandwidth** — 60-second rolling per-interface chart
-- **Threat Intelligence** — ThreatIntelDB, AbuseIPDB v2 lookup (consent-gated)
+- **Threat Intelligence** — ThreatIntelDB + AbuseIPDB v2 lookup (consent-gated)
 - **DHCP Lease Inventory** — rogue DHCP server detection
 - **DNS Zone Mapping** — AXFR + mDNS
-- **CVE lifecycle tracker** — per-device CVE tracking with metric_store schema v8
-- **Alert pipeline** — AlertEngine + NotificationRouter with Toast/Webhook/Email/Pushover/Ntfy/Telegram channels
+- **CVE lifecycle tracker** — per-device CVE tracking (schema v8)
+- **Alert pipeline** — AlertEngine + NotificationRouter across Toast/Webhook/Email/Pushover/Ntfy/Telegram
 - **Maintenance windows** — alert suppression per device or fleet-wide
 - **Predictive trend alerting** — OLS regression over RTT/loss/jitter with ETA-to-threshold
-- **Modem Signal Monitor** — ZTE MC889 5G modem signal stats (SINR, RSRP, band, cell ID); `modem_page.py`
-- **Mesh Router Monitor** — TP-Link Deco XE75 node signal stats and topology; `mesh_router_page.py`
-- **802.11 Monitor Mode** — passive frame capture via Npcap; `wifi_monitor_page.py`; requires admin
-- **Monitor Overview** — aggregated dashboard across all monitoring streams; `monitor_overview_page.py`
-- **Timeline** — chronological event log across all monitoring sources; `timeline_page.py`
-- **Service Diagnostics** — `ui/pages/service_diagnostics_page.py`; on-demand DNS/TCP/HTTPS/ICMP/traceroute probes for streaming and gaming services, plus any arbitrary hostname via the "Custom host…" picker entry (`DiagnosticEngine.run_custom()`); failure-layer classification (device → local_network → dns → isp → routing → remote_outage → filtered); `filtered` flags the ICMP-succeeds/TCP-fails signature of a firewall, VPN, or ISP silently blocking a connection, distinct from a real remote outage; backed by `modules/service_diagnostics.py`, `modules/service_diagnostics_probes.py`, `workers/service_diagnostics_worker.py` (Sprints 3–4, Monitor section)
+- **Modem Signal Monitor** — 5G modem signal stats (`ui/pages/modem_page.py`)
+- **Mesh Router Monitor** — mesh node signal stats and topology (`ui/pages/mesh_router_page.py`)
+- **802.11 Monitor Mode** — passive frame capture via Npcap, admin required (`ui/pages/wifi_monitor_page.py`)
+- **Monitor Overview** — aggregated dashboard across monitoring streams (`ui/pages/monitor_overview_page.py`)
+- **Timeline** — chronological event log across monitoring sources (`ui/pages/timeline_page.py`)
+- **Service Diagnostics** — on-demand DNS/TCP/HTTPS/ICMP/traceroute probes with failure-layer classification (`modules/service_diagnostics.py`)
 
 ### Navigation & UI
-- **VSCode-style activity rail navigation** — permanent 48 px icon rail + 280 px animated flyout; 9 sections; full feature set always visible; last-open section restored via QSettings; mode switcher removed
-- **Rail icon labels** — 9 px section name drawn below each rail icon (58 px button height); sections legible without hovering
-- **Persistent search button** — magnifier at the top of the rail, always visible; opens Ctrl+K on click
-- **Breadcrumb strip** — `"Section  ›  Page"` label above the content area; updated on every navigation
-- **Pinned section** — right-click any flyout item to pin it; a "Pinned" rail section appears immediately at the top of the rail; persists via QSettings
-- **Command palette (Ctrl+K)** — fuzzy-match any page or action; non-modal (click anywhere to dismiss); arrow keys + Enter; Esc to close
+- **VSCode-style activity rail navigation** — 48 px icon rail + 280 px animated flyout, 9 sections
+- **Rail icon labels** — section name drawn below each rail icon
+- **Persistent search button** — opens Ctrl+K from the rail
+- **Breadcrumb strip** — "Section › Page" label above the content area
+- **Pinned section** — right-click any flyout item to pin; persists via QSettings
+- **Command palette (Ctrl+K)** — fuzzy-match any page or action
 - **Sidebar search (Ctrl+F)** — focuses sidebar search from anywhere in the app
-- **Page help popover (?)** — floating 300px panel anchored below the ? button; screen-edge clamped so it never renders off-screen
-- **Lucide SVG rail section icons** — RULE 25; clean scalable SVG at any size
-- **Two colour themes** — Arctic Clean (light, cohesive cool-slate chrome) and Midnight Pro (dark); all values in `ui/styles.py`
-- **Configurable Overview tile dashboard** — drag to reorder, layout persists; `_LAYOUT_VER = 4`
-- **Skeleton loading rows** — `ui/widgets/skeleton.py`; placeholder rows while scan workers run
-- **Feature Guide** — `discover_page.py`; 83 feature entries across 9 groups with filter bar and Open buttons
-- **Scan Registry / flyout dot badges** — `_nav_set_scan_state()` in `_NavBuilderMixin` updates per-page state (never/running/fresh/stale/error); flyout items show coloured dots (GREEN/AMBER/ACCENT/RED); Security Audit rail button shows worst-state badge across all 9 audit labels; state persists across sessions via QSettings key `scan_registry/state`; auto-promoted from fresh → stale after per-label threshold via 5-minute staleness timer
-- **_ScanStatusTile** — new Overview tile (TILE_ID `"scan_status"`) pinned as first tile by default; shows live scan state for all 9 Security Audit tools from `_scan_registry`
-- **Last run chips** — `SpeedTestPage` and `DnsZonePage` each show a "Last run: N ago" chip in `_page_header_bar` updated after each successful run; `DnsZonePage` emits `scan_complete = pyqtSignal(str)` on success
+- **Page help popover (?)** — floating panel anchored below the ? button
+- **Lucide SVG rail section icons** — clean scalable SVG at any size (RULE 25)
+- **Two colour themes** — Arctic Clean (light) and Midnight Pro (dark) (`ui/styles.py`)
+- **Configurable Overview tile dashboard** — drag to reorder, layout persists
+- **Skeleton loading rows** — placeholder rows while scan workers run (`ui/widgets/skeleton.py`)
+- **Feature Guide** — filterable index of feature entries with Open buttons (`ui/pages/discover_page.py`)
+- **Scan Registry / flyout dot badges** — per-page scan state drives flyout and rail badges (`_NavBuilderMixin`)
+- **_ScanStatusTile** — Overview tile showing live scan state for all Security Audit tools
+- **Last run chips** — "Last run: N ago" chip on Speed Test and DNS Zone pages
 
 ### Home Page
 - **"Since you were last here" banner** — new devices and outages since last session
-- **"What to do next" suggestions strip** — up to four colour-coded action cards after each scan
-- **Weekly digest tray notification** — 7-day summary on startup if 7+ days elapsed
-- **Dismissible browser dashboard strip** — shown when REST API is enabled; links to `/dashboard`
-- **Dismissible Quick Tips card** — Ctrl+K, right-click pin, right-click device rows, REST API hint
-- **Scan Center card** — always-visible 5-row card on Home page (Device Scan, Security Audit, Speed Test, Service Health, Network Logger); each row shows a state dot from `_scan_registry` and a per-row action button; "▶ Rescan" triggers `rescan_requested` (full device scan only — other categories run from their own row button)
+- **"What to do next" suggestions strip** — up to four action cards after each scan
+- **Weekly digest tray notification** — 7-day summary on startup
+- **Dismissible browser dashboard strip** — shown when REST API is enabled
+- **Dismissible Quick Tips card** — Ctrl+K, right-click pin, REST API hint
+- **Scan Center card** — always-visible 5-row card with per-row state dot and action button
 
 ### Diagnosis & Root Cause
-- **One-click "What's Wrong?" diagnosis** — `DiagnosisPage`; symptom tiles → sequenced scan → plain-English findings; tiles: slow internet, dropping connection, no connection, **a service is unreachable** (new — selects service via combobox, routes finding to Service Diagnostics); accessible from Home page button and Ctrl+K
-- **Service Heartbeat Diagnose action** — "Diagnose →" right-click/context action on any monitored service in `service_page.py`; emits `diagnose_service` signal → navigates to Service Diagnostics pre-loaded for that service
-- **Root Cause Correlator** — `modules/root_cause_correlator.py`; prioritised findings and global verdict
+- **One-click "What's Wrong?" diagnosis** — symptom tiles → sequenced scan → plain-English findings (`ui/pages/diagnosis_page.py`)
+- **Service Heartbeat Diagnose action** — right-click action routes to Service Diagnostics (`ui/pages/service_page.py`)
+- **Root Cause Correlator** — prioritised findings and global verdict (`modules/root_cause_correlator.py`)
 - **Health Check** — on-demand ping, DNS speed test, traceroute, HTTP check, DNS leak test
 
 ### Data & Reporting
 - **PDF report export** — `save_pdf_report()`
-- **Config baseline snapshots and diff viewer** — structured diff: added/removed/changed devices
-- **REST API** — standalone page (`rest_api_page.py`); read-only Flask, 127.0.0.1 default, OS-keychain API key; live status probe; endpoint reference
-- **Browser dashboard** — self-contained dark HTML page at `/dashboard`; auto-refreshes every 30 s
-- **Wi-Fi signal-strength heatmap** — floor plan import, per-BSSID IDW interpolation, PNG export
-- **Geolocation map** — offline MaxMind GeoLite2-City, no API key, no external calls
-- **Network documentation generator** — one-click HTML/Markdown snapshot; `network_doc_page.py`
-- **Shareable diagnostic card** — PNG/HTML export: grade circle, ISP, top 3 findings, attribution
-- **MQTT / Home Assistant publisher** — Discovery payloads, configurable broker, OS keychain credentials; `mqtt_page.py`
-- **Speed Test modem signal snapshot** — each test saves 20 modem signal fields to DB; clicking history row restores signal panel
+- **Config baseline snapshots and diff viewer** — structured added/removed/changed device diff
+- **REST API** — read-only Flask API, OS-keychain key (`ui/pages/rest_api_page.py`)
+- **Browser dashboard** — self-contained dark HTML page at `/dashboard`, auto-refreshes
+- **Wi-Fi signal-strength heatmap** — floor plan import, per-BSSID IDW interpolation
+- **Geolocation map** — offline MaxMind GeoLite2-City, no API key
+- **Network documentation generator** — one-click HTML/Markdown snapshot (`ui/pages/network_doc_page.py`)
+- **Shareable diagnostic card** — PNG/HTML export with grade, ISP, top findings
+- **MQTT / Home Assistant publisher** — Discovery payloads, OS keychain credentials (`ui/pages/mqtt_page.py`)
+- **Speed Test modem signal snapshot** — saves 20 modem signal fields per test
 
 ### Automation
-- **Automation Hooks** — event-to-action pipeline; shell command hooks on alert/scan events; `automation_page.py`
-- **Custom Triggers** — expression builder for alerting conditions; `trigger_builder_page.py`, `modules/trigger_expression.py`
-- **Scheduled Reports** — `report_scheduler_worker.py`; configurable delivery schedule
+- **Automation Hooks** — event-to-action shell command pipeline (`ui/pages/automation_page.py`)
+- **Custom Triggers** — expression builder for alerting conditions (`modules/trigger_expression.py`)
+- **Scheduled Reports** — configurable delivery schedule (`workers/report_scheduler_worker.py`)
 
 ### Security Audit (requires admin or Npcap)
-- **Security Overview** — aggregate security findings dashboard with grade; `security_overview_page.py`; Scan Status card shows per-tool state (9 rows) with pill badges and last-run age for all audit labels in `_AUDIT_SCAN_LABELS`; "▶ Run Security Audit" button fires `_AUDIT_SEQUENCE` (Port Scan TCP + Exposed to Internet) sequentially via the audit coordinator in `dashboard._advance_security_audit()`
+- **Security Overview** — aggregate security findings dashboard with grade and Scan Status card (`ui/pages/security_overview_page.py`)
 - **Full Device Discovery** — comprehensive multi-method device enumeration
-- **Login Test** — credentialed scan (SSH, SMB, FTP, Telnet); `modules/credentialed_scan.py`
-- **Natural language device search** — `modules/nl_query.py`
+- **Login Test** — credentialed scan (SSH, SMB, FTP, Telnet) (`modules/credentialed_scan.py`)
+- **Natural language device search** — (`modules/nl_query.py`)
 
 ### Education
-- **Interactive protocol visualizer** — 10-protocol animated diagrams (ARP, DNS, TCP, DHCP, STP, OSPF, NAT, VLAN 802.1Q, TLS 1.3, ICMP traceroute) using real scan data (`ui/pages/protocol_viz_page.py`, `modules/protocol_animator.py`, `modules/protocol_animator_extra.py`)
-- **Lab / scenario mode** — guided exercises with hints, solution reveals, exportable HTML results; live challenges injected from Network Logger events (`ui/pages/lab_mode_page.py`, `modules/lab_scenarios.py`)
-- **Contextual explainer panel** — `ui/widgets/explainer_panel.py`; collapsible plain-English panel on detection pages
+- **Interactive protocol visualizer** — 10-protocol animated diagrams using real scan data (`ui/pages/protocol_viz_page.py`)
+- **Lab / scenario mode** — guided exercises with live challenges from Network Logger events (`ui/pages/lab_mode_page.py`)
+- **Contextual explainer panel** — collapsible plain-English panel on detection pages (`ui/widgets/explainer_panel.py`)
 
 ### Security & Plumbing
-- **AppData path hardening** — `get_app_data_dir()` prevents PermissionError in `C:\Program Files\`
-- **OS keychain for all secrets** — SMTP, SNMP, API keys via `keyring`; never QSettings
+- **AppData path hardening** — `get_app_data_dir()` prevents PermissionError in Program Files
+- **OS keychain for all secrets** — SMTP, SNMP, API keys via `keyring`
 - **Winget E_ABORT fix** — three-layer defence for Ookla CLI install edge cases
-- **Plugin system** — drop Python scripts into `plugins/`; `plugin_system.py` + `plugin_registry.py`; exposed via Security Audit sidebar
-- **Hardware integration** — USB/serial/GPIO device detection; `hardware_integration_page.py` in Extend section
-- **Hardware plugin ecosystem (v1.9.45–v1.9.47)**
-  - Multi-instance support — same plugin type, different device IPs, each with its own keyring credential and Hub card
-  - Per-plugin health tracking — success/error counters, circuit-breaker (auto-disable after 10 errors), degraded amber state after 24 h without success
-  - Structured error classification — AUTH / DEPS / NET / TIMEOUT prefixes; `_classify_error()` routes to appropriate remediation text
-  - Blocking live-test before registration — credential dialog runs get_info()+get_status() in background thread; only saves on success
-  - Startup dep smoke-check — missing PYPI_PACKAGE dependencies surface as card errors immediately at startup
-  - Plugin log console — "≡ Logs" toggle on each Hub card shows last 100 structured poll log lines (P3-3)
-  - Unsigned plugin warning — one-time SHA-256-keyed consent dialog for non-bundled scripts (P4-1)
-  - Plugin validator CLI — `python -m modules.plugin_tools validate <plugin.py>` performs static analysis (P3-1)
-  - Plugin template wizard — "⬡ New Plugin" button in Hardware Hub generates a filled-in .py template (P3-2)
-  - Plugin icon support — `icon.png` alongside script or `ICON_PATH` constant displayed as 24×24 on Hub cards (P2-3)
-  - Bundled plugin signing — `data/plugin_hashes.json` SHA-256 hash list; tampered files blocked at load time (P4-2)
-  - Restricted import advisory — `validate_plugin()` warns when imports fall outside `_DEFAULT_SAFE_IMPORTS` (P4-3)
+- **Plugin system** — drop Python scripts into `plugins/` (`modules/plugin_system.py`)
+- **Hardware integration** — USB/serial/GPIO device detection (`ui/pages/hardware_integration_page.py`)
+- **Hardware plugin ecosystem** — multi-instance support, per-plugin health tracking with circuit-breaker, structured error classification, blocking live-test on registration, log console, signing/validation tooling, and a template wizard (`modules/plugin_tools.py`, `ui/widgets/hub_card.py`)
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-description: Enforce RED-GREEN-REFACTOR cycle with hard gates. Use this skill whenever writing new code, fixing bugs, or adding features — any time implementation code will be written or modified. Prevents the common LLM failure mode of writing implementation first and tests later (or never). Also use when reviewing code to verify TDD discipline was followed.
+description: Enforce RED-GREEN-REFACTOR cycle with hard gates. Per RULE-TDD1, applies to new or changed `modules/` code and bug-fix regression tests — `ui/pages/` uses RULE-T7 post-hoc behavioral tests instead (PyQt6 widget lifecycle makes strict test-first impractical there). Prevents the common LLM failure mode of writing implementation first and tests later (or never). Also use when reviewing `modules/` code to verify TDD discipline was followed.
 role: worker
 user-invocable: true
 ---

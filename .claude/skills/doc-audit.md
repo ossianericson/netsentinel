@@ -88,6 +88,28 @@ checks each tracked package is named in the layout map, not each file. Record
 
 ---
 
+## Step 5b — Source ↔ output reconciliation
+
+Two checks that catch a dead source file or an unmanaged orphan — neither of which
+Step 4 detects, since `apm compile` silently ignores a misnamed source and has no
+opinion about extra files sitting in `.claude/rules/`.
+
+```powershell
+# (a) every .apm/instructions/*.md must be named *.instructions.md, or apm compile ignores it
+Get-ChildItem .apm/instructions -Filter "*.md" | Where-Object { $_.Name -notmatch "\.instructions\.md$" }
+
+# (b) every file in .claude/rules/ must correspond to an .apm source (else it's an orphan)
+$sources = Get-ChildItem .apm/instructions -Filter "*.instructions.md" | ForEach-Object { $_.BaseName -replace "\.instructions$", "" }
+$outputs = Get-ChildItem .claude/rules -Filter "*.md" | ForEach-Object { $_.BaseName -replace "\.instructions$", "" }
+Compare-Object $sources $outputs
+```
+
+Both commands should return nothing. Record `✓ no dead sources / no orphans` or
+`⚠ <list>` — a dead source needs renaming to the `*.instructions.md` suffix; an
+orphan needs either an `.apm/instructions/` source created for it or deletion.
+
+---
+
 ## Step 6 — Print the dashboard
 
 ```
@@ -97,6 +119,7 @@ apm.yml rules block   [✓/⚠]  clean / stale block present
 Version tokens        [✓/⚠]  all v<X> / drift: <values>
 Fossil CLAUDE.md      [✓/⚠]  none / present
 Generated outputs     [✓/⚠]  in sync / N drifted (recompiled)
+Source/output sync    [✓/⚠]  no dead sources or orphans / N found
 Structure tests       [✓/⚠]  passed / N failed
 ```
 
