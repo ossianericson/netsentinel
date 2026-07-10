@@ -1992,6 +1992,8 @@ class _ScanStatusTile(_BaseTile):
             else:
                 e = registry.get(reg_key, {})
                 state, ts = e.get("state", "never"), e.get("ts", 0.0) or 0.0
+                if state == "running":
+                    state = "never"  # scan interrupted before startup normalization ran
             color = _COLOR.get(state, TEXT_MUTED)
             self._sc_dots[i].setStyleSheet(f"font-size:9px; color:{color}; border:none;")
             self._sc_ages[i].setText(self._scan_age_str(ts) if ts else "Never")

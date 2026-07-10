@@ -6,7 +6,7 @@ On completion, compares results against the last baseline and fires a
 desktop notification if new or changed devices are found.
 
 Desktop notifications:
-  Windows  — win10toast (optional) or fallback to PowerShell BurntToast
+  Windows  — PowerShell toast via the Windows.UI.Notifications API
   macOS    — osascript notification
   Linux    — notify-send
 All fallback gracefully if the platform notification API is unavailable.
@@ -22,19 +22,31 @@ from typing import Callable, List, Optional
 
 # ── Notification helpers ──────────────────────────────────────────────────────
 
+def _escape_ps_string(s: str) -> str:
+    """Escape a string for safe embedding inside a PowerShell double-quoted literal."""
+    return s.replace("`", "``").replace('"', '`"').replace("$", "`$")
+
+
+def _escape_applescript_string(s: str) -> str:
+    """Escape a string for safe embedding inside an AppleScript double-quoted literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _notify(title: str, message: str) -> None:
     """Best-effort desktop notification. Silently ignores all errors."""
     system = platform.system()
     try:
         if system == "Windows":
             # Try PowerShell toast (no extra package needed on Win10+)
+            ps_title = _escape_ps_string(title)
+            ps_message = _escape_ps_string(message)
             ps = (
                 f'[Windows.UI.Notifications.ToastNotificationManager,'
                 f'Windows.UI.Notifications,ContentType=WindowsRuntime] | Out-Null;'
                 f'$t=[Windows.UI.Notifications.ToastTemplateType]::ToastText02;'
                 f'$x=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($t);'
-                f'$x.GetElementsByTagName("text")[0].AppendChild($x.CreateTextNode("{title}")) | Out-Null;'
-                f'$x.GetElementsByTagName("text")[1].AppendChild($x.CreateTextNode("{message}")) | Out-Null;'
+                f'$x.GetElementsByTagName("text")[0].AppendChild($x.CreateTextNode("{ps_title}")) | Out-Null;'
+                f'$x.GetElementsByTagName("text")[1].AppendChild($x.CreateTextNode("{ps_message}")) | Out-Null;'
                 f'$n=[Windows.UI.Notifications.ToastNotification]::new($x);'
                 f'[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("NetSentinel").Show($n)'
             )
@@ -45,9 +57,11 @@ def _notify(title: str, message: str) -> None:
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
         elif system == "Darwin":
+            as_title = _escape_applescript_string(title)
+            as_message = _escape_applescript_string(message)
             subprocess.run(
                 ["osascript", "-e",
-                 f'display notification "{message}" with title "{title}"'],
+                 f'display notification "{as_message}" with title "{as_title}"'],
                 timeout=5,
                 capture_output=True,
             )

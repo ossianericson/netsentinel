@@ -23,6 +23,7 @@ Architecture rules observed
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
@@ -35,6 +36,8 @@ from modules.notification_channels import (
     _deliver_webhook_tracked, _deliver_email_tracked,
     _deliver_pushover_tracked, _deliver_ntfy_tracked, _deliver_telegram_tracked,
 )
+
+_log = logging.getLogger(__name__)
 
 # ── Severity ordering ─────────────────────────────────────────────────────────
 
@@ -188,8 +191,8 @@ class NotificationRouter:
                     continue
                 if expiry == 0 or expiry > now:
                     self._snooze[rule_name] = expiry
-        except Exception:
-            pass  # ignore corrupt snooze registry
+        except Exception as exc:
+            _log.warning("Failed to restore snooze registry from %s: %s", self._snooze_path(), exc)
 
     def _persist_snoozes(self) -> None:
         """Write current snooze registry to disk."""
@@ -197,8 +200,8 @@ class NotificationRouter:
             path = self._snooze_path()
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(self._snooze), encoding="utf-8")
-        except Exception:
-            pass  # non-fatal
+        except Exception as exc:
+            _log.warning("Failed to persist snooze registry: %s", exc)
 
     def set_snooze(self, rule_name: str, until_ts: float) -> None:
         """Snooze rule_name until until_ts (Unix seconds). Pass 0 for 'forever'."""
@@ -209,8 +212,8 @@ class NotificationRouter:
             path = self._snooze_path()
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(snapshot), encoding="utf-8")
-        except Exception:
-            pass  # non-fatal
+        except Exception as exc:
+            _log.warning("Failed to persist snooze for rule %r: %s", rule_name, exc)
 
     def clear_snooze(self, rule_name: str) -> None:
         with self._lock:
@@ -220,8 +223,8 @@ class NotificationRouter:
             path = self._snooze_path()
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(snapshot), encoding="utf-8")
-        except Exception:
-            pass  # non-fatal
+        except Exception as exc:
+            _log.warning("Failed to persist snooze clear for rule %r: %s", rule_name, exc)
 
     def get_snooze_expiry(self, rule_name: str) -> Optional[float]:
         """Return expiry ts for snoozed rule, 0 if forever, None if not snoozed."""
