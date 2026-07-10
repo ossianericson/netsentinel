@@ -59,7 +59,11 @@ RULE_TYPES = frozenset({
 # The two sets are deliberately disjoint. Rules absent from both (MESH_DEGRADED,
 # MODEM_SIGNAL_DROP, GRADE_REGRESSION, BASELINE_DROP) are singleton/network-wide
 # metrics keyed by a literal string, not an arbitrary device — neither gated nor
-# counted toward the security badge.
+# counted toward the security badge. NEW_OPEN_PORT is also absent from both: a
+# newly opened port is a state change of unknown severity (could be a game server
+# the user just started), not an attack signature like ARP_SPOOF/ROGUE_DHCP — it
+# still fires and lands in the general Alert History, but doesn't compete for
+# attention with genuine security incidents on the Security Audit badge/card.
 
 # Gated set = rules that fire against auto-discovered LAN devices from the scan /
 # availability pipeline (the ones that flood when "every device in the scan" is
@@ -84,7 +88,6 @@ DEVICE_SCOPED_RULE_TYPES = frozenset({
 SECURITY_RELEVANT_RULE_TYPES = frozenset({
     "ARP_SPOOF",
     "ROGUE_DHCP",
-    "NEW_OPEN_PORT",
     "NEW_CVE",
     "NEW_EXPOSURE",
     "CONFIG_DRIFT",
