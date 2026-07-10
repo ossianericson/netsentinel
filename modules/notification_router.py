@@ -275,13 +275,16 @@ class NotificationRouter:
                 continue
 
             if isinstance(ch, ToastChannel):
+                entry = self._log_delivery(ch.name, "TOAST", alert)
                 if self._toast_cb:
                     try:
                         self._toast_cb(alert)
-                    except Exception:
-                        pass  # non-fatal
-                entry = self._log_delivery(ch.name, "TOAST", alert)
-                self._mark_delivered(entry)
+                    except Exception as exc:
+                        self._mark_failed(entry, str(exc))
+                    else:
+                        self._mark_delivered(entry)
+                else:
+                    self._mark_delivered(entry)
 
             elif isinstance(ch, WebhookChannel):
                 if ch.url:
