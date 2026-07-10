@@ -180,6 +180,9 @@ class SystemTrayManager:
         self._health_headline: str = ""
         self._pending_click_callback: Optional[Callable[[], None]] = None
         self._qs = QSettings("NetSentinel", "NetSentinel")
+        # True only after show_tray_icon() has run — see show_tray_icon() and
+        # the guards in show_notification()/_refresh_icon() for why this exists.
+        self._shown = False
 
     # ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -197,8 +200,39 @@ class SystemTrayManager:
         self._tray.setContextMenu(menu)
         self._tray.activated.connect(self._on_activated)
         self._tray.messageClicked.connect(self._on_message_clicked)
-        self._tray.show()
+        # .show() is deliberately NOT called here — see show_tray_icon().
+        # self._tray is fully constructed and wired above so is_available()
+        # (self._tray is not None) still works immediately for callers gating
+        # on it during startup, before the icon is actually shown.
         return True
+
+    def show_tray_icon(self) -> None:
+        """Show the already-constructed tray icon. Must only be called from
+        AppHeaderMixin.showEvent() (ui/header.py) — never from setup() or
+        anywhere else in Dashboard.__init__/main()'s startup sequence.
+        QSystemTrayIcon.show() calls into Shell_NotifyIcon, a COM call-out.
+        Calling it synchronously from setup() (invoked from Dashboard.__init__,
+        while a dozen+ background QThread workers are already starting, and
+        while main() is still pumping nested processEvents() calls via
+        _splash_msg) reproduced a fatal, uncatchable Windows COM reentrancy
+        fault (0x8001010d) during a 2026-07-08 chaos soak run
+        (docs/spikes/startup-com-reentrancy.md). Deferring with
+        QTimer.singleShot(0, ...) from setup() was tried and confirmed NOT to
+        fix it — the 0ms timer fires on the very next event-loop turn, which
+        is _splash_msg's own processEvents() call, the same pump it needed to
+        avoid. showEvent() only fires after the real window.show() runs,
+        which is after every _splash_msg pump in main() has already returned.
+
+        showMessage()/setIcon()/setToolTip() are the same Shell_NotifyIcon
+        call-out and are just as reachable during that startup window —
+        show_notification() and _refresh_icon() are guarded by ``self._shown``
+        below and stay silent until this method has run, then this method
+        flushes any badge/grade/health state that was set while hidden.
+        """
+        if self._tray is not None:
+            self._tray.show()
+            self._shown = True
+            self._refresh_icon()
 
     def _load_icon(self) -> QIcon:
         # 1. Caller-supplied path
@@ -307,8 +341,8 @@ class SystemTrayManager:
         ``on_click`` is invoked once if the user clicks the notification
         balloon itself (not the tray icon) before it dismisses.
         """
-        if self._tray is None:
-            return
+        if self._tray is None or not self._shown:
+            return  # not shown yet — see show_tray_icon() docstring (COM reentrancy)
         icon_map = {
             "CRITICAL": QSystemTrayIcon.MessageIcon.Critical,
             "HIGH":     QSystemTrayIcon.MessageIcon.Critical,
@@ -442,8 +476,8 @@ class SystemTrayManager:
     # ── Internal ─────────────────────────────────────────────────────────────
 
     def _refresh_icon(self) -> None:
-        if self._tray is None or self._base_icon is None:
-            return
+        if self._tray is None or self._base_icon is None or not self._shown:
+            return  # not shown yet — see show_tray_icon() docstring (COM reentrancy)
         icon = _build_badge_icon(self._base_icon, self._badge_count)
         icon = _overlay_health_dot(icon, self._health_state)
         self._tray.setIcon(icon)

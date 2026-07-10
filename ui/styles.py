@@ -2,8 +2,8 @@
 UI colour palette and QSS stylesheet for NetSentinel.
 
 Two built-in themes:
-  • Arctic Clean  — professional light, cohesive cool-slate chrome
-  • Midnight Pro  — modern dark with electric blue (GitHub Dark palette, default)
+  • Arctic Clean — professional light, cool-slate chrome with deep-indigo table headers
+  • Midnight Pro — modern dark with bright royal-blue accent (GitHub Dark palette, default)
 
 Theme is persisted in QSettings under "ui/theme".
 All colour constants are injected into module globals at import time
@@ -34,10 +34,10 @@ _ARCTIC_CLEAN = {
     "TEXT_PRIMARY":       "#1A1A2E",
     "TEXT_SECONDARY":     "#475569",
     "TEXT_MUTED":         "#6D7A88",
-    # Table headers
-    "TH_BG":              "#1A3A5C",
+    # Table headers — deep indigo (ported from Sentinel Light: white-on-header 11.6→15.2:1)
+    "TH_BG":              "#14205A",
     "TH_TEXT":            "#FFFFFF",
-    "TH_BORDER":          "#254A6E",
+    "TH_BORDER":          "#22307A",
     "TABLE_SEL":          "#CCE4F7",
     "TABLE_ROW_BORDER":   "#EAEAEA",
     # Status colours
@@ -130,7 +130,7 @@ _ARCTIC_CLEAN = {
     "CHART_PLOT_BG":      "#FAFBFC",
     "CHART_GRID":         "#E8EDF2",
     "CHART_SPINE":        "#D4D4D4",
-    "CHART_TITLE":        "#1A3A5C",
+    "CHART_TITLE":        "#14205A",
     # Critical severity (CVE, risk — darker than RED for emphasis)
     "CVE_CRITICAL_FG":    "#8B0000",
     # Scan radar animation
@@ -145,16 +145,16 @@ _DARK_PRO = {
     "NAV_BAR":            "#0D1117",
     "SIDEBAR_BG":         "#161B22",
     "SIDEBAR_HOVER":      "#21262D",
-    "SIDEBAR_SEL":        "#2F81F7",
+    "SIDEBAR_SEL":        "#3B82F6",
     "SIDEBAR_ITEM_FG":    "#8B949E",
     "SIDEBAR_SEL_BG":     "#1D3045",
     "BG_DARK":            "#0D1117",
     "BG_CARD":            "#1C2128",
     "BG_HOVER":           "#1A2233",
     "BG_ALT_ROW":         "#111820",
-    # Accent
-    "ACCENT":             "#2F81F7",
-    "ACCENT_LITE":        "#58A6FF",
+    # Accent — brighter royal blue (ported from Sentinel Dark: accent-on-card 4.32→4.63:1, clears AA)
+    "ACCENT":             "#3B82F6",
+    "ACCENT_LITE":        "#60A5FA",
     "ACCENT_DARK":        "#1A6BC4",
     # Text
     "TEXT_PRIMARY":       "#E6EDF3",
@@ -170,7 +170,7 @@ _DARK_PRO = {
     "RED":                "#F85149",
     "AMBER":              "#F5B942",
     "GREEN":              "#4CAF50",
-    "BLUE":               "#2F81F7",
+    "BLUE":               "#3B82F6",
     # Status badge backgrounds
     "RED_BG":             "rgba(217,48,37,0.12)",
     "AMBER_BG":           "rgba(245,158,11,0.12)",
@@ -193,14 +193,14 @@ _DARK_PRO = {
     "SCROLLBAR_TRACK":    "#0D1117",
     "SCROLLBAR_HANDLE":   "#30363D",
     # Labels / tooltips
-    "LABEL_SUBTITLE":     "#58A6FF",
+    "LABEL_SUBTITLE":     "#60A5FA",
     "TOOLTIP_BG":         "#0D1117",
     "TOOLTIP_BORDER":     "#30363D",
     "TOOLTIP_FG":         "#E6EDF3",
     # Notification bars
     "UPDATE_BAR_BG":      "#102030",
     "UPDATE_BAR_BORDER":  "#204050",
-    "UPDATE_BAR_FG":      "#58A6FF",
+    "UPDATE_BAR_FG":      "#60A5FA",
     "ADMIN_WARN_FG":      "#E3B341",
     "ADMIN_WARN_BG":      "#2A1A00",
     "ADMIN_WARN_BORDER":  "#664400",
@@ -236,7 +236,7 @@ _DARK_PRO = {
     # Info box (Ookla banner etc.)
     "INFO_BOX_BG":        "#102030",
     "INFO_BOX_BORDER":    "#204050",
-    "INFO_BOX_FG":        "#58A6FF",
+    "INFO_BOX_FG":        "#60A5FA",
     # Inline warning text / background
     "INLINE_WARN_FG":     "#E3B341",
     "INLINE_WARN_BG":     "#2A1A00",
@@ -255,7 +255,7 @@ _DARK_PRO = {
     "CHART_PLOT_BG":      "#0D1117",
     "CHART_GRID":         "#21262D",
     "CHART_SPINE":        "#30363D",
-    "CHART_TITLE":        "#58A6FF",
+    "CHART_TITLE":        "#60A5FA",
     # Critical severity
     "CVE_CRITICAL_FG":    "#FF6E6E",
     # Scan radar animation
@@ -268,8 +268,8 @@ _DARK_PRO = {
 # ── Theme registry ────────────────────────────────────────────────────────────
 
 THEMES: dict = {
-    "Arctic Clean":  _ARCTIC_CLEAN,
-    "Midnight Pro":  _DARK_PRO,
+    "Arctic Clean":   _ARCTIC_CLEAN,
+    "Midnight Pro":   _DARK_PRO,
 }
 
 DEFAULT_THEME = "Midnight Pro"
@@ -516,7 +516,7 @@ CHART_PURPLE = "#8E44AD"   # 6th data-series colour (history charts)
 MAP_LAND_BG        = "#1E2D3D"   # geo map — land fill (dark ocean-contrast)
 MAP_LAND_BORDER    = "#3A4F63"   # geo map — land border (subtle outline)
 
-IP_CALC_NET_BIT_BG = "#1A3A5C"   # ip calculator — network bit cell (reuses TH_BG value)
+IP_CALC_NET_BIT_BG = "#14205A"   # ip calculator — network bit cell (matches Arctic TH_BG)
 IP_CALC_HOST_BIT_BG = "#2D4A2D"  # ip calculator — host bit cell (green tint)
 IP_CALC_NET_FG     = "#7EB8F7"   # ip calculator — network bit foreground (light blue)
 IP_CALC_HOST_FG    = "#88CC88"   # ip calculator — host bit foreground (light green)

@@ -4,6 +4,22 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.27
+
+Polish and stability release — sharpens the two built-in themes for contrast, fixes an intermittent startup COM-reentrancy fault, speeds up first paint, and repairs a CI gap that was silently hiding most of the test suite. No new features.
+
+**Changed**
+- Kept the theme lineup at two polished options (`Arctic Clean` light, `Midnight Pro` dark) and folded in the only measurable clarity wins from the experimental Sentinel palettes: `Arctic Clean` table headers deepened to indigo `#14205A` (white-on-header contrast 11.6→15.2:1) and `Midnight Pro`'s accent brightened to royal-blue `#3B82F6` (accent-on-card 4.32→4.63:1, now clears WCAG AA), with the full Midnight accent family (`SIDEBAR_SEL`, `BLUE`, `CHART_TITLE`, info/update-bar text) re-tinted to match
+- Faster first paint — the Network Map's `WebEngine` view and the Threat Intel table now build lazily in `showEvent()` instead of during Dashboard construction; behind the opt-in `experimental/lazy_pages` flag, 10 leaf pages also defer construction until first shown
+- APM instruction pipeline is now Claude-only — dropped the unused Copilot/Gemini targets and removed the generated `AGENTS.md`, `GEMINI.md`, and `.github/instructions/` outputs (dev tooling only)
+
+**Fixed**
+- Startup COM-reentrancy fault — the system-tray icon's `show()` and the remaining `Shell_NotifyIcon` call-outs are now deferred to `showEvent()` / guarded, stopping an intermittent `STATUS_ACCESS_VIOLATION` fault on some Windows machines (`ui/system_tray.py`, `ui/header.py`)
+- CI was silently running only part of the test suite — a Dashboard test reaching `closeEvent()` → `os._exit(0)` terminated pytest early with a green exit; the offending Dashboard tests are now subprocess-isolated and `tests/test_suite_completes.py` guards against the regression, and the chaos-test focus guard was hardened to log and reclaim rather than skip
+- `--tracemalloc` memory-soak launches again — tracemalloc now traces 1 frame and activates 3 s into the event loop instead of inline before `app.exec()`, so the window appears in ~11 s rather than timing out the soak harness (dev tooling only)
+
+---
+
 ### v2.1.26
 
 Internal tooling and dev-process release — consolidates monkey-test tooling into one budget-driven runner, closes a sleep/screensaver gap that could kill unattended chaos runs, repairs the APM instruction-compilation pipeline, and fixes a page-help popover that could get stuck open. No user-facing feature changes.

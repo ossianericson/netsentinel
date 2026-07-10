@@ -371,9 +371,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Internal tooling release", "This release is dev-process and tooling work — no user-facing features or settings changed."),
-        ("Steadier page help", "The '?' page-help popover no longer gets stuck open after navigating to another page."),
-        ("More reliable chaos testing", "The overnight chaos-test tooling was consolidated into one runner and no longer stalls if the machine sleeps mid-run."),
+        ("Sharper themes", "Arctic Clean gets deeper indigo table headers and Midnight Pro a brighter, AA-compliant royal-blue accent — two polished themes rather than more choices."),
+        ("Steadier launch", "Fixed an intermittent startup fault on some Windows machines caused by the system-tray icon initialising too early."),
+        ("Faster startup", "Heavy pages like the Network Map and Threat Intel now build the first time you open them instead of at launch."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────

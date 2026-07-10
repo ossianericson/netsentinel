@@ -289,6 +289,83 @@ function Get-TracemallocSnapshots {
     return $result
 }
 
+function Get-PhaseHealth {
+    # Parses a phase's monkey.log for RSS trend + health/restart events. These
+    # do NOT surface in exit code, crash count, or exception count: monkey_test's
+    # health monitor silently RESTARTS a hung or memory-blown app and the phase
+    # then finishes with exit 0. Without this parse, a phase that climbed to
+    # 1250 MB and hung for 45s looks identical to a clean phase in the report.
+    # Also used to reconstruct a partial result for a phase interrupted by Ctrl+C
+    # (which never returns from Invoke-Phase and so never writes monkey_summary.json).
+    param([string]$OutDir)
+    $h = [pscustomobject]@{
+        PeakRssMb = $null; LastRssMb = $null; LastIter = $null
+        MemExceeded = 0; Hangs = 0; Restarts = 0
+        Events = @(); HasLog = $false
+    }
+    $logPath = Join-Path $OutDir "monkey.log"
+    if (-not (Test-Path $logPath)) { return $h }
+    $h.HasLog = $true
+    # -Encoding UTF8: monkey.log is written by Python logging as UTF-8 (no BOM);
+    # without this PS5.1 reads it as cp1252 and mangles em-dashes into "a-hat"
+    # mojibake that then gets baked into the report.
+    $lines = @(Get-Content $logPath -Encoding UTF8 -ErrorAction SilentlyContinue)
+    if ($lines.Count -eq 0) { return $h }
+
+    $peak = 0; $last = $null; $lastIter = $null
+    $memFirst = $null; $memLast = $null
+    $evt = New-Object System.Collections.Generic.List[string]
+    foreach ($ln in $lines) {
+        if ($ln -match 'rss=(\d+)\s*MB') {
+            $v = [int]$Matches[1]
+            if ($v -gt $peak) { $peak = $v }
+            $last = $v
+        }
+        if ($ln -match 'iter=(\d+)') { $lastIter = [int]$Matches[1] }
+        elseif ($ln -match 'Interrupted at iteration (\d+)') { $lastIter = [int]$Matches[1] }
+
+        if ($ln -match 'exceeds limit') {
+            $h.MemExceeded++
+            if ($null -eq $memFirst) { $memFirst = $ln.Trim() }
+            $memLast = $ln.Trim()
+        }
+        if ($ln -match 'may be hung' -or $ln -match 'No iteration for') { $h.Hangs++; $evt.Add($ln.Trim()) }
+        # Count restarts once each: the "restarting app (attempt N/3)" line is
+        # emitted exactly once per restart (whether triggered by the health
+        # monitor or by "Window/process gone"). The follow-on "relaunch attempt"
+        # / "App relaunched" lines are kept as context but not re-counted.
+        if ($ln -match 'restarting app \(attempt') { $h.Restarts++; $evt.Add($ln.Trim()) }
+        elseif ($ln -match '\[restart\]') { $evt.Add($ln.Trim()) }
+        if ($ln -match 'Interrupted at iteration') { $evt.Add($ln.Trim()) }
+    }
+    if ($peak -gt 0) { $h.PeakRssMb = $peak }
+    $h.LastRssMb = $last
+    $h.LastIter = $lastIter
+    if ($h.MemExceeded -gt 0 -and $memFirst) {
+        $evt.Insert(0, "RSS exceeded mem-limit x$($h.MemExceeded): first [$memFirst] last [$memLast]")
+    }
+    # dedupe, preserve order, cap length
+    $seen = @{}; $out = New-Object System.Collections.Generic.List[string]
+    foreach ($e in $evt) {
+        if (-not $seen.ContainsKey($e)) { $seen[$e] = $true; $out.Add($e) }
+        if ($out.Count -ge 25) { break }
+    }
+    $h.Events = $out.ToArray()
+    return $h
+}
+
+function Format-HealthCell {
+    param($Health)
+    if ($null -eq $Health) { return "-" }
+    $parts = @()
+    if ($Health.Hangs -gt 0)       { $parts += "hang x$($Health.Hangs)" }
+    if ($Health.MemExceeded -gt 0) { $parts += "mem x$($Health.MemExceeded)" }
+    if ($Health.Restarts -gt 0)    { $parts += "restart x$($Health.Restarts)" }
+    if ($parts.Count -gt 0) { return ($parts -join ", ") }
+    if ($Health.HasLog) { return "ok" }
+    return "-"
+}
+
 function Write-AiReport {
     param(
         [string]$ReportPath,
@@ -328,8 +405,8 @@ function Write-AiReport {
     [void]$sb.AppendLine("")
     [void]$sb.AppendLine("## Phase results")
     [void]$sb.AppendLine("")
-    [void]$sb.AppendLine("| Cycle | Phase | Chaos | Seed | Planned | Actual | Exit | Crashes | Exceptions | Iters | Focus-stolen | Peak RSS (MB) |")
-    [void]$sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|")
+    [void]$sb.AppendLine("| Cycle | Phase | Chaos | Seed | Planned | Actual | Exit | Crashes | Exceptions | Iters | Focus-stolen | Health | Peak RSS (MB) |")
+    [void]$sb.AppendLine("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     foreach ($r in $Results) {
         $chaosCell = "-"; if ($r.Chaos) { $chaosCell = $r.Chaos }
         $seedCell = "-"; if ($null -ne $r.Seed) { $seedCell = "$($r.Seed)" }
@@ -337,10 +414,38 @@ function Write-AiReport {
         $excCell = "-"; if ($null -ne $r.Exceptions) { $excCell = "$($r.Exceptions)" }
         $itersCell = "-"; if ($null -ne $r.Iters) { $itersCell = "$($r.Iters)" }
         $focusCell = "-"; if ($null -ne $r.FocusStolen) { $focusCell = "$($r.FocusStolen)" }
+        $healthCell = Format-HealthCell $r.Health
         $rssCell = "-"; if ($null -ne $r.PeakRssMb) { $rssCell = "$($r.PeakRssMb)" }
-        [void]$sb.AppendLine("| $($r.Cycle) | $($r.Phase) | $chaosCell | $seedCell | $(Format-Secs $r.PlannedSecs) | $(Format-Secs $r.ActualSecs) | $($r.ExitCode) | $crashCell | $excCell | $itersCell | $focusCell | $rssCell |")
+        [void]$sb.AppendLine("| $($r.Cycle) | $($r.Phase) | $chaosCell | $seedCell | $(Format-Secs $r.PlannedSecs) | $(Format-Secs $r.ActualSecs) | $($r.ExitCode) | $crashCell | $excCell | $itersCell | $focusCell | $healthCell | $rssCell |")
     }
     [void]$sb.AppendLine("")
+
+    # Health-events section - surfaces mid-phase hangs, memory-limit breaches, and
+    # health-monitor restarts that a phase's exit code / crash / exception counts
+    # all hide (the monitor restarts the app and the phase still finishes exit 0).
+    $healthPhases = @($Results | Where-Object { $_.Health -and (($_.Health.Hangs -gt 0) -or ($_.Health.MemExceeded -gt 0) -or ($_.Health.Restarts -gt 0)) })
+    if ($healthPhases.Count -gt 0) {
+        [void]$sb.AppendLine("## Health events (memory limit / hangs / restarts)")
+        [void]$sb.AppendLine("")
+        [void]$sb.AppendLine("These do NOT show up in Exit / Crashes / Exceptions - monkey_test's health")
+        [void]$sb.AppendLine("monitor silently restarts a hung or memory-blown app and the phase still")
+        [void]$sb.AppendLine("finishes exit 0. Treat any row below as a real defect to investigate.")
+        [void]$sb.AppendLine("")
+        foreach ($r in $healthPhases) {
+            [void]$sb.AppendLine("### $($r.Phase)  (cycle $($r.Cycle))")
+            $peakTxt = "?"; if ($r.Health.PeakRssMb) { $peakTxt = "$($r.Health.PeakRssMb)" }
+            $lastTxt = "?"; if ($r.Health.LastRssMb) { $lastTxt = "$($r.Health.LastRssMb)" }
+            [void]$sb.AppendLine("- Peak RSS ${peakTxt} MB, last RSS ${lastTxt} MB, last iter $($r.Health.LastIter)")
+            [void]$sb.AppendLine("- hangs=$($r.Health.Hangs)  mem-limit-breaches=$($r.Health.MemExceeded)  restarts=$($r.Health.Restarts)")
+            if ($r.Health.Events.Count -gt 0) {
+                [void]$sb.AppendLine('```')
+                foreach ($e in $r.Health.Events) { [void]$sb.AppendLine($e) }
+                [void]$sb.AppendLine('```')
+            }
+            [void]$sb.AppendLine("")
+        }
+    }
+
     [void]$sb.AppendLine("## Findings")
     [void]$sb.AppendLine("")
 
@@ -423,6 +528,14 @@ function Invoke-Phase {
 
     $fullArgs = $ScriptArgs + @("--output-dir", $OutDir)
     $t0 = Get-Date
+    # Publish the in-flight phase to script scope BEFORE launching python, so a
+    # Ctrl+C (which aborts this function mid-call and jumps straight to the
+    # top-level finally) can still reconstruct a partial row for it. Cleared to
+    # $null just before this function returns on a normal completion.
+    $script:CurrentPhase = [pscustomobject]@{
+        Cycle = $CycleNum; Label = $Label; Chaos = $Chaos; Seed = $Seed
+        PlannedSecs = $PlannedSecs; OutDir = $OutDir; T0 = $t0; Tracemalloc = [bool]$Tracemalloc
+    }
     # Do NOT redirect stderr (2>&1) - in Windows PowerShell that wraps native
     # stderr lines as error records and falsely flips $? even on exit 0.
     & python $Script @fullArgs
@@ -459,6 +572,13 @@ function Invoke-Phase {
 
     Write-Host ("     exit={0}  crashes={1}  exceptions={2}  iters={3}  peakRSS={4}MB  actual={5}" -f $rc, $crashes, $exc, $iters, $peakRss, (Format-Secs $actualSecs))
 
+    # Always parse the log for RSS trend + health events (hangs / mem-limit /
+    # restarts) - these are invisible in $rc / $crashes / $exc. Backfill peak RSS
+    # and iters from the log when the summary JSON is missing or partial.
+    $health = Get-PhaseHealth -OutDir $OutDir
+    if ($null -eq $peakRss -and $null -ne $health.PeakRssMb) { $peakRss = $health.PeakRssMb }
+    if ($null -eq $iters   -and $null -ne $health.LastIter)  { $iters   = $health.LastIter }
+
     $needsDetail = ($rc -ne 0) -or ($crashes -gt 0) -or ($exc -gt 0)
     $findings = $null
     if ($needsDetail) { $findings = Get-PhaseFindings -OutDir $OutDir }
@@ -466,6 +586,10 @@ function Invoke-Phase {
         if (-not $findings) { $findings = [pscustomobject]@{ CrashFiles = @(); Tracebacks = @(); Screenshots = @() } }
         $findings | Add-Member -NotePropertyName TracemallocSnapshots -NotePropertyValue (Get-TracemallocSnapshots -LogPath $tracemallocLog) -Force
     }
+
+    # Phase completed normally - clear the in-flight marker so the finally block
+    # does not also emit a partial row for it.
+    $script:CurrentPhase = $null
 
     return [pscustomobject]@{
         Cycle       = $CycleNum
@@ -482,6 +606,7 @@ function Invoke-Phase {
         PeakRssMb   = $peakRss
         OutDir      = $OutDir
         Findings    = $findings
+        Health      = $health
     }
 }
 
@@ -648,6 +773,7 @@ if ($Soak) {
 Write-Host "============================================================" -ForegroundColor Cyan
 
 $results = New-Object System.Collections.ArrayList
+$script:CurrentPhase = $null   # set by Invoke-Phase while a phase is running; read by finally on Ctrl+C
 $meta = [pscustomobject]@{
     Started         = $startTime.ToString("yyyy-MM-dd HH:mm:ss")
     Ended           = $null
@@ -788,6 +914,67 @@ try {
 } finally {
     # Always restore Quick Edit + sleep timeouts, even on Ctrl+C mid-run.
     if (Test-Path $setupScript) { & $setupScript -Restore }
+
+    # If Ctrl+C (or a never-returning hang) aborted a phase mid-run, Invoke-Phase
+    # never returned and its row is missing from $results - exactly the phase most
+    # likely to hold the failure. Reconstruct a partial row from its log so the
+    # report can't silently drop it. (This is why an earlier -Soak run looked
+    # clean: the moderate soak that climbed to 1250 MB and hung was interrupted
+    # and never made it into AI_REPORT.md.)
+    if ($script:CurrentPhase) {
+        $cp = $script:CurrentPhase
+        $script:CurrentPhase = $null
+        Write-Host ""
+        Write-Host "[interrupted] capturing partial data for in-flight phase: $($cp.Label)" -ForegroundColor Yellow
+
+        $findings = $null
+        if ($cp.Tracemalloc) {
+            # Salvage the soak phase's tracemalloc snapshots before the next launch
+            # would truncate them - the memory-growth evidence lives here.
+            $tmSrc = Join-Path $env:LOCALAPPDATA "NetSentinel\tracemalloc_snapshots.log"
+            if (Test-Path $tmSrc) {
+                $tmDest = Join-Path $cp.OutDir "tracemalloc.log"
+                Copy-Item -Path $tmSrc -Destination $tmDest -Force -ErrorAction SilentlyContinue
+                if (Test-Path $tmDest) {
+                    $findings = [pscustomobject]@{ CrashFiles = @(); Tracebacks = @(); Screenshots = @() }
+                    $findings | Add-Member -NotePropertyName TracemallocSnapshots -NotePropertyValue (Get-TracemallocSnapshots -LogPath $tmDest) -Force
+                }
+            }
+        }
+
+        $crashes = $null; $exc = $null; $iters = $null; $focus = $null; $peak = $null
+        $sp = Join-Path $cp.OutDir "monkey_summary.json"
+        if (Test-Path $sp) {
+            try {
+                $s = Get-Content $sp -Raw | ConvertFrom-Json
+                $crashes = $s.crashes; $exc = $s.exceptions_caught; $iters = $s.iterations_completed
+                $focus = $s.focus_stolen_count; $peak = $s.peak_rss_mb
+            } catch {
+                # partial/malformed JSON (killed mid-write) - fall back to the log below
+            }
+        }
+        $health = Get-PhaseHealth -OutDir $cp.OutDir
+        if ($null -eq $peak  -and $null -ne $health.PeakRssMb) { $peak  = $health.PeakRssMb }
+        if ($null -eq $iters -and $null -ne $health.LastIter)  { $iters = $health.LastIter }
+
+        [void]$results.Add([pscustomobject]@{
+            Cycle       = $cp.Cycle
+            Phase       = "$($cp.Label) [INTERRUPTED]"
+            Chaos       = $cp.Chaos
+            Seed        = $cp.Seed
+            PlannedSecs = $cp.PlannedSecs
+            ActualSecs  = ((Get-Date) - $cp.T0).TotalSeconds
+            ExitCode    = "INT"
+            Crashes     = $crashes
+            Exceptions  = $exc
+            Iters       = $iters
+            FocusStolen = $focus
+            PeakRssMb   = $peak
+            OutDir      = $cp.OutDir
+            Findings    = $findings
+            Health      = $health
+        })
+    }
 
     $meta.Ended = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     Write-AiReport -ReportPath $reportPath -Meta $meta -Results $results -Final

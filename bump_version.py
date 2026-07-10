@@ -161,10 +161,9 @@ def bump(ver: str) -> None:
         ".github/winget/NetSentinel.NetSentinel.yaml",
         ".github/winget/NetSentinel.NetSentinel.installer.yaml",
         ".github/winget/NetSentinel.NetSentinel.locale.en-US.yaml",
-        "README.md", "CHANGELOG.md", "AGENTS.md", "ui/dashboard.py",
+        "README.md", "CHANGELOG.md", "ui/dashboard.py",
         ".apm/instructions/project-vision.instructions.md",
         ".claude/rules/project-vision.md",
-        ".github/instructions/project-vision.instructions.md",
     ]
     print("\nStaging version files…")
     existing = [f for f in _VERSION_FILES if (ROOT / f).exists()]

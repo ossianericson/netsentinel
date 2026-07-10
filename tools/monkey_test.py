@@ -272,6 +272,12 @@ _BLACKLIST: List[str] = [
     "open dashboard",   # Home "Open Dashboard" (home_data_mixin.py) → QDesktopServices.openUrl()
     "open in browser",  # Lab Mode / Overview / Network Doc post-export → webbrowser.open()
     "view on nvd",      # CVE Lookup row context menu → webbrowser.open(nvd.nist.gov/...)
+    "open in editor",   # Plugin wizard "Plugin Created" dialog (plugin_wizard_mixin.py) →
+                        # os.startfile() on the generated .py template. On a stock Windows
+                        # box .py has no editor association, so it opens in Notepad, which
+                        # steals foreground focus (not a #32770 dialog, so the dialog-guard
+                        # can't catch it by class). "new plugin"/"save template" already
+                        # block the entry points; this covers the post-create dialog too.
 ]
 
 # Safe pages to navigate to via the Ctrl+K command palette.
@@ -679,6 +685,30 @@ def _is_system_hwnd(hwnd: int) -> bool:
     return False
 
 
+def _describe_hwnd(hwnd: int) -> str:
+    """Best-effort 'class=... proc=... pid=...' description of a window, for diagnostics.
+
+    Used when a system/desktop window steals foreground so the log records exactly what
+    the thief is (class name + owning process) instead of only a bare hwnd — e.g. to tell
+    a Progman/WorkerW desktop window apart from a shell or notification host.
+    """
+    cls = proc = "?"
+    pid_val = 0
+    try:
+        user32 = ctypes.windll.user32
+        buf = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, buf, 256)
+        cls = buf.value or "?"
+        pid = ctypes.c_ulong(0)
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        pid_val = pid.value
+        if pid_val:
+            proc = psutil.Process(pid_val).name()
+    except Exception:
+        pass  # non-fatal — diagnostic only; return whatever was resolved
+    return f"class={cls!r} proc={proc!r} pid={pid_val}"
+
+
 def _force_foreground(hwnd: int) -> None:
     """Force a window to the foreground using the AttachThreadInput trick.
 
@@ -960,9 +990,23 @@ class MonkeyTester:
                 # Root guard: same protection as _post_click_dialog_guard — never
                 # send WM_CLOSE to the Desktop/Shell (triggers Shut Down Windows dialog).
                 if _is_system_hwnd(fg2):
+                    # B1 diagnostic: name the thief (class + owning process) so a
+                    # persistent system-window hold is identifiable, not a bare hwnd.
                     self.log.warning(
-                        "[focus] fg=0x%x is a system/desktop window — skipping dismiss "
-                        "(WM_CLOSE to Desktop triggers Shut Down dialog)", fg2,
+                        "[focus] fg=0x%x is a system/desktop window (%s) — will not "
+                        "WM_CLOSE it (triggers Shut Down dialog); escalating app reclaim",
+                        fg2, _describe_hwnd(fg2),
+                    )
+                    # B2 escalation: a single _force_foreground can fail hundreds of
+                    # times in a row against a sticky system window (447x / 16.5 min
+                    # of controls=0 observed 2026-07-10). Retry harder on the APP side
+                    # only — minimize/restore to knock the z-order, re-force foreground.
+                    # Never send any message to the thief.
+                    if self._escalate_app_reclaim(hwnd):
+                        return True
+                    self.log.warning(
+                        "[focus] escalated reclaim failed against system window 0x%x "
+                        "(stolen_count=%d) — skipping iteration", fg2, self.stats.focus_stolen,
                     )
                     return False
                 dismissed = self._dismiss_native_window(fg2)
@@ -986,6 +1030,38 @@ class MonkeyTester:
             return True
         except Exception:
             return True  # non-fatal; proceed without blocking
+
+    def _escalate_app_reclaim(self, hwnd: int, retries: int = 3) -> bool:
+        """Bounded, app-side-only escalation to reclaim foreground from a sticky
+        system/desktop window that a single _force_foreground() could not dislodge.
+
+        Each attempt minimizes then restores OUR window (hwnd) to force the window
+        manager to re-evaluate z-order — which usually knocks a stuck foreground
+        holder off the top — then re-forces our window forward. This NEVER sends any
+        message to the thief (WM_CLOSE to a Desktop/Shell window opens the Shut Down
+        dialog), so it is safe against system windows. Returns True as soon as our
+        window is foreground again, else False after *retries* attempts.
+        """
+        try:
+            user32 = ctypes.windll.user32
+        except Exception:
+            return False  # non-fatal — ctypes unavailable; caller falls back to skip
+        for attempt in range(1, retries + 1):
+            try:
+                user32.ShowWindow(hwnd, 6)   # SW_MINIMIZE — drop out of the z-order
+                time.sleep(0.15)
+                user32.ShowWindow(hwnd, 9)   # SW_RESTORE — pop back to the top
+            except Exception:
+                pass  # non-fatal — proceed to _force_foreground regardless
+            _force_foreground(hwnd)
+            time.sleep(0.25)
+            if _get_foreground_hwnd() == hwnd:
+                self.log.info(
+                    "[focus] reclaimed foreground after escalation attempt %d/%d",
+                    attempt, retries,
+                )
+                return True
+        return False
 
     def _kill_stale_netsentinel(self) -> None:
         """Terminate any pre-existing NetSentinel processes before launching a new one.
@@ -1195,6 +1271,18 @@ class MonkeyTester:
                         continue
                 except Exception:
                     pass  # non-fatal
+
+                # Skip windows owned by a protected IDE/terminal process (VS Code,
+                # Cursor, Visual Studio) — reuses the guard _is_system_hwnd() already
+                # applies elsewhere. Without this, a title keyword match below (e.g.
+                # "crash", "error") can match an open editor tab and WM_CLOSE the IDE
+                # itself, which kills this script's own host process tree.
+                try:
+                    win_handle = getattr(win, "handle", 0) or 0
+                    if win_handle and _is_system_hwnd(win_handle):
+                        continue
+                except Exception:
+                    pass  # non-fatal — fall through to keyword-based checks
 
                 # Windows common file dialog (Open/Save As) — class #32770.
                 # The monkey gets trapped inside these when Browse… buttons open them;

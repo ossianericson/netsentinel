@@ -243,6 +243,7 @@ hiddenimports: list = [
     "ui.nav",
     "ui.nav.rail",
     "ui.nav.builder",
+    "ui.nav.lazy_page",
     "ui.monitor_state",
     "ui.plugin_page_mixin",
     "ui.command_palette",

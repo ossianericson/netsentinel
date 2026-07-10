@@ -178,6 +178,12 @@ class ThreatIntelPage(QWidget):
         self._last_updated = ""
         self._popover = None
         self._threat_entries: list = []
+        # STARTUP-PERF: _load_cache() runs in __init__ so the data (and the
+        # entries_updated signal the geo map depends on) is ready eagerly, but
+        # painting up to _MAX_TABLE_ROWS QTableWidgetItems (~120 ms) is pointless
+        # while the page is hidden. Defer the actual table fill to first show.
+        self._first_shown = False
+        self._pending_table_fill = False
         self._threat_timer = QTimer(self)
         self._threat_timer.setSingleShot(True)
         self._threat_timer.setInterval(200)
@@ -189,6 +195,20 @@ class ThreatIntelPage(QWidget):
 
     def set_popover(self, popover) -> None:
         self._popover = popover
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        """Populate the indicator table the first time the page is shown.
+
+        STARTUP-PERF: the (potentially 5,000-row) table fill is deferred out of
+        the __init__ cache load into the first real show so it never blocks
+        Dashboard construction / first paint.
+        """
+        super().showEvent(event)
+        if not self._first_shown:
+            self._first_shown = True
+            if self._pending_table_fill:
+                self._pending_table_fill = False
+                self._apply_threat_filter()
 
     # ── UI construction ───────────────────────────────────────────────────────
 
@@ -634,6 +654,13 @@ class ThreatIntelPage(QWidget):
             self._threat_match_lbl.setText(f"{len(visible)} / {total}")
         else:
             self._threat_match_lbl.setText("")
+
+        # While the page has never been shown (e.g. the startup cache load),
+        # skip the expensive table population and flag it for the first show.
+        # KPIs, match label, and the entries_updated signal are already updated.
+        if not self._first_shown:
+            self._pending_table_fill = True
+            return
 
         self._fill_table(visible)
 

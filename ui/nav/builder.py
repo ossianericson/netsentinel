@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 from ui.help import _PAGE_HELP
 from ui.nav.labels import NavLabel as L, SPECIAL_LABELS
+from ui.nav.lazy_page import _LazyPageHost
 from ui.nav.rail import _NavEntry, _RailButton, _make_nav_icon
 from ui.perf_audit import warn_if_nav_slow
 from ui.styles import (
@@ -722,6 +723,11 @@ class _NavBuilderMixin:
                         f"— not a NavLabel member registered in _build_pro_nav()"
                     )
             return
+        # Deferred-construction hook (experimental/lazy_pages): if the label still
+        # points at a placeholder, build the real page and re-point the stack/map
+        # before the crossfade so the user lands on the real widget, not "Loading…".
+        if isinstance(widget, _LazyPageHost):
+            widget = self._materialize_host(widget)
         if (
             label != "Settings"
             and hasattr(self, "_settings_page")
@@ -1537,8 +1543,15 @@ class _NavBuilderMixin:
                 if existing.isVisible():
                     existing.reject()
                     return
+                # Not visible → a stale palette closed by Esc/selection on a
+                # prior open. It is a C++ child of this window, so it is NOT
+                # freed until the window closes; without deleting it here, every
+                # Ctrl+K after a close leaks a whole palette (its ~120 list items
+                # + cached device/alert data), which is what drove the moderate
+                # soak from ~600 MB to >1.2 GB and a Not-Responding hang.
+                existing.deleteLater()
             except RuntimeError:
-                pass  # non-fatal — palette may have already been closed
+                pass  # non-fatal — palette may have already been deleted
         items = self._build_palette_items()
         pal = CommandPalette(items, parent=self)
         pal.load_recent_data(self._store)

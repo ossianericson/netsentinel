@@ -17,8 +17,8 @@ import re
 from ui.styles import THEMES, _ARCTIC_CLEAN, _DARK_PRO
 
 _ALL_THEMES = {
-    "Arctic Clean":  _ARCTIC_CLEAN,
-    "Midnight Pro":  _DARK_PRO,
+    "Arctic Clean":   _ARCTIC_CLEAN,
+    "Midnight Pro":   _DARK_PRO,
 }
 
 _HEX_RE  = re.compile(r"^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")

@@ -80,6 +80,7 @@ from ui.scan_wiring import ScanResultMixin
 from ui.header import AppHeaderMixin
 from ui.tabs import TabBuilderMixin
 from ui.nav.builder import _NavBuilderMixin
+from ui.nav.lazy_page import _LazyPageMixin
 from ui.monitor_state import (
     _color_for_level,  # re-exported via __all__; used by ui.scan_enrichment lazy import
     _MonitorStateMixin,
@@ -90,7 +91,7 @@ from ui.export_mixin import _ExportMixin
 
 
 class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
-               _NavBuilderMixin, _MonitorStateMixin, _PluginPageMixin,
+               _NavBuilderMixin, _LazyPageMixin, _MonitorStateMixin, _PluginPageMixin,
                _ExportMixin, QMainWindow):
     _update_available         = pyqtSignal(str)
     global_time_range_changed = pyqtSignal(float)  # hours: float
@@ -126,6 +127,19 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
         self._offenders_path = get_offenders_path()
         self._admin = is_admin()
+
+        # ── Deferred page construction (RULE-EXP1) ────────────────────────────
+        # experimental/lazy_pages: when True, a conservative set of self-contained
+        # "leaf" pages are registered as _LazyPageHost placeholders and built on
+        # first navigation (or by a background chunk-builder), instead of eagerly
+        # in _build_tabs(). Default False ⇒ the previously-verified eager path is
+        # byte-for-byte intact. See project_com_reentrancy_startup_crash memory /
+        # docs/spikes/startup-com-reentrancy.md.
+        self._lazy_pages = QSettings("NetSentinel", "NetSentinel").value(
+            "experimental/lazy_pages", False, type=bool
+        )
+        self._lazy_hosts: list = []          # _LazyPageHost objects awaiting materialization
+        self._lazy_build_timer = None        # background chunk-builder QTimer(self)
 
         # Scan results cache
         self._m1_result   = None

@@ -16,6 +16,11 @@ ruff + mypy + pip-audit → full test suite → debug_launch → UI sign-off →
 "commit to repo" · "push to repo" · "go ahead and commit" · "push it" · "commit it".
 "looks good" or "lgtm" from the UI sign-off do **not** grant permission to commit.
 
+### RULE-GIT1 (blocking): Never add a Co-Authored-By or co-author trailer
+Git commits must carry the message only — no `Co-Authored-By:` line and no other
+co-author/attribution trailer. The user runs multiple coding agents and does not
+want any single agent credited in history.
+
 ---
 
 ## Non-Negotiable Rules
@@ -399,6 +404,13 @@ Key constraints the skill enforces:
 - Branch push must precede the tag push — CI won't run on tag-only push
 - Plain semver only — non-semver tags (e.g. `v1.9.52-codeql`) break `AppxManifest.xml`
 - A clean monkey-test run is required before every version bump
+
+### RULE-BUMP2 (blocking): Never pass --help or any flag to bump_version.py
+`bump_version.py` takes the version positionally (`python bump_version.py X.Y.Z`) — it does
+not parse flags. Passing `--help` or any other flag is treated as the version string and the
+script rewrites every tracked file's version to that literal text (this happened once with
+`--help`). Always invoke it with a bare semver argument, and prefer `/bump` (RULE-BUMP1) so the
+skill supplies the argument correctly.
 
 ### RULE-R1b (blocking): Every version bump needs a CHANGELOG.md entry and a README.md summary update
 Before running `bump_version.py`:
@@ -843,6 +855,12 @@ This generalizes beyond hangs: for crash-type bugs, `procdump -e` (dump on unhan
 exception) or the app's own `faulthandler` output is the equivalent move instead of custom
 exception-hook instrumentation.
 
+### RULE-DBG3 (required): Prefer live reproduction over static/log-only archaeology
+When investigating a bug, launch the app, drive the actual flow, and watch it break before
+reaching for logs, code reading, or static analysis alone. Static archaeology is a fallback
+when live reproduction is genuinely not possible (e.g. CI-only failure), not the default
+starting point.
+
 ---
 
 ## Windows Platform Rules
@@ -902,6 +920,26 @@ test setup to prevent real file-watching threads).
 
 **Never** delete Qt widgets by letting them go out of scope or calling the C++ destructor
 directly. **Always** `deleteLater()` followed by `processEvents()`.
+
+### RULE-TP4-DASH (blocking): No pytest-collected test may construct a real Dashboard in-process
+
+**Mechanism:** a fully-constructed `Dashboard` cannot be created-and-destroyed in-process on
+Windows without a Qt/QThread teardown crash — which is exactly why `Dashboard.closeEvent()`
+ends in `os._exit(0)` (RULE-WIN4). Under pytest the autouse `_flush_qt_events` fixture
+(`tests/conftest.py`) calls `w.close()` on every top-level widget after each test; on a
+Dashboard that reaches `closeEvent()` → **`os._exit(0)` terminates the pytest process itself
+with code 0** — no summary, no session-finish. The suite silently truncates and CI goes falsely
+green (this hid ~60% of the suite from commit `6d52b36` until mid-2026).
+
+**Correct pattern:** run any Dashboard-constructing test in a subprocess child that owns its
+exit code (`tests/_lazy_pages_child.py`): construct the Dashboard, run assertions, then
+`dash.close()` on success (drains workers, then `os._exit(0)` cleanly ends the *child*). A
+failed assertion raises before `close()` → child exits 1 → parent asserts on the return code.
+Keep the child QApplication alive in a module global — a discarded `_ensure_app()` return value
+is GC'd and tears down the C++ app under the Dashboard mid-construction.
+
+Enforced by `tests/test_suite_completes.py` (`test_no_collected_test_constructs_dashboard_in_process`
++ the two run-to-completion guards).
 
 ### RULE-WIN5 (blocking): Never use unparented QTimer.singleShot(n, self.method) anywhere in a widget — use a parented QTimer
 `QTimer.singleShot(n, slot)` creates a standalone timer with **no Qt parent**. If the widget is
@@ -987,6 +1025,39 @@ btn.setVisible(condition)
 `setVisible(False)` before `addWidget` is harmless (nothing paints) — the risk is only a
 non-`False` argument. Enforced by `tests/test_widget_visibility_order.py` (AST guard over `ui/`).
 
+### RULE-WIN8 (blocking): Reassigning the Python handle to a parented widget does NOT free the old one — delete it explicitly before replacing
+**Mechanism:** a `QWidget`/`QDialog` created with `parent=self` is owned by its parent in
+C++ (Qt's object tree). Dropping the only *Python* reference to it — e.g. `self._x = NewWidget(parent=self)`
+overwriting the previous `self._x` — does **not** destroy it: the parent still holds a C++
+child pointer, so the widget (and everything it owns: list items, cached query results, child
+widgets) lives until the parent is destroyed. In a long-lived window that means "until app
+exit." Recreating such a widget on a repeatable user action (open a dialog, rebuild a panel)
+leaks one full instance per action. This is unbounded, invisible to Python's GC and to
+`tracemalloc` (which only sees the Python-side proxies, not the C++ objects), and surfaces as
+steadily climbing RSS → eventual Windows "Not Responding" under memory pressure. The Ctrl+K
+command palette leaked this way: every reopen after a close built a fresh `CommandPalette(parent=self)`
+without freeing the previous hidden one, driving a moderate soak from ~600 MB past 1.2 GB and
+into a 45 s hang.
+
+```python
+# WRONG — old palette stays alive as a C++ child of self forever
+def _open(self):
+    self._palette = CommandPalette(items, parent=self)   # previous one leaks
+
+# CORRECT — delete the stale instance before creating the replacement
+def _open(self):
+    old = getattr(self, "_palette", None)
+    if old is not None:
+        try: old.deleteLater()
+        except RuntimeError: pass  # already gone
+    self._palette = CommandPalette(items, parent=self)
+```
+
+Alternative: set `Qt.WidgetAttribute.WA_DeleteOnClose` so the widget self-destructs on close
+(then clear the handle in a `destroyed` slot). Either way, a parented widget you recreate on a
+repeatable action must have a defined destruction point. Regression coverage for the palette:
+`tests/test_command_palette_leak.py`.
+
 ---
 
 ## QSettings State Hygiene
@@ -1015,6 +1086,29 @@ else:
 ```
 WHY: on 2nd+ launch, saved geometry is off-center; `window.show()` at that position sticks out from behind the splash. Off-screen move hides it until the splash closes.
 `_pending_show_maximized` must be set in `_restore_settings()` — do NOT call `showMaximized()` inside `_restore_settings()` itself.
+
+### RULE-TM1 (blocking): tracemalloc must trace 1 frame and be activated inside the event loop, never inline before app.exec()
+
+The `NETSENTINEL_TRACEMALLOC=1` path in `app.py main()` (set by `tools/monkey_test.py
+--tracemalloc` for the multi-hour memory soak) must obey two constraints:
+
+1. **`tracemalloc.start(1)` — 1 frame only.** `start(N)` captures an N-frame Python
+   traceback on *every* allocation; cost scales with N. The snapshot loop groups by
+   `"lineno"` (`statistics("lineno")` / `compare_to(..., "lineno")`), which uses only the
+   TOP frame — so extra frames are pure overhead with an identical leak report. The old
+   `start(25)` slowed the process ~7×.
+2. **Activate via `QTimer.singleShot(3000, _activate)` — never inline.** The window's first
+   paint/layout storm runs once `app.exec()` starts pumping events. Starting tracemalloc
+   *before* `app.exec()` means that whole storm runs under allocation tracing. With `start(25)`
+   this dragged window-appear time from ~11 s to ~78 s — **past `monkey_test.py`'s 60 s connect
+   timeout**, so every `--tracemalloc` soak phase died at launch with exit 2 ("Timed out waiting
+   for window") and the hours-long soak never ran. The snapshot loop's own 60 s warmup means a
+   3 s deferral loses no leak data.
+
+Symptom to recognise: soak phases exit 2 with an empty `monkey_summary.json` while the
+non-tracemalloc coverage sweep connects fine. Verify a fix by launching with
+`NETSENTINEL_TRACEMALLOC=1` and confirming the window appears in ~11 s (not ~78 s) and CPU
+settles to idle after it shows.
 
 ---
 
@@ -1121,13 +1215,16 @@ And re-run `test_style_token_imports.py` to confirm no false-positive "missing i
 
 ## APM Source File Hygiene
 
-### RULE-APM1 (blocking): Never edit `.claude/rules/` or `AGENTS.md` directly — edit `.apm/instructions/` only
-Everything under `.claude/rules/` (read by Claude Code) and the root `AGENTS.md` /
-`GEMINI.md` / `.github/instructions/` (read by other tools) are **generated outputs**.
-They are regenerated by `apm install` + `apm compile` — automatically via the
+### RULE-APM1 (blocking): Never edit `.claude/rules/` directly — edit `.apm/instructions/` only
+Everything under `.claude/rules/` (read by Claude Code) is a **generated output**.
+It is regenerated by `apm install` + `apm compile` — automatically via the
 PostToolUse hook in `.claude/settings.json` whenever `apm.yml` or any
 `.apm/instructions/*.md` file is edited, and again on every `bump_version.py` run.
 Any edit to a generated file is silently overwritten on the next compile.
+
+`apm.yml` `targets:` is `claude` only — this project does not use Copilot or
+Gemini, so `AGENTS.md`, `GEMINI.md`, and `.github/instructions/` are not
+generated and must not be recreated or checked in.
 
 `CLAUDE.md` is **no longer used** — current APM does not generate it (Claude Code
 reads `.claude/rules/` directly). Do not recreate a root `CLAUDE.md`; it would
@@ -1143,7 +1240,7 @@ duplicate the rules into context twice.
 .apm/instructions/tests.instructions.md               ← URL-assertion, scaling-guard, LOC-budget, coverage-ratchet conventions
 ```
 
-To regenerate manually: `apm install --target all && apm compile --all`.
+To regenerate manually: `apm install && apm compile --clean`.
 
 **Diagnosis:** If you edited a rule and the change disappeared, you edited a
 generated output. Make the change in the matching `.apm/instructions/` file instead.
@@ -1456,6 +1553,8 @@ Currently tool-enforced (high reliability):
 - RULE-ENC1 → `test_source_encoding.py`
 - RULE-WIN3/5 → test suite heap corruption surfaces violations automatically
 - RULE-WIN7 → `test_widget_visibility_order.py`
+- RULE-WIN8 → `test_command_palette_leak.py` (palette case only — no general AST guard yet)
+- RULE-TP4-DASH → `test_suite_completes.py` (AST guard + run-to-completion guards)
 
 Rules that should be converted to tool enforcement (future work):
 - RULE-D2 → add startup assertion that crashes if a registered page has no `_FEATURES` entry

@@ -145,6 +145,12 @@ class NetworkMapPage(QWidget):
         self._web_available = False
         self._web_view: Any = None
         self._bridge: Optional[_CytoscapeBridge] = None
+        # STARTUP-PERF: QWebEngineView construction (~185 ms) is deferred out of
+        # __init__ into the first showEvent() so it never blocks Dashboard build
+        # / first paint. render() already guards on _web_available, so any
+        # startup cache-restore render before the page is shown safely populates
+        # the Classic view only; the Interactive view is filled on first show.
+        self._webengine_init_attempted = False
         self._diff_mode = False
         self._traffic_overlay = False
         self._bw_by_mac: Dict[str, float] = {}
@@ -260,7 +266,7 @@ class NetworkMapPage(QWidget):
         self._web_placeholder.setStyleSheet(f"color:{TEXT_SECONDARY};font-size:12px;")
         ic_lay.addWidget(self._web_placeholder)
         self._web_container_layout = ic_lay
-        self._try_init_webengine()
+        # QWebEngineView init deferred to showEvent() — see __init__ note.
 
         # LLDP admin hint for Interactive view — toggled by render()
         self._lldp_hint_label = QLabel(
@@ -1058,6 +1064,17 @@ class NetworkMapPage(QWidget):
         thread (BandwidthOverlayWorker).
         """
         super().showEvent(event)
+        # STARTUP-PERF: build the QWebEngineView the first time the page is
+        # actually shown, not during Dashboard construction. If a scan (or the
+        # startup cache-restore) already produced render data while we were
+        # hidden, replay it into the freshly-built Interactive view.
+        if not self._webengine_init_attempted:
+            self._webengine_init_attempted = True
+            self._try_init_webengine()
+            if self._web_available and self._web_view is not None and self._last_render_kwargs:
+                self._refresh_web_view(
+                    diff=self._last_render_kwargs.get("diff") if self._diff_mode else None
+                )
         # Default traffic overlay to checked on first real show — legend helps
         # users understand node colours.  _on_bw_error untoggles it gracefully
         # if Scapy or admin rights are absent.

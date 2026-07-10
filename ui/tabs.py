@@ -127,9 +127,12 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._notifications_page.set_store(self._store)
         self.global_time_range_changed.connect(self._notifications_page.set_global_hours)
 
-        from ui.pages.baseline_page import BaselinePage
-        self._baseline_page = BaselinePage(store=self._store, parent=None)
-        self._baseline_page.drift_detected.connect(self._on_config_drift_detected)
+        def _mk_baseline_page():
+            from ui.pages.baseline_page import BaselinePage
+            self._baseline_page = BaselinePage(store=self._store, parent=None)
+            self._baseline_page.drift_detected.connect(self._on_config_drift_detected)
+            return self._baseline_page
+        self._lazy_or_build("_baseline_page", L.CONFIG_SNAPSHOTS, _mk_baseline_page)
 
         from ui.pages.trend_page import TrendPage
         self._trend_page = TrendPage(store=self._store, parent=None)
@@ -161,10 +164,13 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         from ui.pages.diagnosis_page import DiagnosisPage
         self._diagnosis_page = DiagnosisPage(store=self._store, parent=None)
 
-        from ui.pages.troubleshoot_page import TroubleshootPage
-        self._troubleshoot_page = TroubleshootPage(parent=None)
-        self._troubleshoot_page.navigate_to.connect(self._nav_rail_go_to)
-        self._troubleshoot_page.diagnose_symptom.connect(self._on_diagnose_symptom)
+        def _mk_troubleshoot_page():
+            from ui.pages.troubleshoot_page import TroubleshootPage
+            self._troubleshoot_page = TroubleshootPage(parent=None)
+            self._troubleshoot_page.navigate_to.connect(self._nav_rail_go_to)
+            self._troubleshoot_page.diagnose_symptom.connect(self._on_diagnose_symptom)
+            return self._troubleshoot_page
+        self._lazy_or_build("_troubleshoot_page", L.TROUBLESHOOT, _mk_troubleshoot_page)
 
         from ui.pages.settings_page import SettingsPage
         self._settings_page = SettingsPage(parent=None)
@@ -202,14 +208,20 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._app_traffic_page = AppTrafficPage(store=self._store, parent=None)
         self._app_traffic_page.traffic_sample_ready.connect(self._on_app_traffic_sample)
 
-        from ui.pages.dhcp_lease_page import DhcpLeasePage
-        self._dhcp_lease_page = DhcpLeasePage(parent=None)
-        self._dhcp_lease_page.navigate_to.connect(self._nav_rail_go_to)
-        self._dhcp_lease_page.select_device.connect(self._inventory_page.select_device)
+        def _mk_dhcp_lease_page():
+            from ui.pages.dhcp_lease_page import DhcpLeasePage
+            self._dhcp_lease_page = DhcpLeasePage(parent=None)
+            self._dhcp_lease_page.navigate_to.connect(self._nav_rail_go_to)
+            self._dhcp_lease_page.select_device.connect(self._inventory_page.select_device)
+            return self._dhcp_lease_page
+        self._lazy_or_build("_dhcp_lease_page", L.DHCP_LEASES, _mk_dhcp_lease_page)
 
-        from ui.pages.dns_zone_page import DnsZonePage
-        self._dns_zone_page = DnsZonePage(parent=None)
-        self._dns_zone_page.scan_complete.connect(self._on_dns_zone_complete)
+        def _mk_dns_zone_page():
+            from ui.pages.dns_zone_page import DnsZonePage
+            self._dns_zone_page = DnsZonePage(parent=None)
+            self._dns_zone_page.scan_complete.connect(self._on_dns_zone_complete)
+            return self._dns_zone_page
+        self._lazy_or_build("_dns_zone_page", L.DNS_ZONE_MAP, _mk_dns_zone_page)
 
         from ui.pages.threat_intel_page import ThreatIntelPage
         self._threat_intel_page = ThreatIntelPage(parent=None)
@@ -266,11 +278,17 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         from ui.pages.mqtt_page import MqttPage
         self._mqtt_page = MqttPage(parent=None)
 
-        from ui.pages.ip_calculator_page import IpCalculatorPage
-        self._ip_calc_page = IpCalculatorPage(parent=None)
+        def _mk_ip_calc_page():
+            from ui.pages.ip_calculator_page import IpCalculatorPage
+            self._ip_calc_page = IpCalculatorPage(parent=None)
+            return self._ip_calc_page
+        self._lazy_or_build("_ip_calc_page", L.IP_CALCULATOR, _mk_ip_calc_page)
 
-        from ui.pages.wifi_heatmap_page import WifiHeatmapPage
-        self._wifi_heatmap_page = WifiHeatmapPage(parent=None)
+        def _mk_wifi_heatmap_page():
+            from ui.pages.wifi_heatmap_page import WifiHeatmapPage
+            self._wifi_heatmap_page = WifiHeatmapPage(parent=None)
+            return self._wifi_heatmap_page
+        self._lazy_or_build("_wifi_heatmap_page", L.WIFI_HEATMAP, _mk_wifi_heatmap_page)
 
         from ui.pages.geo_map_page import GeoMapPage
         self._geo_map_page = GeoMapPage(store=self._store, parent=None)
@@ -288,9 +306,12 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._protocol_viz_page = ProtocolVizPage(parent=None)
         self._protocol_viz_page.navigate_to.connect(self._nav_rail_go_to)
 
-        from ui.pages.discover_page import FeatureGuidePage
-        self._discover_page = FeatureGuidePage(parent=None)
-        self._discover_page.navigate_to.connect(self._nav_rail_go_to)
+        def _mk_discover_page():
+            from ui.pages.discover_page import FeatureGuidePage
+            self._discover_page = FeatureGuidePage(parent=None)
+            self._discover_page.navigate_to.connect(self._nav_rail_go_to)
+            return self._discover_page
+        self._lazy_or_build("_discover_page", L.FEATURE_GUIDE, _mk_discover_page)
 
         from ui.pages.service_diagnostics_page import ServiceDiagnosticsPage
         self._service_diagnostics_page = ServiceDiagnosticsPage(parent=None)
@@ -408,8 +429,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         _QT.singleShot(0, self._update_monitor_badge)
         _QT.singleShot(0, self._push_monitor_pills)
 
-        from ui.pages.rest_api_page import RestApiPage
-        self._rest_api_page = RestApiPage(store=self._store, parent=None)
+        def _mk_rest_api_page():
+            from ui.pages.rest_api_page import RestApiPage
+            self._rest_api_page = RestApiPage(store=self._store, parent=None)
+            return self._rest_api_page
+        self._lazy_or_build("_rest_api_page", L.REST_API, _mk_rest_api_page)
 
         self._mtr_tab_widget      = self._build_mtr_tab()
         self._adv_tab_widget      = self._build_advanced_tools_tab()
@@ -438,8 +462,11 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         self._iot_baseline_tab_widget    = self._build_iot_baseline_tab()
         self._benchmark_tab_widget       = self._build_benchmark_tab()
 
-        from ui.pages.wifi_monitor_page import WiFiMonitorPage
-        self._wifi_monitor_page = WiFiMonitorPage(parent=None)
+        def _mk_wifi_monitor_page():
+            from ui.pages.wifi_monitor_page import WiFiMonitorPage
+            self._wifi_monitor_page = WiFiMonitorPage(parent=None)
+            return self._wifi_monitor_page
+        self._lazy_or_build("_wifi_monitor_page", L.MONITOR_802_11, _mk_wifi_monitor_page)
 
         from ui.pages.monitor_overview_page import MonitorOverviewPage
         self._monitor_overview_page = MonitorOverviewPage(parent=None)
@@ -450,7 +477,10 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
         if self._store is not None:
             self._monitor_overview_page.set_store(self._store)
 
-        self._help_tab_widget            = self._build_help_tab()
+        def _mk_help_tab_widget():
+            self._help_tab_widget = self._build_help_tab()
+            return self._help_tab_widget
+        self._lazy_or_build("_help_tab_widget", L.HELP_REFERENCE, _mk_help_tab_widget)
 
         # ── Store tab refs for mode nav builders ──────────────────────────────
         self._m1_tab = m1

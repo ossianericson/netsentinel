@@ -17,8 +17,9 @@ user-invocable: true
 
 **Read only. Zero file edits.** This skill answers "is the governance layer still
 coherent?" The canonical rule source is `.apm/instructions/*.md`; everything in
-`.claude/rules/`, `AGENTS.md`, `GEMINI.md`, and `.github/instructions/` is a
-generated output. `CLAUDE.md` is no longer generated and must not come back.
+`.claude/rules/` is a generated output. `apm.yml` `targets:` is `claude` only —
+`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, and `.github/instructions/` are not
+generated and must not come back.
 
 ---
 
@@ -49,15 +50,18 @@ All three must be equal. A mismatch means a bump touched one source but not anot
 
 ---
 
-## Step 3 — No fossil CLAUDE.md
+## Step 3 — No fossil CLAUDE.md / AGENTS.md / GEMINI.md / .github/instructions
 
 ```powershell
-Test-Path CLAUDE.md, tests/CLAUDE.md
+Test-Path CLAUDE.md, tests/CLAUDE.md, AGENTS.md, tests/AGENTS.md, GEMINI.md, .github/instructions
 ```
 
-Both must be `False`. Current APM does not generate `CLAUDE.md` — Claude Code reads
-`.claude/rules/` directly. A root `CLAUDE.md` would duplicate every rule into context
-twice. Record `✓ none` or `⚠ fossil present — remove (it loads rules a second time)`.
+All must be `False`. Current APM does not generate `CLAUDE.md`, and `apm.yml`
+`targets:` is `claude` only, so `AGENTS.md`/`GEMINI.md`/`.github/instructions/`
+have no legitimate source either — Claude Code reads `.claude/rules/` directly.
+Any of these duplicate rules into context a second time (or a third, for
+copilot/gemini targets this project doesn't use). Record `✓ none` or
+`⚠ fossil present — remove <path>`.
 
 ---
 
@@ -65,9 +69,13 @@ twice. Record `✓ none` or `⚠ fossil present — remove (it loads rules a sec
 
 ```powershell
 $env:PATH += ";C:\Users\ossia\AppData\Local\Programs\apm\bin"
-apm compile --all 2>&1 | Select-String "completed successfully"
-git status --short .claude/rules AGENTS.md GEMINI.md .github/instructions
+apm compile --clean 2>&1 | Select-String "completed successfully"
+git status --short .claude/rules
 ```
+
+Never run `apm compile --all` or `--target copilot|gemini` in this repo — `apm.yml`
+`targets:` is `claude` only, and `--all` would regenerate `AGENTS.md`, `GEMINI.md`,
+and `.github/instructions/` that were deliberately removed.
 
 Compile must succeed. If `git status` then shows changes, the committed generated
 outputs were stale (someone edited `.apm/instructions/` without recompiling, or

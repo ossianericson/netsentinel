@@ -255,9 +255,9 @@ class TestThemeCharacter:
         assert luminance < 40, f"Expected dark BG, got luminance={luminance}"
 
     def test_midnight_pro_has_blue_accent(self):
-        """Midnight Pro uses GitHub-inspired blue accent."""
+        """Midnight Pro uses a bright royal-blue accent (AA-clearing on dark cards)."""
         from ui.styles import THEMES
-        assert THEMES["Midnight Pro"]["ACCENT"] == "#2F81F7"
+        assert THEMES["Midnight Pro"]["ACCENT"] == "#3B82F6"
 
     def test_themes_have_distinct_accents(self):
         from ui.styles import THEMES

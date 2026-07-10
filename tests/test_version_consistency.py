@@ -95,7 +95,7 @@ def test_build_sh_version(canonical):
 def test_project_vision_version(canonical):
     # CLAUDE.md is no longer generated/tracked; the canonical version-stamped doc
     # is the APM source that bump_version.py updates and `apm` compiles to
-    # .claude/rules/ + AGENTS.md.
+    # .claude/rules/ (claude is the only configured apm.yml target).
     src = ROOT / ".apm" / "instructions" / "project-vision.instructions.md"
     text = src.read_text(encoding="utf-8")
     m = re.search(r'Current version:\s*\*\*v([^*]+)\*\*', text)

@@ -34,6 +34,24 @@ _KEYCHAIN_SVC = "NetSentinel"
 _KEYCHAIN_KEY = "mqtt/password"
 
 
+def _get_secret() -> str:
+    """Read the stored MQTT password, degrading to "" when no keyring backend
+    is available (e.g. headless Linux / CI). Without this guard, constructing
+    this page raised keyring.errors.NoKeyringError and aborted the whole
+    Dashboard build. Mirrors _load_secret in notif_channel_panels/threat_intel."""
+    try:
+        return keyring.get_password(_KEYCHAIN_SVC, _KEYCHAIN_KEY) or ""
+    except Exception:
+        return ""  # no keyring backend — treat the secret as unset
+
+
+def _set_secret(pw: str) -> None:
+    try:
+        keyring.set_password(_KEYCHAIN_SVC, _KEYCHAIN_KEY, pw)
+    except Exception:
+        pass  # no keyring backend — silently skip persisting the secret
+
+
 # ── Connection worker ─────────────────────────────────────────────────────────
 
 class _ConnectWorker(QThread):
@@ -297,7 +315,7 @@ class MqttPage(QWidget):
         self._chk_uptime.setChecked(s.value("pub_uptime", "true").lower() == "true")
         s.endGroup()
         # Password from keychain (don't pre-fill — just leave placeholder)
-        pw = keyring.get_password(_KEYCHAIN_SVC, _KEYCHAIN_KEY) or ""
+        pw = _get_secret()
         self._password.setPlaceholderText("●●●●●● (stored)" if pw else "Stored in OS keychain")
 
     def _save_settings(self) -> None:
@@ -315,7 +333,7 @@ class MqttPage(QWidget):
         s.endGroup()
         pw = self._password.text()
         if pw:
-            keyring.set_password(_KEYCHAIN_SVC, _KEYCHAIN_KEY, pw)
+            _set_secret(pw)
 
     # ── Connection actions ────────────────────────────────────────────────────
 
@@ -326,7 +344,7 @@ class MqttPage(QWidget):
             return
 
         self._save_settings()
-        pw = self._password.text() or keyring.get_password(_KEYCHAIN_SVC, _KEYCHAIN_KEY) or ""
+        pw = self._password.text() or _get_secret()
         self._publisher.configure(
             host         = self._host.text().strip() or "localhost",
             port         = self._port.value(),

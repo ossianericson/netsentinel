@@ -885,7 +885,7 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("NetSentinel")
-    app.setApplicationVersion("2.1.26")
+    app.setApplicationVersion("2.1.27")
 
     _start_minimised = "--minimised" in sys.argv
     _startup_logger  = "--startup-logger" in sys.argv
@@ -1027,7 +1027,7 @@ def main():
     # Version
     _spp.setPen(QColor(SPLASH_VERSION_FG))
     _spp.setFont(QFont("Segoe UI", 9))
-    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.26")
+    _spp.drawText(QRect(_SOX, _SOY + 250, _SPLASH_W, 22), Qt.AlignmentFlag.AlignCenter, "v2.1.27")
     _spp.end()
 
     _splash = QSplashScreen(_splash_base, Qt.WindowType.WindowStaysOnTopHint)
@@ -1533,48 +1533,72 @@ def main():
     # get_app_data_dir()/tracemalloc_snapshots.log via a dedicated FileHandler —
     # "netsentinel.tracemalloc" has no other handler attached anywhere, so
     # without this the snapshots were previously logged into the void.
+    #
+    # CRITICAL — tracemalloc must (a) trace only 1 frame per allocation, and (b) be
+    # activated a few seconds INTO the event loop, never inline here (RULE-TM1).
+    # tracemalloc.start(N) captures an N-frame Python traceback on EVERY allocation;
+    # cost scales with N. The old start(25) slowed the process ~7x, and running it
+    # before app.exec() dragged the first paint/layout storm (which happens once the
+    # loop starts) from ~11 s to ~78 s of window-appear time — past
+    # tools/monkey_test.py's 60 s connect timeout, so every --tracemalloc soak phase
+    # died at launch with exit 2 ("Timed out waiting for window") and the hours-long
+    # memory soak never ran. The 24 extra frames were pure overhead: the snapshot
+    # loop below only ever groups by "lineno" (statistics/compare_to), which uses the
+    # TOP frame alone — so start(1) gives an identical leak report for ~1/25th the
+    # cost. Deferring the start ~3 s in additionally lets the window paint at full
+    # speed; the snapshot loop's own 60 s warmup means no leak data is lost.
     if os.environ.get("NETSENTINEL_TRACEMALLOC") == "1":
-        import tracemalloc as _tm
-        import logging as _logging
-        import threading as _threading
-        from modules.utils import get_app_data_dir as _gad_tracemalloc
-        _tm.start(25)  # keep 25 frames of traceback per allocation
-        _tm_log = _logging.getLogger("netsentinel.tracemalloc")
-        _tm_log.setLevel(_logging.DEBUG)
-        _tm_log.propagate = False
-        if not _tm_log.handlers:
-            try:
-                _tm_path = os.path.join(str(_gad_tracemalloc()), "tracemalloc_snapshots.log")
-                _tm_handler = _logging.FileHandler(_tm_path, mode="w", encoding="utf-8")
-                _tm_handler.setFormatter(_logging.Formatter("%(asctime)s %(message)s"))
-                _tm_log.addHandler(_tm_handler)
-            except Exception:
-                pass  # file handler is optional — snapshot loop still runs, just logs nowhere
-        _tm_baseline: list = []
+        from PyQt6.QtCore import QTimer as _TmActivateTimer
 
-        def _tm_snapshot_loop() -> None:
-            import time as _time
-            _time.sleep(60)   # let the app warm up before first snapshot
-            while True:
-                _time.sleep(60)
+        def _activate_tracemalloc() -> None:
+            import tracemalloc as _tm
+            import logging as _logging
+            import threading as _threading
+            from modules.utils import get_app_data_dir as _gad_tracemalloc
+            # 1 frame only — the snapshot loop groups by "lineno" (top frame), so
+            # deeper tracebacks add cost without changing the report. Bump this only
+            # if you switch the snapshot analysis to statistics("traceback").
+            _tm.start(1)
+            _tm_log = _logging.getLogger("netsentinel.tracemalloc")
+            _tm_log.setLevel(_logging.DEBUG)
+            _tm_log.propagate = False
+            if not _tm_log.handlers:
                 try:
-                    snap = _tm.take_snapshot()
-                    stats = snap.statistics("lineno")
-                    _tm_log.info("=== tracemalloc top-20 (by current size) ===")
-                    for s in stats[:20]:
-                        _tm_log.info("  %s", s)
-                    if _tm_baseline:
-                        diff = snap.compare_to(_tm_baseline[-1], "lineno")
-                        _tm_log.info("=== tracemalloc diff vs previous snapshot ===")
-                        for d in diff[:20]:
-                            _tm_log.info("  %s", d)
-                    _tm_baseline[:] = [snap]  # keep only the last snapshot for diff
-                except Exception as _e:
-                    _tm_log.warning("tracemalloc snapshot failed: %s", _e)
+                    _tm_path = os.path.join(str(_gad_tracemalloc()), "tracemalloc_snapshots.log")
+                    _tm_handler = _logging.FileHandler(_tm_path, mode="w", encoding="utf-8")
+                    _tm_handler.setFormatter(_logging.Formatter("%(asctime)s %(message)s"))
+                    _tm_log.addHandler(_tm_handler)
+                except Exception:
+                    pass  # file handler is optional — snapshot loop still runs, just logs nowhere
+            _tm_baseline: list = []
 
-        _tm_thread = _threading.Thread(target=_tm_snapshot_loop, daemon=True,
-                                       name="tracemalloc-sampler")
-        _tm_thread.start()
+            def _tm_snapshot_loop() -> None:
+                import time as _time
+                _time.sleep(60)   # let the app warm up before first snapshot
+                while True:
+                    _time.sleep(60)
+                    try:
+                        snap = _tm.take_snapshot()
+                        stats = snap.statistics("lineno")
+                        _tm_log.info("=== tracemalloc top-20 (by current size) ===")
+                        for s in stats[:20]:
+                            _tm_log.info("  %s", s)
+                        if _tm_baseline:
+                            diff = snap.compare_to(_tm_baseline[-1], "lineno")
+                            _tm_log.info("=== tracemalloc diff vs previous snapshot ===")
+                            for d in diff[:20]:
+                                _tm_log.info("  %s", d)
+                        _tm_baseline[:] = [snap]  # keep only the last snapshot for diff
+                    except Exception as _e:
+                        _tm_log.warning("tracemalloc snapshot failed: %s", _e)
+
+            _tm_thread = _threading.Thread(target=_tm_snapshot_loop, daemon=True,
+                                           name="tracemalloc-sampler")
+            _tm_thread.start()
+
+        # Fire once, ~3 s after app.exec() begins — the window has already painted by
+        # then, so the expensive first paint is not slowed by tracemalloc bookkeeping.
+        _TmActivateTimer.singleShot(3000, _activate_tracemalloc)
     # ─────────────────────────────────────────────────────────────────────────
 
     ret = app.exec()

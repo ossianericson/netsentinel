@@ -7,7 +7,7 @@
           {
             "type": "command",
             "shell": "powershell",
-            "command": "$d = $Input | ConvertFrom-Json; $fp = $d.tool_input.file_path; if ($fp -match 'apm\\.yml|\\.apm.instructions') { $env:PATH += \";C:\\Users\\ossia\\AppData\\Local\\Programs\\apm\\bin\"; apm install --target all 2>&1; apm compile --all 2>&1 }",
+            "command": "$d = $Input | ConvertFrom-Json; $fp = $d.tool_input.file_path; if ($fp -match 'apm\\.yml|\\.apm.instructions') { $env:PATH += \";C:\\Users\\ossia\\AppData\\Local\\Programs\\apm\\bin\"; apm install --target claude 2>&1; apm compile --target claude --clean 2>&1 }",
             "statusMessage": "Regenerating APM instructions..."
           }
         ]

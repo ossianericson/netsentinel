@@ -1,5 +1,5 @@
 """
-WCAG 2.1 colour-contrast ratio tests for all three NetSentinel themes.
+WCAG 2.1 colour-contrast ratio tests for both NetSentinel themes.
 
 For every known text/background pairing used in the global QSS and common
 inline stylesheets this test asserts the minimum WCAG contrast ratio:

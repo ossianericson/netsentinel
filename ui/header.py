@@ -407,6 +407,25 @@ class AppHeaderMixin:
             self._welcome_shown = True
             from PyQt6.QtCore import QTimer as _QT4
             _QT4.singleShot(600, self._show_welcome_overlay)
+        # Tray icon .show() — deferred here (not SystemTrayManager.setup(),
+        # called from Dashboard.__init__) because showEvent() only fires
+        # after the real window.show() runs in main(), well past every
+        # _splash_msg processEvents() pump. See
+        # SystemTrayManager.show_tray_icon() (ui/system_tray.py) for the full
+        # COM-reentrancy mechanism (docs/spikes/startup-com-reentrancy.md).
+        if not getattr(self, "_tray_icon_shown", False):
+            self._tray_icon_shown = True
+            if getattr(self, "_tray_manager", None) is not None:
+                self._tray_manager.show_tray_icon()
+        # Deferred page construction (experimental/lazy_pages): now that the window
+        # is up and the event loop is running, drain the placeholder queue in the
+        # background so pages are ready before the user reaches them. No-op when the
+        # flag is off. Short delay lets the first frame paint first.
+        if not getattr(self, "_lazy_builder_started", False):
+            self._lazy_builder_started = True
+            if getattr(self, "_lazy_pages", False):
+                from PyQt6.QtCore import QTimer as _QTlazy
+                _QTlazy.singleShot(400, self._start_lazy_page_builder)
 
     def _install_snap_subclass(self):
         """Subclass the Win32 HWND so WM_NCHITTEST returns HTMAXBUTTON over our

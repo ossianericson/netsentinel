@@ -1,13 +1,11 @@
 name: netsentinel
-version: 2.1.26
+version: 2.1.27
 description: >
   NetSentinel — Enterprise network security scanner, rogue device detector,
   and connectivity monitor. Professional enterprise UI built with PyQt6.
 
 targets:
   - claude
-  - copilot
-  - gemini
 
 dependencies:
   apm: []
