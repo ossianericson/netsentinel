@@ -117,11 +117,10 @@ def _mdns_name(ip: str) -> str:
         header = b"\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00"
         packet = header + question
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(1.5)
-        sock.sendto(packet, ("224.0.0.251", 5353))
-        data, _ = sock.recvfrom(512)
-        sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(1.5)
+            sock.sendto(packet, ("224.0.0.251", 5353))
+            data, _ = sock.recvfrom(512)
         # Very naive parse: find a label sequence after the answer section
         # Look for readable ASCII hostname segments
         text = data[12:]
@@ -179,11 +178,10 @@ def _snmp_sysname(ip: str, community: str = "public") -> str:
         msg_inner = version + com_str + pdu
         msg = b"\x30" + _ber_len(len(msg_inner)) + msg_inner
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(1.5)
-        sock.sendto(msg, (ip, 161))
-        resp, _ = sock.recvfrom(1024)
-        sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(1.5)
+            sock.sendto(msg, (ip, 161))
+            resp, _ = sock.recvfrom(1024)
         # Parse: find OctetString value after the last OID
         idx = resp.rfind(b"\x04")
         if idx != -1 and idx + 2 < len(resp):

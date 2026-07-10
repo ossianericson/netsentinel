@@ -83,10 +83,9 @@ class DiscoveryResult:
 def _get_local_cidr() -> str:
     """Best-effort local /24 CIDR from the default route."""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
         # Assume /24 for discovery
         parts = ip.split(".")
         return f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
@@ -205,25 +204,24 @@ def _mdns_query(timeout: float = 2.0) -> Dict[str, DiscoveredDevice]:
             + b"\x00\x0c"  # QTYPE: PTR (12)
             + b"\x80\x01"  # QCLASS: IN (unicast)
         )
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.settimeout(timeout)
-        sock.sendto(query, (_MDNS_ADDR, _MDNS_PORT))
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                data, addr = sock.recvfrom(4096)
-                ip = addr[0]
-                if ip not in devices:
-                    devices[ip] = DiscoveredDevice(ip=ip, discovery_methods=["mdns"])
-                else:
-                    if "mdns" not in devices[ip].discovery_methods:
-                        devices[ip].discovery_methods.append("mdns")
-            except socket.timeout:
-                break
-            except Exception:
-                break
-        sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.settimeout(timeout)
+            sock.sendto(query, (_MDNS_ADDR, _MDNS_PORT))
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                try:
+                    data, addr = sock.recvfrom(4096)
+                    ip = addr[0]
+                    if ip not in devices:
+                        devices[ip] = DiscoveredDevice(ip=ip, discovery_methods=["mdns"])
+                    else:
+                        if "mdns" not in devices[ip].discovery_methods:
+                            devices[ip].discovery_methods.append("mdns")
+                except socket.timeout:
+                    break
+                except Exception:
+                    break
     except Exception:
         pass  # non-fatal
     return devices

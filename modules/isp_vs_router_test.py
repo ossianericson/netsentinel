@@ -220,10 +220,9 @@ def run_isp_vs_router_test(
 def _detect_gateway() -> Optional[str]:
     """Best-effort gateway detection via a UDP connect trick (no packets sent)."""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
         # Assume gateway is .1 on the same /24
         parts = local_ip.split(".")
         if len(parts) == 4:

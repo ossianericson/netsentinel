@@ -147,27 +147,26 @@ def _ssdp_discover(timeout: float = 3.0) -> list[str]:
     """
     Send an SSDP M-SEARCH and return a list of location URLs for UPnP IGDs.
     """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.settimeout(timeout)
-    sock.sendto(_SSDP_DISCOVER.encode(), (_SSDP_ADDR, _SSDP_PORT))
-
     locations: list[str] = []
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            data, _ = sock.recvfrom(4096)
-            text = data.decode("utf-8", errors="replace")
-            for line in text.splitlines():
-                if line.strip().upper().startswith("LOCATION:"):
-                    loc = line.split(":", 1)[1].strip()
-                    if loc not in locations:
-                        locations.append(loc)
-        except socket.timeout:
-            break
-        except Exception:
-            break
-    sock.close()
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.settimeout(timeout)
+        sock.sendto(_SSDP_DISCOVER.encode(), (_SSDP_ADDR, _SSDP_PORT))
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                data, _ = sock.recvfrom(4096)
+                text = data.decode("utf-8", errors="replace")
+                for line in text.splitlines():
+                    if line.strip().upper().startswith("LOCATION:"):
+                        loc = line.split(":", 1)[1].strip()
+                        if loc not in locations:
+                            locations.append(loc)
+            except socket.timeout:
+                break
+            except Exception:
+                break
     return locations
 
 
