@@ -223,7 +223,7 @@ class _DeviceWritesMixin:
             VALUES(?, ?, ?, ?, ?, ?, ?, COALESCE(?, 1),
                    ?, COALESCE(?, 0), COALESCE(?, 0.0))
             ON CONFLICT(mac) DO UPDATE SET
-                ip            = excluded.ip,
+                ip            = COALESCE(excluded.ip, ip),
                 hostname      = COALESCE(excluded.hostname, hostname),
                 vendor        = COALESCE(excluded.vendor,   vendor),
                 device_type   = COALESCE(excluded.device_type, device_type),
