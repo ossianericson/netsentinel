@@ -199,3 +199,148 @@ def test_module1_device_found_emits_with_deviceinfo_objects(tmp_path, monkeypatc
     assert found[0]["type"] == "Windows PC"
 
     _cleanup(w)
+
+
+# ── Module2Worker / Module3Worker subprocess cleanup (finding #16) ───────────
+#
+# These workers spawn a helper multiprocessing.Process to isolate Scapy/Npcap
+# from the main process. Bug: the child was only reaped (terminate()+join())
+# on the *normal* exit path — an exception raised before that point, or a
+# forced QThread.terminate() during app close, orphaned the child. The fix
+# adds a try/finally safety net (both workers) and a cooperative stop_event/
+# mp_stop path for Module3Worker (which previously had no stop() at all,
+# unlike Module2Worker).
+
+class _FakeMpProcess:
+    """Stands in for multiprocessing.Process — never actually runs `target`,
+    just tracks start/terminate/join/is_alive so the QThread's own cleanup
+    logic can be exercised without spawning a real OS process."""
+
+    def __init__(self, target=None, args=(), daemon=None):
+        self.target = target
+        self.args = args
+        self.daemon = daemon
+        self.pid = 4242
+        self.exitcode = 0
+        self.terminate_called = False
+        self._started = False
+
+    def start(self):
+        self._started = True
+
+    def is_alive(self):
+        return self._started and not self.terminate_called
+
+    def terminate(self):
+        self.terminate_called = True
+
+    def join(self, timeout=None):
+        pass
+
+
+class _StopAwareMpProcess(_FakeMpProcess):
+    """Simulates a well-behaved child: exits (is_alive() -> False) once mp_stop
+    (the last positional arg, by convention) is set — mirrors a real child
+    process that polls mp_stop and exits within its own poll interval."""
+
+    def is_alive(self):
+        if not self._started or self.terminate_called:
+            return False
+        mp_stop = self.args[-1]
+        return not mp_stop.is_set()
+
+
+class _CrashOnceMpProcess(_FakeMpProcess):
+    """Like _FakeMpProcess, but is_alive() raises on its first call — simulates
+    an unexpected exception occurring mid-scan, before the worker reaches its
+    normal terminate()/join() reap code."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self._is_alive_calls = 0
+
+    def is_alive(self):
+        self._is_alive_calls += 1
+        if self._is_alive_calls == 1:
+            raise RuntimeError("boom mid-scan")
+        return not self.terminate_called
+
+
+def test_module3_worker_has_stop_method():
+    from workers.scan_worker import Module3Worker
+    w = Module3Worker(duration=1)
+    assert hasattr(w, "stop")
+    assert not w.isRunning()
+    _cleanup(w)
+
+
+def test_module3_worker_stop_exits_without_waiting_full_duration(monkeypatch):
+    """stop() must propagate to the child via mp_stop and exit promptly,
+    instead of running for the full duration + 15s deadline."""
+    import multiprocessing as _mp_real
+    from workers.scan_worker import Module3Worker
+
+    monkeypatch.setattr(_mp_real, "Process", _StopAwareMpProcess)
+
+    w = Module3Worker(duration=30)
+    w.stop()  # set the cooperative flag before start() — no race, Event persists
+    w.start()
+    finished = w.wait(5000)
+    assert finished, "Module3Worker did not honour stop() promptly"
+    assert not w.isRunning()
+    _cleanup(w)
+
+
+def test_module3_worker_exception_path_still_reaps_process(monkeypatch):
+    """Regression for finding #16: an exception raised before the normal
+    terminate()/join() line must still result in the child being reaped."""
+    import multiprocessing as _mp_real
+    from workers.scan_worker import Module3Worker
+
+    created = []
+    monkeypatch.setattr(_mp_real, "Process", lambda **kw: created.append(_CrashOnceMpProcess(**kw)) or created[-1])
+
+    errors = []
+    w = Module3Worker(duration=30)
+    w.error.connect(errors.append)
+    w.start()
+    finished = w.wait(5000)
+    assert finished
+    assert not w.isRunning()
+
+    app = QApplication.instance()
+    for _ in range(5):
+        app.processEvents()
+
+    assert errors and "Module 3 error" in errors[0]
+    assert created and created[0].terminate_called is True, (
+        "child process must be terminated even when an exception interrupts the scan loop"
+    )
+    _cleanup(w)
+
+
+def test_module2_worker_exception_path_still_reaps_process(monkeypatch):
+    """Same regression as above, for Module2Worker (STP scan)."""
+    import multiprocessing as _mp_real
+    from workers.scan_worker import Module2Worker
+
+    created = []
+    monkeypatch.setattr(_mp_real, "Process", lambda **kw: created.append(_CrashOnceMpProcess(**kw)) or created[-1])
+
+    errors = []
+    w = Module2Worker(gateway_mac="aa:bb:cc:dd:ee:ff", duration=30)
+    w.error.connect(errors.append)
+    w.start()
+    finished = w.wait(5000)
+    assert finished
+    assert not w.isRunning()
+
+    app = QApplication.instance()
+    for _ in range(5):
+        app.processEvents()
+
+    assert errors and "Module 2 error" in errors[0]
+    assert created and created[0].terminate_called is True, (
+        "child process must be terminated even when an exception interrupts the scan loop"
+    )
+    _cleanup(w)
