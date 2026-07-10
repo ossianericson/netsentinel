@@ -203,17 +203,19 @@ def axfr_transfer(
         msg = struct.pack(">H", len(query_body)) + query_body
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((server, 53))
-        sock.sendall(msg)
+        try:
+            sock.settimeout(timeout)
+            sock.connect((server, 53))
+            sock.sendall(msg)
 
-        buf = b""
-        while True:
-            chunk = sock.recv(4096)
-            if not chunk:
-                break
-            buf += chunk
-        sock.close()
+            buf = b""
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                buf += chunk
+        finally:
+            sock.close()
 
         # Parse multi-message TCP response (each prefixed with 2-byte length)
         pos = 0

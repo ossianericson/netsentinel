@@ -4,6 +4,46 @@ from modules.dns_zone_scanner import (
 )
 
 
+class _FakeSocket:
+    """Mimics socket.socket just enough to drive axfr_transfer's cleanup path."""
+
+    def __init__(self, fail_on):
+        self._fail_on = fail_on  # which method should raise
+        self.closed = False
+
+    def settimeout(self, _t):
+        pass
+
+    def connect(self, _addr):
+        if self._fail_on == "connect":
+            raise ConnectionRefusedError("refused")
+
+    def sendall(self, _msg):
+        if self._fail_on == "sendall":
+            raise OSError("broken pipe")
+
+    def recv(self, _n):
+        if self._fail_on == "recv":
+            raise TimeoutError("recv timed out")
+        return b""
+
+    def close(self):
+        self.closed = True
+
+
+def test_axfr_transfer_closes_socket_on_connection_failure(monkeypatch):
+    """A refused/failed AXFR connection must still close the socket, not leak it."""
+    from modules import dns_zone_scanner as m
+
+    fake = _FakeSocket(fail_on="connect")
+    monkeypatch.setattr(m.socket, "socket", lambda *a, **kw: fake)
+
+    result = m.axfr_transfer("10.0.0.1", "example.com", timeout=1.0)
+
+    assert result == []
+    assert fake.closed is True
+
+
 def test_import():
     from modules import dns_zone_scanner as m
     assert hasattr(m, "DnsZoneResult")
