@@ -80,7 +80,7 @@ def test_vendor_batch_worker_stop_skips_remaining_macs(monkeypatch):
 def test_start_vendor_lookups_stops_existing_worker_cooperatively(monkeypatch):
     """_start_vendor_lookups must call stop(), not terminate(), on a running worker."""
     from ui.scan_wiring import ScanResultMixin
-    import ui.scan_wiring as sw
+    from ui import scan_wiring as sw
 
     class _FakeExistingWorker:
         def __init__(self):
