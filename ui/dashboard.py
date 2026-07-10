@@ -1193,7 +1193,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._set_status("Security audit complete — see Security Overview for findings.")
             return
         label = self._pending_security_tools.pop(0)
-        if label == "Port Scan (TCP)":
+        if label == L.PORT_SCAN_TCP:
             gw = self._net_info.get("gateway", "") if self._net_info else ""
             if not gw:
                 # No gateway known yet — skip and advance to next tool
@@ -1201,7 +1201,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 return
             self._syn_host.setText(gw)
             self._start_syn_scan()
-        elif label == "Exposed to Internet":
+        elif label == L.EXPOSED_TO_INTERNET:
             self._start_exposure_check()
         else:
             # Unrecognised label — skip silently

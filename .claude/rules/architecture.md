@@ -180,9 +180,17 @@ Port scans default to 2 h; CVE/TLS to 24 h; unknown labels use `_DEFAULT_FRESH_S
 
 **`_AUDIT_SCAN_LABELS`** (in `security_overview_page.py`) — 9-item tuple of all nav page labels shown in the Scan Status card rows: `"Port Scan (TCP)"`, `"Port Scan (UDP)"`, `"CVE Lookup"`, `"Threat Intel"`, `"TLS & Exposure"`, `"Login Test"`, `"OS Detection"`, `"Exposed to Internet"`, `"Full Device Discovery"`. These must exactly match the strings passed to `_nav_set_scan_state()` in `ScanResultMixin`.
 
-**`_AUDIT_SEQUENCE`** (in `security_overview_page.py`) — 2-item tuple that the "▶ Run Security Audit" button fires sequentially: `"Port Scan (TCP)"` and `"Exposed to Internet"`. Only scans that need no user-supplied host target belong here. The full `_AUDIT_SCAN_LABELS` list contains more items but those require manual triggering from each tool's own page.
+**Security Scan panel** — `_SecurityScanPanel._TOOLS` (in `ui/widgets/overview_tile.py`) is a
+6-item checkbox list on the Overview page ("Threat Intel", "TLS & Exposure", "Device Risk
+Score", "CVE Lookup", "Port Scan (TCP)", "Exposed to Internet") that the user checks/unchecks
+before clicking "Run". Selected labels emit via `run_clicked` → `overview_page.py`'s
+`security_scan_requested` signal (wired in `ui/tabs.py`) → `dashboard.py._run_security_scans()`.
 
-**Security Audit Coordinator** — `dashboard.py._advance_security_audit()` pops from `_pending_security_tools` and fires each scan sequentially; `_security_audit_total` tracks progress for the Security Overview progress bar.
+**Security Audit Coordinator** — `dashboard.py._advance_security_audit()` pops labels one at a
+time from `_pending_security_tools` and dispatches by comparing against `NavLabel` enum members
+(`L.PORT_SCAN_TCP`, `L.EXPOSED_TO_INTERNET`) — only those two currently have working dispatch
+code; any other label falls through the "unrecognised label — skip silently" branch.
+`_security_audit_total` tracks progress for the Security Overview progress bar.
 
 ### Scan workers
 All network operations run in `workers/` (QThread subclasses). Emit `result_ready` and `error` signals. **Never** do blocking I/O on the main thread.

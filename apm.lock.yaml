@@ -15,7 +15,7 @@ local_deployed_files:
 - .github/instructions/session-workflow.instructions.md
 - .github/instructions/tests.instructions.md
 local_deployed_file_hashes:
-  .claude/rules/architecture.md: sha256:276f43556786a26c9241540f142928389e7550c925026f163782b7385e9b8db7
+  .claude/rules/architecture.md: sha256:5a33797c45cd57a371ce60a9bd650a93a248d78ef756e5fb387c420d787eb9f5
   .claude/rules/changelog.md: sha256:a3223ba6da72d0faa0a43b7cd898362b985776f534fac0a83ba96e30dc71c496
   .claude/rules/development-rules.md: sha256:681e4bf2143b804142f080588dcf44cbae5854de51ceb906758e75921990808a
   .claude/rules/project-vision.md: sha256:f98010a484140faf95de1ccd6d53d802d3b2e709fef48f1e449401a9f22e81b8
