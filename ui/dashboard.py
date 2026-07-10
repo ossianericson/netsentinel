@@ -1209,6 +1209,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     @pyqtSlot()
     def _start_full_scan(self):
+        if self._is_scanning:
+            return
         # Track whether this scan was triggered from the home page so we can
         # auto-navigate to Overview once device results arrive.
         # Do NOT overwrite if already True (pre-set by _on_welcome_scan to survive
