@@ -6,6 +6,7 @@ Dashboard inherits ScanResultMixin to receive these methods.
 """
 from __future__ import annotations
 
+import threading
 import time
 from typing import TYPE_CHECKING
 
@@ -39,11 +40,20 @@ class _VendorBatchWorker(QThread):
     def __init__(self, macs: list[str], parent=None) -> None:
         super().__init__(parent)
         self._macs = macs
+        self._stop_event = threading.Event()
+
+    def stop(self) -> None:
+        """Cooperative stop — checked between MACs so an in-flight (bounded,
+        5s-timeout) HTTP lookup finishes naturally instead of the thread being
+        force-terminated mid-syscall."""
+        self._stop_event.set()
 
     def run(self) -> None:
         try:
             from modules.mac_lookup import lookup_vendor
             for mac in self._macs:
+                if self._stop_event.is_set():
+                    break
                 if not mac:
                     continue
                 vendor = lookup_vendor(mac)
@@ -450,11 +460,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if not pending:
             return
 
-        # Cancel any still-running lookup from a previous scan
+        # Cancel any still-running lookup from a previous scan. stop() is
+        # cooperative (checked between MACs) rather than terminate() — the
+        # in-flight lookup has its own bounded HTTP timeout, so it exits on
+        # its own shortly instead of being force-killed mid-syscall.
         existing = getattr(self, "_vendor_batch_worker", None)
         if existing and existing.isRunning():
             existing.vendor_resolved.disconnect()
-            existing.terminate()
+            existing.stop()
             existing.wait(200)
 
         worker = _VendorBatchWorker(pending, self)
