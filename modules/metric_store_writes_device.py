@@ -70,11 +70,11 @@ class _DeviceWritesMixin:
             INSERT INTO device_annotations (mac, user_label, location, owner, notes, asset_tag, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(mac) DO UPDATE SET
-                user_label = excluded.user_label,
-                location   = excluded.location,
-                owner      = excluded.owner,
-                notes      = excluded.notes,
-                asset_tag  = excluded.asset_tag,
+                user_label = COALESCE(NULLIF(excluded.user_label, ''), user_label),
+                location   = COALESCE(NULLIF(excluded.location, ''),   location),
+                owner      = COALESCE(NULLIF(excluded.owner, ''),      owner),
+                notes      = COALESCE(NULLIF(excluded.notes, ''),      notes),
+                asset_tag  = COALESCE(NULLIF(excluded.asset_tag, ''),  asset_tag),
                 updated_at = excluded.updated_at
             """,
             (

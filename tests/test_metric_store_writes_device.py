@@ -81,6 +81,24 @@ class TestDeviceAnnotations:
         assert all_ann["aa:bb:cc:00:03:02"]["user_label"] == "A"
         assert all_ann["aa:bb:cc:00:03:03"]["user_label"] == "B"
 
+    def test_partial_update_preserves_other_fields(self, store):
+        mac = "aa:bb:cc:00:03:04"
+        store.save_device_annotations(
+            mac,
+            user_label="Office PC",
+            location="Server Room",
+            owner="IT Dept",
+            asset_tag="AT-042",
+            notes="Original note",
+        )
+        store.save_device_annotations(mac, notes="Only updating the note")
+        ann = store.get_device_annotations(mac)
+        assert ann["notes"] == "Only updating the note"
+        assert ann["user_label"] == "Office PC"
+        assert ann["location"] == "Server Room"
+        assert ann["owner"] == "IT Dept"
+        assert ann["asset_tag"] == "AT-042"
+
 
 class TestDeviceChangeEvents:
     def test_record_and_get(self, store):
