@@ -28,7 +28,7 @@ from PyQt6.QtCore import QSettings, QTimer, Qt
 from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
 
-from ui.styles import ACCENT, AMBER, GREEN, RED
+from ui import styles as _s
 
 # ── Startup registry helpers (Windows only) ───────────────────────────────────
 
@@ -100,7 +100,7 @@ def _build_badge_icon(base_icon: QIcon, count: int) -> QIcon:
     badge_size = 13
     x = px.width()  - badge_size
     y = 0
-    painter.setBrush(QColor(RED))
+    painter.setBrush(QColor(_s.RED))
     painter.setPen(Qt.PenStyle.NoPen)
     painter.drawEllipse(x, y, badge_size, badge_size)
 
@@ -115,11 +115,13 @@ def _build_badge_icon(base_icon: QIcon, count: int) -> QIcon:
     return QIcon(px)
 
 
-_HEALTH_DOT_COLOUR = {
-    "green":  GREEN,
-    "amber":  AMBER,
-    "red":    RED,
-}
+def _health_dot_colour(state: str) -> "str | None":
+    """Semantic dot colour per health state, read live (theme switch aware)."""
+    return {
+        "green":  _s.GREEN,
+        "amber":  _s.AMBER,
+        "red":    _s.RED,
+    }.get(state)
 
 
 def _overlay_health_dot(base_icon: QIcon, state: str) -> QIcon:
@@ -128,7 +130,7 @@ def _overlay_health_dot(base_icon: QIcon, state: str) -> QIcon:
     represent the ambient health state.  Returns base_icon unchanged when
     state is 'unknown'.
     """
-    colour_hex = _HEALTH_DOT_COLOUR.get(state)
+    colour_hex = _health_dot_colour(state)
     if not colour_hex:
         return base_icon
 
@@ -252,18 +254,18 @@ class SystemTrayManager:
                 return QIcon(str(p))
         # 3. Fallback: plain blue square
         px = QPixmap(32, 32)
-        px.fill(QColor(ACCENT))
+        px.fill(QColor(_s.ACCENT))
         return QIcon(px)
 
     def _build_menu(self) -> QMenu:
-        from ui.styles import BG_CARD, BORDER, TEXT_PRIMARY, BG_HOVER
         menu = QMenu()
-        menu.setStyleSheet(
-            f"QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f" border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
-            f"QMenu::item {{ padding:5px 20px; }}"
-            f"QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
-            f"QMenu::separator {{ height:1px; background:{BORDER}; margin:3px 8px; }}"
+        _s.themed_ss(
+            menu,
+            "QMenu {{ background:{BG_CARD}; color:{TEXT_PRIMARY};"
+            " border:1px solid {BORDER}; font-size:11px; padding:4px; }}"
+            "QMenu::item {{ padding:5px 20px; }}"
+            "QMenu::item:selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            "QMenu::separator {{ height:1px; background:{BORDER}; margin:3px 8px; }}",
         )
 
         self._act_health = QAction("○  Gathering health data…", menu)

@@ -18,20 +18,7 @@ from ui.nav.labels import NavLabel as L, SPECIAL_LABELS
 from ui.nav.lazy_page import _LazyPageHost
 from ui.nav.rail import _NavEntry, _RailButton, _make_nav_icon
 from ui.perf_audit import warn_if_nav_slow
-from ui.styles import (
-    ACCENT,
-    AMBER,
-    AUDIT_RED,
-    BORDER,
-    CHART_SPINE,
-    GREEN,
-    RED,
-    SIDEBAR_BG,
-    SIDEBAR_ITEM_FG,
-    SIDEBAR_SECTION_BG,
-    SIDEBAR_SECTION_FG,
-    TEXT_MUTED,
-)
+from ui import styles as _s
 
 # Pages that auto-expand the tip bar on first visit (non-obvious interactions)
 _AUTO_HELP_PAGES: frozenset[str] = frozenset({
@@ -104,13 +91,13 @@ class _NavBuilderMixin:
             _div = QListWidgetItem()
             _div.setFlags(Qt.ItemFlag.NoItemFlags)
             _div.setSizeHint(QSize(0, 9))
-            _div.setBackground(QBrush(QColor(CHART_SPINE)))
+            _div.setBackground(QBrush(QColor(_s.CHART_SPINE)))
             self._nav.addItem(_div)
             self._nav_separators.add(self._nav.count() - 1)
         item = QListWidgetItem()
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)   # clickable but not selectable
         item.setSizeHint(QSize(0, 28))
-        item.setBackground(QBrush(QColor(SIDEBAR_SECTION_BG)))
+        item.setBackground(QBrush(QColor(_s.SIDEBAR_SECTION_BG)))
         f = _QFont("Segoe UI", 9)
         f.setBold(True)
         item.setFont(f)
@@ -138,7 +125,7 @@ class _NavBuilderMixin:
         item = QListWidgetItem()
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         item.setSizeHint(QSize(0, 26))
-        item.setBackground(QBrush(QColor(SIDEBAR_SECTION_BG)))
+        item.setBackground(QBrush(QColor(_s.SIDEBAR_SECTION_BG)))
         self._nav.addItem(item)
         row = self._nav.count() - 1
         self._nav_item_icons[row]    = icon
@@ -284,7 +271,7 @@ class _NavBuilderMixin:
                 item.setText(f" {arrow}  {label.upper()}")
             else:
                 item.setText(f"     {arrow}  {label}")
-            _fg = grp.get("fg_color") or SIDEBAR_SECTION_FG
+            _fg = grp.get("fg_color") or _s.SIDEBAR_SECTION_FG
             item.setForeground(QColor(_fg))
             item.setToolTip("")
         else:
@@ -293,9 +280,9 @@ class _NavBuilderMixin:
             item.setToolTip("")
             from PyQt6.QtGui import QColor
             if row in self._nav_audit_rows:
-                item.setForeground(QColor(AUDIT_RED))
+                item.setForeground(QColor(_s.AUDIT_RED))
             else:
-                item.setForeground(QColor(SIDEBAR_ITEM_FG))
+                item.setForeground(QColor(_s.SIDEBAR_ITEM_FG))
 
     def _nav_toggle_section(self, header_row: int):
         """Collapse or expand a section / sub-group header."""
@@ -306,8 +293,8 @@ class _NavBuilderMixin:
         self._nav_refresh_item_text(header_row)
         self._nav_apply_section_visibility(header_row, grp["collapsed"])
         from PyQt6.QtCore import QSettings as _QS
-        _s = _QS(str(self._settings_path()), _QS.Format.IniFormat)
-        _s.setValue(f"nav/group_{header_row}_collapsed", str(grp["collapsed"]))
+        _qs = _QS(str(self._settings_path()), _QS.Format.IniFormat)
+        _qs.setValue(f"nav/group_{header_row}_collapsed", str(grp["collapsed"]))
 
     def _nav_apply_section_visibility(self, header_row: int, hide: bool):
         """Show/hide direct children; recurse into sub-group children."""
@@ -452,7 +439,7 @@ class _NavBuilderMixin:
         for _arow in self._nav_audit_rows:
             _aitem = self._nav.item(_arow)
             if _aitem:
-                _aitem.setForeground(_QColor(AUDIT_RED))
+                _aitem.setForeground(_QColor(_s.AUDIT_RED))
 
         # C-1/C-2: restore scan dots/badges from QSettings; start staleness timer
         self._restore_scan_registry()
@@ -503,7 +490,7 @@ class _NavBuilderMixin:
         sep = QListWidgetItem()
         sep.setFlags(Qt.ItemFlag.NoItemFlags)
         sep.setSizeHint(QSize(0, 10))
-        sep.setBackground(QBrush(QColor(SIDEBAR_BG)))
+        sep.setBackground(QBrush(QColor(_s.SIDEBAR_BG)))
         self._nav.addItem(sep)
         self._nav_header_rows.add(self._nav.count() - 1)
 
@@ -519,7 +506,7 @@ class _NavBuilderMixin:
         f.setBold(True)
         item.setFont(f)
         item.setText(f"  {label.upper()}")
-        _fg = fg_color or SIDEBAR_SECTION_FG
+        _fg = fg_color or _s.SIDEBAR_SECTION_FG
         item.setForeground(QColor(_fg))
         self._nav.addItem(item)
         row = self._nav.count() - 1
@@ -587,7 +574,7 @@ class _NavBuilderMixin:
         self._recent_rail_btn.setToolTip("Recently visited pages")
         self._recent_rail_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._recent_rail_btn.setCheckable(True)
-        self._recent_rail_btn.setIcon(_make_nav_icon("log", 18, TEXT_MUTED))
+        self._recent_rail_btn.setIcon(_make_nav_icon("log", 18, _s.TEXT_MUTED))
         self._recent_rail_btn.setIconSize(QSize(18, 18))
         self._recent_rail_btn.setStyleSheet(
             f"QPushButton {{ background: transparent; border: none; outline: none; }}"
@@ -606,9 +593,10 @@ class _NavBuilderMixin:
             from PyQt6.QtCore import Qt as _Qt
             qa_lbl.setAlignment(_Qt.AlignmentFlag.AlignHCenter | _Qt.AlignmentFlag.AlignVCenter)
             qa_lbl.setFixedSize(56, 24)
-            qa_lbl.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:7px; font-weight:bold;"
-                f" letter-spacing:0.5px; background:transparent;"
+            _s.themed_ss(
+                qa_lbl,
+                "color:{TEXT_MUTED}; font-size:7px; font-weight:bold;"
+                " letter-spacing:0.5px; background:transparent;",
             )
             insert_at = self._nav_rail_lay.count() - 2
             self._nav_rail_lay.insertWidget(insert_at, qa_lbl)
@@ -825,10 +813,10 @@ class _NavBuilderMixin:
             self._scan_registry = registry
 
         _dot_map = {
-            "fresh":   GREEN,
-            "stale":   AMBER,
-            "running": ACCENT,
-            "error":   RED,
+            "fresh":   _s.GREEN,
+            "stale":   _s.AMBER,
+            "running": _s.ACCENT,
+            "error":   _s.RED,
             "never":   "",
         }
         color = _dot_map.get(state, "")
@@ -857,7 +845,7 @@ class _NavBuilderMixin:
         _page_to_sec = getattr(self, "_nav_page_to_section", {})
         section = _page_to_sec.get(label, "")
         if section and hasattr(self, "_nav_rail_buttons"):
-            _priority = {"": 0, GREEN: 1, ACCENT: 2, AMBER: 3, RED: 4}
+            _priority = {"": 0, _s.GREEN: 1, _s.ACCENT: 2, _s.AMBER: 3, _s.RED: 4}
             worst_color = ""
             for lbl, col in getattr(self, "_flyout_dots", {}).items():
                 if _page_to_sec.get(lbl) == section:
@@ -1563,21 +1551,20 @@ class _NavBuilderMixin:
     def _open_shortcut_overlay(self) -> None:
         """Show the keyboard shortcut reference overlay (KEYBOARD-1)."""
         from PyQt6.QtWidgets import QDialog, QDialogButtonBox
-        from ui.styles import BG_CARD, TEXT_PRIMARY, TEXT_SECONDARY, WHITE
         dlg = QDialog(self)
         dlg.setWindowTitle("Keyboard Shortcuts")
         dlg.setMinimumWidth(420)
         dlg.setModal(True)
         dlg.setStyleSheet(
-            f"QDialog {{ background:{BG_CARD}; }}"
-            f"QLabel {{ color:{TEXT_PRIMARY}; background:transparent; }}"
+            f"QDialog {{ background:{_s.BG_CARD}; }}"
+            f"QLabel {{ color:{_s.TEXT_PRIMARY}; background:transparent; }}"
         )
         from PyQt6.QtWidgets import QVBoxLayout as _QVL, QWidget as _QW, QHBoxLayout as _QHL
         vlay = _QVL(dlg)
         vlay.setContentsMargins(20, 16, 20, 16)
         vlay.setSpacing(8)
         hdr = QLabel("Keyboard Shortcuts")
-        hdr.setStyleSheet(f"font-size:15px; font-weight:bold; color:{TEXT_PRIMARY};")
+        hdr.setStyleSheet(f"font-size:15px; font-weight:bold; color:{_s.TEXT_PRIMARY};")
         vlay.addWidget(hdr)
         shortcuts = [
             ("?",           "Show this reference"),
@@ -1604,11 +1591,11 @@ class _NavBuilderMixin:
             key_lbl.setFixedWidth(110)
             key_lbl.setStyleSheet(
                 f"font-family:monospace; font-size:11px; font-weight:bold;"
-                f" color:{ACCENT}; background:{CHART_SPINE};"
-                f" border:1px solid {BORDER}; border-radius:3px; padding:1px 5px;"
+                f" color:{_s.ACCENT}; background:{_s.CHART_SPINE};"
+                f" border:1px solid {_s.BORDER}; border-radius:3px; padding:1px 5px;"
             )
             desc_lbl = QLabel(desc)
-            desc_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+            desc_lbl.setStyleSheet(f"font-size:11px; color:{_s.TEXT_SECONDARY};")
             row_lay.addWidget(key_lbl)
             row_lay.addSpacing(12)
             row_lay.addWidget(desc_lbl, 1)
@@ -1616,9 +1603,9 @@ class _NavBuilderMixin:
         btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         btns.rejected.connect(dlg.accept)
         btns.button(QDialogButtonBox.StandardButton.Close).setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; border:none;"
             f" border-radius:4px; padding:4px 14px; }}"
-            f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
         )
         vlay.addSpacing(4)
         vlay.addWidget(btns)

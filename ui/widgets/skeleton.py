@@ -19,13 +19,9 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem
 
-from ui.styles import BG_ALT_ROW, BG_HOVER
+from ui import styles as _s
 
 _SKELETON_TAG = "__skeleton__"
-
-# Two alternating background colours for the shimmer pulse
-_SHADE_A = BG_ALT_ROW
-_SHADE_B = BG_HOVER
 
 # Timer registry: table id → QTimer (kept alive while rows exist)
 _timers: dict[int, QTimer] = {}
@@ -43,7 +39,7 @@ def insert_skeleton_rows(table: QTableWidget, count: int = 6) -> None:
             item = QTableWidgetItem("")
             item.setData(Qt.ItemDataRole.UserRole, _SKELETON_TAG)
             item.setFlags(Qt.ItemFlag.NoItemFlags)
-            item.setBackground(QBrush(QColor(_SHADE_A)))
+            item.setBackground(QBrush(QColor(_s.BG_ALT_ROW)))
             table.setItem(r, c, item)
 
     # Pulse animation: swap background every 650 ms
@@ -53,7 +49,7 @@ def insert_skeleton_rows(table: QTableWidget, count: int = 6) -> None:
         if not _is_skeleton_present(table):
             _stop_timer(table)
             return
-        shade = _SHADE_B if phase[0] else _SHADE_A
+        shade = _s.BG_HOVER if phase[0] else _s.BG_ALT_ROW
         phase[0] = not phase[0]
         rows = table.rowCount()
         for r in range(rows):

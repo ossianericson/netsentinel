@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER, WHITE, alpha
+from ui.styles import ACCENT, BORDER, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, BG_HOVER, WHITE, alpha, themed_ss
 
 
 class PageHeaderBar(QWidget):
@@ -299,9 +299,10 @@ class _HelpPopover(QFrame):
     ) -> None:
         super().__init__(parent, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
         self.setFixedWidth(300)
-        self.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
-            f" border-radius:4px; }}"
+        themed_ss(
+            self,
+            "QFrame {{ background:{BG_CARD}; border:1px solid {BORDER};"
+            " border-radius:4px; }}",
         )
         lay = QVBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 12)
@@ -309,46 +310,50 @@ class _HelpPopover(QFrame):
 
         title_lbl = QLabel(title)
         title_lbl.setWordWrap(True)
-        title_lbl.setStyleSheet(
-            f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
-            f" background:transparent; border:none;"
+        themed_ss(
+            title_lbl,
+            "font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+            " background:transparent; border:none;",
         )
         lay.addWidget(title_lbl)
 
         def _section_label(text: str) -> QLabel:
             lbl = QLabel(text)
-            lbl.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
-                f" background:transparent; border:none; letter-spacing:0.5px;"
+            themed_ss(
+                lbl,
+                "font-size:10px; font-weight:bold; color:{TEXT_SECONDARY};"
+                " background:transparent; border:none; letter-spacing:0.5px;",
             )
             return lbl
 
         lay.addWidget(_section_label("WHAT IT DOES"))
         body_lbl = QLabel(body)
         body_lbl.setWordWrap(True)
-        body_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+        themed_ss(
+            body_lbl,
+            "font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;",
         )
         lay.addWidget(body_lbl)
 
         if tips:
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.HLine)
-            sep.setStyleSheet(f"color:{BORDER}; background:{BORDER};")
+            themed_ss(sep, "color:{BORDER}; background:{BORDER};")
             sep.setFixedHeight(1)
             lay.addWidget(sep)
             lay.addWidget(_section_label("TIPS"))
             for tip in tips[:2]:
                 tip_lbl = QLabel(f"▸  {tip}")
                 tip_lbl.setWordWrap(True)
-                tip_lbl.setStyleSheet(
-                    f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+                themed_ss(
+                    tip_lbl,
+                    "font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;",
                 )
                 lay.addWidget(tip_lbl)
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"color:{BORDER}; background:{BORDER};")
+        themed_ss(sep2, "color:{BORDER}; background:{BORDER};")
         sep2.setFixedHeight(1)
         lay.addWidget(sep2)
         lay.addWidget(_section_label("SHORTCUTS"))
@@ -358,13 +363,15 @@ class _HelpPopover(QFrame):
             row.setSpacing(6)
             key_lbl = QLabel(key)
             key_lbl.setFixedWidth(56)
-            key_lbl.setStyleSheet(
-                f"font-size:10px; font-weight:bold; color:{ACCENT};"
-                f" background:transparent; border:none; font-family:Consolas,monospace;"
+            themed_ss(
+                key_lbl,
+                "font-size:10px; font-weight:bold; color:{ACCENT};"
+                " background:transparent; border:none; font-family:Consolas,monospace;",
             )
             desc_lbl = QLabel(desc)
-            desc_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+            themed_ss(
+                desc_lbl,
+                "font-size:10px; color:{TEXT_SECONDARY}; background:transparent; border:none;",
             )
             row.addWidget(key_lbl)
             row.addWidget(desc_lbl, 1)

@@ -11,7 +11,7 @@ automatically as rows are added or removed.  No layout restructuring needed.
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from ui.styles import BORDER, TEXT_MUTED, TEXT_SECONDARY
+from ui.styles import themed_ss
 
 
 class EmptyStateOverlay(QWidget):
@@ -27,15 +27,17 @@ class EmptyStateOverlay(QWidget):
 
         self._icon_lbl = QLabel(icon)
         self._icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icon_lbl.setStyleSheet(
-            f"color:{BORDER}; font-size:40px; background:transparent; border:none;"
+        themed_ss(
+            self._icon_lbl,
+            "color:{BORDER}; font-size:40px; background:transparent; border:none;",
         )
 
         self._title_lbl = QLabel(title)
         self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title_lbl.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:13px; font-weight:600;"
-            "background:transparent; border:none;"
+        themed_ss(
+            self._title_lbl,
+            "color:{TEXT_SECONDARY}; font-size:13px; font-weight:600;"
+            "background:transparent; border:none;",
         )
 
         lay.addWidget(self._icon_lbl)
@@ -44,9 +46,10 @@ class EmptyStateOverlay(QWidget):
         if subtitle:
             sub = QLabel(subtitle)
             sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            sub.setStyleSheet(
-                f"color:{TEXT_MUTED}; font-size:11px;"
-                "background:transparent; border:none;"
+            themed_ss(
+                sub,
+                "color:{TEXT_MUTED}; font-size:11px;"
+                "background:transparent; border:none;",
             )
             lay.addWidget(sub)
 

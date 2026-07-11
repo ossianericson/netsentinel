@@ -10,19 +10,19 @@ from __future__ import annotations
 from PyQt6.QtCore import QSettings
 from PyQt6.QtGui import QColor
 
-from ui.styles import AMBER, GREEN, RED, TEXT_MUTED
+from ui import styles as _s
 
 
 def status_color(status: str) -> QColor:
     """Map a device or alert status string → semantic QColor."""
     s = status.lower()
     if s in ("online", "good", "up", "joined", "recovered"):
-        return QColor(GREEN)
+        return QColor(_s.GREEN)
     if s in ("offline", "down", "critical"):
-        return QColor(RED)
+        return QColor(_s.RED)
     if s in ("warn", "warning", "degraded", "left"):
-        return QColor(AMBER)
-    return QColor(TEXT_MUTED)
+        return QColor(_s.AMBER)
+    return QColor(_s.TEXT_MUTED)
 
 
 def _reduce_motion() -> bool:

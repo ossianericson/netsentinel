@@ -22,7 +22,7 @@ from typing import Callable, Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from ui.styles import BG_DARK, TEXT_SECONDARY
+from ui.styles import themed_ss
 
 
 class _LazyPageHost(QWidget):
@@ -47,13 +47,14 @@ class _LazyPageHost(QWidget):
         self._nav_label = nav_label
         self._materialized = False
         self._real: Optional[QWidget] = None
-        self.setStyleSheet(f"QWidget {{ background:{BG_DARK}; }}")
+        themed_ss(self, "QWidget {{ background:{BG_DARK}; }}")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         self._placeholder = QLabel("Loading…")
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet(
-            f"color:{TEXT_SECONDARY}; font-size:13px; background:transparent; border:none;"
+        themed_ss(
+            self._placeholder,
+            "color:{TEXT_SECONDARY}; font-size:13px; background:transparent; border:none;",
         )
         lay.addWidget(self._placeholder)
 

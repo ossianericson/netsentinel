@@ -11,7 +11,7 @@ Usage:
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QWidget
 
-from ui.styles import BORDER, BORDER_LITE
+from ui import styles as _s
 
 
 class SkeletonRow(QWidget):
@@ -38,7 +38,7 @@ class SkeletonRow(QWidget):
         for _ in range(rows):
             frame = QFrame()
             frame.setFixedHeight(row_height)
-            frame.setStyleSheet(f"background:{BORDER};border:none;")
+            frame.setStyleSheet(f"background:{_s.BORDER};border:none;")
             layout.addWidget(frame)
             self._frames.append(frame)
         
@@ -51,7 +51,7 @@ class SkeletonRow(QWidget):
     def _animate(self):
         """Toggle all frames between BORDER and BORDER_LITE."""
         self._state = not self._state
-        color = BORDER_LITE if self._state else BORDER
+        color = _s.BORDER_LITE if self._state else _s.BORDER
         for frame in self._frames:
             frame.setStyleSheet(f"background:{color};border:none;")
     

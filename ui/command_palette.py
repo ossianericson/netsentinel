@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QStyledItemDelegate, QVBoxLayout, QWidget,
 )
 
-from ui.styles import ACCENT, BG_CARD, BG_HOVER, BORDER, TEXT_PRIMARY, TEXT_SECONDARY, WHITE
+from ui import styles as _s
 
 
 class _ShortcutDelegate(QStyledItemDelegate):
@@ -19,7 +19,7 @@ class _ShortcutDelegate(QStyledItemDelegate):
         if shortcut:
             painter.save()
             is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
-            painter.setPen(QColor(WHITE if is_selected else TEXT_SECONDARY))
+            painter.setPen(QColor(_s.WHITE if is_selected else _s.TEXT_SECONDARY))
             f = QFont()
             f.setPointSize(9)
             painter.setFont(f)
@@ -54,8 +54,8 @@ class CommandPalette(QDialog):
         wrap.setObjectName("paletteWrap")
         wrap.setStyleSheet(
             f"QWidget#paletteWrap {{"
-            f"  background:{BG_CARD};"
-            f"  border:1px solid {ACCENT};"
+            f"  background:{_s.BG_CARD};"
+            f"  border:1px solid {_s.ACCENT};"
             f"  border-radius:8px;"
             f"}}"
         )
@@ -68,8 +68,8 @@ class CommandPalette(QDialog):
         self._search.setFixedHeight(42)
         self._search.setStyleSheet(
             f"QLineEdit {{"
-            f"  background:{BG_CARD}; color:{TEXT_PRIMARY};"
-            f"  border:none; border-bottom:1px solid {BORDER};"
+            f"  background:{_s.BG_CARD}; color:{_s.TEXT_PRIMARY};"
+            f"  border:none; border-bottom:1px solid {_s.BORDER};"
             f"  padding:0 14px; font-size:14px;"
             f"  border-top-left-radius:8px; border-top-right-radius:8px;"
             f"}}"
@@ -82,16 +82,16 @@ class CommandPalette(QDialog):
         self._list.setFixedHeight(320)
         self._list.setStyleSheet(
             f"QListWidget {{"
-            f"  background:{BG_CARD}; border:none; outline:none;"
+            f"  background:{_s.BG_CARD}; border:none; outline:none;"
             f"  border-bottom-left-radius:8px; border-bottom-right-radius:8px;"
             f"}}"
             f"QListWidget::item {{"
-            f"  padding:9px 14px; color:{TEXT_PRIMARY}; background:{BG_CARD}; font-size:12px; border:none;"
+            f"  padding:9px 14px; color:{_s.TEXT_PRIMARY}; background:{_s.BG_CARD}; font-size:12px; border:none;"
             f"}}"
             f"QListWidget::item:selected {{"
-            f"  background:{ACCENT}; color:{WHITE}; border-radius:0;"
+            f"  background:{_s.ACCENT}; color:{_s.WHITE}; border-radius:0;"
             f"}}"
-            f"QListWidget::item:hover:!selected {{ background:{BG_HOVER}; color:{TEXT_PRIMARY}; }}"
+            f"QListWidget::item:hover:!selected {{ background:{_s.BG_HOVER}; color:{_s.TEXT_PRIMARY}; }}"
         )
         self._list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._list.setItemDelegate(_ShortcutDelegate(self._list))
@@ -111,7 +111,7 @@ class CommandPalette(QDialog):
             if kind == "separator":
                 row = QListWidgetItem(f"  {label.upper()}")
                 row.setFlags(Qt.ItemFlag.NoItemFlags)
-                row.setForeground(QColor(TEXT_SECONDARY))
+                row.setForeground(QColor(_s.TEXT_SECONDARY))
                 f = QFont()
                 f.setPointSize(8)
                 f.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
@@ -123,7 +123,7 @@ class CommandPalette(QDialog):
                 if shortcut:
                     row.setData(Qt.ItemDataRole.UserRole + 1, shortcut)
                 if kind in ("action", "recent"):
-                    row.setForeground(QColor(TEXT_SECONDARY))
+                    row.setForeground(QColor(_s.TEXT_SECONDARY))
                 if first_selectable is None:
                     first_selectable = self._list.count()
             self._list.addItem(row)
@@ -134,7 +134,7 @@ class CommandPalette(QDialog):
             _f.setPointSize(9)
             _f.setItalic(True)
             _tip.setFont(_f)
-            _tip.setForeground(QColor(TEXT_SECONDARY))
+            _tip.setForeground(QColor(_s.TEXT_SECONDARY))
             self._list.addItem(_tip)
         if first_selectable is not None:
             self._list.setCurrentRow(first_selectable)
