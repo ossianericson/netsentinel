@@ -199,7 +199,15 @@ Zero telemetry. No cloud backend. Every outbound connection is user-initiated an
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
-### v2.1.27 (current)
+### v2.1.28 (current)
+
+- Plugged a batch of resource leaks — sockets and scan/speed-test helper processes are now always closed on error and timeout paths
+- Firewall block/unblock actions no longer briefly freeze the UI — they run off the GUI thread
+- Fixed two silent data-loss bugs when updating a device's saved vendor or annotations
+- Hardened the three-layer architecture separation (the UI no longer writes the database or imports the alert engine directly) for safer maintenance
+- More worker errors now show a plain-English explanation instead of a raw exception
+
+### v2.1.27
 
 - Sharpened the two built-in themes instead of adding more: **Arctic Clean** now uses deeper indigo table headers (higher white-on-header contrast) and **Midnight Pro** has a brighter royal-blue accent that clears WCAG AA on cards
 - Fixed an intermittent startup fault on some Windows machines caused by the system-tray icon initialising too early
