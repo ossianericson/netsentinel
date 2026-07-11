@@ -1,5 +1,9 @@
 """
-settings_io.py — Export / import NetSentinel QSettings to/from JSON.
+settings_io.py — Export / import NetSentinel settings to/from JSON.
+
+Pure module (ARCH RULE 1): no PyQt import. It owns the JSON shaping and the
+keyring-secret filtering; the QSettings read/write lives in the UI caller
+(ui/pages/settings_cards.py), which threads a plain {key: value} dict in and out.
 
 Credentials stored in the OS keychain are NEVER written to the export file.
 A warning notice is included in the export so importers know secrets are excluded.
@@ -8,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 # QSettings keys that map to keyring entries — never exported.
@@ -22,16 +26,16 @@ _KEYRING_KEYS: frozenset[str] = frozenset({
 })
 
 
-def export_settings(path: Path) -> None:
-    """Dump all QSettings values (except keyring secrets) to a JSON file."""
-    from PyQt6.QtCore import QSettings
-    qs = QSettings("NetSentinel", "NetSentinel")
+def export_settings(path: Path, settings: Mapping[str, Any]) -> None:
+    """Write `settings` (minus keyring secrets) to a JSON file.
 
+    `settings` is the raw {key: value} mapping the caller read from QSettings.
+    None values are dropped; values that aren't JSON-native are stringified.
+    """
     data: dict[str, Any] = {}
-    for key in qs.allKeys():
+    for key, val in settings.items():
         if key in _KEYRING_KEYS:
             continue
-        val = qs.value(key)
         # QSettings may return None for some keys — skip them
         if val is None:
             continue
@@ -58,10 +62,11 @@ def export_settings(path: Path) -> None:
     path.write_text(json.dumps(output, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def import_settings(path: Path) -> int:
-    """Read a JSON export file and write all settings back to QSettings.
+def import_settings(path: Path) -> dict[str, Any]:
+    """Read a JSON export file and return its settings dict (minus keyring secrets).
 
-    Returns the number of keys imported.
+    The caller is responsible for writing the returned dict to QSettings and
+    reporting len(...) as the imported count.
     Raises ValueError if the file format is unrecognised.
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
@@ -71,14 +76,8 @@ def import_settings(path: Path) -> int:
     if meta.get("app") != "NetSentinel":
         raise ValueError("This file was not exported from NetSentinel.")
 
-    from PyQt6.QtCore import QSettings
-    qs = QSettings("NetSentinel", "NetSentinel")
-
-    count = 0
-    for key, val in raw["settings"].items():
-        if key in _KEYRING_KEYS:
-            continue
-        qs.setValue(key, val)
-        count += 1
-    qs.sync()
-    return count
+    return {
+        key: val
+        for key, val in raw["settings"].items()
+        if key not in _KEYRING_KEYS
+    }

@@ -1262,7 +1262,9 @@ class _SettingsCardsMixin:
             return
         try:
             from modules.settings_io import export_settings
-            export_settings(Path(path))
+            qs = QSettings("NetSentinel", "NetSentinel")
+            raw = {k: qs.value(k) for k in qs.allKeys()}
+            export_settings(Path(path), raw)
             self._settings_io_status.setText(f"Settings exported to {Path(path).name}")
         except Exception as exc:
             log.warning("Settings export failed: %s", exc)
@@ -1289,9 +1291,13 @@ class _SettingsCardsMixin:
             return
         try:
             from modules.settings_io import import_settings
-            count = import_settings(Path(path))
+            data = import_settings(Path(path))
+            qs = QSettings("NetSentinel", "NetSentinel")
+            for k, v in data.items():
+                qs.setValue(k, v)
+            qs.sync()
             self._settings_io_status.setText(
-                f"Imported {count} settings from {Path(path).name} — restart to apply."
+                f"Imported {len(data)} settings from {Path(path).name} — restart to apply."
             )
         except Exception as exc:
             log.warning("Settings import failed: %s", exc)
