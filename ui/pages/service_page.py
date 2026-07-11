@@ -12,7 +12,7 @@ import json
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFormLayout,
@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QStackedWidget,
     QTableWidgetItem,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -34,7 +35,7 @@ from ui.widgets.context_menu import install_copy_menu
 from ui.widgets.skeleton import clear_skeleton_rows, insert_skeleton_rows
 
 from modules.metric_store import MetricStore, ServiceCheckPoint
-from modules.service_monitor import ServiceTarget
+from modules.service_monitor import ServiceTarget, check_tcp
 from ui.styles import (
     ACCENT, ACCENT_DARK, ACCENT_LITE, BG_ALT_ROW, BG_CARD,
     BG_HOVER, BORDER, CARD_HDR_BORDER, CARD_RADIUS,
@@ -54,6 +55,27 @@ def _ts_label(ts: int) -> str:
         return "—"
 
 
+class _AddProbeWorker(QThread):
+    """One-off reachability check run before a new target is persisted.
+
+    Without this, any text landing in the add-service field (a typo, or an
+    automated fuzz click into the host box with the port spinbox's 443
+    default) becomes a permanent monitor with no confirmation — and if the
+    target was never actually reachable, it fires a CRITICAL Service Down
+    alert on its very first check and forever after.
+    """
+    result = pyqtSignal(bool)
+
+    def __init__(self, host: str, port: int, parent=None):
+        super().__init__(parent)
+        self._host = host
+        self._port = port
+
+    def run(self) -> None:
+        up, _rtt, _err = check_tcp(self._host, self._port, timeout=3.0)
+        self.result.emit(up)
+
+
 class ServicePage(QWidget):
     """Displays TCP service/port heartbeat status for all monitored services."""
 
@@ -68,6 +90,7 @@ class ServicePage(QWidget):
         self._query_hours = 24.0
         self._rows: list[ServiceCheckPoint] = []
         self._configured: list[dict] = self._load_targets()
+        self._add_probe: Optional[_AddProbeWorker] = None
         self._setup_ui()
         if self._configured:
             self._content_stack.setCurrentIndex(1)
@@ -93,18 +116,38 @@ class ServicePage(QWidget):
         targets = [ServiceTarget(t["host"], t["port"], t.get("label", "")) for t in self._configured]
         self.services_changed.emit(targets)
 
-    def _add_service(self, host: str, port: int, label: str) -> bool:
-        """Add a service target. Returns True if the service was actually added."""
+    def _probe_and_add(self, host: str, port: int, label: str, on_result) -> bool:
+        """Probe host:port for reachability before persisting it as a target.
+
+        An unreachable target is hard-blocked, not silently added — see
+        _AddProbeWorker's docstring for why. Returns True once a probe has
+        been started (the outcome arrives asynchronously via
+        on_result(up: bool)); returns False without starting a probe if the
+        input was rejected synchronously (blank host, or a duplicate that is
+        already monitored) — mirrors the previous synchronous return value.
+        """
         host = host.strip()
         if not host:
             return False
         for t in self._configured:
             if t["host"] == host and t["port"] == port:
                 return False
-        self._configured.append({"host": host, "port": port, "label": label.strip() or f"{host}:{port}"})
-        self._save_targets()
-        self._emit_targets()
-        self._content_stack.setCurrentIndex(1)
+        if self._add_probe is not None and self._add_probe.isRunning():
+            return False
+
+        def _finish(up: bool) -> None:
+            if up:
+                self._configured.append(
+                    {"host": host, "port": port, "label": label.strip() or f"{host}:{port}"}
+                )
+                self._save_targets()
+                self._emit_targets()
+                self._content_stack.setCurrentIndex(1)
+            on_result(up)
+
+        self._add_probe = _AddProbeWorker(host, port, parent=self)
+        self._add_probe.result.connect(_finish)
+        self._add_probe.start()
         return True
 
     def _remove_service(self, host: str, port: int) -> None:
@@ -165,13 +208,38 @@ class ServicePage(QWidget):
         e0_add.setObjectName("btnScan")
         e0_add.setFixedHeight(30)
 
+        _e0_normal_style = f"font-size:11px; border:1px solid {BORDER}; padding:3px 6px;"
+        _e0_error_style = f"font-size:11px; border:1px solid {RED}; padding:3px 6px;"
+
         def _add_from_empty():
-            added = self._add_service(e0_host.text(), e0_port.value(), e0_label.text())
-            if added:
-                e0_host.clear()
-                e0_label.clear()
-                self.check_now_requested.emit()
-                self.scan_requested.emit()
+            host = e0_host.text()
+            port = e0_port.value()
+            label = e0_label.text()
+
+            def _done(up: bool):
+                e0_add.setEnabled(True)
+                e0_add.setText("Add Service")
+                if up:
+                    e0_host.clear()
+                    e0_label.clear()
+                    self.check_now_requested.emit()
+                    self.scan_requested.emit()
+                else:
+                    msg = f"Couldn't reach {host.strip()}:{port} — not added."
+                    e0_host.setStyleSheet(_e0_error_style)
+                    e0_host.setToolTip(msg)
+                    # setToolTip() alone only shows on hover — pop it up immediately
+                    # so the rejection reason is actually seen, not just a red flash.
+                    QToolTip.showText(e0_host.mapToGlobal(e0_host.rect().bottomLeft()), msg, e0_host)
+                    _t = QTimer(self)
+                    _t.setSingleShot(True)
+                    _t.timeout.connect(lambda: (e0_host.setStyleSheet(_e0_normal_style), e0_host.setToolTip("")))
+                    _t.start(2500)
+
+            started = self._probe_and_add(host, port, label, _done)
+            if started:
+                e0_add.setEnabled(False)
+                e0_add.setText("Checking…")
 
         e0_add.clicked.connect(_add_from_empty)
         e0_host.returnPressed.connect(_add_from_empty)
@@ -254,24 +322,49 @@ class ServicePage(QWidget):
             f"QPushButton:pressed {{ color:{ACCENT_DARK}; border-color:{ACCENT_DARK}; }}"
         )
 
+        _bar_normal_style = f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;"
+        _bar_error_style = f"font-size:11px; border:1px solid {RED}; padding:2px 5px;"
+
+        def _flash_bar_host(tooltip: str, duration_ms: int) -> None:
+            self._txt_host.setStyleSheet(_bar_error_style)
+            self._txt_host.setToolTip(tooltip)
+            if tooltip:
+                # setToolTip() alone only shows on hover — pop it up immediately
+                # so the rejection reason is actually seen, not just a red flash.
+                QToolTip.showText(
+                    self._txt_host.mapToGlobal(self._txt_host.rect().bottomLeft()),
+                    tooltip,
+                    self._txt_host,
+                )
+            _t = QTimer(self)
+            _t.setSingleShot(True)
+            _t.timeout.connect(lambda: (
+                self._txt_host.setStyleSheet(_bar_normal_style), self._txt_host.setToolTip("")
+            ))
+            _t.start(duration_ms)
+
         def _add_from_bar():
             host = self._txt_host.text().strip()
             if not host:
-                self._txt_host.setStyleSheet(
-                    f"font-size:11px; border:1px solid {RED}; padding:2px 5px;"
-                )
-                _t = QTimer(self)
-                _t.setSingleShot(True)
-                _t.timeout.connect(lambda: self._txt_host.setStyleSheet(
-                    f"font-size:11px; border:1px solid {BORDER}; padding:2px 5px;"
-                ))
-                _t.start(1500)
+                _flash_bar_host("", 1500)
                 return
-            added = self._add_service(host, self._spin_port.value(), self._txt_label.text())
-            if added:
-                self._txt_host.clear()
-                self._txt_label.clear()
-                self.check_now_requested.emit()
+            port = self._spin_port.value()
+            label = self._txt_label.text()
+
+            def _done(up: bool):
+                btn_add.setEnabled(True)
+                btn_add.setText("+ Add")
+                if up:
+                    self._txt_host.clear()
+                    self._txt_label.clear()
+                    self.check_now_requested.emit()
+                else:
+                    _flash_bar_host(f"Couldn't reach {host}:{port} — not added.", 2500)
+
+            started = self._probe_and_add(host, port, label, _done)
+            if started:
+                btn_add.setEnabled(False)
+                btn_add.setText("Checking…")
 
         btn_add.clicked.connect(_add_from_bar)
         self._txt_host.returnPressed.connect(_add_from_bar)
