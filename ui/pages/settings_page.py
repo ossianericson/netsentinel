@@ -243,7 +243,7 @@ class SettingsPage(_SettingsCardsMixin, QWidget):
         self._apply_visibility()
 
     def refresh_theme(self) -> None:
-        self._refresh_theme_buttons()
+        self._refresh_theme_swatches()
 
     def _mark_dirty(self) -> None:
         self._dirty = True

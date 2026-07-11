@@ -59,15 +59,29 @@ def _imported_tokens(source: str) -> set[str]:
 
 def _referenced_tokens(source: str) -> set[str]:
     """
-    Return all UPPER_CASE identifiers that appear as {NAME} inside
-    f-string expressions or format()-style placeholders.
+    Return all UPPER_CASE bare-Name identifiers referenced inside f-string
+    interpolations (``ast.FormattedValue`` nodes within ``ast.JoinedStr``).
 
-    We match:
-      {IDENTIFIER}   — inside any string in the file
-      {IDENTIFIER:   — with format spec
+    AST-based, not a raw-source regex, so it only sees real f-strings — a
+    ``themed_ss(w, "color:{RED};")`` template is a *plain* string with literal
+    ``{RED}`` text; it has no ``ast.Name`` node and can never raise NameError,
+    so it must not count here. f-strings can NameError on a missing import;
+    that is exactly the bug class this test guards against. Multi-line
+    f-strings are also handled correctly since this walks the parsed tree
+    rather than matching line-by-line.
     """
-    # Regex: opening brace, then an uppercase identifier (no dots / calls)
-    return set(re.findall(r'\{([A-Z][A-Z0-9_]{2,})(?:[}:!])', source))
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    referenced: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.JoinedStr):
+            continue
+        for value in node.values:
+            if isinstance(value, ast.FormattedValue) and isinstance(value.value, ast.Name):
+                referenced.add(value.value.id)
+    return referenced
 
 
 def _page_files() -> list[Path]:
@@ -88,11 +102,6 @@ class TestStyleTokenImports:
 
         # Tokens used in this file but never imported from ui.styles
         missing = referenced - imported
-
-        # Allow tokens that are accessed via the _styles module alias
-        # e.g. _styles.get_active_theme_name() — these aren't imported directly
-        if "import ui.styles as _styles" in source or "import ui.styles" in source:
-            pass  # module-level access is fine alongside direct imports
 
         assert not missing, (
             f"{page_path.name} uses style token(s) without importing them: "

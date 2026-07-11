@@ -1453,7 +1453,7 @@ class _SettingsCardsMixin:
         )
         bl.addWidget(accent_hdr)
         accent_desc = QLabel(
-            "Override the active theme's accent colour. Takes effect on next launch."
+            "Override the active theme's accent colour. Applies immediately."
         )
         accent_desc.setWordWrap(True)
         accent_desc.setStyleSheet(
@@ -1540,10 +1540,20 @@ class _SettingsCardsMixin:
             sw.set_active(name == active)
 
     def _on_theme(self, name: str) -> None:
-        from ui.styles import set_active_theme_name
-        set_active_theme_name(name)
-        self._refresh_theme_swatches()
-        self._theme_status_lbl.setText(f"Theme '{name}' saved — restart the app to apply.")
+        from PyQt6.QtCore import QSettings
+        live = QSettings("NetSentinel", "NetSentinel").value(
+            "experimental/live_theme_switch", False, type=bool
+        )
+        if live:
+            from ui.styles import apply_theme
+            apply_theme(name)   # persists + emits itself — do NOT also call set_active_theme_name
+            self._refresh_theme_swatches()
+            self._theme_status_lbl.setText(f"Theme '{name}' applied.")
+        else:
+            from ui.styles import set_active_theme_name
+            set_active_theme_name(name)
+            self._refresh_theme_swatches()
+            self._theme_status_lbl.setText(f"Theme '{name}' saved — restart the app to apply.")
 
     # ── Display preferences ───────────────────────────────────────────────────
 

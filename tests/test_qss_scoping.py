@@ -110,6 +110,17 @@ def _scan_function(func: ast.AST):
             wk = _key(node.args[0])
             if wk:
                 containers.add(wk)
+        # themed_ss(w, template) is the live-theming equivalent of
+        # w.setStyleSheet(template) — treat it identically so converted sites
+        # stay visible to both tiers instead of vanishing from the scan.
+        if isinstance(fn, ast.Name) and fn.id == "themed_ss" and len(node.args) >= 2:
+            recv = _key(node.args[0])
+            if recv is not None:
+                styled.add(recv)
+                text = _literal_text(node.args[1])
+                if text is not None and "{" not in text and text.strip():
+                    bare_containers[recv] = (node.lineno, text.strip()[:60])
+            continue
         if not isinstance(fn, ast.Attribute):
             continue
         recv = _key(fn.value)

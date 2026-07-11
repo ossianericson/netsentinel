@@ -8,9 +8,17 @@ Two built-in themes:
 Theme is persisted in QSettings under "ui/theme".
 All colour constants are injected into module globals at import time
 so that ``from ui.styles import ACCENT`` always returns the active theme's value.
-Changing the theme requires a restart; call ``set_active_theme_name()`` then
-restart the application.
+Call ``apply_theme(name)`` to switch the active theme immediately — it persists
+the choice and emits ``get_theme_manager().theme_changed``, no restart required.
+``set_active_theme_name()`` alone only persists; it does not restyle the running
+app.
 """
+
+import contextlib
+import logging
+import weakref
+
+log = logging.getLogger(__name__)
 
 # ── Palette definitions ───────────────────────────────────────────────────────
 
@@ -1178,35 +1186,111 @@ def get_theme_manager():
     return _theme_manager
 
 
+# ── Live QSS registry ──────────────────────────────────────────────────────────
+
+_THEMED_REGISTRY: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+
+
+class _LiveTokens:
+    """Mapping over this module's live globals for str.format_map."""
+
+    def __getitem__(self, key: str):
+        try:
+            return globals()[key]
+        except KeyError:
+            raise KeyError(
+                f"Unknown style token {{{key}}} in themed_ss template — "
+                f"must be a name defined in ui/styles.py"
+            ) from None
+
+
+_LIVE_TOKENS = _LiveTokens()
+
+
+def _render(template) -> str:
+    if callable(template):
+        return template()
+    return template.format_map(_LIVE_TOKENS)
+
+
+def themed_ss(widget, template) -> None:
+    """setStyleSheet now + auto re-apply on every theme/accent change.
+
+    template: plain str with {TOKEN} placeholders (converted from an f-string by
+    dropping the 'f' — literal QSS braces stay doubled), or a zero-arg callable
+    returning a QSS string. The callable MUST NOT capture the widget or self —
+    that would strongly reference the WeakKeyDictionary key and leak the entry.
+    Re-registering a widget replaces its template. GUI thread only.
+    """
+    widget.setStyleSheet(_render(template))   # render first: bad template raises
+    _THEMED_REGISTRY[widget] = template        # only after a successful render
+
+
+def _reapply_themed() -> None:
+    import time as _time
+    _t0 = _time.perf_counter()
+    for w, t in list(_THEMED_REGISTRY.items()):   # snapshot: GC/re-entrancy safe
+        try:
+            w.setStyleSheet(_render(t))
+        except RuntimeError:
+            _THEMED_REGISTRY.pop(w, None)  # C++ object deleted, wrapper alive
+    log.debug(
+        "themed_ss: reapplied %d sheet(s) in %.1fms",
+        len(_THEMED_REGISTRY), (_time.perf_counter() - _t0) * 1000,
+    )
+
+
+@contextlib.contextmanager
+def _suspend_repaints():
+    """Disable repaints on every top-level widget while re-theming, so nothing
+    paints a stale-colour frame mid-switch. No-op if there is no QApplication
+    yet — some tests exercise this module without a running Qt app."""
+    from PyQt6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        yield
+        return
+    widgets = app.topLevelWidgets()
+    for w in widgets:
+        w.setUpdatesEnabled(False)
+    try:
+        yield
+    finally:
+        for w in widgets:
+            w.setUpdatesEnabled(True)
+
+
 def apply_theme(name: str) -> None:
     """Switch the active theme immediately — no restart required."""
     if name not in THEMES:
         raise ValueError(f"Unknown theme {name!r}. Valid: {list(THEMES)}")
-    import sys as _sys
-    _m = _sys.modules[__name__]
-    globals().update(THEMES[name])
-    globals()["_ACTIVE_THEME"] = name
-    _acc = get_accent_override()
-    if _acc:
-        _a, _al, _ad = _compute_accent_variants(_acc)
-        globals().update({"ACCENT": _a, "ACCENT_LITE": _al, "ACCENT_DARK": _ad})
-    _m.RISK_COLORS.clear()
-    _m.RISK_COLORS.update({
-        "HIGH":    _m.RED,    "STORM":   _m.RED,
-        "MEDIUM":  _m.AMBER,  "WARNING": _m.AMBER,
-        "LOW":     _m.BLUE,   "CLEAN":   _m.GREEN,
-        "UNKNOWN": _m.TEXT_SECONDARY,
-    })
-    _m.RISK_BG.clear()
-    _m.RISK_BG.update({
-        "HIGH":    _m.RED_BG,     "STORM":   _m.RED_BG,
-        "MEDIUM":  _m.AMBER_BG,   "WARNING": _m.AMBER_BG,
-        "LOW":     _m.BTN_HOVER_BG, "CLEAN":  _m.GREEN_BG,
-        "UNKNOWN": _m.BG_CARD,
-    })
-    globals()["MAIN_STYLE"] = _build_qss()
-    set_active_theme_name(name)
-    get_theme_manager().theme_changed.emit(name)
+    with _suspend_repaints():
+        import sys as _sys
+        _m = _sys.modules[__name__]
+        globals().update(THEMES[name])
+        globals()["_ACTIVE_THEME"] = name
+        _acc = get_accent_override()
+        if _acc:
+            _a, _al, _ad = _compute_accent_variants(_acc)
+            globals().update({"ACCENT": _a, "ACCENT_LITE": _al, "ACCENT_DARK": _ad})
+        _m.RISK_COLORS.clear()
+        _m.RISK_COLORS.update({
+            "HIGH":    _m.RED,    "STORM":   _m.RED,
+            "MEDIUM":  _m.AMBER,  "WARNING": _m.AMBER,
+            "LOW":     _m.BLUE,   "CLEAN":   _m.GREEN,
+            "UNKNOWN": _m.TEXT_SECONDARY,
+        })
+        _m.RISK_BG.clear()
+        _m.RISK_BG.update({
+            "HIGH":    _m.RED_BG,     "STORM":   _m.RED_BG,
+            "MEDIUM":  _m.AMBER_BG,   "WARNING": _m.AMBER_BG,
+            "LOW":     _m.BTN_HOVER_BG, "CLEAN":  _m.GREEN_BG,
+            "UNKNOWN": _m.BG_CARD,
+        })
+        globals()["MAIN_STYLE"] = _build_qss()
+        _reapply_themed()
+        set_active_theme_name(name)
+        get_theme_manager().theme_changed.emit(name)
 
 
 def apply_accent_override(hex_val: "str | None") -> None:
@@ -1225,6 +1309,7 @@ def apply_accent_override(hex_val: "str | None") -> None:
             "ACCENT_DARK": _t["ACCENT_DARK"],
         })
     globals()["MAIN_STYLE"] = _build_qss()
+    _reapply_themed()
     get_theme_manager().theme_changed.emit(_m._ACTIVE_THEME)
 
 
