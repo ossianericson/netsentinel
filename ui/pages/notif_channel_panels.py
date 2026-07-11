@@ -607,7 +607,7 @@ class _NotifChannelsMixin:
 
     def _test_webhook(self) -> None:
         from modules.notification_router import WebhookChannel, _deliver_webhook
-        from modules.alert_engine import AlertFired
+        from modules.alert_types import AlertFired
         import time as _t
         url = self._webhook_url.text().strip()
         if not url:
@@ -623,7 +623,7 @@ class _NotifChannelsMixin:
 
     def _test_email(self) -> None:
         from modules.notification_router import EmailChannel, _deliver_email
-        from modules.alert_engine import AlertFired
+        from modules.alert_types import AlertFired
         import time as _t
         try:
             port = int(self._email_port.text().strip() or "587")
@@ -650,7 +650,7 @@ class _NotifChannelsMixin:
 
     def _test_pushover(self) -> None:
         from modules.notification_router import PushoverChannel, _deliver_pushover
-        from modules.alert_engine import AlertFired
+        from modules.alert_types import AlertFired
         import time as _t
         ch = PushoverChannel(
             enabled=True,
@@ -667,7 +667,7 @@ class _NotifChannelsMixin:
 
     def _test_ntfy(self) -> None:
         from modules.notification_router import NtfyChannel, _deliver_ntfy
-        from modules.alert_engine import AlertFired
+        from modules.alert_types import AlertFired
         import time as _t
         ch = NtfyChannel(
             enabled=True,
@@ -685,7 +685,7 @@ class _NotifChannelsMixin:
 
     def _test_telegram(self) -> None:
         from modules.notification_router import TelegramChannel, _deliver_telegram
-        from modules.alert_engine import AlertFired
+        from modules.alert_types import AlertFired
         import time as _t
         ch = TelegramChannel(
             enabled=True,
