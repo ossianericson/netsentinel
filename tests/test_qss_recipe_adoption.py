@@ -77,13 +77,10 @@ _PATTERNS = {
 
 # Per-file, per-pattern baseline. Anything not listed defaults to 0.
 _BASELINE: dict[str, dict[str, int]] = {
-    "home_page.py": {
-        # 577/946/1124/1136: each mixes in a property qss_dismiss_button()
-        # doesn't model (text-align:left, border-radius:3px + a differently
-        # coloured hover background, or hover text-decoration:underline) --
-        # genuinely distinct button styles, not the plain dismiss recipe.
-        "dismiss_b": 4,
-    },
+    # home_page.py's four `dismiss_b` matches dropped to 0 in the Instant Theme
+    # Switching Phase 4a conversion: those f-string setStyleSheet calls became
+    # themed_ss() plain-string templates (the `f` prefix the regex keys on is
+    # gone), so the raw-literal shape no longer appears. Defaults to 0.
 }
 
 

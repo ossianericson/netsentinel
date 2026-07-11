@@ -15,12 +15,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget,
 )
 
-from ui.styles import (
-    alpha,
-    ACCENT, ACCENT_DARK, AMBER, BG_CARD, BG_HOVER, BORDER,
-    CARD_RADIUS, GREEN, PRO_WARN_BG, RED, TEXT_MUTED, TEXT_PRIMARY,
-    TEXT_SECONDARY, UPDATE_BAR_BORDER, UPDATE_BAR_FG, WHITE,
-)
+from ui import styles as _s
 from ui.widgets.home_widgets import (
     _load_grade_history, _GRADE_HISTORY_KEY, _AlertRow,
 )
@@ -64,7 +59,7 @@ class _HomeDataMixin:
         if not filtered:
             lbl = QLabel(f'No features matching "{text}"')
             lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY};"
+                f"font-size:11px; color:{_s.TEXT_SECONDARY};"
                 " background:transparent; border:none;"
             )
             self._search_results_inner.addWidget(lbl)
@@ -84,12 +79,12 @@ class _HomeDataMixin:
 
         name_lbl = QLabel(feat["name"])
         name_lbl.setStyleSheet(
-            f"font-size:11px; font-weight:bold; color:{TEXT_PRIMARY};"
+            f"font-size:11px; font-weight:bold; color:{_s.TEXT_PRIMARY};"
             " background:transparent; border:none; min-width:130px;"
         )
         desc_lbl = QLabel(feat["desc"])
         desc_lbl.setStyleSheet(
-            f"font-size:11px; color:{TEXT_SECONDARY};"
+            f"font-size:11px; color:{_s.TEXT_SECONDARY};"
             " background:transparent; border:none;"
         )
         desc_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -98,10 +93,10 @@ class _HomeDataMixin:
         btn.setFlat(True)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setStyleSheet(
-            f"QPushButton {{ color:{ACCENT}; font-size:11px;"
+            f"QPushButton {{ color:{_s.ACCENT}; font-size:11px;"
             f" background:transparent; border:none; padding:0; }}"
-            f"QPushButton:hover {{ color:{TEXT_PRIMARY}; }}"
-            f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+            f"QPushButton:hover {{ color:{_s.TEXT_PRIMARY}; }}"
+            f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
         )
         target = feat.get("page") or "Feature Guide"
         btn.clicked.connect(lambda _=False, t=target: self.navigate_to.emit(t))
@@ -277,9 +272,8 @@ class _HomeDataMixin:
         if not hasattr(self, "_rec_grade_lbl"):
             return
         if self._current_grade:
-            from ui.styles import GREEN as _G, AMBER as _A, RED as _R
-            color = _G if self._current_grade in ("A", "B") else (
-                _A if self._current_grade == "C" else _R
+            color = _s.GREEN if self._current_grade in ("A", "B") else (
+                _s.AMBER if self._current_grade == "C" else _s.RED
             )
             self._rec_grade_lbl.setText(f"Network Grade: {self._current_grade}")
             self._rec_grade_lbl.setStyleSheet(
@@ -322,7 +316,7 @@ class _HomeDataMixin:
             self._tw_cve_val.setText(str(len(cves)))
             self._tw_cve_val.setStyleSheet(
                 f"font-size:16px; font-weight:bold;"
-                f" color:{RED if cves else TEXT_MUTED};"
+                f" color:{_s.RED if cves else _s.TEXT_MUTED};"
                 " background:transparent; border:none;"
             )
 
@@ -341,6 +335,7 @@ class _HomeDataMixin:
         self, arp: bool, dhcp: bool, storm: bool, logger: bool
     ) -> None:
         """Update monitoring pill badges. Called by dashboard on worker state changes."""
+        self._last_pill_states = (arp, dhcp, storm, logger)
         # Track logger start time for rich tooltip
         if logger and not getattr(self, "_logger_active_since", None):
             self._logger_active_since: "datetime.datetime | None" = datetime.datetime.now()
@@ -357,19 +352,19 @@ class _HomeDataMixin:
             if active:
                 btn.setText(f"●  {label}")
                 btn.setStyleSheet(
-                    f"QPushButton {{ background:{alpha(GREEN, 0x22)}; color:{GREEN}; font-size:10px;"
-                    f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
+                    f"QPushButton {{ background:{_s.alpha(_s.GREEN, 0x22)}; color:{_s.GREEN}; font-size:10px;"
+                    f" font-weight:bold; border:1px solid {_s.GREEN}; border-radius:11px;"
                     f" padding:1px 10px; }}"
-                    f"QPushButton:hover {{ background:{alpha(GREEN, 0x44)}; }}"
-                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                    f"QPushButton:hover {{ background:{_s.alpha(_s.GREEN, 0x44)}; }}"
+                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
                 )
             else:
                 btn.setText(f"○  {label}")
                 btn.setStyleSheet(
-                    f"QPushButton {{ background:{BG_CARD}; color:{TEXT_MUTED}; font-size:10px;"
-                    f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
-                    f"QPushButton:hover {{ background:{BG_HOVER}; }}"
-                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                    f"QPushButton {{ background:{_s.BG_CARD}; color:{_s.TEXT_MUTED}; font-size:10px;"
+                    f" border:1px solid {_s.BORDER}; border-radius:11px; padding:1px 10px; }}"
+                    f"QPushButton:hover {{ background:{_s.BG_HOVER}; }}"
+                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
                 )
         all_off = not any([arp, dhcp, storm, logger])
         self._monitoring_nudge.setVisible(all_off)
@@ -401,19 +396,19 @@ class _HomeDataMixin:
             if active:
                 rbtn.setText(f"●  {rlabel}")
                 rbtn.setStyleSheet(
-                    f"QPushButton {{ background:{alpha(GREEN, 0x22)}; color:{GREEN}; font-size:10px;"
-                    f" font-weight:bold; border:1px solid {GREEN}; border-radius:11px;"
+                    f"QPushButton {{ background:{_s.alpha(_s.GREEN, 0x22)}; color:{_s.GREEN}; font-size:10px;"
+                    f" font-weight:bold; border:1px solid {_s.GREEN}; border-radius:11px;"
                     f" padding:1px 10px; }}"
-                    f"QPushButton:hover {{ background:{alpha(GREEN, 0x44)}; }}"
-                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                    f"QPushButton:hover {{ background:{_s.alpha(_s.GREEN, 0x44)}; }}"
+                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
                 )
             else:
                 rbtn.setText(f"○  {rlabel}")
                 rbtn.setStyleSheet(
-                    f"QPushButton {{ background:{BG_HOVER}; color:{TEXT_MUTED}; font-size:10px;"
-                    f" border:1px solid {BORDER}; border-radius:11px; padding:1px 10px; }}"
-                    f"QPushButton:hover {{ border-color:{ACCENT}; }}"
-                    f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                    f"QPushButton {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; font-size:10px;"
+                    f" border:1px solid {_s.BORDER}; border-radius:11px; padding:1px 10px; }}"
+                    f"QPushButton:hover {{ border-color:{_s.ACCENT}; }}"
+                    f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
                 )
 
     # ── Action-needed card ────────────────────────────────────────────────────
@@ -448,7 +443,7 @@ class _HomeDataMixin:
             else:
                 time_str = f"{elapsed // 3600}h ago"
 
-            dot_color  = RED if severity == "CRITICAL" else AMBER
+            dot_color  = _s.RED if severity == "CRITICAL" else _s.AMBER
             label_text = f"{rule} · {msg[:50]}" if msg else rule
 
             row_w = QWidget()
@@ -465,7 +460,7 @@ class _HomeDataMixin:
 
             msg_lbl = QLabel(label_text)
             msg_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+                f"font-size:11px; color:{_s.TEXT_PRIMARY}; background:transparent; border:none;"
             )
             msg_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             msg_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -474,7 +469,7 @@ class _HomeDataMixin:
 
             time_lbl = QLabel(time_str)
             time_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                f"font-size:10px; color:{_s.TEXT_MUTED}; background:transparent; border:none;"
             )
 
             ack_btn = QPushButton("✓")
@@ -482,10 +477,10 @@ class _HomeDataMixin:
             ack_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             ack_btn.setToolTip("Acknowledge this alert")
             ack_btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{TEXT_MUTED};"
-                f" border:1px solid {BORDER}; border-radius:3px; font-size:10px; }}"
-                f"QPushButton:hover {{ color:{GREEN}; border-color:{GREEN}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_MUTED}; }}"
+                f"QPushButton {{ background:transparent; color:{_s.TEXT_MUTED};"
+                f" border:1px solid {_s.BORDER}; border-radius:3px; font-size:10px; }}"
+                f"QPushButton:hover {{ color:{_s.GREEN}; border-color:{_s.GREEN}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_MUTED}; }}"
             )
             ack_btn.clicked.connect(lambda _=False, aid=alert_id, w=row_w: self._ack_alert_row(aid, w))
 
@@ -538,7 +533,7 @@ class _HomeDataMixin:
         if not history:
             self._rec_diag_lbl.setText("Last diagnosis:  none yet")
             self._rec_diag_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                f"font-size:11px; color:{_s.TEXT_MUTED}; background:transparent; border:none;"
             )
             return
         e = history[0]
@@ -557,8 +552,8 @@ class _HomeDataMixin:
             ago = "—"
         sev = e.get("severity", "INFO")
         n = len(e.get("findings", []))
-        sev_colors = {"CRITICAL": RED, "HIGH": RED, "MEDIUM": AMBER, "LOW": GREEN, "INFO": ACCENT}
-        color = sev_colors.get(sev, TEXT_MUTED)
+        sev_colors = {"CRITICAL": _s.RED, "HIGH": _s.RED, "MEDIUM": _s.AMBER, "LOW": _s.GREEN, "INFO": _s.ACCENT}
+        color = sev_colors.get(sev, _s.TEXT_MUTED)
         txt = f"Last diagnosis:  {sev} · {n} finding{'s' if n != 1 else ''} · {ago}"
         self._rec_diag_lbl.setText(txt)
         self._rec_diag_lbl.setStyleSheet(
@@ -622,7 +617,7 @@ class _HomeDataMixin:
                 row = speed_rows[0]
                 dl = row.download_mbps or 0.0
                 ul = row.upload_mbps or 0.0
-                colour = GREEN if dl > 25 else (AMBER if dl > 5 else RED)
+                colour = _s.GREEN if dl > 25 else (_s.AMBER if dl > 5 else _s.RED)
                 self._speed_card.set_value(
                     f"{dl:.0f} Mbps",
                     f"/ up {ul:.0f} Mbps",
@@ -648,7 +643,7 @@ class _HomeDataMixin:
                     str(n),
                     "on network",
                     "(last scan)",
-                    GREEN,
+                    _s.GREEN,
                 )
         except Exception:
             pass  # non-fatal
@@ -671,7 +666,7 @@ class _HomeDataMixin:
         QSettings("NetSentinel", "NetSentinel").setValue("home/last_scan_ts", _now.isoformat())
         self._freshness_strip.set_scan_timestamp(
             "Last scan: just now",
-            f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;",
+            f"font-size:11px; color:{_s.TEXT_SECONDARY}; background:transparent; border:none;",
         )
 
         devices = result.get("devices", [])
@@ -700,9 +695,9 @@ class _HomeDataMixin:
             _new_count  = len(_current_macs - _prev_macs)
             _gone_count = len(_prev_macs - _current_macs)
             if _new_count:
-                _parts.append(f'<span style="color:{AMBER};">+{_new_count} new device{"s" if _new_count != 1 else ""}</span>')
+                _parts.append(f'<span style="color:{_s.AMBER};">+{_new_count} new device{"s" if _new_count != 1 else ""}</span>')
             if _gone_count:
-                _parts.append(f'<span style="color:{RED};">−{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
+                _parts.append(f'<span style="color:{_s.RED};">−{_gone_count} device{"s" if _gone_count != 1 else ""} missing</span>')
 
         # CVE delta — new CVE findings added since last scan
         _store = getattr(self, "_store", None)
@@ -715,7 +710,7 @@ class _HomeDataMixin:
                 if _prev_cve_count is not None and _cve_count > _prev_cve_count:
                     _d = _cve_count - _prev_cve_count
                     _parts.append(
-                        f'<span style="color:{RED};">+{_d} new CVE{"s" if _d != 1 else ""}</span>'
+                        f'<span style="color:{_s.RED};">+{_d} new CVE{"s" if _d != 1 else ""}</span>'
                     )
             except Exception:
                 pass  # non-fatal — store may not have CVE table yet
@@ -727,7 +722,7 @@ class _HomeDataMixin:
         elif _prev_macs:
             # no device or security changes
             self._delta_chips_lbl.setText(
-                f'<span style="color:{GREEN};">● No changes since last scan</span>'
+                f'<span style="color:{_s.GREEN};">● No changes since last scan</span>'
             )
             self._delta_chips_lbl.setTextFormat(Qt.TextFormat.RichText)
             self._delta_banner.setVisible(True)
@@ -736,7 +731,7 @@ class _HomeDataMixin:
             1 for d in devices
             if d.get("risk_level", "UNKNOWN") in ("HIGH", "UNKNOWN")
         )
-        dev_colour = GREEN if n_at_risk == 0 else AMBER
+        dev_colour = _s.GREEN if n_at_risk == 0 else _s.AMBER
         n_new = sum(1 for d in devices if d.get("is_new", False))
         dev_sub = f"on network" + (f" · {n_new} new" if n_new else "")
         dev_status = (
@@ -758,11 +753,11 @@ class _HomeDataMixin:
             if all_vals:
                 avg_rtt = sum(all_vals) / len(all_vals)
                 if avg_rtt < 50:
-                    stab_colour, stab_status = GREEN, "Stable connection"
+                    stab_colour, stab_status = _s.GREEN, "Stable connection"
                 elif avg_rtt < 150:
-                    stab_colour, stab_status = AMBER, "Moderate latency"
+                    stab_colour, stab_status = _s.AMBER, "Moderate latency"
                 else:
-                    stab_colour, stab_status = RED, "High latency"
+                    stab_colour, stab_status = _s.RED, "High latency"
                 self._stability_card.set_value(
                     f"{avg_rtt:.0f} ms", "avg latency", stab_status, stab_colour
                 )
@@ -784,37 +779,31 @@ class _HomeDataMixin:
             )
 
         if n_total > 0:
-            _s = "s" if n_total != 1 else ""
+            _plural = "s" if n_total != 1 else ""
             _new = f"  ·  {n_new} new" if n_new else ""
-            self._res_devices_lbl.setText(f"{n_total} device{_s} found{_new}")
-            _dev_colour = GREEN if n_at_risk == 0 else AMBER
-            self._res_devices_dot.setStyleSheet(
-                f"font-size:8px; color:{_dev_colour};"
-                " background:transparent; border:none;"
-            )
+            self._res_devices_lbl.setText(f"{n_total} device{_plural} found{_new}")
+            _dev_colour = _s.GREEN if n_at_risk == 0 else _s.AMBER
+            _s.themed_ss(self._res_devices_dot, lambda c=_dev_colour:
+                         f"font-size:8px; color:{c}; background:transparent; border:none;")
 
             if avg_rtt is not None:
-                _conn_colour = GREEN if avg_rtt < 50 else (AMBER if avg_rtt < 150 else RED)
+                _conn_colour = _s.GREEN if avg_rtt < 50 else (_s.AMBER if avg_rtt < 150 else _s.RED)
                 self._res_conn_lbl.setText(f"{avg_rtt:.0f} ms avg latency")
             else:
-                _conn_colour = GREEN
+                _conn_colour = _s.GREEN
                 self._res_conn_lbl.setText("Connection monitoring active")
-            self._res_conn_dot.setStyleSheet(
-                f"font-size:8px; color:{_conn_colour};"
-                " background:transparent; border:none;"
-            )
+            _s.themed_ss(self._res_conn_dot, lambda c=_conn_colour:
+                         f"font-size:8px; color:{c}; background:transparent; border:none;")
 
             if n_at_risk == 0:
-                _sec_colour = GREEN
+                _sec_colour = _s.GREEN
                 self._res_security_lbl.setText("No security findings")
             else:
-                _sec_colour = RED
+                _sec_colour = _s.RED
                 _i = "s" if n_at_risk != 1 else ""
                 self._res_security_lbl.setText(f"{n_at_risk} device{_i} need attention")
-            self._res_security_dot.setStyleSheet(
-                f"font-size:8px; color:{_sec_colour};"
-                " background:transparent; border:none;"
-            )
+            _s.themed_ss(self._res_security_dot, lambda c=_sec_colour:
+                         f"font-size:8px; color:{c}; background:transparent; border:none;")
 
             self._results_strip.setVisible(True)
 
@@ -911,7 +900,7 @@ class _HomeDataMixin:
         """Refresh the speed mini-card from a SpeedTestResult."""
         dl = getattr(result, "download_mbps", 0.0) or 0.0
         ul = getattr(result, "upload_mbps", 0.0) or 0.0
-        colour = GREEN if dl > 25 else (AMBER if dl > 5 else RED)
+        colour = _s.GREEN if dl > 25 else (_s.AMBER if dl > 5 else _s.RED)
         self._speed_card.set_value(
             f"{dl:.0f} Mbps",
             f"/ up {ul:.0f} Mbps",
@@ -935,7 +924,7 @@ class _HomeDataMixin:
 
         severity = getattr(alert, "severity", "WARNING")
         msg = str(getattr(alert, "message", alert))
-        colour = RED if any(k in severity.upper() for k in ("HIGH", "CRITICAL")) else AMBER
+        colour = _s.RED if any(k in severity.upper() for k in ("HIGH", "CRITICAL")) else _s.AMBER
         time_str = datetime.datetime.now().strftime("%H:%M")
         row = _AlertRow(colour, msg[:80], time_str, alert=alert)
         row.clicked.connect(self.alert_view_requested.emit)
@@ -948,6 +937,7 @@ class _HomeDataMixin:
     def set_monitoring_status(self, running: bool, elapsed_str: str = "",
                               outage_count: int = 0) -> None:
         """Update the stability monitoring card on the home page."""
+        self._last_mon_status = (running, elapsed_str, outage_count)
         if running:
             outage_txt = f" · {outage_count} outage{'s' if outage_count != 1 else ''}" if outage_count else " · no outages"
             elapsed_txt = f"  {elapsed_str}" if elapsed_str else ""
@@ -955,34 +945,34 @@ class _HomeDataMixin:
                 f"Running{elapsed_txt}{outage_txt} — leave the app open to keep logging."
             )
             self._mon_status_lbl.setStyleSheet(
-                f"font-size:11px; color:{GREEN}; background:transparent; border:none;"
+                f"font-size:11px; color:{_s.GREEN}; background:transparent; border:none;"
             )
             self._mon_dot.setStyleSheet(
-                f"font-size:9px; color:{GREEN}; background:transparent; border:none;"
+                f"font-size:9px; color:{_s.GREEN}; background:transparent; border:none;"
             )
             self._btn_mon_start.setText("Stop")
             self._btn_mon_start.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{TEXT_SECONDARY}; border:1px solid {BORDER};"
+                f"QPushButton {{ background:transparent; color:{_s.TEXT_SECONDARY}; border:1px solid {_s.BORDER};"
                 f" border-radius:4px; font-size:11px; padding:0 12px; }}"
-                f"QPushButton:hover {{ background:{BORDER}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{TEXT_SECONDARY}; }}"
+                f"QPushButton:hover {{ background:{_s.BORDER}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.TEXT_SECONDARY}; }}"
             )
         else:
             self._mon_status_lbl.setText(
                 "Not running — start to log connection stability over time."
             )
             self._mon_status_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+                f"font-size:11px; color:{_s.TEXT_SECONDARY}; background:transparent; border:none;"
             )
             self._mon_dot.setStyleSheet(
-                f"font-size:9px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+                f"font-size:9px; color:{_s.TEXT_SECONDARY}; background:transparent; border:none;"
             )
             self._btn_mon_start.setText("Start Monitoring")
             self._btn_mon_start.setStyleSheet(
-                f"QPushButton {{ background:{ACCENT}; color:{WHITE}; border:none;"
+                f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; border:none;"
                 f" border-radius:4px; font-size:11px; font-weight:600; padding:0 12px; }}"
-                f"QPushButton:hover {{ background:{ACCENT_DARK}; }}"
-                f"QPushButton:pressed {{ color:{TEXT_PRIMARY}; }}"
+                f"QPushButton:hover {{ background:{_s.ACCENT_DARK}; }}"
+                f"QPushButton:pressed {{ color:{_s.TEXT_PRIMARY}; }}"
             )
 
     def set_last_visit_summary(
@@ -1027,34 +1017,35 @@ class _HomeDataMixin:
 
     def _apply_last_visit_style(self, prominent: bool) -> None:
         """Swap the 'since last visit' card between routine and prominent styles (S9-6)."""
+        self._last_visit_prominent = prominent
         if prominent:
             self._last_visit_card.setStyleSheet(
-                f"QFrame#lastVisitCard {{ background:{BG_CARD}; border:1px solid {alpha(ACCENT, 0x44)};"
-                f" border-left:3px solid {ACCENT}; border-radius:{CARD_RADIUS}; }}"
+                f"QFrame#lastVisitCard {{ background:{_s.BG_CARD}; border:1px solid {_s.alpha(_s.ACCENT, 0x44)};"
+                f" border-left:3px solid {_s.ACCENT}; border-radius:{_s.CARD_RADIUS}; }}"
             )
             self._lv_icon.setStyleSheet(
-                f"font-size:18px; color:{ACCENT}; background:transparent; border:none;"
+                f"font-size:18px; color:{_s.ACCENT}; background:transparent; border:none;"
             )
             self._lv_title.setText("Welcome back!")
             self._lv_title.setStyleSheet(
-                f"font-size:12px; font-weight:bold; color:{TEXT_PRIMARY};"
+                f"font-size:12px; font-weight:bold; color:{_s.TEXT_PRIMARY};"
                 " background:transparent; border:none;"
             )
             self._lv_title.setVisible(True)
             self._lv_text.setStyleSheet(
-                f"font-size:11px; color:{TEXT_SECONDARY}; background:transparent; border:none;"
+                f"font-size:11px; color:{_s.TEXT_SECONDARY}; background:transparent; border:none;"
             )
         else:
             self._last_visit_card.setStyleSheet(
-                f"QFrame#lastVisitCard {{ background:{PRO_WARN_BG}; border:1px solid {UPDATE_BAR_BORDER};"
-                f" border-radius:{CARD_RADIUS}; }}"
+                f"QFrame#lastVisitCard {{ background:{_s.PRO_WARN_BG}; border:1px solid {_s.UPDATE_BAR_BORDER};"
+                f" border-radius:{_s.CARD_RADIUS}; }}"
             )
             self._lv_icon.setStyleSheet(
-                f"font-size:13px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+                f"font-size:13px; color:{_s.UPDATE_BAR_FG}; background:transparent; border:none;"
             )
             self._lv_title.setVisible(False)
             self._lv_text.setStyleSheet(
-                f"font-size:11px; color:{UPDATE_BAR_FG}; background:transparent; border:none;"
+                f"font-size:11px; color:{_s.UPDATE_BAR_FG}; background:transparent; border:none;"
             )
 
     # ── Grade display ─────────────────────────────────────────────────────────
@@ -1081,16 +1072,17 @@ class _HomeDataMixin:
         delta = this_avg - last_avg
         if abs(delta) < 1:
             text  = "— no change"
-            color = TEXT_SECONDARY
+            color = _s.TEXT_SECONDARY
         elif delta > 0:
             text  = f"↑ +{delta:.0f} vs last week"
-            color = GREEN
+            color = _s.GREEN
         else:
             text  = f"↓ {delta:.0f} vs last week"
-            color = RED
+            color = _s.RED
         self._grade_delta_lbl.setText(text)
-        self._grade_delta_lbl.setStyleSheet(
-            f"font-size:10px; color:{color}; background:transparent; border:none;"
+        _s.themed_ss(
+            self._grade_delta_lbl,
+            lambda c=color: f"font-size:10px; color:{c}; background:transparent; border:none;",
         )
         self._grade_delta_lbl.setVisible(True)
 
@@ -1196,7 +1188,7 @@ class _HomeDataMixin:
         card = QFrame()
         card.setObjectName("scanCenterCard")
         card.setStyleSheet(
-            f"QFrame#scanCenterCard {{ background:{BG_CARD}; border:1px solid {BORDER}; }}"
+            f"QFrame#scanCenterCard {{ background:{_s.BG_CARD}; border:1px solid {_s.BORDER}; }}"
         )
         outer = QVBoxLayout(card)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -1206,14 +1198,14 @@ class _HomeDataMixin:
         hdr_frame = QFrame()
         hdr_frame.setFixedHeight(32)
         hdr_frame.setStyleSheet(
-            f"QFrame {{ background:{BG_CARD}; border-bottom:1px solid {BORDER}; }}"
+            f"QFrame {{ background:{_s.BG_CARD}; border-bottom:1px solid {_s.BORDER}; }}"
         )
         hdr_lay = QHBoxLayout(hdr_frame)
         hdr_lay.setContentsMargins(12, 0, 10, 0)
         hdr_lay.setSpacing(8)
         hdr_lbl = QLabel("SCAN CENTER")
         hdr_lbl.setStyleSheet(
-            f"font-size:10px; font-weight:700; color:{TEXT_SECONDARY}; border:none;"
+            f"font-size:10px; font-weight:700; color:{_s.TEXT_SECONDARY}; border:none;"
             " letter-spacing:1.5px;"
         )
         run_all_btn = QPushButton("▶  Rescan")
@@ -1224,10 +1216,10 @@ class _HomeDataMixin:
             "categories, use each row's own button below."
         )
         run_all_btn.setStyleSheet(
-            f"QPushButton {{ background:{ACCENT}; color:{WHITE}; font-size:10px;"
+            f"QPushButton {{ background:{_s.ACCENT}; color:{_s.WHITE}; font-size:10px;"
             f" border:none; border-radius:3px; padding:0 8px; }}"
-            f"QPushButton:hover   {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
-            f"QPushButton:pressed {{ background:{ACCENT_DARK}; color:{WHITE}; }}"
+            f"QPushButton:hover   {{ background:{_s.ACCENT_DARK}; color:{_s.WHITE}; }}"
+            f"QPushButton:pressed {{ background:{_s.ACCENT_DARK}; color:{_s.WHITE}; }}"
         )
         run_all_btn.clicked.connect(self.rescan_requested)
         hdr_lay.addWidget(hdr_lbl)
@@ -1249,7 +1241,7 @@ class _HomeDataMixin:
         self._scan_center_age_labels:  list = []
 
         rows_frame = QFrame()
-        rows_frame.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:none; }}")
+        rows_frame.setStyleSheet(f"QFrame {{ background:{_s.BG_CARD}; border:none; }}")
         rows_lay = QVBoxLayout(rows_frame)
         rows_lay.setContentsMargins(12, 2, 10, 4)
         rows_lay.setSpacing(0)
@@ -1262,18 +1254,18 @@ class _HomeDataMixin:
             dot = QLabel("●")
             dot.setFixedWidth(14)
             dot.setStyleSheet(
-                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                f"font-size:10px; color:{_s.TEXT_MUTED}; background:transparent; border:none;"
             )
 
             name_lbl = QLabel(display)
             name_lbl.setFixedWidth(110)
             name_lbl.setStyleSheet(
-                f"font-size:11px; color:{TEXT_PRIMARY}; background:transparent; border:none;"
+                f"font-size:11px; color:{_s.TEXT_PRIMARY}; background:transparent; border:none;"
             )
 
             age_lbl = QLabel("Never")
             age_lbl.setStyleSheet(
-                f"font-size:10px; color:{TEXT_MUTED}; background:transparent; border:none;"
+                f"font-size:10px; color:{_s.TEXT_MUTED}; background:transparent; border:none;"
             )
 
             btn = QPushButton(btn_text)
@@ -1281,10 +1273,10 @@ class _HomeDataMixin:
             btn.setFixedWidth(96)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet(
-                f"QPushButton {{ background:transparent; color:{ACCENT}; font-size:10px;"
-                f" border:1px solid {BORDER}; border-radius:3px; padding:0 6px; }}"
-                f"QPushButton:hover   {{ background:{BG_HOVER}; border-color:{ACCENT}; }}"
-                f"QPushButton:pressed {{ background:{BG_HOVER}; color:{ACCENT}; }}"
+                f"QPushButton {{ background:transparent; color:{_s.ACCENT}; font-size:10px;"
+                f" border:1px solid {_s.BORDER}; border-radius:3px; padding:0 6px; }}"
+                f"QPushButton:hover   {{ background:{_s.BG_HOVER}; border-color:{_s.ACCENT}; }}"
+                f"QPushButton:pressed {{ background:{_s.BG_HOVER}; color:{_s.ACCENT}; }}"
             )
             if nav_target is None:
                 btn.clicked.connect(self.rescan_requested)
@@ -1335,11 +1327,11 @@ class _HomeDataMixin:
                 _sec_state = "stale"
 
         _STATE_COLOR = {
-            "fresh":   GREEN,
-            "stale":   AMBER,
-            "running": ACCENT,
-            "error":   RED,
-            "never":   TEXT_MUTED,
+            "fresh":   _s.GREEN,
+            "stale":   _s.AMBER,
+            "running": _s.ACCENT,
+            "error":   _s.RED,
+            "never":   _s.TEXT_MUTED,
         }
 
         for i, (_, reg_key, _, _nav) in enumerate(self._scan_center_row_configs):
@@ -1359,7 +1351,7 @@ class _HomeDataMixin:
                 if state == "running":
                     state = "never"  # scan interrupted before startup normalization ran
 
-            color = _STATE_COLOR.get(state, TEXT_MUTED)
+            color = _STATE_COLOR.get(state, _s.TEXT_MUTED)
             dot.setStyleSheet(
                 f"font-size:10px; color:{color}; background:transparent; border:none;"
             )

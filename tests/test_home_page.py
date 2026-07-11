@@ -316,3 +316,64 @@ class TestMiniCardLayout:
         page = _make_page()
         page.on_speed_result(_make_speed_result(dl=9999.9, ul=9999.9))
         assert page._speed_card.minimumHeight() >= 100
+
+
+# ---------------------------------------------------------------------------
+# Instant theme switching (Phase 4a) — live restyle, both directions
+# ---------------------------------------------------------------------------
+
+class TestLiveThemeSwitch:
+    def test_card_frame_restyles_live_both_directions(self):
+        """themed_ss-registered card frame flips BG_CARD on apply_theme."""
+        from ui import styles as _s
+        arctic = _s.THEMES["Arctic Clean"]["BG_CARD"]
+        midnight = _s.THEMES["Midnight Pro"]["BG_CARD"]
+        assert arctic != midnight
+
+        original = _s.get_active_theme_name()
+        try:
+            _s.apply_theme("Arctic Clean")
+            page = _make_page(store=None)
+            app = QApplication.instance()
+            if app:
+                app.processEvents()
+
+            ss_arctic = page._speed_card.styleSheet()
+            assert arctic in ss_arctic and midnight not in ss_arctic
+
+            _s.apply_theme("Midnight Pro")
+            page.refresh_theme()   # dashboard fans this out on theme_changed
+            ss_mid = page._speed_card.styleSheet()
+            assert midnight in ss_mid and arctic not in ss_mid
+
+            _s.apply_theme("Arctic Clean")
+            page.refresh_theme()
+            ss_back = page._speed_card.styleSheet()
+            assert arctic in ss_back and midnight not in ss_back
+        finally:
+            _s.apply_theme(original)
+
+    def test_refresh_theme_reapplies_cached_dynamic_state(self):
+        """refresh_theme() re-invokes cached pill/monitor state after a switch."""
+        from ui import styles as _s
+        original = _s.get_active_theme_name()
+        try:
+            _s.apply_theme("Arctic Clean")
+            page = _make_page(store=None)
+            page.set_monitor_pills(True, False, True, False)
+            page.set_monitoring_status(True, "1h", 0)
+            page.on_cycle_done({
+                "devices": [
+                    {"mac": "aa:bb:cc:dd:ee:ff", "risk_level": "LOW", "is_new": False}
+                ],
+                "rtts": {"192.168.1.1": 20.0},
+            })
+
+            _s.apply_theme("Midnight Pro")
+            page.refresh_theme()   # must not raise; re-applies cached state
+
+            mid_card = _s.THEMES["Midnight Pro"]["BG_CARD"]
+            # Inactive DHCP pill background uses the (now Midnight) card colour.
+            assert mid_card in page._pill_dhcp.styleSheet()
+        finally:
+            _s.apply_theme(original)
