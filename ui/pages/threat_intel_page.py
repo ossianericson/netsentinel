@@ -15,6 +15,7 @@ No blocking I/O on the main thread (all network ops in workers).
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -56,6 +57,8 @@ from ui.styles import (
     TEXT_SECONDARY,
     WHITE,
 )
+
+log = logging.getLogger(__name__)
 
 # ── Keyring helpers (RULE 22-A) ───────────────────────────────────────────────
 _KR_SERVICE      = "NetSentinel"
@@ -567,7 +570,10 @@ class ThreatIntelPage(QWidget):
             db = ThreatIntelDB.from_cache()
             self._on_db_ready(db, from_cache=True)
         except Exception as e:
-            self._status_lbl.setText(f"Cache load failed: {e}")
+            log.warning("Threat intel cache load failed: %s", e)
+            self._status_lbl.setText(
+                "No cached threat feed found — click Refresh to download the latest data."
+            )
 
     def _run_refresh(self) -> None:
         if self._refresh_worker and self._refresh_worker.isRunning():

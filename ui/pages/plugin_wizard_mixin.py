@@ -5,6 +5,7 @@ Extracted from hardware_integration_page.py (S14-2).
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -33,6 +34,8 @@ from ui.styles import (
     WHITE,
 )
 from ui.widgets.hub_card import _TEMPLATE
+
+log = logging.getLogger(__name__)
 
 
 class _PluginWizardMixin:
@@ -224,7 +227,10 @@ class _PluginWizardMixin:
                 _created_path.append(str(dest))
                 dlg.accept()
             except Exception as exc:
-                status_lbl.setText(f"Failed to create file: {exc}")
+                log.warning("Plugin template file creation failed: %s", exc)
+                status_lbl.setText(
+                    "Failed to create file — check that the destination folder is writable and try again."
+                )
                 status_lbl.setVisible(True)
 
         create_btn.clicked.connect(_on_create)
