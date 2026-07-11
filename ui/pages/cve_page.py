@@ -25,6 +25,9 @@ from PyQt6.QtWidgets import (
 )
 
 from modules.metric_store import MetricStore
+from modules.cve_admin import (
+    delete_cve_lifecycle, update_cve_state, upsert_cve_lifecycle,
+)
 from ui.expanding_table import ExpandingTable
 from ui.styles import (
     ACCENT, AMBER, BG_ALT_ROW, BG_CARD,
@@ -659,7 +662,7 @@ class CvePage(QWidget):
             )
             QMessageBox.information(self, "How to Fix", msg)
         elif chosen == act_delete:
-            self._store.delete_cve_lifecycle(row_data["id"])
+            delete_cve_lifecycle(self._store, row_data["id"])
             self._refresh()
 
     def _change_state(self, row_data: dict) -> None:
@@ -671,7 +674,8 @@ class CvePage(QWidget):
             parent=self,
         )
         if dlg.exec() == QDialog.DialogCode.Accepted:
-            self._store.update_cve_state(
+            update_cve_state(
+                self._store,
                 row_data["id"],
                 dlg.state,
                 dlg.owner,
@@ -862,7 +866,8 @@ class CvePage(QWidget):
             try:
                 result = lookup_cve(svc)
                 for cve in result.cves:
-                    self._store.upsert_cve_lifecycle(
+                    upsert_cve_lifecycle(
+                        self._store,
                         cve_id      = cve.cve_id,
                         service     = svc,
                         host        = host,

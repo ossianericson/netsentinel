@@ -24,6 +24,7 @@ from ui.styles import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from modules.utils import get_offenders_path, is_admin
+from modules.scan_persistence import persist_alert, record_modem_signal
 
 
 # ─── Module Tab Helpers (defined in ui/tabs.py, re-exported here) ────────────
@@ -1542,7 +1543,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                             ]
                             _prior_sinr = [v for v in _prior_sinr if v is not None]
                     try:
-                        self._store.record_modem_signal(
+                        record_modem_signal(
+                            self._store,
                             network_type=data.get("network_type"),
                             signal_bars=data.get("signal_bars"),
                             cell_id=data.get("cell_id"),
@@ -1578,10 +1580,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                             self._show_alert_toast(a)
                             self._home_page.on_alert(a)
                             try:
-                                self._store.record_alert_fired(
-                                    a.rule_name, a.host, a.severity, a.message, ts=a.ts,
-                                    rule_type=a.rule_type,
-                                )
+                                persist_alert(self._store, a)
                             except Exception:
                                 pass  # non-fatal — persistence failure must not block modem UI updates
 

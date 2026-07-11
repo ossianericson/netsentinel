@@ -48,6 +48,10 @@ from ui.styles import (
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
 
+from modules.device_admin import (
+    clear_classification_override, set_device_alert_opt_in,
+)
+from modules.network_segments import upsert_segment
 
 from ui.widgets.inventory_dialogs import (
     _DeviceLabelDialog, _TypeOverrideDialog, _ScanCompareDialog, _SegmentEditorDialog,
@@ -414,7 +418,7 @@ class _DeviceDrawer(QFrame):
         if not self._current_store or not self._current_mac:
             return
         try:
-            self._current_store.clear_classification_override(self._current_mac)
+            clear_classification_override(self._current_store, self._current_mac)
         except Exception:
             pass  # non-fatal
         self.load(self._current_mac, self._current_store)
@@ -1878,13 +1882,13 @@ class InventoryPage(QWidget):
                 self.set_scan_devices(self._scan_devices)
         elif action == act_clear and self._store:
             try:
-                self._store.clear_classification_override(mac)
+                clear_classification_override(self._store, mac)
             except Exception:
                 pass  # non-fatal
             self.set_scan_devices(self._scan_devices)
         elif action == act_alert_toggle and self._store:
             try:
-                self._store.set_device_alert_opt_in(mac, not alert_opt_in)
+                set_device_alert_opt_in(self._store, mac, not alert_opt_in)
             except Exception:
                 pass  # non-fatal
 
@@ -2078,7 +2082,7 @@ class InventoryPage(QWidget):
                 seg.color = vals["color"]
                 seg.description = vals["description"]
                 try:
-                    self._store.upsert_segment(seg)
+                    upsert_segment(self._store, seg)
                 except Exception:
                     pass  # non-fatal — DB write failure should not crash the UI
                 self._rebuild_segment_pills(self._current_segments)

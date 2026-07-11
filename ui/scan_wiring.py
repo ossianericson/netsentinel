@@ -13,6 +13,9 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import QTableWidgetItem
 
+from modules.network_segments import upsert_segment
+from modules.scan_persistence import persist_alert, upsert_known_device
+
 from ui.tabs import _add_row
 from ui.tabs_helpers import format_scan_status, risk_to_label
 
@@ -499,7 +502,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         _store = getattr(self, "_store", None)
         if _store is not None:
             try:
-                _store.upsert_known_device(mac.lower(), vendor=vendor)
+                upsert_known_device(_store, mac.lower(), vendor=vendor)
             except Exception:
                 pass  # non-fatal — best-effort persistence
 
@@ -585,7 +588,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 for _seg in _merged:
                     if _seg.id == 0 and _inv_store:
                         try:
-                            _new_id = _inv_store.upsert_segment(_seg)
+                            _new_id = upsert_segment(_inv_store, _seg)
                             _seg.id = _new_id
                         except Exception:
                             pass  # non-fatal — proceed without DB id
@@ -840,7 +843,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         self._show_alert_toast(a)
                         self._home_page.on_alert(a)
                         try:
-                            self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                            persist_alert(self._store, a)
                         except Exception:
                             pass  # non-fatal — persistence failure must not block the scan handler
                 # Forward device events to MQTT publisher
@@ -1095,10 +1098,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                                 self._show_alert_toast(a)
                                 self._home_page.on_alert(a)
                                 try:
-                                    self._store.record_alert_fired(
-                                        a.rule_name, a.host, a.severity, a.message, ts=a.ts,
-                                        rule_type=a.rule_type,
-                                    )
+                                    persist_alert(self._store, a)
                                 except Exception:
                                     pass  # non-fatal — persistence failure must not block the scan handler
 

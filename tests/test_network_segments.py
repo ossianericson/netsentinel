@@ -211,3 +211,33 @@ def test_classify_scaling():
         pytest.skip("below measurement threshold")
     ratio = t_l / t_s
     assert ratio < 15, f"Scaling ratio {ratio:.1f}x suggests O(n²) regression"
+
+
+# ── upsert_segment pass-through (ARCH RULE 1, #21) ────────────────────────────
+
+def test_upsert_segment_is_importable():
+    from modules.network_segments import upsert_segment
+    assert callable(upsert_segment)
+
+
+def test_upsert_segment_forwards():
+    from unittest.mock import MagicMock
+    from modules.network_segments import upsert_segment, NetworkSegment
+    store = MagicMock()
+    store.upsert_segment.return_value = 7
+    seg = NetworkSegment(id=0, name="Lab", cidr="10.0.5.0/24", color="#0078D4")
+    assert upsert_segment(store, seg) == 7
+    store.upsert_segment.assert_called_once_with(seg)
+
+
+def test_upsert_segment_persists_against_real_store(tmp_path):
+    from modules.metric_store import MetricStore
+    from modules.network_segments import upsert_segment, NetworkSegment
+    s = MetricStore(db_path=tmp_path / "seg.db")
+    try:
+        seg = NetworkSegment(id=0, name="Lab", cidr="10.0.5.0/24",
+                             color="#0078D4", auto_created=1)
+        new_id = upsert_segment(s, seg)
+        assert isinstance(new_id, int) and new_id > 0
+    finally:
+        s.close()
