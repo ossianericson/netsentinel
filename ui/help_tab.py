@@ -371,9 +371,9 @@ def build_help_tab(window) -> QWidget:
     # ── What's New ───────────────────────────────────────────────────────
     app_ver = QApplication.applicationVersion()
     bl.addWidget(_section(f"What's New in v{app_ver}", [
-        ("Sharper themes", "Arctic Clean gets deeper indigo table headers and Midnight Pro a brighter, AA-compliant royal-blue accent — two polished themes rather than more choices."),
-        ("Steadier launch", "Fixed an intermittent startup fault on some Windows machines caused by the system-tray icon initialising too early."),
-        ("Faster startup", "Heavy pages like the Network Map and Threat Intel now build the first time you open them instead of at launch."),
+        ("Fewer leaks", "Plugged a batch of resource leaks — sockets and scan/speed-test helper processes are now always cleaned up, even when a scan errors or times out."),
+        ("Smoother firewall actions", "Blocking or unblocking a device in the firewall no longer briefly freezes the window — it now runs in the background."),
+        ("Safer device edits", "Fixed two cases where editing a device's saved vendor or notes could quietly drop other saved details."),
     ]))
 
     # ── Requirements ─────────────────────────────────────────────────────
