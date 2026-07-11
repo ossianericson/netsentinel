@@ -321,8 +321,8 @@ class SnmpTrapReceiver:
         Returns the actual bound port.
         """
         for attempt_port in (self._port, FALLBACK_PORT):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.settimeout(SOCKET_TIMEOUT)
                 sock.bind((self._bind_address, attempt_port))  # lgtm[py/bind-socket-all-network-interfaces] — SNMP trap receiver intentionally listens on all interfaces
@@ -331,6 +331,7 @@ class SnmpTrapReceiver:
                 self.listen_port = actual_port
                 return actual_port
             except OSError:
+                sock.close()
                 if attempt_port == FALLBACK_PORT:
                     raise
         return self.listen_port   # unreachable

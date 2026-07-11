@@ -26,6 +26,8 @@ from ui.styles import (
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
 
+from modules.device_admin import update_device_ha_info
+
 class _DeviceLabelDialog(QDialog):
     """Edit custom name, tags, and notes for a known device."""
 
@@ -108,8 +110,8 @@ class _DeviceLabelDialog(QDialog):
         name  = self._name.text().strip() or None
         tags  = self._tags.text().strip() or None
         notes = self._notes.toPlainText().strip() or None
-        self._store.update_device_ha_info(
-            self._mac, custom_name=name, tags=tags, notes=notes
+        update_device_ha_info(
+            self._store, self._mac, custom_name=name, tags=tags, notes=notes
         )
         _new_name = name or ""
         if _new_name != self._old_name:

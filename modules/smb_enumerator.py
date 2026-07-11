@@ -147,11 +147,10 @@ def _netbios_name_query(host: str, timeout: float = 3.0) -> NetBIOSInfo:
             b"\x00\x21"   # QTYPE: NBSTAT (0x0021)
             b"\x00\x01"   # QCLASS: IN
         )
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(timeout)
-        sock.sendto(query, (host, 137))
-        data, _ = sock.recvfrom(1024)
-        sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(timeout)
+            sock.sendto(query, (host, 137))
+            data, _ = sock.recvfrom(1024)
 
         # Parse NBSTAT response
         # After the 12-byte header, the answer section starts
@@ -233,12 +232,11 @@ def _smb_anonymous_banner(host: str, timeout: float = 5.0) -> tuple:
             b"\x02\x02"           # SMB 2.0.2
             b"\x10\x02"           # SMB 2.1
         )
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((host, 445))
-        sock.sendall(smb2_negotiate)
-        banner = sock.recv(256)
-        sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            sock.connect((host, 445))
+            sock.sendall(smb2_negotiate)
+            banner = sock.recv(256)
 
         # SMB2 negotiate response: dialect, capabilities, OS strings
         if len(banner) > 72 and banner[4:8] == b"\xfeSMB":

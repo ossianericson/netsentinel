@@ -48,6 +48,7 @@ def scan(
     known_rogue_macs: Optional[List[str]] = None,
     progress_cb: Optional[Callable[[str], None]] = None,
     on_error: Optional[Callable[[str], None]] = None,
+    stop_event: Optional[threading.Event] = None,
 ) -> StormResult:
     """
     Sniff all packets for `duration` seconds and return a StormResult.
@@ -105,7 +106,13 @@ def scan(
         result.storm_level = "UNKNOWN"
         return result
 
+    # Wait for the sniff duration — check stop_event each second for cooperative
+    # cancellation, mirroring modules/stp_detector.py.
     for i in range(duration):
+        if stop_event and stop_event.is_set():
+            if progress_cb:
+                progress_cb("Storm scan cancelled.")
+            break
         time.sleep(1)
         if progress_cb:
             progress_cb(f"Storm analysis: {duration - i - 1}s remaining...")

@@ -107,3 +107,39 @@ def test_scan_result_has_plain_verdict_when_no_scapy(monkeypatch):
     result = scan(duration=1)
     assert isinstance(result.plain_verdict, str)
     assert len(result.plain_verdict) > 0
+
+
+# ── stop_event cooperative cancellation (finding #16) ────────────────────────
+
+def test_scan_stops_early_when_stop_event_already_set(monkeypatch):
+    """scan() must check stop_event each second and stop the sniffer early,
+    mirroring the existing pattern in modules/stp_detector.py.
+
+    Without this, Module3Worker has no way to end the child process's blocking
+    sniff loop cooperatively, so an app-close during a storm scan force-kills
+    the QThread and orphans the multiprocessing.Process (finding #16)."""
+    import threading
+    from modules import storm_analyser as m
+
+    class _FakeSniffer:
+        def __init__(self, prn=None, store=False):
+            self.stopped = False
+
+        def start(self):
+            pass
+
+        def stop(self):
+            self.stopped = True
+
+    fake_sniffer = _FakeSniffer()
+    monkeypatch.setattr(m, "AsyncSniffer", lambda **kw: fake_sniffer)
+    monkeypatch.setattr(m.time, "sleep", lambda _s: None)
+
+    stop_event = threading.Event()
+    stop_event.set()  # already cancelled before scan() even starts waiting
+
+    calls = []
+    m.scan(duration=30, progress_cb=calls.append, stop_event=stop_event)
+
+    assert fake_sniffer.stopped is True
+    assert any("cancel" in c.lower() for c in calls), calls

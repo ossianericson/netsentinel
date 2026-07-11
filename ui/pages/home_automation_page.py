@@ -55,6 +55,9 @@ from ui.styles import (
     TEXT_PRIMARY, TEXT_SECONDARY, TH_BG, TH_BORDER,
     TH_TEXT,
 )
+from modules.device_admin import (
+    record_ha_detected, update_device_ha_info, upsert_known_device,
+)
 
 # ── Category definitions ──────────────────────────────────────────────────────
 
@@ -859,7 +862,7 @@ class HomeAutomationPage(QWidget):
         mac = device.get("mac", "")
         if self._store and mac:
             try:
-                self._store.update_device_ha_info(mac=mac, **vals)
+                update_device_ha_info(self._store, mac=mac, **vals)
             except Exception as exc:
                 self._set_status(f"⚠  Save failed: {exc}")
                 return
@@ -880,7 +883,7 @@ class HomeAutomationPage(QWidget):
         new_pinned = not d.get("is_pinned", False)
         if self._store and mac:
             try:
-                self._store.update_device_ha_info(mac=mac, is_pinned=new_pinned)
+                update_device_ha_info(self._store, mac=mac, is_pinned=new_pinned)
             except Exception:
                 pass  # non-fatal
         d["is_pinned"] = new_pinned
@@ -910,7 +913,7 @@ class HomeAutomationPage(QWidget):
             # Persist vendor to DB
             if self._store:
                 try:
-                    self._store.upsert_known_device(mac=mac, vendor=vendor)
+                    upsert_known_device(self._store, mac=mac, vendor=vendor)
                 except Exception:
                     pass  # non-fatal
             # Update local cache
@@ -964,7 +967,8 @@ class HomeAutomationPage(QWidget):
             # Record in DB
             if self._store:
                 try:
-                    self._store.record_ha_detected(
+                    record_ha_detected(
+                        self._store,
                         ip=match.ip, mac=match.mac,
                         ha_type=match.ha_type,
                         confidence=match.confidence,
@@ -972,11 +976,13 @@ class HomeAutomationPage(QWidget):
                     )
                     # Auto-categorise + upsert the device
                     if match.mac:
-                        self._store.upsert_known_device(
+                        upsert_known_device(
+                            self._store,
                             mac=match.mac, ip=match.ip,
                             device_type=match.label,
                         )
-                        self._store.update_device_ha_info(
+                        update_device_ha_info(
+                            self._store,
                             mac=match.mac,
                             category=ha_category(match.ha_type),
                         )
@@ -1039,8 +1045,9 @@ class HomeAutomationPage(QWidget):
 
         if self._store:
             try:
-                self._store.upsert_known_device(mac=mac.lower())
-                self._store.update_device_ha_info(
+                upsert_known_device(self._store, mac=mac.lower())
+                update_device_ha_info(
+                    self._store,
                     mac=mac.lower(),
                     custom_name=name_edit.text().strip() or None,
                     room=room_edit.text().strip() or None,
@@ -1120,7 +1127,7 @@ class HomeAutomationPage(QWidget):
     def _unpin_device(self, mac: str) -> None:
         if self._store and mac:
             try:
-                self._store.update_device_ha_info(mac=mac, is_pinned=False)
+                update_device_ha_info(self._store, mac=mac, is_pinned=False)
             except Exception:
                 pass  # non-fatal
         for d in self._devices:

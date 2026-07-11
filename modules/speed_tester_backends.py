@@ -154,6 +154,7 @@ def _run_ookla_cli(
     result_data: dict = {}
     current_phase = "connecting"
     deadline = time.monotonic() + 130
+    stderr_text = ""
 
     try:
         while True:
@@ -161,7 +162,6 @@ def _run_ookla_cli(
                 raw = line_q.get(timeout=1.0)
             except _queue.Empty:
                 if time.monotonic() > deadline:
-                    proc.kill()
                     raise RuntimeError("Ookla CLI timed out (>120 s)")
                 continue
 
@@ -211,9 +211,22 @@ def _run_ookla_cli(
 
     finally:
         reader.join(timeout=2)
+        if proc.poll() is None:
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                pass  # non-fatal — best-effort reap after a forced kill
+        if proc.stdout:
+            proc.stdout.close()
+        if proc.stderr:
+            try:
+                stderr_text = proc.stderr.read()
+            except Exception:
+                pass  # non-fatal — pipe may already be at EOF/closed
+            proc.stderr.close()
 
     if not result_data:
-        stderr_text = proc.stderr.read() if proc.stderr else ""
         raise RuntimeError(f"Ookla CLI returned no result. stderr: {stderr_text[:300]}")
 
     ping_ms = float((result_data.get("ping") or {}).get("latency") or 0)

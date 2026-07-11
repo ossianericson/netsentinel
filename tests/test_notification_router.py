@@ -102,6 +102,24 @@ class TestRouterDispatch(unittest.TestCase):
         r.dispatch(_alert("CRITICAL"))
         cb.assert_not_called()
 
+    def test_toast_callback_exception_marks_delivery_failed(self):
+        """A raised toast callback exception must record status=FAILED, not
+        DELIVERED — the previous code swallowed the exception and then
+        unconditionally called _mark_delivered regardless of outcome, so a
+        toast that never reached the user still showed as delivered with no
+        error trail."""
+        r = self._make_router()
+        r.set_toast_callback(MagicMock(side_effect=RuntimeError("toast api unavailable")))
+        r.dispatch(_alert("CRITICAL"))
+        log = r.get_delivery_log()
+        assert len(log) == 1
+        assert log[0]["status"] == "FAILED", (
+            f"Expected status='FAILED' when the toast callback raises; "
+            f"got '{log[0]['status']}' — dispatch() is swallowing the "
+            f"exception and marking it DELIVERED anyway"
+        )
+        assert "toast api unavailable" in log[0].get("error", "")
+
     def test_delivery_log_recorded(self):
         r = self._make_router()
         r.set_toast_callback(MagicMock())

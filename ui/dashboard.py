@@ -24,6 +24,7 @@ from ui.styles import (
     TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY, WHITE,
 )
 from modules.utils import get_offenders_path, is_admin
+from modules.scan_persistence import persist_alert, record_modem_signal
 
 
 # ─── Module Tab Helpers (defined in ui/tabs.py, re-exported here) ────────────
@@ -1193,7 +1194,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
             self._set_status("Security audit complete — see Security Overview for findings.")
             return
         label = self._pending_security_tools.pop(0)
-        if label == "Port Scan (TCP)":
+        if label == L.PORT_SCAN_TCP:
             gw = self._net_info.get("gateway", "") if self._net_info else ""
             if not gw:
                 # No gateway known yet — skip and advance to next tool
@@ -1201,7 +1202,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                 return
             self._syn_host.setText(gw)
             self._start_syn_scan()
-        elif label == "Exposed to Internet":
+        elif label == L.EXPOSED_TO_INTERNET:
             self._start_exposure_check()
         else:
             # Unrecognised label — skip silently
@@ -1209,6 +1210,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
 
     @pyqtSlot()
     def _start_full_scan(self):
+        if self._is_scanning:
+            return
         # Track whether this scan was triggered from the home page so we can
         # auto-navigate to Overview once device results arrive.
         # Do NOT overwrite if already True (pre-set by _on_welcome_scan to survive
@@ -1540,7 +1543,8 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                             ]
                             _prior_sinr = [v for v in _prior_sinr if v is not None]
                     try:
-                        self._store.record_modem_signal(
+                        record_modem_signal(
+                            self._store,
                             network_type=data.get("network_type"),
                             signal_bars=data.get("signal_bars"),
                             cell_id=data.get("cell_id"),
@@ -1576,10 +1580,7 @@ class Dashboard(ScanResultMixin, AppHeaderMixin, TabBuilderMixin,
                             self._show_alert_toast(a)
                             self._home_page.on_alert(a)
                             try:
-                                self._store.record_alert_fired(
-                                    a.rule_name, a.host, a.severity, a.message, ts=a.ts,
-                                    rule_type=a.rule_type,
-                                )
+                                persist_alert(self._store, a)
                             except Exception:
                                 pass  # non-fatal — persistence failure must not block modem UI updates
 

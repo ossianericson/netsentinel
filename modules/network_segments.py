@@ -14,7 +14,16 @@ from __future__ import annotations
 
 import ipaddress
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
+
+
+def upsert_segment(store: Any, seg: "NetworkSegment") -> int:
+    """Persist a segment via MetricStore (module-layer boundary, ARCH RULE 1 #21).
+
+    Thin pass-through so the UI (Inventory, scan glue) never calls the store's
+    write method directly. Returns the segment's DB id.
+    """
+    return store.upsert_segment(seg)
 
 # ── Segment colour palette (assigned round-robin to auto-detected subnets) ────
 SEGMENT_PALETTE: list[str] = [

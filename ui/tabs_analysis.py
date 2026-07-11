@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QFont
+
+from modules.scan_persistence import persist_alert, record_grade
 from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel,
     QPushButton, QSpinBox, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
@@ -529,10 +531,7 @@ class _AnalysisTabsMixin:
                                 self._home_page.on_alert(a)
                                 if self._store is not None:
                                     try:
-                                        self._store.record_alert_fired(
-                                            a.rule_name, a.host, a.severity, a.message, ts=a.ts,
-                                            rule_type=a.rule_type,
-                                        )
+                                        persist_alert(self._store, a)
                                     except Exception:
                                         pass  # non-fatal — persistence failure must not block the drain loop
                 except _q.Empty:
@@ -824,7 +823,7 @@ class _AnalysisTabsMixin:
             except Exception:
                 pass  # non-fatal
             try:
-                self._store.record_grade(result.overall_grade, result.overall_score, result.overall_verdict)
+                record_grade(self._store, result.overall_grade, result.overall_score, result.overall_verdict)
             except Exception:
                 pass  # non-fatal
             if self._alert_engine is not None:
@@ -834,7 +833,7 @@ class _AnalysisTabsMixin:
                     self._show_alert_toast(a)
                     self._home_page.on_alert(a)
                     try:
-                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                        persist_alert(self._store, a)
                     except Exception:
                         pass  # non-fatal — persistence failure must not block grade display
 

@@ -6,11 +6,15 @@ Dashboard inherits ScanResultMixin to receive these methods.
 """
 from __future__ import annotations
 
+import threading
 import time
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtWidgets import QTableWidgetItem
+
+from modules.network_segments import upsert_segment
+from modules.scan_persistence import persist_alert, upsert_known_device
 
 from ui.tabs import _add_row
 from ui.tabs_helpers import format_scan_status, risk_to_label
@@ -39,11 +43,20 @@ class _VendorBatchWorker(QThread):
     def __init__(self, macs: list[str], parent=None) -> None:
         super().__init__(parent)
         self._macs = macs
+        self._stop_event = threading.Event()
+
+    def stop(self) -> None:
+        """Cooperative stop — checked between MACs so an in-flight (bounded,
+        5s-timeout) HTTP lookup finishes naturally instead of the thread being
+        force-terminated mid-syscall."""
+        self._stop_event.set()
 
     def run(self) -> None:
         try:
             from modules.mac_lookup import lookup_vendor
             for mac in self._macs:
+                if self._stop_event.is_set():
+                    break
                 if not mac:
                     continue
                 vendor = lookup_vendor(mac)
@@ -450,11 +463,14 @@ class ScanResultMixin(ScanEnrichmentMixin):
         if not pending:
             return
 
-        # Cancel any still-running lookup from a previous scan
+        # Cancel any still-running lookup from a previous scan. stop() is
+        # cooperative (checked between MACs) rather than terminate() — the
+        # in-flight lookup has its own bounded HTTP timeout, so it exits on
+        # its own shortly instead of being force-killed mid-syscall.
         existing = getattr(self, "_vendor_batch_worker", None)
         if existing and existing.isRunning():
             existing.vendor_resolved.disconnect()
-            existing.terminate()
+            existing.stop()
             existing.wait(200)
 
         worker = _VendorBatchWorker(pending, self)
@@ -486,7 +502,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
         _store = getattr(self, "_store", None)
         if _store is not None:
             try:
-                _store.upsert_known_device(mac.lower(), vendor=vendor)
+                upsert_known_device(_store, mac.lower(), vendor=vendor)
             except Exception:
                 pass  # non-fatal — best-effort persistence
 
@@ -572,7 +588,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                 for _seg in _merged:
                     if _seg.id == 0 and _inv_store:
                         try:
-                            _new_id = _inv_store.upsert_segment(_seg)
+                            _new_id = upsert_segment(_inv_store, _seg)
                             _seg.id = _new_id
                         except Exception:
                             pass  # non-fatal — proceed without DB id
@@ -827,7 +843,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                         self._show_alert_toast(a)
                         self._home_page.on_alert(a)
                         try:
-                            self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                            persist_alert(self._store, a)
                         except Exception:
                             pass  # non-fatal — persistence failure must not block the scan handler
                 # Forward device events to MQTT publisher
@@ -1082,10 +1098,7 @@ class ScanResultMixin(ScanEnrichmentMixin):
                                 self._show_alert_toast(a)
                                 self._home_page.on_alert(a)
                                 try:
-                                    self._store.record_alert_fired(
-                                        a.rule_name, a.host, a.severity, a.message, ts=a.ts,
-                                        rule_type=a.rule_type,
-                                    )
+                                    persist_alert(self._store, a)
                                 except Exception:
                                     pass  # non-fatal — persistence failure must not block the scan handler
 

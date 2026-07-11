@@ -1,7 +1,14 @@
-"""Tests for modules/settings_io.py — Settings export/import."""
+"""Tests for modules/settings_io.py — pure settings export/import (no PyQt).
+
+Contract (ARCH RULE 1, D#13 — module layer is PyQt-free):
+  - export_settings(path, settings) : filter keyring keys, JSON-coerce, write file.
+  - import_settings(path) -> dict   : validate + return the settings dict (caller
+                                      writes it to QSettings).
+The QSettings read/write lives in the UI caller (ui/pages/settings_cards.py),
+not here.
+"""
 import json
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 def test_import():
@@ -19,51 +26,94 @@ def test_keyring_keys_never_exported():
 
 
 def test_export_creates_valid_json(tmp_path):
-    """export_settings writes valid JSON with a _meta block."""
+    """export_settings writes valid JSON with a _meta block, excluding secrets."""
+    from modules.settings_io import export_settings
     out = tmp_path / "settings_export.json"
-    mock_qs = MagicMock()
-    mock_qs.allKeys.return_value = ["display/compact_rows", "ui/theme", "notifications/smtp_password"]
-    mock_qs.value.side_effect = lambda k: {
+    raw = {
         "display/compact_rows": True,
         "ui/theme": "Arctic Clean",
         "notifications/smtp_password": "secret",
-    }.get(k)
+    }
+    export_settings(out, raw)
 
-    # QSettings is imported inside the function; patch it at the PyQt6 level
-    try:
-        with patch("PyQt6.QtCore.QSettings", return_value=mock_qs):
-            from modules.settings_io import export_settings
-            export_settings(out)
-    except Exception:
-        pytest.skip("PyQt6 not available in test environment")
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["_meta"]["app"] == "NetSentinel"
+    assert data["_meta"]["format_version"] == 1
+    # Non-secret keys round-trip
+    assert data["settings"]["display/compact_rows"] is True
+    assert data["settings"]["ui/theme"] == "Arctic Clean"
+    # Secret must NOT be in the export file
+    assert "notifications/smtp_password" not in data["settings"]
 
-    if out.exists():
-        data = json.loads(out.read_text())
-        assert "_meta" in data
-        assert data["_meta"]["app"] == "NetSentinel"
-        # Secret must not be in export
-        assert "notifications/smtp_password" not in data.get("settings", {})
+
+def test_export_skips_none_and_coerces_types(tmp_path):
+    """None values are dropped; non-JSON-native values are stringified."""
+    from modules.settings_io import export_settings
+    out = tmp_path / "settings_export.json"
+
+    class _Weird:
+        def __str__(self):
+            return "weird-value"
+
+    raw = {
+        "a/none": None,          # dropped
+        "a/int": 5,              # kept as int
+        "a/list": ["x", "y"],    # kept as list
+        "a/obj": _Weird(),       # stringified
+    }
+    export_settings(out, raw)
+    settings = json.loads(out.read_text(encoding="utf-8"))["settings"]
+    assert "a/none" not in settings
+    assert settings["a/int"] == 5
+    assert settings["a/list"] == ["x", "y"]
+    assert settings["a/obj"] == "weird-value"
+
+
+def test_import_returns_dict_without_keyring(tmp_path):
+    """import_settings returns the settings dict, minus any keyring keys."""
+    from modules.settings_io import import_settings, export_settings
+    out = tmp_path / "s.json"
+    export_settings(out, {"ui/theme": "Midnight Pro", "display/compact_rows": False})
+    data = import_settings(out)
+    assert isinstance(data, dict)
+    assert data == {"ui/theme": "Midnight Pro", "display/compact_rows": False}
+
+
+def test_import_drops_keyring_keys_if_present(tmp_path):
+    """A hand-crafted file containing a keyring key must not leak it back."""
+    from modules.settings_io import import_settings
+    f = tmp_path / "s.json"
+    f.write_text(json.dumps({
+        "_meta": {"app": "NetSentinel"},
+        "settings": {"ui/theme": "Arctic Clean", "rest_api/api_key": "leaked"},
+    }), encoding="utf-8")
+    data = import_settings(f)
+    assert data == {"ui/theme": "Arctic Clean"}
+    assert "rest_api/api_key" not in data
+
+
+def test_roundtrip(tmp_path):
+    """export then import returns the same non-secret settings."""
+    from modules.settings_io import export_settings, import_settings
+    out = tmp_path / "rt.json"
+    original = {"ui/theme": "Arctic Clean", "scan/interval": 300, "flag": True}
+    export_settings(out, original)
+    assert import_settings(out) == original
 
 
 def test_import_rejects_wrong_app(tmp_path):
     """import_settings raises ValueError for files not from NetSentinel."""
+    from modules.settings_io import import_settings
     bad_file = tmp_path / "bad.json"
     bad_file.write_text(json.dumps({"_meta": {"app": "OtherApp"}, "settings": {}}))
-    try:
-        from modules.settings_io import import_settings
-        with pytest.raises(ValueError, match="not exported from NetSentinel"):
-            import_settings(bad_file)
-    except ImportError:
-        pytest.skip("PyQt6 not available in test environment")
+    with pytest.raises(ValueError, match="not exported from NetSentinel"):
+        import_settings(bad_file)
 
 
 def test_import_rejects_missing_settings_key(tmp_path):
     """import_settings raises ValueError when 'settings' key is absent."""
+    from modules.settings_io import import_settings
     bad_file = tmp_path / "bad.json"
     bad_file.write_text(json.dumps({"data": {}}))
-    try:
-        from modules.settings_io import import_settings
-        with pytest.raises(ValueError, match="missing 'settings' key"):
-            import_settings(bad_file)
-    except ImportError:
-        pytest.skip("PyQt6 not available in test environment")
+    with pytest.raises(ValueError, match="missing 'settings' key"):
+        import_settings(bad_file)

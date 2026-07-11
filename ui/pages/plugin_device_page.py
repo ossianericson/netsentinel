@@ -710,7 +710,10 @@ class PluginDevicePage(QWidget):
                 importlib.invalidate_caches()
                 self._banner_frame.setVisible(False)
         except Exception as exc:
-            self._banner_lbl.setText(f"Install failed: {exc}")
+            log.warning("Plugin dependency install failed: %s", exc)
+            self._banner_lbl.setText(
+                "Package install failed — check your internet connection and try again."
+            )
             self._banner_frame.setVisible(True)
 
     def _fill_modem(self, status: dict, extra: dict) -> None:

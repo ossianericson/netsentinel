@@ -34,6 +34,7 @@ from ui.styles import (
     SIDEBAR_SECTION_FG, TEXT_MUTED, TEXT_PRIMARY, TEXT_SECONDARY,
     WHITE,
 )
+from modules.scan_persistence import record_app_traffic_sample
 from ui.nav.labels import NavLabel as L
 from ui.nav.rail import _RailButton, _FlyoutPanel, _CanvasClickFilter, _make_nav_icon
 from ui.widgets.alert_drawer import AlertDrawer
@@ -1083,7 +1084,8 @@ class TabBuilderMixin(_ScanTabsMixin, _NetworkTabsMixin, _DiagTabsMixin,
             return
         for s in samples:
             try:
-                self._store.record_app_traffic_sample(
+                record_app_traffic_sample(
+                    self._store,
                     mac=s["mac"], label=s["label"], category=s["category"],
                     app=s["app"], bytes_total=s["bytes_total"],
                     window_s=s["window_s"], cdn=s.get("cdn"),

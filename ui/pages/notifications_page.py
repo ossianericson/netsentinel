@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import ACCENT, BG_CARD, BG_DARK, BORDER, TEXT_MUTED, TEXT_PRIMARY
-from modules.alert_engine import rule_settings_key as _rule_key
+from modules.alert_suppressor import rule_settings_key as _rule_key
 from ui.widgets.alert_drawer import AlertDrawer
 from ui.widgets.skeleton import insert_skeleton_rows
 

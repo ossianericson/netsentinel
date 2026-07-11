@@ -14,6 +14,10 @@ from PyQt6.QtCore import Qt, QSettings, pyqtSlot
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QTableWidgetItem
 
+from modules.scan_persistence import (
+    persist_alert, record_mesh_snapshot, record_plugin_snapshot, record_rtt,
+)
+
 from ui.tabs import _add_row
 from ui.nav.labels import NavLabel as L
 from ui.styles import (
@@ -69,7 +73,7 @@ class ScanEnrichmentMixin:
                 self._home_page.on_alert(a)
                 if self._store is not None:
                     try:
-                        self._store.record_alert_fired(a.rule_name, a.host, a.severity, a.message, ts=a.ts, rule_type=a.rule_type)
+                        persist_alert(self._store, a)
                     except Exception:
                         pass  # non-fatal — persistence failure must not block the scan handler
 
@@ -84,7 +88,8 @@ class ScanEnrichmentMixin:
                 now = _time.time()
                 if self._store and now - self._last_mesh_log_ts >= interval_s:
                     try:
-                        self._store.record_mesh_snapshot(
+                        record_mesh_snapshot(
+                            self._store,
                             unit_count=unit_count,
                             online_count=online_count,
                             worst_unit=worst_name,
@@ -156,7 +161,7 @@ class ScanEnrichmentMixin:
                 _qs_key = hw_name.lower().replace(" ", "_")
                 from PyQt6.QtCore import QSettings as _QS_pl
                 if self._store and _QS_pl().value(f"logging/plugin_{_qs_key}_enabled", False, type=bool):
-                    self._store.record_plugin_snapshot(hw_name, data)
+                    record_plugin_snapshot(self._store, hw_name, data)
             return  # modem plugins have no LAN clients to enrich
 
         # ── Router/AP/mesh plugins: enrich Devices table + topology ──────────
@@ -203,7 +208,7 @@ class ScanEnrichmentMixin:
             _qs_key = hw_name.lower().replace(" ", "_")
             from PyQt6.QtCore import QSettings as _QS_pl
             if self._store and _QS_pl().value(f"logging/plugin_{_qs_key}_enabled", False, type=bool):
-                self._store.record_plugin_snapshot(hw_name, data)
+                record_plugin_snapshot(self._store, hw_name, data)
 
     def _on_m2_result(self, data: dict):
         self._m2_stack.setCurrentIndex(1)
@@ -633,7 +638,7 @@ class ScanEnrichmentMixin:
                 self._recon_disc_table.setItem(r, c, _TWI(v))
             if _store_ref and dev.response_ms > 0 and dev.ip:
                 try:
-                    _store_ref.record_rtt(dev.ip, dev.response_ms)
+                    record_rtt(_store_ref, dev.ip, dev.response_ms)
                 except Exception:
                     pass  # non-fatal — table may not exist on schema upgrade
 

@@ -15,15 +15,15 @@ local_deployed_files:
 - .github/instructions/session-workflow.instructions.md
 - .github/instructions/tests.instructions.md
 local_deployed_file_hashes:
-  .claude/rules/architecture.md: sha256:276f43556786a26c9241540f142928389e7550c925026f163782b7385e9b8db7
+  .claude/rules/architecture.md: sha256:5a33797c45cd57a371ce60a9bd650a93a248d78ef756e5fb387c420d787eb9f5
   .claude/rules/changelog.md: sha256:a3223ba6da72d0faa0a43b7cd898362b985776f534fac0a83ba96e30dc71c496
   .claude/rules/development-rules.md: sha256:681e4bf2143b804142f080588dcf44cbae5854de51ceb906758e75921990808a
-  .claude/rules/project-vision.md: sha256:f98010a484140faf95de1ccd6d53d802d3b2e709fef48f1e449401a9f22e81b8
+  .claude/rules/project-vision.md: sha256:9224ddacbb9a0e582b5eea517adb6e83dd6bd13c754e9d2ed31e23b3ef1f4263
   .claude/rules/session-workflow.md: sha256:b767fc662ac6ae516f8e0aae3b9a021fb1c2c8cf67531ca3256eabe7c76e1922
   .claude/rules/tests.md: sha256:25d829b1e177cbac92318634ea4e8ad91b66451e65a63f683a30b388044f9090
-  .github/instructions/architecture.instructions.md: sha256:dac4c8117dca0f454e19496ab47de22fb22af35b0f515832100f26f32d2e8dc6
+  .github/instructions/architecture.instructions.md: sha256:7b841a766c49a080d92d71b913d90e4519ae43db206d25ddf91c1ea396b8e996
   .github/instructions/changelog.instructions.md: sha256:99467e7d716c7c9e1a77c02fd93c0747a5d2e3dd5169a4d8c98260dea45439a9
   .github/instructions/development-rules.instructions.md: sha256:a90247cbd28af8a741ea726bdd974e1513c4edb463eef587cd10260e1f207d39
-  .github/instructions/project-vision.instructions.md: sha256:7f4309be7847ce8bede6916d934b5e8173ec48f58874bc1798999d463ba9f96d
+  .github/instructions/project-vision.instructions.md: sha256:907d3c4d0de2dd3db10f2cec9c03232f775d47a8b8bffbb8b245ac8dc608ecb2
   .github/instructions/session-workflow.instructions.md: sha256:0c6142533f77d398d5a74af666ed5456754d67474a4774c64f1d43e7d3e7e83b
   .github/instructions/tests.instructions.md: sha256:3e3b91c001932a6ce259d4a316d8b9b4fa706a79d2b3aa8899e7361d70cd8a66

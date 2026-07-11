@@ -4,6 +4,25 @@ All notable changes to NetSentinel are documented here. The current version summ
 
 ---
 
+### v2.1.28
+
+Stability and architecture-hygiene release — a batch of resource-leak, thread-safety, and data-correctness fixes, plus enforcement of the three-layer UI/data/module separation (ARCH RULE 1). No new features.
+
+**Changed**
+- Enforced the three-layer architecture boundary (ARCH RULE 1) — all UI writes to `MetricStore` now route through the module layer, `modules/settings_io.py` is PyQt-free, and the UI no longer imports `modules/alert_engine.py`
+
+**Fixed**
+- Closed leaked sockets, subprocesses, and child processes on error/timeout paths — across the discovery/enumeration modules, the STP/broadcast-storm scan, the DNS zone-transfer (AXFR) socket, and the Ookla CLI speed-test child
+- Moved `netsh` firewall block/unblock calls off the GUI thread so a firewall action no longer stalls the UI (RULE 4)
+- Stopped the vendor-lookup worker cooperatively instead of `terminate()`, and guarded against scan re-entrancy destroying in-flight workers
+- Coalesced `HistoryPage` refresh requests so concurrent refresh workers no longer pile up
+- Preserved `known_device.ip` on a vendor-only upsert and preserved unset fields on a partial `save_device_annotations` update, closing two silent data-loss paths
+- Translated five raw worker-exception error slots into plain English (RULE-A2)
+- Marked failed toast deliveries as `FAILED` rather than `DELIVERED`, logged previously-silenced snooze-registry failures, hardened notification strings, and fixed a scan status that could stay stuck on "Running"
+- Dropped `NEW_OPEN_PORT` from the Security Audit acknowledge scope and routed audit dispatch through the `NavLabel` enum
+
+---
+
 ### v2.1.27
 
 Polish and stability release — sharpens the two built-in themes for contrast, fixes an intermittent startup COM-reentrancy fault, speeds up first paint, and repairs a CI gap that was silently hiding most of the test suite. No new features.

@@ -53,6 +53,7 @@ from ui.styles import (
 
 from ui.pages.ookla_cli_banner import OoklaCliBanner
 from modules.speed_drop_detector import evaluate_speed_drop
+from modules.scan_persistence import record_speed_test
 
 # ── Gauge constants ───────────────────────────────────────────────────────────
 _GAUGE_START_DEG = 210     # 7 o'clock — 0 Mbps (left)
@@ -1342,7 +1343,8 @@ class SpeedTestPage(QWidget):
         # Always: persist to database regardless of page visibility.
         if self._store:
             try:
-                self._store.record_speed_test(
+                record_speed_test(
+                    self._store,
                     download_mbps=result.download_mbps,
                     upload_mbps=result.upload_mbps,
                     ping_ms=result.ping_ms,

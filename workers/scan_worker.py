@@ -59,7 +59,7 @@ def _stp_scan_process_target(gateway_mac, duration, result_q, event_q, mp_stop):
 
 
 def _storm_scan_process_target(duration, warn_threshold, storm_threshold,
-                                known_rogue_macs, result_q, event_q):
+                                known_rogue_macs, result_q, event_q, mp_stop):
     """Runs storm_analyser.scan() in an isolated process."""
 
     def _ev(kind, payload):
@@ -77,6 +77,7 @@ def _storm_scan_process_target(duration, warn_threshold, storm_threshold,
             known_rogue_macs=known_rogue_macs,
             progress_cb=lambda m: _ev("status", m),
             on_error=lambda m: _ev("error", m),
+            stop_event=mp_stop,
         )
         result_q.put(data)
     except Exception as exc:
@@ -134,6 +135,7 @@ class Module2Worker(QThread):
     def run(self):
         import multiprocessing as _mp
         import time as _time
+        p = None
         try:
             result_q = _mp.Queue()
             event_q  = _mp.Queue()
@@ -198,6 +200,10 @@ class Module2Worker(QThread):
                 })
         except Exception as exc:
             self.error.emit(f"Module 2 error: {exc}")
+        finally:
+            if p is not None and p.is_alive():
+                p.terminate()
+                p.join(timeout=3)
 
     def stop(self):
         self._stop_event.set()
@@ -222,18 +228,24 @@ class Module3Worker(QThread):
         self.warn_threshold = warn_threshold
         self.storm_threshold = storm_threshold
         self.known_rogue_macs = known_rogue_macs or []
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        self._stop_event.set()
 
     def run(self):
         import multiprocessing as _mp
         import time as _time
+        p = None
         try:
             result_q = _mp.Queue()
             event_q  = _mp.Queue()
+            mp_stop  = _mp.Event()
 
             p = _mp.Process(
                 target=_storm_scan_process_target,
                 args=(self.duration, self.warn_threshold, self.storm_threshold,
-                      self.known_rogue_macs, result_q, event_q),
+                      self.known_rogue_macs, result_q, event_q, mp_stop),
                 daemon=True,
             )
             p.start()
@@ -250,6 +262,8 @@ class Module3Worker(QThread):
                             self.error.emit(payload)
                     except Exception:
                         break
+                if self._stop_event.is_set():
+                    mp_stop.set()
                 if not p.is_alive():
                     break
                 _time.sleep(0.25)
@@ -289,6 +303,10 @@ class Module3Worker(QThread):
                 })
         except Exception as exc:
             self.error.emit(f"Module 3 error: {exc}")
+        finally:
+            if p is not None and p.is_alive():
+                p.terminate()
+                p.join(timeout=3)
 
 
 class Module4Worker(QThread):

@@ -83,11 +83,14 @@ class _RollupMixin:
 
     def rollup_rtt_samples_before(self, cutoff_ts: int) -> int:
         """Aggregate rtt_sample rows older than `cutoff_ts` into daily_rollup
-        (one row per UTC day/host, per metric: rtt_ms, loss_pct, jitter_ms),
-        then return the number of source rows aggregated. Does NOT delete the
-        source rows — callers (prune_old_data()) delete them separately with
-        the same cutoff immediately after. rtt_ms == -1.0 (unreachable
-        sentinel) is excluded from the rtt_ms rollup."""
+        (one row per UTC day/host, per metric: rtt_ms, loss_pct, jitter_ms).
+        Returns the sum of per-metric row counts across the three separate
+        rollup passes — NOT the number of distinct source rows, since a
+        single rtt_sample row is counted once per metric it contributes a
+        valid value to (up to 3x). Does NOT delete the source rows —
+        callers (prune_old_data()) delete them separately with the same
+        cutoff immediately after. rtt_ms == -1.0 (unreachable sentinel) is
+        excluded from the rtt_ms rollup."""
         total = 0
         for metric, extra_where in (
             ("rtt_ms", "AND rtt_ms >= 0"),

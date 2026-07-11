@@ -298,6 +298,76 @@ def test_history_page_renders_rollup_data_without_error(qt_app):
         qt_app.processEvents()
 
 
+# ── Concurrent-refresh coalescing (2026-07-11 wild chaos hang) ─────────────────
+# _HistoryRefreshWorker.run() never calls exec(), so hideEvent()'s
+# worker.quit()/wait(300) is a no-op against it — the worker keeps running as
+# an orphaned QThread. Rapid re-navigation to Availability History (routine
+# under chaos-level clicking) could spin up several overlapping workers, each
+# issuing up to 6 hosts x 3 MetricStore queries concurrently. That pile-up is
+# the prime suspect for 4 of the 7 health-monitor hangs in the wild/moderate
+# soak phases of run 20260711_002759, including the one that exhausted the
+# restart budget and ended the run. Fix: _refresh() must coalesce instead of
+# stacking a second concurrent worker.
+
+def test_history_page_refresh_coalesces_concurrent_requests(qt_app, monkeypatch):
+    """A second _refresh() call while a fetch is in flight must not start a
+    second concurrent _HistoryRefreshWorker — it must be coalesced and run
+    once the in-flight worker finishes."""
+    if qt_app is None:
+        pytest.skip("No QApplication")
+
+    from ui.pages import history_page as hp_mod
+    from PyQt6.QtCore import QThread, pyqtSignal
+
+    created: list = []
+
+    class _FakeWorker(QThread):
+        result_ready = pyqtSignal(dict)
+
+        def __init__(self, store, window_h, selected, parent=None):
+            super().__init__(parent)
+            self._running = False
+            created.append(self)
+
+        def start(self, *a, **kw):
+            self._running = True
+
+        def isRunning(self):
+            return self._running
+
+        def finish(self):
+            self._running = False
+            self.result_ready.emit({"hosts": []})
+            self.finished.emit()
+
+    monkeypatch.setattr(hp_mod, "_HistoryRefreshWorker", _FakeWorker)
+
+    page = hp_mod.HistoryPage(store=None)  # store=None skips __init__'s own _refresh()
+    monkeypatch.setattr(page, "isVisible", lambda: True)
+    page._store = MagicMock()
+
+    page._refresh()
+    assert len(created) == 1, "first _refresh() must start a worker"
+
+    page._refresh()  # a second request arrives while the first is still in flight
+    assert len(created) == 1, (
+        "a second concurrent worker must not be started while one is running "
+        "— this is what stacked overlapping DB fetches under rapid "
+        "re-navigation and hung the app"
+    )
+
+    created[0].finish()
+    qt_app.processEvents()
+    assert len(created) == 2, "the coalesced request must run once the first worker finishes"
+
+    try:
+        page.deleteLater()
+    except RuntimeError:
+        pass  # non-fatal — widget may already be cleaned up
+    for _ in range(3):
+        qt_app.processEvents()
+
+
 # ── HistoryPage smoke ─────────────────────────────────────────────────────────
 
 def test_history_page_no_blocking_refresh_attribute(qt_app):

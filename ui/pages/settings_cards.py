@@ -16,6 +16,7 @@ Usage:
 """
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -50,6 +51,8 @@ from ui.styles import (
     TEXT_SECONDARY, WHITE, qss_chip, qss_frame, qss_label, qss_muted_label,
 )
 from ui.widgets.context_menu import install_copy_menu as _install_copy_menu
+
+log = logging.getLogger(__name__)
 
 
 # ── Worker threads ────────────────────────────────────────────────────────────
@@ -1259,10 +1262,15 @@ class _SettingsCardsMixin:
             return
         try:
             from modules.settings_io import export_settings
-            export_settings(Path(path))
+            qs = QSettings("NetSentinel", "NetSentinel")
+            raw = {k: qs.value(k) for k in qs.allKeys()}
+            export_settings(Path(path), raw)
             self._settings_io_status.setText(f"Settings exported to {Path(path).name}")
         except Exception as exc:
-            self._settings_io_status.setText(f"Export failed: {exc}")
+            log.warning("Settings export failed: %s", exc)
+            self._settings_io_status.setText(
+                "Export failed — check that the destination folder is writable and try again."
+            )
 
     def _on_import_settings(self) -> None:
         from PyQt6.QtWidgets import QFileDialog, QMessageBox
@@ -1283,12 +1291,19 @@ class _SettingsCardsMixin:
             return
         try:
             from modules.settings_io import import_settings
-            count = import_settings(Path(path))
+            data = import_settings(Path(path))
+            qs = QSettings("NetSentinel", "NetSentinel")
+            for k, v in data.items():
+                qs.setValue(k, v)
+            qs.sync()
             self._settings_io_status.setText(
-                f"Imported {count} settings from {Path(path).name} — restart to apply."
+                f"Imported {len(data)} settings from {Path(path).name} — restart to apply."
             )
         except Exception as exc:
-            self._settings_io_status.setText(f"Import failed: {exc}")
+            log.warning("Settings import failed: %s", exc)
+            self._settings_io_status.setText(
+                "Import failed — check that the file is a valid NetSentinel settings export and try again."
+            )
 
     def _on_reset_settings(self) -> None:
         result = QMessageBox.warning(

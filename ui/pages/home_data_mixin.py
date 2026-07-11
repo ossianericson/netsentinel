@@ -1356,6 +1356,8 @@ class _HomeDataMixin:
                 entry = registry.get(reg_key, {})
                 state = entry.get("state", "never")
                 ts    = entry.get("ts", 0.0) or 0.0
+                if state == "running":
+                    state = "never"  # scan interrupted before startup normalization ran
 
             color = _STATE_COLOR.get(state, TEXT_MUTED)
             dot.setStyleSheet(

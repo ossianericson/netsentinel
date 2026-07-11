@@ -203,17 +203,19 @@ def axfr_transfer(
         msg = struct.pack(">H", len(query_body)) + query_body
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect((server, 53))
-        sock.sendall(msg)
+        try:
+            sock.settimeout(timeout)
+            sock.connect((server, 53))
+            sock.sendall(msg)
 
-        buf = b""
-        while True:
-            chunk = sock.recv(4096)
-            if not chunk:
-                break
-            buf += chunk
-        sock.close()
+            buf = b""
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                buf += chunk
+        finally:
+            sock.close()
 
         # Parse multi-message TCP response (each prefixed with 2-byte length)
         pos = 0
@@ -286,24 +288,23 @@ def mdns_enumerate(
         q = _encode_qname("_services._dns-sd._udp.local")
         query = _build_mdns_query(q)
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.settimeout(timeout)
-        sock.sendto(query, (_MDNS_ADDR, _MDNS_PORT))
-
         service_types: list[str] = []
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                data, _ = sock.recvfrom(4096)
-                for rec in _parse_dns_response(data):
-                    if rec.rtype == "PTR" and rec.value and rec.value not in service_types:
-                        service_types.append(rec.value)
-            except socket.timeout:
-                break
-            except Exception:
-                break
-        sock.close()
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.settimeout(timeout)
+            sock.sendto(query, (_MDNS_ADDR, _MDNS_PORT))
+
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                try:
+                    data, _ = sock.recvfrom(4096)
+                    for rec in _parse_dns_response(data):
+                        if rec.rtype == "PTR" and rec.value and rec.value not in service_types:
+                            service_types.append(rec.value)
+                except socket.timeout:
+                    break
+                except Exception:
+                    break
 
         if progress_cb:
             progress_cb(f"Found {len(service_types)} service type(s), resolving instances…")
@@ -314,22 +315,21 @@ def mdns_enumerate(
             try:
                 q2   = _encode_qname(stype)
                 msg2 = _build_mdns_query(q2)
-                s2   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                s2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s2.settimeout(min(timeout, 2.0))
-                s2.sendto(msg2, (_MDNS_ADDR, _MDNS_PORT))
-                ddl = time.monotonic() + min(timeout, 2.0)
-                while time.monotonic() < ddl:
-                    try:
-                        data2, _ = s2.recvfrom(4096)
-                        for rec in _parse_dns_response(data2):
-                            if rec.rtype == "PTR" and rec.value:
-                                instance_to_type[rec.value] = stype
-                    except socket.timeout:
-                        break
-                    except Exception:
-                        break
-                s2.close()
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as s2:
+                    s2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s2.settimeout(min(timeout, 2.0))
+                    s2.sendto(msg2, (_MDNS_ADDR, _MDNS_PORT))
+                    ddl = time.monotonic() + min(timeout, 2.0)
+                    while time.monotonic() < ddl:
+                        try:
+                            data2, _ = s2.recvfrom(4096)
+                            for rec in _parse_dns_response(data2):
+                                if rec.rtype == "PTR" and rec.value:
+                                    instance_to_type[rec.value] = stype
+                        except socket.timeout:
+                            break
+                        except Exception:
+                            break
             except Exception:
                 pass  # non-fatal
 
@@ -339,35 +339,34 @@ def mdns_enumerate(
             try:
                 q3   = _encode_qname(instance)
                 msg3 = _build_mdns_query(q3, qtype=255)  # ANY
-                s3   = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-                s3.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s3.settimeout(min(timeout, 2.0))
-                s3.sendto(msg3, (_MDNS_ADDR, _MDNS_PORT))
                 info: dict = {"host": "", "ip": "", "port": 0, "txt": ""}
-                ddl = time.monotonic() + min(timeout, 2.0)
-                while time.monotonic() < ddl:
-                    try:
-                        data3, addr3 = s3.recvfrom(4096)
-                        for rec in _parse_dns_response(data3):
-                            if rec.rtype == "SRV":
-                                parts = rec.value.split()
-                                if len(parts) >= 4:
-                                    try:
-                                        info["port"] = int(parts[2])
-                                    except ValueError:
-                                        pass  # non-fatal
-                                    info["host"] = parts[3]
-                            elif rec.rtype == "A":
-                                info["ip"] = rec.value
-                            elif rec.rtype == "TXT":
-                                info["txt"] = rec.value
-                        if not info["ip"]:
-                            info["ip"] = addr3[0]
-                    except socket.timeout:
-                        break
-                    except Exception:
-                        break
-                s3.close()
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as s3:
+                    s3.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s3.settimeout(min(timeout, 2.0))
+                    s3.sendto(msg3, (_MDNS_ADDR, _MDNS_PORT))
+                    ddl = time.monotonic() + min(timeout, 2.0)
+                    while time.monotonic() < ddl:
+                        try:
+                            data3, addr3 = s3.recvfrom(4096)
+                            for rec in _parse_dns_response(data3):
+                                if rec.rtype == "SRV":
+                                    parts = rec.value.split()
+                                    if len(parts) >= 4:
+                                        try:
+                                            info["port"] = int(parts[2])
+                                        except ValueError:
+                                            pass  # non-fatal
+                                        info["host"] = parts[3]
+                                elif rec.rtype == "A":
+                                    info["ip"] = rec.value
+                                elif rec.rtype == "TXT":
+                                    info["txt"] = rec.value
+                            if not info["ip"]:
+                                info["ip"] = addr3[0]
+                        except socket.timeout:
+                            break
+                        except Exception:
+                            break
                 instance_details[instance] = info
             except Exception:
                 pass  # non-fatal

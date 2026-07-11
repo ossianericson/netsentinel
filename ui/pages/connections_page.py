@@ -19,8 +19,6 @@ Layout
 
 from __future__ import annotations
 
-import subprocess
-import sys
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot
@@ -75,77 +73,9 @@ _STATUS_COLOR = {
 
 
 # ── Firewall helpers ──────────────────────────────────────────────────────────
-
-def _rule_name(exe_name: str) -> str:
-    return f"NS-Block-{exe_name}"
-
-
-def _block_process(exe_path: str, exe_name: str) -> tuple[bool, str]:
-    """Create an outbound-deny firewall rule. Returns (success, message)."""
-    if sys.platform != "win32":
-        return False, "Firewall control is only available on Windows"
-    if not exe_path:
-        return False, f"Cannot block '{exe_name}' — executable path unknown"
-    rule = _rule_name(exe_name)
-    cmd = [
-        "netsh", "advfirewall", "firewall", "add", "rule",
-        f"name={rule}",
-        "dir=out",
-        "action=block",
-        f"program={exe_path}",
-        "enable=yes",
-        "profile=any",
-    ]
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            return True, f"Blocked: {exe_name}"
-        return False, result.stderr.strip() or result.stdout.strip()
-    except Exception as exc:
-        return False, str(exc)
-
-
-def _unblock_process(exe_name: str) -> tuple[bool, str]:
-    """Remove the NS-Block-* firewall rule for exe_name."""
-    if sys.platform != "win32":
-        return False, "Windows only"
-    rule = _rule_name(exe_name)
-    cmd = [
-        "netsh", "advfirewall", "firewall", "delete", "rule",
-        f"name={rule}",
-    ]
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            return True, f"Unblocked: {exe_name}"
-        return False, result.stderr.strip() or "Rule not found"
-    except Exception as exc:
-        return False, str(exc)
-
-
-def _get_blocked_rules() -> list[str]:
-    """Return list of exe names currently blocked by NS-Block-* rules."""
-    if sys.platform != "win32":
-        return []
-    try:
-        result = subprocess.run(
-            ["netsh", "advfirewall", "firewall", "show", "rule",
-             "name=all", "dir=out", "verbose"],
-            capture_output=True, text=True, timeout=15
-        )
-        rules = []
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if line.startswith("Rule Name:") and "NS-Block-" in line:
-                name = line.split("NS-Block-", 1)[1].strip()
-                rules.append(name)
-        return rules
-    except Exception:
-        return []
+# Actual netsh subprocess calls live in modules/firewall_control.py and run
+# off the GUI thread via workers/firewall_worker.py (RULE 4) — see
+# _run_fw_worker() below.
 
 
 # ── Main page ─────────────────────────────────────────────────────────────────
@@ -167,6 +97,8 @@ class ConnectionsPage(QWidget):
         self._blocked_rules: list[str] = []
         self._worker = None
         self._poller = None
+        self._fw_worker = None
+        self._pending_block_exe: str = ""
         self._group_by_proc: bool = False
 
         self._auto_timer = QTimer(self)
@@ -430,7 +362,7 @@ class ConnectionsPage(QWidget):
         hdr.addWidget(btn_reload_rules)
         blocked_lay.addLayout(hdr)
 
-        self._blocked_lbl = QLabel("No active blocks")
+        self._blocked_lbl = QLabel("Loading…")
         self._blocked_lbl.setStyleSheet(
             f"font-size:11px; color:{TEXT_SECONDARY};"
             f" background:transparent; border:none;"
@@ -887,13 +819,28 @@ class ConnectionsPage(QWidget):
         return visible
 
     # ── Block / Unblock ───────────────────────────────────────────────────────
+    # netsh calls block for up to 10-15s (RULE 4) — every op below runs on a
+    # FirewallWorker QThread (workers/firewall_worker.py) instead of the GUI
+    # thread. Only one firewall op may be in flight at a time (same
+    # isRunning() re-entrancy guard used throughout the app).
+
+    def _run_fw_worker(self, op: str, on_done, exe_path: str = "", exe_name: str = "") -> None:
+        from workers.firewall_worker import FirewallWorker
+        if self._fw_worker and self._fw_worker.isRunning():
+            return
+        self._fw_worker = FirewallWorker(
+            op=op, exe_path=exe_path, exe_name=exe_name, parent=self
+        )
+        self._fw_worker.result_ready.connect(on_done)
+        self._fw_worker.start()
 
     def _toggle_block(self, conn, currently_blocked: bool) -> None:
         if currently_blocked:
-            ok, msg = _unblock_process(conn.exe_name)
-            self._status_lbl.setText(f"{'✓' if ok else '⚠'}  {msg}")
-            self._load_blocked_rules()
-            self._apply_filters()
+            self._run_fw_worker(
+                "unblock",
+                lambda r: self._on_unblock_result(r, prefix=""),
+                exe_name=conn.exe_name,
+            )
             return
 
         # Block path — confirmation dialog
@@ -929,18 +876,32 @@ class ConnectionsPage(QWidget):
         )
         btns.accepted.connect(dlg.accept)
         btns.rejected.connect(dlg.reject)
+        lay.addWidget(btns)
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
-        ok, msg = _block_process(conn.exe_path, conn.exe_name)
+        self._pending_block_exe = conn.exe_name
+        self._run_fw_worker(
+            "block", self._on_block_result,
+            exe_path=conn.exe_path, exe_name=conn.exe_name,
+        )
+
+    def _on_block_result(self, result: dict) -> None:
+        ok, msg = result.get("ok", False), result.get("message", "")
         if ok:
-            self._undo_exe = conn.exe_name
-            self._undo_lbl.setText(f"✓  Blocked {conn.exe_name}")
+            self._undo_exe = self._pending_block_exe
+            self._undo_lbl.setText(f"✓  Blocked {self._pending_block_exe}")
             self._undo_bar.setVisible(True)
             self._undo_timer.start(10_000)
         else:
             self._status_lbl.setText(f"⚠  {msg}")
+        self._load_blocked_rules()
+        self._apply_filters()
+
+    def _on_unblock_result(self, result: dict, prefix: str = "") -> None:
+        ok, msg = result.get("ok", False), result.get("message", "")
+        self._status_lbl.setText(f"{'✓' if ok else '⚠'}  {prefix}{msg}")
         self._load_blocked_rules()
         self._apply_filters()
 
@@ -949,11 +910,12 @@ class ConnectionsPage(QWidget):
         if not self._undo_exe:
             return
         exe = self._undo_exe
-        ok, msg = _unblock_process(exe)
         self._hide_undo_bar()
-        self._status_lbl.setText(f"{'✓' if ok else '⚠'}  Undo: {msg}")
-        self._load_blocked_rules()
-        self._apply_filters()
+        self._run_fw_worker(
+            "unblock",
+            lambda r: self._on_unblock_result(r, prefix="Undo: "),
+            exe_name=exe,
+        )
 
     def _hide_undo_bar(self) -> None:
         self._undo_timer.stop()
@@ -963,7 +925,10 @@ class ConnectionsPage(QWidget):
     # ── Blocked rules panel ───────────────────────────────────────────────────
 
     def _load_blocked_rules(self) -> None:
-        self._blocked_rules = _get_blocked_rules()
+        self._run_fw_worker("list", self._on_list_result)
+
+    def _on_list_result(self, result: dict) -> None:
+        self._blocked_rules = result.get("rules", [])
         count = len(self._blocked_rules)
         if count:
             self._blocked_lbl.setText(

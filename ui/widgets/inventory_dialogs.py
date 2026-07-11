@@ -27,6 +27,10 @@ from ui.styles import (
 if TYPE_CHECKING:
     from modules.metric_store import MetricStore
 
+from modules.device_admin import (
+    clear_classification_override, set_classification_override, update_device_ha_info,
+)
+
 
 # ── Device label editor dialog (DEVICE-1) ────────────────────────────────────
 
@@ -111,8 +115,8 @@ class _DeviceLabelDialog(QDialog):
         name = self._name.text().strip() or None
         tags = self._tags.text().strip() or None
         notes = self._notes.toPlainText().strip() or None
-        self._store.update_device_ha_info(
-            self._mac, custom_name=name, tags=tags, notes=notes
+        update_device_ha_info(
+            self._store, self._mac, custom_name=name, tags=tags, notes=notes
         )
         self.accept()
 
@@ -195,14 +199,14 @@ class _TypeOverrideDialog(QDialog):
 
     def _set_override(self) -> None:
         try:
-            self._store.set_classification_override(self._mac, self._combo.currentText())
+            set_classification_override(self._store, self._mac, self._combo.currentText())
         except Exception:
             pass  # non-fatal
         self.accept()
 
     def _clear_override(self) -> None:
         try:
-            self._store.clear_classification_override(self._mac)
+            clear_classification_override(self._store, self._mac)
         except Exception:
             pass  # non-fatal
         self.accept()

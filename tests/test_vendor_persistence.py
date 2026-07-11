@@ -153,6 +153,27 @@ class TestOnVendorResolvedPersistence:
             f"Expected in-memory DeviceInfo vendor='Synology Inc.'; got '{stored_vendor}'"
         )
 
+    def test_vendor_resolved_does_not_blank_existing_ip(self, store):
+        """_on_vendor_resolved must not blank the IP that a scan just wrote.
+
+        _on_vendor_resolved calls upsert_known_device(mac, vendor=vendor) with no
+        ip= kwarg. If the SQL ON CONFLICT clause overwrites ip unconditionally
+        (ip = excluded.ip instead of COALESCE(excluded.ip, ip)), this blanks the
+        IP that DeviceTracker.process_scan() correctly wrote seconds earlier.
+        """
+        mac = "aa:bb:cc:11:22:39"
+        ip = "192.168.1.30"
+        store.upsert_known_device(mac, ip=ip, vendor=None)
+
+        _call_on_vendor_resolved(store, mac, "Netgear Inc.")
+
+        kd = store.get_known_devices().get(mac)
+        assert kd is not None
+        assert kd.ip == ip, (
+            f"Expected ip='{ip}' to survive a vendor-only upsert_known_device call; "
+            f"got ip='{kd.ip}' — ON CONFLICT clause is blanking ip on partial updates"
+        )
+
     def test_on_vendor_resolved_no_store_does_not_raise(self):
         """_on_vendor_resolved must not raise when self._store is None."""
         from ui.scan_wiring import ScanResultMixin
