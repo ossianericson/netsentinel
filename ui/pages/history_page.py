@@ -300,6 +300,7 @@ class HistoryPage(QWidget):
         self._hover_annot = None
         self._hover_pts: list = []
         self._refresh_worker: Optional[_HistoryRefreshWorker] = None
+        self._refresh_pending = False  # a refresh was requested while one was in flight
 
         self._build_ui()
 
@@ -317,6 +318,7 @@ class HistoryPage(QWidget):
     def hideEvent(self, event) -> None:
         self._disconnect_hover()
         self._hover_pts = []
+        self._refresh_pending = False  # drop any queued refresh — page is hidden
         # Stop any in-flight worker so it doesn't call back into hidden UI
         if self._refresh_worker and self._refresh_worker.isRunning():
             try:
@@ -592,15 +594,18 @@ class HistoryPage(QWidget):
     def _refresh(self) -> None:
         if not self._store or not self.isVisible():
             return
-        # Cancel previous worker if still running
         if self._refresh_worker and self._refresh_worker.isRunning():
-            try:
-                self._refresh_worker.result_ready.disconnect()
-            except RuntimeError:
-                pass  # already disconnected
-            self._refresh_worker.quit()
-            self._refresh_worker.wait(200)
+            # A fetch is already in flight. _HistoryRefreshWorker.run() never
+            # calls exec(), so QThread.quit() cannot stop it — starting a
+            # second worker here would let concurrent fetches pile up (each
+            # issuing up to _CHART_HOST_LIMIT hosts x 3 MetricStore queries).
+            # Coalesce instead: queue this request and let it run once the
+            # in-flight worker's `finished` signal fires (see _on_worker_finished).
+            self._refresh_pending = True
+            return
+        self._start_refresh_worker()
 
+    def _start_refresh_worker(self) -> None:
         selected = self._host_combo.currentText()
         self._set_controls_enabled(False)
 
@@ -608,7 +613,18 @@ class HistoryPage(QWidget):
             self._store, self._window_h, selected, parent=self
         )
         self._refresh_worker.result_ready.connect(self._on_history_data)
+        self._refresh_worker.finished.connect(self._on_worker_finished)
         self._refresh_worker.start()
+
+    @pyqtSlot()
+    def _on_worker_finished(self) -> None:
+        """Fires when the worker's run() returns — independent of whether
+        result_ready is still connected (hideEvent disconnects it, but
+        QThread.finished always fires exactly once)."""
+        if self._refresh_pending:
+            self._refresh_pending = False
+            if self._store and self.isVisible():
+                self._start_refresh_worker()
 
     @pyqtSlot(dict)
     def _on_history_data(self, data: dict) -> None:
